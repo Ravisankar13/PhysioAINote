@@ -1,10 +1,11 @@
 import { 
   users, type User, type InsertUser,
-  clinicalNotes, type ClinicalNote, type InsertClinicalNote,
+  clinicalNotes, type ClinicalNote, type InsertClinicalNote, type UpdateNoteVisibility,
   comments, type Comment, type InsertComment
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, isNull, sql } from "drizzle-orm";
+import { calculateAgeRange, deIdentifyNote, extractCondition } from "./utilities/deIdentify";
 
 export interface IStorage {
   // User Operations
@@ -17,7 +18,7 @@ export interface IStorage {
   getClinicalNotes(currentUserId?: number): Promise<ClinicalNote[]>;
   getUserNotes(userId: number): Promise<ClinicalNote[]>;
   createClinicalNote(note: InsertClinicalNote): Promise<ClinicalNote>;
-  updateNoteVisibility(noteId: number, visibility: string): Promise<ClinicalNote>;
+  updateNoteVisibility(noteId: number, updateData: UpdateNoteVisibility): Promise<ClinicalNote>;
   
   // Comments Operations
   createComment(comment: InsertComment): Promise<Comment>;
@@ -81,14 +82,46 @@ export class DatabaseStorage implements IStorage {
     return result[0];
   }
   
-  async updateNoteVisibility(noteId: number, visibility: string): Promise<ClinicalNote> {
+  async updateNoteVisibility(noteId: number, updateData: UpdateNoteVisibility): Promise<ClinicalNote> {
+    // First get the current note
+    const note = await this.getClinicalNote(noteId);
+    if (!note) {
+      throw new Error("Note not found");
+    }
+    
+    // Create de-identified data when sharing or making public
+    let updateValues: any = { 
+      visibility: updateData.visibility,
+      updatedAt: new Date()
+    };
+    
+    // Only create de-identified versions when note is being made public or shared
+    if (updateData.visibility === "public" || updateData.visibility === "shared") {
+      // If de-identified data not provided, generate it
+      if (!updateData.condition) {
+        updateValues.condition = extractCondition(note);
+      } else {
+        updateValues.condition = updateData.condition;
+      }
+      
+      if (!updateData.ageRange) {
+        updateValues.ageRange = calculateAgeRange(note.dateOfBirth);
+      } else {
+        updateValues.ageRange = updateData.ageRange;
+      }
+      
+      if (!updateData.deIdentifiedNote) {
+        updateValues.deIdentifiedNote = deIdentifyNote(note);
+      } else {
+        updateValues.deIdentifiedNote = updateData.deIdentifiedNote;
+      }
+    }
+    
     const result = await db.update(clinicalNotes)
-      .set({ 
-        visibility: visibility as any, // Cast needed due to enum type
-        updatedAt: new Date()
-      })
+      .set(updateValues)
       .where(eq(clinicalNotes.id, noteId))
       .returning();
+    
     return result[0];
   }
   

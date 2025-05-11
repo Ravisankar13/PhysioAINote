@@ -684,7 +684,7 @@ export function SkeletonModel() {
                   Q${skeleton.hipLeft.x + 15},${skeleton.hipLeft.y - 15},${skeleton.pelvis.left + 10},${skeleton.pelvis.top}
                 `}
                 fill="url(#boneGradient)"
-                stroke="#aaa"
+                stroke="#666"
                 strokeWidth={1.2}
               />
               
@@ -698,7 +698,7 @@ export function SkeletonModel() {
                   Q${skeleton.hipRight.x - 15},${skeleton.hipRight.y - 15},${skeleton.pelvis.right - 10},${skeleton.pelvis.top}
                 `}
                 fill="url(#boneGradient)"
-                stroke="#aaa"
+                stroke="#666"
                 strokeWidth={1.2}
               />
               
@@ -711,7 +711,7 @@ export function SkeletonModel() {
                   Q${skeleton.hipRight.x - 8},${skeleton.hipRight.y + 15},${skeleton.hipRight.x - 2},${skeleton.hipRight.y + 2}
                 `}
                 fill="url(#boneGradient)"
-                stroke="#aaa"
+                stroke="#666"
                 strokeWidth={1.2}
               />
               
@@ -721,7 +721,7 @@ export function SkeletonModel() {
                 cy={skeleton.hipLeft.y} 
                 r={8} 
                 fill="none" 
-                stroke="#aaa" 
+                stroke="#666" 
                 strokeWidth={1.5} 
               />
               <circle 
@@ -739,9 +739,20 @@ export function SkeletonModel() {
                 cy={skeleton.hipRight.y} 
                 r={8} 
                 fill="none" 
-                stroke="#aaa" 
+                stroke="#666" 
                 strokeWidth={1.5} 
               />
+              
+              {/* Pelvis label */}
+              {showLabels && (
+                <SkeletonLabel 
+                  x={skeleton.pelvis.left - 20} 
+                  y={skeleton.pelvis.top + 15} 
+                  text={skeleton.dimensions.pelvis} 
+                  fontSize={6}
+                  textAnchor="start"
+                />
+              )}
               <circle 
                 cx={skeleton.hipRight.x} 
                 cy={skeleton.hipRight.y} 

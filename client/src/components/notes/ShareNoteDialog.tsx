@@ -5,6 +5,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Share2, Shield, Users, Info } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -18,6 +19,7 @@ interface ShareNoteDialogProps {
 export function ShareNoteDialog({ noteId, currentVisibility }: ShareNoteDialogProps) {
   const [open, setOpen] = useState(false);
   const [visibility, setVisibility] = useState(currentVisibility);
+  const [bodyPart, setBodyPart] = useState("other");
   const [condition, setCondition] = useState("");
   const [additionalInfo, setAdditionalInfo] = useState(false);
   

@@ -6,6 +6,22 @@ import { relations } from "drizzle-orm";
 // Visibility enum for notes
 export const visibilityEnum = pgEnum("visibility", ["private", "public", "shared"]);
 
+// Body part category enum
+export const bodyPartEnum = pgEnum("body_part", [
+  "shoulder", 
+  "neck", 
+  "back", 
+  "elbow", 
+  "wrist", 
+  "hand", 
+  "hip", 
+  "knee", 
+  "ankle", 
+  "foot",
+  "general",
+  "other"
+]);
+
 // Users
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -45,6 +61,7 @@ export const clinicalNotes = pgTable("clinical_notes", {
   condition: text("condition"), // Short description of the condition (no PII)
   ageRange: text("age_range"), // Age range instead of specific DOB
   deIdentifiedNote: json("de_identified_note"), // Version of the note with PII removed
+  bodyPart: bodyPartEnum("body_part").default("other"), // Body part category
   visibility: visibilityEnum("visibility").default("private").notNull(),
   isArchived: boolean("is_archived").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -61,6 +78,10 @@ export const insertClinicalNoteSchema = createInsertSchema(clinicalNotes).omit({
 // Schema for updating note visibility and de-identification
 export const updateNoteVisibilitySchema = z.object({
   visibility: z.enum(["private", "public", "shared"]),
+  bodyPart: z.enum([
+    "shoulder", "neck", "back", "elbow", "wrist", "hand", 
+    "hip", "knee", "ankle", "foot", "general", "other"
+  ]).default("other"),
   condition: z.string().optional(),
   ageRange: z.string().optional(),
   deIdentifiedNote: z.record(z.any()).optional(),

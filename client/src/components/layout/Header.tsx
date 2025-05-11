@@ -22,7 +22,8 @@ const Header = () => {
   const navItems = [
     { href: "/", label: "Home" },
     { href: "/clinical-notes", label: "Clinical Notes" },
-    { href: "/skeleton-tool", label: "Skeleton Tool" },
+    { href: "/skeleton-tool", label: "2D Skeleton Tool" },
+    { href: "/skeleton-3d-tool", label: "3D Skeleton Tool" },
     { href: "/shared-notes", label: "Shared Notes" },
     { href: "/about", label: "About" },
     { href: "/contact", label: "Contact" },
@@ -98,7 +99,15 @@ const Header = () => {
                     <Link href="/skeleton-tool">
                       <div className="flex items-center cursor-pointer w-full">
                         <Bone className="mr-2 h-4 w-4" />
-                        <span>Skeleton Tool</span>
+                        <span>2D Skeleton Tool</span>
+                      </div>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="flex items-center" asChild>
+                    <Link href="/skeleton-3d-tool">
+                      <div className="flex items-center cursor-pointer w-full">
+                        <Bone className="mr-2 h-4 w-4" />
+                        <span>3D Skeleton Tool</span>
                       </div>
                     </Link>
                   </DropdownMenuItem>
@@ -162,7 +171,15 @@ const Header = () => {
                             className="px-2 py-2 text-base block cursor-pointer text-muted-foreground hover:text-foreground"
                             onClick={() => setOpen(false)}
                           >
-                            Skeleton Tool
+                            2D Skeleton Tool
+                          </span>
+                        </Link>
+                        <Link href="/skeleton-3d-tool">
+                          <span
+                            className="px-2 py-2 text-base block cursor-pointer text-muted-foreground hover:text-foreground"
+                            onClick={() => setOpen(false)}
+                          >
+                            3D Skeleton Tool
                           </span>
                         </Link>
                         <span

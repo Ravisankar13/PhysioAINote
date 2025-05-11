@@ -12,6 +12,7 @@ import AuthPage from "@/pages/auth-page";
 import SharedNotes from "@/pages/SharedNotes";
 import MyNotes from "@/pages/MyNotes";
 import SkeletonTool from "@/pages/SkeletonTool";
+import Skeleton3DTool from "@/pages/Skeleton3DTool";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { ThemeProvider } from "next-themes";
@@ -29,6 +30,7 @@ function Router() {
           <Route path="/shared-notes" component={SharedNotes} />
           <ProtectedRoute path="/my-notes" component={MyNotes} />
           <Route path="/skeleton-tool" component={SkeletonTool} />
+          <Route path="/skeleton-3d-tool" component={Skeleton3DTool} />
           <Route path="/about" component={About} />
           <Route path="/contact" component={Contact} />
           <Route path="/auth" component={AuthPage} />

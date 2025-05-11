@@ -25,7 +25,7 @@ import {
   TabsTrigger 
 } from "@/components/ui/tabs";
 import VoiceRecorder from "@/components/notes/VoiceRecorder";
-import VoiceRecordingButton from "@/components/notes/VoiceRecordingButton";
+import VoiceRecordingDrawer from "@/components/notes/VoiceRecordingDrawer";
 import { soapNoteInputSchema } from "@shared/schema";
 
 interface SoapFormProps {
@@ -252,7 +252,7 @@ const SoapForm = ({ onNoteGenerated }: SoapFormProps) => {
                   <h4 className="text-lg font-medium text-neutral-900">SOAP Note Details</h4>
                   <div className="flex items-center space-x-2">
                     <span className="text-sm text-neutral-500">Quickly add notes:</span>
-                    <VoiceRecordingButton onRecordingComplete={handleRecordingComplete} />
+                    <VoiceRecordingDrawer onRecordingComplete={handleRecordingComplete} />
                   </div>
                 </div>
 
@@ -364,18 +364,34 @@ const SoapForm = ({ onNoteGenerated }: SoapFormProps) => {
               </div>
 
               <div className="pt-5">
-                <div className="flex justify-end gap-3">
+                <div className="flex justify-between gap-3">
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={handleReset}
-                    disabled={isLoading}
+                    className="flex items-center gap-1 bg-primary-50 text-primary-600 border-primary-200 hover:bg-primary-100"
+                    onClick={() => document.getElementById('voice-tab-trigger')?.click()}
                   >
-                    Reset Form
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                      <line x1="12" x2="12" y1="19" y2="22" />
+                    </svg>
+                    Record Voice
                   </Button>
-                  <Button type="submit" disabled={isLoading}>
-                    {isLoading ? "Generating..." : "Generate SOAP Note"}
-                  </Button>
+                  
+                  <div className="flex gap-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleReset}
+                      disabled={isLoading}
+                    >
+                      Reset Form
+                    </Button>
+                    <Button type="submit" disabled={isLoading}>
+                      {isLoading ? "Generating..." : "Generate SOAP Note"}
+                    </Button>
+                  </div>
                 </div>
               </div>
             </form>

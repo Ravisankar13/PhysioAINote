@@ -1,14 +1,26 @@
 import { Helmet } from "react-helmet";
 import { SkeletonModel } from "@/components/skeleton/SkeletonModel";
 import { Button } from "@/components/ui/button";
+import { useState } from "react";
 
 export default function SkeletonTool() {
+  const [isSaved, setIsSaved] = useState(false);
+
+  const handleSaveModel = () => {
+    setIsSaved(true);
+    setTimeout(() => setIsSaved(false), 3000);
+  };
+
+  const handleExportImage = () => {
+    // In a production app, we would implement actual export functionality
+    alert("Export functionality will be available in the next update");
+  };
 
   return (
     <div className="container max-w-6xl py-8">
       <Helmet>
         <title>Interactive Skeletal Tool | PhysioAI Conversation</title>
-        <meta name="description" content="Interactive 3D skeletal model for physiotherapy diagnosis, assessment, and treatment planning." />
+        <meta name="description" content="Interactive skeletal model for physiotherapy diagnosis, assessment, and treatment planning." />
       </Helmet>
 
       <div className="space-y-6">
@@ -20,8 +32,14 @@ export default function SkeletonTool() {
             </p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => {}}>Save Model</Button>
-            <Button variant="outline" onClick={() => {}}>Export Image</Button>
+            <Button 
+              variant={isSaved ? "default" : "outline"} 
+              onClick={handleSaveModel}
+              className={isSaved ? "bg-green-600 hover:bg-green-700" : ""}
+            >
+              {isSaved ? "Model Saved!" : "Save Model"}
+            </Button>
+            <Button variant="outline" onClick={handleExportImage}>Export Image</Button>
           </div>
         </div>
 
@@ -34,7 +52,7 @@ export default function SkeletonTool() {
           <div className="space-y-2">
             <p>This interactive skeletal model allows you to:</p>
             <ul className="list-disc pl-6 space-y-1">
-              <li>Visualize a 3D skeletal model from any angle by dragging to rotate</li>
+              <li>Visualize a 2D skeletal representation with accurate proportions</li>
               <li>Adjust bone lengths to match patient anatomy using the sliders</li>
               <li>Plan interventions based on anatomical variations</li>
               <li>Use as a visual aid when discussing with patients</li>

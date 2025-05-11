@@ -12,6 +12,7 @@ import os from "os";
 import { transcribeAudio, analyzeTranscription } from "./transcription";
 import { setupAuth } from "./auth";
 import { calculateAgeRange, deIdentifyNote, extractCondition } from "./utilities/deIdentify";
+import { sampleNotes } from "./routes/sampleNotes";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication routes

@@ -7,14 +7,14 @@ import { useEffect } from "react";
 
 export default function SkeletonTool() {
   const { user, isLoading } = useAuth();
-  const [_, navigate] = useLocation();
+  const [_, setLocation] = useLocation();
 
   // Redirect to auth page if user is not logged in
   useEffect(() => {
     if (!isLoading && !user) {
-      navigate('/auth');
+      setLocation('/auth');
     }
-  }, [user, isLoading, navigate]);
+  }, [user, isLoading, setLocation]);
 
   if (isLoading) {
     return (

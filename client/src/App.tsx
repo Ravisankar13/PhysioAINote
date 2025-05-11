@@ -9,6 +9,8 @@ import ClinicalNotes from "@/pages/ClinicalNotes";
 import About from "@/pages/About";
 import Contact from "@/pages/Contact";
 import AuthPage from "@/pages/auth-page";
+import SharedNotes from "@/pages/SharedNotes";
+import MyNotes from "@/pages/MyNotes";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { ThemeProvider } from "next-themes";
@@ -23,6 +25,8 @@ function Router() {
         <Switch>
           <Route path="/" component={Home} />
           <ProtectedRoute path="/clinical-notes" component={ClinicalNotes} />
+          <Route path="/shared-notes" component={SharedNotes} />
+          <ProtectedRoute path="/my-notes" component={MyNotes} />
           <Route path="/about" component={About} />
           <Route path="/contact" component={Contact} />
           <Route path="/auth" component={AuthPage} />

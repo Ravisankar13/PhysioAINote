@@ -324,6 +324,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(500).json({ message: "Failed to fetch comments" });
     }
   });
+  
+  // API route to get sample notes by body part category
+  app.get("/api/sample-notes", (req: Request, res: Response) => {
+    try {
+      const bodyPart = req.query.bodyPart as string;
+      
+      if (bodyPart) {
+        // Filter by body part if provided
+        const filteredNotes = sampleNotes.filter(note => note.bodyPart === bodyPart);
+        return res.json(filteredNotes);
+      }
+      
+      // Return all sample notes
+      return res.json(sampleNotes);
+    } catch (error) {
+      console.error("Error fetching sample notes:", error);
+      return res.status(500).json({ message: "Failed to fetch sample notes" });
+    }
+  });
+
+  app.get("/api/sample-notes/:bodyPart", (req: Request, res: Response) => {
+    try {
+      const bodyPart = req.params.bodyPart;
+      
+      // Find sample note for the requested body part
+      const note = sampleNotes.find(note => note.bodyPart === bodyPart);
+      
+      if (!note) {
+        return res.status(404).json({ message: "Sample note not found for this body part" });
+      }
+      
+      return res.json(note);
+    } catch (error) {
+      console.error("Error fetching sample note:", error);
+      return res.status(500).json({ message: "Failed to fetch sample note" });
+    }
+  });
 
   const httpServer = createServer(app);
   return httpServer;

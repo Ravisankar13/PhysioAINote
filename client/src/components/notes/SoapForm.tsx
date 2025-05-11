@@ -25,6 +25,7 @@ import {
   TabsTrigger 
 } from "@/components/ui/tabs";
 import VoiceRecorder from "@/components/notes/VoiceRecorder";
+import VoiceRecordingButton from "@/components/notes/VoiceRecordingButton";
 import { soapNoteInputSchema } from "@shared/schema";
 
 interface SoapFormProps {
@@ -247,11 +248,15 @@ const SoapForm = ({ onNoteGenerated }: SoapFormProps) => {
                 </div>
 
                 {/* SOAP Inputs */}
-                <div className="pt-6">
+                <div className="pt-6 flex justify-between items-center">
                   <h4 className="text-lg font-medium text-neutral-900">SOAP Note Details</h4>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm text-neutral-500">Quickly add notes:</span>
+                    <VoiceRecordingButton onRecordingComplete={handleRecordingComplete} />
+                  </div>
                 </div>
 
-                {/* Voice Recording Tab */}
+                {/* Voice Recording Tab - Still available for detailed view */}
                 <Tabs 
                   defaultValue="text" 
                   onValueChange={(value) => setInputMethod(value as "text" | "voice")}
@@ -259,7 +264,7 @@ const SoapForm = ({ onNoteGenerated }: SoapFormProps) => {
                 >
                   <TabsList className="grid w-full grid-cols-2">
                     <TabsTrigger value="text">Text Input</TabsTrigger>
-                    <TabsTrigger value="voice">Voice Recording</TabsTrigger>
+                    <TabsTrigger value="voice">Advanced Voice Recording</TabsTrigger>
                   </TabsList>
                   <TabsContent value="voice" className="mt-6">
                     <div className="mb-4 p-4 bg-primary-50 rounded-lg text-primary-800">

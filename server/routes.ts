@@ -1,12 +1,78 @@
-import type { Express, Request, Response } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { generateSoapNote } from "./openai";
 import { soapNoteInputSchema, insertClinicalNoteSchema } from "@shared/schema";
 import { ZodError } from "zod";
 import { fromZodError } from "zod-validation-error";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
+import os from "os";
+import { transcribeAudio, analyzeTranscription } from "./transcription";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Set up multer for file uploads
+  const upload = multer({
+    storage: multer.diskStorage({
+      destination: (_req, _file, cb) => {
+        const tempDir = path.join(os.tmpdir(), 'physioai-uploads');
+        // Create the temp directory if it doesn't exist
+        if (!fs.existsSync(tempDir)) {
+          fs.mkdirSync(tempDir, { recursive: true });
+        }
+        cb(null, tempDir);
+      },
+      filename: (_req, file, cb) => {
+        // Generate a unique filename
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, uniqueSuffix + path.extname(file.originalname));
+      }
+    }),
+    limits: {
+      fileSize: 10 * 1024 * 1024, // Limit file size to 10MB
+    },
+    fileFilter: (_req, file, cb) => {
+      // Accept only audio files
+      const mimeTypes = ['audio/wav', 'audio/mpeg', 'audio/mp4', 'audio/webm', 'audio/ogg'];
+      if (mimeTypes.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        cb(new Error('Invalid file type. Only audio files are allowed.') as any, false);
+      }
+    }
+  });
+
+  // API route to handle audio transcription
+  app.post('/api/transcribe', upload.single('audio'), async (req: Request, res: Response) => {
+    try {
+      // Check if we have a file
+      if (!req.file) {
+        return res.status(400).json({ message: 'No audio file provided' });
+      }
+      
+      // Get the path to the uploaded file
+      const filePath = req.file.path;
+      
+      // Transcribe the audio
+      const transcript = await transcribeAudio(filePath);
+      
+      // Analyze the transcript to extract SOAP elements
+      const soapElements = await analyzeTranscription(transcript);
+      
+      // Return the transcript and SOAP elements
+      return res.json({
+        transcript,
+        ...soapElements
+      });
+    } catch (error: any) {
+      console.error('Error in transcription endpoint:', error);
+      return res.status(500).json({ 
+        message: 'Failed to process audio',
+        error: error.message 
+      });
+    }
+  });
   // API route to generate a SOAP note
   app.post("/api/notes/generate", async (req: Request, res: Response) => {
     try {

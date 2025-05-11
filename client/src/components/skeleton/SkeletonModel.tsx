@@ -19,11 +19,42 @@ interface LineProps {
   color?: string;
 }
 
+interface LabelProps {
+  x: number;
+  y: number;
+  text: string;
+  fontSize?: number;
+  fontWeight?: string;
+  textAnchor?: "start" | "middle" | "end";
+}
+
+function SkeletonLabel({ 
+  x, 
+  y, 
+  text, 
+  fontSize = 6, 
+  fontWeight = "normal", 
+  textAnchor = "middle" 
+}: LabelProps) {
+  return (
+    <text
+      x={x}
+      y={y}
+      fontSize={fontSize}
+      fontWeight={fontWeight}
+      textAnchor={textAnchor}
+      fill="#444"
+    >
+      {text}
+    </text>
+  );
+}
+
 function SkeletonBone({ 
   path, 
   fill = "none", 
-  stroke = "#ddd", 
-  strokeWidth = 1.5,
+  stroke = "#444", 
+  strokeWidth = 1.2,
   opacity = 1
 }: { 
   path: string; 
@@ -48,12 +79,16 @@ function Vertebra({
   centerX, 
   centerY, 
   width, 
-  height 
+  height,
+  label = "", 
+  showLabel = false
 }: { 
   centerX: number; 
   centerY: number; 
   width: number; 
-  height: number; 
+  height: number;
+  label?: string;
+  showLabel?: boolean;
 }) {
   const x1 = centerX - width/2;
   const x2 = centerX + width/2;
@@ -68,22 +103,23 @@ function Vertebra({
         width={width} 
         height={height} 
         rx={1} 
-        fill="#e0e0e0" 
-        stroke="#aaa" 
+        fill="#f0f0f0" 
+        stroke="#666" 
         strokeWidth={0.8} 
       />
       {/* Spinous process */}
       <path 
         d={`M${centerX-1},${y2} L${centerX},${y2+2} L${centerX+1},${y2}`} 
-        fill="#e0e0e0" 
-        stroke="#aaa" 
+        fill="#f0f0f0" 
+        stroke="#666" 
         strokeWidth={0.8} 
       />
+      {showLabel && <SkeletonLabel x={centerX + width + 4} y={centerY} text={label} fontSize={5} textAnchor="start" />}
     </g>
   );
 }
 
-function SkeletonLine({ x1, y1, x2, y2, thickness = 2, color = "#bbb" }: LineProps) {
+function SkeletonLine({ x1, y1, x2, y2, thickness = 1.5, color = "#666" }: LineProps) {
   return (
     <line
       x1={x1}
@@ -97,7 +133,7 @@ function SkeletonLine({ x1, y1, x2, y2, thickness = 2, color = "#bbb" }: LinePro
   );
 }
 
-function SkeletonJoint({ x, y, size = 6, color = "#ddd", stroke = "#aaa" }: { 
+function SkeletonJoint({ x, y, size = 6, color = "#f0f0f0", stroke = "#666" }: { 
   x: number; 
   y: number; 
   size?: number; 
@@ -127,6 +163,8 @@ export function SkeletonModel() {
     pelvisWidth: 1
   });
 
+  const [showLabels, setShowLabels] = useState(true);
+
   const handleAdjustmentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setAdjustments(prev => ({
@@ -139,7 +177,7 @@ export function SkeletonModel() {
   const skeleton = useMemo(() => {
     // Base height and positioning
     const centerX = 100;
-    const baseHeight = 250;
+    const baseHeight = 320;
     
     // Head position
     const headY = 30;
@@ -147,7 +185,7 @@ export function SkeletonModel() {
     
     // Calculate joint positions based on bone lengths
     const neckY = headY + headSize;
-    const shoulderY = neckY + 10;
+    const shoulderY = neckY + 15;
     
     // Ribcage parameters
     const ribcageTop = shoulderY + 5;
@@ -166,10 +204,14 @@ export function SkeletonModel() {
     const wristRightX = centerX + 35;
     const wristY = elbowY + 30 * adjustments.radiusLength;
     
+    // Hand parameters
+    const handSize = 10;
+    const fingerLength = 15;
+    
     // Pelvis and hips
     const pelvisWidth = 35 * adjustments.pelvisWidth; // Adjustable pelvis width
     const pelvisHeight = 25;
-    const pelvisTop = spineEnd;
+    const pelvisTop = spineEnd + 5;
     const pelvisBottom = pelvisTop + pelvisHeight;
     
     // Hip joints
@@ -183,8 +225,12 @@ export function SkeletonModel() {
     const kneeRightX = centerX + 20;
     
     const ankleY = kneeY + 50 * adjustments.tibiaLength;
-    const ankleLeftX = centerX - 15;
-    const ankleRightX = centerX + 15;
+    const ankleLeftX = centerX - 18;
+    const ankleRightX = centerX + 18;
+    
+    // Feet parameters
+    const footLength = 25;
+    const footHeight = 8;
     
     return {
       // Body centers
@@ -223,6 +269,20 @@ export function SkeletonModel() {
       wristLeft: { x: wristLeftX, y: wristY },
       wristRight: { x: wristRightX, y: wristY },
       
+      // Hands
+      handLeft: { 
+        x: wristLeftX - 5, 
+        y: wristY + 5, 
+        width: handSize, 
+        height: handSize + 5 
+      },
+      handRight: { 
+        x: wristRightX + 5, 
+        y: wristY + 5, 
+        width: handSize, 
+        height: handSize + 5 
+      },
+      
       // Hips
       hipLeft: { x: hipLeftX, y: hipY },
       hipRight: { x: hipRightX, y: hipY },
@@ -232,6 +292,48 @@ export function SkeletonModel() {
       kneeRight: { x: kneeRightX, y: kneeY },
       ankleLeft: { x: ankleLeftX, y: ankleY },
       ankleRight: { x: ankleRightX, y: ankleY },
+      
+      // Feet
+      footLeft: {
+        x: ankleLeftX - 10,
+        y: ankleY,
+        width: footLength,
+        height: footHeight
+      },
+      footRight: {
+        x: ankleRightX - 15,
+        y: ankleY,
+        width: footLength,
+        height: footHeight
+      },
+      
+      // Dimensions for bone labels
+      dimensions: {
+        skull: "Cranium/Skull",
+        cervicalVert: "Cervical Vertebrae",
+        thoracicVert: "Thoracic Vertebrae",
+        lumbarVert: "Lumbar Vertebrae",
+        clavicle: "Clavicle",
+        scapula: "Scapula",
+        sternum: "Sternum",
+        humerus: "Humerus",
+        radius: "Radius",
+        ulna: "Ulna", 
+        carpals: "Carpals",
+        metacarpals: "Metacarpals",
+        phalanges: "Phalanges (Fingers)",
+        ribs: "Ribs",
+        pelvis: "Pelvis",
+        sacrum: "Sacrum",
+        coccyx: "Coccyx",
+        femur: "Femur",
+        patella: "Patella",
+        tibia: "Tibia",
+        fibula: "Fibula",
+        tarsals: "Tarsals",
+        metatarsals: "Metatarsals",
+        toePhalanges: "Phalanges (Toes)"
+      }
     };
   }, [adjustments]);
 

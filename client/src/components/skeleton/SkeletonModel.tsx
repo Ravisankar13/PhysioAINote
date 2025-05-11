@@ -6,6 +6,8 @@ interface LimbAdjustments {
   humerusLength: number;
   radiusLength: number;
   spineLength: number;
+  ribcageWidth: number;
+  pelvisWidth: number;
 }
 
 interface LineProps {
@@ -48,7 +50,9 @@ export function SkeletonModel() {
     tibiaLength: 1,
     humerusLength: 1,
     radiusLength: 1,
-    spineLength: 1
+    spineLength: 1,
+    ribcageWidth: 1,
+    pelvisWidth: 1
   });
 
   const handleAdjustmentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -63,7 +67,7 @@ export function SkeletonModel() {
   const skeleton = useMemo(() => {
     // Base height and positioning
     const centerX = 100;
-    const baseHeight = 200;
+    const baseHeight = 250;
     
     // Head position
     const headY = 30;
@@ -72,7 +76,14 @@ export function SkeletonModel() {
     // Calculate joint positions based on bone lengths
     const neckY = headY + headSize;
     const shoulderY = neckY + 10;
-    const spineEnd = shoulderY + 50 * adjustments.spineLength;
+    
+    // Ribcage parameters
+    const ribcageTop = shoulderY + 5;
+    const ribcageHeight = 45 * adjustments.spineLength;
+    const ribcageWidth = 45 * adjustments.ribcageWidth; // Use ribcageWidth adjustment
+    
+    // Spine
+    const spineEnd = ribcageTop + ribcageHeight;
     
     // Arms
     const elbowLeftX = centerX - 30;
@@ -83,8 +94,18 @@ export function SkeletonModel() {
     const wristRightX = centerX + 35;
     const wristY = elbowY + 30 * adjustments.radiusLength;
     
+    // Pelvis and hips
+    const pelvisWidth = 35 * adjustments.pelvisWidth; // Adjustable pelvis width
+    const pelvisHeight = 25;
+    const pelvisTop = spineEnd;
+    const pelvisBottom = pelvisTop + pelvisHeight;
+    
+    // Hip joints
+    const hipY = pelvisTop + 15;
+    const hipLeftX = centerX - pelvisWidth/2 + 5;
+    const hipRightX = centerX + pelvisWidth/2 - 5;
+    
     // Legs
-    const hipY = spineEnd;
     const kneeY = hipY + 50 * adjustments.femurLength;
     const kneeLeftX = centerX - 20;
     const kneeRightX = centerX + 20;
@@ -99,9 +120,30 @@ export function SkeletonModel() {
       neck: { x: centerX, y: neckY },
       spine: { start: { x: centerX, y: neckY }, end: { x: centerX, y: spineEnd } },
       
+      // Ribcage
+      ribcage: {
+        top: ribcageTop,
+        bottom: spineEnd,
+        left: centerX - ribcageWidth/2,
+        right: centerX + ribcageWidth/2,
+        center: centerX,
+        width: ribcageWidth,
+        height: ribcageHeight
+      },
+      
+      // Pelvis
+      pelvis: {
+        top: pelvisTop,
+        bottom: pelvisBottom,
+        left: centerX - pelvisWidth/2,
+        right: centerX + pelvisWidth/2,
+        width: pelvisWidth,
+        height: pelvisHeight
+      },
+      
       // Shoulders
-      shoulderLeft: { x: centerX - 20, y: shoulderY },
-      shoulderRight: { x: centerX + 20, y: shoulderY },
+      shoulderLeft: { x: centerX - 25, y: shoulderY },
+      shoulderRight: { x: centerX + 25, y: shoulderY },
       
       // Arms
       elbowLeft: { x: elbowLeftX, y: elbowY },
@@ -110,8 +152,8 @@ export function SkeletonModel() {
       wristRight: { x: wristRightX, y: wristY },
       
       // Hips
-      hipLeft: { x: centerX - 15, y: hipY },
-      hipRight: { x: centerX + 15, y: hipY },
+      hipLeft: { x: hipLeftX, y: hipY },
+      hipRight: { x: hipRightX, y: hipY },
       
       // Legs
       kneeLeft: { x: kneeLeftX, y: kneeY },
@@ -130,10 +172,57 @@ export function SkeletonModel() {
         <div className="w-full bg-gray-50 rounded-lg p-4 flex justify-center">
           <svg 
             width="200" 
-            height="300" 
-            viewBox="0 0 200 300" 
-            style={{ maxHeight: '350px' }}
+            height="350" 
+            viewBox="0 0 200 350" 
+            style={{ maxHeight: '400px' }}
           >
+            {/* Ribcage */}
+            <ellipse 
+              cx={skeleton.ribcage.center} 
+              cy={skeleton.ribcage.top + skeleton.ribcage.height/2} 
+              rx={skeleton.ribcage.width/2} 
+              ry={skeleton.ribcage.height/2} 
+              fill="none" 
+              stroke="#555" 
+              strokeWidth="1.5" 
+              strokeDasharray="2,2"
+            />
+            
+            {/* Ribs */}
+            {[0.2, 0.35, 0.5, 0.65, 0.8].map((percentage, i) => {
+              const y = skeleton.ribcage.top + skeleton.ribcage.height * percentage;
+              const horizontalScale = Math.sin(Math.PI * percentage) * 0.95;
+              const width = skeleton.ribcage.width * horizontalScale;
+              return (
+                <line 
+                  key={`rib-${i}`}
+                  x1={skeleton.ribcage.center - width/2} 
+                  y1={y} 
+                  x2={skeleton.ribcage.center + width/2} 
+                  y2={y} 
+                  stroke="#666" 
+                  strokeWidth="2"
+                />
+              );
+            })}
+            
+            {/* Pelvis */}
+            <path 
+              d={`
+                M${skeleton.pelvis.left},${skeleton.pelvis.top + 5}
+                C${skeleton.pelvis.left},${skeleton.pelvis.top},${skeleton.pelvis.left + 10},${skeleton.pelvis.top},${skeleton.pelvis.left + skeleton.pelvis.width/2},${skeleton.pelvis.top}
+                C${skeleton.pelvis.right - 10},${skeleton.pelvis.top},${skeleton.pelvis.right},${skeleton.pelvis.top},${skeleton.pelvis.right},${skeleton.pelvis.top + 5}
+                L${skeleton.pelvis.right},${skeleton.pelvis.bottom - 5}
+                C${skeleton.pelvis.right},${skeleton.pelvis.bottom},${skeleton.pelvis.right - 10},${skeleton.pelvis.bottom},${skeleton.pelvis.right - 15},${skeleton.pelvis.bottom}
+                L${skeleton.pelvis.left + 15},${skeleton.pelvis.bottom}
+                C${skeleton.pelvis.left + 10},${skeleton.pelvis.bottom},${skeleton.pelvis.left},${skeleton.pelvis.bottom},${skeleton.pelvis.left},${skeleton.pelvis.bottom - 5}
+                Z
+              `}
+              fill="none"
+              stroke="#555"
+              strokeWidth="2"
+            />
+            
             {/* Head */}
             <circle cx={skeleton.head.x} cy={skeleton.head.y} r="20" fill="#e0e0e0" stroke="#333" strokeWidth="1.5" />
             
@@ -147,14 +236,22 @@ export function SkeletonModel() {
               color="#555"
             />
             
-            {/* Shoulders */}
+            {/* Clavicles */}
             <SkeletonLine 
               x1={skeleton.shoulderLeft.x}
               y1={skeleton.shoulderLeft.y}
-              x2={skeleton.shoulderRight.x}
-              y2={skeleton.shoulderRight.y}
-              thickness={8}
-              color="#555"
+              x2={skeleton.neck.x}
+              y2={skeleton.shoulderLeft.y - 2}
+              thickness={4}
+              color="#666"
+            />
+            <SkeletonLine 
+              x1={skeleton.shoulderRight.x}
+              y1={skeleton.shoulderRight.y}
+              x2={skeleton.neck.x}
+              y2={skeleton.shoulderRight.y - 2}
+              thickness={4}
+              color="#666"
             />
             
             {/* Arms: Upper arm (humerus) */}
@@ -191,16 +288,6 @@ export function SkeletonModel() {
               y2={skeleton.wristRight.y}
               thickness={5}
               color="#777"
-            />
-            
-            {/* Hips */}
-            <SkeletonLine 
-              x1={skeleton.hipLeft.x}
-              y1={skeleton.hipLeft.y}
-              x2={skeleton.hipRight.x}
-              y2={skeleton.hipRight.y}
-              thickness={8}
-              color="#555"
             />
             
             {/* Legs: Upper leg (femur) */}
@@ -240,19 +327,22 @@ export function SkeletonModel() {
             />
             
             {/* Joints */}
-            <SkeletonJoint x={skeleton.neck.x} y={skeleton.neck.y} size={4} />
-            <SkeletonJoint x={skeleton.shoulderLeft.x} y={skeleton.shoulderLeft.y} size={5} />
-            <SkeletonJoint x={skeleton.shoulderRight.x} y={skeleton.shoulderRight.y} size={5} />
-            <SkeletonJoint x={skeleton.elbowLeft.x} y={skeleton.elbowLeft.y} size={4} />
-            <SkeletonJoint x={skeleton.elbowRight.x} y={skeleton.elbowRight.y} size={4} />
-            <SkeletonJoint x={skeleton.wristLeft.x} y={skeleton.wristLeft.y} size={3} />
-            <SkeletonJoint x={skeleton.wristRight.x} y={skeleton.wristRight.y} size={3} />
-            <SkeletonJoint x={skeleton.hipLeft.x} y={skeleton.hipLeft.y} size={5} />
-            <SkeletonJoint x={skeleton.hipRight.x} y={skeleton.hipRight.y} size={5} />
-            <SkeletonJoint x={skeleton.kneeLeft.x} y={skeleton.kneeLeft.y} size={4} />
-            <SkeletonJoint x={skeleton.kneeRight.x} y={skeleton.kneeRight.y} size={4} />
-            <SkeletonJoint x={skeleton.ankleLeft.x} y={skeleton.ankleLeft.y} size={3} />
-            <SkeletonJoint x={skeleton.ankleRight.x} y={skeleton.ankleRight.y} size={3} />
+            <SkeletonJoint x={skeleton.neck.x} y={skeleton.neck.y} size={4} color="#666" />
+            <SkeletonJoint x={skeleton.shoulderLeft.x} y={skeleton.shoulderLeft.y} size={5} color="#666" />
+            <SkeletonJoint x={skeleton.shoulderRight.x} y={skeleton.shoulderRight.y} size={5} color="#666" />
+            <SkeletonJoint x={skeleton.elbowLeft.x} y={skeleton.elbowLeft.y} size={4} color="#777" />
+            <SkeletonJoint x={skeleton.elbowRight.x} y={skeleton.elbowRight.y} size={4} color="#777" />
+            <SkeletonJoint x={skeleton.wristLeft.x} y={skeleton.wristLeft.y} size={3} color="#888" />
+            <SkeletonJoint x={skeleton.wristRight.x} y={skeleton.wristRight.y} size={3} color="#888" />
+            
+            {/* Hip joints - highlighted to emphasize anatomical accuracy */}
+            <SkeletonJoint x={skeleton.hipLeft.x} y={skeleton.hipLeft.y} size={6} color="#d32f2f" />
+            <SkeletonJoint x={skeleton.hipRight.x} y={skeleton.hipRight.y} size={6} color="#d32f2f" />
+            
+            <SkeletonJoint x={skeleton.kneeLeft.x} y={skeleton.kneeLeft.y} size={4} color="#777" />
+            <SkeletonJoint x={skeleton.kneeRight.x} y={skeleton.kneeRight.y} size={4} color="#777" />
+            <SkeletonJoint x={skeleton.ankleLeft.x} y={skeleton.ankleLeft.y} size={3} color="#888" />
+            <SkeletonJoint x={skeleton.ankleRight.x} y={skeleton.ankleRight.y} size={3} color="#888" />
             
             {/* Feet */}
             <path 
@@ -276,84 +366,137 @@ export function SkeletonModel() {
         <h2 className="text-lg font-bold mb-4 text-center">Bone Length Adjustments</h2>
         
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-          <div className="bg-gray-50 p-3 rounded">
-            <label className="block text-sm font-medium mb-1 text-gray-700">
-              Femur Length: <span className="font-bold">{adjustments.femurLength.toFixed(2)}</span>
-            </label>
-            <input
-              type="range"
-              name="femurLength"
-              min="0.5"
-              max="1.5"
-              step="0.01"
-              value={adjustments.femurLength}
-              onChange={handleAdjustmentChange}
-              className="w-full accent-primary"
-            />
+          {/* Skeleton Body Parts Group */}
+          <div className="bg-gray-50 p-3 rounded sm:col-span-2 mb-2 border-b border-gray-200 pb-4">
+            <h3 className="text-sm font-semibold mb-3 text-blue-700">Torso Adjustments</h3>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1 text-gray-700">
+                  Spine Length: <span className="font-bold">{adjustments.spineLength.toFixed(2)}</span>
+                </label>
+                <input
+                  type="range"
+                  name="spineLength"
+                  min="0.5"
+                  max="1.5"
+                  step="0.01"
+                  value={adjustments.spineLength}
+                  onChange={handleAdjustmentChange}
+                  className="w-full accent-primary"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-1 text-gray-700">
+                  Ribcage Width: <span className="font-bold">{adjustments.ribcageWidth.toFixed(2)}</span>
+                </label>
+                <input
+                  type="range"
+                  name="ribcageWidth"
+                  min="0.7"
+                  max="1.3"
+                  step="0.01"
+                  value={adjustments.ribcageWidth}
+                  onChange={handleAdjustmentChange}
+                  className="w-full accent-primary"
+                />
+              </div>
+              
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium mb-1 text-gray-700">
+                  Pelvis Width: <span className="font-bold">{adjustments.pelvisWidth.toFixed(2)}</span>
+                </label>
+                <input
+                  type="range"
+                  name="pelvisWidth"
+                  min="0.7"
+                  max="1.3"
+                  step="0.01"
+                  value={adjustments.pelvisWidth}
+                  onChange={handleAdjustmentChange}
+                  className="w-full accent-primary"
+                />
+              </div>
+            </div>
           </div>
           
-          <div className="bg-gray-50 p-3 rounded">
-            <label className="block text-sm font-medium mb-1 text-gray-700">
-              Tibia Length: <span className="font-bold">{adjustments.tibiaLength.toFixed(2)}</span>
-            </label>
-            <input
-              type="range"
-              name="tibiaLength"
-              min="0.5"
-              max="1.5"
-              step="0.01"
-              value={adjustments.tibiaLength}
-              onChange={handleAdjustmentChange}
-              className="w-full accent-primary"
-            />
+          {/* Upper Limbs Group */}
+          <div className="bg-gray-50 p-3 rounded sm:col-span-2 mb-2 border-b border-gray-200 pb-4">
+            <h3 className="text-sm font-semibold mb-3 text-blue-700">Arm Adjustments</h3>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1 text-gray-700">
+                  Humerus Length: <span className="font-bold">{adjustments.humerusLength.toFixed(2)}</span>
+                </label>
+                <input
+                  type="range"
+                  name="humerusLength"
+                  min="0.5"
+                  max="1.5"
+                  step="0.01"
+                  value={adjustments.humerusLength}
+                  onChange={handleAdjustmentChange}
+                  className="w-full accent-primary"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-1 text-gray-700">
+                  Radius Length: <span className="font-bold">{adjustments.radiusLength.toFixed(2)}</span>
+                </label>
+                <input
+                  type="range"
+                  name="radiusLength"
+                  min="0.5"
+                  max="1.5"
+                  step="0.01"
+                  value={adjustments.radiusLength}
+                  onChange={handleAdjustmentChange}
+                  className="w-full accent-primary"
+                />
+              </div>
+            </div>
           </div>
           
-          <div className="bg-gray-50 p-3 rounded">
-            <label className="block text-sm font-medium mb-1 text-gray-700">
-              Humerus Length: <span className="font-bold">{adjustments.humerusLength.toFixed(2)}</span>
-            </label>
-            <input
-              type="range"
-              name="humerusLength"
-              min="0.5"
-              max="1.5"
-              step="0.01"
-              value={adjustments.humerusLength}
-              onChange={handleAdjustmentChange}
-              className="w-full accent-primary"
-            />
-          </div>
-          
-          <div className="bg-gray-50 p-3 rounded">
-            <label className="block text-sm font-medium mb-1 text-gray-700">
-              Radius Length: <span className="font-bold">{adjustments.radiusLength.toFixed(2)}</span>
-            </label>
-            <input
-              type="range"
-              name="radiusLength"
-              min="0.5"
-              max="1.5"
-              step="0.01"
-              value={adjustments.radiusLength}
-              onChange={handleAdjustmentChange}
-              className="w-full accent-primary"
-            />
-          </div>
-          
+          {/* Lower Limbs Group */}
           <div className="bg-gray-50 p-3 rounded sm:col-span-2">
-            <label className="block text-sm font-medium mb-1 text-gray-700">
-              Spine Length: <span className="font-bold">{adjustments.spineLength.toFixed(2)}</span>
-            </label>
-            <input
-              type="range"
-              name="spineLength"
-              min="0.5"
-              max="1.5"
-              step="0.01"
-              value={adjustments.spineLength}
-              onChange={handleAdjustmentChange}
-              className="w-full accent-primary"
-            />
+            <h3 className="text-sm font-semibold mb-3 text-blue-700">Leg Adjustments</h3>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1 text-gray-700">
+                  Femur Length: <span className="font-bold">{adjustments.femurLength.toFixed(2)}</span>
+                </label>
+                <input
+                  type="range"
+                  name="femurLength"
+                  min="0.5"
+                  max="1.5"
+                  step="0.01"
+                  value={adjustments.femurLength}
+                  onChange={handleAdjustmentChange}
+                  className="w-full accent-primary"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-1 text-gray-700">
+                  Tibia Length: <span className="font-bold">{adjustments.tibiaLength.toFixed(2)}</span>
+                </label>
+                <input
+                  type="range"
+                  name="tibiaLength"
+                  min="0.5"
+                  max="1.5"
+                  step="0.01"
+                  value={adjustments.tibiaLength}
+                  onChange={handleAdjustmentChange}
+                  className="w-full accent-primary"
+                />
+              </div>
+            </div>
           </div>
         </div>
         
@@ -363,7 +506,9 @@ export function SkeletonModel() {
             tibiaLength: 1,
             humerusLength: 1,
             radiusLength: 1,
-            spineLength: 1
+            spineLength: 1,
+            ribcageWidth: 1,
+            pelvisWidth: 1
           })}
           className="w-full bg-primary text-white py-2 rounded-md mt-4"
         >

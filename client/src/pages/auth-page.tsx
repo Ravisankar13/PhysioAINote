@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Leaf, LockKeyhole, User, Mail, ArrowRight } from "lucide-react";
+import { Leaf, LockKeyhole, User, Mail, ArrowRight, Loader2 } from "lucide-react";
 
 // Define the login form schema
 const loginSchema = z.object({

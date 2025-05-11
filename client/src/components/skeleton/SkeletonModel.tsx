@@ -356,7 +356,7 @@ export function SkeletonModel() {
           </div>
         </div>
         
-        <div className="w-full bg-gray-50 rounded-lg p-4 flex justify-center">
+        <div className="w-full bg-zinc-100 rounded-lg p-4 flex justify-center">
           <svg 
             width="240" 
             height="500" 
@@ -365,9 +365,9 @@ export function SkeletonModel() {
           >
             <defs>
               <linearGradient id="boneGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor="#e6e6e6" />
-                <stop offset="50%" stopColor="#f8f8f8" />
-                <stop offset="100%" stopColor="#e6e6e6" />
+                <stop offset="0%" stopColor="#e0e0e0" />
+                <stop offset="50%" stopColor="#f5f5f5" />
+                <stop offset="100%" stopColor="#e0e0e0" />
               </linearGradient>
             </defs>
             
@@ -379,7 +379,7 @@ export function SkeletonModel() {
                 cy={skeleton.head.y - 2} 
                 rx={19} 
                 ry={21} 
-                fill="url(#boneGradient)" 
+                fill="#f0f0f0" 
                 stroke="#666" 
                 strokeWidth={1.2} 
               />
@@ -393,7 +393,7 @@ export function SkeletonModel() {
                   Q${skeleton.head.x},${skeleton.head.y + 20},${skeleton.head.x - 12},${skeleton.head.y + 5}
                   Z
                 `} 
-                fill="url(#boneGradient)" 
+                fill="#f0f0f0" 
                 stroke="#666" 
                 strokeWidth={1.2} 
               />
@@ -1036,8 +1036,8 @@ export function SkeletonModel() {
                 L${skeleton.kneeLeft.x},${skeleton.kneeLeft.y - 6}
                 Q${skeleton.hipLeft.x + 5},${skeleton.hipLeft.y + 25},${skeleton.hipLeft.x},${skeleton.hipLeft.y}
               `}
-              fill="url(#boneGradient)"
-              stroke="#aaa"
+              fill="#f0f0f0"
+              stroke="#666"
               strokeWidth={1.2}
             />
             

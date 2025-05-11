@@ -2,7 +2,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { generateSoapNote } from "./openai";
-import { soapNoteInputSchema, insertClinicalNoteSchema } from "@shared/schema";
+import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema } from "@shared/schema";
 import { ZodError } from "zod";
 import { fromZodError } from "zod-validation-error";
 import multer from "multer";
@@ -10,8 +10,19 @@ import path from "path";
 import fs from "fs";
 import os from "os";
 import { transcribeAudio, analyzeTranscription } from "./transcription";
+import { setupAuth } from "./auth";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Setup authentication routes
+  setupAuth(app);
+  
+  // Middleware to ensure user is authenticated for protected routes
+  const ensureAuthenticated = (req: Request, res: Response, next: NextFunction) => {
+    if (req.isAuthenticated()) {
+      return next();
+    }
+    res.status(401).json({ message: "Unauthorized - Please log in" });
+  };
   // Set up multer for file uploads
   const upload = multer({
     storage: multer.diskStorage({
@@ -73,8 +84,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
   });
-  // API route to generate a SOAP note
-  app.post("/api/notes/generate", async (req: Request, res: Response) => {
+  // API route to generate a SOAP note (protected)
+  app.post("/api/notes/generate", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       // Validate input data
       const validatedData = soapNoteInputSchema.parse(req.body);
@@ -100,11 +111,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // API route to save a clinical note
-  app.post("/api/notes", async (req: Request, res: Response) => {
+  // API route to save a clinical note (protected)
+  app.post("/api/notes", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       // Validate input data
-      const validatedData = insertClinicalNoteSchema.parse(req.body);
+      const validatedData = insertClinicalNoteSchema.parse({
+        ...req.body,
+        userId: req.user!.id, // Add the user ID from the authenticated user
+      });
       
       // Save the note
       const savedNote = await storage.createClinicalNote(validatedData);
@@ -127,15 +141,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // API route to get all clinical notes
-  app.get("/api/notes", async (_req: Request, res: Response) => {
+  // API route to get all clinical notes (filtered by visibility and user)
+  app.get("/api/notes", async (req: Request, res: Response) => {
     try {
-      const notes = await storage.getClinicalNotes();
+      // If user is authenticated, get their notes + public notes
+      // If not authenticated, only get public notes
+      const userId = req.isAuthenticated() ? req.user!.id : undefined;
+      const notes = await storage.getClinicalNotes(userId);
       return res.json(notes);
     } catch (error) {
       console.error("Error fetching clinical notes:", error);
       return res.status(500).json({ 
         message: "Failed to fetch clinical notes" 
+      });
+    }
+  });
+
+  // API route to get the current user's notes
+  app.get("/api/my-notes", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const notes = await storage.getUserNotes(req.user!.id);
+      return res.json(notes);
+    } catch (error) {
+      console.error("Error fetching user notes:", error);
+      return res.status(500).json({ 
+        message: "Failed to fetch your notes" 
       });
     }
   });
@@ -154,6 +184,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!note) {
         return res.status(404).json({ message: "Clinical note not found" });
       }
+
+      // If note is private, check if user is authenticated and is the owner
+      if (note.visibility === "private") {
+        if (!req.isAuthenticated() || note.userId !== req.user!.id) {
+          return res.status(403).json({ message: "You don't have permission to view this note" });
+        }
+      }
       
       return res.json(note);
     } catch (error) {
@@ -161,6 +198,111 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(500).json({ 
         message: "Failed to fetch clinical note" 
       });
+    }
+  });
+  
+  // API route to update note visibility
+  app.patch("/api/notes/:id/visibility", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid note ID" });
+      }
+      
+      const note = await storage.getClinicalNote(id);
+      
+      if (!note) {
+        return res.status(404).json({ message: "Clinical note not found" });
+      }
+      
+      // Ensure the user is the owner of the note
+      if (note.userId !== req.user!.id) {
+        return res.status(403).json({ message: "You don't have permission to modify this note" });
+      }
+      
+      const { visibility } = req.body;
+      if (!["private", "public", "shared"].includes(visibility)) {
+        return res.status(400).json({ message: "Invalid visibility value" });
+      }
+      
+      const updatedNote = await storage.updateNoteVisibility(id, visibility);
+      return res.json(updatedNote);
+    } catch (error) {
+      console.error("Error updating note visibility:", error);
+      return res.status(500).json({ message: "Failed to update note visibility" });
+    }
+  });
+  
+  // API route to add a comment to a note
+  app.post("/api/notes/:id/comments", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const noteId = parseInt(req.params.id);
+      
+      if (isNaN(noteId)) {
+        return res.status(400).json({ message: "Invalid note ID" });
+      }
+      
+      const note = await storage.getClinicalNote(noteId);
+      
+      if (!note) {
+        return res.status(404).json({ message: "Clinical note not found" });
+      }
+      
+      // Ensure the note is not private or if it is, it belongs to the current user
+      if (note.visibility === "private" && note.userId !== req.user!.id) {
+        return res.status(403).json({ message: "You don't have permission to comment on this note" });
+      }
+      
+      const validatedData = insertCommentSchema.parse({
+        ...req.body,
+        noteId,
+        userId: req.user!.id
+      });
+      
+      const comment = await storage.createComment(validatedData);
+      return res.status(201).json(comment);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        const validationError = fromZodError(error);
+        return res.status(400).json({ 
+          message: "Validation error", 
+          errors: validationError.details 
+        });
+      }
+      
+      console.error("Error adding comment:", error);
+      return res.status(500).json({ message: "Failed to add comment" });
+    }
+  });
+  
+  // API route to get comments for a note
+  app.get("/api/notes/:id/comments", async (req: Request, res: Response) => {
+    try {
+      const noteId = parseInt(req.params.id);
+      
+      if (isNaN(noteId)) {
+        return res.status(400).json({ message: "Invalid note ID" });
+      }
+      
+      const note = await storage.getClinicalNote(noteId);
+      
+      if (!note) {
+        return res.status(404).json({ message: "Clinical note not found" });
+      }
+      
+      // Ensure the note is not private or if it is, it belongs to the current user
+      if (note.visibility === "private") {
+        if (!req.isAuthenticated() || note.userId !== req.user!.id) {
+          return res.status(403).json({ message: "You don't have permission to view comments on this note" });
+        }
+      }
+      
+      const comments = await storage.getNoteComments(noteId);
+      return res.json(comments);
+    } catch (error) {
+      console.error("Error fetching comments:", error);
+      return res.status(500).json({ message: "Failed to fetch comments" });
     }
   });
 

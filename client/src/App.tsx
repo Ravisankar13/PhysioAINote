@@ -8,9 +8,12 @@ import Home from "@/pages/Home";
 import ClinicalNotes from "@/pages/ClinicalNotes";
 import About from "@/pages/About";
 import Contact from "@/pages/Contact";
+import AuthPage from "@/pages/auth-page";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { ThemeProvider } from "next-themes";
+import { AuthProvider } from "@/hooks/use-auth";
+import { ProtectedRoute } from "@/lib/protected-route";
 
 function Router() {
   return (
@@ -19,9 +22,10 @@ function Router() {
       <main className="flex-grow">
         <Switch>
           <Route path="/" component={Home} />
-          <Route path="/clinical-notes" component={ClinicalNotes} />
+          <ProtectedRoute path="/clinical-notes" component={ClinicalNotes} />
           <Route path="/about" component={About} />
           <Route path="/contact" component={Contact} />
+          <Route path="/auth" component={AuthPage} />
           <Route component={NotFound} />
         </Switch>
       </main>
@@ -35,8 +39,10 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider attribute="class" defaultTheme="light">
         <TooltipProvider>
-          <Toaster />
-          <Router />
+          <AuthProvider>
+            <Toaster />
+            <Router />
+          </AuthProvider>
         </TooltipProvider>
       </ThemeProvider>
     </QueryClientProvider>

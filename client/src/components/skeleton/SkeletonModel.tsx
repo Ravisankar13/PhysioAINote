@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { ThreeDSkeleton } from './ThreeDSkeleton';
 
 interface LimbAdjustments {
   femurLength: number;
@@ -239,15 +240,16 @@ export function SkeletonModel() {
     <div className="w-full">
       {/* Interactive skeleton visualization */}
       <div className="w-full p-4 mb-4 border rounded-lg bg-white">
-        <h2 className="text-lg font-bold mb-4 text-center">Interactive Skeleton Model</h2>
+        <h2 className="text-lg font-bold mb-4 text-center">Interactive 3D Skeleton Model</h2>
         
-        <div className="w-full bg-gray-50 rounded-lg p-4 flex justify-center">
-          <svg 
-            width="240" 
-            height="400" 
-            viewBox="0 0 240 400" 
-            style={{ maxHeight: '480px' }}
-          >
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="w-full md:w-1/2 bg-gray-50 rounded-lg p-4 flex justify-center">
+            <svg 
+              width="240" 
+              height="400" 
+              viewBox="0 0 240 400" 
+              style={{ maxHeight: '480px' }}
+            >
             <defs>
               <linearGradient id="boneGradient" x1="0%" y1="0%" x2="100%" y2="0%">
                 <stop offset="0%" stopColor="#e6e6e6" />
@@ -838,10 +840,15 @@ export function SkeletonModel() {
               strokeWidth={1} 
             />
           </svg>
+          </div>
+          
+          <div className="w-full md:w-1/2">
+            <ThreeDSkeleton adjustments={adjustments} />
+          </div>
         </div>
         
         <p className="text-sm text-center text-gray-600 mt-3 mb-0">
-          Drag the sliders below to adjust bone lengths
+          Drag the sliders below to adjust bone lengths. Use your mouse to rotate, zoom, and pan the 3D model.
         </p>
       </div>
       

@@ -361,7 +361,7 @@ export function SkeletonModel() {
             width="240" 
             height="500" 
             viewBox="0 0 240 500" 
-            style={{ maxHeight: '600px' }}
+            style={{ maxHeight: '600px', display: 'block' }}
           >
             <defs>
               <linearGradient id="boneGradient" x1="0%" y1="0%" x2="100%" y2="0%">

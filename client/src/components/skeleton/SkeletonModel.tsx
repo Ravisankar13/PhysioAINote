@@ -728,8 +728,8 @@ export function SkeletonModel() {
                 cx={skeleton.hipLeft.x} 
                 cy={skeleton.hipLeft.y} 
                 r={5} 
-                fill="#d5d5d5" 
-                stroke="#aaa" 
+                fill="#f0f0f0" 
+                stroke="#666" 
                 strokeWidth={1} 
               />
               
@@ -741,6 +741,26 @@ export function SkeletonModel() {
                 fill="none" 
                 stroke="#666" 
                 strokeWidth={1.5} 
+              />
+              
+              {/* Ischial tuberosities */}
+              <path
+                d={`
+                  M${skeleton.hipLeft.x - 5},${skeleton.hipLeft.y + 15}
+                  Q${skeleton.hipLeft.x - 8},${skeleton.hipLeft.y + 25},${skeleton.hipLeft.x + 2},${skeleton.hipLeft.y + 25}
+                `}
+                fill="none"
+                stroke="#666"
+                strokeWidth={1.2}
+              />
+              <path
+                d={`
+                  M${skeleton.hipRight.x + 5},${skeleton.hipRight.y + 15}
+                  Q${skeleton.hipRight.x + 8},${skeleton.hipRight.y + 25},${skeleton.hipRight.x - 2},${skeleton.hipRight.y + 25}
+                `}
+                fill="none"
+                stroke="#666"
+                strokeWidth={1.2}
               />
               
               {/* Pelvis label */}
@@ -757,8 +777,8 @@ export function SkeletonModel() {
                 cx={skeleton.hipRight.x} 
                 cy={skeleton.hipRight.y} 
                 r={5} 
-                fill="#d5d5d5" 
-                stroke="#aaa" 
+                fill="#f0f0f0" 
+                stroke="#666" 
                 strokeWidth={1} 
               />
             </g>
@@ -771,9 +791,9 @@ export function SkeletonModel() {
                   ${skeleton.shoulderLeft.x - 10},${skeleton.shoulderLeft.y - 5},
                   ${skeleton.shoulderLeft.x},${skeleton.shoulderLeft.y}
               `}
-              fill="none"
-              stroke="#d0d0d0"
-              strokeWidth={4}
+              fill="url(#boneGradient)"
+              stroke="#666"
+              strokeWidth={2}
             />
             <path 
               d={`

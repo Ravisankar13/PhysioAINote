@@ -803,9 +803,20 @@ export function SkeletonModel() {
                   ${skeleton.shoulderLeft.x},${skeleton.shoulderLeft.y}
               `}
               fill="none"
-              stroke="#aaa"
-              strokeWidth={1}
+              stroke="#666"
+              strokeWidth={1.2}
             />
+            
+            {/* Clavicle labels */}
+            {showLabels && (
+              <SkeletonLabel 
+                x={(skeleton.shoulderLeft.x + skeleton.neck.x) / 2}
+                y={skeleton.shoulderLeft.y - 12}
+                text="Clavicle"
+                fontSize={6}
+                textAnchor="middle"
+              />
+            )}
             
             <path 
               d={`
@@ -826,9 +837,19 @@ export function SkeletonModel() {
                   ${skeleton.shoulderRight.x},${skeleton.shoulderRight.y}
               `}
               fill="none"
-              stroke="#aaa"
-              strokeWidth={1}
+              stroke="#666"
+              strokeWidth={1.2}
             />
+            
+            {showLabels && (
+              <SkeletonLabel 
+                x={(skeleton.shoulderRight.x + skeleton.neck.x) / 2}
+                y={skeleton.shoulderRight.y - 12}
+                text="Clavicle"
+                fontSize={6}
+                textAnchor="middle"
+              />
+            )}
             
             {/* Scapula (shoulder blades) */}
             <path 
@@ -840,10 +861,21 @@ export function SkeletonModel() {
                 Z
               `}
               fill="url(#boneGradient)"
-              stroke="#aaa"
+              stroke="#666"
               strokeWidth={1}
-              opacity={0.6}
+              opacity={0.75}
             />
+            
+            {/* Scapula label - left */}
+            {showLabels && (
+              <SkeletonLabel 
+                x={skeleton.shoulderLeft.x - 20}
+                y={skeleton.shoulderLeft.y + 25}
+                text={skeleton.dimensions.scapula}
+                fontSize={6}
+                textAnchor="end"
+              />
+            )}
             
             <path 
               d={`
@@ -854,10 +886,21 @@ export function SkeletonModel() {
                 Z
               `}
               fill="url(#boneGradient)"
-              stroke="#aaa"
+              stroke="#666"
               strokeWidth={1}
-              opacity={0.6}
+              opacity={0.75}
             />
+            
+            {/* Scapula label - right */}
+            {showLabels && (
+              <SkeletonLabel 
+                x={skeleton.shoulderRight.x + 20}
+                y={skeleton.shoulderRight.y + 25}
+                text={skeleton.dimensions.scapula}
+                fontSize={6}
+                textAnchor="start"
+              />
+            )}
             
             {/* Arms: Upper arm (humerus) */}
             <path 

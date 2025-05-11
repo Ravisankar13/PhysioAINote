@@ -2,6 +2,8 @@ import {
   users, type User, type InsertUser,
   clinicalNotes, type ClinicalNote, type InsertClinicalNote
 } from "@shared/schema";
+import { db } from "./db";
+import { eq, desc } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
@@ -14,57 +16,38 @@ export interface IStorage {
   createClinicalNote(note: InsertClinicalNote): Promise<ClinicalNote>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  private clinicalNotes: Map<number, ClinicalNote>;
-  userCurrentId: number;
-  noteCurrentId: number;
-
-  constructor() {
-    this.users = new Map();
-    this.clinicalNotes = new Map();
-    this.userCurrentId = 1;
-    this.noteCurrentId = 1;
-  }
-
+export class DatabaseStorage implements IStorage {
   async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
+    const results = await db.select().from(users).where(eq(users.id, id));
+    return results.length > 0 ? results[0] : undefined;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    const results = await db.select().from(users).where(eq(users.username, username));
+    return results.length > 0 ? results[0] : undefined;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.userCurrentId++;
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+    const result = await db.insert(users).values(insertUser).returning();
+    return result[0];
   }
 
   // Clinical Notes Methods
   async getClinicalNote(id: number): Promise<ClinicalNote | undefined> {
-    return this.clinicalNotes.get(id);
+    const results = await db.select().from(clinicalNotes).where(eq(clinicalNotes.id, id));
+    return results.length > 0 ? results[0] : undefined;
   }
 
   async getClinicalNotes(): Promise<ClinicalNote[]> {
-    return Array.from(this.clinicalNotes.values()).sort((a, b) => {
-      // Sort by creation date descending (newest first)
-      const dateA = new Date(a.createdAt).getTime();
-      const dateB = new Date(b.createdAt).getTime();
-      return dateB - dateA;
-    });
+    // Sort by creation date descending (newest first)
+    return db.select().from(clinicalNotes).orderBy(desc(clinicalNotes.createdAt));
   }
 
   async createClinicalNote(note: InsertClinicalNote): Promise<ClinicalNote> {
-    const id = this.noteCurrentId++;
-    const createdAt = new Date().toISOString();
-    const clinicalNote: ClinicalNote = { ...note, id, createdAt };
-    this.clinicalNotes.set(id, clinicalNote);
-    return clinicalNote;
+    const result = await db.insert(clinicalNotes).values(note).returning();
+    return result[0];
   }
 }
 
-export const storage = new MemStorage();
+// Use the database storage implementation
+export const storage = new DatabaseStorage();

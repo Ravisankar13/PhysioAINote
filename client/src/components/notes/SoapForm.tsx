@@ -264,7 +264,7 @@ const SoapForm = ({ onNoteGenerated }: SoapFormProps) => {
                 >
                   <TabsList className="grid w-full grid-cols-2">
                     <TabsTrigger value="text">Text Input</TabsTrigger>
-                    <TabsTrigger value="voice">Advanced Voice Recording</TabsTrigger>
+                    <TabsTrigger id="voice-tab-trigger" value="voice">Advanced Voice Recording</TabsTrigger>
                   </TabsList>
                   <TabsContent value="voice" className="mt-6">
                     <div className="mb-4 p-4 bg-primary-50 rounded-lg text-primary-800">

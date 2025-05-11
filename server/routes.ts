@@ -47,11 +47,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
     fileFilter: (_req, file, cb) => {
       // Accept only audio files
-      const mimeTypes = ['audio/wav', 'audio/mpeg', 'audio/mp4', 'audio/webm', 'audio/ogg'];
-      if (mimeTypes.includes(file.mimetype)) {
+      const mimeTypes = [
+        'audio/wav', 
+        'audio/mpeg', 
+        'audio/mp4', 
+        'audio/webm', 
+        'audio/ogg',
+        'audio/x-wav',
+        'audio/webm; codecs=opus',
+        'audio/webm;codecs=opus',
+        'audio/*'  // Accept any audio type as fallback
+      ];
+      
+      console.log('Received file mimetype:', file.mimetype);
+      
+      // Check if the mimetype starts with audio/ or is in our list
+      if (file.mimetype.startsWith('audio/') || mimeTypes.includes(file.mimetype)) {
         cb(null, true);
       } else {
-        cb(new Error('Invalid file type. Only audio files are allowed.') as any, false);
+        cb(new Error(`Invalid file type: ${file.mimetype}. Only audio files are allowed.`) as any, false);
       }
     }
   });
@@ -61,23 +75,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // Check if we have a file
       if (!req.file) {
+        console.error('Transcription error: No audio file provided');
         return res.status(400).json({ message: 'No audio file provided' });
+      }
+      
+      // Log file details for debugging
+      console.log('Received audio file:', {
+        filename: req.file.originalname,
+        mimetype: req.file.mimetype,
+        size: req.file.size,
+        path: req.file.path
+      });
+      
+      // Check file size
+      if (req.file.size === 0) {
+        console.error('Transcription error: Empty audio file');
+        return res.status(400).json({ message: 'Audio file is empty' });
       }
       
       // Get the path to the uploaded file
       const filePath = req.file.path;
       
-      // Transcribe the audio
-      const transcript = await transcribeAudio(filePath);
-      
-      // Analyze the transcript to extract SOAP elements
-      const soapElements = await analyzeTranscription(transcript);
-      
-      // Return the transcript and SOAP elements
-      return res.json({
-        transcript,
-        ...soapElements
-      });
+      try {
+        // Transcribe the audio
+        console.log('Starting audio transcription...');
+        const transcript = await transcribeAudio(filePath);
+        console.log('Transcription successful, analyzing content...');
+        
+        if (!transcript || transcript.trim() === '') {
+          console.error('Transcription returned empty result');
+          return res.status(422).json({ message: 'No speech detected in the audio' });
+        }
+        
+        // Analyze the transcript to extract SOAP elements
+        const soapElements = await analyzeTranscription(transcript);
+        console.log('SOAP analysis complete');
+        
+        // Return the transcript and SOAP elements
+        return res.json({
+          transcript,
+          ...soapElements
+        });
+      } catch (transcriptionError: any) {
+        console.error('Error in OpenAI transcription:', transcriptionError);
+        
+        // Check if it's an OpenAI API error
+        if (transcriptionError.message.includes('API key')) {
+          return res.status(500).json({ 
+            message: 'OpenAI API key error. Please check your API key configuration.',
+            error: transcriptionError.message 
+          });
+        }
+        
+        throw transcriptionError; // rethrow to be caught by outer catch
+      }
     } catch (error: any) {
       console.error('Error in transcription endpoint:', error);
       return res.status(500).json({ 

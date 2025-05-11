@@ -46,11 +46,34 @@ const VoiceRecorder = ({ onRecordingComplete }: VoiceRecorderProps) => {
     try {
       audioChunksRef.current = [];
       
-      // Request microphone access
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Request microphone access with specific audio constraints for better quality
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 48000,
+        }
+      });
       
-      // Create new media recorder
-      const mediaRecorder = new MediaRecorder(stream);
+      // Determine supported MIME types
+      const supportedMimeTypes = [
+        'audio/webm',
+        'audio/webm;codecs=opus',
+        'audio/ogg;codecs=opus',
+        'audio/mp4'
+      ].filter(mimeType => MediaRecorder.isTypeSupported(mimeType));
+      
+      console.log('Supported MIME types:', supportedMimeTypes);
+      
+      // Create new media recorder with preferred MIME type
+      const options = supportedMimeTypes.length > 0 
+        ? { mimeType: supportedMimeTypes[0] } 
+        : {};
+        
+      console.log('Using MediaRecorder options:', options);
+      
+      const mediaRecorder = new MediaRecorder(stream, options);
       mediaRecorderRef.current = mediaRecorder;
       
       // Listen for data available event
@@ -178,9 +201,30 @@ const VoiceRecorder = ({ onRecordingComplete }: VoiceRecorderProps) => {
     setIsProcessing(true);
     
     try {
+      // Check if the audio blob is valid
+      if (audioBlob.size === 0) {
+        throw new Error("Empty audio recording. Please record again.");
+      }
+      
       // Create a form data object to send the audio file
       const formData = new FormData();
-      formData.append('audio', audioBlob, 'recording.wav');
+      
+      // Get the actual MIME type from the blob
+      const mimeType = audioBlob.type || 'audio/webm';
+      console.log('Sending audio with MIME type:', mimeType);
+      
+      // Use the correct extension based on MIME type
+      let fileName = 'recording.webm';
+      if (mimeType.includes('wav')) {
+        fileName = 'recording.wav';
+      } else if (mimeType.includes('mp3') || mimeType.includes('mpeg')) {
+        fileName = 'recording.mp3';
+      } else if (mimeType.includes('ogg')) {
+        fileName = 'recording.ogg';
+      }
+      
+      // Append the audio blob with the correct filename
+      formData.append('audio', audioBlob, fileName);
       
       // Send to server for transcription
       const response = await fetch('/api/transcribe', {
@@ -189,10 +233,16 @@ const VoiceRecorder = ({ onRecordingComplete }: VoiceRecorderProps) => {
       });
       
       if (!response.ok) {
-        throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+        const errorData = await response.json().catch(() => null);
+        const errorMessage = errorData?.message || `Server returned ${response.status}: ${response.statusText}`;
+        throw new Error(errorMessage);
       }
       
       const data = await response.json();
+      
+      if (!data.transcript) {
+        throw new Error("No transcript returned from server. Try speaking louder or recording in a quieter environment.");
+      }
       
       // Pass recording data to parent component with all the analyzed SOAP elements
       onRecordingComplete(audioBlob, {
@@ -211,7 +261,7 @@ const VoiceRecorder = ({ onRecordingComplete }: VoiceRecorderProps) => {
       console.error("Transcription error:", err);
       toast({
         title: "Transcription failed",
-        description: "Could not convert audio to text. Please try again or input text manually.",
+        description: err.message || "Could not convert audio to text. Please try again or input text manually.",
         variant: "destructive",
       });
       

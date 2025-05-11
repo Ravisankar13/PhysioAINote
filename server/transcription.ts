@@ -10,27 +10,66 @@ export async function transcribeAudio(filePath: string): Promise<string> {
   try {
     console.log(`Transcribing audio file at path: ${filePath}`);
     
+    // Check if the file exists
+    if (!fs.existsSync(filePath)) {
+      throw new Error(`Audio file not found at path: ${filePath}`);
+    }
+    
+    // Get file stats
+    const stats = fs.statSync(filePath);
+    if (stats.size === 0) {
+      throw new Error('Audio file is empty (0 bytes)');
+    }
+    
+    console.log(`Audio file size: ${stats.size} bytes`);
+    
     // Create a readable stream for the audio file
     const audioReadStream = fs.createReadStream(filePath);
     
-    // Call OpenAI Whisper API to transcribe the audio
-    const transcription = await openai.audio.transcriptions.create({
-      file: audioReadStream,
-      model: "whisper-1",
-      language: "en",
-    });
+    // Verify API key exists
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error('OpenAI API key not found in environment variables');
+    }
     
-    console.log("Transcription successful");
-    
-    // Return the transcribed text
-    return transcription.text;
+    try {
+      // Call OpenAI Whisper API to transcribe the audio
+      console.log('Calling OpenAI Whisper API...');
+      const transcription = await openai.audio.transcriptions.create({
+        file: audioReadStream,
+        model: "whisper-1",
+        language: "en",
+        response_format: "json",
+      });
+      
+      console.log("Transcription successful");
+      
+      // Return the transcribed text
+      return transcription.text || '';
+    } catch (apiError: any) {
+      console.error('OpenAI API error:', apiError);
+      
+      // Handle specific OpenAI API errors
+      if (apiError.status === 401) {
+        throw new Error('OpenAI API key is invalid or expired');
+      } else if (apiError.status === 429) {
+        throw new Error('OpenAI API rate limit exceeded. Please try again later.');
+      } else if (apiError.message?.includes('audio file format')) {
+        throw new Error('Audio file format not supported by OpenAI. Please use WAV, MP3, or MP4 format.');
+      }
+      
+      // Re-throw with more context
+      throw new Error(`OpenAI API Error: ${apiError.message || 'Unknown error'}`);
+    }
   } catch (error: any) {
     console.error("Error transcribing audio:", error);
     throw new Error(`Failed to transcribe audio: ${error.message || 'Unknown error'}`);
   } finally {
     // Clean up: delete the temporary file
     try {
-      fs.unlinkSync(filePath);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+        console.log(`Temporary file deleted: ${filePath}`);
+      }
     } catch (err) {
       console.warn(`Warning: Could not delete temporary file ${filePath}:`, err);
     }

@@ -14,7 +14,7 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
   
   // Clinical Notes Operations
-  getClinicalNote(id: number): Promise<ClinicalNote | undefined>;
+  getClinicalNote(id: number, currentUserId?: number): Promise<ClinicalNote | undefined>;
   getClinicalNotes(currentUserId?: number): Promise<ClinicalNote[]>;
   getUserNotes(userId: number): Promise<ClinicalNote[]>;
   createClinicalNote(note: InsertClinicalNote): Promise<ClinicalNote>;
@@ -44,9 +44,49 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Clinical Notes Methods
-  async getClinicalNote(id: number): Promise<ClinicalNote | undefined> {
+  async getClinicalNote(id: number, currentUserId?: number): Promise<ClinicalNote | undefined> {
     const results = await db.select().from(clinicalNotes).where(eq(clinicalNotes.id, id));
-    return results.length > 0 ? results[0] : undefined;
+    
+    if (results.length === 0) {
+      return undefined;
+    }
+    
+    const note = results[0];
+    
+    // If the user is viewing their own note, return the full note
+    if (currentUserId && note.userId === currentUserId) {
+      return note;
+    }
+    
+    // For public or shared notes viewed by other users, ensure we're returning a de-identified version
+    if (note.visibility === 'public' || note.visibility === 'shared') {
+      // If the de-identified fields aren't populated yet, let's create them
+      if (!note.deIdentifiedNote || !note.ageRange || !note.condition) {
+        // Generate the de-identification data
+        const deIdentifiedFields = {
+          deIdentifiedNote: deIdentifyNote(note),
+          ageRange: calculateAgeRange(note.dateOfBirth),
+          condition: extractCondition(note)
+        };
+        
+        // Update the note in the database with the de-identified data
+        await db.update(clinicalNotes)
+          .set(deIdentifiedFields)
+          .where(eq(clinicalNotes.id, id));
+          
+        // Add the fields to the return value
+        return {
+          ...note,
+          ...deIdentifiedFields
+        };
+      }
+      
+      return note;
+    }
+    
+    // If the note is private and the user is not the owner, this function should not be called
+    // But for safety, return undefined in this case
+    return undefined;
   }
 
   async getClinicalNotes(currentUserId?: number): Promise<ClinicalNote[]> {
@@ -58,12 +98,16 @@ export class DatabaseStorage implements IStorage {
         .orderBy(desc(clinicalNotes.createdAt));
     }
     
-    // If user ID is provided, return public notes + user's own notes
+    // If user ID is provided, return:
+    // 1. public notes (accessible to everyone)
+    // 2. shared notes (accessible to all authenticated users)
+    // 3. user's own notes (regardless of visibility)
     return db.select()
       .from(clinicalNotes)
       .where(
         or(
           eq(clinicalNotes.visibility, "public"),
+          eq(clinicalNotes.visibility, "shared"),
           eq(clinicalNotes.userId, currentUserId)
         )
       )

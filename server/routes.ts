@@ -2,7 +2,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { generateSoapNote } from "./openai";
-import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema } from "@shared/schema";
+import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema } from "@shared/schema";
 import { ZodError } from "zod";
 import { fromZodError } from "zod-validation-error";
 import multer from "multer";
@@ -11,6 +11,7 @@ import fs from "fs";
 import os from "os";
 import { transcribeAudio, analyzeTranscription } from "./transcription";
 import { setupAuth } from "./auth";
+import { calculateAgeRange, deIdentifyNote, extractCondition } from "./utilities/deIdentify";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication routes
@@ -179,7 +180,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid note ID" });
       }
       
-      const note = await storage.getClinicalNote(id);
+      // Pass the current user ID if authenticated
+      const currentUserId = req.isAuthenticated() ? req.user!.id : undefined;
+      const note = await storage.getClinicalNote(id, currentUserId);
       
       if (!note) {
         return res.status(404).json({ message: "Clinical note not found" });
@@ -190,6 +193,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (!req.isAuthenticated() || note.userId !== req.user!.id) {
           return res.status(403).json({ message: "You don't have permission to view this note" });
         }
+      }
+      
+      // For shared notes, check if user is authenticated
+      if (note.visibility === "shared" && !req.isAuthenticated()) {
+        return res.status(403).json({ message: "You must be logged in to view shared notes" });
       }
       
       return res.json(note);
@@ -221,13 +229,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "You don't have permission to modify this note" });
       }
       
-      const { visibility } = req.body;
-      if (!["private", "public", "shared"].includes(visibility)) {
-        return res.status(400).json({ message: "Invalid visibility value" });
+      try {
+        // Validate the input data
+        const updateData = updateNoteVisibilitySchema.parse(req.body);
+        
+        // Update the note with visibility and de-identification if needed
+        const updatedNote = await storage.updateNoteVisibility(id, updateData);
+        
+        return res.json(updatedNote);
+      } catch (error) {
+        if (error instanceof ZodError) {
+          return res.status(400).json({ 
+            message: "Invalid update data", 
+            errors: fromZodError(error).message 
+          });
+        }
+        throw error;
       }
-      
-      const updatedNote = await storage.updateNoteVisibility(id, visibility);
-      return res.json(updatedNote);
     } catch (error) {
       console.error("Error updating note visibility:", error);
       return res.status(500).json({ message: "Failed to update note visibility" });

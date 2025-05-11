@@ -62,10 +62,18 @@ const VoiceRecorder = ({ onRecordingComplete }: VoiceRecorderProps) => {
       
       // Handle recording stop
       mediaRecorder.onstop = () => {
-        // Create audio blob and URL
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
+        // Use the correct MIME type based on what the browser recorded
+        // The MediaRecorder API usually produces audio/webm
+        const mimeType = mediaRecorderRef.current?.mimeType || 'audio/webm';
+        
+        // Create audio blob and URL with the correct MIME type
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
         const url = URL.createObjectURL(audioBlob);
         setAudioUrl(url);
+        
+        // Log for debugging
+        console.log('Recording MIME type:', mimeType);
+        console.log('Audio blob size:', audioBlob.size);
         
         // Transcribe the audio
         transcribeAudio(audioBlob);

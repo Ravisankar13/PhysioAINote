@@ -341,14 +341,27 @@ export function SkeletonModel() {
     <div className="w-full">
       {/* Interactive skeleton visualization */}
       <div className="w-full p-4 mb-4 border rounded-lg bg-white">
-        <h2 className="text-lg font-bold mb-4 text-center">Interactive Skeleton Model</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold text-center">Anatomical Skeleton Model</h2>
+          <div className="flex items-center space-x-2">
+            <label className="text-sm font-medium">
+              <input
+                type="checkbox"
+                checked={showLabels}
+                onChange={() => setShowLabels(!showLabels)}
+                className="mr-2"
+              />
+              Show Labels
+            </label>
+          </div>
+        </div>
         
         <div className="w-full bg-gray-50 rounded-lg p-4 flex justify-center">
           <svg 
             width="240" 
-            height="400" 
-            viewBox="0 0 240 400" 
-            style={{ maxHeight: '480px' }}
+            height="500" 
+            viewBox="0 0 240 500" 
+            style={{ maxHeight: '600px' }}
           >
             <defs>
               <linearGradient id="boneGradient" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -367,7 +380,7 @@ export function SkeletonModel() {
                 rx={19} 
                 ry={21} 
                 fill="url(#boneGradient)" 
-                stroke="#aaa" 
+                stroke="#666" 
                 strokeWidth={1.2} 
               />
               
@@ -381,7 +394,7 @@ export function SkeletonModel() {
                   Z
                 `} 
                 fill="url(#boneGradient)" 
-                stroke="#aaa" 
+                stroke="#666" 
                 strokeWidth={1.2} 
               />
               
@@ -391,8 +404,8 @@ export function SkeletonModel() {
                 cy={skeleton.head.y} 
                 rx={4} 
                 ry={5} 
-                fill="#d0d0d0" 
-                stroke="#bbb" 
+                fill="#e0e0e0" 
+                stroke="#666" 
                 strokeWidth={1} 
               />
               <ellipse 
@@ -400,39 +413,155 @@ export function SkeletonModel() {
                 cy={skeleton.head.y} 
                 rx={4} 
                 ry={5} 
-                fill="#d0d0d0" 
-                stroke="#bbb" 
+                fill="#e0e0e0" 
+                stroke="#666" 
                 strokeWidth={1} 
               />
+              
+              {/* Zygomatic arches (cheekbones) */}
+              <path 
+                d={`
+                  M${skeleton.head.x - 10},${skeleton.head.y + 2}
+                  Q${skeleton.head.x - 15},${skeleton.head.y + 5},${skeleton.head.x - 12},${skeleton.head.y + 10}
+                `}
+                fill="none"
+                stroke="#666"
+                strokeWidth={1}
+              />
+              <path 
+                d={`
+                  M${skeleton.head.x + 10},${skeleton.head.y + 2}
+                  Q${skeleton.head.x + 15},${skeleton.head.y + 5},${skeleton.head.x + 12},${skeleton.head.y + 10}
+                `}
+                fill="none"
+                stroke="#666"
+                strokeWidth={1}
+              />
+              
+              {/* Nasal cavity */}
+              <path
+                d={`
+                  M${skeleton.head.x - 3},${skeleton.head.y + 5}
+                  Q${skeleton.head.x},${skeleton.head.y + 10},${skeleton.head.x + 3},${skeleton.head.y + 5}
+                `}
+                fill="none"
+                stroke="#666"
+                strokeWidth={1}
+              />
+              
+              {/* Label */}
+              {showLabels && (
+                <SkeletonLabel 
+                  x={skeleton.head.x + 35} 
+                  y={skeleton.head.y} 
+                  text={skeleton.dimensions.skull} 
+                  fontSize={6}
+                  textAnchor="start"
+                />
+              )}
             </g>
             
             {/* Cervical vertebrae */}
-            {[0, 1, 2, 3, 4, 5, 6].map((i) => {
-              const yPos = skeleton.neck.y + 4 + i * 3.5;
-              return <Vertebra key={`cv-${i}`} centerX={skeleton.neck.x} centerY={yPos} width={8} height={3} />;
-            })}
+            <g>
+              {[0, 1, 2, 3, 4, 5, 6].map((i) => {
+                const yPos = skeleton.neck.y + 4 + i * 3.5;
+                return (
+                  <Vertebra 
+                    key={`cv-${i}`} 
+                    centerX={skeleton.neck.x} 
+                    centerY={yPos} 
+                    width={8} 
+                    height={3}
+                    label={i === 3 && showLabels ? skeleton.dimensions.cervicalVert : ""}
+                    showLabel={i === 3}
+                  />
+                );
+              })}
+            </g>
             
             {/* Thoracic and Lumbar vertebrae */}
-            {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16].map((i) => {
-              const progress = i / 16;
-              const vertSize = 4 + (progress * 4); // Vertebrae get larger down the spine
-              const yPos = skeleton.ribcage.top + 14 + i * (skeleton.ribcage.height / 14);
-              return <Vertebra key={`tv-${i}`} centerX={skeleton.spine.start.x} centerY={yPos} width={9 + progress * 3} height={vertSize} />;
-            })}
+            <g>
+              {/* Thoracic */}
+              {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((i) => {
+                const progress = i / 12;
+                const vertSize = 4 + (progress * 3);
+                const yPos = skeleton.ribcage.top + 14 + i * (skeleton.ribcage.height / 14);
+                return (
+                  <Vertebra 
+                    key={`tv-${i}`} 
+                    centerX={skeleton.spine.start.x} 
+                    centerY={yPos} 
+                    width={9 + progress * 3} 
+                    height={vertSize}
+                    label={i === 5 && showLabels ? skeleton.dimensions.thoracicVert : ""}
+                    showLabel={i === 5}
+                  />
+                );
+              })}
+              
+              {/* Lumbar */}
+              {[0, 1, 2, 3, 4].map((i) => {
+                const yPos = skeleton.ribcage.bottom + 5 + i * 7;
+                return (
+                  <Vertebra 
+                    key={`lv-${i}`} 
+                    centerX={skeleton.spine.start.x} 
+                    centerY={yPos} 
+                    width={14} 
+                    height={6}
+                    label={i === 2 && showLabels ? skeleton.dimensions.lumbarVert : ""}
+                    showLabel={i === 2}
+                  />
+                );
+              })}
+            </g>
             
-            {/* Sacrum */}
-            <path 
-              d={`
-                M${skeleton.spine.start.x - 12},${skeleton.pelvis.top - 5}
-                Q${skeleton.spine.start.x},${skeleton.pelvis.top - 8},${skeleton.spine.start.x + 12},${skeleton.pelvis.top - 5}
-                L${skeleton.spine.start.x + 10},${skeleton.pelvis.top + 15}
-                Q${skeleton.spine.start.x},${skeleton.pelvis.top + 18},${skeleton.spine.start.x - 10},${skeleton.pelvis.top + 15}
-                Z
-              `}
-              fill="url(#boneGradient)"
-              stroke="#aaa"
-              strokeWidth={1.2}
-            />
+            {/* Sacrum and Coccyx */}
+            <g>
+              <path 
+                d={`
+                  M${skeleton.spine.start.x - 12},${skeleton.pelvis.top - 5}
+                  Q${skeleton.spine.start.x},${skeleton.pelvis.top - 8},${skeleton.spine.start.x + 12},${skeleton.pelvis.top - 5}
+                  L${skeleton.spine.start.x + 10},${skeleton.pelvis.top + 15}
+                  Q${skeleton.spine.start.x},${skeleton.pelvis.top + 18},${skeleton.spine.start.x - 10},${skeleton.pelvis.top + 15}
+                  Z
+                `}
+                fill="url(#boneGradient)"
+                stroke="#666"
+                strokeWidth={1.2}
+              />
+              
+              {/* Coccyx */}
+              <path
+                d={`
+                  M${skeleton.spine.start.x - 4},${skeleton.pelvis.top + 15}
+                  Q${skeleton.spine.start.x},${skeleton.pelvis.top + 24},${skeleton.spine.start.x + 4},${skeleton.pelvis.top + 15}
+                `}
+                fill="#f0f0f0"
+                stroke="#666"
+                strokeWidth={1}
+              />
+              
+              {/* Labels */}
+              {showLabels && (
+                <>
+                  <SkeletonLabel 
+                    x={skeleton.spine.start.x + 30} 
+                    y={skeleton.pelvis.top + 5} 
+                    text={skeleton.dimensions.sacrum} 
+                    fontSize={6}
+                    textAnchor="start"
+                  />
+                  <SkeletonLabel 
+                    x={skeleton.spine.start.x + 30} 
+                    y={skeleton.pelvis.top + 20} 
+                    text={skeleton.dimensions.coccyx} 
+                    fontSize={6}
+                    textAnchor="start"
+                  />
+                </>
+              )}
+            </g>
             
             {/* Ribcage Structure */}
             <g>
@@ -447,32 +576,24 @@ export function SkeletonModel() {
                   Q${skeleton.ribcage.center + 2},${skeleton.ribcage.top + 39},${skeleton.ribcage.center},${skeleton.ribcage.top + 42}
                   Q${skeleton.ribcage.center - 2},${skeleton.ribcage.top + 45},${skeleton.ribcage.center},${skeleton.ribcage.top + 48}
                 `}
-                fill="none"
-                stroke="#d0d0d0"
-                strokeWidth={7}
-              />
-              <path 
-                d={`
-                  M${skeleton.ribcage.center},${skeleton.ribcage.top + 12}
-                  Q${skeleton.ribcage.center + 2},${skeleton.ribcage.top + 15},${skeleton.ribcage.center},${skeleton.ribcage.top + 18}
-                  Q${skeleton.ribcage.center - 2},${skeleton.ribcage.top + 21},${skeleton.ribcage.center},${skeleton.ribcage.top + 24}
-                  Q${skeleton.ribcage.center + 2},${skeleton.ribcage.top + 27},${skeleton.ribcage.center},${skeleton.ribcage.top + 30}
-                  Q${skeleton.ribcage.center - 2},${skeleton.ribcage.top + 33},${skeleton.ribcage.center},${skeleton.ribcage.top + 36}
-                  Q${skeleton.ribcage.center + 2},${skeleton.ribcage.top + 39},${skeleton.ribcage.center},${skeleton.ribcage.top + 42}
-                  Q${skeleton.ribcage.center - 2},${skeleton.ribcage.top + 45},${skeleton.ribcage.center},${skeleton.ribcage.top + 48}
-                `}
-                fill="none"
-                stroke="#aaa"
-                strokeWidth={1}
+                fill="#f0f0f0"
+                stroke="#666"
+                strokeWidth={3}
               />
               
               {/* Individual ribs - using curved paths for each rib pair */}
-              {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => {
-                const ribSpacing = skeleton.ribcage.height / 12;
+              {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((i) => {
+                const ribSpacing = skeleton.ribcage.height / 13;
                 const y = skeleton.ribcage.top + 10 + (i * ribSpacing);
                 const ribWidth = (skeleton.ribcage.width * 0.95) * (i < 7 ? 1 - (i * 0.01) : 1 - (i * 0.05));
                 const ribHeight = ribSpacing * 0.9;
                 const ribCurve = 15 + (i * 1.5);
+                
+                // Only first 7 pairs are true ribs (connected to sternum)
+                const isFloatingRib = i > 9;
+                const isFalseRib = i > 6 && i <= 9;
+                const isTrueRib = i <= 6;
+                const connectToSternum = isTrueRib;
                 
                 return (
                   <g key={`rib-${i}`}>
@@ -483,14 +604,21 @@ export function SkeletonModel() {
                         C${skeleton.spine.start.x - ribWidth/4},${y - ribCurve},
                           ${skeleton.spine.start.x - ribWidth/2},${y - ribCurve},
                           ${skeleton.spine.start.x - ribWidth + 10},${y - ribHeight/2}
-                        L${skeleton.spine.start.x - ribWidth},${y}
-                        C${skeleton.spine.start.x - ribWidth/2},${y + ribCurve},
-                          ${skeleton.spine.start.x - ribWidth/4},${y + ribCurve},
-                          ${skeleton.spine.start.x - 4},${y + ribHeight}
+                        ${connectToSternum ? 
+                          `L${skeleton.spine.start.x - ribWidth + 5},${y}
+                           C${skeleton.spine.start.x - ribWidth/3},${y + ribCurve/2},
+                             ${skeleton.spine.start.x - 15},${y + ribCurve/3},
+                             ${skeleton.spine.start.x - 2},${y + (i * 1.5)}` 
+                          : 
+                          isFloatingRib ? 
+                            `Q${skeleton.spine.start.x - ribWidth + 3},${y + 2},${skeleton.spine.start.x - ribWidth},${y}` 
+                            : 
+                            `Q${skeleton.spine.start.x - ribWidth + 3},${y + 2},${skeleton.spine.start.x - ribWidth + 15},${y + (i * 0.8)}`
+                        }
                       `}
-                      fill="url(#boneGradient)"
-                      stroke="#aaa"
-                      strokeWidth={1}
+                      fill="none"
+                      stroke="#666"
+                      strokeWidth={1.2}
                       opacity={0.9}
                     />
                     
@@ -501,19 +629,46 @@ export function SkeletonModel() {
                         C${skeleton.spine.start.x + ribWidth/4},${y - ribCurve},
                           ${skeleton.spine.start.x + ribWidth/2},${y - ribCurve},
                           ${skeleton.spine.start.x + ribWidth - 10},${y - ribHeight/2}
-                        L${skeleton.spine.start.x + ribWidth},${y}
-                        C${skeleton.spine.start.x + ribWidth/2},${y + ribCurve},
-                          ${skeleton.spine.start.x + ribWidth/4},${y + ribCurve},
-                          ${skeleton.spine.start.x + 4},${y + ribHeight}
+                        ${connectToSternum ? 
+                          `L${skeleton.spine.start.x + ribWidth - 5},${y}
+                           C${skeleton.spine.start.x + ribWidth/3},${y + ribCurve/2},
+                             ${skeleton.spine.start.x + 15},${y + ribCurve/3},
+                             ${skeleton.spine.start.x + 2},${y + (i * 1.5)}` 
+                          : 
+                          isFloatingRib ? 
+                            `Q${skeleton.spine.start.x + ribWidth - 3},${y + 2},${skeleton.spine.start.x + ribWidth},${y}` 
+                            : 
+                            `Q${skeleton.spine.start.x + ribWidth - 3},${y + 2},${skeleton.spine.start.x + ribWidth - 15},${y + (i * 0.8)}`
+                        }
                       `}
-                      fill="url(#boneGradient)"
-                      stroke="#aaa"
-                      strokeWidth={1}
+                      fill="none"
+                      stroke="#666"
+                      strokeWidth={1.2}
                       opacity={0.9}
                     />
                   </g>
                 );
               })}
+              
+              {/* Labels */}
+              {showLabels && (
+                <>
+                  <SkeletonLabel 
+                    x={skeleton.ribcage.center} 
+                    y={skeleton.ribcage.top + 24} 
+                    text={skeleton.dimensions.sternum} 
+                    fontSize={6}
+                    textAnchor="middle"
+                  />
+                  <SkeletonLabel 
+                    x={skeleton.ribcage.left - 25} 
+                    y={skeleton.ribcage.top + 30} 
+                    text={skeleton.dimensions.ribs} 
+                    fontSize={6}
+                    textAnchor="start"
+                  />
+                </>
+              )}
             </g>
             
             {/* Pelvis */}

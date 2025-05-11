@@ -24,9 +24,9 @@ const Footer = () => {
           {navItems.map((item) => (
             <div key={item.label} className="px-5 py-2">
               <Link href={item.href}>
-                <a className="text-base text-neutral-500 hover:text-neutral-900">
+                <span className="text-base text-neutral-500 hover:text-neutral-900 cursor-pointer">
                   {item.label}
-                </a>
+                </span>
               </Link>
             </div>
           ))}

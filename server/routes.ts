@@ -107,14 +107,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(422).json({ message: 'No speech detected in the audio' });
         }
         
-        // Analyze the transcript to extract SOAP elements
-        const soapElements = await analyzeTranscription(transcript);
-        console.log('SOAP analysis complete');
+        // Generate clinical insights from the transcript
+        const analysisResult = await analyzeTranscription(transcript);
+        console.log('Clinical analysis complete');
         
-        // Return the transcript and SOAP elements
+        // Return the transcript and analysis
         return res.json({
-          transcript,
-          ...soapElements
+          transcript: transcript,
+          transcription: transcript,
+          clinicalInsights: analysisResult.clinicalInsights,
+          // Include legacy SOAP fields to maintain compatibility
+          subjective: analysisResult.clinicalInsights,
+          objective: "",
+          assessment: "",
+          plan: ""
         });
       } catch (transcriptionError: any) {
         console.error('Error in OpenAI transcription:', transcriptionError);

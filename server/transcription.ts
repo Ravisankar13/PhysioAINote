@@ -77,29 +77,35 @@ export async function transcribeAudio(filePath: string): Promise<string> {
 }
 
 export async function analyzeTranscription(transcript: string): Promise<{
-  subjective: string;
-  objective: string;
-  assessment: string;
-  plan: string;
+  transcription: string;
+  clinicalInsights: string;
 }> {
   try {
-    console.log("Analyzing transcription to extract SOAP elements");
+    console.log("Generating clinical insights from transcription");
     
-    // Use OpenAI to analyze the transcript and extract SOAP elements
+    // Use OpenAI to extract clinical insights without forcing SOAP format
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
         {
           role: "system",
-          content: `You are an expert physiotherapist specializing in analyzing clinical sessions and extracting relevant information for SOAP notes. 
-          Your task is to analyze a transcription of a physiotherapy session and extract the following elements:
+          content: `You are an expert physiotherapist specializing in analyzing clinical sessions. 
+          Your task is to analyze a transcription of a physiotherapy session and extract key clinical information.
           
-          1. Subjective: All information reported by the patient (symptoms, pain levels, concerns, history, etc.)
-          2. Objective: All observations and measurements taken by the physiotherapist (range of motion, strength tests, palpation findings, etc.)
-          3. Assessment: The physiotherapist's clinical reasoning, diagnosis, problem list
-          4. Plan: Treatment provided, goals, future plan, home exercises, etc.
+          Please analyze the text and provide a structured summary that includes relevant clinical information such as:
+          - Patient history and presenting complaints
+          - Key examination findings
+          - Possible diagnoses or clinical impressions
+          - Treatment recommendations and plan
+          - Any other clinically relevant information
           
-          Format your response as JSON with these four sections.`,
+          Do not force the information into strict SOAP format if it doesn't naturally fit. Instead, provide a coherent, 
+          clinically relevant summary that captures the important details from the transcription.
+          
+          Format your response as JSON with these sections:
+          {
+            "clinicalSummary": "A well-organized summary of all important clinical information"
+          }`,
         },
         {
           role: "user",
@@ -113,16 +119,18 @@ export async function analyzeTranscription(transcript: string): Promise<{
     const content = response.choices[0].message.content as string;
     const result = JSON.parse(content);
     
-    console.log("Successfully analyzed transcription");
+    console.log("Successfully generated clinical insights");
     
     return {
-      subjective: result.subjective || "",
-      objective: result.objective || "",
-      assessment: result.assessment || "",
-      plan: result.plan || "",
+      transcription: transcript || "",
+      clinicalInsights: result.clinicalSummary || "",
     };
   } catch (error: any) {
-    console.error("Error analyzing transcription:", error);
-    throw new Error(`Failed to analyze transcription: ${error.message || 'Unknown error'}`);
+    console.error("Error generating clinical insights:", error);
+    // Return just the transcription if analysis fails
+    return {
+      transcription: transcript || "",
+      clinicalInsights: "Error analyzing transcription. Raw transcription is available.",
+    };
   }
 }

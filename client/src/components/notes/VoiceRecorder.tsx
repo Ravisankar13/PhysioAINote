@@ -7,6 +7,8 @@ import { useToast } from "@/hooks/use-toast";
 
 interface TranscriptionResult {
   transcript?: string;
+  transcription?: string;
+  clinicalInsights?: string;
   subjective?: string;
   objective?: string;
   assessment?: string;
@@ -244,10 +246,13 @@ const VoiceRecorder = ({ onRecordingComplete }: VoiceRecorderProps) => {
         throw new Error("No transcript returned from server. Try speaking louder or recording in a quieter environment.");
       }
       
-      // Pass recording data to parent component with all the analyzed SOAP elements
+      // Pass recording data to parent component
       onRecordingComplete(audioBlob, {
         transcript: data.transcript || '',
-        subjective: data.subjective || '',
+        transcription: data.transcription || data.transcript || '',
+        clinicalInsights: data.clinicalInsights || '',
+        // Keep SOAP fields for backward compatibility
+        subjective: data.subjective || data.clinicalInsights || '',
         objective: data.objective || '',
         assessment: data.assessment || '',
         plan: data.plan || ''

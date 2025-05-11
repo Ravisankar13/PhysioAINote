@@ -96,6 +96,8 @@ const SoapForm = ({ onNoteGenerated }: SoapFormProps) => {
   // Import the TranscriptionResult type from VoiceRecorder
   type TranscriptionResult = {
     transcript?: string;
+    transcription?: string;
+    clinicalInsights?: string;
     subjective?: string;
     objective?: string;
     assessment?: string;
@@ -104,56 +106,69 @@ const SoapForm = ({ onNoteGenerated }: SoapFormProps) => {
   
   const handleRecordingComplete = (_audioBlob: Blob, transcriptData: TranscriptionResult | string) => {
     // Update form with data from the transcription analysis
-    const { subjective, objective, assessment, plan } = form.getValues();
+    const { subjective } = form.getValues();
     
-    // If we received SOAP sections from the analysis, use them
-    if (typeof transcriptData === 'object' && 'subjective' in transcriptData && transcriptData.subjective) {
-      // We have structured SOAP data
-      const soapData = transcriptData as TranscriptionResult;
+    // Check if we have an object with proper data
+    if (typeof transcriptData === 'object') {
+      const data = transcriptData as TranscriptionResult;
       
-      if (soapData.subjective) {
+      // Handle clinical insights (new format)
+      if (data.clinicalInsights) {
         form.setValue("subjective", subjective 
-          ? `${subjective}\n\n${soapData.subjective}` 
-          : soapData.subjective);
+          ? `${subjective}\n\n### Clinical Analysis:\n${data.clinicalInsights}` 
+          : `### Clinical Analysis:\n${data.clinicalInsights}`);
       }
-      
-      if (soapData.objective) {
-        form.setValue("objective", objective 
-          ? `${objective}\n\n${soapData.objective}` 
-          : soapData.objective);
+      // Handle transcription (new format) or transcript (old format)
+      else if (data.transcription || data.transcript) {
+        const transcript = data.transcription || data.transcript || '';
+        form.setValue("subjective", subjective 
+          ? `${subjective}\n\n### Voice Recording Transcript:\n${transcript}` 
+          : `### Voice Recording Transcript:\n${transcript}`);
       }
-      
-      if (soapData.assessment) {
-        form.setValue("assessment", assessment 
-          ? `${assessment}\n\n${soapData.assessment}` 
-          : soapData.assessment);
+      // Handle SOAP format (old format) if clinicalInsights not available
+      else if (data.subjective) {
+        form.setValue("subjective", subjective 
+          ? `${subjective}\n\n${data.subjective}` 
+          : data.subjective);
+          
+        if (data.objective) {
+          const { objective } = form.getValues();
+          form.setValue("objective", objective 
+            ? `${objective}\n\n${data.objective}` 
+            : data.objective);
+        }
+        
+        if (data.assessment) {
+          const { assessment } = form.getValues();
+          form.setValue("assessment", assessment 
+            ? `${assessment}\n\n${data.assessment}` 
+            : data.assessment);
+        }
+        
+        if (data.plan) {
+          const { plan } = form.getValues();
+          form.setValue("plan", plan 
+            ? `${plan}\n\n${data.plan}` 
+            : data.plan);
+        }
+      } 
+      // Fallback for no recognizable data
+      else {
+        form.setValue("subjective", subjective 
+          ? `${subjective}\n\n### Note: No structured data was extracted from the recording.` 
+          : `### Note: No structured data was extracted from the recording.`);
       }
-      
-      if (soapData.plan) {
-        form.setValue("plan", plan 
-          ? `${plan}\n\n${soapData.plan}` 
-          : soapData.plan);
-      }
-    } else {
-      // If it's just a raw transcript, add it to the subjective field
-      let transcript: string;
-      
-      if (typeof transcriptData === 'string') {
-        transcript = transcriptData;
-      } else if (typeof transcriptData === 'object' && 'transcript' in transcriptData && transcriptData.transcript) {
-        transcript = transcriptData.transcript;
-      } else {
-        transcript = 'Transcript unavailable';
-      }
-      
+    } 
+    // Handle string data (usually error messages)
+    else if (typeof transcriptData === 'string') {
       form.setValue("subjective", subjective 
-        ? `${subjective}\n\nFrom Recording:\n${transcript}` 
-        : transcript);
+        ? `${subjective}\n\n### Recording Note:\n${transcriptData}` 
+        : `### Recording Note:\n${transcriptData}`);
     }
     
     toast({
       title: "Recording Processed",
-      description: "Voice recording has been transcribed and added to the SOAP note form.",
+      description: "Voice recording has been transcribed and analyzed.",
     });
   };
 

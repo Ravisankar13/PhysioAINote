@@ -5,8 +5,16 @@ import { Progress } from "@/components/ui/progress";
 import { Mic, Square, Play, Pause } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
+interface TranscriptionResult {
+  transcript?: string;
+  subjective?: string;
+  objective?: string;
+  assessment?: string;
+  plan?: string;
+}
+
 interface VoiceRecorderProps {
-  onRecordingComplete: (audioBlob: Blob, transcript: string) => void;
+  onRecordingComplete: (audioBlob: Blob, result: TranscriptionResult | string) => void;
 }
 
 const VoiceRecorder = ({ onRecordingComplete }: VoiceRecorderProps) => {
@@ -178,20 +186,29 @@ const VoiceRecorder = ({ onRecordingComplete }: VoiceRecorderProps) => {
       
       const data = await response.json();
       
-      // Pass recording data to parent component
-      onRecordingComplete(audioBlob, data.transcript);
+      // Pass recording data to parent component with all the analyzed SOAP elements
+      onRecordingComplete(audioBlob, {
+        transcript: data.transcript || '',
+        subjective: data.subjective || '',
+        objective: data.objective || '',
+        assessment: data.assessment || '',
+        plan: data.plan || ''
+      });
       
       toast({
         title: "Transcription complete",
-        description: "Audio has been converted to text successfully.",
+        description: "Audio has been converted to text and analyzed for SOAP elements.",
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error("Transcription error:", err);
       toast({
         title: "Transcription failed",
         description: "Could not convert audio to text. Please try again or input text manually.",
         variant: "destructive",
       });
+      
+      // Still provide the blob so the user can try again if needed
+      onRecordingComplete(audioBlob, "Error transcribing audio. Please try again.");
     } finally {
       setIsTranscribing(false);
       setIsProcessing(false);

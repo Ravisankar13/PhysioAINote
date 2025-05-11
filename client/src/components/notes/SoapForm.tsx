@@ -18,6 +18,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
+import { 
+  Tabs, 
+  TabsContent, 
+  TabsList, 
+  TabsTrigger 
+} from "@/components/ui/tabs";
+import VoiceRecorder from "@/components/notes/VoiceRecorder";
 import { soapNoteInputSchema } from "@shared/schema";
 
 interface SoapFormProps {
@@ -27,6 +34,7 @@ interface SoapFormProps {
 const SoapForm = ({ onNoteGenerated }: SoapFormProps) => {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [inputMethod, setInputMethod] = useState<"text" | "voice">("text");
 
   // Get today's date in YYYY-MM-DD format for default values
   const today = new Date().toISOString().split("T")[0];
@@ -82,6 +90,70 @@ const SoapForm = ({ onNoteGenerated }: SoapFormProps) => {
       objective: "",
       assessment: "",
       plan: "",
+    });
+  };
+  
+  // Import the TranscriptionResult type from VoiceRecorder
+  type TranscriptionResult = {
+    transcript?: string;
+    subjective?: string;
+    objective?: string;
+    assessment?: string;
+    plan?: string;
+  };
+  
+  const handleRecordingComplete = (_audioBlob: Blob, transcriptData: TranscriptionResult | string) => {
+    // Update form with data from the transcription analysis
+    const { subjective, objective, assessment, plan } = form.getValues();
+    
+    // If we received SOAP sections from the analysis, use them
+    if (typeof transcriptData === 'object' && 'subjective' in transcriptData && transcriptData.subjective) {
+      // We have structured SOAP data
+      const soapData = transcriptData as TranscriptionResult;
+      
+      if (soapData.subjective) {
+        form.setValue("subjective", subjective 
+          ? `${subjective}\n\n${soapData.subjective}` 
+          : soapData.subjective);
+      }
+      
+      if (soapData.objective) {
+        form.setValue("objective", objective 
+          ? `${objective}\n\n${soapData.objective}` 
+          : soapData.objective);
+      }
+      
+      if (soapData.assessment) {
+        form.setValue("assessment", assessment 
+          ? `${assessment}\n\n${soapData.assessment}` 
+          : soapData.assessment);
+      }
+      
+      if (soapData.plan) {
+        form.setValue("plan", plan 
+          ? `${plan}\n\n${soapData.plan}` 
+          : soapData.plan);
+      }
+    } else {
+      // If it's just a raw transcript, add it to the subjective field
+      let transcript: string;
+      
+      if (typeof transcriptData === 'string') {
+        transcript = transcriptData;
+      } else if (typeof transcriptData === 'object' && 'transcript' in transcriptData && transcriptData.transcript) {
+        transcript = transcriptData.transcript;
+      } else {
+        transcript = 'Transcript unavailable';
+      }
+      
+      form.setValue("subjective", subjective 
+        ? `${subjective}\n\nFrom Recording:\n${transcript}` 
+        : transcript);
+    }
+    
+    toast({
+      title: "Recording Processed",
+      description: "Voice recording has been transcribed and added to the SOAP note form.",
     });
   };
 
@@ -162,6 +234,27 @@ const SoapForm = ({ onNoteGenerated }: SoapFormProps) => {
                 <div className="pt-6">
                   <h4 className="text-lg font-medium text-neutral-900">SOAP Note Details</h4>
                 </div>
+
+                {/* Voice Recording Tab */}
+                <Tabs 
+                  defaultValue="text" 
+                  onValueChange={(value) => setInputMethod(value as "text" | "voice")}
+                  className="mb-6 w-full"
+                >
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="text">Text Input</TabsTrigger>
+                    <TabsTrigger value="voice">Voice Recording</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="voice" className="mt-6">
+                    <div className="mb-4 p-4 bg-primary-50 rounded-lg text-primary-800">
+                      <p className="text-sm">
+                        Record your clinical session and let our AI transcribe the audio. 
+                        The transcription will be added to your notes.
+                      </p>
+                    </div>
+                    <VoiceRecorder onRecordingComplete={handleRecordingComplete} />
+                  </TabsContent>
+                </Tabs>
 
                 <FormField
                   control={form.control}

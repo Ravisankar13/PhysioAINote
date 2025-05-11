@@ -1,32 +1,8 @@
 import { Helmet } from "react-helmet";
 import { SkeletonModel } from "@/components/skeleton/SkeletonModel";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/hooks/use-auth";
-import { useLocation } from "wouter";
-import { useEffect } from "react";
 
 export default function SkeletonTool() {
-  const { user, isLoading } = useAuth();
-  const [_, setLocation] = useLocation();
-
-  // Redirect to auth page if user is not logged in
-  useEffect(() => {
-    if (!isLoading && !user) {
-      setLocation('/auth');
-    }
-  }, [user, isLoading, setLocation]);
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"></div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return null; // Will redirect to auth page
-  }
 
   return (
     <div className="container max-w-6xl py-8">

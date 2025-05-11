@@ -28,7 +28,7 @@ function Router() {
           <ProtectedRoute path="/clinical-notes" component={ClinicalNotes} />
           <Route path="/shared-notes" component={SharedNotes} />
           <ProtectedRoute path="/my-notes" component={MyNotes} />
-          <ProtectedRoute path="/skeleton-tool" component={SkeletonTool} />
+          <Route path="/skeleton-tool" component={SkeletonTool} />
           <Route path="/about" component={About} />
           <Route path="/contact" component={Contact} />
           <Route path="/auth" component={AuthPage} />

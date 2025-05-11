@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Leaf, MessageSquareText, Menu, LogOut, User } from "lucide-react";
+import { Leaf, MessageSquareText, Menu, LogOut, User, Bone } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 
 const Header = () => {
@@ -22,6 +22,8 @@ const Header = () => {
   const navItems = [
     { href: "/", label: "Home" },
     { href: "/clinical-notes", label: "Clinical Notes" },
+    { href: "/skeleton-tool", label: "Skeleton Tool" },
+    { href: "/shared-notes", label: "Shared Notes" },
     { href: "/about", label: "About" },
     { href: "/contact", label: "Contact" },
   ];
@@ -92,6 +94,14 @@ const Header = () => {
                       </div>
                     </Link>
                   </DropdownMenuItem>
+                  <DropdownMenuItem className="flex items-center" asChild>
+                    <Link href="/skeleton-tool">
+                      <div className="flex items-center cursor-pointer w-full">
+                        <Bone className="mr-2 h-4 w-4" />
+                        <span>Skeleton Tool</span>
+                      </div>
+                    </Link>
+                  </DropdownMenuItem>
                   <DropdownMenuItem className="flex items-center cursor-pointer" onClick={handleLogout}>
                     <LogOut className="mr-2 h-4 w-4" />
                     <span>Logout</span>
@@ -145,6 +155,14 @@ const Header = () => {
                             onClick={() => setOpen(false)}
                           >
                             My Notes
+                          </span>
+                        </Link>
+                        <Link href="/skeleton-tool">
+                          <span
+                            className="px-2 py-2 text-base block cursor-pointer text-muted-foreground hover:text-foreground"
+                            onClick={() => setOpen(false)}
+                          >
+                            Skeleton Tool
                           </span>
                         </Link>
                         <span

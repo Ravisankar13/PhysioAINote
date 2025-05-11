@@ -11,6 +11,7 @@ import Contact from "@/pages/Contact";
 import AuthPage from "@/pages/auth-page";
 import SharedNotes from "@/pages/SharedNotes";
 import MyNotes from "@/pages/MyNotes";
+import SkeletonTool from "@/pages/SkeletonTool";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { ThemeProvider } from "next-themes";
@@ -27,6 +28,7 @@ function Router() {
           <ProtectedRoute path="/clinical-notes" component={ClinicalNotes} />
           <Route path="/shared-notes" component={SharedNotes} />
           <ProtectedRoute path="/my-notes" component={MyNotes} />
+          <ProtectedRoute path="/skeleton-tool" component={SkeletonTool} />
           <Route path="/about" component={About} />
           <Route path="/contact" component={Contact} />
           <Route path="/auth" component={AuthPage} />

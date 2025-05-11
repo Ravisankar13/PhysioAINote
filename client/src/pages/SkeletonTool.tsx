@@ -2,12 +2,12 @@ import { Helmet } from "react-helmet";
 import { SkeletonModel } from "@/components/skeleton/SkeletonModel";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
-import { useNavigate } from "wouter";
+import { useLocation } from "wouter";
 import { useEffect } from "react";
 
 export default function SkeletonTool() {
   const { user, isLoading } = useAuth();
-  const [_, navigate] = useNavigate();
+  const [_, navigate] = useLocation();
 
   // Redirect to auth page if user is not logged in
   useEffect(() => {

@@ -19,7 +19,71 @@ interface LineProps {
   color?: string;
 }
 
-function SkeletonLine({ x1, y1, x2, y2, thickness = 10, color = "#333" }: LineProps) {
+function SkeletonBone({ 
+  path, 
+  fill = "none", 
+  stroke = "#ddd", 
+  strokeWidth = 1.5,
+  opacity = 1
+}: { 
+  path: string; 
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: number;
+  opacity?: number;
+}) {
+  return (
+    <path
+      d={path}
+      fill={fill}
+      stroke={stroke}
+      strokeWidth={strokeWidth}
+      opacity={opacity}
+    />
+  );
+}
+
+// Helper function for vertebrae
+function Vertebra({ 
+  centerX, 
+  centerY, 
+  width, 
+  height 
+}: { 
+  centerX: number; 
+  centerY: number; 
+  width: number; 
+  height: number; 
+}) {
+  const x1 = centerX - width/2;
+  const x2 = centerX + width/2;
+  const y1 = centerY - height/2;
+  const y2 = centerY + height/2;
+  
+  return (
+    <g>
+      <rect 
+        x={x1} 
+        y={y1} 
+        width={width} 
+        height={height} 
+        rx={1} 
+        fill="#e0e0e0" 
+        stroke="#aaa" 
+        strokeWidth={0.8} 
+      />
+      {/* Spinous process */}
+      <path 
+        d={`M${centerX-1},${y2} L${centerX},${y2+2} L${centerX+1},${y2}`} 
+        fill="#e0e0e0" 
+        stroke="#aaa" 
+        strokeWidth={0.8} 
+      />
+    </g>
+  );
+}
+
+function SkeletonLine({ x1, y1, x2, y2, thickness = 2, color = "#bbb" }: LineProps) {
   return (
     <line
       x1={x1}
@@ -33,13 +97,21 @@ function SkeletonLine({ x1, y1, x2, y2, thickness = 10, color = "#333" }: LinePr
   );
 }
 
-function SkeletonJoint({ x, y, size = 8, color = "#555" }: { x: number; y: number; size?: number; color?: string }) {
+function SkeletonJoint({ x, y, size = 6, color = "#ddd", stroke = "#aaa" }: { 
+  x: number; 
+  y: number; 
+  size?: number; 
+  color?: string;
+  stroke?: string;
+}) {
   return (
     <circle
       cx={x}
       cy={y}
       r={size}
       fill={color}
+      stroke={stroke}
+      strokeWidth={1}
     />
   );
 }
@@ -171,187 +243,599 @@ export function SkeletonModel() {
         
         <div className="w-full bg-gray-50 rounded-lg p-4 flex justify-center">
           <svg 
-            width="200" 
-            height="350" 
-            viewBox="0 0 200 350" 
-            style={{ maxHeight: '400px' }}
+            width="240" 
+            height="400" 
+            viewBox="0 0 240 400" 
+            style={{ maxHeight: '480px' }}
           >
-            {/* Ribcage */}
-            <ellipse 
-              cx={skeleton.ribcage.center} 
-              cy={skeleton.ribcage.top + skeleton.ribcage.height/2} 
-              rx={skeleton.ribcage.width/2} 
-              ry={skeleton.ribcage.height/2} 
-              fill="none" 
-              stroke="#555" 
-              strokeWidth="1.5" 
-              strokeDasharray="2,2"
-            />
+            <defs>
+              <linearGradient id="boneGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#e6e6e6" />
+                <stop offset="50%" stopColor="#f8f8f8" />
+                <stop offset="100%" stopColor="#e6e6e6" />
+              </linearGradient>
+            </defs>
             
-            {/* Ribs */}
-            {[0.2, 0.35, 0.5, 0.65, 0.8].map((percentage, i) => {
-              const y = skeleton.ribcage.top + skeleton.ribcage.height * percentage;
-              const horizontalScale = Math.sin(Math.PI * percentage) * 0.95;
-              const width = skeleton.ribcage.width * horizontalScale;
-              return (
-                <line 
-                  key={`rib-${i}`}
-                  x1={skeleton.ribcage.center - width/2} 
-                  y1={y} 
-                  x2={skeleton.ribcage.center + width/2} 
-                  y2={y} 
-                  stroke="#666" 
-                  strokeWidth="2"
-                />
-              );
+            {/* Skull */}
+            <g>
+              {/* Cranium */}
+              <ellipse 
+                cx={skeleton.head.x} 
+                cy={skeleton.head.y - 2} 
+                rx={19} 
+                ry={21} 
+                fill="url(#boneGradient)" 
+                stroke="#aaa" 
+                strokeWidth={1.2} 
+              />
+              
+              {/* Face/Jaw */}
+              <path 
+                d={`
+                  M${skeleton.head.x - 14},${skeleton.head.y + 8}
+                  Q${skeleton.head.x},${skeleton.head.y + 25},${skeleton.head.x + 14},${skeleton.head.y + 8}
+                  L${skeleton.head.x + 12},${skeleton.head.y + 5}
+                  Q${skeleton.head.x},${skeleton.head.y + 20},${skeleton.head.x - 12},${skeleton.head.y + 5}
+                  Z
+                `} 
+                fill="url(#boneGradient)" 
+                stroke="#aaa" 
+                strokeWidth={1.2} 
+              />
+              
+              {/* Eye sockets */}
+              <ellipse 
+                cx={skeleton.head.x - 7} 
+                cy={skeleton.head.y} 
+                rx={4} 
+                ry={5} 
+                fill="#d0d0d0" 
+                stroke="#bbb" 
+                strokeWidth={1} 
+              />
+              <ellipse 
+                cx={skeleton.head.x + 7} 
+                cy={skeleton.head.y} 
+                rx={4} 
+                ry={5} 
+                fill="#d0d0d0" 
+                stroke="#bbb" 
+                strokeWidth={1} 
+              />
+            </g>
+            
+            {/* Cervical vertebrae */}
+            {[0, 1, 2, 3, 4, 5, 6].map((i) => {
+              const yPos = skeleton.neck.y + 4 + i * 3.5;
+              return <Vertebra key={`cv-${i}`} centerX={skeleton.neck.x} centerY={yPos} width={8} height={3} />;
             })}
             
-            {/* Pelvis */}
+            {/* Thoracic and Lumbar vertebrae */}
+            {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16].map((i) => {
+              const progress = i / 16;
+              const vertSize = 4 + (progress * 4); // Vertebrae get larger down the spine
+              const yPos = skeleton.ribcage.top + 14 + i * (skeleton.ribcage.height / 14);
+              return <Vertebra key={`tv-${i}`} centerX={skeleton.spine.start.x} centerY={yPos} width={9 + progress * 3} height={vertSize} />;
+            })}
+            
+            {/* Sacrum */}
             <path 
               d={`
-                M${skeleton.pelvis.left},${skeleton.pelvis.top + 5}
-                C${skeleton.pelvis.left},${skeleton.pelvis.top},${skeleton.pelvis.left + 10},${skeleton.pelvis.top},${skeleton.pelvis.left + skeleton.pelvis.width/2},${skeleton.pelvis.top}
-                C${skeleton.pelvis.right - 10},${skeleton.pelvis.top},${skeleton.pelvis.right},${skeleton.pelvis.top},${skeleton.pelvis.right},${skeleton.pelvis.top + 5}
-                L${skeleton.pelvis.right},${skeleton.pelvis.bottom - 5}
-                C${skeleton.pelvis.right},${skeleton.pelvis.bottom},${skeleton.pelvis.right - 10},${skeleton.pelvis.bottom},${skeleton.pelvis.right - 15},${skeleton.pelvis.bottom}
-                L${skeleton.pelvis.left + 15},${skeleton.pelvis.bottom}
-                C${skeleton.pelvis.left + 10},${skeleton.pelvis.bottom},${skeleton.pelvis.left},${skeleton.pelvis.bottom},${skeleton.pelvis.left},${skeleton.pelvis.bottom - 5}
+                M${skeleton.spine.start.x - 12},${skeleton.pelvis.top - 5}
+                Q${skeleton.spine.start.x},${skeleton.pelvis.top - 8},${skeleton.spine.start.x + 12},${skeleton.pelvis.top - 5}
+                L${skeleton.spine.start.x + 10},${skeleton.pelvis.top + 15}
+                Q${skeleton.spine.start.x},${skeleton.pelvis.top + 18},${skeleton.spine.start.x - 10},${skeleton.pelvis.top + 15}
                 Z
               `}
-              fill="none"
-              stroke="#555"
-              strokeWidth="2"
+              fill="url(#boneGradient)"
+              stroke="#aaa"
+              strokeWidth={1.2}
             />
             
-            {/* Head */}
-            <circle cx={skeleton.head.x} cy={skeleton.head.y} r="20" fill="#e0e0e0" stroke="#333" strokeWidth="1.5" />
+            {/* Ribcage Structure */}
+            <g>
+              {/* Sternum */}
+              <path 
+                d={`
+                  M${skeleton.ribcage.center},${skeleton.ribcage.top + 12}
+                  Q${skeleton.ribcage.center + 2},${skeleton.ribcage.top + 15},${skeleton.ribcage.center},${skeleton.ribcage.top + 18}
+                  Q${skeleton.ribcage.center - 2},${skeleton.ribcage.top + 21},${skeleton.ribcage.center},${skeleton.ribcage.top + 24}
+                  Q${skeleton.ribcage.center + 2},${skeleton.ribcage.top + 27},${skeleton.ribcage.center},${skeleton.ribcage.top + 30}
+                  Q${skeleton.ribcage.center - 2},${skeleton.ribcage.top + 33},${skeleton.ribcage.center},${skeleton.ribcage.top + 36}
+                  Q${skeleton.ribcage.center + 2},${skeleton.ribcage.top + 39},${skeleton.ribcage.center},${skeleton.ribcage.top + 42}
+                  Q${skeleton.ribcage.center - 2},${skeleton.ribcage.top + 45},${skeleton.ribcage.center},${skeleton.ribcage.top + 48}
+                `}
+                fill="none"
+                stroke="#d0d0d0"
+                strokeWidth={7}
+              />
+              <path 
+                d={`
+                  M${skeleton.ribcage.center},${skeleton.ribcage.top + 12}
+                  Q${skeleton.ribcage.center + 2},${skeleton.ribcage.top + 15},${skeleton.ribcage.center},${skeleton.ribcage.top + 18}
+                  Q${skeleton.ribcage.center - 2},${skeleton.ribcage.top + 21},${skeleton.ribcage.center},${skeleton.ribcage.top + 24}
+                  Q${skeleton.ribcage.center + 2},${skeleton.ribcage.top + 27},${skeleton.ribcage.center},${skeleton.ribcage.top + 30}
+                  Q${skeleton.ribcage.center - 2},${skeleton.ribcage.top + 33},${skeleton.ribcage.center},${skeleton.ribcage.top + 36}
+                  Q${skeleton.ribcage.center + 2},${skeleton.ribcage.top + 39},${skeleton.ribcage.center},${skeleton.ribcage.top + 42}
+                  Q${skeleton.ribcage.center - 2},${skeleton.ribcage.top + 45},${skeleton.ribcage.center},${skeleton.ribcage.top + 48}
+                `}
+                fill="none"
+                stroke="#aaa"
+                strokeWidth={1}
+              />
+              
+              {/* Individual ribs - using curved paths for each rib pair */}
+              {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => {
+                const ribSpacing = skeleton.ribcage.height / 12;
+                const y = skeleton.ribcage.top + 10 + (i * ribSpacing);
+                const ribWidth = (skeleton.ribcage.width * 0.95) * (i < 7 ? 1 - (i * 0.01) : 1 - (i * 0.05));
+                const ribHeight = ribSpacing * 0.9;
+                const ribCurve = 15 + (i * 1.5);
+                
+                return (
+                  <g key={`rib-${i}`}>
+                    {/* Left rib */}
+                    <path 
+                      d={`
+                        M${skeleton.spine.start.x - 4},${y}
+                        C${skeleton.spine.start.x - ribWidth/4},${y - ribCurve},
+                          ${skeleton.spine.start.x - ribWidth/2},${y - ribCurve},
+                          ${skeleton.spine.start.x - ribWidth + 10},${y - ribHeight/2}
+                        L${skeleton.spine.start.x - ribWidth},${y}
+                        C${skeleton.spine.start.x - ribWidth/2},${y + ribCurve},
+                          ${skeleton.spine.start.x - ribWidth/4},${y + ribCurve},
+                          ${skeleton.spine.start.x - 4},${y + ribHeight}
+                      `}
+                      fill="url(#boneGradient)"
+                      stroke="#aaa"
+                      strokeWidth={1}
+                      opacity={0.9}
+                    />
+                    
+                    {/* Right rib */}
+                    <path 
+                      d={`
+                        M${skeleton.spine.start.x + 4},${y}
+                        C${skeleton.spine.start.x + ribWidth/4},${y - ribCurve},
+                          ${skeleton.spine.start.x + ribWidth/2},${y - ribCurve},
+                          ${skeleton.spine.start.x + ribWidth - 10},${y - ribHeight/2}
+                        L${skeleton.spine.start.x + ribWidth},${y}
+                        C${skeleton.spine.start.x + ribWidth/2},${y + ribCurve},
+                          ${skeleton.spine.start.x + ribWidth/4},${y + ribCurve},
+                          ${skeleton.spine.start.x + 4},${y + ribHeight}
+                      `}
+                      fill="url(#boneGradient)"
+                      stroke="#aaa"
+                      strokeWidth={1}
+                      opacity={0.9}
+                    />
+                  </g>
+                );
+              })}
+            </g>
             
-            {/* Spine */}
-            <SkeletonLine 
-              x1={skeleton.spine.start.x}
-              y1={skeleton.spine.start.y}
-              x2={skeleton.spine.end.x}
-              y2={skeleton.spine.end.y}
-              thickness={8}
-              color="#555"
-            />
+            {/* Pelvis */}
+            <g>
+              {/* Ilium (hip bones) */}
+              <path 
+                d={`
+                  M${skeleton.pelvis.left + 10},${skeleton.pelvis.top}
+                  Q${skeleton.pelvis.left},${skeleton.pelvis.top - 5},${skeleton.pelvis.left - 5},${skeleton.pelvis.top + 10}
+                  Q${skeleton.pelvis.left - 8},${skeleton.pelvis.top + 20},${skeleton.pelvis.left},${skeleton.pelvis.top + 25}
+                  L${skeleton.hipLeft.x - 5},${skeleton.hipLeft.y}
+                  Q${skeleton.hipLeft.x},${skeleton.hipLeft.y + 5},${skeleton.hipLeft.x + 10},${skeleton.hipLeft.y}
+                  Q${skeleton.hipLeft.x + 15},${skeleton.hipLeft.y - 15},${skeleton.pelvis.left + 10},${skeleton.pelvis.top}
+                `}
+                fill="url(#boneGradient)"
+                stroke="#aaa"
+                strokeWidth={1.2}
+              />
+              
+              <path 
+                d={`
+                  M${skeleton.pelvis.right - 10},${skeleton.pelvis.top}
+                  Q${skeleton.pelvis.right},${skeleton.pelvis.top - 5},${skeleton.pelvis.right + 5},${skeleton.pelvis.top + 10}
+                  Q${skeleton.pelvis.right + 8},${skeleton.pelvis.top + 20},${skeleton.pelvis.right},${skeleton.pelvis.top + 25}
+                  L${skeleton.hipRight.x + 5},${skeleton.hipRight.y}
+                  Q${skeleton.hipRight.x},${skeleton.hipRight.y + 5},${skeleton.hipRight.x - 10},${skeleton.hipRight.y}
+                  Q${skeleton.hipRight.x - 15},${skeleton.hipRight.y - 15},${skeleton.pelvis.right - 10},${skeleton.pelvis.top}
+                `}
+                fill="url(#boneGradient)"
+                stroke="#aaa"
+                strokeWidth={1.2}
+              />
+              
+              {/* Pubic bones and ischium */}
+              <path 
+                d={`
+                  M${skeleton.hipLeft.x + 2},${skeleton.hipLeft.y + 2}
+                  Q${skeleton.hipLeft.x + 8},${skeleton.hipLeft.y + 15},${skeleton.pelvis.left + skeleton.pelvis.width/2 - 5},${skeleton.pelvis.bottom}
+                  L${skeleton.pelvis.left + skeleton.pelvis.width/2 + 5},${skeleton.pelvis.bottom}
+                  Q${skeleton.hipRight.x - 8},${skeleton.hipRight.y + 15},${skeleton.hipRight.x - 2},${skeleton.hipRight.y + 2}
+                `}
+                fill="url(#boneGradient)"
+                stroke="#aaa"
+                strokeWidth={1.2}
+              />
+              
+              {/* Acetabulum (hip socket) - left */}
+              <circle 
+                cx={skeleton.hipLeft.x} 
+                cy={skeleton.hipLeft.y} 
+                r={8} 
+                fill="none" 
+                stroke="#aaa" 
+                strokeWidth={1.5} 
+              />
+              <circle 
+                cx={skeleton.hipLeft.x} 
+                cy={skeleton.hipLeft.y} 
+                r={5} 
+                fill="#d5d5d5" 
+                stroke="#aaa" 
+                strokeWidth={1} 
+              />
+              
+              {/* Acetabulum (hip socket) - right */}
+              <circle 
+                cx={skeleton.hipRight.x} 
+                cy={skeleton.hipRight.y} 
+                r={8} 
+                fill="none" 
+                stroke="#aaa" 
+                strokeWidth={1.5} 
+              />
+              <circle 
+                cx={skeleton.hipRight.x} 
+                cy={skeleton.hipRight.y} 
+                r={5} 
+                fill="#d5d5d5" 
+                stroke="#aaa" 
+                strokeWidth={1} 
+              />
+            </g>
             
             {/* Clavicles */}
-            <SkeletonLine 
-              x1={skeleton.shoulderLeft.x}
-              y1={skeleton.shoulderLeft.y}
-              x2={skeleton.neck.x}
-              y2={skeleton.shoulderLeft.y - 2}
-              thickness={4}
-              color="#666"
+            <path 
+              d={`
+                M${skeleton.neck.x},${skeleton.shoulderLeft.y - 3}
+                C${skeleton.neck.x + 8},${skeleton.shoulderLeft.y - 5},
+                  ${skeleton.shoulderLeft.x - 10},${skeleton.shoulderLeft.y - 5},
+                  ${skeleton.shoulderLeft.x},${skeleton.shoulderLeft.y}
+              `}
+              fill="none"
+              stroke="#d0d0d0"
+              strokeWidth={4}
             />
-            <SkeletonLine 
-              x1={skeleton.shoulderRight.x}
-              y1={skeleton.shoulderRight.y}
-              x2={skeleton.neck.x}
-              y2={skeleton.shoulderRight.y - 2}
-              thickness={4}
-              color="#666"
+            <path 
+              d={`
+                M${skeleton.neck.x},${skeleton.shoulderLeft.y - 3}
+                C${skeleton.neck.x + 8},${skeleton.shoulderLeft.y - 5},
+                  ${skeleton.shoulderLeft.x - 10},${skeleton.shoulderLeft.y - 5},
+                  ${skeleton.shoulderLeft.x},${skeleton.shoulderLeft.y}
+              `}
+              fill="none"
+              stroke="#aaa"
+              strokeWidth={1}
+            />
+            
+            <path 
+              d={`
+                M${skeleton.neck.x},${skeleton.shoulderRight.y - 3}
+                C${skeleton.neck.x - 8},${skeleton.shoulderRight.y - 5},
+                  ${skeleton.shoulderRight.x + 10},${skeleton.shoulderRight.y - 5},
+                  ${skeleton.shoulderRight.x},${skeleton.shoulderRight.y}
+              `}
+              fill="none"
+              stroke="#d0d0d0"
+              strokeWidth={4}
+            />
+            <path 
+              d={`
+                M${skeleton.neck.x},${skeleton.shoulderRight.y - 3}
+                C${skeleton.neck.x - 8},${skeleton.shoulderRight.y - 5},
+                  ${skeleton.shoulderRight.x + 10},${skeleton.shoulderRight.y - 5},
+                  ${skeleton.shoulderRight.x},${skeleton.shoulderRight.y}
+              `}
+              fill="none"
+              stroke="#aaa"
+              strokeWidth={1}
+            />
+            
+            {/* Scapula (shoulder blades) */}
+            <path 
+              d={`
+                M${skeleton.shoulderLeft.x},${skeleton.shoulderLeft.y}
+                L${skeleton.shoulderLeft.x - 10},${skeleton.shoulderLeft.y + 5}
+                Q${skeleton.shoulderLeft.x - 15},${skeleton.shoulderLeft.y + 25},${skeleton.shoulderLeft.x - 8},${skeleton.shoulderLeft.y + 40}
+                Q${skeleton.shoulderLeft.x + 8},${skeleton.shoulderLeft.y + 35},${skeleton.shoulderLeft.x + 5},${skeleton.shoulderLeft.y + 10}
+                Z
+              `}
+              fill="url(#boneGradient)"
+              stroke="#aaa"
+              strokeWidth={1}
+              opacity={0.6}
+            />
+            
+            <path 
+              d={`
+                M${skeleton.shoulderRight.x},${skeleton.shoulderRight.y}
+                L${skeleton.shoulderRight.x + 10},${skeleton.shoulderRight.y + 5}
+                Q${skeleton.shoulderRight.x + 15},${skeleton.shoulderRight.y + 25},${skeleton.shoulderRight.x + 8},${skeleton.shoulderRight.y + 40}
+                Q${skeleton.shoulderRight.x - 8},${skeleton.shoulderRight.y + 35},${skeleton.shoulderRight.x - 5},${skeleton.shoulderRight.y + 10}
+                Z
+              `}
+              fill="url(#boneGradient)"
+              stroke="#aaa"
+              strokeWidth={1}
+              opacity={0.6}
             />
             
             {/* Arms: Upper arm (humerus) */}
-            <SkeletonLine 
-              x1={skeleton.shoulderLeft.x}
-              y1={skeleton.shoulderLeft.y}
-              x2={skeleton.elbowLeft.x}
-              y2={skeleton.elbowLeft.y}
-              thickness={6}
-              color="#666"
-            />
-            <SkeletonLine 
-              x1={skeleton.shoulderRight.x}
-              y1={skeleton.shoulderRight.y}
-              x2={skeleton.elbowRight.x}
-              y2={skeleton.elbowRight.y}
-              thickness={6}
-              color="#666"
+            <path 
+              d={`
+                M${skeleton.shoulderLeft.x},${skeleton.shoulderLeft.y}
+                Q${skeleton.shoulderLeft.x - 2},${skeleton.shoulderLeft.y + 15},${skeleton.elbowLeft.x},${skeleton.elbowLeft.y - 5}
+                L${skeleton.elbowLeft.x - 4},${skeleton.elbowLeft.y}
+                L${skeleton.elbowLeft.x},${skeleton.elbowLeft.y + 5}
+                L${skeleton.elbowLeft.x + 4},${skeleton.elbowLeft.y}
+                L${skeleton.elbowLeft.x},${skeleton.elbowLeft.y - 5}
+                Q${skeleton.shoulderLeft.x + 2},${skeleton.shoulderLeft.y + 15},${skeleton.shoulderLeft.x},${skeleton.shoulderLeft.y}
+              `}
+              fill="url(#boneGradient)"
+              stroke="#aaa"
+              strokeWidth={1.2}
             />
             
-            {/* Arms: Lower arm (radius/ulna) */}
-            <SkeletonLine 
-              x1={skeleton.elbowLeft.x}
-              y1={skeleton.elbowLeft.y}
-              x2={skeleton.wristLeft.x}
-              y2={skeleton.wristLeft.y}
-              thickness={5}
-              color="#777"
+            <path 
+              d={`
+                M${skeleton.shoulderRight.x},${skeleton.shoulderRight.y}
+                Q${skeleton.shoulderRight.x + 2},${skeleton.shoulderRight.y + 15},${skeleton.elbowRight.x},${skeleton.elbowRight.y - 5}
+                L${skeleton.elbowRight.x + 4},${skeleton.elbowRight.y}
+                L${skeleton.elbowRight.x},${skeleton.elbowRight.y + 5}
+                L${skeleton.elbowRight.x - 4},${skeleton.elbowRight.y}
+                L${skeleton.elbowRight.x},${skeleton.elbowRight.y - 5}
+                Q${skeleton.shoulderRight.x - 2},${skeleton.shoulderRight.y + 15},${skeleton.shoulderRight.x},${skeleton.shoulderRight.y}
+              `}
+              fill="url(#boneGradient)"
+              stroke="#aaa"
+              strokeWidth={1.2}
             />
-            <SkeletonLine 
-              x1={skeleton.elbowRight.x}
-              y1={skeleton.elbowRight.y}
-              x2={skeleton.wristRight.x}
-              y2={skeleton.wristRight.y}
-              thickness={5}
-              color="#777"
+            
+            {/* Arms: Lower arm (radius and ulna) */}
+            <path 
+              d={`
+                M${skeleton.elbowLeft.x - 3},${skeleton.elbowLeft.y + 1}
+                Q${skeleton.elbowLeft.x - 4},${skeleton.elbowLeft.y + 15},${skeleton.wristLeft.x - 2},${skeleton.wristLeft.y - 2}
+                L${skeleton.wristLeft.x},${skeleton.wristLeft.y}
+                Q${skeleton.elbowLeft.x + 2},${skeleton.elbowLeft.y + 15},${skeleton.elbowLeft.x + 3},${skeleton.elbowLeft.y + 1}
+              `}
+              fill="url(#boneGradient)"
+              stroke="#aaa"
+              strokeWidth={1.2}
             />
+            
+            <path 
+              d={`
+                M${skeleton.elbowRight.x + 3},${skeleton.elbowRight.y + 1}
+                Q${skeleton.elbowRight.x + 4},${skeleton.elbowRight.y + 15},${skeleton.wristRight.x + 2},${skeleton.wristRight.y - 2}
+                L${skeleton.wristRight.x},${skeleton.wristRight.y}
+                Q${skeleton.elbowRight.x - 2},${skeleton.elbowRight.y + 15},${skeleton.elbowRight.x - 3},${skeleton.elbowRight.y + 1}
+              `}
+              fill="url(#boneGradient)"
+              stroke="#aaa"
+              strokeWidth={1.2}
+            />
+            
+            {/* Hand bones - carpals, metacarpals and phalanges */}
+            <g>
+              {/* Left wrist */}
+              <rect 
+                x={skeleton.wristLeft.x - 5} 
+                y={skeleton.wristLeft.y - 2} 
+                width={10} 
+                height={6} 
+                rx={2} 
+                fill="url(#boneGradient)" 
+                stroke="#aaa" 
+                strokeWidth={0.8} 
+              />
+              
+              {/* Left fingers */}
+              {[0, 1, 2, 3, 4].map((i) => {
+                const baseX = skeleton.wristLeft.x - 4 + (i * 2);
+                const baseY = skeleton.wristLeft.y + 4;
+                const length = i === 0 ? 6 : (i === 4 ? 8 : 10);
+                
+                return (
+                  <g key={`lf-${i}`}>
+                    <line 
+                      x1={baseX} 
+                      y1={baseY} 
+                      x2={baseX} 
+                      y2={baseY + length} 
+                      stroke="#d0d0d0" 
+                      strokeWidth={1.5} 
+                    />
+                  </g>
+                );
+              })}
+              
+              {/* Right wrist */}
+              <rect 
+                x={skeleton.wristRight.x - 5} 
+                y={skeleton.wristRight.y - 2} 
+                width={10} 
+                height={6} 
+                rx={2} 
+                fill="url(#boneGradient)" 
+                stroke="#aaa" 
+                strokeWidth={0.8} 
+              />
+              
+              {/* Right fingers */}
+              {[0, 1, 2, 3, 4].map((i) => {
+                const baseX = skeleton.wristRight.x + 4 - (i * 2);
+                const baseY = skeleton.wristRight.y + 4;
+                const length = i === 0 ? 6 : (i === 4 ? 8 : 10);
+                
+                return (
+                  <g key={`rf-${i}`}>
+                    <line 
+                      x1={baseX} 
+                      y1={baseY} 
+                      x2={baseX} 
+                      y2={baseY + length} 
+                      stroke="#d0d0d0" 
+                      strokeWidth={1.5} 
+                    />
+                  </g>
+                );
+              })}
+            </g>
             
             {/* Legs: Upper leg (femur) */}
-            <SkeletonLine 
-              x1={skeleton.hipLeft.x}
-              y1={skeleton.hipLeft.y}
-              x2={skeleton.kneeLeft.x}
-              y2={skeleton.kneeLeft.y}
-              thickness={7}
-              color="#666"
-            />
-            <SkeletonLine 
-              x1={skeleton.hipRight.x}
-              y1={skeleton.hipRight.y}
-              x2={skeleton.kneeRight.x}
-              y2={skeleton.kneeRight.y}
-              thickness={7}
-              color="#666"
-            />
-            
-            {/* Legs: Lower leg (tibia) */}
-            <SkeletonLine 
-              x1={skeleton.kneeLeft.x}
-              y1={skeleton.kneeLeft.y}
-              x2={skeleton.ankleLeft.x}
-              y2={skeleton.ankleLeft.y}
-              thickness={6}
-              color="#777"
-            />
-            <SkeletonLine 
-              x1={skeleton.kneeRight.x}
-              y1={skeleton.kneeRight.y}
-              x2={skeleton.ankleRight.x}
-              y2={skeleton.ankleRight.y}
-              thickness={6}
-              color="#777"
-            />
-            
-            {/* Joints */}
-            <SkeletonJoint x={skeleton.neck.x} y={skeleton.neck.y} size={4} color="#666" />
-            <SkeletonJoint x={skeleton.shoulderLeft.x} y={skeleton.shoulderLeft.y} size={5} color="#666" />
-            <SkeletonJoint x={skeleton.shoulderRight.x} y={skeleton.shoulderRight.y} size={5} color="#666" />
-            <SkeletonJoint x={skeleton.elbowLeft.x} y={skeleton.elbowLeft.y} size={4} color="#777" />
-            <SkeletonJoint x={skeleton.elbowRight.x} y={skeleton.elbowRight.y} size={4} color="#777" />
-            <SkeletonJoint x={skeleton.wristLeft.x} y={skeleton.wristLeft.y} size={3} color="#888" />
-            <SkeletonJoint x={skeleton.wristRight.x} y={skeleton.wristRight.y} size={3} color="#888" />
-            
-            {/* Hip joints - highlighted to emphasize anatomical accuracy */}
-            <SkeletonJoint x={skeleton.hipLeft.x} y={skeleton.hipLeft.y} size={6} color="#d32f2f" />
-            <SkeletonJoint x={skeleton.hipRight.x} y={skeleton.hipRight.y} size={6} color="#d32f2f" />
-            
-            <SkeletonJoint x={skeleton.kneeLeft.x} y={skeleton.kneeLeft.y} size={4} color="#777" />
-            <SkeletonJoint x={skeleton.kneeRight.x} y={skeleton.kneeRight.y} size={4} color="#777" />
-            <SkeletonJoint x={skeleton.ankleLeft.x} y={skeleton.ankleLeft.y} size={3} color="#888" />
-            <SkeletonJoint x={skeleton.ankleRight.x} y={skeleton.ankleRight.y} size={3} color="#888" />
-            
-            {/* Feet */}
             <path 
-              d={`M${skeleton.ankleLeft.x-2},${skeleton.ankleLeft.y} L${skeleton.ankleLeft.x-10},${skeleton.ankleLeft.y+10} L${skeleton.ankleLeft.x+5},${skeleton.ankleLeft.y+10} L${skeleton.ankleLeft.x},${skeleton.ankleLeft.y}`} 
-              fill="#888" 
+              d={`
+                M${skeleton.hipLeft.x},${skeleton.hipLeft.y}
+                Q${skeleton.hipLeft.x - 5},${skeleton.hipLeft.y + 25},${skeleton.kneeLeft.x},${skeleton.kneeLeft.y - 6}
+                L${skeleton.kneeLeft.x - 5},${skeleton.kneeLeft.y}
+                L${skeleton.kneeLeft.x},${skeleton.kneeLeft.y + 6}
+                L${skeleton.kneeLeft.x + 5},${skeleton.kneeLeft.y}
+                L${skeleton.kneeLeft.x},${skeleton.kneeLeft.y - 6}
+                Q${skeleton.hipLeft.x + 5},${skeleton.hipLeft.y + 25},${skeleton.hipLeft.x},${skeleton.hipLeft.y}
+              `}
+              fill="url(#boneGradient)"
+              stroke="#aaa"
+              strokeWidth={1.2}
             />
+            
             <path 
-              d={`M${skeleton.ankleRight.x+2},${skeleton.ankleRight.y} L${skeleton.ankleRight.x+10},${skeleton.ankleRight.y+10} L${skeleton.ankleRight.x-5},${skeleton.ankleRight.y+10} L${skeleton.ankleRight.x},${skeleton.ankleRight.y}`} 
-              fill="#888" 
+              d={`
+                M${skeleton.hipRight.x},${skeleton.hipRight.y}
+                Q${skeleton.hipRight.x + 5},${skeleton.hipRight.y + 25},${skeleton.kneeRight.x},${skeleton.kneeRight.y - 6}
+                L${skeleton.kneeRight.x + 5},${skeleton.kneeRight.y}
+                L${skeleton.kneeRight.x},${skeleton.kneeRight.y + 6}
+                L${skeleton.kneeRight.x - 5},${skeleton.kneeRight.y}
+                L${skeleton.kneeRight.x},${skeleton.kneeRight.y - 6}
+                Q${skeleton.hipRight.x - 5},${skeleton.hipRight.y + 25},${skeleton.hipRight.x},${skeleton.hipRight.y}
+              `}
+              fill="url(#boneGradient)"
+              stroke="#aaa"
+              strokeWidth={1.2}
+            />
+            
+            {/* Legs: Lower leg (tibia and fibula) */}
+            <path 
+              d={`
+                M${skeleton.kneeLeft.x - 3},${skeleton.kneeLeft.y + 2}
+                Q${skeleton.kneeLeft.x - 4},${skeleton.kneeLeft.y + 25},${skeleton.ankleLeft.x - 3},${skeleton.ankleLeft.y - 3}
+                L${skeleton.ankleLeft.x},${skeleton.ankleLeft.y}
+                Q${skeleton.kneeLeft.x + 2},${skeleton.kneeLeft.y + 25},${skeleton.kneeLeft.x + 3},${skeleton.kneeLeft.y + 2}
+              `}
+              fill="url(#boneGradient)"
+              stroke="#aaa"
+              strokeWidth={1.2}
+            />
+            
+            <path 
+              d={`
+                M${skeleton.kneeRight.x + 3},${skeleton.kneeRight.y + 2}
+                Q${skeleton.kneeRight.x + 4},${skeleton.kneeRight.y + 25},${skeleton.ankleRight.x + 3},${skeleton.ankleRight.y - 3}
+                L${skeleton.ankleRight.x},${skeleton.ankleRight.y}
+                Q${skeleton.kneeRight.x - 2},${skeleton.kneeRight.y + 25},${skeleton.kneeRight.x - 3},${skeleton.kneeRight.y + 2}
+              `}
+              fill="url(#boneGradient)"
+              stroke="#aaa"
+              strokeWidth={1.2}
+            />
+            
+            {/* Feet bones */}
+            <g>
+              {/* Left ankle and foot */}
+              <path 
+                d={`
+                  M${skeleton.ankleLeft.x},${skeleton.ankleLeft.y}
+                  L${skeleton.ankleLeft.x - 8},${skeleton.ankleLeft.y + 2}
+                  Q${skeleton.ankleLeft.x - 12},${skeleton.ankleLeft.y + 5},${skeleton.ankleLeft.x - 14},${skeleton.ankleLeft.y + 12}
+                  L${skeleton.ankleLeft.x + 4},${skeleton.ankleLeft.y + 12}
+                  Q${skeleton.ankleLeft.x + 2},${skeleton.ankleLeft.y + 5},${skeleton.ankleLeft.x},${skeleton.ankleLeft.y}
+                `}
+                fill="url(#boneGradient)"
+                stroke="#aaa"
+                strokeWidth={1}
+              />
+              
+              {/* Left toes */}
+              {[0, 1, 2, 3, 4].map((i) => {
+                const baseX = skeleton.ankleLeft.x - 12 + (i * 3);
+                const baseY = skeleton.ankleLeft.y + 12;
+                
+                return (
+                  <line 
+                    key={`lt-${i}`}
+                    x1={baseX} 
+                    y1={baseY} 
+                    x2={baseX} 
+                    y2={baseY + 4} 
+                    stroke="#d0d0d0" 
+                    strokeWidth={1.5} 
+                  />
+                );
+              })}
+              
+              {/* Right ankle and foot */}
+              <path 
+                d={`
+                  M${skeleton.ankleRight.x},${skeleton.ankleRight.y}
+                  L${skeleton.ankleRight.x + 8},${skeleton.ankleRight.y + 2}
+                  Q${skeleton.ankleRight.x + 12},${skeleton.ankleRight.y + 5},${skeleton.ankleRight.x + 14},${skeleton.ankleRight.y + 12}
+                  L${skeleton.ankleRight.x - 4},${skeleton.ankleRight.y + 12}
+                  Q${skeleton.ankleRight.x - 2},${skeleton.ankleRight.y + 5},${skeleton.ankleRight.x},${skeleton.ankleRight.y}
+                `}
+                fill="url(#boneGradient)"
+                stroke="#aaa"
+                strokeWidth={1}
+              />
+              
+              {/* Right toes */}
+              {[0, 1, 2, 3, 4].map((i) => {
+                const baseX = skeleton.ankleRight.x + 12 - (i * 3);
+                const baseY = skeleton.ankleRight.y + 12;
+                
+                return (
+                  <line 
+                    key={`rt-${i}`}
+                    x1={baseX} 
+                    y1={baseY} 
+                    x2={baseX} 
+                    y2={baseY + 4} 
+                    stroke="#d0d0d0" 
+                    strokeWidth={1.5} 
+                  />
+                );
+              })}
+            </g>
+            
+            {/* Patella (kneecaps) */}
+            <ellipse 
+              cx={skeleton.kneeLeft.x} 
+              cy={skeleton.kneeLeft.y} 
+              rx={6} 
+              ry={7} 
+              fill="url(#boneGradient)" 
+              stroke="#aaa" 
+              strokeWidth={1} 
+            />
+            
+            <ellipse 
+              cx={skeleton.kneeRight.x} 
+              cy={skeleton.kneeRight.y} 
+              rx={6} 
+              ry={7} 
+              fill="url(#boneGradient)" 
+              stroke="#aaa" 
+              strokeWidth={1} 
             />
           </svg>
         </div>

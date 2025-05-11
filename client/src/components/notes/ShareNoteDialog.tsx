@@ -29,6 +29,7 @@ export function ShareNoteDialog({ noteId, currentVisibility }: ShareNoteDialogPr
   const shareNoteMutation = useMutation({
     mutationFn: async (data: { 
       visibility: string,
+      bodyPart: string,
       condition?: string 
     }) => {
       const response = await apiRequest(
@@ -67,7 +68,10 @@ export function ShareNoteDialog({ noteId, currentVisibility }: ShareNoteDialogPr
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    const data: any = { visibility };
+    const data: any = { 
+      visibility,
+      bodyPart 
+    };
     
     // If condition is provided, include it
     if (additionalInfo && condition.trim()) {
@@ -154,37 +158,72 @@ export function ShareNoteDialog({ noteId, currentVisibility }: ShareNoteDialogPr
                   Age will be shown as a range (e.g., "40-49").
                 </p>
                 
-                <div className="space-y-2">
-                  <div className="flex items-center space-x-2">
-                    <input 
-                      type="checkbox" 
-                      id="additional-info" 
-                      checked={additionalInfo}
-                      onChange={(e) => setAdditionalInfo(e.target.checked)}
-                      className="rounded border-gray-300 text-primary"
-                    />
-                    <Label htmlFor="additional-info" className="text-sm font-medium">
-                      Add a custom condition description
+                <div className="space-y-4">
+                  {/* Body Part Category Selection */}
+                  <div className="space-y-2">
+                    <Label htmlFor="body-part" className="text-sm font-medium">
+                      Body Part Category
                     </Label>
+                    <Select
+                      value={bodyPart}
+                      onValueChange={setBodyPart}
+                    >
+                      <SelectTrigger id="body-part" className="w-full">
+                        <SelectValue placeholder="Select body part category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="shoulder">Shoulder</SelectItem>
+                        <SelectItem value="neck">Neck</SelectItem>
+                        <SelectItem value="back">Back</SelectItem>
+                        <SelectItem value="elbow">Elbow</SelectItem>
+                        <SelectItem value="wrist">Wrist</SelectItem>
+                        <SelectItem value="hand">Hand</SelectItem>
+                        <SelectItem value="hip">Hip</SelectItem>
+                        <SelectItem value="knee">Knee</SelectItem>
+                        <SelectItem value="ankle">Ankle</SelectItem>
+                        <SelectItem value="foot">Foot</SelectItem>
+                        <SelectItem value="general">General</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Categorize this note by body part to help others find relevant cases.
+                    </p>
                   </div>
                   
-                  {additionalInfo && (
-                    <div className="space-y-2">
-                      <Label htmlFor="condition" className="text-sm">
-                        Condition Description (no patient identifiers)
-                      </Label>
-                      <Input
-                        id="condition"
-                        value={condition}
-                        onChange={(e) => setCondition(e.target.value)}
-                        placeholder="E.g., 'Chronic lower back pain with limited range of motion'"
+                  {/* Condition Description */}
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <input 
+                        type="checkbox" 
+                        id="additional-info" 
+                        checked={additionalInfo}
+                        onChange={(e) => setAdditionalInfo(e.target.checked)}
+                        className="rounded border-gray-300 text-primary"
                       />
-                      <p className="text-xs text-muted-foreground">
-                        This description will appear on the shared note. Keep it concise and ensure it
-                        does not contain any identifiable patient information.
-                      </p>
+                      <Label htmlFor="additional-info" className="text-sm font-medium">
+                        Add a custom condition description
+                      </Label>
                     </div>
-                  )}
+                    
+                    {additionalInfo && (
+                      <div className="space-y-2">
+                        <Label htmlFor="condition" className="text-sm">
+                          Condition Description (no patient identifiers)
+                        </Label>
+                        <Input
+                          id="condition"
+                          value={condition}
+                          onChange={(e) => setCondition(e.target.value)}
+                          placeholder="E.g., 'Chronic lower back pain with limited range of motion'"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          This description will appear on the shared note. Keep it concise and ensure it
+                          does not contain any identifiable patient information.
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}

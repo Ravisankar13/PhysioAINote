@@ -260,7 +260,7 @@ const VoiceRecorder = ({ onRecordingComplete }: VoiceRecorderProps) => {
       
       toast({
         title: "Transcription complete",
-        description: "Audio has been converted to text and analyzed for SOAP elements.",
+        description: "Audio has been converted to text and analyzed for clinical information.",
       });
     } catch (err: any) {
       console.error("Transcription error:", err);

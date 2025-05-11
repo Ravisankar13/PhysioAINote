@@ -25,6 +25,7 @@ const Header = () => {
     { href: "/skeleton-tool", label: "2D Skeleton Tool" },
     { href: "/skeleton-3d-tool", label: "3D Skeleton Tool" },
     { href: "/shared-notes", label: "Shared Notes" },
+    { href: "/sample-notes", label: "Sample Notes" },
     { href: "/about", label: "About" },
     { href: "/contact", label: "Contact" },
   ];

@@ -210,10 +210,10 @@ export class DatabaseStorage implements IStorage {
   
   async getResearchArticles(bodyPart?: string): Promise<ResearchArticle[]> {
     // If bodyPart is provided, filter by it
-    if (bodyPart) {
+    if (bodyPart && Object.values(researchArticles.bodyPart.enumValues).includes(bodyPart)) {
       return db.select()
         .from(researchArticles)
-        .where(eq(researchArticles.bodyPart, bodyPart))
+        .where(eq(researchArticles.bodyPart, bodyPart as any))
         .orderBy(desc(researchArticles.publicationDate));
     }
     

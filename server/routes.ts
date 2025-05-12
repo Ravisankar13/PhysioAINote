@@ -2,7 +2,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { generateSoapNote } from "./openai";
-import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema } from "@shared/schema";
+import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema } from "@shared/schema";
 import { ZodError } from "zod";
 import { fromZodError } from "zod-validation-error";
 import multer from "multer";
@@ -440,6 +440,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching sample note:", error);
       return res.status(500).json({ message: "Failed to fetch sample note" });
+    }
+  });
+
+  // API route to get all research articles
+  app.get("/api/research", async (req: Request, res: Response) => {
+    try {
+      const bodyPart = req.query.bodyPart as string;
+      const articles = await storage.getResearchArticles(bodyPart);
+      return res.json(articles);
+    } catch (error) {
+      console.error("Error fetching research articles:", error);
+      return res.status(500).json({ message: "Failed to fetch research articles" });
+    }
+  });
+
+  // API route to get a specific research article by ID
+  app.get("/api/research/:id", async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid article ID" });
+      }
+      
+      const article = await storage.getResearchArticle(id);
+      
+      if (!article) {
+        return res.status(404).json({ message: "Research article not found" });
+      }
+      
+      return res.json(article);
+    } catch (error) {
+      console.error("Error fetching research article:", error);
+      return res.status(500).json({ message: "Failed to fetch research article" });
+    }
+  });
+  
+  // API route to create a new research article (admin only)
+  app.post("/api/research", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      // TODO: Add admin role check here
+      
+      // Validate request body
+      const articleData = insertResearchArticleSchema.parse(req.body);
+      
+      // Create the article
+      const newArticle = await storage.createResearchArticle(articleData);
+      return res.status(201).json(newArticle);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        const validationError = fromZodError(error);
+        return res.status(400).json({ 
+          message: "Validation error", 
+          errors: validationError.details 
+        });
+      }
+      
+      console.error("Error creating research article:", error);
+      return res.status(500).json({ message: "Failed to create research article" });
     }
   });
 

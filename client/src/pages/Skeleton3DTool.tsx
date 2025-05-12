@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function Skeleton3DTool() {
   const [activeModel, setActiveModel] = useState("generated"); // "generated" or "realistic"
+  const [selectedMovement, setSelectedMovement] = useState<string | undefined>(undefined);
   const [adjustments, setAdjustments] = useState({
     femurLength: 1,
     tibiaLength: 1,
@@ -24,6 +25,10 @@ export default function Skeleton3DTool() {
       ...prev,
       [name]: parseFloat(value)
     }));
+  };
+
+  const handleMovementSelection = (movement: string | undefined) => {
+    setSelectedMovement(movement);
   };
 
   const [isSaved, setIsSaved] = useState(false);
@@ -73,45 +78,87 @@ export default function Skeleton3DTool() {
             
             <TabsContent value="generated">
               <div className="bg-white rounded-lg p-6 shadow-sm">
-                <Skeleton3DModel adjustments={adjustments} />
+                <Skeleton3DModel adjustments={adjustments} animation={selectedMovement} />
               </div>
               
               <div className="bg-white rounded-lg p-6 shadow-sm mt-6">
-                <h2 className="text-xl font-bold mb-4">Adjustment Controls</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {Object.entries(adjustments).map(([key, value]) => (
-                    <div key={key}>
-                      <label className="block text-sm font-medium mb-1">
-                        {key.charAt(0).toUpperCase() + key.slice(1)}: <span className="font-bold">{value.toFixed(2)}</span>
-                      </label>
-                      <input
-                        type="range"
-                        name={key}
-                        min="0.5"
-                        max="1.5"
-                        step="0.01"
-                        value={value}
-                        onChange={handleAdjustmentChange}
-                        className="w-full accent-primary"
-                      />
+                  <div>
+                    <h2 className="text-xl font-bold mb-4">Adjustment Controls</h2>
+                    <div className="space-y-4">
+                      {Object.entries(adjustments).map(([key, value]) => (
+                        <div key={key}>
+                          <label className="block text-sm font-medium mb-1">
+                            {key.charAt(0).toUpperCase() + key.slice(1)}: <span className="font-bold">{value.toFixed(2)}</span>
+                          </label>
+                          <input
+                            type="range"
+                            name={key}
+                            min="0.5"
+                            max="1.5"
+                            step="0.01"
+                            value={value}
+                            onChange={handleAdjustmentChange}
+                            className="w-full accent-primary"
+                          />
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                    
+                    <button
+                      onClick={() => setAdjustments({
+                        femurLength: 1,
+                        tibiaLength: 1,
+                        humerusLength: 1,
+                        radiusLength: 1,
+                        spineLength: 1,
+                        ribcageWidth: 1,
+                        pelvisWidth: 1
+                      })}
+                      className="w-full bg-primary text-white py-2 rounded-md mt-6"
+                    >
+                      Reset to Default
+                    </button>
+                  </div>
+                  
+                  <div>
+                    <h2 className="text-xl font-bold mb-4">Movement Animations</h2>
+                    <p className="text-muted-foreground mb-4">
+                      Select a movement to animate the skeletal model. These animations demonstrate common physiotherapy exercises and movements.
+                    </p>
+                    <div className="space-y-3">
+                      {[
+                        { id: 'squat', label: 'Squat', description: 'Demonstrates knee and hip flexion with weight-bearing' },
+                        { id: 'stepUp', label: 'Step Up', description: 'Shows hip and knee movement during elevation' },
+                        { id: 'stepDown', label: 'Step Down', description: 'Illustrates controlled eccentric movement' },
+                        { id: 'lunge', label: 'Lunge', description: 'Displays hip mobility and knee alignment in split stance' },
+                      ].map((movement) => (
+                        <div 
+                          key={movement.id}
+                          className={`p-3 border rounded-md cursor-pointer transition-all ${selectedMovement === movement.id ? 'border-primary bg-primary/10' : 'hover:bg-gray-50'}`}
+                          onClick={() => handleMovementSelection(selectedMovement === movement.id ? undefined : movement.id)}
+                        >
+                          <div className="flex justify-between items-center">
+                            <h3 className="font-medium">{movement.label}</h3>
+                            {selectedMovement === movement.id && (
+                              <div className="text-xs text-white bg-primary px-2 py-1 rounded-full">Active</div>
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground mt-1">{movement.description}</p>
+                        </div>
+                      ))}
+                      
+                      {selectedMovement && (
+                        <button
+                          onClick={() => handleMovementSelection(undefined)}
+                          className="w-full border border-gray-300 text-gray-700 py-2 rounded-md mt-2 hover:bg-gray-50"
+                        >
+                          Stop Animation
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                
-                <button
-                  onClick={() => setAdjustments({
-                    femurLength: 1,
-                    tibiaLength: 1,
-                    humerusLength: 1,
-                    radiusLength: 1,
-                    spineLength: 1,
-                    ribcageWidth: 1,
-                    pelvisWidth: 1
-                  })}
-                  className="w-full bg-primary text-white py-2 rounded-md mt-6"
-                >
-                  Reset to Default
-                </button>
               </div>
             </TabsContent>
             
@@ -137,14 +184,23 @@ export default function Skeleton3DTool() {
               <li>Control limb size adjustments and rotation speed for both models</li>
               <li>Switch between a generated model and a detailed realistic model</li>
               <li>See both the model view and adjustment controls side-by-side</li>
+              <li>Animate common physiotherapy movements: squat, step up, step down, and lunge</li>
+              <li>Use animations to educate patients on proper movement patterns and range of motion</li>
             </ul>
             
             <div className="border-t pt-4">
               <h3 className="font-medium mb-2">Tips for Physiotherapists:</h3>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-muted-foreground mb-3">
                 Use this tool in conjunction with clinical assessments. The adjustable features 
                 help to visualize proportional differences and can assist in treatment planning, 
                 but should not replace professional clinical judgment.
+              </p>
+              <h3 className="font-medium mb-2">Using Movement Animations:</h3>
+              <p className="text-sm text-muted-foreground">
+                The animated movements can help demonstrate proper form to patients and highlight 
+                problematic movement patterns. Use these animations to explain biomechanical concepts, 
+                show how different muscles and joints work together during functional movements, and 
+                identify areas that may need focus during rehabilitation.
               </p>
             </div>
           </div>

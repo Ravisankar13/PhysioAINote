@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
-import PayPalButton from "@/components/PayPalButton";
+import { Link } from "wouter";
 import StripeProvider from "@/components/StripeProvider";
 import StripeCheckoutButton from "@/components/StripeCheckoutButton";
 import {
@@ -26,8 +26,15 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { CreditCard, CircleDollarSign } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Loader2, CreditCard, AlertCircle } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 
 type SubscriptionPlan = {
@@ -53,7 +60,8 @@ export default function Membership() {
   const queryClient = useQueryClient();
   const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan | null>(null);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<'credit-card' | 'paypal'>('credit-card');
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   // Fetch subscription plans
   const { data: plans = [], isLoading: isLoadingPlans } = useQuery({
@@ -109,12 +117,40 @@ export default function Membership() {
     },
   });
 
-  // Handle payment success (both PayPal and Stripe)
-  const handlePaymentSuccess = (planId: number, transactionId: string, amount: string, method: 'PayPal' | 'Stripe' = 'PayPal') => {
+  // Cancel subscription mutation
+  const cancelSubscriptionMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/user/subscription/cancel");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/user/subscription"] });
+      toast({
+        title: "Subscription Cancelled",
+        description: "Your subscription has been successfully cancelled.",
+        variant: "default",
+      });
+      setShowCancelDialog(false);
+    },
+    onError: (error: any) => {
+      console.error("Cancellation error:", error);
+      toast({
+        title: "Cancellation Failed",
+        description: error.message || "There was an error cancelling your subscription.",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      setIsProcessing(false);
+    }
+  });
+
+  // Handle payment success
+  const handlePaymentSuccess = (planId: number, transactionId: string, amount: string) => {
     createPaymentMutation.mutate({
       planId,
       amount,
-      paymentMethod: method,
+      paymentMethod: 'Stripe',
       transactionId,
       status: "completed",
       paymentDate: new Date().toISOString(),
@@ -130,53 +166,41 @@ export default function Membership() {
     });
   };
   
-  // Render payment options based on selected method
-  const renderPaymentOptions = () => {
+  // Handle cancel subscription
+  const handleCancelSubscription = () => {
+    setIsProcessing(true);
+    cancelSubscriptionMutation.mutate();
+  };
+  
+  // Render credit card payment form
+  const renderPaymentForm = () => {
     if (!selectedPlan) return null;
     
     return (
-      <Tabs defaultValue="credit-card" className="w-full" onValueChange={(value) => setPaymentMethod(value as 'credit-card' | 'paypal')}>
-        <TabsList className="grid w-full grid-cols-2 mb-4">
-          <TabsTrigger value="credit-card" className="flex items-center gap-2">
-            <CreditCard className="h-4 w-4" />
-            Credit Card
-          </TabsTrigger>
-          <TabsTrigger value="paypal" className="flex items-center gap-2">
-            <CircleDollarSign className="h-4 w-4" />
-            PayPal
-          </TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value="credit-card" className="space-y-4">
-          <div className="rounded-md">
-            <StripeProvider>
-              <StripeCheckoutButton 
-                amount={selectedPlan.price}
-                planId={selectedPlan.id}
-                onPaymentSuccess={(planId, transactionId, amount) => 
-                  handlePaymentSuccess(planId, transactionId, amount, 'Stripe')
-                }
-                onPaymentError={handlePaymentError}
-              />
-            </StripeProvider>
-          </div>
-        </TabsContent>
-        
-        <TabsContent value="paypal" className="space-y-4">
-          <div className="flex justify-center border border-gray-200 rounded p-4">
-            <PayPalButton 
-              amount={selectedPlan.price}
-              currency="USD"
-              intent="CAPTURE"
-            />
-          </div>
-        </TabsContent>
-      </Tabs>
+      <div className="rounded-md p-4">
+        <StripeProvider>
+          <StripeCheckoutButton 
+            amount={selectedPlan.price}
+            planId={selectedPlan.id}
+            onPaymentSuccess={handlePaymentSuccess}
+            onPaymentError={handlePaymentError}
+          />
+        </StripeProvider>
+      </div>
     );
   };
 
   // Handle subscribing to a plan
   const handleSubscribe = (plan: SubscriptionPlan) => {
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in or register to purchase a membership.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     setSelectedPlan(plan);
     setShowPaymentDialog(true);
   };
@@ -231,6 +255,16 @@ export default function Membership() {
         </p>
         <div className="bg-gray-100 p-3 rounded-lg inline-block">
           {getSubscriptionStatus()}
+          {subscription && subscription.tier !== 'none' && (
+            <Button 
+              variant="outline" 
+              size="sm"
+              className="ml-4 border-red-300 text-red-600 hover:bg-red-50"
+              onClick={() => setShowCancelDialog(true)}
+            >
+              Cancel Subscription
+            </Button>
+          )}
         </div>
       </div>
 
@@ -282,8 +316,15 @@ export default function Membership() {
           </AlertDialogHeader>
           
           <div className="py-4">
-            <p className="mb-4 font-medium">Choose your payment method:</p>
-            {renderPaymentOptions()}
+            <p className="mb-4 font-medium">Enter your payment details:</p>
+            <StripeProvider>
+              <StripeCheckoutButton 
+                amount={selectedPlan?.price || "0"}
+                planId={selectedPlan?.id || 0}
+                onPaymentSuccess={handlePaymentSuccess}
+                onPaymentError={handlePaymentError}
+              />
+            </StripeProvider>
           </div>
           
           <AlertDialogFooter>
@@ -291,6 +332,37 @@ export default function Membership() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      
+      {/* Cancel Subscription Dialog */}
+      <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cancel Subscription</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to cancel your {subscription?.tier} subscription? You'll lose access to premium features.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex justify-between sm:justify-between mt-4">
+            <Button variant="outline" onClick={() => setShowCancelDialog(false)}>
+              Keep Subscription
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={handleCancelSubscription}
+              disabled={isProcessing}
+            >
+              {isProcessing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Cancelling...
+                </>
+              ) : (
+                "Yes, Cancel Subscription"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

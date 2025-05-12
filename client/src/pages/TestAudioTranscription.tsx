@@ -75,13 +75,26 @@ const TestAudioTranscription = () => {
       }
 
       const data = await response.json();
+      // Set the transcription text
       setTranscription(data.transcript || '');
-      setClinicalInsights(data.clinicalInsights || '');
       
-      toast({
-        title: "Transcription complete",
-        description: "Audio has been successfully transcribed and analyzed",
-      });
+      // Handle the clinical insights, checking for the "no structured data" message
+      const insights = data.clinicalInsights || '';
+      setClinicalInsights(insights);
+      
+      // Show the appropriate toast message based on the content
+      if (insights.includes('not contain enough') || insights.includes('too short')) {
+        toast({
+          title: "Limited Analysis",
+          description: "The recording was too short or unclear. Try recording a longer sample with clear speech.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Transcription complete",
+          description: "Audio has been successfully transcribed and analyzed",
+        });
+      }
     } catch (error: any) {
       console.error('Error processing audio:', error);
       toast({

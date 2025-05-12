@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { soapNoteInputSchema, SoapNoteInput } from '@shared/schema';
+import { z } from 'zod';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -13,6 +14,14 @@ import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { Redirect } from "wouter";
+
+// Create a modified schema without the visibility requirement for the generator form
+const noteGeneratorSchema = soapNoteInputSchema.omit({ visibility: true }).extend({
+  bodyPart: z.string().min(1, { message: "Body part is required" }),
+});
+
+// Define the type for our form
+type NoteGeneratorInput = z.infer<typeof noteGeneratorSchema>;
 
 const TestNoteGenerator = () => {
   const [isGenerating, setIsGenerating] = useState(false);
@@ -45,7 +54,10 @@ const TestNoteGenerator = () => {
     },
   });
 
-  const onSubmit = useCallback(async (data: SoapNoteInput) => {
+  // Add visibility to the data before submission
+  const onSubmit = useCallback(async (data: Omit<SoapNoteInput, 'visibility'>) => {
+    // Since we're only generating and not saving immediately, we don't need visibility yet
+    const submitData = { ...data };
     setIsGenerating(true);
     try {
       const response = await fetch('/api/notes/generate', {

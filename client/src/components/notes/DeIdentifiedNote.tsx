@@ -8,6 +8,7 @@ interface DeIdentifiedNoteProps {
     userId: number;
     condition: string;
     ageRange: string;
+    bodyPart?: string;
     deIdentifiedNote: {
       subjective: string;
       objective: string;
@@ -17,6 +18,9 @@ interface DeIdentifiedNoteProps {
     visibility: string;
     createdAt: string;
     updatedAt: string;
+    user?: {
+      username: string;
+    };
   };
   authorName: string;
 }

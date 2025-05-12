@@ -139,7 +139,7 @@ export default function SharedNotes() {
   });
 
   // Extract unique age ranges and body parts for the filter dropdowns
-  const ageRanges = ["all", ...new Set(notes.map(note => note.ageRange))];
+  const ageRanges = ["all", ...Array.from(new Set(notes.map(note => note.ageRange)))];
   const bodyParts = ["all", "shoulder", "neck", "back", "elbow", "wrist", "hand", "hip", "knee", "ankle", "foot", "general", "other"];
   
   // Group notes by body part for categorized display
@@ -401,6 +401,7 @@ export default function SharedNotes() {
                                       visibility: "public",
                                       createdAt: new Date().toISOString(),
                                       updatedAt: new Date().toISOString(),
+                                      user: { username: "Admin" }
                                     }}
                                     authorName="Admin (Sample)"
                                   />

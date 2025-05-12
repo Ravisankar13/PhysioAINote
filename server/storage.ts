@@ -1,7 +1,8 @@
 import { 
   users, type User, type InsertUser,
   clinicalNotes, type ClinicalNote, type InsertClinicalNote, type UpdateNoteVisibility,
-  comments, type Comment, type InsertComment
+  comments, type Comment, type InsertComment,
+  researchArticles, type ResearchArticle, type InsertResearchArticle
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, isNull, sql } from "drizzle-orm";
@@ -24,6 +25,11 @@ export interface IStorage {
   createComment(comment: InsertComment): Promise<Comment>;
   getNoteComments(noteId: number): Promise<Comment[]>;
   getCommentReplies(commentId: number): Promise<Comment[]>;
+  
+  // Research Article Operations
+  getResearchArticle(id: number): Promise<ResearchArticle | undefined>;
+  getResearchArticles(bodyPart?: string): Promise<ResearchArticle[]>;
+  createResearchArticle(article: InsertResearchArticle): Promise<ResearchArticle>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -194,6 +200,32 @@ export class DatabaseStorage implements IStorage {
       .from(comments)
       .where(eq(comments.parentId, commentId))
       .orderBy(comments.createdAt);
+  }
+  
+  // Research Article Methods
+  async getResearchArticle(id: number): Promise<ResearchArticle | undefined> {
+    const results = await db.select().from(researchArticles).where(eq(researchArticles.id, id));
+    return results.length > 0 ? results[0] : undefined;
+  }
+  
+  async getResearchArticles(bodyPart?: string): Promise<ResearchArticle[]> {
+    // If bodyPart is provided, filter by it
+    if (bodyPart) {
+      return db.select()
+        .from(researchArticles)
+        .where(eq(researchArticles.bodyPart, bodyPart))
+        .orderBy(desc(researchArticles.publicationDate));
+    }
+    
+    // Otherwise, return all articles
+    return db.select()
+      .from(researchArticles)
+      .orderBy(desc(researchArticles.publicationDate));
+  }
+  
+  async createResearchArticle(article: InsertResearchArticle): Promise<ResearchArticle> {
+    const result = await db.insert(researchArticles).values(article).returning();
+    return result[0];
   }
 }
 

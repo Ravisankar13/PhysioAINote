@@ -172,6 +172,37 @@ export const noteTagsRelations = relations(noteTags, ({ one }) => ({
   })
 }));
 
+// Research Articles Schema
+export const researchArticles = pgTable("research_articles", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  authors: text("authors").notNull(),
+  journal: text("journal").notNull(),
+  publicationDate: timestamp("publication_date").notNull(),
+  doi: text("doi").notNull().unique(), // Digital Object Identifier (unique identifier for academic articles)
+  abstract: text("abstract").notNull(),
+  url: text("url").notNull(), // Link to the full article
+  bodyPart: bodyPartEnum("body_part").default("general").notNull(), // Body part category
+  keyFindings: text("key_findings"), // Summary of key findings
+  clinicalRelevance: text("clinical_relevance"), // How this relates to clinical practice
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertResearchArticleSchema = createInsertSchema(researchArticles).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertResearchArticle = z.infer<typeof insertResearchArticleSchema>;
+export type ResearchArticle = typeof researchArticles.$inferSelect;
+
+// Define research article relations
+export const researchArticleRelations = relations(researchArticles, ({ many }) => ({
+  tags: many(tags),
+}));
+
 // SOAP Note Input Schema
 export const soapNoteInputSchema = z.object({
   patientName: z.string().min(1, { message: "Patient name is required" }),

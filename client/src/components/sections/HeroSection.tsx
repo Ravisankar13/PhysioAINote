@@ -12,12 +12,12 @@ const HeroSection = () => {
         <div className="md:flex md:items-center md:justify-between md:space-x-10">
           <div className="max-w-2xl md:max-w-3xl">
             <h1 className="text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl">
-              <span className="block">Transform your</span>
-              <span className="block mt-2">physiotherapy practice with</span>
-              <span className="text-white/90 inline-block bg-secondary px-2 rounded-lg mt-2">AI-powered conversations</span>
+              <span className="block">The ultimate platform for</span>
+              <span className="block mt-2">modern physiotherapists</span>
+              <span className="text-white/90 inline-block bg-secondary px-2 rounded-lg mt-2">powered by AI</span>
             </h1>
             <p className="mt-6 text-xl text-white/80 max-w-2xl">
-              Streamline your clinical documentation with our advanced AI assistant that generates comprehensive SOAP notes from your patient interactions.
+              Streamline your clinical documentation, access research, share knowledge, and enhance patient care with our all-in-one professional platform designed for physiotherapists.
             </p>
             <div className="mt-10 flex flex-col sm:flex-row gap-4">
               <Link href="/clinical-notes">

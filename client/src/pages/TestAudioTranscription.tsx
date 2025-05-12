@@ -82,18 +82,28 @@ const TestAudioTranscription = () => {
       }
 
       const data = await response.json();
-      // Set the transcription text
-      setTranscription(data.transcript || '');
       
-      // Handle the clinical insights, checking for the "no structured data" message
+      // Get transcript and check length and quality
+      const transcript = data.transcript || '';
+      setTranscription(transcript);
+      
+      // Handle the clinical insights
       const insights = data.clinicalInsights || '';
       setClinicalInsights(insights);
       
       // Show the appropriate toast message based on the content
-      if (insights.includes('not contain enough') || insights.includes('too short')) {
+      if (transcript.trim().length < 10) {
+        toast({
+          title: "Very short recording",
+          description: "We detected minimal speech. Try speaking clearly for at least 5-10 seconds.",
+          variant: "destructive",
+        });
+      } else if (insights.includes('not contain enough') || 
+                insights.includes('too short') || 
+                insights.includes('No speech detected')) {
         toast({
           title: "Limited Analysis",
-          description: "The recording was too short or unclear. Try recording a longer sample with clear speech.",
+          description: "The recording needs more clinical content for proper analysis. Try describing symptoms or conditions clearly.",
           variant: "destructive",
         });
       } else {
@@ -126,35 +136,63 @@ const TestAudioTranscription = () => {
               Record your voice to test the OpenAI transcription service
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex justify-center py-8">
-            {isRecording ? (
-              <Button 
-                variant="destructive"
-                size="lg" 
-                className="h-20 w-20 rounded-full"
-                onClick={stopRecording}
-              >
-                <StopCircle className="h-12 w-12" />
-              </Button>
-            ) : (
-              <Button
-                size="lg"
-                className="h-20 w-20 rounded-full bg-red-600 hover:bg-red-700"
-                onClick={startRecording}
-                disabled={isProcessing}
-              >
-                <Mic className="h-12 w-12" />
-              </Button>
-            )}
+          <CardContent className="flex flex-col items-center py-8 gap-6">
+            {/* Recording tips */}
+            <div className="text-center max-w-md mb-4">
+              <p className="text-sm text-muted-foreground mb-2">
+                For best results:
+              </p>
+              <ul className="text-sm text-muted-foreground list-disc pl-5 text-left">
+                <li>Speak clearly and at a normal pace</li>
+                <li>Record for at least 10-15 seconds</li>
+                <li>Include specific clinical terminology</li>
+                <li>Describe symptoms or conditions in detail</li>
+              </ul>
+            </div>
+            
+            {/* Recording button */}
+            <div>
+              {isRecording ? (
+                <Button 
+                  variant="destructive"
+                  size="lg" 
+                  className="h-20 w-20 rounded-full"
+                  onClick={stopRecording}
+                >
+                  <StopCircle className="h-12 w-12" />
+                </Button>
+              ) : (
+                <Button
+                  size="lg"
+                  className="h-20 w-20 rounded-full bg-red-600 hover:bg-red-700"
+                  onClick={startRecording}
+                  disabled={isProcessing}
+                >
+                  <Mic className="h-12 w-12" />
+                </Button>
+              )}
+            </div>
+            
+            {/* Recording status */}
+            <div className="text-center">
+              {isRecording && (
+                <p className="text-sm font-medium text-red-600 animate-pulse">
+                  Recording in progress... Click stop when finished.
+                </p>
+              )}
+              {isProcessing && (
+                <div className="flex items-center">
+                  <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                  Processing audio...
+                </div>
+              )}
+              {!isRecording && !isProcessing && (
+                <p className="text-sm text-muted-foreground">
+                  Click the microphone to start recording
+                </p>
+              )}
+            </div>
           </CardContent>
-          <CardFooter className="flex justify-center">
-            {isProcessing && (
-              <div className="flex items-center">
-                <Loader2 className="h-6 w-6 animate-spin mr-2" />
-                Processing audio...
-              </div>
-            )}
-          </CardFooter>
         </Card>
 
         {(transcription || clinicalInsights) && (

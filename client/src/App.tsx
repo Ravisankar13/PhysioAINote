@@ -40,7 +40,7 @@ function Router() {
           <Route path="/about" component={About} />
           <Route path="/contact" component={Contact} />
           <Route path="/auth" component={AuthPage} />
-          <Route path="/test-transcription" component={TestAudioTranscription} />
+          <Route path="/test-audio-transcription" component={TestAudioTranscription} />
           <Route path="/test-note-generator" component={TestNoteGenerator} />
           <Route component={NotFound} />
         </Switch>

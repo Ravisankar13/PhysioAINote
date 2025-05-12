@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import * as THREE from 'three';
 import { Group } from 'three';
 
@@ -109,7 +108,6 @@ useGLTF.preload(MODEL_PATH);
 
 export default function SkeletonModelViewer() {
   const [rotationSpeed, setRotationSpeed] = useState(0);
-  const [activeTab, setActiveTab] = useState("view");
   
   // State for limb adjustments
   const [limbScales, setLimbScales] = useState({
@@ -142,13 +140,9 @@ export default function SkeletonModelViewer() {
   return (
     <Card className="w-full">
       <CardContent className="p-4">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="w-full mb-4">
-            <TabsTrigger value="view" className="flex-1">View Model</TabsTrigger>
-            <TabsTrigger value="controls" className="flex-1">Adjust Controls</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="view" className="w-full">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+          {/* 3D Model Viewer - takes up 8/12 columns on medium screens and above */}
+          <div className="md:col-span-8">
             <div className="w-full aspect-[4/3] rounded-md overflow-hidden border">
               <Suspense fallback={<div className="flex items-center justify-center h-full bg-muted">Loading 3D Model...</div>}>
                 <Canvas camera={{ position: [0, 0, 5], fov: 50 }}>
@@ -167,9 +161,12 @@ export default function SkeletonModelViewer() {
                 </Canvas>
               </Suspense>
             </div>
-          </TabsContent>
+          </div>
           
-          <TabsContent value="controls" className="space-y-4">
+          {/* Adjustment Controls - takes up 4/12 columns on medium screens and above */}
+          <div className="md:col-span-4 space-y-4">
+            <h3 className="text-lg font-semibold">Adjustment Controls</h3>
+            
             <div className="space-y-2">
               <Label htmlFor="rotation-speed">Model Rotation Speed</Label>
               <Slider
@@ -187,12 +184,12 @@ export default function SkeletonModelViewer() {
               </div>
             </div>
             
-            <div className="mt-6">
-              <h3 className="text-lg font-medium mb-4">Limb Size Adjustments</h3>
+            <div className="mt-2">
+              <h4 className="text-md font-medium mb-2">Limb Size Adjustments</h4>
               
               {Object.entries(limbScales).map(([limb, scale]) => (
-                <div key={limb} className="mb-4">
-                  <Label htmlFor={`${limb}-scale`} className="capitalize">
+                <div key={limb} className="mb-3">
+                  <Label htmlFor={`${limb}-scale`} className="capitalize text-sm">
                     {limb} Size: <span className="font-medium">{scale.toFixed(2)}</span>
                   </Label>
                   <Slider
@@ -208,34 +205,36 @@ export default function SkeletonModelViewer() {
               ))}
             </div>
             
-            <div className="grid grid-cols-2 gap-2 mt-6">
+            <div className="grid grid-cols-2 gap-2 mt-4">
               <Button
                 variant="outline"
                 onClick={() => setRotationSpeed(0)}
+                size="sm"
               >
                 Stop Rotation
               </Button>
               <Button
                 variant="outline"
                 onClick={resetLimbScales}
+                size="sm"
               >
                 Reset Limb Sizes
               </Button>
               <Button
                 variant="default"
                 className="col-span-2 mt-2"
+                size="sm"
                 onClick={() => {
                   // Reset everything
                   setRotationSpeed(0);
                   resetLimbScales();
-                  window.location.reload();
                 }}
               >
                 Reset All
               </Button>
             </div>
-          </TabsContent>
-        </Tabs>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );

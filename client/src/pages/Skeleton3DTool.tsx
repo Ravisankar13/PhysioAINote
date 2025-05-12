@@ -2,9 +2,12 @@ import { Helmet } from "react-helmet";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Skeleton3DModel } from "@/components/skeleton/Skeleton3DModel";
+import SkeletonModelViewer from "@/components/skeleton/SkeletonModelViewer";
 import MembershipRequired from "@/components/MembershipRequired";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function Skeleton3DTool() {
+  const [activeModel, setActiveModel] = useState("generated"); // "generated" or "realistic"
   const [adjustments, setAdjustments] = useState({
     femurLength: 1,
     tibiaLength: 1,
@@ -62,47 +65,67 @@ export default function Skeleton3DTool() {
             <Button variant="outline" onClick={handleExportImage}>Export Image</Button>
           </div>
           
-          <div className="bg-white rounded-lg p-6 shadow-sm">
-            <Skeleton3DModel adjustments={adjustments} />
-          </div>
-          
-          <div className="bg-white rounded-lg p-6 shadow-sm">
-            <h2 className="text-xl font-bold mb-4">Adjustment Controls</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {Object.entries(adjustments).map(([key, value]) => (
-                <div key={key}>
-                  <label className="block text-sm font-medium mb-1">
-                    {key.charAt(0).toUpperCase() + key.slice(1)}: <span className="font-bold">{value.toFixed(2)}</span>
-                  </label>
-                  <input
-                    type="range"
-                    name={key}
-                    min="0.5"
-                    max="1.5"
-                    step="0.01"
-                    value={value}
-                    onChange={handleAdjustmentChange}
-                    className="w-full accent-primary"
-                  />
-                </div>
-              ))}
-            </div>
+          <Tabs value={activeModel} onValueChange={setActiveModel} className="w-full">
+            <TabsList className="grid w-full grid-cols-2 mb-4">
+              <TabsTrigger value="generated">Generated Model</TabsTrigger>
+              <TabsTrigger value="realistic">Realistic 3D Model</TabsTrigger>
+            </TabsList>
             
-            <button
-              onClick={() => setAdjustments({
-                femurLength: 1,
-                tibiaLength: 1,
-                humerusLength: 1,
-                radiusLength: 1,
-                spineLength: 1,
-                ribcageWidth: 1,
-                pelvisWidth: 1
-              })}
-              className="w-full bg-primary text-white py-2 rounded-md mt-6"
-            >
-              Reset to Default
-            </button>
-          </div>
+            <TabsContent value="generated">
+              <div className="bg-white rounded-lg p-6 shadow-sm">
+                <Skeleton3DModel adjustments={adjustments} />
+              </div>
+              
+              <div className="bg-white rounded-lg p-6 shadow-sm mt-6">
+                <h2 className="text-xl font-bold mb-4">Adjustment Controls</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {Object.entries(adjustments).map(([key, value]) => (
+                    <div key={key}>
+                      <label className="block text-sm font-medium mb-1">
+                        {key.charAt(0).toUpperCase() + key.slice(1)}: <span className="font-bold">{value.toFixed(2)}</span>
+                      </label>
+                      <input
+                        type="range"
+                        name={key}
+                        min="0.5"
+                        max="1.5"
+                        step="0.01"
+                        value={value}
+                        onChange={handleAdjustmentChange}
+                        className="w-full accent-primary"
+                      />
+                    </div>
+                  ))}
+                </div>
+                
+                <button
+                  onClick={() => setAdjustments({
+                    femurLength: 1,
+                    tibiaLength: 1,
+                    humerusLength: 1,
+                    radiusLength: 1,
+                    spineLength: 1,
+                    ribcageWidth: 1,
+                    pelvisWidth: 1
+                  })}
+                  className="w-full bg-primary text-white py-2 rounded-md mt-6"
+                >
+                  Reset to Default
+                </button>
+              </div>
+            </TabsContent>
+            
+            <TabsContent value="realistic">
+              <div className="bg-white rounded-lg p-6 shadow-sm">
+                <h2 className="text-xl font-bold mb-4">Realistic 3D Skeletal Model</h2>
+                <p className="text-muted-foreground mb-4">
+                  This high-fidelity 3D model provides detailed visualization of anatomical structures.
+                  Use the controls to rotate, zoom, and examine the model from any angle.
+                </p>
+                <SkeletonModelViewer />
+              </div>
+            </TabsContent>
+          </Tabs>
           
           <div className="bg-white rounded-lg p-6 shadow-sm">
             <h2 className="text-xl font-bold mb-4 text-center">How to Use This Tool</h2>
@@ -112,6 +135,7 @@ export default function Skeleton3DTool() {
               <li>Rotate, zoom, and pan the model for detailed examination</li>
               <li>Adjust bone lengths and proportions to match patient anatomy</li>
               <li>Visualize effects of anatomical variations on biomechanics</li>
+              <li>Switch between a generated model with adjustable parameters and a detailed realistic model</li>
             </ul>
             
             <div className="border-t pt-4">

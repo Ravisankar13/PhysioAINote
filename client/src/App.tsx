@@ -15,6 +15,7 @@ import SkeletonTool from "@/pages/SkeletonTool";
 import Skeleton3DTool from "@/pages/Skeleton3DTool";
 import Research from "@/pages/Research";
 import Membership from "@/pages/Membership";
+import TestAudioTranscription from "@/pages/TestAudioTranscription";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { ThemeProvider } from "next-themes";
@@ -38,6 +39,7 @@ function Router() {
           <Route path="/about" component={About} />
           <Route path="/contact" component={Contact} />
           <Route path="/auth" component={AuthPage} />
+          <Route path="/test-transcription" component={TestAudioTranscription} />
           <Route component={NotFound} />
         </Switch>
       </main>

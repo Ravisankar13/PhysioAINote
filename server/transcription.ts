@@ -81,6 +81,15 @@ export async function analyzeTranscription(transcript: string): Promise<{
   clinicalInsights: string;
 }> {
   try {
+    // Check if transcript is too short for meaningful analysis
+    if (!transcript || transcript.trim().length < 10) {
+      console.log("Transcript too short for meaningful analysis");
+      return {
+        transcription: transcript || "",
+        clinicalInsights: "The audio recording was too short or did not contain enough spoken content for analysis. Please try recording a longer clinical session with clear speech.",
+      };
+    }
+    
     console.log("Generating clinical insights from transcription");
     
     // Use OpenAI to extract clinical insights without forcing SOAP format
@@ -99,12 +108,14 @@ export async function analyzeTranscription(transcript: string): Promise<{
           - Treatment recommendations and plan
           - Any other clinically relevant information
           
+          If the transcription doesn't contain enough clinical information, indicate what's missing and what would be needed for a proper analysis.
+          
           Do not force the information into strict SOAP format if it doesn't naturally fit. Instead, provide a coherent, 
           clinically relevant summary that captures the important details from the transcription.
           
           Format your response as JSON with these sections:
           {
-            "clinicalSummary": "A well-organized summary of all important clinical information"
+            "clinicalSummary": "A well-organized summary of all important clinical information or feedback on what's missing"
           }`,
         },
         {

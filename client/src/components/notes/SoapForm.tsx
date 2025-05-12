@@ -6,7 +6,6 @@ import { useMutation } from "@tanstack/react-query";
 import { generateSoapNote } from "@/lib/openai";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Mic } from "lucide-react";
 import {
   Form,
   FormControl,
@@ -19,13 +18,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
-import { 
-  Tabs, 
-  TabsContent, 
-  TabsList, 
-  TabsTrigger 
-} from "@/components/ui/tabs";
-import VoiceRecorder from "@/components/notes/VoiceRecorder";
+
 import SimpleRecorder from "@/components/notes/SimpleRecorder";
 import { soapNoteInputSchema } from "@shared/schema";
 
@@ -36,7 +29,6 @@ interface SoapFormProps {
 const SoapForm = ({ onNoteGenerated }: SoapFormProps) => {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
-  const [inputMethod, setInputMethod] = useState<"text" | "voice">("text");
 
   // Get today's date in YYYY-MM-DD format for default values
   const today = new Date().toISOString().split("T")[0];
@@ -249,43 +241,24 @@ const SoapForm = ({ onNoteGenerated }: SoapFormProps) => {
                 </div>
 
                 {/* SOAP Inputs */}
-                <div className="pt-6 flex justify-between items-center">
+                <div className="pt-6">
                   <h4 className="text-lg font-medium text-neutral-900">SOAP Note Details</h4>
-                  <div className="flex items-center space-x-2">
-                    <span className="text-sm text-neutral-500">Quickly add notes:</span>
-                    <Button 
-                      type="button"
-                      variant="outline"
-                      className="flex items-center gap-1 bg-primary-50 text-primary-600 border-primary-200 hover:bg-primary-100 hover:text-primary-700 hover:border-primary-300"
-                      onClick={() => document.getElementById('voice-tab-trigger')?.click()}
-                    >
-                      <Mic className="h-4 w-4" />
-                      <span>Record Voice</span>
-                    </Button>
-                  </div>
+                  <p className="text-sm text-neutral-500 mt-1">
+                    Record your voice notes below to automatically generate SOAP note content
+                  </p>
                 </div>
 
-                {/* Voice Recording Tab - Still available for detailed view */}
-                <Tabs 
-                  defaultValue="text" 
-                  onValueChange={(value) => setInputMethod(value as "text" | "voice")}
-                  className="mb-6 w-full"
-                >
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="text">Text Input</TabsTrigger>
-                    <TabsTrigger id="voice-tab-trigger" value="voice">Advanced Voice Recording</TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="voice" className="mt-6">
-                    <div className="mb-4 p-4 bg-primary-50 rounded-lg text-primary-800">
-                      <p className="text-sm">
-                        Record your clinical session and let our AI analyze the audio. 
-                        The system will transcribe your recording and extract key clinical information like 
-                        patient history, examination findings, possible diagnoses, and treatment recommendations.
-                      </p>
-                    </div>
-                    <SimpleRecorder onRecordingComplete={handleRecordingComplete} />
-                  </TabsContent>
-                </Tabs>
+                {/* Voice Recording Section */}
+                <div className="mb-6 w-full">
+                  <div className="mb-4 p-4 bg-primary-50 rounded-lg text-primary-800">
+                    <p className="text-sm">
+                      Record your clinical session and let our AI analyze the audio. 
+                      The system will transcribe your recording and extract key clinical information like 
+                      patient history, examination findings, possible diagnoses, and treatment recommendations.
+                    </p>
+                  </div>
+                  <SimpleRecorder onRecordingComplete={handleRecordingComplete} />
+                </div>
 
                 <FormField
                   control={form.control}
@@ -373,34 +346,18 @@ const SoapForm = ({ onNoteGenerated }: SoapFormProps) => {
               </div>
 
               <div className="pt-5">
-                <div className="flex justify-between gap-3">
+                <div className="flex justify-end gap-3">
                   <Button
                     type="button"
                     variant="outline"
-                    className="flex items-center gap-1 bg-primary-50 text-primary-600 border-primary-200 hover:bg-primary-100"
-                    onClick={() => document.getElementById('voice-tab-trigger')?.click()}
+                    onClick={handleReset}
+                    disabled={isLoading}
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-                      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                      <line x1="12" x2="12" y1="19" y2="22" />
-                    </svg>
-                    Record Voice
+                    Reset Form
                   </Button>
-                  
-                  <div className="flex gap-3">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleReset}
-                      disabled={isLoading}
-                    >
-                      Reset Form
-                    </Button>
-                    <Button type="submit" disabled={isLoading}>
-                      {isLoading ? "Generating..." : "Generate SOAP Note"}
-                    </Button>
-                  </div>
+                  <Button type="submit" disabled={isLoading}>
+                    {isLoading ? "Generating..." : "Generate SOAP Note"}
+                  </Button>
                 </div>
               </div>
             </form>

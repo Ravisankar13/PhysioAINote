@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import { Group } from 'three';
 
 // Import skeleton model
-const MODEL_PATH = "/caf02234-7cac-41a3-b9ac-9f738a212fa6.glb";
+const MODEL_PATH = "/f13554ef-1daa-49cc-bd2d-ff0cdf430bde.glb";
 
 interface ModelProps {
   rotationSpeed?: number;

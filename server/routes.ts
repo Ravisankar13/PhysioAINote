@@ -14,6 +14,18 @@ import { setupAuth } from "./auth";
 import { calculateAgeRange, deIdentifyNote, extractCondition } from "./utilities/deIdentify";
 import { sampleNotes } from "./routes/sampleNotes";
 import { createPaypalOrder, capturePaypalOrder, loadPaypalDefault } from "./paypal";
+import Stripe from "stripe";
+
+// Initialize Stripe with secret key
+if (!process.env.STRIPE_SECRET_KEY) {
+  console.warn("Warning: STRIPE_SECRET_KEY not found in environment variables. Stripe payment processing will be unavailable.");
+}
+
+const stripe = process.env.STRIPE_SECRET_KEY
+  ? new Stripe(process.env.STRIPE_SECRET_KEY, {
+      apiVersion: "2023-10-16",
+    })
+  : null;
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication routes
@@ -597,6 +609,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Capture PayPal order
   app.post("/api/paypal/order/:orderID/capture", async (req, res) => {
     await capturePaypalOrder(req, res);
+  });
+
+  // ===== STRIPE INTEGRATION ROUTES =====
+  
+  // Create Stripe payment intent for credit card payments
+  app.post("/api/create-payment-intent", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      if (!stripe) {
+        return res.status(500).json({ 
+          message: "Stripe is not configured. Please contact the administrator." 
+        });
+      }
+
+      const { amount, metadata } = req.body;
+      
+      if (!amount || isNaN(amount) || amount <= 0) {
+        return res.status(400).json({ message: "Invalid payment amount" });
+      }
+      
+      // Create a payment intent with the order amount and currency
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: Math.round(amount), // amount in cents
+        currency: "usd",
+        metadata: metadata || {},
+        receipt_email: req.user?.email || undefined,
+        automatic_payment_methods: {
+          enabled: true,
+        },
+      });
+
+      res.json({
+        clientSecret: paymentIntent.client_secret,
+      });
+    } catch (error) {
+      console.error("Error creating payment intent:", error);
+      res.status(500).json({ 
+        message: "Error creating payment intent", 
+        error: (error as Error).message 
+      });
+    }
   });
 
   const httpServer = createServer(app);

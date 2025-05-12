@@ -13,6 +13,7 @@ interface Skeleton3DModelProps {
     ribcageWidth: number;
     pelvisWidth: number;
   };
+  animation?: string; // 'squat', 'stepUp', 'stepDown', 'lunge', or undefined for no animation
 }
 
 // Standard bone material
@@ -68,15 +69,119 @@ function JointSphere({ position, scale, boneColor = '#e8e0d0' }) {
 }
 
 // Main model component that renders bones
-function SkeletonModel({ adjustments }: Skeleton3DModelProps) {
+function SkeletonModel({ adjustments, animation }: Skeleton3DModelProps) {
   const groupRef = useRef<THREE.Group>(null);
   const [showLabels, setShowLabels] = useState(false);
   
-  // Create a realistic 3D skeleton with detailed anatomy
+  // Animation references for different body parts
+  const leftLegRef = useRef<THREE.Group>(null);
+  const rightLegRef = useRef<THREE.Group>(null);
+  const pelvisRef = useRef<THREE.Group>(null);
+  const spineRef = useRef<THREE.Group>(null);
+  const leftArmRef = useRef<THREE.Group>(null);
+  const rightArmRef = useRef<THREE.Group>(null);
+  
+  // Animation functions
+  const animateSquat = (time: number) => {
+    if (!pelvisRef.current || !leftLegRef.current || !rightLegRef.current || !spineRef.current) return;
+    
+    // Cycle between 0 and 1 with a smooth transition
+    const cycle = (Math.sin(time * 0.5) + 1) / 2;
+    
+    // Pelvis moves down during squat
+    pelvisRef.current.position.y = 0.9 - (cycle * 0.3);
+    
+    // Legs bend at the knees
+    leftLegRef.current.rotation.x = rightLegRef.current.rotation.x = cycle * Math.PI * 0.25;
+    
+    // Spine leans forward slightly for balance
+    spineRef.current.rotation.x = cycle * Math.PI * 0.1;
+  };
+  
+  const animateStepUp = (time: number) => {
+    if (!pelvisRef.current || !leftLegRef.current || !rightLegRef.current) return;
+    
+    // Cycle through the step-up motion 
+    const cycle = (Math.sin(time * 0.7) + 1) / 2;
+    
+    // Pelvis rises during step up
+    pelvisRef.current.position.y = 0.9 + (cycle * 0.15);
+    
+    // Left leg lifts and bends
+    leftLegRef.current.position.y = cycle * 0.2;
+    leftLegRef.current.rotation.x = -cycle * Math.PI * 0.2;
+    
+    // Right leg extends to support
+    rightLegRef.current.rotation.x = cycle * Math.PI * 0.15;
+  };
+  
+  const animateStepDown = (time: number) => {
+    if (!pelvisRef.current || !leftLegRef.current || !rightLegRef.current) return;
+    
+    // Cycle through the step-down motion
+    const cycle = (Math.sin(time * 0.7) + 1) / 2;
+    
+    // Pelvis lowers during step down
+    pelvisRef.current.position.y = 0.9 - (cycle * 0.15);
+    
+    // Right leg extends forward
+    rightLegRef.current.position.z = cycle * 0.2;
+    rightLegRef.current.rotation.x = -cycle * Math.PI * 0.2;
+    
+    // Left leg bends to support
+    leftLegRef.current.rotation.x = cycle * Math.PI * 0.15;
+  };
+  
+  const animateLunge = (time: number) => {
+    if (!pelvisRef.current || !leftLegRef.current || !rightLegRef.current || !spineRef.current) return;
+    
+    // Cycle through the lunge motion
+    const cycle = (Math.sin(time * 0.5) + 1) / 2;
+    
+    // Pelvis lowers slightly and shifts forward
+    pelvisRef.current.position.y = 0.9 - (cycle * 0.2);
+    pelvisRef.current.position.z = cycle * 0.25;
+    
+    // Left leg extends forward
+    leftLegRef.current.position.z = cycle * 0.4;
+    leftLegRef.current.rotation.x = -cycle * Math.PI * 0.25;
+    
+    // Right leg bends at the knee
+    rightLegRef.current.rotation.x = cycle * Math.PI * 0.3;
+    
+    // Torso leans forward slightly
+    spineRef.current.rotation.x = cycle * Math.PI * 0.1;
+  };
+  
+  // Animation controller
   useFrame(({ clock }) => {
     if (groupRef.current) {
-      // Add subtle breathing-like movement
-      groupRef.current.rotation.y = Math.sin(clock.getElapsedTime() * 0.2) * 0.1;
+      const time = clock.getElapsedTime();
+      
+      // Default subtle breathing-like movement
+      if (!animation) {
+        groupRef.current.rotation.y = Math.sin(time * 0.2) * 0.1;
+        return;
+      }
+      
+      // Stop rotation during exercises
+      groupRef.current.rotation.y = 0;
+      
+      // Apply animation based on selected type
+      switch (animation) {
+        case 'squat':
+          animateSquat(time);
+          break;
+        case 'stepUp':
+          animateStepUp(time);
+          break;
+        case 'stepDown':
+          animateStepDown(time);
+          break;
+        case 'lunge':
+          animateLunge(time);
+          break;
+      }
     }
   });
 
@@ -124,7 +229,7 @@ function SkeletonModel({ adjustments }: Skeleton3DModelProps) {
       </group>
       
       {/* Spine with vertebrae */}
-      <group position={[0, 1.65, 0]}>
+      <group ref={spineRef} position={[0, 1.65, 0]}>
         {Array.from({ length: Math.floor(12 * adjustments.spineLength) }).map((_, i) => (
           <mesh key={`thoracic-${i}`} position={[0, -i * 0.04, 0]}>
             <cylinderGeometry args={[0.05, 0.05, 0.03, 8]} />
@@ -168,7 +273,7 @@ function SkeletonModel({ adjustments }: Skeleton3DModelProps) {
       </group>
       
       {/* Pelvis */}
-      <group position={[0, 0.9, 0]}>
+      <group ref={pelvisRef} position={[0, 0.9, 0]}>
         {/* Iliac crest */}
         <mesh position={[0, 0, 0]} rotation={[Math.PI / 2, 0, 0]}>
           <torusGeometry args={[adjustments.pelvisWidth * 0.22, 0.04, 16, 24, Math.PI]} />
@@ -218,96 +323,102 @@ function SkeletonModel({ adjustments }: Skeleton3DModelProps) {
       </group>
       
       {/* Arms */}
-      {/* Left Arm - Humerus */}
-      <BoneSegment
-        position={[-0.3, 1.5, 0]}
-        rotation={[0, 0, -Math.PI * 0.1]}
-        scale={[0.05, adjustments.humerusLength * 0.4, 0.05]}
-        name={showLabels ? 'Humerus' : ''}
-      />
-      
-      {/* Left Elbow */}
-      <JointSphere 
-        position={[-0.35, 1.3, 0]} 
-        scale={[0.06, 0.06, 0.06]} 
-      />
-      
-      {/* Left Forearm - Radius & Ulna */}
-      <group position={[-0.4, 1.1, 0]} rotation={[0, 0, -Math.PI * 0.1]}>
+      {/* Left Arm */}
+      <group ref={leftArmRef} position={[0, 0, 0]}>
+        {/* Left Arm - Humerus */}
         <BoneSegment
-          position={[0, 0, 0.02]}
-          rotation={[0, 0, 0]}
-          scale={[0.035, adjustments.radiusLength * 0.4, 0.035]}
-          name={showLabels ? 'Radius' : ''}
+          position={[-0.3, 1.5, 0]}
+          rotation={[0, 0, -Math.PI * 0.1]}
+          scale={[0.05, adjustments.humerusLength * 0.4, 0.05]}
+          name={showLabels ? 'Humerus' : ''}
         />
-        <BoneSegment
-          position={[0, 0, -0.02]}
-          rotation={[0, 0, 0]}
-          scale={[0.035, adjustments.radiusLength * 0.4, 0.035]}
-          name={showLabels ? 'Ulna' : ''}
-        />
-      </group>
-      
-      {/* Left Hand */}
-      <group position={[-0.45, 0.9, 0]}>
-        {/* Wrist */}
-        <mesh position={[0, 0, 0]}>
-          <boxGeometry args={[0.08, 0.03, 0.12]} />
-          <meshStandardMaterial {...boneMaterial} />
-        </mesh>
         
-        {/* Fingers */}
-        {Array.from({ length: 5 }).map((_, i) => (
-          <mesh key={`leftfinger-${i}`} position={[(i - 2) * 0.02 - 0.02, -0.08, 0.01]} rotation={[Math.PI * 0.1, 0, 0]} scale={[0.015, 0.12, 0.015]}>
-            <cylinderGeometry args={[1, 1, 1, 6]} />
+        {/* Left Elbow */}
+        <JointSphere 
+          position={[-0.35, 1.3, 0]} 
+          scale={[0.06, 0.06, 0.06]} 
+        />
+        
+        {/* Left Forearm - Radius & Ulna */}
+        <group position={[-0.4, 1.1, 0]} rotation={[0, 0, -Math.PI * 0.1]}>
+          <BoneSegment
+            position={[0, 0, 0.02]}
+            rotation={[0, 0, 0]}
+            scale={[0.035, adjustments.radiusLength * 0.4, 0.035]}
+            name={showLabels ? 'Radius' : ''}
+          />
+          <BoneSegment
+            position={[0, 0, -0.02]}
+            rotation={[0, 0, 0]}
+            scale={[0.035, adjustments.radiusLength * 0.4, 0.035]}
+            name={showLabels ? 'Ulna' : ''}
+          />
+        </group>
+        
+        {/* Left Hand */}
+        <group position={[-0.45, 0.9, 0]}>
+          {/* Wrist */}
+          <mesh position={[0, 0, 0]}>
+            <boxGeometry args={[0.08, 0.03, 0.12]} />
             <meshStandardMaterial {...boneMaterial} />
           </mesh>
-        ))}
+          
+          {/* Fingers */}
+          {Array.from({ length: 5 }).map((_, i) => (
+            <mesh key={`leftfinger-${i}`} position={[(i - 2) * 0.02 - 0.02, -0.08, 0.01]} rotation={[Math.PI * 0.1, 0, 0]} scale={[0.015, 0.12, 0.015]}>
+              <cylinderGeometry args={[1, 1, 1, 6]} />
+              <meshStandardMaterial {...boneMaterial} />
+            </mesh>
+          ))}
+        </group>
       </group>
       
-      {/* Right Arm - Humerus */}
-      <BoneSegment
-        position={[0.3, 1.5, 0]}
-        rotation={[0, 0, Math.PI * 0.1]}
-        scale={[0.05, adjustments.humerusLength * 0.4, 0.05]}
-        name={showLabels ? 'Humerus' : ''}
-      />
-      
-      {/* Right Elbow */}
-      <JointSphere 
-        position={[0.35, 1.3, 0]} 
-        scale={[0.06, 0.06, 0.06]} 
-      />
-      
-      {/* Right Forearm - Radius & Ulna */}
-      <group position={[0.4, 1.1, 0]} rotation={[0, 0, Math.PI * 0.1]}>
+      {/* Right Arm */}
+      <group ref={rightArmRef} position={[0, 0, 0]}>
+        {/* Right Arm - Humerus */}
         <BoneSegment
-          position={[0, 0, 0.02]}
-          rotation={[0, 0, 0]}
-          scale={[0.035, adjustments.radiusLength * 0.4, 0.035]}
+          position={[0.3, 1.5, 0]}
+          rotation={[0, 0, Math.PI * 0.1]}
+          scale={[0.05, adjustments.humerusLength * 0.4, 0.05]}
+          name={showLabels ? 'Humerus' : ''}
         />
-        <BoneSegment
-          position={[0, 0, -0.02]}
-          rotation={[0, 0, 0]}
-          scale={[0.035, adjustments.radiusLength * 0.4, 0.035]}
-        />
-      </group>
-      
-      {/* Right Hand */}
-      <group position={[0.45, 0.9, 0]}>
-        {/* Wrist */}
-        <mesh position={[0, 0, 0]}>
-          <boxGeometry args={[0.08, 0.03, 0.12]} />
-          <meshStandardMaterial {...boneMaterial} />
-        </mesh>
         
-        {/* Fingers */}
-        {Array.from({ length: 5 }).map((_, i) => (
-          <mesh key={`rightfinger-${i}`} position={[(i - 2) * 0.02 + 0.02, -0.08, 0.01]} rotation={[Math.PI * 0.1, 0, 0]} scale={[0.015, 0.12, 0.015]}>
-            <cylinderGeometry args={[1, 1, 1, 6]} />
+        {/* Right Elbow */}
+        <JointSphere 
+          position={[0.35, 1.3, 0]} 
+          scale={[0.06, 0.06, 0.06]} 
+        />
+        
+        {/* Right Forearm - Radius & Ulna */}
+        <group position={[0.4, 1.1, 0]} rotation={[0, 0, Math.PI * 0.1]}>
+          <BoneSegment
+            position={[0, 0, 0.02]}
+            rotation={[0, 0, 0]}
+            scale={[0.035, adjustments.radiusLength * 0.4, 0.035]}
+          />
+          <BoneSegment
+            position={[0, 0, -0.02]}
+            rotation={[0, 0, 0]}
+            scale={[0.035, adjustments.radiusLength * 0.4, 0.035]}
+          />
+        </group>
+        
+        {/* Right Hand */}
+        <group position={[0.45, 0.9, 0]}>
+          {/* Wrist */}
+          <mesh position={[0, 0, 0]}>
+            <boxGeometry args={[0.08, 0.03, 0.12]} />
             <meshStandardMaterial {...boneMaterial} />
           </mesh>
-        ))}
+          
+          {/* Fingers */}
+          {Array.from({ length: 5 }).map((_, i) => (
+            <mesh key={`rightfinger-${i}`} position={[(i - 2) * 0.02 + 0.02, -0.08, 0.01]} rotation={[Math.PI * 0.1, 0, 0]} scale={[0.015, 0.12, 0.015]}>
+              <cylinderGeometry args={[1, 1, 1, 6]} />
+              <meshStandardMaterial {...boneMaterial} />
+            </mesh>
+          ))}
+        </group>
       </group>
       
       {/* Legs */}
@@ -317,54 +428,57 @@ function SkeletonModel({ adjustments }: Skeleton3DModelProps) {
         scale={[0.08, 0.08, 0.08]} 
       />
       
-      {/* Left Leg - Femur */}
-      <BoneSegment
-        position={[-0.18, 0.6, 0]}
-        rotation={[0, 0, 0]}
-        scale={[0.06, adjustments.femurLength * 0.5, 0.06]}
-        name={showLabels ? 'Femur' : ''}
-      />
-      
-      {/* Left Knee */}
-      <group position={[-0.18, 0.3, 0]}>
-        <JointSphere 
-          position={[0, 0, 0]} 
-          scale={[0.07, 0.07, 0.07]} 
+      {/* Left Leg */}
+      <group ref={leftLegRef} position={[0, 0, 0]}>
+        {/* Left Leg - Femur */}
+        <BoneSegment
+          position={[-0.18, 0.6, 0]}
+          rotation={[0, 0, 0]}
+          scale={[0.06, adjustments.femurLength * 0.5, 0.06]}
+          name={showLabels ? 'Femur' : ''}
         />
         
-        {/* Patella */}
-        <mesh position={[0, 0, 0.05]}>
-          <sphereGeometry args={[0.04, 16, 16]} />
+        {/* Left Knee */}
+        <group position={[-0.18, 0.3, 0]}>
+          <JointSphere 
+            position={[0, 0, 0]} 
+            scale={[0.07, 0.07, 0.07]} 
+          />
+          
+          {/* Patella */}
+          <mesh position={[0, 0, 0.05]}>
+            <sphereGeometry args={[0.04, 16, 16]} />
+            <meshStandardMaterial {...boneMaterial} />
+          </mesh>
+        </group>
+        
+        {/* Left Leg - Tibia and Fibula */}
+        <BoneSegment
+          position={[-0.18, 0.1, 0.01]}
+          rotation={[0, 0, 0]}
+          scale={[0.05, adjustments.tibiaLength * 0.4, 0.05]}
+          name={showLabels ? 'Tibia' : ''}
+        />
+        
+        <BoneSegment
+          position={[-0.18, 0.1, -0.02]}
+          rotation={[0, 0, 0]}
+          scale={[0.035, adjustments.tibiaLength * 0.38, 0.035]}
+          name={showLabels ? 'Fibula' : ''}
+        />
+        
+        {/* Left Ankle */}
+        <JointSphere 
+          position={[-0.18, -0.1, 0]} 
+          scale={[0.05, 0.05, 0.05]} 
+        />
+        
+        {/* Left Foot */}
+        <mesh position={[-0.18, -0.15, 0.08]} rotation={[Math.PI * 0.05, 0, 0]}>
+          <boxGeometry args={[0.1, 0.04, 0.2]} />
           <meshStandardMaterial {...boneMaterial} />
         </mesh>
       </group>
-      
-      {/* Left Leg - Tibia and Fibula */}
-      <BoneSegment
-        position={[-0.18, 0.1, 0.01]}
-        rotation={[0, 0, 0]}
-        scale={[0.05, adjustments.tibiaLength * 0.4, 0.05]}
-        name={showLabels ? 'Tibia' : ''}
-      />
-      
-      <BoneSegment
-        position={[-0.18, 0.1, -0.02]}
-        rotation={[0, 0, 0]}
-        scale={[0.035, adjustments.tibiaLength * 0.38, 0.035]}
-        name={showLabels ? 'Fibula' : ''}
-      />
-      
-      {/* Left Ankle */}
-      <JointSphere 
-        position={[-0.18, -0.1, 0]} 
-        scale={[0.05, 0.05, 0.05]} 
-      />
-      
-      {/* Left Foot */}
-      <mesh position={[-0.18, -0.15, 0.08]} rotation={[Math.PI * 0.05, 0, 0]}>
-        <boxGeometry args={[0.1, 0.04, 0.2]} />
-        <meshStandardMaterial {...boneMaterial} />
-      </mesh>
       
       {/* Right Hip Joint */}
       <JointSphere 
@@ -372,51 +486,54 @@ function SkeletonModel({ adjustments }: Skeleton3DModelProps) {
         scale={[0.08, 0.08, 0.08]} 
       />
       
-      {/* Right Leg - Femur */}
-      <BoneSegment
-        position={[0.18, 0.6, 0]}
-        rotation={[0, 0, 0]}
-        scale={[0.06, adjustments.femurLength * 0.5, 0.06]}
-      />
-      
-      {/* Right Knee */}
-      <group position={[0.18, 0.3, 0]}>
-        <JointSphere 
-          position={[0, 0, 0]} 
-          scale={[0.07, 0.07, 0.07]} 
+      {/* Right Leg */}
+      <group ref={rightLegRef} position={[0, 0, 0]}>
+        {/* Right Leg - Femur */}
+        <BoneSegment
+          position={[0.18, 0.6, 0]}
+          rotation={[0, 0, 0]}
+          scale={[0.06, adjustments.femurLength * 0.5, 0.06]}
         />
         
-        {/* Patella */}
-        <mesh position={[0, 0, 0.05]}>
-          <sphereGeometry args={[0.04, 16, 16]} />
+        {/* Right Knee */}
+        <group position={[0.18, 0.3, 0]}>
+          <JointSphere 
+            position={[0, 0, 0]} 
+            scale={[0.07, 0.07, 0.07]} 
+          />
+          
+          {/* Patella */}
+          <mesh position={[0, 0, 0.05]}>
+            <sphereGeometry args={[0.04, 16, 16]} />
+            <meshStandardMaterial {...boneMaterial} />
+          </mesh>
+        </group>
+        
+        {/* Right Leg - Tibia and Fibula */}
+        <BoneSegment
+          position={[0.18, 0.1, 0.01]}
+          rotation={[0, 0, 0]}
+          scale={[0.05, adjustments.tibiaLength * 0.4, 0.05]}
+        />
+        
+        <BoneSegment
+          position={[0.18, 0.1, -0.02]}
+          rotation={[0, 0, 0]}
+          scale={[0.035, adjustments.tibiaLength * 0.38, 0.035]}
+        />
+        
+        {/* Right Ankle */}
+        <JointSphere 
+          position={[0.18, -0.1, 0]} 
+          scale={[0.05, 0.05, 0.05]} 
+        />
+        
+        {/* Right Foot */}
+        <mesh position={[0.18, -0.15, 0.08]} rotation={[Math.PI * 0.05, 0, 0]}>
+          <boxGeometry args={[0.1, 0.04, 0.2]} />
           <meshStandardMaterial {...boneMaterial} />
         </mesh>
       </group>
-      
-      {/* Right Leg - Tibia and Fibula */}
-      <BoneSegment
-        position={[0.18, 0.1, 0.01]}
-        rotation={[0, 0, 0]}
-        scale={[0.05, adjustments.tibiaLength * 0.4, 0.05]}
-      />
-      
-      <BoneSegment
-        position={[0.18, 0.1, -0.02]}
-        rotation={[0, 0, 0]}
-        scale={[0.035, adjustments.tibiaLength * 0.38, 0.035]}
-      />
-      
-      {/* Right Ankle */}
-      <JointSphere 
-        position={[0.18, -0.1, 0]} 
-        scale={[0.05, 0.05, 0.05]} 
-      />
-      
-      {/* Right Foot */}
-      <mesh position={[0.18, -0.15, 0.08]} rotation={[Math.PI * 0.05, 0, 0]}>
-        <boxGeometry args={[0.1, 0.04, 0.2]} />
-        <meshStandardMaterial {...boneMaterial} />
-      </mesh>
       
       {/* Toggle labels button */}
       <mesh 
@@ -433,14 +550,14 @@ function SkeletonModel({ adjustments }: Skeleton3DModelProps) {
   );
 }
 
-export function Skeleton3DModel({ adjustments }: Skeleton3DModelProps) {
+export function Skeleton3DModel({ adjustments, animation }: Skeleton3DModelProps) {
   return (
     <div className="w-full h-[500px] bg-zinc-100 rounded-lg overflow-hidden shadow-inner">
       <Canvas camera={{ position: [0, 1, 3], fov: 45 }}>
         <ambientLight intensity={0.6} />
         <spotLight position={[5, 5, 5]} angle={0.15} penumbra={1} intensity={1} castShadow />
         <pointLight position={[-5, -5, -5]} intensity={0.5} />
-        <SkeletonModel adjustments={adjustments} />
+        <SkeletonModel adjustments={adjustments} animation={animation} />
         <OrbitControls enablePan={true} enableZoom={true} enableRotate={true} />
       </Canvas>
     </div>

@@ -10,7 +10,6 @@ import About from "@/pages/About";
 import Contact from "@/pages/Contact";
 import AuthPage from "@/pages/auth-page";
 import SharedNotes from "@/pages/SharedNotes";
-import SampleNotes from "@/pages/SampleNotes";
 import MyNotes from "@/pages/MyNotes";
 import SkeletonTool from "@/pages/SkeletonTool";
 import Skeleton3DTool from "@/pages/Skeleton3DTool";
@@ -30,7 +29,6 @@ function Router() {
           <Route path="/" component={Home} />
           <ProtectedRoute path="/clinical-notes" component={ClinicalNotes} />
           <Route path="/shared-notes" component={SharedNotes} />
-          <Route path="/sample-notes" component={SampleNotes} />
           <Route path="/research" component={Research} />
           <ProtectedRoute path="/my-notes" component={MyNotes} />
           <Route path="/skeleton-tool" component={SkeletonTool} />

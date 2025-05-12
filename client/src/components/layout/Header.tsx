@@ -40,10 +40,11 @@ const Header = () => {
   return (
     <header className="bg-white shadow-sm sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16">
-          <div className="flex items-center">
+        <div className="flex h-16 items-center">
+          {/* Logo section (left) */}
+          <div className="flex-shrink-0">
             <Link href="/">
-              <div className="flex-shrink-0 flex items-center cursor-pointer">
+              <div className="flex items-center cursor-pointer">
                 <Leaf className="text-primary mr-2 h-7 w-7" />
                 <span className="font-bold text-xl tracking-tight text-foreground">
                   <span className="text-primary">PhysioAI</span>
@@ -51,15 +52,19 @@ const Header = () => {
                 </span>
               </div>
             </Link>
-            <nav className="hidden md:ml-10 md:flex md:space-x-10">
+          </div>
+          
+          {/* Navigation Links (centered) */}
+          <div className="hidden md:flex flex-1 justify-center">
+            <nav className="flex items-center">
               {navItems.map((item) => (
                 <Link key={item.href} href={item.href}>
                   <span
                     className={`${
                       isActive(item.href)
-                        ? "text-primary font-semibold"
+                        ? "text-primary font-semibold border-b-2 border-primary"
                         : "text-muted-foreground hover:text-primary transition-colors duration-200"
-                    } px-1 py-2 text-sm font-medium cursor-pointer`}
+                    } px-3 py-4 mx-1 text-sm font-medium cursor-pointer whitespace-nowrap`}
                   >
                     {item.label}
                   </span>
@@ -67,6 +72,8 @@ const Header = () => {
               ))}
             </nav>
           </div>
+          
+          {/* Action buttons (right) */}
           <div className="flex items-center space-x-4">
             <Link href="/clinical-notes">
               <Button className="bg-primary hover:bg-primary/90 text-white font-semibold shadow-sm flex items-center gap-2">
@@ -125,7 +132,8 @@ const Header = () => {
               </Link>
             )}
             
-            <div className="ml-4 md:hidden flex items-center">
+            {/* Mobile menu button */}
+            <div className="md:hidden flex items-center">
               <Sheet open={open} onOpenChange={setOpen}>
                 <SheetTrigger asChild>
                   <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground hover:bg-accent">

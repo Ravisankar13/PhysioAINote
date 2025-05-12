@@ -157,7 +157,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         if (!transcript || transcript.trim() === '') {
           console.error('Transcription returned empty result');
-          return res.status(422).json({ message: 'No speech detected in the audio' });
+          return res.status(422).json({ 
+            message: 'No speech detected in the audio',
+            transcript: "",
+            transcription: "",
+            clinicalInsights: "No speech detected in the audio recording. Please try again with a clear voice recording."
+          });
         }
         
         // Generate clinical insights from the transcript
@@ -179,30 +184,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error('Error in OpenAI transcription:', transcriptionError);
         
         // More specific error handling
+        // Detailed error responses with consistent structure
         if (transcriptionError.message.includes('API key')) {
-          return res.status(500).json({ 
+          return res.status(500).json({
             message: 'OpenAI API key error. Please check your API key configuration.',
-            error: transcriptionError.message 
+            error: transcriptionError.message,
+            transcript: "",
+            transcription: "",
+            clinicalInsights: "Error processing audio: API key validation failed."
           });
         } else if (transcriptionError.message.includes('format')) {
           return res.status(400).json({
             message: 'Audio format not supported. Please use a different audio format.',
-            error: transcriptionError.message
+            error: transcriptionError.message,
+            transcript: "",
+            transcription: "",
+            clinicalInsights: "Error processing audio: Format not supported. Try using a common format like MP3 or WAV."
           });
         } else if (transcriptionError.message.includes('rate limit')) {
           return res.status(429).json({
             message: 'OpenAI API rate limit exceeded. Please try again later.',
-            error: transcriptionError.message
+            error: transcriptionError.message,
+            transcript: "",
+            transcription: "",
+            clinicalInsights: "Error processing audio: Service temporarily unavailable. Please try again in a few minutes."
+          });
+        } else {
+          // Generic error response
+          return res.status(500).json({
+            message: 'Error transcribing audio. Please try again with a clearer recording.',
+            error: transcriptionError.message,
+            transcript: "",
+            transcription: "",
+            clinicalInsights: "Error processing audio. Please try recording again with a clearer voice and less background noise."
           });
         }
-        
-        throw transcriptionError; // rethrow to be caught by outer catch
       }
     } catch (error: any) {
       console.error('Error in transcription endpoint:', error);
       return res.status(500).json({ 
-        message: 'Error transcribing audio. Please try again.',
-        error: error.message 
+        message: 'Error processing audio. Please try again.',
+        error: error.message,
+        transcript: "",
+        transcription: "",
+        clinicalInsights: "An unexpected error occurred. Please try recording again."
       });
     }
   });

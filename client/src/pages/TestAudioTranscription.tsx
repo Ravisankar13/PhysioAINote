@@ -47,7 +47,11 @@ const TestAudioTranscription = () => {
     if (!mediaRecorderRef.current) return;
 
     mediaRecorderRef.current.onstop = async () => {
-      const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+      // Create both webm and mp3 versions to ensure compatibility
+      const audioBlob = new Blob(audioChunksRef.current, { 
+        type: 'audio/wav' // Use WAV format which is better supported by OpenAI Whisper
+      });
+      
       await processAudio(audioBlob);
       
       // Stop all tracks from the stream
@@ -59,11 +63,14 @@ const TestAudioTranscription = () => {
   };
 
   const processAudio = async (audioBlob: Blob) => {
+    const fileName = `recording-${Date.now()}.wav`;
     setIsProcessing(true);
     try {
       const formData = new FormData();
-      formData.append('audio', audioBlob);
-
+      // Add the file with proper filename to help with MIME type detection
+      formData.append('audio', audioBlob, fileName);
+      
+      console.log('Sending audio for transcription...');
       const response = await fetch('/api/transcribe', {
         method: 'POST',
         body: formData,

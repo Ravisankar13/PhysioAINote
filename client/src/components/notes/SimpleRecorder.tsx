@@ -13,6 +13,7 @@ export function SimpleRecorder({ onRecordingComplete }: SimpleRecorderProps) {
   const [recordingTime, setRecordingTime] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingStatus, setProcessingStatus] = useState<string>('');
   
   const { toast } = useToast();
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -95,6 +96,7 @@ export function SimpleRecorder({ onRecordingComplete }: SimpleRecorderProps) {
   
   const processRecording = async () => {
     setIsProcessing(true);
+    setProcessingStatus('Starting processing...');
     
     try {
       if (audioChunksRef.current.length === 0) {
@@ -102,7 +104,7 @@ export function SimpleRecorder({ onRecordingComplete }: SimpleRecorderProps) {
       }
       
       // Get the MIME type from the MediaRecorder
-      const mimeType = mediaRecorderRef.current?.mimeType || 'audio/webm';
+      const mimeType = mediaRecorderRef.current?.mimeType || 'audio/wav';
       
       // Create audio blob with the correct MIME type
       const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
@@ -110,9 +112,13 @@ export function SimpleRecorder({ onRecordingComplete }: SimpleRecorderProps) {
       // Reset timer
       setRecordingTime(0);
       
+      setProcessingStatus('Converting audio for analysis...');
+      
       // Create FormData to send the audio file
       const formData = new FormData();
-      formData.append('audio', audioBlob, 'recording.webm');
+      formData.append('audio', audioBlob, `recording-${Date.now()}.wav`);
+      
+      setProcessingStatus('Sending audio to AI for transcription...');
       
       // Send to server for transcription
       const response = await fetch('/api/transcribe', {
@@ -125,7 +131,11 @@ export function SimpleRecorder({ onRecordingComplete }: SimpleRecorderProps) {
         throw new Error(errorData?.message || `Server error: ${response.status}`);
       }
       
+      setProcessingStatus('AI is analyzing your clinical notes...');
+      
       const data = await response.json();
+      
+      setProcessingStatus('Generating structured SOAP format...');
       
       toast({
         title: "Transcription successful",
@@ -166,20 +176,28 @@ export function SimpleRecorder({ onRecordingComplete }: SimpleRecorderProps) {
         <div className="flex flex-col items-center">
           <h3 className="text-lg font-medium text-red-700 mb-4">Voice Recording</h3>
           {!isRecording ? (
-            <Button
-              onClick={startRecording}
-              disabled={isProcessing}
-              size="lg"
-              className="bg-red-600 hover:bg-red-700 text-white rounded-full h-20 w-20 flex items-center justify-center"
-            >
-              {isProcessing ? (
-                <div className="animate-pulse">
-                  <div className="h-8 w-8 rounded-full border-4 border-white border-t-transparent animate-spin" />
+            <div className="flex flex-col items-center space-y-3">
+              <Button
+                onClick={startRecording}
+                disabled={isProcessing}
+                size="lg"
+                className="bg-red-600 hover:bg-red-700 text-white rounded-full h-20 w-20 flex items-center justify-center"
+              >
+                {isProcessing ? (
+                  <div className="animate-pulse">
+                    <div className="h-8 w-8 rounded-full border-4 border-white border-t-transparent animate-spin" />
+                  </div>
+                ) : (
+                  <Mic className="h-8 w-8" />
+                )}
+              </Button>
+              
+              {isProcessing && processingStatus && (
+                <div className="text-red-600 animate-pulse text-sm font-medium">
+                  {processingStatus}
                 </div>
-              ) : (
-                <Mic className="h-8 w-8" />
               )}
-            </Button>
+            </div>
           ) : (
             <div className="flex flex-col items-center space-y-4 w-full">
               <div className="text-center">

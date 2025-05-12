@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useStripe, useElements, CardElement } from '@stripe/react-stripe-js';
-import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
+import { Button } from '@/components/ui/button';
+import { Loader2 } from 'lucide-react';
+import { apiRequest } from '@/lib/queryClient';
 
 interface StripeCheckoutButtonProps {
   amount: string;
@@ -13,31 +14,31 @@ interface StripeCheckoutButtonProps {
 const CARD_ELEMENT_OPTIONS = {
   style: {
     base: {
-      color: "#32325d",
+      color: '#32325d',
       fontFamily: '"Helvetica Neue", Helvetica, sans-serif',
-      fontSmoothing: "antialiased",
-      fontSize: "16px",
-      "::placeholder": {
-        color: "#aab7c4",
+      fontSmoothing: 'antialiased',
+      fontSize: '16px',
+      '::placeholder': {
+        color: '#aab7c4',
       },
     },
     invalid: {
-      color: "#fa755a",
-      iconColor: "#fa755a",
+      color: '#fa755a',
+      iconColor: '#fa755a',
     },
   },
 };
 
-export default function StripeCheckoutButton({
+const StripeCheckoutButton: React.FC<StripeCheckoutButtonProps> = ({
   amount,
   planId,
   onPaymentSuccess,
   onPaymentError,
-}: StripeCheckoutButtonProps) {
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+}) => {
   const stripe = useStripe();
   const elements = useElements();
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -48,29 +49,17 @@ export default function StripeCheckoutButton({
       return;
     }
 
-    setIsProcessing(true);
+    setIsLoading(true);
     setErrorMessage(null);
 
     try {
-      // Create payment intent on the server
-      const response = await fetch('/api/create-payment-intent', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          amount: parseFloat(amount) * 100, // Convert to cents
-          metadata: { planId }
-        }),
-      });
+      // Create a payment intent on the server
+      const { clientSecret } = await apiRequest('POST', '/api/create-payment-intent', {
+        amount,
+        planId,
+      }).then(res => res.json());
 
-      if (!response.ok) {
-        throw new Error('Failed to create payment intent');
-      }
-
-      const { clientSecret } = await response.json();
-
-      // Use card element to confirm payment
+      // Confirm the payment with the card element
       const cardElement = elements.getElement(CardElement);
       if (!cardElement) {
         throw new Error('Card element not found');
@@ -79,44 +68,44 @@ export default function StripeCheckoutButton({
       const { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
         payment_method: {
           card: cardElement,
-          billing_details: {
-            // You can optionally collect billing details here
-          },
         },
       });
 
       if (error) {
         throw new Error(error.message || 'Payment failed');
-      } else if (paymentIntent.status === 'succeeded') {
+      }
+
+      if (paymentIntent && paymentIntent.status === 'succeeded') {
         // Payment successful
         onPaymentSuccess(planId, paymentIntent.id, amount);
       } else {
-        throw new Error(`Payment status: ${paymentIntent.status}`);
+        throw new Error('Payment failed to complete');
       }
-    } catch (error) {
-      setErrorMessage((error as Error).message || 'An unknown error occurred');
-      onPaymentError(error as Error);
+    } catch (error: any) {
+      console.error('Payment error:', error);
+      setErrorMessage(error.message || 'An error occurred during payment');
+      onPaymentError(error);
     } finally {
-      setIsProcessing(false);
+      setIsLoading(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="w-full space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4">
       <div className="p-4 border rounded-md">
         <CardElement options={CARD_ELEMENT_OPTIONS} />
       </div>
       
       {errorMessage && (
-        <div className="text-red-500 text-sm">{errorMessage}</div>
+        <div className="text-red-500 text-sm mt-2">{errorMessage}</div>
       )}
       
       <Button 
         type="submit" 
-        disabled={!stripe || isProcessing} 
+        disabled={!stripe || isLoading} 
         className="w-full"
       >
-        {isProcessing ? (
+        {isLoading ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             Processing...
@@ -127,4 +116,6 @@ export default function StripeCheckoutButton({
       </Button>
     </form>
   );
-}
+};
+
+export default StripeCheckoutButton;

@@ -15,6 +15,7 @@ import { calculateAgeRange, deIdentifyNote, extractCondition } from "./utilities
 import { sampleNotes } from "./routes/sampleNotes";
 import { createPaypalOrder, capturePaypalOrder, loadPaypalDefault } from "./paypal";
 import Stripe from "stripe";
+import OpenAI from "openai";
 
 // Initialize Stripe with secret key
 if (!process.env.STRIPE_SECRET_KEY) {
@@ -28,6 +29,33 @@ const stripe = process.env.STRIPE_SECRET_KEY
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication routes
   setupAuth(app);
+  
+  // Add a test endpoint to validate OpenAI API key
+  app.get('/api/openai-validate', async (req: Request, res: Response) => {
+    try {
+      if (!process.env.OPENAI_API_KEY) {
+        return res.status(500).json({ 
+          valid: false, 
+          message: 'OpenAI API key not found in environment variables' 
+        });
+      }
+      
+      // Try a simple OpenAI API call to verify the key
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      await openai.models.list();
+      
+      return res.status(200).json({ 
+        valid: true, 
+        message: 'OpenAI API key is valid' 
+      });
+    } catch (error: any) {
+      console.error('OpenAI key validation error:', error);
+      return res.status(500).json({ 
+        valid: false, 
+        message: error.message || 'Invalid OpenAI API key' 
+      });
+    }
+  });
   
   // Middleware to ensure user is authenticated for protected routes
   const ensureAuthenticated = (req: Request, res: Response, next: NextFunction) => {

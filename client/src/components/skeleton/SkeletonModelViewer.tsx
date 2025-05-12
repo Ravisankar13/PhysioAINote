@@ -1,5 +1,5 @@
-import { Suspense, useRef, useState } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
+import { Suspense, useRef, useState, useEffect } from 'react';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, useGLTF, Environment, PresentationControls } from '@react-three/drei';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,17 +14,81 @@ const MODEL_PATH = "/caf02234-7cac-41a3-b9ac-9f738a212fa6.glb";
 
 interface ModelProps {
   rotationSpeed?: number;
+  limbScales: {
+    arms: number;
+    legs: number;
+    torso: number;
+    hands: number;
+    feet: number;
+    head: number;
+  };
   [key: string]: any;
 }
 
-function Model({ rotationSpeed = 0, ...props }: ModelProps) {
+function Model({ rotationSpeed = 0, limbScales, ...props }: ModelProps) {
   const groupRef = useRef<Group>(null);
-  
-  // Load the GLB model
-  let { scene } = useGLTF(MODEL_PATH);
+  const { scene, nodes } = useGLTF(MODEL_PATH);
+  const { camera } = useThree();
   
   // Clone the scene to avoid mutating the cached original
-  scene = scene.clone();
+  const clonedScene = scene.clone();
+  
+  // Apply different scales to different body parts
+  useEffect(() => {
+    if (clonedScene) {
+      // Find and scale specific bone groups in the model
+      clonedScene.traverse((object) => {
+        // Scale arms
+        if (object.name && (object.name.toLowerCase().includes('arm') || 
+                           object.name.toLowerCase().includes('shoulder') ||
+                           object.name.toLowerCase().includes('humerus') ||
+                           object.name.toLowerCase().includes('radius') ||
+                           object.name.toLowerCase().includes('ulna'))) {
+          object.scale.set(limbScales.arms, limbScales.arms, limbScales.arms);
+        }
+        
+        // Scale legs
+        else if (object.name && (object.name.toLowerCase().includes('leg') || 
+                               object.name.toLowerCase().includes('femur') ||
+                               object.name.toLowerCase().includes('tibia') ||
+                               object.name.toLowerCase().includes('fibula') ||
+                               object.name.toLowerCase().includes('thigh'))) {
+          object.scale.set(limbScales.legs, limbScales.legs, limbScales.legs);
+        }
+        
+        // Scale torso
+        else if (object.name && (object.name.toLowerCase().includes('spine') || 
+                               object.name.toLowerCase().includes('rib') ||
+                               object.name.toLowerCase().includes('chest') ||
+                               object.name.toLowerCase().includes('torso') ||
+                               object.name.toLowerCase().includes('pelvis'))) {
+          object.scale.set(limbScales.torso, limbScales.torso, limbScales.torso);
+        }
+        
+        // Scale hands
+        else if (object.name && (object.name.toLowerCase().includes('hand') || 
+                               object.name.toLowerCase().includes('finger') ||
+                               object.name.toLowerCase().includes('wrist'))) {
+          object.scale.set(limbScales.hands, limbScales.hands, limbScales.hands);
+        }
+        
+        // Scale feet
+        else if (object.name && (object.name.toLowerCase().includes('foot') || 
+                               object.name.toLowerCase().includes('ankle') ||
+                               object.name.toLowerCase().includes('toe'))) {
+          object.scale.set(limbScales.feet, limbScales.feet, limbScales.feet);
+        }
+        
+        // Scale head
+        else if (object.name && (object.name.toLowerCase().includes('head') || 
+                               object.name.toLowerCase().includes('skull') ||
+                               object.name.toLowerCase().includes('cranium') ||
+                               object.name.toLowerCase().includes('neck'))) {
+          object.scale.set(limbScales.head, limbScales.head, limbScales.head);
+        }
+      });
+    }
+  }, [limbScales, clonedScene]);
   
   // Auto-rotate if speed is provided
   useFrame(() => {
@@ -35,7 +99,7 @@ function Model({ rotationSpeed = 0, ...props }: ModelProps) {
 
   return (
     <group ref={groupRef} {...props}>
-      <primitive object={scene} />
+      <primitive object={clonedScene} />
     </group>
   );
 }
@@ -46,6 +110,34 @@ useGLTF.preload(MODEL_PATH);
 export default function SkeletonModelViewer() {
   const [rotationSpeed, setRotationSpeed] = useState(0);
   const [activeTab, setActiveTab] = useState("view");
+  
+  // State for limb adjustments
+  const [limbScales, setLimbScales] = useState({
+    arms: 1,
+    legs: 1,
+    torso: 1,
+    hands: 1,
+    feet: 1,
+    head: 1
+  });
+  
+  const handleLimbScaleChange = (limbName: string, value: number) => {
+    setLimbScales(prev => ({
+      ...prev,
+      [limbName]: value
+    }));
+  };
+  
+  const resetLimbScales = () => {
+    setLimbScales({
+      arms: 1,
+      legs: 1,
+      torso: 1,
+      hands: 1,
+      feet: 1,
+      head: 1
+    });
+  };
   
   return (
     <Card className="w-full">
@@ -60,7 +152,7 @@ export default function SkeletonModelViewer() {
             <div className="w-full aspect-[4/3] rounded-md overflow-hidden border">
               <Suspense fallback={<div className="flex items-center justify-center h-full bg-muted">Loading 3D Model...</div>}>
                 <Canvas camera={{ position: [0, 0, 5], fov: 50 }}>
-                  <ambientLight intensity={0.5} />
+                  <ambientLight intensity={0.7} />
                   <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} />
                   <PresentationControls
                     global
@@ -68,7 +160,7 @@ export default function SkeletonModelViewer() {
                     rotation={[0, 0, 0]}
                     polar={[-Math.PI / 4, Math.PI / 4]}
                     azimuth={[-Math.PI / 4, Math.PI / 4]}>
-                    <Model rotationSpeed={rotationSpeed} />
+                    <Model rotationSpeed={rotationSpeed} limbScales={limbScales} />
                   </PresentationControls>
                   <OrbitControls enableZoom={true} enablePan={true} />
                   <Environment preset="city" />
@@ -78,7 +170,7 @@ export default function SkeletonModelViewer() {
           </TabsContent>
           
           <TabsContent value="controls" className="space-y-4">
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="rotation-speed">Model Rotation Speed</Label>
               <Slider
                 id="rotation-speed"
@@ -95,7 +187,28 @@ export default function SkeletonModelViewer() {
               </div>
             </div>
             
-            <div className="grid grid-cols-2 gap-2 mt-4">
+            <div className="mt-6">
+              <h3 className="text-lg font-medium mb-4">Limb Size Adjustments</h3>
+              
+              {Object.entries(limbScales).map(([limb, scale]) => (
+                <div key={limb} className="mb-4">
+                  <Label htmlFor={`${limb}-scale`} className="capitalize">
+                    {limb} Size: <span className="font-medium">{scale.toFixed(2)}</span>
+                  </Label>
+                  <Slider
+                    id={`${limb}-scale`}
+                    min={0.5}
+                    max={1.5}
+                    step={0.01}
+                    value={[scale]}
+                    onValueChange={(values) => handleLimbScaleChange(limb, values[0])}
+                    className="mt-1"
+                  />
+                </div>
+              ))}
+            </div>
+            
+            <div className="grid grid-cols-2 gap-2 mt-6">
               <Button
                 variant="outline"
                 onClick={() => setRotationSpeed(0)}
@@ -104,13 +217,21 @@ export default function SkeletonModelViewer() {
               </Button>
               <Button
                 variant="outline"
+                onClick={resetLimbScales}
+              >
+                Reset Limb Sizes
+              </Button>
+              <Button
+                variant="default"
+                className="col-span-2 mt-2"
                 onClick={() => {
-                  // Reset view - this is handled by OrbitControls reset
-                  // but we'd need to access its ref to call reset()
+                  // Reset everything
+                  setRotationSpeed(0);
+                  resetLimbScales();
                   window.location.reload();
                 }}
               >
-                Reset View
+                Reset All
               </Button>
             </div>
           </TabsContent>

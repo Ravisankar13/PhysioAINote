@@ -149,22 +149,33 @@ export default function Research() {
   // When tab changes or articles load, filter articles for the selected body part
   useEffect(() => {
     if (articles) {
+      // Filter articles by body part for the default tab view
       const articlesByBodyPart = articles.filter(article => article.bodyPart === selectedTab);
       setFilteredArticles(articlesByBodyPart);
       
-      // If there's a search query, also filter by search term
+      // If there's a search query, search across ALL articles regardless of body part
       if (searchQuery.trim()) {
-        const filtered = articlesByBodyPart.filter(article => 
-          article.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          article.abstract.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          article.authors.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          article.journal.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          article.keyFindings?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          article.clinicalRelevance?.toLowerCase().includes(searchQuery.toLowerCase())
+        const searchTermLower = searchQuery.toLowerCase();
+        const allMatchingArticles = articles.filter(article => 
+          article.title.toLowerCase().includes(searchTermLower) ||
+          article.abstract.toLowerCase().includes(searchTermLower) ||
+          article.authors.toLowerCase().includes(searchTermLower) ||
+          article.journal.toLowerCase().includes(searchTermLower) ||
+          article.keyFindings?.toLowerCase().includes(searchTermLower) ||
+          article.clinicalRelevance?.toLowerCase().includes(searchTermLower)
         );
-        setSearchResults(filtered);
+        
+        // If we have search results, prioritize showing results from the selected tab first
+        // by sorting them so that the current tab's articles appear first
+        const sortedResults = [...allMatchingArticles].sort((a, b) => {
+          if (a.bodyPart === selectedTab && b.bodyPart !== selectedTab) return -1;
+          if (a.bodyPart !== selectedTab && b.bodyPart === selectedTab) return 1;
+          return 0;
+        });
+        
+        setSearchResults(sortedResults);
       } else {
-        setSearchResults(articlesByBodyPart);
+        setSearchResults([]);
       }
     }
   }, [selectedTab, articles, searchQuery]);
@@ -250,29 +261,54 @@ export default function Research() {
                 <div>
                   {searchQuery && (
                     <div className="mb-4 text-sm text-muted-foreground">
-                      {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} found for "{searchQuery}"
+                      {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} found for "{searchQuery}" across all body parts
                     </div>
                   )}
                   
-                  {Object.keys(bodyPartInfo).map((key) => (
-                    <TabsContent key={key} value={key} className="mt-0">
-                      {(searchQuery ? searchResults : filteredArticles).length > 0 ? (
-                        <div className="space-y-4">
-                          {(searchQuery ? searchResults : filteredArticles).map((article) => (
-                            <ArticleCard key={article.id} article={article} />
+                  {/* When searching, show all results in a single view */}
+                  {searchQuery ? (
+                    <div className="mt-0">
+                      {searchResults.length > 0 ? (
+                        <div className="space-y-6">
+                          {searchResults.map((article) => (
+                            <div key={article.id} className="space-y-1">
+                              <Badge 
+                                className={`mb-2 ${bodyPartInfo[article.bodyPart as BodyPartKey]?.color || "bg-gray-100 text-gray-800"}`}
+                              >
+                                {bodyPartInfo[article.bodyPart as BodyPartKey]?.name || article.bodyPart}
+                              </Badge>
+                              <ArticleCard article={article} />
+                            </div>
                           ))}
                         </div>
                       ) : (
                         <div className="flex flex-col items-center justify-center py-10 text-center">
                           <p className="text-muted-foreground">
-                            {searchQuery 
-                              ? `No articles found matching "${searchQuery}" in this category.`
-                              : "No research articles available for this body part."}
+                            No articles found matching "{searchQuery}" in any category.
                           </p>
                         </div>
                       )}
-                    </TabsContent>
-                  ))}
+                    </div>
+                  ) : (
+                    // When not searching, show normal tabs view
+                    Object.keys(bodyPartInfo).map((key) => (
+                      <TabsContent key={key} value={key} className="mt-0">
+                        {filteredArticles.length > 0 ? (
+                          <div className="space-y-4">
+                            {filteredArticles.map((article) => (
+                              <ArticleCard key={article.id} article={article} />
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center justify-center py-10 text-center">
+                            <p className="text-muted-foreground">
+                              No research articles available for this body part.
+                            </p>
+                          </div>
+                        )}
+                      </TabsContent>
+                    ))
+                  )}
                 </div>
               )}
             </Tabs>

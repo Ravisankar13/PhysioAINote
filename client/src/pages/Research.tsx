@@ -137,6 +137,8 @@ export default function Research() {
   const { toast } = useToast();
   const [selectedTab, setSelectedTab] = useState<BodyPartKey>("general");
   const [filteredArticles, setFilteredArticles] = useState<ResearchArticle[]>([]);
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [searchResults, setSearchResults] = useState<ResearchArticle[]>([]);
   
   // Fetch all research articles
   const { data: articles, isLoading, error } = useQuery<ResearchArticle[]>({
@@ -146,9 +148,25 @@ export default function Research() {
   // When tab changes or articles load, filter articles for the selected body part
   useEffect(() => {
     if (articles) {
-      setFilteredArticles(articles.filter(article => article.bodyPart === selectedTab));
+      const articlesByBodyPart = articles.filter(article => article.bodyPart === selectedTab);
+      setFilteredArticles(articlesByBodyPart);
+      
+      // If there's a search query, also filter by search term
+      if (searchQuery.trim()) {
+        const filtered = articlesByBodyPart.filter(article => 
+          article.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          article.abstract.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          article.authors.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          article.journal.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          article.keyFindings?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          article.clinicalRelevance?.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+        setSearchResults(filtered);
+      } else {
+        setSearchResults(articlesByBodyPart);
+      }
     }
-  }, [selectedTab, articles]);
+  }, [selectedTab, articles, searchQuery]);
   
   // Handle error in fetching articles
   useEffect(() => {
@@ -160,6 +178,10 @@ export default function Research() {
       });
     }
   }, [error, toast]);
+  
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(e.target.value);
+  };
   
   return (
     <div className="container max-w-6xl py-8">
@@ -177,21 +199,40 @@ export default function Research() {
         </div>
         
         <Card>
-          <CardHeader>
+          <CardHeader className="pb-2">
             <CardTitle>Research Articles by Body Part</CardTitle>
             <CardDescription>
               Access the latest peer-reviewed research to inform your clinical practice
             </CardDescription>
+            
+            {/* Search bar */}
+            <div className="mt-4 relative">
+              <input
+                type="text"
+                placeholder="Search articles by title, author, content..."
+                className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                value={searchQuery}
+                onChange={handleSearchChange}
+              />
+              {searchQuery && (
+                <button 
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                  onClick={() => setSearchQuery("")}
+                >
+                  ✕
+                </button>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="general" value={selectedTab} onValueChange={(value) => setSelectedTab(value as BodyPartKey)}>
-              <div className="flex justify-center mb-6 overflow-x-auto">
-                <TabsList className="grid grid-cols-4 md:grid-cols-6 gap-1">
+              <div className="mb-6 overflow-x-auto">
+                <TabsList className="flex flex-nowrap min-w-full">
                   {Object.entries(bodyPartInfo).map(([key, info]) => (
                     <TabsTrigger 
                       key={key} 
                       value={key}
-                      className="text-xs sm:text-sm"
+                      className="text-xs sm:text-sm whitespace-nowrap"
                     >
                       {info.name}
                     </TabsTrigger>
@@ -205,17 +246,27 @@ export default function Research() {
                 </div>
               ) : (
                 <div>
+                  {searchQuery && (
+                    <div className="mb-4 text-sm text-muted-foreground">
+                      {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} found for "{searchQuery}"
+                    </div>
+                  )}
+                  
                   {Object.keys(bodyPartInfo).map((key) => (
                     <TabsContent key={key} value={key} className="mt-0">
-                      {filteredArticles.length > 0 ? (
+                      {(searchQuery ? searchResults : filteredArticles).length > 0 ? (
                         <div className="space-y-4">
-                          {filteredArticles.map((article) => (
+                          {(searchQuery ? searchResults : filteredArticles).map((article) => (
                             <ArticleCard key={article.id} article={article} />
                           ))}
                         </div>
                       ) : (
                         <div className="flex flex-col items-center justify-center py-10 text-center">
-                          <p className="text-muted-foreground">No research articles available for this body part.</p>
+                          <p className="text-muted-foreground">
+                            {searchQuery 
+                              ? `No articles found matching "${searchQuery}" in this category.`
+                              : "No research articles available for this body part."}
+                          </p>
                         </div>
                       )}
                     </TabsContent>

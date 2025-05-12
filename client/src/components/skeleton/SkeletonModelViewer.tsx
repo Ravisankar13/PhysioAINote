@@ -26,68 +26,70 @@ interface ModelProps {
 
 function Model({ rotationSpeed = 0, limbScales, ...props }: ModelProps) {
   const groupRef = useRef<Group>(null);
-  const { scene, nodes } = useGLTF(MODEL_PATH);
-  const { camera } = useThree();
+  // useGLTF returns a cached result, so this is efficient
+  const { scene } = useGLTF(MODEL_PATH);
+  const sceneRef = useRef<THREE.Object3D | null>(null);
   
-  // Clone the scene to avoid mutating the cached original
-  const clonedScene = scene.clone();
-  
-  // Apply different scales to different body parts
+  // Initialize the scene only once
   useEffect(() => {
-    if (clonedScene) {
-      // Find and scale specific bone groups in the model
-      clonedScene.traverse((object) => {
-        // Scale arms
-        if (object.name && (object.name.toLowerCase().includes('arm') || 
-                           object.name.toLowerCase().includes('shoulder') ||
-                           object.name.toLowerCase().includes('humerus') ||
-                           object.name.toLowerCase().includes('radius') ||
-                           object.name.toLowerCase().includes('ulna'))) {
-          object.scale.set(limbScales.arms, limbScales.arms, limbScales.arms);
-        }
-        
-        // Scale legs
-        else if (object.name && (object.name.toLowerCase().includes('leg') || 
-                               object.name.toLowerCase().includes('femur') ||
-                               object.name.toLowerCase().includes('tibia') ||
-                               object.name.toLowerCase().includes('fibula') ||
-                               object.name.toLowerCase().includes('thigh'))) {
-          object.scale.set(limbScales.legs, limbScales.legs, limbScales.legs);
-        }
-        
-        // Scale torso
-        else if (object.name && (object.name.toLowerCase().includes('spine') || 
-                               object.name.toLowerCase().includes('rib') ||
-                               object.name.toLowerCase().includes('chest') ||
-                               object.name.toLowerCase().includes('torso') ||
-                               object.name.toLowerCase().includes('pelvis'))) {
-          object.scale.set(limbScales.torso, limbScales.torso, limbScales.torso);
-        }
-        
-        // Scale hands
-        else if (object.name && (object.name.toLowerCase().includes('hand') || 
-                               object.name.toLowerCase().includes('finger') ||
-                               object.name.toLowerCase().includes('wrist'))) {
-          object.scale.set(limbScales.hands, limbScales.hands, limbScales.hands);
-        }
-        
-        // Scale feet
-        else if (object.name && (object.name.toLowerCase().includes('foot') || 
-                               object.name.toLowerCase().includes('ankle') ||
-                               object.name.toLowerCase().includes('toe'))) {
-          object.scale.set(limbScales.feet, limbScales.feet, limbScales.feet);
-        }
-        
-        // Scale head
-        else if (object.name && (object.name.toLowerCase().includes('head') || 
-                               object.name.toLowerCase().includes('skull') ||
-                               object.name.toLowerCase().includes('cranium') ||
-                               object.name.toLowerCase().includes('neck'))) {
-          object.scale.set(limbScales.head, limbScales.head, limbScales.head);
-        }
-      });
+    // Clone the scene to avoid mutating the cached original
+    if (!sceneRef.current) {
+      sceneRef.current = scene.clone();
     }
-  }, [limbScales, clonedScene]);
+  }, [scene]);
+  
+  // Apply scaling whenever limbScales changes
+  useEffect(() => {
+    if (!sceneRef.current) return;
+    
+    // Find and scale specific bone groups in the model
+    sceneRef.current.traverse((object) => {
+      // Get original scale if not yet set
+      if (!object.userData.originalScale) {
+        object.userData.originalScale = object.scale.clone();
+      }
+      
+      // Reset to original scale first
+      const originalScale = object.userData.originalScale;
+      object.scale.copy(originalScale);
+      
+      const name = object.name.toLowerCase();
+      
+      // Scale arms
+      if (name.includes('arm') || name.includes('shoulder') || 
+          name.includes('humerus') || name.includes('radius') || 
+          name.includes('ulna')) {
+        object.scale.multiplyScalar(limbScales.arms);
+      }
+      // Scale legs
+      else if (name.includes('leg') || name.includes('femur') || 
+              name.includes('tibia') || name.includes('fibula') || 
+              name.includes('thigh')) {
+        object.scale.multiplyScalar(limbScales.legs);
+      }
+      // Scale torso
+      else if (name.includes('spine') || name.includes('rib') || 
+              name.includes('chest') || name.includes('torso') || 
+              name.includes('pelvis')) {
+        object.scale.multiplyScalar(limbScales.torso);
+      }
+      // Scale hands
+      else if (name.includes('hand') || name.includes('finger') || 
+              name.includes('wrist')) {
+        object.scale.multiplyScalar(limbScales.hands);
+      }
+      // Scale feet
+      else if (name.includes('foot') || name.includes('ankle') || 
+              name.includes('toe')) {
+        object.scale.multiplyScalar(limbScales.feet);
+      }
+      // Scale head
+      else if (name.includes('head') || name.includes('skull') || 
+              name.includes('cranium') || name.includes('neck')) {
+        object.scale.multiplyScalar(limbScales.head);
+      }
+    });
+  }, [limbScales]);
   
   // Auto-rotate if speed is provided
   useFrame(() => {
@@ -96,9 +98,12 @@ function Model({ rotationSpeed = 0, limbScales, ...props }: ModelProps) {
     }
   });
 
+  // Only render if we have a scene
+  if (!sceneRef.current) return null;
+
   return (
     <group ref={groupRef} {...props}>
-      <primitive object={clonedScene} />
+      <primitive object={sceneRef.current} />
     </group>
   );
 }
@@ -143,9 +148,9 @@ export default function SkeletonModelViewer() {
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
           {/* 3D Model Viewer - takes up 8/12 columns on medium screens and above */}
           <div className="md:col-span-8">
-            <div className="w-full aspect-[4/3] rounded-md overflow-hidden border">
+            <div className="w-full aspect-[4/3] rounded-md overflow-hidden border model-container">
               <Suspense fallback={<div className="flex items-center justify-center h-full bg-muted">Loading 3D Model...</div>}>
-                <Canvas camera={{ position: [0, 0, 5], fov: 50 }}>
+                <Canvas camera={{ position: [0, 0, 5], fov: 50 }} key={`canvas-${JSON.stringify(limbScales)}`}>
                   <ambientLight intensity={0.7} />
                   <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} />
                   <PresentationControls
@@ -161,6 +166,12 @@ export default function SkeletonModelViewer() {
                 </Canvas>
               </Suspense>
             </div>
+            <style jsx>{`
+              .reset-animation {
+                opacity: 0.8;
+                transition: opacity 0.3s ease;
+              }
+            `}</style>
           </div>
           
           {/* Adjustment Controls - takes up 4/12 columns on medium screens and above */}
@@ -228,6 +239,14 @@ export default function SkeletonModelViewer() {
                   // Reset everything
                   setRotationSpeed(0);
                   resetLimbScales();
+                  // Force a re-render of the model
+                  const modelContainer = document.querySelector('.model-container');
+                  if (modelContainer) {
+                    modelContainer.classList.add('reset-animation');
+                    setTimeout(() => {
+                      modelContainer.classList.remove('reset-animation');
+                    }, 300);
+                  }
                 }}
               >
                 Reset All

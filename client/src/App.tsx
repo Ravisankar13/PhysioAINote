@@ -16,6 +16,7 @@ import Skeleton3DTool from "@/pages/Skeleton3DTool";
 import Research from "@/pages/Research";
 import Membership from "@/pages/Membership";
 import TestAudioTranscription from "@/pages/TestAudioTranscription";
+import TestNoteGenerator from "@/pages/TestNoteGenerator";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { ThemeProvider } from "next-themes";
@@ -40,6 +41,7 @@ function Router() {
           <Route path="/contact" component={Contact} />
           <Route path="/auth" component={AuthPage} />
           <Route path="/test-transcription" component={TestAudioTranscription} />
+          <Route path="/test-note-generator" component={TestNoteGenerator} />
           <Route component={NotFound} />
         </Switch>
       </main>

@@ -3,6 +3,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import PayPalButton from "@/components/PayPalButton";
+import StripeProvider from "@/components/StripeProvider";
+import StripeCheckoutButton from "@/components/StripeCheckoutButton";
 import {
   Card,
   CardContent,
@@ -24,6 +26,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { CreditCard, CircleDollarSign } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 
 type SubscriptionPlan = {
@@ -49,6 +53,7 @@ export default function Membership() {
   const queryClient = useQueryClient();
   const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan | null>(null);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<'credit-card' | 'paypal'>('credit-card');
 
   // Fetch subscription plans
   const { data: plans = [], isLoading: isLoadingPlans } = useQuery({
@@ -104,30 +109,69 @@ export default function Membership() {
     },
   });
 
-  // Handle PayPal order approval and record payment
-  const handlePaymentSuccess = (planId: number, transactionId: string, amount: string) => {
+  // Handle payment success (both PayPal and Stripe)
+  const handlePaymentSuccess = (planId: number, transactionId: string, amount: string, method: 'PayPal' | 'Stripe' = 'PayPal') => {
     createPaymentMutation.mutate({
       planId,
       amount,
-      paymentMethod: "PayPal",
+      paymentMethod: method,
       transactionId,
       status: "completed",
       paymentDate: new Date().toISOString(),
     });
   };
+
+  // Handle Stripe payment errors
+  const handlePaymentError = (error: Error) => {
+    toast({
+      title: "Payment Failed",
+      description: error.message || "There was an error processing your payment.",
+      variant: "destructive",
+    });
+  };
   
-  // Customize PayPal button with plan-specific details
-  const renderPayPalButton = () => {
+  // Render payment options based on selected method
+  const renderPaymentOptions = () => {
     if (!selectedPlan) return null;
     
     return (
-      <div className="flex justify-center border border-gray-200 rounded p-4">
-        <PayPalButton 
-          amount={selectedPlan.price}
-          currency="USD"
-          intent="CAPTURE"
-        />
-      </div>
+      <Tabs defaultValue="credit-card" className="w-full" onValueChange={(value) => setPaymentMethod(value as 'credit-card' | 'paypal')}>
+        <TabsList className="grid w-full grid-cols-2 mb-4">
+          <TabsTrigger value="credit-card" className="flex items-center gap-2">
+            <CreditCard className="h-4 w-4" />
+            Credit Card
+          </TabsTrigger>
+          <TabsTrigger value="paypal" className="flex items-center gap-2">
+            <CircleDollarSign className="h-4 w-4" />
+            PayPal
+          </TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="credit-card" className="space-y-4">
+          <div className="rounded-md">
+            <StripeProvider>
+              <StripeCheckoutButton 
+                amount={selectedPlan.price}
+                planId={selectedPlan.id}
+                onPaymentSuccess={(planId, transactionId, amount) => 
+                  handlePaymentSuccess(planId, transactionId, amount, 'Stripe')
+                }
+                onPaymentError={handlePaymentError}
+              />
+            </StripeProvider>
+          </div>
+        </TabsContent>
+        
+        <TabsContent value="paypal" className="space-y-4">
+          <div className="flex justify-center border border-gray-200 rounded p-4">
+            <PayPalButton 
+              amount={selectedPlan.price}
+              currency="USD"
+              intent="CAPTURE"
+            />
+          </div>
+        </TabsContent>
+      </Tabs>
     );
   };
 
@@ -229,7 +273,7 @@ export default function Membership() {
       </div>
 
       <AlertDialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-lg">
           <AlertDialogHeader>
             <AlertDialogTitle>Complete Your Subscription</AlertDialogTitle>
             <AlertDialogDescription>
@@ -238,8 +282,8 @@ export default function Membership() {
           </AlertDialogHeader>
           
           <div className="py-4">
-            <p className="mb-4 font-medium">Pay with PayPal:</p>
-            {renderPayPalButton()}
+            <p className="mb-4 font-medium">Choose your payment method:</p>
+            {renderPaymentOptions()}
           </div>
           
           <AlertDialogFooter>

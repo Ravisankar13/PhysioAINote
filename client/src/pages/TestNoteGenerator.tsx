@@ -40,7 +40,7 @@ const TestNoteGenerator = () => {
   }
 
   const form = useForm({
-    resolver: zodResolver(soapNoteInputSchema),
+    resolver: zodResolver(noteGeneratorSchema),
     defaultValues: {
       patientName: "",
       patientId: "",
@@ -54,10 +54,9 @@ const TestNoteGenerator = () => {
     },
   });
 
-  // Add visibility to the data before submission
-  const onSubmit = useCallback(async (data: Omit<SoapNoteInput, 'visibility'>) => {
-    // Since we're only generating and not saving immediately, we don't need visibility yet
-    const submitData = { ...data };
+  const onSubmit = useCallback(async (data: NoteGeneratorInput) => {
+    // Prepare data for API - omit bodyPart which isn't part of the SOAP note input schema
+    const { bodyPart, ...submitData } = data;
     setIsGenerating(true);
     try {
       const response = await fetch('/api/notes/generate', {
@@ -65,7 +64,7 @@ const TestNoteGenerator = () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify(submitData),
       });
 
       if (!response.ok) {
@@ -96,7 +95,10 @@ const TestNoteGenerator = () => {
     if (!generatedNote) return;
     
     try {
-      // Prepare the note for saving
+      // Get the selected body part from the form
+      const bodyPart = form.getValues().bodyPart;
+      
+      // Prepare the note for saving with proper visibility
       const noteToSave = {
         patientName: generatedNote.patientName,
         patientId: generatedNote.patientId,
@@ -104,10 +106,10 @@ const TestNoteGenerator = () => {
         dateOfVisit: generatedNote.dateOfVisit,
         subjective: generatedNote.subjective,
         objective: generatedNote.objective,
-        assessment: generatedNote.assessment,
-        plan: generatedNote.plan,
-        bodyPart: form.getValues().bodyPart,
-        visibility: "private"
+        assessment: generatedNote.assessment || "",
+        plan: generatedNote.plan || "",
+        bodyPart: bodyPart,
+        visibility: "private" as const
       };
 
       const response = await fetch('/api/notes', {

@@ -533,15 +533,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
+      
+      // Special case for fateofjustice who gets free access to everything
+      if (user.username === "Fateofjustice") {
+        return res.json({
+          tier: "premium",
+          expiry: new Date("2125-05-01").toISOString(), // Far future date for essentially permanent access
+          subscriptionId: null
+        });
+      }
 
+      // For regular users
       return res.json({
         tier: user.membershipTier,
-        expiry: user.membershipExpiry,
-        subscriptionId: user.paypalSubscriptionId,
+        expiry: user.membershipExpiry ? user.membershipExpiry.toISOString() : null,
+        subscriptionId: user.paypalSubscriptionId || user.stripeSubscriptionId,
       });
     } catch (error) {
       console.error("Error fetching user subscription:", error);
       return res.status(500).json({ message: "Failed to fetch subscription" });
+    }
+  });
+  
+  // Cancel user's subscription
+  app.post("/api/user/subscription/cancel", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const user = await storage.getUser(req.user!.id);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      // Special case for fateofjustice who has special access
+      if (user.username === "Fateofjustice") {
+        return res.status(400).json({ message: "Your account has special access that cannot be cancelled." });
+      }
+      
+      // If they have a Stripe subscription, cancel it through Stripe API
+      if (user.stripeSubscriptionId && stripe) {
+        try {
+          await stripe.subscriptions.cancel(user.stripeSubscriptionId);
+        } catch (stripeError) {
+          console.error("Error cancelling Stripe subscription:", stripeError);
+          // Continue with local cancellation even if Stripe fails
+        }
+      }
+      
+      // Update user record in database
+      const updatedUser = await storage.updateUserMembership(user.id, "none", new Date());
+      
+      res.json({
+        success: true,
+        message: "Your subscription has been cancelled successfully.",
+        user: {
+          tier: "none",
+          expiry: null,
+          subscriptionId: null
+        }
+      });
+    } catch (error) {
+      console.error("Error cancelling subscription:", error);
+      res.status(500).json({ message: "Error cancelling subscription." });
     }
   });
 

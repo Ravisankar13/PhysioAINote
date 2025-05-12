@@ -37,6 +37,8 @@ export const users = pgTable("users", {
   membershipTier: membershipTierEnum("membership_tier").default("none").notNull(),
   membershipExpiry: timestamp("membership_expiry"),
   paypalSubscriptionId: text("paypal_subscription_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  stripeCustomerId: text("stripe_customer_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

@@ -22,6 +22,9 @@ export const bodyPartEnum = pgEnum("body_part", [
   "other"
 ]);
 
+// Membership tier enum
+export const membershipTierEnum = pgEnum("membership_tier", ["none", "basic", "standard", "premium"]);
+
 // Users
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -31,6 +34,9 @@ export const users = pgTable("users", {
   fullName: text("full_name"),
   profileImage: text("profile_image"),
   bio: text("bio"),
+  membershipTier: membershipTierEnum("membership_tier").default("none").notNull(),
+  membershipExpiry: timestamp("membership_expiry"),
+  paypalSubscriptionId: text("paypal_subscription_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -201,6 +207,60 @@ export type ResearchArticle = typeof researchArticles.$inferSelect;
 // Define research article relations
 export const researchArticleRelations = relations(researchArticles, ({ many }) => ({
   tags: many(tags),
+}));
+
+// Subscription Plans
+export const subscriptionPlans = pgTable("subscription_plans", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description").notNull(),
+  tier: membershipTierEnum("tier").notNull(),
+  price: text("price").notNull(),
+  interval: text("interval").notNull(),
+  features: text("features").notNull(),
+  active: boolean("active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertSubscriptionPlanSchema = createInsertSchema(subscriptionPlans).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertSubscriptionPlan = z.infer<typeof insertSubscriptionPlanSchema>;
+export type SubscriptionPlan = typeof subscriptionPlans.$inferSelect;
+
+// Payment Records
+export const paymentRecords = pgTable("payment_records", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  planId: integer("plan_id").notNull().references(() => subscriptionPlans.id),
+  amount: text("amount").notNull(),
+  paymentDate: timestamp("payment_date").defaultNow().notNull(),
+  paymentMethod: text("payment_method").notNull(),
+  transactionId: text("transaction_id").notNull(),
+  status: text("status").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertPaymentRecordSchema = createInsertSchema(paymentRecords).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertPaymentRecord = z.infer<typeof insertPaymentRecordSchema>;
+export type PaymentRecord = typeof paymentRecords.$inferSelect;
+
+// Define payment relations
+export const paymentRecordRelations = relations(paymentRecords, ({ one }) => ({
+  user: one(users, {
+    fields: [paymentRecords.userId],
+    references: [users.id],
+  }),
+  plan: one(subscriptionPlans, {
+    fields: [paymentRecords.planId],
+    references: [subscriptionPlans.id],
+  }),
 }));
 
 // SOAP Note Input Schema

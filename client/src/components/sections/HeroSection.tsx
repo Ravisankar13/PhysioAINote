@@ -1,6 +1,6 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { MessageSquareText, ClipboardList } from "lucide-react";
+import { BadgeDollarSign, Sparkles } from "lucide-react";
 
 const HeroSection = () => {
   return (
@@ -20,16 +20,16 @@ const HeroSection = () => {
               Streamline your clinical documentation, access research, share knowledge, and enhance patient care with our all-in-one professional platform designed for physiotherapists.
             </p>
             <div className="mt-10 flex flex-col sm:flex-row gap-4">
-              <Link href="/clinical-notes">
+              <Link href="/membership">
                 <Button size="lg" className="bg-white text-primary hover:bg-white/90 shadow-md flex items-center gap-2">
-                  <MessageSquareText className="h-5 w-5" />
-                  <span className="font-semibold">Try AI Notes</span>
+                  <BadgeDollarSign className="h-5 w-5" />
+                  <span className="font-semibold">View Membership Plans</span>
                 </Button>
               </Link>
-              <Link href="#services">
+              <Link href="#features">
                 <Button size="lg" variant="outline" className="text-white border-white/30 bg-white/10 hover:bg-white/20 hover:border-white/40 shadow-sm flex items-center gap-2">
-                  <ClipboardList className="h-5 w-5" />
-                  <span>Our Services</span>
+                  <Sparkles className="h-5 w-5" />
+                  <span>Explore Features</span>
                 </Button>
               </Link>
             </div>

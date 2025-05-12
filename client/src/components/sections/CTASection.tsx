@@ -12,23 +12,23 @@ const CTASection = () => {
         <div className="lg:grid lg:grid-cols-2 lg:gap-16 items-center">
           <div>
             <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl lg:text-5xl">
-              <span className="block">Ready to transform your</span>
-              <span className="block">clinical documentation?</span>
+              <span className="block">Ready to elevate your</span>
+              <span className="block">physiotherapy practice?</span>
             </h2>
             <p className="mt-6 text-lg text-white/80 max-w-xl">
-              Experience the power of AI-assisted SOAP notes and streamline your physiotherapy practice with our cutting-edge technology.
+              Join thousands of physiotherapists who are saving time, enhancing their clinical decision-making, and delivering better patient care with our platform.
             </p>
             
             <div className="mt-10 flex flex-col sm:flex-row gap-5">
-              <Link href="/clinical-notes">
+              <Link href="/membership">
                 <Button size="lg" className="bg-white text-primary hover:bg-white/90 shadow-md flex items-center gap-2 w-full sm:w-auto">
                   <MessageSquareText className="h-5 w-5" />
-                  <span className="font-semibold">Try AI Notes Now</span>
+                  <span className="font-semibold">Explore Membership Plans</span>
                 </Button>
               </Link>
-              <Link href="/contact">
+              <Link href="/clinical-notes">
                 <Button size="lg" variant="outline" className="border-white text-white bg-white/10 hover:bg-white/20 flex items-center gap-2 w-full sm:w-auto">
-                  <span>Contact Us</span>
+                  <span>Try Free Demo</span>
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>

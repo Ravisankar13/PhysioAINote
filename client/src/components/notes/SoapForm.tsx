@@ -250,12 +250,17 @@ const SoapForm = ({ onNoteGenerated }: SoapFormProps) => {
 
                 {/* Voice Recording Section */}
                 <div className="mb-6 w-full">
-                  <div className="mb-4 p-4 bg-primary-50 rounded-lg text-primary-800">
-                    <p className="text-sm">
-                      Record your clinical session and let our AI analyze the audio. 
-                      The system will transcribe your recording and extract key clinical information like 
-                      patient history, examination findings, possible diagnoses, and treatment recommendations.
+                  <div className="mb-4 p-5 bg-red-50 border border-red-100 rounded-lg shadow-sm">
+                    <h4 className="text-red-800 font-medium mb-2">Record Your Clinical Notes</h4>
+                    <p className="text-sm text-neutral-700">
+                      Use the red microphone button below to record your clinical session. Our AI will:
                     </p>
+                    <ul className="text-sm text-neutral-700 list-disc pl-5 mt-2">
+                      <li>Transcribe your voice recording</li>
+                      <li>Extract key clinical information</li>
+                      <li>Organize findings into a structured SOAP format</li>
+                      <li>Generate comprehensive clinical documentation</li>
+                    </ul>
                   </div>
                   <SimpleRecorder onRecordingComplete={handleRecordingComplete} />
                 </div>

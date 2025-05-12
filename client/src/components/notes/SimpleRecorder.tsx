@@ -161,18 +161,24 @@ export function SimpleRecorder({ onRecordingComplete }: SimpleRecorderProps) {
   };
   
   return (
-    <Card className="border-primary-100 bg-primary-50">
-      <CardContent className="pt-6 pb-6">
+    <Card className="border-red-100 bg-red-50 shadow-md">
+      <CardContent className="pt-8 pb-8">
         <div className="flex flex-col items-center">
+          <h3 className="text-lg font-medium text-red-700 mb-4">Voice Recording</h3>
           {!isRecording ? (
             <Button
               onClick={startRecording}
               disabled={isProcessing}
               size="lg"
-              className="bg-primary-600 hover:bg-primary-700 text-white"
+              className="bg-red-600 hover:bg-red-700 text-white rounded-full h-20 w-20 flex items-center justify-center"
             >
-              <Mic className="mr-2 h-5 w-5" />
-              {isProcessing ? 'Processing...' : 'Start Recording'}
+              {isProcessing ? (
+                <div className="animate-pulse">
+                  <div className="h-8 w-8 rounded-full border-4 border-white border-t-transparent animate-spin" />
+                </div>
+              ) : (
+                <Mic className="h-8 w-8" />
+              )}
             </Button>
           ) : (
             <div className="flex flex-col items-center space-y-4 w-full">
@@ -191,9 +197,9 @@ export function SimpleRecorder({ onRecordingComplete }: SimpleRecorderProps) {
                 onClick={stopRecording}
                 variant="destructive" 
                 size="lg"
+                className="h-20 w-20 rounded-full flex items-center justify-center"
               >
-                <Square className="mr-2 h-5 w-5" />
-                Stop Recording
+                <Square className="h-8 w-8" />
               </Button>
             </div>
           )}
@@ -205,11 +211,24 @@ export function SimpleRecorder({ onRecordingComplete }: SimpleRecorderProps) {
             </div>
           )}
           
-          <p className="text-center text-muted-foreground text-sm mt-4">
-            {isRecording 
-              ? "Speak clearly. Click Stop when finished." 
-              : "Click Start to begin recording your clinical notes"}
-          </p>
+          <div className="text-center mt-4 max-w-md">
+            {isRecording ? (
+              <p className="text-red-700 font-medium">
+                Speaking clearly. Click the square to stop when finished.
+              </p>
+            ) : (
+              <div>
+                <p className="text-neutral-700 font-medium mb-2">
+                  Click the red microphone button to start recording
+                </p>
+                <ul className="text-sm text-neutral-600 list-disc text-left pl-6">
+                  <li>Speak clearly at a normal pace</li>
+                  <li>Record for at least 10-15 seconds</li>
+                  <li>Include patient symptoms and clinical observations</li>
+                </ul>
+              </div>
+            )}
+          </div>
         </div>
       </CardContent>
     </Card>

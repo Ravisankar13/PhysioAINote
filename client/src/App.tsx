@@ -14,6 +14,7 @@ import MyNotes from "@/pages/MyNotes";
 import SkeletonTool from "@/pages/SkeletonTool";
 import Skeleton3DTool from "@/pages/Skeleton3DTool";
 import Research from "@/pages/Research";
+import Membership from "@/pages/Membership";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { ThemeProvider } from "next-themes";
@@ -33,6 +34,7 @@ function Router() {
           <ProtectedRoute path="/my-notes" component={MyNotes} />
           <Route path="/skeleton-tool" component={SkeletonTool} />
           <Route path="/skeleton-3d-tool" component={Skeleton3DTool} />
+          <Route path="/membership" component={Membership} />
           <Route path="/about" component={About} />
           <Route path="/contact" component={Contact} />
           <Route path="/auth" component={AuthPage} />

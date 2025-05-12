@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Leaf, MessageSquareText, Menu, LogOut, User, Bone } from "lucide-react";
+import { Leaf, MessageSquareText, Menu, LogOut, User, Bone, CreditCard } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 
 const Header = () => {
@@ -26,6 +26,7 @@ const Header = () => {
     { href: "/skeleton-3d-tool", label: "3D Skeleton Tool" },
     { href: "/shared-notes", label: "Shared Notes" },
     { href: "/research", label: "Research" },
+    { href: "/membership", label: "Membership" },
     { href: "/about", label: "About" },
     { href: "/contact", label: "Contact" },
   ];
@@ -119,6 +120,14 @@ const Header = () => {
                       </div>
                     </Link>
                   </DropdownMenuItem>
+                  <DropdownMenuItem className="flex items-center" asChild>
+                    <Link href="/membership">
+                      <div className="flex items-center cursor-pointer w-full">
+                        <CreditCard className="mr-2 h-4 w-4" />
+                        <span>Membership</span>
+                      </div>
+                    </Link>
+                  </DropdownMenuItem>
                   <DropdownMenuItem className="flex items-center cursor-pointer" onClick={handleLogout}>
                     <LogOut className="mr-2 h-4 w-4" />
                     <span>Logout</span>
@@ -189,6 +198,14 @@ const Header = () => {
                             onClick={() => setOpen(false)}
                           >
                             3D Skeleton Tool
+                          </span>
+                        </Link>
+                        <Link href="/membership">
+                          <span
+                            className="px-2 py-2 text-base block cursor-pointer text-muted-foreground hover:text-foreground"
+                            onClick={() => setOpen(false)}
+                          >
+                            Membership
                           </span>
                         </Link>
                         <span

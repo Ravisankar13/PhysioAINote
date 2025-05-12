@@ -23,7 +23,12 @@ export async function generateSoapNote(noteInput: SoapNoteInput) {
       response_format: { type: "json_object" }
     });
 
-    const result = JSON.parse(response.choices[0].message.content);
+    const content = response.choices[0].message.content;
+    if (!content) {
+      throw new Error("OpenAI returned empty response");
+    }
+    
+    const result = JSON.parse(content);
     
     // Combine the original input with AI-enhanced sections
     return {
@@ -37,9 +42,9 @@ export async function generateSoapNote(noteInput: SoapNoteInput) {
       plan: result.plan || noteInput.plan || "",
       fullNote: result
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error generating SOAP note:", error);
-    throw new Error(`Failed to generate SOAP note: ${error.message}`);
+    throw new Error(`Failed to generate SOAP note: ${error.message || "Unknown error"}`);
   }
 }
 

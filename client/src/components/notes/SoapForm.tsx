@@ -6,6 +6,7 @@ import { useMutation } from "@tanstack/react-query";
 import { generateSoapNote } from "@/lib/openai";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
+import { Mic } from "lucide-react";
 import {
   Form,
   FormControl,
@@ -25,7 +26,7 @@ import {
   TabsTrigger 
 } from "@/components/ui/tabs";
 import VoiceRecorder from "@/components/notes/VoiceRecorder";
-import VoiceRecordingDrawer from "@/components/notes/VoiceRecordingDrawer";
+import SimpleRecorder from "@/components/notes/SimpleRecorder";
 import { soapNoteInputSchema } from "@shared/schema";
 
 interface SoapFormProps {
@@ -252,7 +253,15 @@ const SoapForm = ({ onNoteGenerated }: SoapFormProps) => {
                   <h4 className="text-lg font-medium text-neutral-900">SOAP Note Details</h4>
                   <div className="flex items-center space-x-2">
                     <span className="text-sm text-neutral-500">Quickly add notes:</span>
-                    <VoiceRecordingDrawer onRecordingComplete={handleRecordingComplete} />
+                    <Button 
+                      type="button"
+                      variant="outline"
+                      className="flex items-center gap-1 bg-primary-50 text-primary-600 border-primary-200 hover:bg-primary-100 hover:text-primary-700 hover:border-primary-300"
+                      onClick={() => document.getElementById('voice-tab-trigger')?.click()}
+                    >
+                      <Mic className="h-4 w-4" />
+                      <span>Record Voice</span>
+                    </Button>
                   </div>
                 </div>
 
@@ -274,7 +283,7 @@ const SoapForm = ({ onNoteGenerated }: SoapFormProps) => {
                         patient history, examination findings, possible diagnoses, and treatment recommendations.
                       </p>
                     </div>
-                    <VoiceRecorder onRecordingComplete={handleRecordingComplete} />
+                    <SimpleRecorder onRecordingComplete={handleRecordingComplete} />
                   </TabsContent>
                 </Tabs>
 

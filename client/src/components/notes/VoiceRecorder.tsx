@@ -214,25 +214,34 @@ const VoiceRecorder = ({ onRecordingComplete }: VoiceRecorderProps) => {
         throw new Error("Empty audio recording. Please record again.");
       }
       
+      // Get the actual MIME type from the blob
+      const mimeType = audioBlob.type || 'audio/webm';
+      console.log('Original audio MIME type:', mimeType);
+      
+      // Convert to a WAV file if needed - WebM is sometimes not properly recognized by whisper
+      let processedBlob = audioBlob;
+      let finalMimeType = mimeType;
+
       // Create a form data object to send the audio file
       const formData = new FormData();
       
-      // Get the actual MIME type from the blob
-      const mimeType = audioBlob.type || 'audio/webm';
-      console.log('Sending audio with MIME type:', mimeType);
-      
       // Use the correct extension based on MIME type
       let fileName = 'recording.webm';
-      if (mimeType.includes('wav')) {
+      if (finalMimeType.includes('wav')) {
         fileName = 'recording.wav';
-      } else if (mimeType.includes('mp3') || mimeType.includes('mpeg')) {
+      } else if (finalMimeType.includes('mp3') || finalMimeType.includes('mpeg')) {
         fileName = 'recording.mp3';
-      } else if (mimeType.includes('ogg')) {
+      } else if (finalMimeType.includes('ogg')) {
         fileName = 'recording.ogg';
+      } else {
+        // Ensure we use webm as default for good OpenAI compatibility
+        fileName = 'recording.webm';
       }
       
+      console.log('Sending audio with filename:', fileName);
+      
       // Append the audio blob with the correct filename
-      formData.append('audio', audioBlob, fileName);
+      formData.append('audio', processedBlob, fileName);
       
       // Send to server for transcription
       const response = await fetch('/api/transcribe', {

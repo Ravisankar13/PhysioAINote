@@ -93,6 +93,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: 'Audio file is empty' });
       }
       
+      // Validate file type - ensure it's an audio file
+      if (!req.file.mimetype.startsWith('audio/')) {
+        console.error(`Transcription error: Invalid file type ${req.file.mimetype}`);
+        return res.status(400).json({ message: 'Invalid file type. Only audio files are allowed.' });
+      }
+      
+      // Verify OPENAI_API_KEY is set and valid
+      if (!process.env.OPENAI_API_KEY) {
+        console.error('Transcription error: OpenAI API key not found');
+        return res.status(500).json({ 
+          message: 'OpenAI API key not found in environment variables. Please configure your API key.'
+        });
+      }
+      
       // Get the path to the uploaded file
       const filePath = req.file.path;
       
@@ -125,11 +139,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (transcriptionError: any) {
         console.error('Error in OpenAI transcription:', transcriptionError);
         
-        // Check if it's an OpenAI API error
+        // More specific error handling
         if (transcriptionError.message.includes('API key')) {
           return res.status(500).json({ 
             message: 'OpenAI API key error. Please check your API key configuration.',
             error: transcriptionError.message 
+          });
+        } else if (transcriptionError.message.includes('format')) {
+          return res.status(400).json({
+            message: 'Audio format not supported. Please use a different audio format.',
+            error: transcriptionError.message
+          });
+        } else if (transcriptionError.message.includes('rate limit')) {
+          return res.status(429).json({
+            message: 'OpenAI API rate limit exceeded. Please try again later.',
+            error: transcriptionError.message
           });
         }
         
@@ -138,7 +162,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error('Error in transcription endpoint:', error);
       return res.status(500).json({ 
-        message: 'Failed to process audio',
+        message: 'Error transcribing audio. Please try again.',
         error: error.message 
       });
     }

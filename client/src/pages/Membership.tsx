@@ -77,10 +77,13 @@ export default function Membership() {
   // Create payment record mutation
   const createPaymentMutation = useMutation({
     mutationFn: async (data: any) => {
-      return apiRequest("/api/user/payments", {
+      const response = await fetch("/api/user/payments", {
         method: "POST",
-        data,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+        credentials: "include"
       });
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/user/subscription"] });
@@ -111,6 +114,21 @@ export default function Membership() {
       status: "completed",
       paymentDate: new Date().toISOString(),
     });
+  };
+  
+  // Customize PayPal button with plan-specific details
+  const renderPayPalButton = () => {
+    if (!selectedPlan) return null;
+    
+    return (
+      <div className="flex justify-center border border-gray-200 rounded p-4">
+        <PayPalButton 
+          amount={selectedPlan.price}
+          currency="USD"
+          intent="CAPTURE"
+        />
+      </div>
+    );
   };
 
   // Handle subscribing to a plan
@@ -221,15 +239,7 @@ export default function Membership() {
           
           <div className="py-4">
             <p className="mb-4 font-medium">Pay with PayPal:</p>
-            {selectedPlan && (
-              <div className="flex justify-center border border-gray-200 rounded p-4">
-                <PayPalButton 
-                  amount={selectedPlan.price}
-                  currency="USD"
-                  intent="CAPTURE"
-                />
-              </div>
-            )}
+            {renderPayPalButton()}
           </div>
           
           <AlertDialogFooter>

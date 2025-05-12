@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ExternalLink, BookOpen, Info, Award, Calendar, Users } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
+import MembershipRequired from "@/components/MembershipRequired";
 
 interface ResearchArticle {
   id: number;

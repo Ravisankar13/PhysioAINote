@@ -2,6 +2,7 @@ import { Helmet } from "react-helmet";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Skeleton3DModel } from "@/components/skeleton/Skeleton3DModel";
+import MembershipRequired from "@/components/MembershipRequired";
 
 export default function Skeleton3DTool() {
   const [adjustments, setAdjustments] = useState({

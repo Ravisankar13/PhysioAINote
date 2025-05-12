@@ -35,14 +35,14 @@ export default function Skeleton3DTool() {
   };
 
   return (
-    <div className="container max-w-6xl py-8">
+    <div className="container max-w-6xl py-8 mx-auto">
       <Helmet>
         <title>3D Skeletal Tool | PhysioAI Conversation</title>
         <meta name="description" content="Interactive 3D skeletal model for physiotherapy diagnosis, assessment, and treatment planning." />
       </Helmet>
 
       <div className="space-y-6">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div className="flex flex-col items-center text-center gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">3D Skeletal Tool</h1>
             <p className="text-muted-foreground mt-1">
@@ -222,11 +222,11 @@ export default function Skeleton3DTool() {
           </button>
         </div>
 
-        <div className="bg-white rounded-lg p-4 md:p-6 shadow-sm space-y-4">
+        <div className="bg-white rounded-lg p-4 md:p-6 shadow-sm space-y-4 text-center">
           <h2 className="text-xl font-bold">How to Use This 3D Tool</h2>
           <div className="space-y-2">
             <p>This interactive 3D skeletal model allows you to:</p>
-            <ul className="list-disc pl-6 space-y-1">
+            <ul className="list-disc space-y-1 inline-block text-left">
               <li>Visualize a 3D skeletal model from any angle by dragging to rotate</li>
               <li>Zoom in/out using the mouse wheel to see details</li>
               <li>Adjust bone dimensions using the sliders to match patient anatomy</li>
@@ -237,7 +237,7 @@ export default function Skeleton3DTool() {
           
           <div className="border-t pt-4 mt-4">
             <h3 className="font-medium mb-2">Tips for Physiotherapists:</h3>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground mx-auto max-w-2xl">
               Use this tool in conjunction with clinical assessments. The adjustable features 
               help to visualize proportional differences and can assist in treatment planning, 
               but should not replace professional clinical judgment.

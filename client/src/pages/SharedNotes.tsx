@@ -157,14 +157,14 @@ export default function SharedNotes() {
   }
 
   return (
-    <div className="container max-w-6xl py-8">
+    <div className="container max-w-6xl py-8 mx-auto">
       <Helmet>
         <title>Shared Clinical Notes | PhysioAI Conversation</title>
         <meta name="description" content="Browse shared clinical notes from other physiotherapists and example notes from administration. Learn from de-identified cases and collaborate with the community." />
       </Helmet>
 
       <div className="space-y-6">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div className="flex flex-col items-center text-center gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Shared Clinical Notes</h1>
             <p className="text-muted-foreground mt-1">

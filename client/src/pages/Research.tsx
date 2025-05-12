@@ -184,14 +184,14 @@ export default function Research() {
   };
   
   return (
-    <div className="container max-w-6xl py-8">
+    <div className="container max-w-6xl py-8 mx-auto">
       <Helmet>
         <title>Physiotherapy Research Articles | PhysioAI</title>
         <meta name="description" content="Browse peer-reviewed physiotherapy research articles organized by body part." />
       </Helmet>
       
       <div className="space-y-8">
-        <div>
+        <div className="text-center">
           <h1 className="text-3xl font-bold tracking-tight">Physiotherapy Research</h1>
           <p className="text-muted-foreground mt-1">
             Browse peer-reviewed physiotherapy research articles organized by body part

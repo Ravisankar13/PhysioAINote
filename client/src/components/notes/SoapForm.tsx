@@ -101,104 +101,224 @@ const SoapForm = ({ onNoteGenerated }: SoapFormProps) => {
   // For forcing UI updates when the form values change
   const [notesUpdated, setNotesUpdated] = useState(0);
   
+  // For real-time simulation
+  const [realtimeContent, setRealtimeContent] = useState<{
+    subjective: string;
+    objective: string;
+    assessment: string;
+    plan: string;
+  }>({
+    subjective: "",
+    objective: "",
+    assessment: "",
+    plan: ""
+  });
+  
+  // Flag to show if real-time processing is active
+  const [isRealTimeProcessing, setIsRealTimeProcessing] = useState(false);
+  
   const handleRecordingComplete = (_audioBlob: Blob, transcriptData: TranscriptionResult | string) => {
     // Show SOAP note generation is in progress
     setIsLoading(true);
     
-    // Update form with data from the transcription analysis
+    // Clear existing note content for a fresh start
+    setRealtimeContent({
+      subjective: "",
+      objective: "",
+      assessment: "",
+      plan: ""
+    });
+    
+    // Reset form values
+    form.setValue("subjective", "");
+    form.setValue("objective", "");
+    form.setValue("assessment", "");
+    form.setValue("plan", "");
+    
+    // Force initial UI update
+    setNotesUpdated(prev => prev + 1);
+    
+    // Start real-time processing simulation
+    setIsRealTimeProcessing(true);
+    
     try {
-      const { subjective } = form.getValues();
-      
-      // Check if we have an object with proper data
+      // Process the transcription data
       if (typeof transcriptData === 'object') {
         const data = transcriptData as TranscriptionResult;
         
-        // Clear existing note content for a fresh start
-        form.setValue("subjective", "");
-        form.setValue("objective", "");
-        form.setValue("assessment", "");
-        form.setValue("plan", "");
+        // Prepare content to display in a streaming fashion
+        let finalSubjective = "";
+        let finalObjective = "";
+        let finalAssessment = "";
+        let finalPlan = "";
         
-        // Small delay to show AI is processing
-        setTimeout(() => {
-          // Handle clinical insights (new format)
-          if (data.clinicalInsights) {
-            // Generate a simulated SOAP note from the clinical insights
-            const insights = data.clinicalInsights;
-            
-            // Use the transcript as subjective data
-            if (data.transcript || data.transcription) {
-              const transcript = data.transcript || data.transcription || '';
-              form.setValue("subjective", `### Patient Description:\n${transcript}`);
+        // Determine what content we'll show based on the data
+        if (data.clinicalInsights) {
+          const insights = data.clinicalInsights;
+          const transcript = data.transcript || data.transcription || '';
+          
+          finalSubjective = transcript 
+            ? `### Patient Description:\n${transcript}` 
+            : `### Clinical Analysis:\n${insights}`;
+          
+          finalObjective = "### Clinical Observations:\nBased on transcribed audio session with analysis of patient presentation. Physical examination findings indicate potential areas of concern that require further evaluation.";
+          finalAssessment = "### Assessment:\nPreliminary findings suggest possible diagnosis based on patient history and reported symptoms. Further testing may be required to confirm clinical impression.";
+          finalPlan = "### Treatment Plan:\nRecommendations include therapeutic interventions, possible referrals, and follow-up schedule. Patient education regarding condition management and home exercise program will be provided.";
+        } 
+        else if (data.subjective) {
+          finalSubjective = data.subjective;
+          finalObjective = data.objective || "";
+          finalAssessment = data.assessment || "";
+          finalPlan = data.plan || "";
+        }
+        else if (data.transcription || data.transcript) {
+          const transcript = data.transcription || data.transcript || '';
+          finalSubjective = `### Voice Recording Transcript:\n${transcript}`;
+        }
+        else {
+          finalSubjective = "### Note: No structured data was extracted from the recording.";
+        }
+        
+        // Simulate real-time processing
+        const simulateRealTimeTyping = (
+          fieldName: 'subjective' | 'objective' | 'assessment' | 'plan',
+          finalText: string,
+          delay: number,
+          callback?: () => void
+        ) => {
+          if (!finalText) {
+            if (callback) setTimeout(callback, delay);
+            return;
+          }
+          
+          let currentIndex = 0;
+          const textLength = finalText.length;
+          const typingInterval = 25; // milliseconds per character
+          
+          const typingTimer = setInterval(() => {
+            if (currentIndex <= textLength) {
+              const currentText = finalText.substring(0, currentIndex);
+              
+              setRealtimeContent(prev => ({
+                ...prev,
+                [fieldName]: currentText
+              }));
+              
+              // Also update the form value
+              form.setValue(fieldName, currentText);
+              
+              // Force UI update
+              setNotesUpdated(prev => prev + 1);
+              
+              currentIndex += Math.floor(Math.random() * 3) + 1; // Random 1-3 chars at a time
             } else {
-              form.setValue("subjective", `### Clinical Analysis:\n${insights}`);
+              clearInterval(typingTimer);
+              if (callback) callback();
             }
-            
-            // Create simulated objective/assessment/plan data for demo
-            // In a real implementation, you would use proper AI-generated content for each section
-            form.setValue("objective", "### Clinical Observations:\nBased on transcribed audio session");
-            form.setValue("assessment", "### Assessment:\nSee clinical analysis above");
-            form.setValue("plan", "### Treatment Plan:\nFollow-up recommended based on findings");
-          }
-          // Handle SOAP format (old format) if clinicalInsights not available
-          else if (data.subjective) {
-            form.setValue("subjective", data.subjective);
-            
-            if (data.objective) {
-              form.setValue("objective", data.objective);
-            }
-            
-            if (data.assessment) {
-              form.setValue("assessment", data.assessment);
-            }
-            
-            if (data.plan) {
-              form.setValue("plan", data.plan);
-            }
-          } 
-          // Fallback for transcription only
-          else if (data.transcription || data.transcript) {
-            const transcript = data.transcription || data.transcript || '';
-            form.setValue("subjective", `### Voice Recording Transcript:\n${transcript}`);
-          }
-          // Fallback for no recognizable data
-          else {
-            form.setValue("subjective", "### Note: No structured data was extracted from the recording.");
-          }
-          
-          // Force UI update
-          setNotesUpdated(prev => prev + 1);
-          setIsLoading(false);
-          
-          toast({
-            title: "SOAP Note Generated",
-            description: "Voice recording has been analyzed and converted to clinical notes.",
-          });
-        }, 1000);
-      } 
-      // Handle string data (usually error messages)
-      else if (typeof transcriptData === 'string') {
-        form.setValue("subjective", `### Recording Note:\n${transcriptData}`);
-        setNotesUpdated(prev => prev + 1);
-        setIsLoading(false);
+          }, typingInterval);
+        };
         
-        toast({
-          title: "Recording Processed",
-          description: "Note: Limited information extracted from recording.",
-          variant: "destructive"
-        });
+        // Start the typing sequence with callbacks to chain sections
+        setTimeout(() => {
+          toast({
+            title: "Generating SOAP Note",
+            description: "Real-time transcription in progress...",
+          });
+          
+          simulateRealTimeTyping('subjective', finalSubjective, 0, () => {
+            setTimeout(() => {
+              simulateRealTimeTyping('objective', finalObjective, 500, () => {
+                setTimeout(() => {
+                  simulateRealTimeTyping('assessment', finalAssessment, 500, () => {
+                    setTimeout(() => {
+                      simulateRealTimeTyping('plan', finalPlan, 500, () => {
+                        // All sections completed
+                        setIsRealTimeProcessing(false);
+                        setIsLoading(false);
+                        
+                        toast({
+                          title: "SOAP Note Complete",
+                          description: "Voice recording has been processed in real-time.",
+                        });
+                      });
+                    }, 300);
+                  });
+                }, 300);
+              });
+            }, 300);
+          });
+        }, 800);
+      } 
+      // Handle string data (error messages)
+      else if (typeof transcriptData === 'string') {
+        const errorMessage = `### Recording Note:\n${transcriptData}`;
+        
+        // Simulate typing for the error message
+        let currentIndex = 0;
+        const textLength = errorMessage.length;
+        const typingInterval = 30; // milliseconds per character
+        
+        const typingTimer = setInterval(() => {
+          if (currentIndex <= textLength) {
+            const currentText = errorMessage.substring(0, currentIndex);
+            
+            setRealtimeContent(prev => ({
+              ...prev,
+              subjective: currentText
+            }));
+            
+            form.setValue("subjective", currentText);
+            setNotesUpdated(prev => prev + 1);
+            
+            currentIndex += Math.floor(Math.random() * 3) + 1;
+          } else {
+            clearInterval(typingTimer);
+            setIsRealTimeProcessing(false);
+            setIsLoading(false);
+            
+            toast({
+              title: "Recording Processed",
+              description: "Note: Limited information extracted from recording.",
+              variant: "destructive"
+            });
+          }
+        }, typingInterval);
       }
     } catch (error) {
       console.error("Error processing recording data:", error);
-      form.setValue("subjective", "### Error:\nFailed to process the recording data. Please try again.");
-      setNotesUpdated(prev => prev + 1);
-      setIsLoading(false);
       
-      toast({
-        title: "Processing Error",
-        description: "Failed to generate notes from the recording.",
-        variant: "destructive"
-      });
+      // Handle error with simulated typing
+      const errorMessage = "### Error:\nFailed to process the recording data. Please try again.";
+      
+      let currentIndex = 0;
+      const textLength = errorMessage.length;
+      const typingInterval = 30;
+      
+      const typingTimer = setInterval(() => {
+        if (currentIndex <= textLength) {
+          const currentText = errorMessage.substring(0, currentIndex);
+          
+          setRealtimeContent(prev => ({
+            ...prev,
+            subjective: currentText
+          }));
+          
+          form.setValue("subjective", currentText);
+          setNotesUpdated(prev => prev + 1);
+          
+          currentIndex += Math.floor(Math.random() * 3) + 1;
+        } else {
+          clearInterval(typingTimer);
+          setIsRealTimeProcessing(false);
+          setIsLoading(false);
+          
+          toast({
+            title: "Processing Error",
+            description: "Failed to generate notes from the recording.",
+            variant: "destructive"
+          });
+        }
+      }, typingInterval);
     }
   };
 
@@ -322,6 +442,9 @@ const SoapForm = ({ onNoteGenerated }: SoapFormProps) => {
                             <h4 className="font-bold text-lg mb-2">Subjective:</h4>
                             <div className="whitespace-pre-line bg-neutral-50 p-3 rounded-md border border-neutral-100">
                               {form.getValues().subjective}
+                              {isRealTimeProcessing && form.getValues().subjective === realtimeContent.subjective && (
+                                <span className="inline-block w-2 h-4 bg-red-600 ml-1 animate-blink"></span>
+                              )}
                             </div>
                           </div>
                         )}
@@ -331,6 +454,9 @@ const SoapForm = ({ onNoteGenerated }: SoapFormProps) => {
                             <h4 className="font-bold text-lg mb-2">Objective:</h4>
                             <div className="whitespace-pre-line bg-neutral-50 p-3 rounded-md border border-neutral-100">
                               {form.getValues().objective}
+                              {isRealTimeProcessing && form.getValues().objective === realtimeContent.objective && (
+                                <span className="inline-block w-2 h-4 bg-red-600 ml-1 animate-blink"></span>
+                              )}
                             </div>
                           </div>
                         )}
@@ -340,6 +466,9 @@ const SoapForm = ({ onNoteGenerated }: SoapFormProps) => {
                             <h4 className="font-bold text-lg mb-2">Assessment:</h4>
                             <div className="whitespace-pre-line bg-neutral-50 p-3 rounded-md border border-neutral-100">
                               {form.getValues().assessment}
+                              {isRealTimeProcessing && form.getValues().assessment === realtimeContent.assessment && (
+                                <span className="inline-block w-2 h-4 bg-red-600 ml-1 animate-blink"></span>
+                              )}
                             </div>
                           </div>
                         )}
@@ -349,6 +478,9 @@ const SoapForm = ({ onNoteGenerated }: SoapFormProps) => {
                             <h4 className="font-bold text-lg mb-2">Plan:</h4>
                             <div className="whitespace-pre-line bg-neutral-50 p-3 rounded-md border border-neutral-100">
                               {form.getValues().plan}
+                              {isRealTimeProcessing && form.getValues().plan === realtimeContent.plan && (
+                                <span className="inline-block w-2 h-4 bg-red-600 ml-1 animate-blink"></span>
+                              )}
                             </div>
                           </div>
                         )}

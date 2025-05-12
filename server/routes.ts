@@ -503,6 +503,102 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ===== SUBSCRIPTION AND PAYMENT ROUTES =====
+
+  // Get all subscription plans
+  app.get("/api/subscriptions", async (req: Request, res: Response) => {
+    try {
+      const plans = await storage.getSubscriptionPlans();
+      return res.json(plans);
+    } catch (error) {
+      console.error("Error fetching subscription plans:", error);
+      return res.status(500).json({ message: "Failed to fetch subscription plans" });
+    }
+  });
+
+  // Get user's subscription status
+  app.get("/api/user/subscription", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const user = await storage.getUser(req.user!.id);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      return res.json({
+        tier: user.membershipTier,
+        expiry: user.membershipExpiry,
+        subscriptionId: user.paypalSubscriptionId,
+      });
+    } catch (error) {
+      console.error("Error fetching user subscription:", error);
+      return res.status(500).json({ message: "Failed to fetch subscription" });
+    }
+  });
+
+  // Get user's payment history
+  app.get("/api/user/payments", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const payments = await storage.getUserPayments(req.user!.id);
+      return res.json(payments);
+    } catch (error) {
+      console.error("Error fetching payment history:", error);
+      return res.status(500).json({ message: "Failed to fetch payment history" });
+    }
+  });
+
+  // Record a payment after successful PayPal transaction
+  app.post("/api/user/payments", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const paymentData = insertPaymentRecordSchema.parse({
+        ...req.body,
+        userId: req.user!.id,
+      });
+      
+      const payment = await storage.createPaymentRecord(paymentData);
+      
+      // Update user's membership based on the plan
+      const plan = await storage.getSubscriptionPlan(paymentData.planId);
+      if (plan) {
+        // Calculate expiry date (1 week from now for weekly subscription)
+        const expiryDate = new Date();
+        expiryDate.setDate(expiryDate.getDate() + 7);
+        
+        // Update user's membership
+        await storage.updateUserMembership(req.user!.id, plan.tier, expiryDate);
+      }
+      
+      return res.status(201).json(payment);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        const validationError = fromZodError(error);
+        return res.status(400).json({ 
+          message: "Validation error", 
+          errors: validationError.details 
+        });
+      }
+      
+      console.error("Error creating payment record:", error);
+      return res.status(500).json({ message: "Failed to create payment record" });
+    }
+  });
+
+  // ===== PAYPAL INTEGRATION ROUTES =====
+  
+  // Setup PayPal session
+  app.get("/api/paypal/setup", async (req, res) => {
+    await loadPaypalDefault(req, res);
+  });
+
+  // Create PayPal order
+  app.post("/api/paypal/order", async (req, res) => {
+    await createPaypalOrder(req, res);
+  });
+
+  // Capture PayPal order
+  app.post("/api/paypal/order/:orderID/capture", async (req, res) => {
+    await capturePaypalOrder(req, res);
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

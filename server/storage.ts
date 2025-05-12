@@ -2,7 +2,9 @@ import {
   users, type User, type InsertUser,
   clinicalNotes, type ClinicalNote, type InsertClinicalNote, type UpdateNoteVisibility,
   comments, type Comment, type InsertComment,
-  researchArticles, type ResearchArticle, type InsertResearchArticle
+  researchArticles, type ResearchArticle, type InsertResearchArticle,
+  subscriptionPlans, type SubscriptionPlan, 
+  paymentRecords, type PaymentRecord, type InsertPaymentRecord
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, isNull, sql } from "drizzle-orm";
@@ -13,6 +15,7 @@ export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  updateUserMembership(userId: number, membershipTier: string, expiryDate: Date): Promise<User>;
   
   // Clinical Notes Operations
   getClinicalNote(id: number, currentUserId?: number): Promise<ClinicalNote | undefined>;
@@ -30,6 +33,15 @@ export interface IStorage {
   getResearchArticle(id: number): Promise<ResearchArticle | undefined>;
   getResearchArticles(bodyPart?: string): Promise<ResearchArticle[]>;
   createResearchArticle(article: InsertResearchArticle): Promise<ResearchArticle>;
+  
+  // Subscription Operations
+  getSubscriptionPlans(): Promise<SubscriptionPlan[]>;
+  getSubscriptionPlan(id: number): Promise<SubscriptionPlan | undefined>;
+  getSubscriptionPlanByTier(tier: string): Promise<SubscriptionPlan | undefined>;
+  
+  // Payment Operations
+  createPaymentRecord(payment: InsertPaymentRecord): Promise<PaymentRecord>;
+  getUserPayments(userId: number): Promise<PaymentRecord[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -226,6 +238,53 @@ export class DatabaseStorage implements IStorage {
   async createResearchArticle(article: InsertResearchArticle): Promise<ResearchArticle> {
     const result = await db.insert(researchArticles).values(article).returning();
     return result[0];
+  }
+
+  // User Membership Methods
+  async updateUserMembership(userId: number, membershipTier: string, expiryDate: Date): Promise<User> {
+    const result = await db.update(users)
+      .set({
+        membershipTier: membershipTier as any, // Cast to any due to enum type issues
+        membershipExpiry: expiryDate
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    return result[0];
+  }
+
+  // Subscription Plan Methods
+  async getSubscriptionPlans(): Promise<SubscriptionPlan[]> {
+    return db.select()
+      .from(subscriptionPlans)
+      .where(eq(subscriptionPlans.active, true))
+      .orderBy(subscriptionPlans.id);
+  }
+
+  async getSubscriptionPlan(id: number): Promise<SubscriptionPlan | undefined> {
+    const results = await db.select()
+      .from(subscriptionPlans)
+      .where(eq(subscriptionPlans.id, id));
+    return results.length > 0 ? results[0] : undefined;
+  }
+
+  async getSubscriptionPlanByTier(tier: string): Promise<SubscriptionPlan | undefined> {
+    const results = await db.select()
+      .from(subscriptionPlans)
+      .where(eq(subscriptionPlans.tier, tier as any)); // Cast to any due to enum type issues
+    return results.length > 0 ? results[0] : undefined;
+  }
+
+  // Payment Record Methods
+  async createPaymentRecord(payment: InsertPaymentRecord): Promise<PaymentRecord> {
+    const result = await db.insert(paymentRecords).values(payment).returning();
+    return result[0];
+  }
+
+  async getUserPayments(userId: number): Promise<PaymentRecord[]> {
+    return db.select()
+      .from(paymentRecords)
+      .where(eq(paymentRecords.userId, userId))
+      .orderBy(desc(paymentRecords.paymentDate));
   }
 }
 

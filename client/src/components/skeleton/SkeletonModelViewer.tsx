@@ -1,5 +1,5 @@
 import { Suspense, useRef, useState } from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, useGLTF, Environment, PresentationControls } from '@react-three/drei';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,7 +10,7 @@ import * as THREE from 'three';
 import { Group } from 'three';
 
 // Import skeleton model
-const MODEL_PATH = "/assets/caf02234-7cac-41a3-b9ac-9f738a212fa6.glb";
+const MODEL_PATH = "/caf02234-7cac-41a3-b9ac-9f738a212fa6.glb";
 
 interface ModelProps {
   rotationSpeed?: number;
@@ -19,13 +19,15 @@ interface ModelProps {
 
 function Model({ rotationSpeed = 0, ...props }: ModelProps) {
   const groupRef = useRef<Group>(null);
-  const { scene } = useGLTF(MODEL_PATH);
+  
+  // Load the GLB model
+  let { scene } = useGLTF(MODEL_PATH);
   
   // Clone the scene to avoid mutating the cached original
-  const clonedScene = scene.clone();
+  scene = scene.clone();
   
   // Auto-rotate if speed is provided
-  useFrame((state) => {
+  useFrame(() => {
     if (groupRef.current && rotationSpeed) {
       groupRef.current.rotation.y += rotationSpeed * 0.01;
     }
@@ -33,7 +35,7 @@ function Model({ rotationSpeed = 0, ...props }: ModelProps) {
 
   return (
     <group ref={groupRef} {...props}>
-      <primitive object={clonedScene} />
+      <primitive object={scene} />
     </group>
   );
 }

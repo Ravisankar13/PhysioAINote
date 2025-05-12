@@ -58,19 +58,25 @@ const VoiceRecorder = ({ onRecordingComplete }: VoiceRecorderProps) => {
         }
       });
       
-      // Determine supported MIME types
-      const supportedMimeTypes = [
+      // Determine supported MIME types - prioritize formats that OpenAI Whisper handles well
+      const mimeTypesByPriority = [
+        'audio/webm;codecs=opus', // Best compatibility with OpenAI Whisper
         'audio/webm',
-        'audio/webm;codecs=opus',
-        'audio/ogg;codecs=opus',
-        'audio/mp4'
-      ].filter(mimeType => MediaRecorder.isTypeSupported(mimeType));
+        'audio/ogg;codecs=opus', 
+        'audio/ogg',
+        'audio/mp4',
+        'audio/mpeg',
+        'audio/wav'
+      ];
+      
+      const supportedMimeTypes = mimeTypesByPriority
+        .filter(mimeType => MediaRecorder.isTypeSupported(mimeType));
       
       console.log('Supported MIME types:', supportedMimeTypes);
       
       // Create new media recorder with preferred MIME type
       const options = supportedMimeTypes.length > 0 
-        ? { mimeType: supportedMimeTypes[0] } 
+        ? { mimeType: supportedMimeTypes[0], audioBitsPerSecond: 128000 } 
         : {};
         
       console.log('Using MediaRecorder options:', options);

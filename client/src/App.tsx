@@ -15,6 +15,7 @@ import SkeletonTool from "@/pages/SkeletonTool";
 import Skeleton3DTool from "@/pages/Skeleton3DTool";
 import Research from "@/pages/Research";
 import Membership from "@/pages/Membership";
+import ExercisePage from "@/pages/ExercisePage";
 import TestAudioTranscription from "@/pages/TestAudioTranscription";
 import TestNoteGenerator from "@/pages/TestNoteGenerator";
 import Header from "@/components/layout/Header";
@@ -34,6 +35,7 @@ function Router() {
           <Route path="/shared-notes" component={SharedNotes} />
           <Route path="/research" component={Research} />
           <ProtectedRoute path="/my-notes" component={MyNotes} />
+          <Route path="/exercises" component={ExercisePage} />
           <Route path="/skeleton-tool" component={SkeletonTool} />
           <Route path="/skeleton-3d-tool" component={Skeleton3DTool} />
           <Route path="/membership" component={Membership} />

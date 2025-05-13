@@ -601,6 +601,100 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // API route to get relevant research articles for a clinical note
+  app.get("/api/notes/:id/related-research", async (req: Request, res: Response) => {
+    try {
+      const noteId = parseInt(req.params.id);
+      
+      if (isNaN(noteId)) {
+        return res.status(400).json({ message: "Invalid note ID" });
+      }
+      
+      const note = await storage.getClinicalNote(noteId);
+      
+      if (!note) {
+        return res.status(404).json({ message: "Clinical note not found" });
+      }
+      
+      // Ensure the note is accessible to the current user
+      if (note.visibility === "private") {
+        if (!req.isAuthenticated() || note.userId !== req.user!.id) {
+          return res.status(403).json({ message: "You don't have permission to access this note's research" });
+        }
+      }
+      
+      // If user is not authenticated and tries to access shared note
+      if (note.visibility === "shared" && !req.isAuthenticated()) {
+        return res.status(401).json({ message: "You must be logged in to view research for shared notes" });
+      }
+      
+      // Get the note's body part and extract keywords from the note content
+      const { bodyPart } = note;
+      
+      // Extract key terms from the assessment and subjective sections
+      const assessmentText = note.assessment || "";
+      const subjectiveText = note.subjective || "";
+      
+      // Get all research articles for this body part
+      const allArticles = await storage.getResearchArticles(bodyPart);
+      
+      // Calculate relevance score for each article
+      let scoredArticles = allArticles.map(article => {
+        let score = 0;
+        
+        // Higher score for matching body part
+        if (article.bodyPart === bodyPart) {
+          score += 10;
+        }
+        
+        // Extract key diagnostic terms and conditions from the note
+        const noteContent = (assessmentText + " " + subjectiveText).toLowerCase();
+        
+        // Check if article content appears in the note
+        const articleKeywords = [
+          article.title.toLowerCase(),
+          article.abstract.toLowerCase(),
+          article.keyFindings?.toLowerCase() || "",
+          article.clinicalRelevance?.toLowerCase() || ""
+        ].join(" ");
+        
+        // Increase score based on keyword matches
+        // This is a simple relevance algorithm that can be improved later
+        const keyTerms = noteContent.split(/\s+/)
+          .filter(term => term.length > 4) // Only consider meaningful terms
+          .filter(term => !["patient", "reported", "history", "present", "treatment"].includes(term));
+          
+        for (const term of keyTerms) {
+          if (articleKeywords.includes(term)) {
+            score += 2;
+          }
+        }
+        
+        // Recent publications get a slight boost
+        const pubDate = new Date(article.publicationDate);
+        const now = new Date();
+        const monthsAgo = (now.getFullYear() - pubDate.getFullYear()) * 12 + now.getMonth() - pubDate.getMonth();
+        if (monthsAgo < 12) { // Published in the last year
+          score += 2;
+        }
+        
+        return { article, relevanceScore: score };
+      });
+      
+      // Sort by relevance score and take top 5
+      scoredArticles.sort((a, b) => b.relevanceScore - a.relevanceScore);
+      const relatedArticles = scoredArticles
+        .slice(0, 5)
+        .filter(item => item.relevanceScore > 3) // Only include relevant articles
+        .map(item => item.article);
+      
+      return res.json(relatedArticles);
+    } catch (error) {
+      console.error("Error fetching related research:", error);
+      return res.status(500).json({ message: "Failed to fetch related research" });
+    }
+  });
+  
   // API route to get sample notes by body part category
   app.get("/api/sample-notes", (req: Request, res: Response) => {
     try {

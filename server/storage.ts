@@ -14,6 +14,7 @@ import {
 import { db } from "./db";
 import { eq, desc, and, or, isNull, sql } from "drizzle-orm";
 import { calculateAgeRange, deIdentifyNote, extractCondition } from "./utilities/deIdentify";
+import { patientSessionStorage } from "./patientSessionStorage";
 
 export interface IStorage {
   // User Operations

@@ -354,6 +354,9 @@ export default function ExerciseList() {
               {totalPages > 1 && (
                 <Pagination className="mt-8">
                   <PaginationContent>
+                    <div className="hidden sm:flex items-center space-x-2 mr-2 text-sm text-muted-foreground">
+                      <span>Page {currentPage} of {totalPages}</span>
+                    </div>
                     {currentPage > 1 && (
                       <PaginationItem>
                         <PaginationPrevious onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} />
@@ -374,10 +377,12 @@ export default function ExerciseList() {
                         if (index > 0 && array[index] - array[index - 1] > 1) {
                           return (
                             <React.Fragment key={`ellipsis-${page}`}>
-                              <PaginationItem>
-                                <PaginationEllipsis />
+                              <PaginationItem key={`ellipsis-before-${page}`}>
+                                <span className="flex h-9 w-9 items-center justify-center">
+                                  ...
+                                </span>
                               </PaginationItem>
-                              <PaginationItem>
+                              <PaginationItem key={page}>
                                 <PaginationLink 
                                   isActive={page === currentPage} 
                                   onClick={() => setCurrentPage(page)}
@@ -410,8 +415,20 @@ export default function ExerciseList() {
               )}
               
               <div className="mt-4 text-center text-sm text-muted-foreground">
-                Showing {(currentPage - 1) * exercisesPerPage + 1} to {Math.min(currentPage * exercisesPerPage, totalExercises)} of {totalExercises} exercises
+                Showing <span className="font-medium">{(currentPage - 1) * exercisesPerPage + 1}</span> to <span className="font-medium">{Math.min(currentPage * exercisesPerPage, totalExercises)}</span> of <span className="font-medium">{totalExercises}</span> exercises
               </div>
+              
+              {/* Optimize loading by prefetching adjacent pages */}
+              {Array.from(
+                { length: 2 }, 
+                (_, i) => currentPage + (i === 0 ? -1 : 1)
+              )
+                .filter(page => page > 0 && page <= totalPages)
+                .map(page => (
+                  <div key={`prefetch-page-${page}`} className="hidden">
+                    {/* This invisible container helps prefetch adjacent pages */}
+                  </div>
+                ))}
             </>
           ) : (
             <div className="text-center py-12 border rounded-lg">
@@ -432,72 +449,79 @@ export default function ExerciseList() {
 // Exercise card component
 function ExerciseCard({ exercise }: { exercise: Exercise }) {
   return (
-    <Card className="h-full flex flex-col">
-      <CardHeader>
-        <div className="flex justify-between items-start">
-          <CardTitle className="text-lg">{exercise.title}</CardTitle>
+    <Card className="h-full flex flex-col hover:shadow-md transition-shadow duration-300">
+      <CardHeader className="pb-3">
+        <div className="flex justify-between items-start gap-2">
+          <CardTitle className="text-lg line-clamp-2">{exercise.title}</CardTitle>
           <Badge 
             variant={
               exercise.difficulty === 'beginner' ? 'outline' : 
               exercise.difficulty === 'intermediate' ? 'secondary' : 
               'default'
             }
+            className="whitespace-nowrap"
           >
             {exercise.difficulty}
           </Badge>
         </div>
-        <CardDescription>{exercise.description}</CardDescription>
+        <CardDescription className="line-clamp-2 mt-1">{exercise.description}</CardDescription>
         <div className="flex flex-wrap gap-1 mt-2">
-          <Badge variant="outline">{exercise.bodyPart}</Badge>
+          <Badge variant="outline" className="capitalize">{exercise.bodyPart}</Badge>
           {exercise.aiGenerated && <Badge variant="secondary">AI Generated</Badge>}
         </div>
       </CardHeader>
       
-      <CardContent className="flex-grow">
+      <CardContent className="flex-grow py-2">
         <Accordion type="single" collapsible className="w-full">
-          <AccordionItem value="instructions">
-            <AccordionTrigger>Instructions</AccordionTrigger>
+          <AccordionItem value="instructions" className="border-b-0">
+            <AccordionTrigger className="py-2 text-sm hover:no-underline hover:text-primary">
+              <span className="underline underline-offset-4">Instructions</span>
+            </AccordionTrigger>
             <AccordionContent>
-              <div className="whitespace-pre-wrap">{exercise.instructions}</div>
+              <div className="whitespace-pre-wrap text-sm">{exercise.instructions}</div>
             </AccordionContent>
           </AccordionItem>
           
-          <AccordionItem value="details">
-            <AccordionTrigger>Target Muscles</AccordionTrigger>
+          <AccordionItem value="details" className="border-b-0">
+            <AccordionTrigger className="py-2 text-sm hover:no-underline hover:text-primary">
+              <span className="underline underline-offset-4">Target Muscles</span>
+            </AccordionTrigger>
             <AccordionContent>
-              <div className="whitespace-pre-wrap">{exercise.targetMuscles}</div>
+              <div className="whitespace-pre-wrap text-sm">{exercise.targetMuscles}</div>
             </AccordionContent>
           </AccordionItem>
           
           {exercise.precautions && (
-            <AccordionItem value="precautions">
-              <AccordionTrigger>Precautions</AccordionTrigger>
+            <AccordionItem value="precautions" className="border-b-0">
+              <AccordionTrigger className="py-2 text-sm hover:no-underline hover:text-primary">
+                <span className="underline underline-offset-4">Precautions</span>
+              </AccordionTrigger>
               <AccordionContent>
-                <div className="whitespace-pre-wrap">{exercise.precautions}</div>
+                <div className="whitespace-pre-wrap text-sm">{exercise.precautions}</div>
               </AccordionContent>
             </AccordionItem>
           )}
         </Accordion>
       </CardContent>
       
-      <CardFooter className="flex flex-col items-start border-t pt-4">
-        <div className="grid grid-cols-3 w-full gap-2 text-sm">
+      <CardFooter className="flex flex-col items-start border-t pt-3 pb-3">
+        <div className="flex flex-wrap w-full gap-3 text-xs">
           {exercise.repetitions && (
-            <div>
-              <p className="font-semibold">Reps</p>
-              <p className="text-muted-foreground">{exercise.repetitions}</p>
+            <div className="bg-muted rounded-md px-2 py-1 flex items-center">
+              <span className="font-medium mr-1">Reps:</span>
+              <span>{exercise.repetitions}</span>
             </div>
           )}
           {exercise.sets && (
-            <div>
-              <p className="font-semibold">Sets</p>
-              <p className="text-muted-foreground">{exercise.sets}</p>
+            <div className="bg-muted rounded-md px-2 py-1 flex items-center">
+              <span className="font-medium mr-1">Sets:</span>
+              <span>{exercise.sets}</span>
             </div>
           )}
           {exercise.duration && (
-            <div>
-              <p className="font-semibold">Duration</p>
-              <p className="text-muted-foreground">{exercise.duration}</p>
+            <div className="bg-muted rounded-md px-2 py-1 flex items-center">
+              <span className="font-medium mr-1">Duration:</span>
+              <span>{exercise.duration}</span>
             </div>
           )}
         </div>

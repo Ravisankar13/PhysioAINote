@@ -25,6 +25,9 @@ export const bodyPartEnum = pgEnum("body_part", [
 // Membership tier enum
 export const membershipTierEnum = pgEnum("membership_tier", ["none", "basic", "standard", "premium"]);
 
+// Session status enum for tracking recording and processing states
+export const sessionStatusEnum = pgEnum("session_status", ["draft", "recorded", "transcribed", "processing", "completed"]);
+
 // Users
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -311,3 +314,73 @@ export const insertExerciseSchema = createInsertSchema(exercises).omit({
 
 export type InsertExercise = z.infer<typeof insertExerciseSchema>;
 export type Exercise = typeof exercises.$inferSelect;
+
+// Patient Session Schema
+export const patientSessions = pgTable("patient_sessions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  sessionName: text("session_name").notNull(),
+  firstName: text("first_name"),
+  middleName: text("middle_name"),
+  lastName: text("last_name"),
+  gender: text("gender"),
+  dob: text("dob"),
+  weight: text("weight"),
+  heightFeet: text("height_feet"),
+  heightInch: text("height_inch"),
+  pastMedicalHistory: text("past_medical_history"),
+  pastSurgicalHistory: text("past_surgical_history"),
+  status: sessionStatusEnum("status").default("draft").notNull(),
+  transcriptUrl: text("transcript_url"),
+  transcriptS3Uri: text("transcript_s3_uri"),
+  soapNote: json("soap_note"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertPatientSessionSchema = createInsertSchema(patientSessions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  status: true,
+  transcriptUrl: true,
+  transcriptS3Uri: true,
+  soapNote: true,
+});
+
+export type InsertPatientSession = z.infer<typeof insertPatientSessionSchema>;
+export type PatientSession = typeof patientSessions.$inferSelect;
+
+// Define session relations
+export const patientSessionRelations = relations(patientSessions, ({ one }) => ({
+  user: one(users, {
+    fields: [patientSessions.userId],
+    references: [users.id],
+  }),
+}));
+
+// Audio Recording Schema
+export const audioRecordings = pgTable("audio_recordings", {
+  id: serial("id").primaryKey(), 
+  sessionId: integer("session_id").notNull().references(() => patientSessions.id, { onDelete: 'cascade' }),
+  audioUrl: text("audio_url").notNull(),
+  audioS3Uri: text("audio_s3_uri").notNull(),
+  duration: integer("duration").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertAudioRecordingSchema = createInsertSchema(audioRecordings).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertAudioRecording = z.infer<typeof insertAudioRecordingSchema>;
+export type AudioRecording = typeof audioRecordings.$inferSelect;
+
+// Define audio recording relations
+export const audioRecordingRelations = relations(audioRecordings, ({ one }) => ({
+  session: one(patientSessions, {
+    fields: [audioRecordings.sessionId],
+    references: [patientSessions.id],
+  })
+}));

@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { insertPatientSessionSchema } from '@shared/schema';
 import multer from 'multer';
 import { transcribeAudio } from '../transcription';
-import { generateSoapNote } from '../openai';
+import { generateSoapNoteFromTranscript } from '../openai';
 import path from 'path';
 import fs from 'fs';
 import { promisify } from 'util';
@@ -294,10 +294,10 @@ router.post('/sessions/:id/generate-soap-note', ensureAuthenticated, async (req:
     // Update session status to processing
     await patientSessionStorage.updatePatientSessionStatus(sessionId, 'processing');
     
-    // Generate SOAP note (this would typically be an async process)
-    const soapNote = await generateSoapNote({
-      transcript,
-      patientInfo
+    // Generate SOAP note from transcript
+    const soapNote = await generateSoapNoteFromTranscript({
+      patientInfo,
+      transcript
     });
     
     // Update session with SOAP note

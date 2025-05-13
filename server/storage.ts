@@ -4,7 +4,8 @@ import {
   comments, type Comment, type InsertComment,
   researchArticles, type ResearchArticle, type InsertResearchArticle,
   subscriptionPlans, type SubscriptionPlan, 
-  paymentRecords, type PaymentRecord, type InsertPaymentRecord
+  paymentRecords, type PaymentRecord, type InsertPaymentRecord,
+  exercises, type Exercise, type InsertExercise
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, isNull, sql } from "drizzle-orm";
@@ -324,6 +325,33 @@ export class DatabaseStorage implements IStorage {
       .from(paymentRecords)
       .where(eq(paymentRecords.userId, userId))
       .orderBy(desc(paymentRecords.paymentDate));
+  }
+
+  // Exercise Methods
+  async getExercise(id: number): Promise<Exercise | undefined> {
+    const result = await db.select().from(exercises).where(eq(exercises.id, id));
+    return result[0];
+  }
+  
+  async getExercises(bodyPart?: string, difficulty?: string): Promise<Exercise[]> {
+    let query = db.select().from(exercises);
+    
+    // If bodyPart is provided and valid, filter by it
+    if (bodyPart && Object.values(exercises.bodyPart.enumValues).includes(bodyPart as any)) {
+      query = query.where(eq(exercises.bodyPart, bodyPart as any));
+    }
+    
+    // If difficulty is provided and valid, filter by it
+    if (difficulty && Object.values(exercises.difficulty.enumValues).includes(difficulty as any)) {
+      query = query.where(eq(exercises.difficulty, difficulty as any));
+    }
+    
+    return query.orderBy(exercises.title);
+  }
+  
+  async createExercise(exercise: InsertExercise): Promise<Exercise> {
+    const result = await db.insert(exercises).values(exercise).returning();
+    return result[0];
   }
 }
 

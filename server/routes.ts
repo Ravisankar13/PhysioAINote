@@ -2,7 +2,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { generateSoapNote } from "./openai";
-import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema } from "@shared/schema";
+import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema } from "@shared/schema";
 import { ZodError } from "zod";
 import { fromZodError } from "zod-validation-error";
 import multer from "multer";
@@ -16,6 +16,7 @@ import { sampleNotes } from "./routes/sampleNotes";
 import { createPaypalOrder, capturePaypalOrder, loadPaypalDefault } from "./paypal";
 import Stripe from "stripe";
 import OpenAI from "openai";
+import { generateExercises, generateFallbackExercises, ExerciseGenerationRequest } from "./exerciseGenerator";
 
 // Helper function to generate SOAP sections from clinical insights
 function generateSoapSectionsFromInsights(transcript: string, insights: string): {

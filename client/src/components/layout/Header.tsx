@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Leaf, MessageSquareText, Menu, LogOut, User, Bone, CreditCard } from "lucide-react";
+import { Leaf, MessageSquareText, Menu, LogOut, User, Bone, CreditCard, FileAudio, Stethoscope } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 
 const Header = () => {
@@ -22,6 +22,7 @@ const Header = () => {
   const navItems = [
     { href: "/", label: "Home" },
     { href: "/clinical-notes", label: "Clinical Notes" },
+    { href: "/notes", label: "Patient Sessions" },
     { href: "/skeleton-tool", label: "2D Skeleton Tool" },
     { href: "/skeleton-3d-tool", label: "3D Skeleton Tool" },
     { href: "/shared-notes", label: "Shared Notes" },
@@ -102,6 +103,14 @@ const Header = () => {
                       <div className="flex items-center cursor-pointer w-full">
                         <User className="mr-2 h-4 w-4" />
                         <span>My Notes</span>
+                      </div>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="flex items-center" asChild>
+                    <Link href="/notes">
+                      <div className="flex items-center cursor-pointer w-full">
+                        <Stethoscope className="mr-2 h-4 w-4" />
+                        <span>Patient Sessions</span>
                       </div>
                     </Link>
                   </DropdownMenuItem>
@@ -191,6 +200,14 @@ const Header = () => {
                             onClick={() => setOpen(false)}
                           >
                             My Notes
+                          </span>
+                        </Link>
+                        <Link href="/notes">
+                          <span
+                            className="px-2 py-2 text-base block cursor-pointer text-muted-foreground hover:text-foreground"
+                            onClick={() => setOpen(false)}
+                          >
+                            Patient Sessions
                           </span>
                         </Link>
                         <Link href="/skeleton-tool">

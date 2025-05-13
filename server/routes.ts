@@ -983,6 +983,121 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // API routes for exercises
+  
+  // Get all exercises with optional filtering
+  app.get("/api/exercises", async (req: Request, res: Response) => {
+    try {
+      const bodyPart = req.query.bodyPart as string;
+      const difficulty = req.query.difficulty as string;
+      
+      const exercises = await storage.getExercises(bodyPart, difficulty);
+      res.json(exercises);
+    } catch (error) {
+      console.error("Error fetching exercises:", error);
+      res.status(500).json({ message: "Failed to fetch exercises" });
+    }
+  });
+  
+  // Get a specific exercise by ID
+  app.get("/api/exercises/:id", async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid exercise ID" });
+      }
+      
+      const exercise = await storage.getExercise(id);
+      if (!exercise) {
+        return res.status(404).json({ message: "Exercise not found" });
+      }
+      
+      res.json(exercise);
+    } catch (error) {
+      console.error("Error fetching exercise:", error);
+      res.status(500).json({ message: "Failed to fetch exercise" });
+    }
+  });
+  
+  // Generate exercises using AI
+  app.post("/api/exercises/generate", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      // Check if the OpenAI API key is available
+      if (!process.env.OPENAI_API_KEY) {
+        return res.status(503).json({ 
+          message: "OpenAI API not available. Please check your API key configuration.",
+          error: "OPENAI_API_KEY not set"
+        });
+      }
+      
+      // Validate the request body
+      const { bodyPart, difficulty, count } = req.body;
+      
+      if (!bodyPart || !difficulty) {
+        return res.status(400).json({ message: "Missing required fields (bodyPart, difficulty)" });
+      }
+      
+      // Create request object
+      const generationRequest: ExerciseGenerationRequest = {
+        bodyPart,
+        difficulty,
+        count: count || 3 // Default to 3 exercises if not specified
+      };
+      
+      // Generate exercises
+      let exercises;
+      try {
+        exercises = await generateExercises(generationRequest);
+      } catch (error) {
+        console.warn("Error generating exercises with OpenAI, using fallback:", error);
+        exercises = generateFallbackExercises(generationRequest);
+      }
+      
+      // Store exercises in the database
+      const savedExercises = await Promise.all(
+        exercises.map(exercise => storage.createExercise(exercise))
+      );
+      
+      res.json(savedExercises);
+    } catch (error) {
+      console.error("Error generating exercises:", error);
+      res.status(500).json({ 
+        message: "Failed to generate exercises", 
+        error: (error as Error).message 
+      });
+    }
+  });
+  
+  // Create a new exercise manually
+  app.post("/api/exercises", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      // Parse and validate the request body
+      let exerciseData;
+      try {
+        exerciseData = insertExerciseSchema.parse(req.body);
+      } catch (error) {
+        if (error instanceof ZodError) {
+          const validationError = fromZodError(error);
+          return res.status(400).json({ 
+            message: "Invalid exercise data", 
+            errors: validationError.details 
+          });
+        }
+        throw error;
+      }
+      
+      // Create the exercise
+      const exercise = await storage.createExercise(exerciseData);
+      res.status(201).json(exercise);
+    } catch (error) {
+      console.error("Error creating exercise:", error);
+      res.status(500).json({ 
+        message: "Failed to create exercise", 
+        error: (error as Error).message 
+      });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

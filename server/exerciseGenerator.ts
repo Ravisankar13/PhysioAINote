@@ -1,12 +1,12 @@
 import OpenAI from "openai";
-import { InsertExercise } from "@shared/schema";
+import { InsertExercise, bodyPartEnum, difficultyEnum } from "@shared/schema";
 
 // Initialize OpenAI with API key from environment variables
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 export interface ExerciseGenerationRequest {
-  bodyPart: string;
-  difficulty: string;
+  bodyPart: typeof bodyPartEnum.enumValues[number];
+  difficulty: typeof difficultyEnum.enumValues[number];
   count: number;
 }
 
@@ -66,21 +66,34 @@ export async function generateExercises(request: ExerciseGenerationRequest): Pro
       }
       
       // Map the exercises to the expected format
-      const exercises: InsertExercise[] = parsedResponse.exercises.map((exercise: any) => ({
-        title: exercise.title,
-        description: exercise.description,
-        bodyPart: request.bodyPart,
-        targetMuscles: exercise.targetMuscles,
-        difficulty: request.difficulty,
-        instructions: exercise.instructions,
-        precautions: exercise.precautions || null,
-        repetitions: exercise.repetitions || null,
-        sets: exercise.sets || null,
-        duration: exercise.duration || null,
-        imageUrl: null, // We'll set these to null initially
-        videoUrl: null, // We could integrate with an image generation API later
-        aiGenerated: true
-      }));
+      // Validate and map the exercise data
+      const exercises: InsertExercise[] = parsedResponse.exercises.map((exercise: any) => {
+        // Ensure bodyPart is one of the valid enum values
+        const bodyPart = bodyPartEnum.enumValues.includes(request.bodyPart) 
+          ? request.bodyPart 
+          : "general";
+          
+        // Ensure difficulty is one of the valid enum values
+        const difficulty = difficultyEnum.enumValues.includes(request.difficulty)
+          ? request.difficulty
+          : "beginner";
+          
+        return {
+          title: exercise.title,
+          description: exercise.description,
+          bodyPart: bodyPart,
+          targetMuscles: exercise.targetMuscles,
+          difficulty: difficulty,
+          instructions: exercise.instructions,
+          precautions: exercise.precautions || null,
+          repetitions: exercise.repetitions || null,
+          sets: exercise.sets || null,
+          duration: exercise.duration || null,
+          imageUrl: null, // We'll set these to null initially
+          videoUrl: null, // We could integrate with an image generation API later
+          aiGenerated: true
+        };
+      });
       
       return exercises;
     } catch (parseError) {

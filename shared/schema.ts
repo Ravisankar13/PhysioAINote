@@ -105,7 +105,7 @@ export const comments = pgTable("comments", {
   noteId: integer("note_id").notNull().references(() => clinicalNotes.id, { onDelete: 'cascade' }),
   userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
   content: text("content").notNull(),
-  parentId: integer("parent_id").references(() => comments.id),
+  parentId: integer("parent_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -279,3 +279,35 @@ export const soapNoteInputSchema = z.object({
 });
 
 export type SoapNoteInput = z.infer<typeof soapNoteInputSchema>;
+
+// Exercise difficulty enum
+export const difficultyEnum = pgEnum("difficulty", ["beginner", "intermediate", "advanced"]);
+
+// Exercise Library Schema
+export const exercises = pgTable("exercises", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  bodyPart: bodyPartEnum("body_part").default("general").notNull(),
+  targetMuscles: text("target_muscles").notNull(),
+  difficulty: difficultyEnum("difficulty").default("beginner").notNull(),
+  instructions: text("instructions").notNull(),
+  precautions: text("precautions"),
+  repetitions: text("repetitions"),
+  sets: text("sets"),
+  duration: text("duration"),
+  imageUrl: text("image_url"),
+  videoUrl: text("video_url"),
+  aiGenerated: boolean("ai_generated").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertExerciseSchema = createInsertSchema(exercises).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertExercise = z.infer<typeof insertExerciseSchema>;
+export type Exercise = typeof exercises.$inferSelect;

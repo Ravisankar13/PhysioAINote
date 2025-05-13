@@ -37,6 +37,11 @@ export interface IStorage {
   getResearchArticles(bodyPart?: string): Promise<ResearchArticle[]>;
   createResearchArticle(article: InsertResearchArticle): Promise<ResearchArticle>;
   
+  // Exercise Operations
+  getExercise(id: number): Promise<Exercise | undefined>;
+  getExercises(bodyPart?: string, difficulty?: string): Promise<Exercise[]>;
+  createExercise(exercise: InsertExercise): Promise<Exercise>;
+  
   // Subscription Operations
   getSubscriptionPlans(): Promise<SubscriptionPlan[]>;
   getSubscriptionPlan(id: number): Promise<SubscriptionPlan | undefined>;

@@ -19,7 +19,8 @@ import {
   PaginationItem, 
   PaginationLink, 
   PaginationNext, 
-  PaginationPrevious 
+  PaginationPrevious,
+  PaginationEllipsis
 } from '@/components/ui/pagination';
 
 // Exercise type matching database schema
@@ -359,16 +360,45 @@ export default function ExerciseList() {
                       </PaginationItem>
                     )}
                     
-                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                      <PaginationItem key={page}>
-                        <PaginationLink 
-                          isActive={page === currentPage} 
-                          onClick={() => setCurrentPage(page)}
-                        >
-                          {page}
-                        </PaginationLink>
-                      </PaginationItem>
-                    ))}
+                    {/* Display limited page numbers with ellipsis for many pages */}
+                    {Array.from({ length: totalPages }, (_, i) => i + 1)
+                      .filter(page => {
+                        // Always show first and last page
+                        if (page === 1 || page === totalPages) return true;
+                        // Show pages near current page
+                        if (Math.abs(page - currentPage) <= 1) return true;
+                        return false;
+                      })
+                      .map((page, index, array) => {
+                        // Add ellipsis between non-consecutive pages
+                        if (index > 0 && array[index] - array[index - 1] > 1) {
+                          return (
+                            <React.Fragment key={`ellipsis-${page}`}>
+                              <PaginationItem>
+                                <PaginationEllipsis />
+                              </PaginationItem>
+                              <PaginationItem>
+                                <PaginationLink 
+                                  isActive={page === currentPage} 
+                                  onClick={() => setCurrentPage(page)}
+                                >
+                                  {page}
+                                </PaginationLink>
+                              </PaginationItem>
+                            </React.Fragment>
+                          );
+                        }
+                        return (
+                          <PaginationItem key={page}>
+                            <PaginationLink 
+                              isActive={page === currentPage} 
+                              onClick={() => setCurrentPage(page)}
+                            >
+                              {page}
+                            </PaginationLink>
+                          </PaginationItem>
+                        );
+                      })}
                     
                     {currentPage < totalPages && (
                       <PaginationItem>

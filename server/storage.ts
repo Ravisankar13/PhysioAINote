@@ -71,6 +71,43 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  // Patient Session methods, using patientSessionStorage
+  async getPatientSession(id: number): Promise<PatientSession | undefined> {
+    return await patientSessionStorage.getPatientSession(id);
+  }
+
+  async getUserPatientSessions(userId: number): Promise<PatientSession[]> {
+    return await patientSessionStorage.getUserPatientSessions(userId);
+  }
+
+  async createPatientSession(session: InsertPatientSession): Promise<PatientSession> {
+    return await patientSessionStorage.createPatientSession(session);
+  }
+
+  async updatePatientSession(id: number, data: Partial<InsertPatientSession>): Promise<PatientSession> {
+    return await patientSessionStorage.updatePatientSession(id, data);
+  }
+
+  async updatePatientSessionStatus(id: number, status: string): Promise<PatientSession> {
+    return await patientSessionStorage.updatePatientSessionStatus(id, status);
+  }
+
+  async updatePatientSessionTranscript(id: number, transcriptUrl: string, transcriptS3Uri: string): Promise<PatientSession> {
+    return await patientSessionStorage.updatePatientSessionTranscript(id, transcriptUrl, transcriptS3Uri);
+  }
+
+  async updatePatientSessionSoapNote(id: number, soapNote: any): Promise<PatientSession> {
+    return await patientSessionStorage.updatePatientSessionSoapNote(id, soapNote);
+  }
+  
+  // Audio Recording methods, using patientSessionStorage
+  async createAudioRecording(recording: InsertAudioRecording): Promise<AudioRecording> {
+    return await patientSessionStorage.createAudioRecording(recording);
+  }
+
+  async getSessionAudioRecordings(sessionId: number): Promise<AudioRecording[]> {
+    return await patientSessionStorage.getSessionAudioRecordings(sessionId);
+  }
   // User Methods
   async getUser(id: number): Promise<User | undefined> {
     const results = await db.select().from(users).where(eq(users.id, id));

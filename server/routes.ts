@@ -17,6 +17,7 @@ import { createPaypalOrder, capturePaypalOrder, loadPaypalDefault } from "./payp
 import Stripe from "stripe";
 import OpenAI from "openai";
 import { generateExercises, generateFallbackExercises, ExerciseGenerationRequest } from "./exerciseGenerator";
+import sessionRoutes from "./routes/sessionRoutes";
 
 // Helper function to generate SOAP sections from clinical insights
 function generateSoapSectionsFromInsights(transcript: string, insights: string): {
@@ -117,6 +118,9 @@ const stripe = process.env.STRIPE_SECRET_KEY
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication routes
   setupAuth(app);
+  
+  // Register patient session routes
+  app.use('/api', sessionRoutes);
   
   // Add a test endpoint to validate OpenAI API key
   app.get('/api/openai-validate', async (req: Request, res: Response) => {

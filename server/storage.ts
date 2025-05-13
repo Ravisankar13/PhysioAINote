@@ -6,7 +6,10 @@ import {
   subscriptionPlans, type SubscriptionPlan, 
   paymentRecords, type PaymentRecord, type InsertPaymentRecord,
   exercises, type Exercise, type InsertExercise,
-  bodyPartEnum, difficultyEnum
+  bodyPartEnum, difficultyEnum,
+  patientSessions, type PatientSession, type InsertPatientSession,
+  audioRecordings, type AudioRecording, type InsertAudioRecording,
+  sessionStatusEnum
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, isNull, sql } from "drizzle-orm";
@@ -52,6 +55,19 @@ export interface IStorage {
   // Payment Operations
   createPaymentRecord(payment: InsertPaymentRecord): Promise<PaymentRecord>;
   getUserPayments(userId: number): Promise<PaymentRecord[]>;
+  
+  // Patient Session Operations
+  getPatientSession(id: number): Promise<PatientSession | undefined>;
+  getUserPatientSessions(userId: number): Promise<PatientSession[]>;
+  createPatientSession(session: InsertPatientSession): Promise<PatientSession>;
+  updatePatientSession(id: number, data: Partial<InsertPatientSession>): Promise<PatientSession>;
+  updatePatientSessionStatus(id: number, status: string): Promise<PatientSession>;
+  updatePatientSessionTranscript(id: number, transcriptUrl: string, transcriptS3Uri: string): Promise<PatientSession>;
+  updatePatientSessionSoapNote(id: number, soapNote: any): Promise<PatientSession>;
+  
+  // Audio Recording Operations
+  createAudioRecording(recording: InsertAudioRecording): Promise<AudioRecording>;
+  getSessionAudioRecordings(sessionId: number): Promise<AudioRecording[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -358,5 +374,4 @@ export class DatabaseStorage implements IStorage {
   }
 }
 
-// Use the database storage implementation
 export const storage = new DatabaseStorage();

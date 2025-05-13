@@ -18,6 +18,7 @@ import Membership from "@/pages/Membership";
 import ExercisePage from "@/pages/ExercisePage";
 import TestAudioTranscription from "@/pages/TestAudioTranscription";
 import TestNoteGenerator from "@/pages/TestNoteGenerator";
+import SessionsPage from "@/pages/SessionsPage";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { ThemeProvider } from "next-themes";
@@ -35,6 +36,7 @@ function Router() {
           <Route path="/shared-notes" component={SharedNotes} />
           <Route path="/research" component={Research} />
           <ProtectedRoute path="/my-notes" component={MyNotes} />
+          <ProtectedRoute path="/notes/:id?" component={SessionsPage} />
           <Route path="/exercises" component={ExercisePage} />
           <Route path="/skeleton-tool" component={SkeletonTool} />
           <Route path="/skeleton-3d-tool" component={Skeleton3DTool} />

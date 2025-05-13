@@ -4,7 +4,7 @@ import SessionManager from '@/components/sessions/SessionManager';
 import { Button } from '@/components/ui/button';
 import { useLocation } from 'wouter';
 
-const SessionsPage: React.FC = () => {
+function SessionsPage() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiRequest } from '@/lib/queryClient';
+import { apiRequest, queryClient as defaultQueryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -13,7 +13,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { Loader2, ArrowLeft, Plus, FileText } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { useNavigate, useParams } from 'wouter';
+import { useLocation, useParams } from 'wouter';
 
 interface PatientSession {
   id: number;
@@ -55,17 +55,17 @@ const getStatusBadge = (status: string) => {
     case 'processing':
       return <Badge variant="secondary" className="animate-pulse">Processing</Badge>;
     case 'completed':
-      return <Badge variant="success">Completed</Badge>;
+      return <Badge>Completed</Badge>;
     default:
       return <Badge variant="outline">{status}</Badge>;
   }
 };
 
-const SessionManager: React.FC = () => {
+function SessionManager() {
   const { user } = useAuth();
   const [_, params] = useParams();
   const sessionId = params?.id ? parseInt(params.id) : null;
-  const navigate = useNavigate();
+  const [, navigate] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [currentTab, setCurrentTab] = useState('info');
@@ -79,7 +79,7 @@ const SessionManager: React.FC = () => {
   
   // Get specific session query
   const sessionQuery = useQuery({
-    queryKey: ['/api/sessions', sessionId],
+    queryKey: ['/api/sessions', sessionId?.toString()],
     queryFn: getQueryFn(),
     enabled: !!user && !!sessionId
   });
@@ -433,9 +433,10 @@ const SessionManager: React.FC = () => {
 };
 
 // Helper for query function with authentication handling
-const getQueryFn = (options = {}) => {
-  return async ({ queryKey }: { queryKey: (string | number)[] }) => {
-    const path = queryKey.join('/').replace(/\/+/g, '/');
+const getQueryFn = (options: { on401?: 'returnNull' } = {}) => {
+  return async ({ queryKey }: { queryKey: (string | number | undefined)[] }) => {
+    // Filter out undefined values and join the path
+    const path = queryKey.filter(Boolean).join('/').replace(/\/+/g, '/');
     const response = await fetch(path);
     
     if (response.status === 401) {

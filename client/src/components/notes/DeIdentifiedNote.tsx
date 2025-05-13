@@ -1,6 +1,11 @@
+import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { BookOpen, ChevronDown, ChevronUp } from "lucide-react";
+import { RelatedResearch } from "./RelatedResearch";
+import { useAuth } from "@/hooks/use-auth";
 
 interface DeIdentifiedNoteProps {
   note: {
@@ -26,12 +31,21 @@ interface DeIdentifiedNoteProps {
 }
 
 export function DeIdentifiedNote({ note, authorName }: DeIdentifiedNoteProps) {
+  const [showResearch, setShowResearch] = useState(false);
+  const { user } = useAuth();
+  
+  // Determine if we should show research articles based on visibility and authentication
+  const canShowResearch = note.visibility !== "private" || (user && note.userId === user.id);
+  
   return (
     <Card className="w-full">
       <CardHeader>
         <CardTitle className="flex flex-wrap gap-2 items-center">
           <span>De-identified Clinical Note</span>
           <Badge variant="outline" className="ml-2">{note.ageRange}</Badge>
+          {note.bodyPart && (
+            <Badge variant="outline" className="ml-1">{note.bodyPart}</Badge>
+          )}
         </CardTitle>
         <CardDescription className="flex flex-col sm:flex-row justify-between">
           <span>Documented by {authorName}</span>
@@ -67,6 +81,32 @@ export function DeIdentifiedNote({ note, authorName }: DeIdentifiedNoteProps) {
           </TabsContent>
         </Tabs>
       </CardContent>
+      
+      {canShowResearch && (
+        <CardFooter className="flex flex-col items-stretch border-t pt-4">
+          <Button 
+            variant="ghost" 
+            className="flex justify-between items-center"
+            onClick={() => setShowResearch(!showResearch)}
+          >
+            <div className="flex items-center">
+              <BookOpen className="h-4 w-4 mr-2" />
+              <span>Related Research Articles</span>
+            </div>
+            {showResearch ? (
+              <ChevronUp className="h-4 w-4" />
+            ) : (
+              <ChevronDown className="h-4 w-4" />
+            )}
+          </Button>
+          
+          {showResearch && (
+            <div className="mt-4">
+              <RelatedResearch noteId={note.id} />
+            </div>
+          )}
+        </CardFooter>
+      )}
     </Card>
   );
 }

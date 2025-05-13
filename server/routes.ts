@@ -629,7 +629,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Get the note's body part and extract keywords from the note content
-      const { bodyPart } = note;
+      // Ensure we're using a valid bodyPart value from the enum
+      const validBodyParts = ["shoulder", "neck", "back", "elbow", "wrist", "hand", "hip", "knee", "ankle", "foot", "general", "other"];
+      const bodyPart = note.bodyPart && validBodyParts.includes(note.bodyPart) 
+        ? note.bodyPart 
+        : "general";
       
       // Extract key terms from the assessment and subjective sections
       const assessmentText = note.assessment || "";

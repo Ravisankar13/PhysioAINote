@@ -5,7 +5,23 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ExternalLink, Loader2, BookOpen } from "lucide-react";
-import { ResearchArticle } from "@/types/research";
+
+// Define the ResearchArticle type directly here for simplicity
+interface ResearchArticle {
+  id: number;
+  title: string;
+  authors: string;
+  journal: string;
+  publicationDate: string;
+  doi: string;
+  abstract: string;
+  url: string;
+  bodyPart: string;
+  keyFindings?: string;
+  clinicalRelevance?: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 interface RelatedResearchProps {
   noteId: number;

@@ -5,7 +5,8 @@ import {
   researchArticles, type ResearchArticle, type InsertResearchArticle,
   subscriptionPlans, type SubscriptionPlan, 
   paymentRecords, type PaymentRecord, type InsertPaymentRecord,
-  exercises, type Exercise, type InsertExercise
+  exercises, type Exercise, type InsertExercise,
+  bodyPartEnum, difficultyEnum
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, isNull, sql } from "drizzle-orm";
@@ -334,19 +335,21 @@ export class DatabaseStorage implements IStorage {
   }
   
   async getExercises(bodyPart?: string, difficulty?: string): Promise<Exercise[]> {
+    // Start with the base query
     let query = db.select().from(exercises);
     
     // If bodyPart is provided and valid, filter by it
-    if (bodyPart && Object.values(exercises.bodyPart.enumValues).includes(bodyPart as any)) {
-      query = query.where(eq(exercises.bodyPart, bodyPart as any));
+    if (bodyPart && bodyPartEnum.enumValues.includes(bodyPart as any)) {
+      query = query.where(eq(exercises.bodyPart, bodyPart as typeof bodyPartEnum.enumValues[number]));
     }
     
     // If difficulty is provided and valid, filter by it
-    if (difficulty && Object.values(exercises.difficulty.enumValues).includes(difficulty as any)) {
-      query = query.where(eq(exercises.difficulty, difficulty as any));
+    if (difficulty && difficultyEnum.enumValues.includes(difficulty as any)) {
+      query = query.where(eq(exercises.difficulty, difficulty as typeof difficultyEnum.enumValues[number]));
     }
     
-    return query.orderBy(exercises.title);
+    // Execute the query with any applied filters
+    return await query.orderBy(exercises.title);
   }
   
   async createExercise(exercise: InsertExercise): Promise<Exercise> {

@@ -110,8 +110,17 @@ export async function generateExercises(request: ExerciseGenerationRequest): Pro
 export function generateFallbackExercises(request: ExerciseGenerationRequest): InsertExercise[] {
   console.log(`Generating fallback exercises for ${request.bodyPart}...`);
   
+  // Validate body part and difficulty against enum values
+  const bodyPart = bodyPartEnum.enumValues.includes(request.bodyPart) 
+    ? request.bodyPart 
+    : "general";
+    
+  const difficulty = difficultyEnum.enumValues.includes(request.difficulty)
+    ? request.difficulty
+    : "beginner";
+  
   // Basic template exercises for each body part
-  const templates: Record<string, Partial<InsertExercise>[]> = {
+  const templates: Partial<Record<typeof bodyPartEnum.enumValues[number], Partial<InsertExercise>[]>> = {
     "shoulder": [
       {
         title: "Shoulder External Rotation",
@@ -156,21 +165,21 @@ export function generateFallbackExercises(request: ExerciseGenerationRequest): I
   
   // If we have templates for the requested body part, use them
   // Otherwise use a generic template
-  const exerciseTemplates = templates[request.bodyPart] || [
+  const exerciseTemplates = templates[bodyPart as keyof typeof templates] || [
     {
-      title: `${request.bodyPart.charAt(0).toUpperCase() + request.bodyPart.slice(1)} Strengthening Exercise`,
-      description: `Basic strengthening exercise for the ${request.bodyPart}`,
-      targetMuscles: `Primary muscles in the ${request.bodyPart} region`,
-      instructions: `Perform controlled movements targeting the ${request.bodyPart} area`,
+      title: `${bodyPart.charAt(0).toUpperCase() + bodyPart.slice(1)} Strengthening Exercise`,
+      description: `Basic strengthening exercise for the ${bodyPart}`,
+      targetMuscles: `Primary muscles in the ${bodyPart} region`,
+      instructions: `Perform controlled movements targeting the ${bodyPart} area`,
       precautions: "Stop if you experience pain beyond mild discomfort",
       repetitions: "10-12",
       sets: "3"
     },
     {
-      title: `${request.bodyPart.charAt(0).toUpperCase() + request.bodyPart.slice(1)} Mobility Exercise`,
-      description: `Improves range of motion in the ${request.bodyPart}`,
-      targetMuscles: `Muscles and joint structures of the ${request.bodyPart}`,
-      instructions: `Slowly move through available range of motion for the ${request.bodyPart}`,
+      title: `${bodyPart.charAt(0).toUpperCase() + bodyPart.slice(1)} Mobility Exercise`,
+      description: `Improves range of motion in the ${bodyPart}`,
+      targetMuscles: `Muscles and joint structures of the ${bodyPart}`,
+      instructions: `Slowly move through available range of motion for the ${bodyPart}`,
       precautions: "Stay within pain-free range of motion",
       repetitions: "8-10",
       sets: "2-3"
@@ -183,11 +192,11 @@ export function generateFallbackExercises(request: ExerciseGenerationRequest): I
   
   // Map templates to full exercise objects
   return selectedTemplates.map(template => ({
-    title: template.title || `Exercise for ${request.bodyPart}`,
-    description: template.description || `A ${request.difficulty} exercise for the ${request.bodyPart}`,
-    bodyPart: request.bodyPart,
-    targetMuscles: template.targetMuscles || `Muscles of the ${request.bodyPart}`,
-    difficulty: request.difficulty,
+    title: template.title || `Exercise for ${bodyPart}`,
+    description: template.description || `A ${difficulty} exercise for the ${bodyPart}`,
+    bodyPart: bodyPart,
+    targetMuscles: template.targetMuscles || `Muscles of the ${bodyPart}`,
+    difficulty: difficulty,
     instructions: template.instructions || `Perform the exercise with proper form`,
     precautions: template.precautions || "Stop if you experience pain",
     repetitions: template.repetitions || "10-12",

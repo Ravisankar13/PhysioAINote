@@ -51,6 +51,10 @@ export default function ExerciseList() {
   const [difficulty, setDifficulty] = useState<string>('');
   const [activeTab, setActiveTab] = useState('all');
   
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const exercisesPerPage = 6; // Number of exercises per page
+  
   // Fetch exercises with filters
   const { data: exercises, isLoading, isError, error, refetch } = useQuery<Exercise[]>({
     queryKey: ['/api/exercises', bodyPart, difficulty],
@@ -78,6 +82,16 @@ export default function ExerciseList() {
     if (activeTab === 'all') return true;
     return exercise.bodyPart === activeTab;
   });
+  
+  // Calculate pagination
+  const totalExercises = filteredExercises?.length || 0;
+  const totalPages = Math.ceil(totalExercises / exercisesPerPage);
+  
+  // Get current page exercises
+  const currentExercises = filteredExercises ? filteredExercises.slice(
+    (currentPage - 1) * exercisesPerPage,
+    currentPage * exercisesPerPage
+  ) : [];
   
   // Handle exercise generation
   const handleGenerateExercises = async (bodyPart: string, difficulty: string, count: number = 3) => {
@@ -134,6 +148,7 @@ export default function ExerciseList() {
   const resetFilters = () => {
     setBodyPart('');
     setDifficulty('');
+    setCurrentPage(1); // Reset to first page when filters change
   };
   
   if (isLoading) {
@@ -304,7 +319,13 @@ export default function ExerciseList() {
         </div>
       </div>
       
-      <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
+      <Tabs 
+        defaultValue="all" 
+        value={activeTab} 
+        onValueChange={(value) => {
+          setActiveTab(value);
+          setCurrentPage(1); // Reset to first page when changing tabs
+        }}>
         <TabsList className="mb-4 flex overflow-x-auto pb-2 max-w-full">
           <TabsTrigger value="all">All</TabsTrigger>
           <TabsTrigger value="shoulder">Shoulder</TabsTrigger>
@@ -321,11 +342,47 @@ export default function ExerciseList() {
         
         <TabsContent value={activeTab} className="mt-0">
           {filteredExercises && filteredExercises.length > 0 ? (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {filteredExercises.map((exercise) => (
-                <ExerciseCard key={exercise.id} exercise={exercise} />
-              ))}
-            </div>
+            <>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {currentExercises?.map((exercise) => (
+                  <ExerciseCard key={exercise.id} exercise={exercise} />
+                )) || []}
+              </div>
+              
+              {/* Pagination controls */}
+              {totalPages > 1 && (
+                <Pagination className="mt-8">
+                  <PaginationContent>
+                    {currentPage > 1 && (
+                      <PaginationItem>
+                        <PaginationPrevious onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} />
+                      </PaginationItem>
+                    )}
+                    
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                      <PaginationItem key={page}>
+                        <PaginationLink 
+                          isActive={page === currentPage} 
+                          onClick={() => setCurrentPage(page)}
+                        >
+                          {page}
+                        </PaginationLink>
+                      </PaginationItem>
+                    ))}
+                    
+                    {currentPage < totalPages && (
+                      <PaginationItem>
+                        <PaginationNext onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} />
+                      </PaginationItem>
+                    )}
+                  </PaginationContent>
+                </Pagination>
+              )}
+              
+              <div className="mt-4 text-center text-sm text-muted-foreground">
+                Showing {(currentPage - 1) * exercisesPerPage + 1} to {Math.min(currentPage * exercisesPerPage, totalExercises)} of {totalExercises} exercises
+              </div>
+            </>
           ) : (
             <div className="text-center py-12 border rounded-lg">
               <p className="text-muted-foreground mb-4">No exercises found for the selected filters.</p>

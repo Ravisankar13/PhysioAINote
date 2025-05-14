@@ -122,11 +122,10 @@ function getRandomRecentDate() {
   const yearsAgo = new Date();
   yearsAgo.setFullYear(now.getFullYear() - 5);
   
-  const date = new Date(
+  // Return a Date object (not a string) as required by PostgreSQL timestamp
+  return new Date(
     yearsAgo.getTime() + Math.random() * (now.getTime() - yearsAgo.getTime())
   );
-  
-  return date.toISOString().split('T')[0]; // Return YYYY-MM-DD format
 }
 
 // Function to generate a random DOI
@@ -241,7 +240,8 @@ function generateArticlesForBodyPart(bodyPart: string, baseCount: number): Inser
 // Main function to add articles to the database
 async function addResearchArticles() {
   const articlesPerBodyPart = 100;
-  const bodyParts = bodyPartEnum.enumValues;
+  // Only process the remaining body parts that need articles
+  const bodyParts = ["general", "other"];
   
   try {
     for (const bodyPart of bodyParts) {

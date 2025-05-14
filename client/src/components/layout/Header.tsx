@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Leaf, MessageSquareText, Menu, LogOut, User, Bone, CreditCard, FileAudio, Stethoscope, Activity } from "lucide-react";
+import { Leaf, MessageSquareText, Menu, LogOut, User, Bone, CreditCard, FileAudio, Stethoscope, Activity, Users } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 
 const Header = () => {

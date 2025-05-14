@@ -112,14 +112,35 @@ async function performAnalysis(
   patientData: VirtualPatientInput
 ): Promise<VirtualPatientAnalysisOutput> {
   const systemPrompt = `
-  You are an expert physiotherapist with training in medical diagnosis. Analyze the following patient case and provide:
+  You are an expert physiotherapist with training in medical diagnosis, manual therapy, and exercise prescription. Analyze the following patient case and provide:
   
   1. A primary diagnosis based on the patient's history and symptoms
   2. 3-5 differential diagnoses ranked by likelihood (high/medium/low) with brief reasoning
-  3. 5-7 evidence-based treatment options for the primary diagnosis, including:
-     - Brief description
-     - Evidence level (high/moderate/low/expert opinion)
-     - Recommendation strength (highly recommended/recommended/optional)
+  3. Evidence-based treatment options for the primary diagnosis, organized by category:
+     a. Manual Therapy techniques (2-3 specific techniques)
+        - Specific technique name
+        - Detailed description including hand placement, direction, and dosage
+        - Target anatomical structure
+        - Evidence level (high/moderate/low/expert opinion)
+        - Recommendation strength (highly recommended/recommended/optional)
+        - Brief research support summary
+     
+     b. Progressive Loading Exercises (3-4 specific exercises)
+        - Specific exercise name
+        - Detailed description including positioning, movement pattern
+        - Target muscle group
+        - Loading parameters (sets, reps, frequency, intensity)
+        - Progression criteria
+        - Evidence level (high/moderate/low/expert opinion)
+        - Recommendation strength (highly recommended/recommended/optional)
+        - Brief research support summary
+     
+     c. Patient Education recommendations (2-3 topics)
+        - Specific education topics
+        - Key points for patient understanding
+        - Evidence level (high/moderate/low/expert opinion)
+        - Recommendation strength (highly recommended/recommended/optional)
+  
   4. 5-10 keywords that would be useful for searching research related to this case
   
   Your analysis should be physiotherapy-focused but consider relevant medical conditions.
@@ -140,18 +161,54 @@ async function performAnalysis(
     ],
     "treatmentOptions": [
       {
-        "name": "treatment option 1",
-        "description": "description",
-        "evidenceLevel": "high/moderate/low/expert opinion",
-        "recommendationStrength": "highly recommended/recommended/optional",
-        "researchConsiderations": [
+        "category": "Manual Therapy",
+        "techniques": [
           {
-            "topic": "relevant research topic",
-            "relevance": "why this research area is relevant"
-          }
+            "name": "specific technique name",
+            "description": "detailed technique description including hand placement, direction, and dosage",
+            "targetTissue": "specific anatomical structure being targeted",
+            "evidenceLevel": "high/moderate/low/expert opinion",
+            "recommendationStrength": "highly recommended/recommended/optional",
+            "researchSupport": "brief summary of research evidence supporting this technique",
+            "contraindications": ["contraindication1", "contraindication2"]
+          },
+          ...
         ]
       },
-      ...
+      {
+        "category": "Progressive Loading Exercises",
+        "exercises": [
+          {
+            "name": "specific exercise name",
+            "description": "detailed exercise description including positioning and movement pattern",
+            "targetMuscleGroup": "specific muscles being targeted",
+            "loadingParameters": {
+              "sets": "recommended sets (range)",
+              "reps": "recommended repetitions (range)",
+              "frequency": "recommended frequency",
+              "intensity": "recommended intensity/load guidelines",
+              "progressionCriteria": "when and how to progress the exercise"
+            },
+            "evidenceLevel": "high/moderate/low/expert opinion",
+            "recommendationStrength": "highly recommended/recommended/optional",
+            "researchSupport": "brief summary of research evidence supporting this exercise",
+            "modificationOptions": ["option1", "option2"]
+          },
+          ...
+        ]
+      },
+      {
+        "category": "Patient Education",
+        "recommendations": [
+          {
+            "topic": "specific education topic",
+            "keyPoints": ["point1", "point2"],
+            "evidenceLevel": "high/moderate/low/expert opinion",
+            "recommendationStrength": "highly recommended/recommended/optional"
+          },
+          ...
+        ]
+      }
     ],
     "recommendedKeywords": ["keyword1", "keyword2", ...]
   }

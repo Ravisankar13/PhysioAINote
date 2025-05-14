@@ -9,6 +9,7 @@ import {
   bodyPartEnum, difficultyEnum,
   patientSessions, type PatientSession, type InsertPatientSession,
   audioRecordings, type AudioRecording, type InsertAudioRecording,
+  manualTherapyTechniques, type ManualTherapyTechnique, type InsertManualTherapyTechnique,
   sessionStatusEnum
 } from "@shared/schema";
 import { db } from "./db";
@@ -54,6 +55,11 @@ export interface IStorage {
   getExercise(id: number): Promise<Exercise | undefined>;
   getExercises(bodyPart?: string, difficulty?: string): Promise<Exercise[]>;
   createExercise(exercise: InsertExercise): Promise<Exercise>;
+  
+  // Manual Therapy Technique Operations
+  getManualTherapyTechnique(id: number): Promise<ManualTherapyTechnique | undefined>;
+  getManualTherapyTechniques(bodyPart?: string): Promise<ManualTherapyTechnique[]>;
+  createManualTherapyTechnique(technique: InsertManualTherapyTechnique): Promise<ManualTherapyTechnique>;
   
   // Subscription Operations
   getSubscriptionPlans(): Promise<SubscriptionPlan[]>;

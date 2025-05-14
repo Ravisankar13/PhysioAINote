@@ -384,3 +384,28 @@ export const audioRecordingRelations = relations(audioRecordings, ({ one }) => (
     references: [patientSessions.id],
   })
 }));
+
+// Manual Therapy Techniques Schema
+export const manualTherapyTechniques = pgTable("manual_therapy_techniques", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  bodyPart: bodyPartEnum("body_part").notNull(),
+  description: text("description").notNull(),
+  indications: text("indications").notNull(),
+  contraindications: text("contraindications"),
+  technique: text("technique").notNull(),
+  evidence: text("evidence"),
+  videoUrl: text("video_url"),
+  imageUrl: text("image_url"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertManualTherapyTechniqueSchema = createInsertSchema(manualTherapyTechniques).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertManualTherapyTechnique = z.infer<typeof insertManualTherapyTechniqueSchema>;
+export type ManualTherapyTechnique = typeof manualTherapyTechniques.$inferSelect;

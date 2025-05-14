@@ -12,14 +12,35 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
-  const res = await fetch(url, {
+  console.log(`Making API request: ${method} ${url}`);
+  
+  const headers: Record<string, string> = {};
+  if (data && !(data instanceof FormData)) {
+    headers["Content-Type"] = "application/json";
+  }
+  
+  const options: RequestInit = {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
-    body: data ? JSON.stringify(data) : undefined,
-    credentials: "include",
-  });
-
-  await throwIfResNotOk(res);
+    headers,
+    credentials: "include", // Important for sending cookies with cross-origin requests
+  };
+  
+  if (data) {
+    if (data instanceof FormData) {
+      options.body = data;
+    } else {
+      options.body = JSON.stringify(data);
+    }
+  }
+  
+  const res = await fetch(url, options);
+  
+  if (!res.ok) {
+    const errorText = await res.text();
+    console.error(`API error (${res.status}): ${errorText}`);
+    throw new Error(errorText || res.statusText || `${res.status} error`);
+  }
+  
   return res;
 }
 
@@ -29,16 +50,34 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const res = await fetch(queryKey[0] as string, {
-      credentials: "include",
-    });
+    console.log(`Making query for: ${queryKey[0]}`);
+    try {
+      const res = await fetch(queryKey[0] as string, {
+        credentials: "include",
+      });
 
-    if (unauthorizedBehavior === "returnNull" && res.status === 401) {
-      return null;
+      if (unauthorizedBehavior === "returnNull" && res.status === 401) {
+        console.log(`Unauthorized request: ${queryKey[0]}, returning null as configured`);
+        return null;
+      }
+
+      if (!res.ok) {
+        const text = await res.text();
+        const errorMessage = `${res.status}: ${text || res.statusText}`;
+        console.error(`Query error: ${errorMessage}`);
+        
+        if (res.status === 401 && unauthorizedBehavior !== "returnNull") {
+          console.error("Authentication error - user may need to log in");
+        }
+        
+        throw new Error(errorMessage);
+      }
+      
+      return await res.json();
+    } catch (error) {
+      console.error(`Query error for ${queryKey[0]}:`, error);
+      throw error;
     }
-
-    await throwIfResNotOk(res);
-    return await res.json();
   };
 
 export const queryClient = new QueryClient({

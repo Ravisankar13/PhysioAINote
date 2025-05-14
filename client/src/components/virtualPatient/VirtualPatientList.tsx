@@ -25,9 +25,17 @@ export default function VirtualPatientList({ onPatientSelect, onCreateNew }: Vir
     queryKey: ["/api/virtual-patients"],
     queryFn: async () => {
       try {
-        const response = await fetch("/api/virtual-patients");
+        console.log("Fetching virtual patients");
+        const response = await fetch("/api/virtual-patients", {
+          credentials: "include" // Include cookies with the request
+        });
         if (response.status === 401) {
-          // User is not authenticated, we'll handle this case in the UI
+          console.log("Not authenticated while fetching virtual patients");
+          toast({
+            title: "Authentication Required",
+            description: "Please log in to view your virtual patients",
+            variant: "destructive"
+          });
           return [];
         }
         if (!response.ok) {

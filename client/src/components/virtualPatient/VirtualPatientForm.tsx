@@ -100,14 +100,13 @@ export default function VirtualPatientForm({ onPatientCreated, onCancel }: Virtu
     mutationFn: async (data: FormData) => {
       console.log("Submitting data:", data);
       
-      const response = await apiRequest("POST", "/api/virtual-patients", data);
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error("Server response error:", errorData);
-        throw new Error(errorData.message || "Server error");
+      try {
+        const response = await apiRequest("POST", "/api/virtual-patients", data);
+        return await response.json();
+      } catch (error) {
+        console.error("API request error:", error);
+        throw error;
       }
-      
-      return await response.json();
     },
     onSuccess: (data) => {
       console.log("Success response:", data);

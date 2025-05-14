@@ -281,9 +281,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const ensureAuthenticated = (req: Request, res: Response, next: NextFunction) => {
     if (req.isAuthenticated()) {
+      console.log(`Request authenticated. User: ${req.user?.username}, ID: ${req.user?.id}`);
       return next();
     }
-    res.status(401).send('Unauthorized - Please log in');
+    console.log('Request not authenticated. Session ID:', req.sessionID);
+    res.status(401).json({ message: 'Unauthorized - Please log in' });
   };
 
   // PayPal Setup

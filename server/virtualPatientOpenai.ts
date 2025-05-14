@@ -116,7 +116,9 @@ export async function findRelevantResearchArticles(
       response_format: { type: "json_object" },
     });
 
-    const result = JSON.parse(response.choices[0].message.content);
+    // Use type assertion to handle potential null
+    const content = (response.choices[0].message.content as string) || '{"searchTerms":[],"strategy":""}';
+    const result = JSON.parse(content);
     return {
       searchTerms: result.searchTerms || [],
       strategy: result.strategy || ""
@@ -276,7 +278,9 @@ async function performAnalysis(
   });
 
   try {
-    const result = JSON.parse(response.choices[0].message.content);
+    // Use type assertion to handle potential null
+    const content = (response.choices[0].message.content as string) || '{}';
+    const result = JSON.parse(content);
     return result as VirtualPatientAnalysisOutput;
   } catch (error) {
     console.error("Error parsing OpenAI response:", error);
@@ -287,7 +291,21 @@ async function performAnalysis(
 // Creates a fallback analysis when OpenAI API fails, incorporating expert approaches
 function createFallbackAnalysis(patientData: VirtualPatientInput): VirtualPatientAnalysisOutput {
   // Generate an expert-informed analysis based on the body part
-  const bodyPartInfo = getBodyPartFallbackInfo(patientData.bodyPart);
+  const bodyPartInfo = getBodyPartFallbackInfo(patientData.bodyPart) as {
+    prefix: string;
+    expertDiagnosis: string;
+    expertDiagnosisDescription: string;
+    expertReferences: string;
+    diagnosis1: string;
+    diagnosis1reasoning: string;
+    expert1: string;
+    diagnosis2: string;
+    diagnosis2reasoning: string;
+    expert2: string;
+    diagnosis3: string;
+    diagnosis3reasoning: string;
+    expert3: string;
+  };
   
   return {
     primaryDiagnosis: {

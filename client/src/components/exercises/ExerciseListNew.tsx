@@ -40,26 +40,165 @@ interface Exercise {
   aiGenerated: boolean;
 }
 
-// Default images for different body parts
+// Specific exercise images for common exercises
+const specificExerciseImages: Record<string, string> = {
+  // Shoulder exercises
+  'shoulder press': 'https://static.strengthlevel.com/images/illustrations/dumbbell-shoulder-press-1000x1000.jpg',
+  'overhead press': 'https://static.strengthlevel.com/images/illustrations/dumbbell-shoulder-press-1000x1000.jpg',
+  'lateral raise': 'https://static.strengthlevel.com/images/illustrations/dumbbell-lateral-raise-1000x1000.jpg',
+  'front raise': 'https://static.strengthlevel.com/images/illustrations/dumbbell-front-raise-1000x1000.jpg',
+  'rear delt': 'https://static.strengthlevel.com/images/illustrations/reverse-dumbbell-fly-1000x1000.jpg',
+  'shrug': 'https://static.strengthlevel.com/images/illustrations/dumbbell-shrug-1000x1000.jpg',
+  'rotator cuff': 'https://www.spotebi.com/wp-content/uploads/2015/02/rotator-cuff-exercise-illustration.jpg',
+  'external rotation': 'https://www.spotebi.com/wp-content/uploads/2016/07/shoulder-external-rotation-exercise-illustration.jpg',
+  'internal rotation': 'https://www.physiomed.co.uk/uploads/images/homepages/resist_band_rotation_home.jpg',
+  'face pull': 'https://static.strengthlevel.com/images/illustrations/face-pull-1000x1000.jpg',
+  'upright row': 'https://static.strengthlevel.com/images/illustrations/upright-row-1000x1000.jpg',
+  
+  // Neck exercises
+  'neck rotation': 'https://www.spotebi.com/wp-content/uploads/2015/04/neck-rotation-exercise-illustration.jpg',
+  'neck flexion': 'https://www.spotebi.com/wp-content/uploads/2015/03/neck-flexion-exercise-illustration.jpg',
+  'neck extension': 'https://www.neckfit.com.au/wp-content/uploads/2021/11/neck-extension-exercise-illustration.jpg',
+  'chin tuck': 'https://images.squarespace-cdn.com/content/v1/5c5f2b43e8ba447cacee3a00/1629149254553-7Z1AQZM4EZCXL7EUW4BL/Chin+Tuck.jpg',
+  
+  // Back exercises
+  'pull-up': 'https://static.strengthlevel.com/images/illustrations/pull-ups-1000x1000.jpg',
+  'lat pulldown': 'https://static.strengthlevel.com/images/illustrations/lat-pulldown-1000x1000.jpg',
+  'seated row': 'https://static.strengthlevel.com/images/illustrations/seated-cable-row-1000x1000.jpg',
+  'bent over row': 'https://static.strengthlevel.com/images/illustrations/bent-over-row-1000x1000.jpg',
+  'deadlift': 'https://static.strengthlevel.com/images/illustrations/deadlift-1000x1000.jpg',
+  'superman': 'https://www.spotebi.com/wp-content/uploads/2015/01/superman-exercise-illustration.jpg',
+  'bird dog': 'https://www.spotebi.com/wp-content/uploads/2015/01/bird-dog-exercise-illustration.jpg',
+  'cat cow': 'https://www.spotebi.com/wp-content/uploads/2015/05/cat-cow-exercise-illustration.jpg',
+  'mckenzie press up': 'https://www.researchgate.net/profile/Stephen-Pheasant/publication/303864059/figure/fig2/AS:668749290856457@1536456321164/The-McKenzie-press-up-exercise-drawing-by-the-first-author.png',
+  'good morning': 'https://static.strengthlevel.com/images/illustrations/good-morning-1000x1000.jpg',
+  
+  // Elbow exercises
+  'bicep curl': 'https://static.strengthlevel.com/images/illustrations/dumbbell-curl-1000x1000.jpg',
+  'hammer curl': 'https://static.strengthlevel.com/images/illustrations/hammer-curl-1000x1000.jpg',
+  'tricep extension': 'https://static.strengthlevel.com/images/illustrations/cable-tricep-pushdown-1000x1000.jpg',
+  'skull crusher': 'https://static.strengthlevel.com/images/illustrations/lying-tricep-extension-1000x1000.jpg',
+  'close grip bench press': 'https://static.strengthlevel.com/images/illustrations/close-grip-bench-press-1000x1000.jpg',
+  'wrist curl': 'https://static.strengthlevel.com/images/illustrations/wrist-curl-1000x1000.jpg',
+  'reverse wrist curl': 'https://static.strengthlevel.com/images/illustrations/reverse-wrist-curl-1000x1000.jpg',
+  'pronation': 'https://www.piesantyhealth.com/photos/shared/resisted-forearm-pronation.jpg',
+  'supination': 'https://www.piesantyhealth.com/photos/shared/resisted-forearm-supination.jpg',
+  
+  // Hip exercises
+  'squat': 'https://static.strengthlevel.com/images/illustrations/squat-1000x1000.jpg',
+  'hip thrust': 'https://static.strengthlevel.com/images/illustrations/hip-thrust-1000x1000.jpg',
+  'hip extension': 'https://static.strengthlevel.com/images/illustrations/hip-thrust-1000x1000.jpg',
+  'glute bridge': 'https://www.spotebi.com/wp-content/uploads/2015/01/glute-bridge-exercise-illustration.jpg',
+  'clam': 'https://www.spotebi.com/wp-content/uploads/2015/01/clams-exercise-illustration.jpg',
+  'glute clam': 'https://www.spotebi.com/wp-content/uploads/2015/01/clams-exercise-illustration.jpg',
+  'side-lying hip abduction': 'https://www.spotebi.com/wp-content/uploads/2015/01/side-lying-leg-raise-exercise-illustration.jpg',
+  'leg raise': 'https://www.spotebi.com/wp-content/uploads/2015/01/side-lying-leg-raise-exercise-illustration.jpg',
+  'dead bug': 'https://www.spotebi.com/wp-content/uploads/2016/06/dead-bug-exercise-illustration.jpg',
+  'fire hydrant': 'https://www.spotebi.com/wp-content/uploads/2016/10/fire-hydrant-exercise-illustration.jpg',
+  'donkey kick': 'https://www.spotebi.com/wp-content/uploads/2015/01/donkey-kicks-exercise-illustration.jpg',
+  'hip flexor stretch': 'https://www.spotebi.com/wp-content/uploads/2015/02/hip-flexor-stretch-exercise-illustration.jpg',
+  'pigeon pose': 'https://www.spotebi.com/wp-content/uploads/2015/02/pigeon-pose-exercise-illustration.jpg',
+  
+  // Knee exercises
+  'leg extension': 'https://static.strengthlevel.com/images/illustrations/leg-extension-1000x1000.jpg',
+  'leg curl': 'https://static.strengthlevel.com/images/illustrations/seated-leg-curl-1000x1000.jpg',
+  'lunge': 'https://static.strengthlevel.com/images/illustrations/dumbbell-lunge-1000x1000.jpg',
+  'step up': 'https://www.spotebi.com/wp-content/uploads/2015/03/step-up-exercise-illustration.jpg',
+  'terminal knee extension': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQwGEzSMgTZOxaQBfgWz2_M6TExG95uZm5-ZQ&usqp=CAU',
+  'wall slide': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQIvJf3SH1h8Wqe-z5-_xzW1SbEh_ReSH5BGA&usqp=CAU',
+  'leg press': 'https://static.strengthlevel.com/images/illustrations/leg-press-1000x1000.jpg',
+  'bulgarian split squat': 'https://static.strengthlevel.com/images/illustrations/bulgarian-split-squat-1000x1000.jpg',
+  'quad stretch': 'https://www.spotebi.com/wp-content/uploads/2015/02/quad-stretch-exercise-illustration.jpg',
+  
+  // Ankle exercises
+  'ankle alphabet': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT77YW1QbUCQDGxtTdS9KK2wpHwajwKcCm9hg&usqp=CAU',
+  'ankle circles': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT77YW1QbUCQDGxtTdS9KK2wpHwajwKcCm9hg&usqp=CAU',
+  'ankle dorsiflexion': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQiIhC7aU99_SHyEgjAU3AcdO76vYQu96B4OA&usqp=CAU',
+  'ankle plantarflexion': 'https://static.strengthlevel.com/images/illustrations/standing-calf-raise-1000x1000.jpg',
+  'calf raise': 'https://static.strengthlevel.com/images/illustrations/standing-calf-raise-1000x1000.jpg',
+  'heel drop': 'https://www.ankle-joint-pain.com/images/xheal-drop-exercise.jpg.pagespeed.ic.5_YQWqt7L_.jpg',
+  'heel raise': 'https://static.strengthlevel.com/images/illustrations/standing-calf-raise-1000x1000.jpg',
+  'ankle inversion': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTZTJPBxtRQjQEV6fhOEBtO-xRtDnA0hHNZPA&usqp=CAU',
+  'ankle eversion': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT4OznNXBvd4m4PG1eo6BJa4eVhRkLuuJzYww&usqp=CAU',
+  
+  // Foot exercises
+  'toe curl': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS-Cw2VDRQnqlMX0JVGtvPIbXw9a4LE0ASBGA&usqp=CAU',
+  'toe spread': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQyxqDf9LULLCJulqnJeNVfRoQ6B6BI_1bZwQ&usqp=CAU',
+  'towel scrunch': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTaPG_f9jF2SfK1q-Y1DzxFhJFBbhBVuF11KQ&usqp=CAU',
+  'marble pickup': 'https://i.pinimg.com/originals/03/fa/44/03fa44e9b15307ee5ae0378cd6484ebe.jpg',
+  'short foot exercise': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTxvg5lZB-y_c1J3YSUkLbEfuRY-jt4c1q_yQ&usqp=CAU',
+  
+  // General exercises
+  'plank': 'https://static.strengthlevel.com/images/illustrations/plank-1000x1000.jpg',
+  'side plank': 'https://static.strengthlevel.com/images/illustrations/side-plank-1000x1000.jpg',
+  'push-up': 'https://static.strengthlevel.com/images/illustrations/push-ups-1000x1000.jpg',
+  'bench press': 'https://static.strengthlevel.com/images/illustrations/bench-press-1000x1000.jpg',
+  'mountain climber': 'https://www.spotebi.com/wp-content/uploads/2014/10/mountain-climbers-exercise-illustration.jpg',
+  'burpee': 'https://www.spotebi.com/wp-content/uploads/2015/03/burpees-exercise-illustration.jpg',
+  'crunch': 'https://static.strengthlevel.com/images/illustrations/crunch-1000x1000.jpg',
+  'sit-up': 'https://static.strengthlevel.com/images/illustrations/sit-up-1000x1000.jpg',
+  'jumping jack': 'https://www.spotebi.com/wp-content/uploads/2015/09/jumping-jacks-exercise-illustration.jpg',
+  'jumping rope': 'https://www.spotebi.com/wp-content/uploads/2017/07/jump-rope-exercise-illustration.jpg',
+  'russian twist': 'https://www.spotebi.com/wp-content/uploads/2016/10/russian-twist-exercise-illustration.jpg',
+  'high knees': 'https://www.spotebi.com/wp-content/uploads/2014/10/high-knees-exercise-illustration.jpg',
+};
+
+// Default images for different body parts (used as fallback)
 const bodyPartImages: Record<string, string> = {
-  shoulder: 'https://images.unsplash.com/photo-1590507621108-433608c97823?q=80&w=2070&auto=format&fit=crop',
-  neck: 'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?q=80&w=2094&auto=format&fit=crop',
-  back: 'https://images.unsplash.com/photo-1603287681836-b174ce5074c2?q=80&w=2071&auto=format&fit=crop',
-  elbow: 'https://images.unsplash.com/photo-1576678927484-cc907957088c?q=80&w=1974&auto=format&fit=crop',
-  wrist: 'https://images.unsplash.com/photo-1556139966-56c3df1ddc63?q=80&w=2070&auto=format&fit=crop',
-  hand: 'https://images.unsplash.com/photo-1506374322094-6021fc3926f1?q=80&w=2070&auto=format&fit=crop',
-  hip: 'https://images.unsplash.com/photo-1434682881908-b43d0467b798?q=80&w=2074&auto=format&fit=crop',
-  knee: 'https://images.unsplash.com/photo-1548690312-e3b507d8c110?q=80&w=2069&auto=format&fit=crop',
-  ankle: 'https://images.unsplash.com/photo-1603744229289-64bfc37c5dd8?q=80&w=2070&auto=format&fit=crop',
-  foot: 'https://images.unsplash.com/photo-1508387027939-27cccde53673?q=80&w=2070&auto=format&fit=crop',
-  general: 'https://images.unsplash.com/photo-1518611012118-696072aa579a?q=80&w=2070&auto=format&fit=crop'
+  shoulder: 'https://static.strengthlevel.com/images/illustrations/dumbbell-shoulder-press-1000x1000.jpg',
+  neck: 'https://www.spotebi.com/wp-content/uploads/2015/04/neck-rotation-exercise-illustration.jpg',
+  back: 'https://static.strengthlevel.com/images/illustrations/lat-pulldown-1000x1000.jpg',
+  elbow: 'https://static.strengthlevel.com/images/illustrations/dumbbell-curl-1000x1000.jpg',
+  wrist: 'https://static.strengthlevel.com/images/illustrations/wrist-curl-1000x1000.jpg',
+  hand: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSwBvpGJBirJgMXKPvNBaRXygfXm0qB0xIoAw&usqp=CAU',
+  hip: 'https://static.strengthlevel.com/images/illustrations/hip-thrust-1000x1000.jpg',
+  knee: 'https://static.strengthlevel.com/images/illustrations/leg-extension-1000x1000.jpg',
+  ankle: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT77YW1QbUCQDGxtTdS9KK2wpHwajwKcCm9hg&usqp=CAU',
+  foot: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS-Cw2VDRQnqlMX0JVGtvPIbXw9a4LE0ASBGA&usqp=CAU',
+  general: 'https://static.strengthlevel.com/images/illustrations/push-ups-1000x1000.jpg'
 };
 
 // Exercise card component
 function ExerciseCard({ exercise }: { exercise: Exercise }) {
-  // Get default image URL based on body part
+  // Find the most appropriate image for the exercise
   const getImageUrl = () => {
+    // Use custom image if available
     if (exercise.imageUrl) return exercise.imageUrl;
+    
+    // Convert title, description, and target muscles to lowercase for matching
+    const title = exercise.title.toLowerCase();
+    const description = exercise.description.toLowerCase();
+    const targetMuscles = exercise.targetMuscles.toLowerCase();
+    const instructions = exercise.instructions.toLowerCase();
+    
+    // Combine all text for comprehensive matching
+    const allText = `${title} ${description} ${targetMuscles} ${instructions}`;
+    
+    // Create a scoring system for better matches
+    let bestMatch = '';
+    let bestScore = 0;
+    
+    // Find a specific exercise image by looking for keywords in all the text
+    for (const [keyword, imageUrl] of Object.entries(specificExerciseImages)) {
+      // Title match is highest priority
+      if (title.includes(keyword)) {
+        return imageUrl; // Immediate match if keyword is in title
+      }
+      
+      // Check how many times the keyword appears in all text
+      const matches = (allText.match(new RegExp(keyword, 'g')) || []).length;
+      if (matches > bestScore) {
+        bestScore = matches;
+        bestMatch = imageUrl;
+      }
+    }
+    
+    // If we found any match in the combined text, use it
+    if (bestMatch && bestScore > 0) {
+      return bestMatch;
+    }
+    
+    // Fall back to body part image if no specific exercise match
     return bodyPartImages[exercise.bodyPart] || bodyPartImages.general;
   };
 

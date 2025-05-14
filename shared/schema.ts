@@ -146,7 +146,9 @@ export const noteTags = pgTable("note_tags", {
 // Define relations after all tables are defined
 export const userRelations = relations(users, ({ many }) => ({
   clinicalNotes: many(clinicalNotes),
-  comments: many(comments)
+  comments: many(comments),
+  sharedCases: many(sharedCases),
+  caseDiscussions: many(caseDiscussions)
 }));
 
 export const clinicalNoteRelations = relations(clinicalNotes, ({ one, many }) => ({
@@ -561,6 +563,71 @@ export const discussionUpvotes = pgTable("discussion_upvotes", {
   userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+// Peer Knowledge Exchange relations
+export const sharedCaseRelations = relations(sharedCases, ({ one, many }) => ({
+  user: one(users, {
+    fields: [sharedCases.userId],
+    references: [users.id],
+  }),
+  discussions: many(caseDiscussions),
+  tags: many(caseTagsMapping),
+  upvotes: many(caseUpvotes),
+}));
+
+export const caseDiscussionRelations = relations(caseDiscussions, ({ one, many }) => ({
+  case: one(sharedCases, {
+    fields: [caseDiscussions.caseId],
+    references: [sharedCases.id],
+  }),
+  user: one(users, {
+    fields: [caseDiscussions.userId],
+    references: [users.id],
+  }),
+  parent: one(caseDiscussions, {
+    fields: [caseDiscussions.parentId],
+    references: [caseDiscussions.id],
+  }),
+  replies: many(caseDiscussions, { relationName: "replies" }),
+  upvotes: many(discussionUpvotes),
+}));
+
+export const caseTagRelations = relations(caseTags, ({ many }) => ({
+  cases: many(caseTagsMapping),
+}));
+
+export const caseTagsMappingRelations = relations(caseTagsMapping, ({ one }) => ({
+  case: one(sharedCases, {
+    fields: [caseTagsMapping.caseId],
+    references: [sharedCases.id],
+  }),
+  tag: one(caseTags, {
+    fields: [caseTagsMapping.tagId],
+    references: [caseTags.id],
+  }),
+}));
+
+export const caseUpvoteRelations = relations(caseUpvotes, ({ one }) => ({
+  case: one(sharedCases, {
+    fields: [caseUpvotes.caseId],
+    references: [sharedCases.id],
+  }),
+  user: one(users, {
+    fields: [caseUpvotes.userId],
+    references: [users.id],
+  }),
+}));
+
+export const discussionUpvoteRelations = relations(discussionUpvotes, ({ one }) => ({
+  discussion: one(caseDiscussions, {
+    fields: [discussionUpvotes.discussionId],
+    references: [caseDiscussions.id],
+  }),
+  user: one(users, {
+    fields: [discussionUpvotes.userId],
+    references: [users.id],
+  }),
+}));
 
 // Virtual patient relations
 export const virtualPatientRelations = relations(virtualPatients, ({ one }) => ({

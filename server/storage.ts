@@ -96,6 +96,43 @@ export interface IStorage {
     treatmentOptions: any, 
     relatedArticleIds: any
   ): Promise<VirtualPatient>;
+  
+  // Peer Knowledge Exchange - Shared Cases Operations
+  getSharedCase(id: number): Promise<SharedCase | undefined>;
+  getSharedCases(
+    bodyPart?: string,
+    expertiseLevel?: string,
+    complexityLevel?: string,
+    searchTerm?: string,
+    page?: number,
+    pageSize?: number
+  ): Promise<{
+    cases: SharedCase[],
+    total: number
+  }>;
+  getUserSharedCases(userId: number): Promise<SharedCase[]>;
+  createSharedCase(sharedCase: InsertSharedCase): Promise<SharedCase>;
+  updateSharedCase(id: number, data: Partial<SharedCase>): Promise<SharedCase>;
+  incrementCaseViews(id: number): Promise<void>;
+  upvoteCase(caseId: number, userId: number): Promise<{ success: boolean, upvotes: number }>;
+  removeUpvoteCase(caseId: number, userId: number): Promise<{ success: boolean, upvotes: number }>;
+  
+  // Peer Knowledge Exchange - Case Discussions Operations
+  getCaseDiscussion(id: number): Promise<CaseDiscussion | undefined>;
+  getCaseDiscussions(caseId: number): Promise<CaseDiscussion[]>;
+  getDiscussionReplies(discussionId: number): Promise<CaseDiscussion[]>;
+  createCaseDiscussion(discussion: InsertCaseDiscussion): Promise<CaseDiscussion>;
+  updateCaseDiscussion(id: number, content: string): Promise<CaseDiscussion>;
+  upvoteDiscussion(discussionId: number, userId: number): Promise<{ success: boolean, upvotes: number }>;
+  removeUpvoteDiscussion(discussionId: number, userId: number): Promise<{ success: boolean, upvotes: number }>;
+  
+  // Peer Knowledge Exchange - Tags Operations
+  getCaseTag(id: number): Promise<typeof caseTags.$inferSelect | undefined>;
+  getCaseTags(): Promise<(typeof caseTags.$inferSelect)[]>;
+  createCaseTag(name: string, category: string, color: string): Promise<typeof caseTags.$inferSelect>;
+  addCaseTag(caseId: number, tagId: number): Promise<void>;
+  removeCaseTag(caseId: number, tagId: number): Promise<void>;
+  getCaseTagsByCategory(category: string): Promise<(typeof caseTags.$inferSelect)[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -556,6 +593,518 @@ export class DatabaseStorage implements IStorage {
       return result[0];
     } catch (error) {
       console.error('Error updating virtual patient diagnosis:', error);
+      throw error;
+    }
+  }
+  
+  // Peer Knowledge Exchange - Shared Cases Operations
+  async getSharedCase(id: number): Promise<SharedCase | undefined> {
+    try {
+      const result = await db.select()
+        .from(sharedCases)
+        .where(eq(sharedCases.id, id));
+      
+      return result[0];
+    } catch (error) {
+      console.error('Error getting shared case:', error);
+      throw error;
+    }
+  }
+
+  async getSharedCases(
+    bodyPart?: string,
+    expertiseLevel?: string,
+    complexityLevel?: string,
+    searchTerm?: string,
+    page: number = 1,
+    pageSize: number = 10
+  ): Promise<{
+    cases: SharedCase[],
+    total: number
+  }> {
+    try {
+      const offset = (page - 1) * pageSize;
+      
+      let query = db.select()
+        .from(sharedCases)
+        .where(eq(sharedCases.isApproved, true))
+        .orderBy(desc(sharedCases.createdAt));
+      
+      if (bodyPart && bodyPart !== 'all') {
+        query = query.where(eq(sharedCases.bodyPart, bodyPart));
+      }
+      
+      if (expertiseLevel) {
+        query = query.where(eq(sharedCases.expertiseLevel, expertiseLevel));
+      }
+      
+      if (complexityLevel) {
+        query = query.where(eq(sharedCases.complexityLevel, complexityLevel));
+      }
+      
+      if (searchTerm) {
+        query = query.where(
+          or(
+            sql`${sharedCases.title} ILIKE ${'%' + searchTerm + '%'}`,
+            sql`${sharedCases.description} ILIKE ${'%' + searchTerm + '%'}`,
+            sql`${sharedCases.condition} ILIKE ${'%' + searchTerm + '%'}`,
+            sql`${sharedCases.presentingComplaints} ILIKE ${'%' + searchTerm + '%'}`
+          )
+        );
+      }
+      
+      const result = await query
+        .limit(pageSize)
+        .offset(offset);
+      
+      // Count total for pagination
+      const countQuery = db.select({ count: sql<number>`count(*)` })
+        .from(sharedCases)
+        .where(eq(sharedCases.isApproved, true));
+      
+      if (bodyPart && bodyPart !== 'all') {
+        countQuery.where(eq(sharedCases.bodyPart, bodyPart));
+      }
+      
+      if (expertiseLevel) {
+        countQuery.where(eq(sharedCases.expertiseLevel, expertiseLevel));
+      }
+      
+      if (complexityLevel) {
+        countQuery.where(eq(sharedCases.complexityLevel, complexityLevel));
+      }
+      
+      if (searchTerm) {
+        countQuery.where(
+          or(
+            sql`${sharedCases.title} ILIKE ${'%' + searchTerm + '%'}`,
+            sql`${sharedCases.description} ILIKE ${'%' + searchTerm + '%'}`,
+            sql`${sharedCases.condition} ILIKE ${'%' + searchTerm + '%'}`,
+            sql`${sharedCases.presentingComplaints} ILIKE ${'%' + searchTerm + '%'}`
+          )
+        );
+      }
+      
+      const totalResult = await countQuery;
+      const total = totalResult[0]?.count || 0;
+      
+      return {
+        cases: result,
+        total
+      };
+    } catch (error) {
+      console.error('Error getting shared cases:', error);
+      throw error;
+    }
+  }
+
+  async getUserSharedCases(userId: number): Promise<SharedCase[]> {
+    try {
+      const result = await db.select()
+        .from(sharedCases)
+        .where(eq(sharedCases.userId, userId))
+        .orderBy(desc(sharedCases.createdAt));
+      
+      return result;
+    } catch (error) {
+      console.error('Error getting user shared cases:', error);
+      throw error;
+    }
+  }
+
+  async createSharedCase(sharedCase: InsertSharedCase): Promise<SharedCase> {
+    try {
+      const result = await db.insert(sharedCases)
+        .values(sharedCase)
+        .returning();
+      
+      return result[0];
+    } catch (error) {
+      console.error('Error creating shared case:', error);
+      throw error;
+    }
+  }
+
+  async updateSharedCase(id: number, data: Partial<SharedCase>): Promise<SharedCase> {
+    try {
+      const result = await db.update(sharedCases)
+        .set({
+          ...data,
+          updatedAt: new Date()
+        })
+        .where(eq(sharedCases.id, id))
+        .returning();
+      
+      return result[0];
+    } catch (error) {
+      console.error('Error updating shared case:', error);
+      throw error;
+    }
+  }
+
+  async incrementCaseViews(id: number): Promise<void> {
+    try {
+      await db.update(sharedCases)
+        .set({
+          views: sql`${sharedCases.views} + 1`
+        })
+        .where(eq(sharedCases.id, id));
+    } catch (error) {
+      console.error('Error incrementing case views:', error);
+      throw error;
+    }
+  }
+
+  async upvoteCase(caseId: number, userId: number): Promise<{ success: boolean, upvotes: number }> {
+    try {
+      // Check if user has already upvoted
+      const existingUpvote = await db.select()
+        .from(caseUpvotes)
+        .where(
+          and(
+            eq(caseUpvotes.caseId, caseId),
+            eq(caseUpvotes.userId, userId)
+          )
+        );
+      
+      if (existingUpvote.length > 0) {
+        return { success: false, upvotes: 0 };
+      }
+      
+      // Add the upvote
+      await db.insert(caseUpvotes)
+        .values({
+          caseId,
+          userId
+        });
+      
+      // Increment the upvote count
+      await db.update(sharedCases)
+        .set({
+          upvotes: sql`${sharedCases.upvotes} + 1`
+        })
+        .where(eq(sharedCases.id, caseId));
+      
+      // Get the new upvote count
+      const updatedCase = await this.getSharedCase(caseId);
+      return { success: true, upvotes: updatedCase?.upvotes || 0 };
+    } catch (error) {
+      console.error('Error upvoting case:', error);
+      throw error;
+    }
+  }
+
+  async removeUpvoteCase(caseId: number, userId: number): Promise<{ success: boolean, upvotes: number }> {
+    try {
+      // Check if upvote exists
+      const existingUpvote = await db.select()
+        .from(caseUpvotes)
+        .where(
+          and(
+            eq(caseUpvotes.caseId, caseId),
+            eq(caseUpvotes.userId, userId)
+          )
+        );
+      
+      if (existingUpvote.length === 0) {
+        return { success: false, upvotes: 0 };
+      }
+      
+      // Remove the upvote
+      await db.delete(caseUpvotes)
+        .where(
+          and(
+            eq(caseUpvotes.caseId, caseId),
+            eq(caseUpvotes.userId, userId)
+          )
+        );
+      
+      // Decrement the upvote count
+      await db.update(sharedCases)
+        .set({
+          upvotes: sql`${sharedCases.upvotes} - 1`
+        })
+        .where(eq(sharedCases.id, caseId));
+      
+      // Get the new upvote count
+      const updatedCase = await this.getSharedCase(caseId);
+      return { success: true, upvotes: updatedCase?.upvotes || 0 };
+    } catch (error) {
+      console.error('Error removing case upvote:', error);
+      throw error;
+    }
+  }
+
+  // Peer Knowledge Exchange - Case Discussions Operations
+  async getCaseDiscussion(id: number): Promise<CaseDiscussion | undefined> {
+    try {
+      const result = await db.select()
+        .from(caseDiscussions)
+        .where(eq(caseDiscussions.id, id));
+      
+      return result[0];
+    } catch (error) {
+      console.error('Error getting case discussion:', error);
+      throw error;
+    }
+  }
+
+  async getCaseDiscussions(caseId: number): Promise<CaseDiscussion[]> {
+    try {
+      const result = await db.select()
+        .from(caseDiscussions)
+        .where(
+          and(
+            eq(caseDiscussions.caseId, caseId),
+            isNull(caseDiscussions.parentId) // Top-level discussions only
+          )
+        )
+        .orderBy(desc(caseDiscussions.createdAt));
+      
+      return result;
+    } catch (error) {
+      console.error('Error getting case discussions:', error);
+      throw error;
+    }
+  }
+
+  async getDiscussionReplies(discussionId: number): Promise<CaseDiscussion[]> {
+    try {
+      const result = await db.select()
+        .from(caseDiscussions)
+        .where(eq(caseDiscussions.parentId, discussionId))
+        .orderBy(caseDiscussions.createdAt);
+      
+      return result;
+    } catch (error) {
+      console.error('Error getting discussion replies:', error);
+      throw error;
+    }
+  }
+
+  async createCaseDiscussion(discussion: InsertCaseDiscussion): Promise<CaseDiscussion> {
+    try {
+      const result = await db.insert(caseDiscussions)
+        .values(discussion)
+        .returning();
+      
+      return result[0];
+    } catch (error) {
+      console.error('Error creating case discussion:', error);
+      throw error;
+    }
+  }
+
+  async updateCaseDiscussion(id: number, content: string): Promise<CaseDiscussion> {
+    try {
+      const result = await db.update(caseDiscussions)
+        .set({
+          content,
+          isEdited: true,
+          updatedAt: new Date()
+        })
+        .where(eq(caseDiscussions.id, id))
+        .returning();
+      
+      return result[0];
+    } catch (error) {
+      console.error('Error updating case discussion:', error);
+      throw error;
+    }
+  }
+
+  async upvoteDiscussion(discussionId: number, userId: number): Promise<{ success: boolean, upvotes: number }> {
+    try {
+      // Check if user has already upvoted
+      const existingUpvote = await db.select()
+        .from(discussionUpvotes)
+        .where(
+          and(
+            eq(discussionUpvotes.discussionId, discussionId),
+            eq(discussionUpvotes.userId, userId)
+          )
+        );
+      
+      if (existingUpvote.length > 0) {
+        return { success: false, upvotes: 0 };
+      }
+      
+      // Add the upvote
+      await db.insert(discussionUpvotes)
+        .values({
+          discussionId,
+          userId
+        });
+      
+      // Increment the upvote count
+      await db.update(caseDiscussions)
+        .set({
+          upvotes: sql`${caseDiscussions.upvotes} + 1`
+        })
+        .where(eq(caseDiscussions.id, discussionId));
+      
+      // Get the new upvote count
+      const updatedDiscussion = await this.getCaseDiscussion(discussionId);
+      return { success: true, upvotes: updatedDiscussion?.upvotes || 0 };
+    } catch (error) {
+      console.error('Error upvoting discussion:', error);
+      throw error;
+    }
+  }
+
+  async removeUpvoteDiscussion(discussionId: number, userId: number): Promise<{ success: boolean, upvotes: number }> {
+    try {
+      // Check if upvote exists
+      const existingUpvote = await db.select()
+        .from(discussionUpvotes)
+        .where(
+          and(
+            eq(discussionUpvotes.discussionId, discussionId),
+            eq(discussionUpvotes.userId, userId)
+          )
+        );
+      
+      if (existingUpvote.length === 0) {
+        return { success: false, upvotes: 0 };
+      }
+      
+      // Remove the upvote
+      await db.delete(discussionUpvotes)
+        .where(
+          and(
+            eq(discussionUpvotes.discussionId, discussionId),
+            eq(discussionUpvotes.userId, userId)
+          )
+        );
+      
+      // Decrement the upvote count
+      await db.update(caseDiscussions)
+        .set({
+          upvotes: sql`${caseDiscussions.upvotes} - 1`
+        })
+        .where(eq(caseDiscussions.id, discussionId));
+      
+      // Get the new upvote count
+      const updatedDiscussion = await this.getCaseDiscussion(discussionId);
+      return { success: true, upvotes: updatedDiscussion?.upvotes || 0 };
+    } catch (error) {
+      console.error('Error removing discussion upvote:', error);
+      throw error;
+    }
+  }
+
+  // Peer Knowledge Exchange - Tags Operations
+  async getCaseTag(id: number): Promise<typeof caseTags.$inferSelect | undefined> {
+    try {
+      const result = await db.select()
+        .from(caseTags)
+        .where(eq(caseTags.id, id));
+      
+      return result[0];
+    } catch (error) {
+      console.error('Error getting case tag:', error);
+      throw error;
+    }
+  }
+
+  async getCaseTags(): Promise<(typeof caseTags.$inferSelect)[]> {
+    try {
+      const result = await db.select()
+        .from(caseTags)
+        .orderBy(desc(caseTags.count));
+      
+      return result;
+    } catch (error) {
+      console.error('Error getting case tags:', error);
+      throw error;
+    }
+  }
+
+  async createCaseTag(name: string, category: string, color: string): Promise<typeof caseTags.$inferSelect> {
+    try {
+      const result = await db.insert(caseTags)
+        .values({
+          name,
+          category,
+          color
+        })
+        .returning();
+      
+      return result[0];
+    } catch (error) {
+      console.error('Error creating case tag:', error);
+      throw error;
+    }
+  }
+
+  async addCaseTag(caseId: number, tagId: number): Promise<void> {
+    try {
+      // Check if mapping already exists
+      const existingMapping = await db.select()
+        .from(caseTagsMapping)
+        .where(
+          and(
+            eq(caseTagsMapping.caseId, caseId),
+            eq(caseTagsMapping.tagId, tagId)
+          )
+        );
+      
+      if (existingMapping.length > 0) {
+        return;
+      }
+      
+      // Add the mapping
+      await db.insert(caseTagsMapping)
+        .values({
+          caseId,
+          tagId
+        });
+      
+      // Increment the tag count
+      await db.update(caseTags)
+        .set({
+          count: sql`${caseTags.count} + 1`
+        })
+        .where(eq(caseTags.id, tagId));
+    } catch (error) {
+      console.error('Error adding case tag:', error);
+      throw error;
+    }
+  }
+
+  async removeCaseTag(caseId: number, tagId: number): Promise<void> {
+    try {
+      // Remove the mapping
+      await db.delete(caseTagsMapping)
+        .where(
+          and(
+            eq(caseTagsMapping.caseId, caseId),
+            eq(caseTagsMapping.tagId, tagId)
+          )
+        );
+      
+      // Decrement the tag count
+      await db.update(caseTags)
+        .set({
+          count: sql`${caseTags.count} - 1`
+        })
+        .where(eq(caseTags.id, tagId));
+    } catch (error) {
+      console.error('Error removing case tag:', error);
+      throw error;
+    }
+  }
+
+  async getCaseTagsByCategory(category: string): Promise<(typeof caseTags.$inferSelect)[]> {
+    try {
+      const result = await db.select()
+        .from(caseTags)
+        .where(eq(caseTags.category, category))
+        .orderBy(desc(caseTags.count));
+      
+      return result;
+    } catch (error) {
+      console.error('Error getting case tags by category:', error);
       throw error;
     }
   }

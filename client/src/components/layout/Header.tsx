@@ -25,7 +25,6 @@ const Header = () => {
     { href: "/notes", label: "Patient Sessions" },
     { href: "/skeleton-tool", label: "2D Skeleton Tool" },
     { href: "/skeleton-3d-tool", label: "3D Skeleton Tool" },
-    { href: "/shared-notes", label: "Shared Notes" },
     { href: "/shared-cases", label: "Peer Exchange" },
     { href: "/research", label: "Research" },
     { href: "/exercises", label: "Exercise Library" },
@@ -136,6 +135,14 @@ const Header = () => {
                       <div className="flex items-center cursor-pointer w-full">
                         <Activity className="mr-2 h-4 w-4" />
                         <span>Virtual Patients</span>
+                      </div>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="flex items-center" asChild>
+                    <Link href="/shared-cases">
+                      <div className="flex items-center cursor-pointer w-full">
+                        <Users className="mr-2 h-4 w-4" />
+                        <span>Peer Exchange</span>
                       </div>
                     </Link>
                   </DropdownMenuItem>

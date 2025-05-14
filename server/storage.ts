@@ -450,6 +450,26 @@ export class DatabaseStorage implements IStorage {
     const result = await db.insert(exercises).values(exercise).returning();
     return result[0];
   }
+  
+  // Manual Therapy Technique methods
+  async getManualTherapyTechnique(id: number): Promise<ManualTherapyTechnique | undefined> {
+    const techniques = await db.select().from(manualTherapyTechniques).where(eq(manualTherapyTechniques.id, id)).limit(1);
+    return techniques[0];
+  }
+  
+  async getManualTherapyTechniques(bodyPart?: string): Promise<ManualTherapyTechnique[]> {
+    if (bodyPart && bodyPart !== 'all') {
+      const bodyPartValue = bodyPart as typeof bodyPartEnum.enumValues[number];
+      return await db.select().from(manualTherapyTechniques).where(eq(manualTherapyTechniques.bodyPart, bodyPartValue)).orderBy(desc(manualTherapyTechniques.id));
+    }
+    
+    return await db.select().from(manualTherapyTechniques).orderBy(desc(manualTherapyTechniques.id));
+  }
+  
+  async createManualTherapyTechnique(technique: InsertManualTherapyTechnique): Promise<ManualTherapyTechnique> {
+    const result = await db.insert(manualTherapyTechniques).values(technique).returning();
+    return result[0];
+  }
 }
 
 export const storage = new DatabaseStorage();

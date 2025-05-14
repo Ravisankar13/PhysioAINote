@@ -1118,6 +1118,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Manual Therapy Techniques Routes
+  app.get("/api/manual-therapy", async (req: Request, res: Response) => {
+    try {
+      const bodyPart = req.query.bodyPart as string;
+      const techniques = await storage.getManualTherapyTechniques(bodyPart);
+      res.json(techniques);
+    } catch (error) {
+      console.error("Error fetching manual therapy techniques:", error);
+      res.status(500).json({ 
+        message: "Failed to fetch manual therapy techniques", 
+        error: (error as Error).message 
+      });
+    }
+  });
+  
+  app.get("/api/manual-therapy/:id", async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id);
+      const technique = await storage.getManualTherapyTechnique(id);
+      
+      if (!technique) {
+        return res.status(404).json({ message: "Manual therapy technique not found" });
+      }
+      
+      res.json(technique);
+    } catch (error) {
+      console.error("Error fetching manual therapy technique:", error);
+      res.status(500).json({ 
+        message: "Failed to fetch manual therapy technique", 
+        error: (error as Error).message 
+      });
+    }
+  });
+  
+  app.post("/api/manual-therapy", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      // Parse and validate the request body
+      let techniqueData;
+      try {
+        techniqueData = insertManualTherapyTechniqueSchema.parse(req.body);
+      } catch (error) {
+        if (error instanceof ZodError) {
+          const validationError = fromZodError(error);
+          return res.status(400).json({ 
+            message: "Invalid manual therapy technique data", 
+            errors: validationError.details 
+          });
+        }
+        throw error;
+      }
+      
+      const technique = await storage.createManualTherapyTechnique(techniqueData);
+      res.status(201).json(technique);
+    } catch (error) {
+      console.error("Error creating manual therapy technique:", error);
+      res.status(500).json({ 
+        message: "Failed to create manual therapy technique", 
+        error: (error as Error).message 
+      });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

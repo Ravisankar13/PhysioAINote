@@ -43,6 +43,7 @@ function Router() {
           <Route path="/manual-therapy" component={ManualTherapyPage} />
           <Route path="/skeleton-tool" component={SkeletonTool} />
           <Route path="/skeleton-3d-tool" component={Skeleton3DTool} />
+          <ProtectedRoute path="/virtual-patient" component={VirtualPatientPage} />
           <Route path="/membership" component={Membership} />
           <Route path="/about" component={About} />
           <Route path="/contact" component={Contact} />

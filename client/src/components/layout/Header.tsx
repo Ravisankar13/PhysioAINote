@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Leaf, MessageSquareText, Menu, LogOut, User, Bone, CreditCard, FileAudio, Stethoscope } from "lucide-react";
+import { Leaf, MessageSquareText, Menu, LogOut, User, Bone, CreditCard, FileAudio, Stethoscope, Activity } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 
 const Header = () => {
@@ -126,6 +126,14 @@ const Header = () => {
                       <div className="flex items-center cursor-pointer w-full">
                         <Bone className="mr-2 h-4 w-4" />
                         <span>3D Skeleton Tool</span>
+                      </div>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="flex items-center" asChild>
+                    <Link href="/virtual-patient">
+                      <div className="flex items-center cursor-pointer w-full">
+                        <Activity className="mr-2 h-4 w-4" />
+                        <span>Virtual Patient</span>
                       </div>
                     </Link>
                   </DropdownMenuItem>

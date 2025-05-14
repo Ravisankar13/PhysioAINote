@@ -28,6 +28,12 @@ export const membershipTierEnum = pgEnum("membership_tier", ["none", "basic", "s
 // Session status enum for tracking recording and processing states
 export const sessionStatusEnum = pgEnum("session_status", ["draft", "recorded", "transcribed", "processing", "completed"]);
 
+// Case expertise level enum for peer knowledge exchange
+export const expertiseLevelEnum = pgEnum("expertise_level", ["student", "novice", "intermediate", "advanced", "expert"]);
+
+// Case complexity level enum for peer knowledge exchange
+export const complexityLevelEnum = pgEnum("complexity_level", ["simple", "moderate", "complex", "multifactorial"]);
+
 // Users
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -447,6 +453,114 @@ export const insertVirtualPatientSchema = createInsertSchema(virtualPatients).om
 
 export type InsertVirtualPatient = z.infer<typeof insertVirtualPatientSchema>;
 export type VirtualPatient = typeof virtualPatients.$inferSelect;
+
+// Peer Knowledge Exchange - Shared Cases
+export const sharedCases = pgTable("shared_cases", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  bodyPart: bodyPartEnum("body_part").default("general").notNull(),
+  patientAgeRange: text("patient_age_range").notNull(), // Age range instead of specific age
+  patientGender: text("patient_gender"),
+  condition: text("condition").notNull(), // Primary condition or diagnosis
+  presentingComplaints: text("presenting_complaints").notNull(),
+  clinicalHistory: text("clinical_history"),
+  examinationFindings: text("examination_findings"),
+  investigationResults: text("investigation_results"),
+  initialDiagnosis: text("initial_diagnosis"),
+  treatmentApproach: text("treatment_approach"),
+  outcome: text("outcome"),
+  learningPoints: text("learning_points"),
+  keywords: text("keywords").array(),
+  expertiseLevel: expertiseLevelEnum("expertise_level").default("intermediate"),
+  complexityLevel: complexityLevelEnum("complexity_level").default("moderate"),
+  attachmentUrls: text("attachment_urls").array(),
+  sourceType: text("source_type").notNull(), // 'clinical_note', 'virtual_patient', 'manual'
+  sourceId: integer("source_id"), // ID of the original note or virtual patient (if applicable)
+  isAnonymized: boolean("is_anonymized").default(true).notNull(),
+  isApproved: boolean("is_approved").default(false).notNull(),
+  views: integer("views").default(0).notNull(),
+  upvotes: integer("upvotes").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertSharedCaseSchema = createInsertSchema(sharedCases).omit({
+  id: true,
+  views: true,
+  upvotes: true,
+  isApproved: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertSharedCase = z.infer<typeof insertSharedCaseSchema>;
+export type SharedCase = typeof sharedCases.$inferSelect;
+
+// Peer Knowledge Exchange - Case Discussions
+export const caseDiscussions = pgTable("case_discussions", {
+  id: serial("id").primaryKey(),
+  caseId: integer("case_id").notNull().references(() => sharedCases.id, { onDelete: 'cascade' }),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  content: text("content").notNull(),
+  parentId: integer("parent_id"), // For threaded discussions
+  expertise: expertiseLevelEnum("expertise_level").default("intermediate"),
+  hasReferences: boolean("has_references").default(false).notNull(),
+  references: text("references"), // Comma-separated list of references
+  attachmentUrls: text("attachment_urls").array(),
+  upvotes: integer("upvotes").default(0).notNull(),
+  isEdited: boolean("is_edited").default(false).notNull(),
+  isHighlighted: boolean("is_highlighted").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertCaseDiscussionSchema = createInsertSchema(caseDiscussions).omit({
+  id: true,
+  upvotes: true,
+  isEdited: true,
+  isHighlighted: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertCaseDiscussion = z.infer<typeof insertCaseDiscussionSchema>;
+export type CaseDiscussion = typeof caseDiscussions.$inferSelect;
+
+// Tags for shared cases
+export const caseTags = pgTable("case_tags", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  category: text("category").notNull(), // pathology, treatment, anatomy, etc.
+  description: text("description"),
+  color: text("color").notNull(),
+  count: integer("count").default(0).notNull(), // Usage count for sorting/ranking
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Junction table for cases and tags
+export const caseTagsMapping = pgTable("case_tags_mapping", {
+  id: serial("id").primaryKey(),
+  caseId: integer("case_id").notNull().references(() => sharedCases.id, { onDelete: 'cascade' }),
+  tagId: integer("tag_id").notNull().references(() => caseTags.id, { onDelete: 'cascade' }),
+});
+
+// User upvotes tracking (to prevent multiple upvotes)
+export const caseUpvotes = pgTable("case_upvotes", {
+  id: serial("id").primaryKey(),
+  caseId: integer("case_id").notNull().references(() => sharedCases.id, { onDelete: 'cascade' }),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Discussion upvotes tracking
+export const discussionUpvotes = pgTable("discussion_upvotes", {
+  id: serial("id").primaryKey(),
+  discussionId: integer("discussion_id").notNull().references(() => caseDiscussions.id, { onDelete: 'cascade' }),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
 
 // Virtual patient relations
 export const virtualPatientRelations = relations(virtualPatients, ({ one }) => ({

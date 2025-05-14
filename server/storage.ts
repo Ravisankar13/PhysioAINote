@@ -10,6 +10,7 @@ import {
   patientSessions, type PatientSession, type InsertPatientSession,
   audioRecordings, type AudioRecording, type InsertAudioRecording,
   manualTherapyTechniques, type ManualTherapyTechnique, type InsertManualTherapyTechnique,
+  virtualPatients, type VirtualPatient, type InsertVirtualPatient,
   sessionStatusEnum
 } from "@shared/schema";
 import { db } from "./db";
@@ -482,6 +483,81 @@ export class DatabaseStorage implements IStorage {
   async createManualTherapyTechnique(technique: InsertManualTherapyTechnique): Promise<ManualTherapyTechnique> {
     const result = await db.insert(manualTherapyTechniques).values(technique).returning();
     return result[0];
+  }
+
+  // Virtual Patient Methods
+  async getVirtualPatient(id: number): Promise<VirtualPatient | undefined> {
+    try {
+      const result = await db.select().from(virtualPatients).where(eq(virtualPatients.id, id));
+      return result[0];
+    } catch (error) {
+      console.error('Error fetching virtual patient:', error);
+      throw error;
+    }
+  }
+
+  async getUserVirtualPatients(userId: number): Promise<VirtualPatient[]> {
+    try {
+      const result = await db.select()
+        .from(virtualPatients)
+        .where(eq(virtualPatients.userId, userId))
+        .orderBy(desc(virtualPatients.createdAt));
+      return result;
+    } catch (error) {
+      console.error('Error fetching user virtual patients:', error);
+      throw error;
+    }
+  }
+
+  async createVirtualPatient(virtualPatient: InsertVirtualPatient): Promise<VirtualPatient> {
+    try {
+      const result = await db.insert(virtualPatients).values(virtualPatient).returning();
+      return result[0];
+    } catch (error) {
+      console.error('Error creating virtual patient:', error);
+      throw error;
+    }
+  }
+
+  async updateVirtualPatient(id: number, data: Partial<VirtualPatient>): Promise<VirtualPatient> {
+    try {
+      const result = await db.update(virtualPatients)
+        .set({
+          ...data,
+          updatedAt: new Date()
+        })
+        .where(eq(virtualPatients.id, id))
+        .returning();
+      return result[0];
+    } catch (error) {
+      console.error('Error updating virtual patient:', error);
+      throw error;
+    }
+  }
+
+  async updateVirtualPatientDiagnosis(
+    id: number, 
+    diagnosis: string, 
+    differentialDiagnosis: any, 
+    treatmentOptions: any, 
+    relatedArticleIds: any
+  ): Promise<VirtualPatient> {
+    try {
+      const result = await db.update(virtualPatients)
+        .set({
+          diagnosis,
+          differentialDiagnosis,
+          treatmentOptions,
+          relatedArticleIds,
+          updatedAt: new Date()
+        })
+        .where(eq(virtualPatients.id, id))
+        .returning();
+      return result[0];
+    } catch (error) {
+      console.error('Error updating virtual patient diagnosis:', error);
+      throw error;
+    }
   }
 }
 

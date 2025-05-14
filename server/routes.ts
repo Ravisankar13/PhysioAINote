@@ -1,6 +1,8 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
+import { eq } from "drizzle-orm";
 import { storage } from "./storage";
+import { db } from "./db";
 import { generateSoapNote } from "./openai";
 import { analyzeVirtualPatientCase, findRelevantResearchArticles } from "./virtualPatientOpenai";
 import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, discussionUpvotes } from "@shared/schema";

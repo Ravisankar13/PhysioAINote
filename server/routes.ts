@@ -1267,15 +1267,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Analyze the virtual patient case
       const analysisResult = await analyzeVirtualPatientCase(virtualPatient);
       
+      // Get empty arrays if properties are missing to prevent "cannot read properties of undefined" errors
+      const differentialDiagnoses = analysisResult.differentialDiagnoses?.map(d => d.name) || [];
+      const keywords = analysisResult.recommendedKeywords || [];
+      
       // Find relevant research articles based on the diagnosis
-      const relevantArticleIds = await findRelevantResearchArticles(analysisResult.diagnosis);
+      const searchResults = await findRelevantResearchArticles(
+        analysisResult.primaryDiagnosis?.name || "undefined diagnosis",
+        differentialDiagnoses,
+        virtualPatient.bodyPart,
+        keywords
+      );
+      
+      // Get relevant article IDs from the search terms
+      const relevantArticleIds = searchResults?.searchTerms || [];
       
       // Update the virtual patient with the analysis results
       const updatedPatient = await storage.updateVirtualPatientDiagnosis(
         patientId,
-        analysisResult.diagnosis,
-        analysisResult.differentialDiagnosis,
-        analysisResult.treatmentOptions,
+        analysisResult.primaryDiagnosis?.name || "Unknown diagnosis",
+        analysisResult.differentialDiagnoses || [],
+        analysisResult.treatmentOptions || [],
         relevantArticleIds
       );
       

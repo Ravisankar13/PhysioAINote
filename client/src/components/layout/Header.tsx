@@ -30,8 +30,6 @@ const Header = () => {
     { href: "/exercises", label: "Exercise Library" },
     { href: "/manual-therapy", label: "Manual Therapy" },
     { href: "/membership", label: "Membership" },
-    { href: "/about", label: "About" },
-    { href: "/contact", label: "Contact" },
   ];
 
   const isActive = (path: string) => location === path;

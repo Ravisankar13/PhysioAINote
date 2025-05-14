@@ -82,6 +82,7 @@ export async function analyzeVirtualPatientCase(
 }
 
 // Interface to facilitate finding research articles relevant to a diagnosis
+// with enhanced expert-based approach
 export async function findRelevantResearchArticles(
   primaryDiagnosis: string,
   differentialDiagnoses: string[],
@@ -90,6 +91,10 @@ export async function findRelevantResearchArticles(
 ): Promise<{
   searchTerms: string[];
   strategy: string;
+  expertTerms: string[];
+  pathoPhysiologicalTerms: string[];
+  treatmentApproaches: string[];
+  relevanceWeights: {[key: string]: number};
 }> {
   try {
     const prompt = `
@@ -100,13 +105,28 @@ export async function findRelevantResearchArticles(
     - Additional relevant keywords: ${keywords.join(', ')}
 
     Please provide:
-    1. A list of 5-10 specific search terms that would be most effective for finding relevant research articles about this case
-    2. A brief search strategy explaining which aspects of the case should be prioritized in the literature search
+    1. 7-12 specific search terms that would be most effective for finding relevant research articles about this case
+    2. 3-5 expert-specific terms related to key researchers in this field (e.g., "Jill Cook tendinopathy continuum", "McKenzie directional preference")
+    3. 3-5 pathophysiological terms related to the underlying mechanisms of the condition
+    4. 3-5 evidence-based treatment approaches for this condition
+    5. A brief search strategy explaining which aspects of the case should be prioritized
+    6. Relevance weights (0-10) for different term categories to indicate their importance in article matching
 
     Format your response as JSON with the following structure:
     {
       "searchTerms": ["term1", "term2", ...],
-      "strategy": "explanation of search strategy"
+      "expertTerms": ["expert term1", "expert term2", ...],
+      "pathoPhysiologicalTerms": ["pathophysiology1", "pathophysiology2", ...],
+      "treatmentApproaches": ["treatment1", "treatment2", ...],
+      "strategy": "explanation of search strategy", 
+      "relevanceWeights": {
+        "primaryDiagnosis": 9,
+        "experts": 8,
+        "pathophysiology": 7,
+        "treatments": 6,
+        "bodyPart": 5,
+        "differentialDiagnosis": 4
+      }
     }
     `;
 
@@ -121,14 +141,57 @@ export async function findRelevantResearchArticles(
     const result = JSON.parse(content);
     return {
       searchTerms: result.searchTerms || [],
-      strategy: result.strategy || ""
+      strategy: result.strategy || "",
+      expertTerms: result.expertTerms || [],
+      pathoPhysiologicalTerms: result.pathoPhysiologicalTerms || [],
+      treatmentApproaches: result.treatmentApproaches || [],
+      relevanceWeights: result.relevanceWeights || {
+        primaryDiagnosis: 9,
+        experts: 8,
+        pathophysiology: 7,
+        treatments: 6,
+        bodyPart: 5,
+        differentialDiagnosis: 4
+      }
     };
   } catch (error) {
     console.error("Error generating research search strategy:", error);
-    // Fallback
+    
+    // Get the experts associated with this body part to use in the fallback
+    const bodyPartInfo = getBodyPartFallbackInfo(bodyPart) as {
+      expert1: string;
+      expert2: string;
+      expert3: string;
+      expertDiagnosis: string;
+    };
+    
+    // Enhanced fallback with expert information
     return {
-      searchTerms: [primaryDiagnosis, bodyPart, ...keywords.slice(0, 3)],
-      strategy: `Search for articles about ${primaryDiagnosis} affecting the ${bodyPart}.`
+      searchTerms: [primaryDiagnosis, bodyPart, ...keywords.slice(0, 5)],
+      expertTerms: [
+        `${bodyPartInfo.expert1} ${bodyPart}`, 
+        `${bodyPartInfo.expert2} ${bodyPart}`,
+        `${bodyPartInfo.expert3} ${primaryDiagnosis}`
+      ],
+      pathoPhysiologicalTerms: [
+        `pathophysiology ${primaryDiagnosis}`,
+        `mechanism ${primaryDiagnosis}`,
+        `etiology ${bodyPart} pain`
+      ],
+      treatmentApproaches: [
+        `manual therapy ${bodyPart}`,
+        `exercise therapy ${primaryDiagnosis}`,
+        `rehabilitation ${bodyPart}`
+      ],
+      strategy: `Priority search for articles about ${primaryDiagnosis} affecting the ${bodyPart}, with emphasis on works by ${bodyPartInfo.expert1}, ${bodyPartInfo.expert2}, and clinical trials on treatment effectiveness.`,
+      relevanceWeights: {
+        primaryDiagnosis: 9,
+        experts: 8,
+        pathophysiology: 7,
+        treatments: 6,
+        bodyPart: 5,
+        differentialDiagnosis: 4
+      }
     };
   }
 }

@@ -1420,15 +1420,95 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
 
       // Find articles based on the search strategy
-      // For now, just fetch articles for the body part and filter later
       const { articles } = await storage.getResearchArticles(
         virtualPatient.bodyPart, 
         1, 
-        50
+        100 // Get more articles to allow for better filtering
       );
 
-      // TODO: Implement more sophisticated article matching based on search strategy
-      const relevantArticleIds = articles.slice(0, 5).map(article => article.id);
+      // Advanced article matching based on expert-enhanced search strategy
+      const scoredArticles = articles.map(article => {
+        let score = 0;
+        const weights = articleSearchStrategy.relevanceWeights;
+        
+        // Convert article content to lowercase for matching
+        const articleContent = [
+          article.title,
+          article.abstract,
+          article.keyFindings || "",
+          article.clinicalRelevance || "",
+          article.methodology || ""
+        ].join(" ").toLowerCase();
+        
+        // Score matches for primary diagnosis (highest weight)
+        if (articleContent.includes(primaryDiagnosis.toLowerCase())) {
+          score += weights.primaryDiagnosis * 2;
+        }
+        
+        // Score matches for body part
+        if (article.bodyPart === virtualPatient.bodyPart) {
+          score += weights.bodyPart * 1.5;
+        }
+        
+        // Score matches for expert names and concepts
+        articleSearchStrategy.expertTerms.forEach(term => {
+          if (articleContent.includes(term.toLowerCase())) {
+            score += weights.experts;
+          }
+        });
+        
+        // Score matches for pathophysiological terms
+        articleSearchStrategy.pathoPhysiologicalTerms.forEach(term => {
+          if (articleContent.includes(term.toLowerCase())) {
+            score += weights.pathophysiology;
+          }
+        });
+        
+        // Score matches for treatment approaches
+        articleSearchStrategy.treatmentApproaches.forEach(term => {
+          if (articleContent.includes(term.toLowerCase())) {
+            score += weights.treatments;
+          }
+        });
+        
+        // Score matches for differential diagnoses
+        differentialDiagnoses.forEach(diagnosis => {
+          if (articleContent.includes(diagnosis.toLowerCase())) {
+            score += weights.differentialDiagnosis;
+          }
+        });
+        
+        // Score matches for regular search terms
+        articleSearchStrategy.searchTerms.forEach(term => {
+          if (articleContent.includes(term.toLowerCase())) {
+            score += 2;
+          }
+        });
+        
+        // Boost score for recent publications
+        const pubDate = new Date(article.publicationDate);
+        const now = new Date();
+        const yearDiff = now.getFullYear() - pubDate.getFullYear();
+        if (yearDiff <= 2) { // Published in the last 2 years
+          score += 3;
+        } else if (yearDiff <= 5) { // Published in the last 5 years
+          score += 1;
+        }
+        
+        // Boost score for articles with good methodology
+        if (article.methodology && article.methodology.toLowerCase().includes("randomized controlled")) {
+          score += 2;
+        }
+        
+        return { article, score };
+      });
+      
+      // Sort by score and get top 5 most relevant articles
+      scoredArticles.sort((a, b) => b.score - a.score);
+      const relevantArticleIds = scoredArticles
+        .slice(0, 5)
+        .filter(item => item.score > 5) // Only include sufficiently relevant articles
+        .map(item => item.article.id);
 
       // Update the virtual patient with diagnosis and treatment information
       const updatedPatient = await storage.updateVirtualPatientDiagnosis(

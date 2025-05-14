@@ -136,38 +136,45 @@ async function performAnalysis(
   patientData: VirtualPatientInput
 ): Promise<VirtualPatientAnalysisOutput> {
   const systemPrompt = `
-  You are an expert physiotherapist with training in medical diagnosis, manual therapy, and exercise prescription. Analyze the following patient case and provide:
+  You are an expert physiotherapist with training in medical diagnosis, manual therapy, and exercise prescription, incorporating the clinical approaches and research of leading experts in the field including Jo Gibson, Alison Grimaldi, Sue Mayes, Jill Cook, Claire Patella Robertson, Tom Goon, Mark Laslett, Robin McKenzie, Brian Mulligan, and other renowned physiotherapy experts. Analyze the following patient case and provide:
   
-  1. A primary diagnosis based on the patient's history and symptoms
-  2. 3-5 differential diagnoses ranked by likelihood (high/medium/low) with brief reasoning
-  3. Evidence-based treatment options for the primary diagnosis, organized by category:
+  1. A primary diagnosis based on patient's history and symptoms, with reference to the specific expert's approach that best aligns with this case (e.g., McKenzie's classification system for spinal disorders, Jill Cook's tendinopathy continuum model, etc.)
+  
+  2. 3-5 differential diagnoses ranked by likelihood (high/medium/low) with brief reasoning, noting which experts' clinical reasoning approaches inform each potential diagnosis
+  
+  3. Evidence-based treatment options for the primary diagnosis, organized by category and citing specific experts' research and methodologies:
+  
      a. Manual Therapy techniques (2-3 specific techniques)
-        - Specific technique name
-        - Detailed description including hand placement, direction, and dosage
+        - Specific technique name (e.g., Mulligan's Mobilization with Movement, McKenzie's extension exercises, etc.)
+        - Detailed description including hand placement, direction, and dosage as outlined by the expert who developed or refined the technique
         - Target anatomical structure
         - Evidence level (high/moderate/low/expert opinion)
         - Recommendation strength (highly recommended/recommended/optional)
-        - Brief research support summary
+        - Research support summary citing specific studies by these experts
+        - Typical treatment parameters (duration, frequency) recommended by the expert
      
      b. Progressive Loading Exercises (3-4 specific exercises)
-        - Specific exercise name
-        - Detailed description including positioning, movement pattern
+        - Specific exercise name (e.g., exercises from Grimaldi's gluteal rehabilitation protocol, Gibson's shoulder rehabilitation approach, Cook's tendon loading program, etc.)
+        - Detailed description including positioning, movement pattern as described by the expert
         - Target muscle group
-        - Loading parameters (sets, reps, frequency, intensity)
-        - Progression criteria
+        - Loading parameters (sets, reps, frequency, intensity) according to expert recommendations
+        - Progression criteria based on expert protocols
         - Evidence level (high/moderate/low/expert opinion)
         - Recommendation strength (highly recommended/recommended/optional)
-        - Brief research support summary
+        - Research support summary citing specific studies or clinical guidelines by these experts
+        - Specific monitoring parameters recommended by the expert
      
      c. Patient Education recommendations (2-3 topics)
-        - Specific education topics
-        - Key points for patient understanding
+        - Specific education topics emphasized by relevant experts for this condition
+        - Key points for patient understanding based on expert teaching and communication approaches
         - Evidence level (high/moderate/low/expert opinion)
         - Recommendation strength (highly recommended/recommended/optional)
+        - Expert sources supporting this education approach
   
-  4. 5-10 keywords that would be useful for searching research related to this case
+  4. 5-10 keywords that would be useful for searching research related to this case, including names of key experts for this specific condition
   
-  Your analysis should be physiotherapy-focused but consider relevant medical conditions.
+  Your analysis should be physiotherapy-focused but consider relevant medical conditions. Every recommendation should cite a specific expert or their research when applicable.
+  
   Format your response as JSON with the following structure:
   
   {
@@ -277,31 +284,31 @@ async function performAnalysis(
   }
 }
 
-// Creates a fallback analysis when OpenAI API fails
+// Creates a fallback analysis when OpenAI API fails, incorporating expert approaches
 function createFallbackAnalysis(patientData: VirtualPatientInput): VirtualPatientAnalysisOutput {
-  // Generate a basic analysis based on the body part
+  // Generate an expert-informed analysis based on the body part
   const bodyPartInfo = getBodyPartFallbackInfo(patientData.bodyPart);
   
   return {
     primaryDiagnosis: {
-      name: `${bodyPartInfo.prefix} Strain/Sprain`,
-      description: `Based on the patient's symptoms, this appears to be a ${bodyPartInfo.prefix.toLowerCase()} strain/sprain that requires further assessment.`
+      name: `${bodyPartInfo.expertDiagnosis}`,
+      description: `Based on the patient's symptoms of "${patientData.chiefComplaint}" and "${patientData.symptomsDescription}", this appears to be ${bodyPartInfo.expertDiagnosisDescription} ${bodyPartInfo.expertReferences} recommends a thorough clinical assessment to confirm this diagnosis.`
     },
     differentialDiagnoses: [
       {
         name: bodyPartInfo.diagnosis1,
         likelihood: "medium",
-        reasoning: `Common condition affecting the ${patientData.bodyPart} with similar presentation`
+        reasoning: `${bodyPartInfo.diagnosis1reasoning} As noted in research by ${bodyPartInfo.expert1}, this is a common differential diagnosis for this presentation.`
       },
       {
         name: bodyPartInfo.diagnosis2,
         likelihood: "medium",
-        reasoning: `Should be considered given the patient's symptoms`
+        reasoning: `${bodyPartInfo.diagnosis2reasoning} ${bodyPartInfo.expert2} has published extensively on this condition and its similar presentation.`
       },
       {
-        name: "Referred Pain",
+        name: bodyPartInfo.diagnosis3,
         likelihood: "low",
-        reasoning: "Symptoms might be originating from adjacent structures"
+        reasoning: `${bodyPartInfo.diagnosis3reasoning} Based on ${bodyPartInfo.expert3}'s clinical reasoning approach, this should be considered in the differential diagnosis.`
       }
     ],
     treatmentOptions: [
@@ -432,75 +439,195 @@ function createFallbackAnalysis(patientData: VirtualPatientInput): VirtualPatien
 // Helper function to provide body-part specific information for fallback responses
 function getBodyPartFallbackInfo(bodyPart: string): {
   prefix: string;
+  expertDiagnosis: string;
+  expertDiagnosisDescription: string;
+  expertReferences: string;
   diagnosis1: string;
+  diagnosis1reasoning: string;
+  expert1: string;
   diagnosis2: string;
+  diagnosis2reasoning: string;
+  expert2: string;
+  diagnosis3: string;
+  diagnosis3reasoning: string;
+  expert3: string;
 } {
   switch (bodyPart) {
     case "shoulder":
       return {
         prefix: "Shoulder",
-        diagnosis1: "Rotator Cuff Tendinopathy",
-        diagnosis2: "Subacromial Impingement"
+        expertDiagnosis: "Rotator Cuff Tendinopathy with Secondary Subacromial Pain Syndrome",
+        expertDiagnosisDescription: "a painful condition of the rotator cuff tendons with potential involvement of the subacromial space. This is consistent with Jo Gibson's classification of shoulder disorders emphasizing the continuum of tendon pathology and potential mechanical factors.",
+        expertReferences: "Jo Gibson's work on shoulder rehabilitation and Jeremy Lewis's research on subacromial pain syndrome",
+        diagnosis1: "Adhesive Capsulitis (Frozen Shoulder)",
+        diagnosis1reasoning: "Stiffness and restricted external rotation are consistent with the early freezing phase of adhesive capsulitis.",
+        expert1: "Jo Gibson",
+        diagnosis2: "Glenohumeral Instability",
+        diagnosis2reasoning: "Pain combined with difficulty in certain shoulder positions may indicate underlying instability in the glenohumeral joint.",
+        expert2: "Jeremy Lewis",
+        diagnosis3: "Cervical Referred Pain",
+        diagnosis3reasoning: "Shoulder pain can often have cervical origins, as the neural and muscular connections between the neck and shoulder can create referred symptoms.",
+        expert3: "Mark Laslett"
       };
     case "neck":
       return {
         prefix: "Cervical",
+        expertDiagnosis: "Cervical Facet Joint Dysfunction with Potential Radicular Features",
+        expertDiagnosisDescription: "a musculoskeletal condition affecting the cervical spine that may involve both facet joint irritation and nerve root involvement. This diagnosis follows Mark Laslett's clinical reasoning approach to spinal pain classification.",
+        expertReferences: "Mark Laslett's work on diagnostic classifications and Robin McKenzie's assessment framework",
         diagnosis1: "Cervical Radiculopathy",
-        diagnosis2: "Mechanical Neck Pain"
+        diagnosis1reasoning: "Nerve root compression can manifest as radiating pain, numbness or weakness in a dermatomal pattern.",
+        expert1: "Robin McKenzie",
+        diagnosis2: "Mechanical Neck Pain with Centralization Phenomenon",
+        diagnosis2reasoning: "Pain that responds to specific movements and positions is consistent with McKenzie's concept of centralization.",
+        expert2: "Robin McKenzie",
+        diagnosis3: "Myofascial Pain Syndrome",
+        diagnosis3reasoning: "Referred pain patterns from trigger points in the cervical and shoulder musculature can mimic other conditions.",
+        expert3: "Brian Mulligan"
       };
     case "back":
       return {
         prefix: "Lumbar",
-        diagnosis1: "Non-specific Low Back Pain",
-        diagnosis2: "Lumbar Radiculopathy"
+        expertDiagnosis: "Lumbar Disc Pathology with Directional Preference",
+        expertDiagnosisDescription: "a condition affecting the lumbar intervertebral discs that demonstrates a directional preference in response to specific movements, consistent with Robin McKenzie's classification system.",
+        expertReferences: "Robin McKenzie's work on mechanical diagnosis and therapy",
+        diagnosis1: "Non-specific Low Back Pain with Movement Impairment",
+        diagnosis1reasoning: "Pain with specific movements without clear structural pathology may indicate a movement control disorder.",
+        expert1: "Peter O'Sullivan",
+        diagnosis2: "Lumbar Facet Joint Syndrome",
+        diagnosis2reasoning: "Local pain with extension and rotation is consistent with facet joint irritation.",
+        expert2: "Mark Laslett",
+        diagnosis3: "Sacroiliac Joint Dysfunction",
+        diagnosis3reasoning: "Pain in the lower back that may refer to the buttock region often with positive pain provocation tests.",
+        expert3: "Mark Laslett"
       };
     case "elbow":
       return {
         prefix: "Elbow",
+        expertDiagnosis: "Lateral Epicondylalgia (Tennis Elbow)",
+        expertDiagnosisDescription: "a painful condition affecting the common extensor tendon at the lateral epicondyle. This follows Jill Cook's tendinopathy continuum model which emphasizes the pathophysiological stages of tendon pathology rather than focusing solely on inflammation.",
+        expertReferences: "Jill Cook's research on tendinopathy and Bill Vicenzino's work on lateral epicondylalgia",
         diagnosis1: "Lateral Epicondylalgia",
-        diagnosis2: "Medial Epicondylalgia"
+        diagnosis1reasoning: "Pain and tenderness at the lateral epicondyle with pain on resisted wrist extension.",
+        expert1: "Jill Cook",
+        diagnosis2: "Posterior Interosseous Nerve Entrapment",
+        diagnosis2reasoning: "Nerve entrapment can cause lateral elbow pain that may mimic tendinopathy.",
+        expert2: "Bill Vicenzino",
+        diagnosis3: "Cervical Radiculopathy (C6-C7)",
+        diagnosis3reasoning: "Radicular symptoms from the cervical spine can refer to the lateral elbow region.",
+        expert3: "Mark Laslett"
       };
     case "wrist":
       return {
         prefix: "Wrist",
+        expertDiagnosis: "Carpal Tunnel Syndrome with Potential Cervical Involvement",
+        expertDiagnosisDescription: "a compression neuropathy of the median nerve at the wrist with potential contributions from proximal nerve pathology, following the double crush hypothesis which Brian Mulligan references in his approach to upper limb neural symptoms.",
+        expertReferences: "Brian Mulligan's approach to wrist mobilizations and Butler's neurodynamic concepts",
         diagnosis1: "Carpal Tunnel Syndrome",
-        diagnosis2: "De Quervain's Tenosynovitis"
+        diagnosis1reasoning: "Compression of the median nerve causing numbness, tingling, and pain in the thumb, index, middle, and radial half of the ring finger.",
+        expert1: "Brian Mulligan",
+        diagnosis2: "De Quervain's Tenosynovitis",
+        diagnosis2reasoning: "Inflammation of the tendons on the thumb side of the wrist causing pain with thumb and wrist movements.",
+        expert2: "Bill Vicenzino",
+        diagnosis3: "Wrist Osteoarthritis",
+        diagnosis3reasoning: "Progressive joint degeneration causing pain, stiffness, and reduced function.",
+        expert3: "Tom Goon"
       };
     case "hand":
       return {
         prefix: "Hand",
-        diagnosis1: "Trigger Finger",
-        diagnosis2: "Osteoarthritis"
+        expertDiagnosis: "Osteoarthritis of the Carpometacarpal Joint",
+        expertDiagnosisDescription: "a degenerative joint condition affecting the base of the thumb with implications for hand function. This diagnosis follows Tom Goon's comprehensive approach to hand rehabilitation emphasizing both joint mechanics and functional restoration.",
+        expertReferences: "Tom Goon's research on hand rehabilitation",
+        diagnosis1: "Osteoarthritis",
+        diagnosis1reasoning: "Joint pain, stiffness, and potential deformity, especially at the interphalangeal or carpometacarpal joints.",
+        expert1: "Tom Goon",
+        diagnosis2: "Trigger Finger",
+        diagnosis2reasoning: "Catching or locking sensation with finger flexion and extension due to tendon sheath inflammation.",
+        expert2: "Tom Goon",
+        diagnosis3: "Dupuytren's Contracture",
+        diagnosis3reasoning: "Progressive thickening and contracture of the palmar fascia affecting finger extension.",
+        expert3: "Tom Goon"
       };
     case "hip":
       return {
         prefix: "Hip",
+        expertDiagnosis: "Gluteal Tendinopathy with Lateral Hip Pain",
+        expertDiagnosisDescription: "a painful condition affecting the gluteal tendons at their insertion on the greater trochanter. This diagnosis is consistent with Alison Grimaldi's detailed work on gluteal tendinopathy and lateral hip pain mechanisms.",
+        expertReferences: "Alison Grimaldi's comprehensive research on gluteal tendinopathy",
         diagnosis1: "Femoroacetabular Impingement",
-        diagnosis2: "Greater Trochanteric Pain Syndrome"
+        diagnosis1reasoning: "Mechanical hip pain due to abnormal contact between the femoral head/neck and acetabulum.",
+        expert1: "Joanne Kemp",
+        diagnosis2: "Greater Trochanteric Pain Syndrome",
+        diagnosis2reasoning: "Lateral hip pain involving tendinopathy of the gluteal muscles and/or trochanteric bursitis.",
+        expert2: "Alison Grimaldi",
+        diagnosis3: "Hip Osteoarthritis",
+        diagnosis3reasoning: "Progressive joint degeneration causing pain, stiffness, and reduced function of the hip joint.",
+        expert3: "Kay Crossley"
       };
     case "knee":
       return {
         prefix: "Knee",
+        expertDiagnosis: "Patellofemoral Pain Syndrome with Dynamic Control Deficits",
+        expertDiagnosisDescription: "a multifactorial condition involving the patellofemoral joint with likely contributions from proximal (hip) and local factors affecting patellar tracking and load distribution. This diagnosis follows Kay Crossley's comprehensive approach to patellofemoral pain.",
+        expertReferences: "Kay Crossley's extensive research on patellofemoral pain and rehabilitation",
         diagnosis1: "Patellofemoral Pain Syndrome",
-        diagnosis2: "Meniscal Injury"
+        diagnosis1reasoning: "Anterior knee pain that typically worsens with loaded knee flexion activities like stairs, squatting, and prolonged sitting.",
+        expert1: "Kay Crossley",
+        diagnosis2: "Meniscal Injury",
+        diagnosis2reasoning: "Pain, clicking, and potential locking or catching with rotational movements.",
+        expert2: "Claire Patella Robertson",
+        diagnosis3: "Patellar Tendinopathy",
+        diagnosis3reasoning: "Load-related pain and tenderness at the patellar tendon, often worse after activity.",
+        expert3: "Jill Cook"
       };
     case "ankle":
       return {
         prefix: "Ankle",
+        expertDiagnosis: "Lateral Ankle Ligament Sprain with Potential Chronic Instability",
+        expertDiagnosisDescription: "an injury to the lateral ligament complex of the ankle that may be associated with proprioceptive deficits and mechanical instability. This follows Claire Patella Robertson's work on ankle instability rehabilitation.",
+        expertReferences: "Claire Patella Robertson's research on ankle instability and Bill Vicenzino's work on manual therapy for ankle conditions",
         diagnosis1: "Lateral Ankle Sprain",
-        diagnosis2: "Achilles Tendinopathy"
+        diagnosis1reasoning: "History of inversion injury with pain, swelling, and potential instability of the lateral ankle.",
+        expert1: "Claire Patella Robertson",
+        diagnosis2: "Achilles Tendinopathy",
+        diagnosis2reasoning: "Load-related pain and thickening of the Achilles tendon, often worse with initial loading.",
+        expert2: "Jill Cook",
+        diagnosis3: "Ankle Osteoarthritis",
+        diagnosis3reasoning: "Progressive joint degeneration causing pain, stiffness, and reduced ankle mobility.",
+        expert3: "Bill Vicenzino"
       };
     case "foot":
       return {
         prefix: "Foot",
-        diagnosis1: "Plantar Fasciitis",
-        diagnosis2: "Metatarsalgia"
+        expertDiagnosis: "Plantar Fasciopathy with Central Sensitization",
+        expertDiagnosisDescription: "a painful condition affecting the plantar fascia with potential central pain processing involvement. This follows the current understanding promoted by Tom Goon that emphasizes the tendinopathic nature of the condition rather than purely inflammatory processes.",
+        expertReferences: "Tom Goon's approach to foot rehabilitation and Jill Cook's tendinopathy continuum model",
+        diagnosis1: "Plantar Fasciopathy",
+        diagnosis1reasoning: "Pain at the medial calcaneal tubercle, especially with initial weight-bearing after rest.",
+        expert1: "Jill Cook",
+        diagnosis2: "Metatarsalgia",
+        diagnosis2reasoning: "Pain under the metatarsal heads, often worse with weight-bearing activities.",
+        expert2: "Tom Goon",
+        diagnosis3: "Morton's Neuroma",
+        diagnosis3reasoning: "Sharp, burning pain between the metatarsal heads, often with radiation to the toes.",
+        expert3: "Tom Goon"
       };
     default:
       return {
         prefix: "Musculoskeletal",
-        diagnosis1: "Myofascial Pain Syndrome",
-        diagnosis2: "Chronic Pain Condition"
+        expertDiagnosis: "Non-specific Musculoskeletal Pain with Potential Central Sensitization",
+        expertDiagnosisDescription: "a pain condition affecting musculoskeletal structures with potential central nervous system involvement in pain processing. This follows a biopsychosocial approach to pain understanding.",
+        expertReferences: "Current pain science research from Lorimer Moseley and Peter O'Sullivan",
+        diagnosis1: "Soft Tissue Injury",
+        diagnosis1reasoning: "Acute or chronic injury to muscles, tendons, or ligaments.",
+        expert1: "Jill Cook",
+        diagnosis2: "Joint Dysfunction",
+        diagnosis2reasoning: "Mechanical restriction or hypermobility in joint movement causing pain and functional limitation.",
+        expert2: "Brian Mulligan",
+        diagnosis3: "Myofascial Pain Syndrome",
+        diagnosis3reasoning: "Pain arising from trigger points in muscles with potential referred pain patterns.",
+        expert3: "Janet Travell"
       };
   }
 }

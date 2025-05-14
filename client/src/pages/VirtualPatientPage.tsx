@@ -1,77 +1,102 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Helmet } from "react-helmet";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
 import VirtualPatientForm from "@/components/virtualPatient/VirtualPatientForm";
 import VirtualPatientList from "@/components/virtualPatient/VirtualPatientList";
 import VirtualPatientDetail from "@/components/virtualPatient/VirtualPatientDetail";
+import { useAuth } from "@/hooks/use-auth";
+import { Plus, List } from "lucide-react";
+
+enum VirtualPatientView {
+  LIST = "list",
+  CREATE = "create",
+  DETAIL = "detail"
+}
 
 export default function VirtualPatientPage() {
+  const { user } = useAuth();
+  const [currentView, setCurrentView] = useState<VirtualPatientView>(VirtualPatientView.LIST);
   const [selectedPatientId, setSelectedPatientId] = useState<number | null>(null);
-  const [activeTab, setActiveTab] = useState<string>("list");
-
-  const handlePatientSelect = (id: number) => {
-    setSelectedPatientId(id);
-    setActiveTab("detail");
-  };
-
-  const handleCreateNew = () => {
-    setSelectedPatientId(null);
-    setActiveTab("create");
-  };
-
-  const handleBackToList = () => {
-    setActiveTab("list");
-  };
 
   const handlePatientCreated = (patientId: number) => {
     setSelectedPatientId(patientId);
-    setActiveTab("detail");
+    setCurrentView(VirtualPatientView.DETAIL);
+  };
+
+  const handlePatientSelected = (patientId: number) => {
+    setSelectedPatientId(patientId);
+    setCurrentView(VirtualPatientView.DETAIL);
+  };
+
+  const handleBackToList = () => {
+    setCurrentView(VirtualPatientView.LIST);
+    setSelectedPatientId(null);
   };
 
   return (
     <div className="container py-8">
       <Helmet>
-        <title>Virtual Patient | PhysioHub</title>
-        <meta name="description" content="Create virtual patients and receive AI-generated diagnoses, treatment options, and relevant research recommendations." />
+        <title>Virtual Patients | PhysioConversation</title>
+        <meta name="description" content="Create and analyze virtual patient cases to practice your clinical reasoning skills and get AI-generated diagnoses and treatment recommendations." />
       </Helmet>
-      
-      <h1 className="text-3xl font-bold mb-6 text-center">Virtual Patient</h1>
-      <p className="text-center mb-8 max-w-3xl mx-auto">
-        Create a virtual patient by entering their demographic information, signs, symptoms, and medical history. 
-        Our AI will analyze the case and provide potential diagnoses, treatment options, and relevant research.
-      </p>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full max-w-md mx-auto grid-cols-3 mb-8">
-          <TabsTrigger value="list">Patient List</TabsTrigger>
-          <TabsTrigger value="create">Create New</TabsTrigger>
-          <TabsTrigger value="detail" disabled={!selectedPatientId}>View Patient</TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value="list" className="mt-0">
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Virtual Patients</h1>
+          <p className="text-muted-foreground mt-1">
+            Create virtual patient cases and receive AI-powered diagnosis and treatment recommendations
+          </p>
+        </div>
+
+        {currentView !== VirtualPatientView.LIST && (
+          <Button 
+            variant="outline" 
+            onClick={handleBackToList}
+            size="sm"
+            className="flex items-center"
+          >
+            <List className="h-4 w-4 mr-2" />
+            Back to List
+          </Button>
+        )}
+
+        {currentView === VirtualPatientView.LIST && (
+          <Button 
+            onClick={() => setCurrentView(VirtualPatientView.CREATE)}
+            size="sm"
+            className="flex items-center"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Create New Patient
+          </Button>
+        )}
+      </div>
+
+      <Separator className="my-6" />
+
+      <div className="mt-4">
+        {currentView === VirtualPatientView.LIST && (
           <VirtualPatientList 
-            onPatientSelect={handlePatientSelect} 
-            onCreateNew={handleCreateNew}
+            onPatientSelect={handlePatientSelected}
+            onCreateNew={() => setCurrentView(VirtualPatientView.CREATE)}
           />
-        </TabsContent>
-        
-        <TabsContent value="create" className="mt-0">
+        )}
+
+        {currentView === VirtualPatientView.CREATE && (
           <VirtualPatientForm 
-            onPatientCreated={handlePatientCreated} 
+            onPatientCreated={handlePatientCreated}
             onCancel={handleBackToList}
           />
-        </TabsContent>
-        
-        <TabsContent value="detail" className="mt-0">
-          {selectedPatientId && (
-            <VirtualPatientDetail 
-              patientId={selectedPatientId} 
-              onBackToList={handleBackToList}
-            />
-          )}
-        </TabsContent>
-      </Tabs>
+        )}
+
+        {currentView === VirtualPatientView.DETAIL && selectedPatientId && (
+          <VirtualPatientDetail 
+            patientId={selectedPatientId}
+            onBackToList={handleBackToList}
+          />
+        )}
+      </div>
     </div>
   );
 }

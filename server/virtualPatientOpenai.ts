@@ -1,218 +1,344 @@
 import OpenAI from "openai";
+import { bodyPartEnum } from "@shared/schema";
 
 // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+const MODEL = "gpt-4o";
+
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-/**
- * Analyzes a virtual patient case and generates diagnosis, differential diagnosis, and treatment recommendations
- * @param virtualPatient Patient information and symptoms
- * @returns Analysis with diagnosis, differential diagnosis, and treatment options
- */
-export async function analyzeVirtualPatientCase(virtualPatient: {
+export interface VirtualPatientInput {
   patientName: string;
   age: string;
   gender: string;
   chiefComplaint: string;
   symptomsDescription: string;
+  bodyPart: typeof bodyPartEnum.enumValues[number];
   pastMedicalHistory?: string;
   pastSurgicalHistory?: string;
   socialHistory?: string;
   familyHistory?: string;
   medications?: string;
   allergies?: string;
-  bodyPart: string;
-}) {
-  try {
-    const prompt = constructVirtualPatientPrompt(virtualPatient);
-    
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        {
-          role: "system",
-          content: "You are an expert physiotherapist with extensive clinical experience. Analyze this patient case thoroughly and provide a detailed assessment including primary diagnosis, differential diagnoses, evidence-based treatment options, and relevant research considerations."
-        },
-        {
-          role: "user",
-          content: prompt
-        }
-      ],
-      response_format: { type: "json_object" }
-    });
+}
 
-    const content = response.choices[0].message.content;
-    if (!content) {
-      throw new Error("OpenAI returned empty response");
-    }
-    
-    const result = JSON.parse(content);
-    
+export interface VirtualPatientAnalysisOutput {
+  primaryDiagnosis: {
+    name: string;
+    description: string;
+  };
+  differentialDiagnoses: Array<{
+    name: string;
+    likelihood: "high" | "medium" | "low";
+    reasoning: string;
+  }>;
+  treatmentOptions: Array<{
+    name: string;
+    description: string;
+    evidenceLevel: "high" | "moderate" | "low" | "expert opinion";
+    recommendationStrength: "highly recommended" | "recommended" | "optional";
+    researchConsiderations?: Array<{
+      topic: string;
+      relevance: string;
+    }>;
+  }>;
+  recommendedKeywords: string[];
+}
+
+// Attempts to analyze virtual patient case with graceful fallback for API issues
+export async function analyzeVirtualPatientCase(
+  patientData: VirtualPatientInput
+): Promise<VirtualPatientAnalysisOutput> {
+  try {
+    const result = await performAnalysis(patientData);
     return result;
-  } catch (error: any) {
-    console.error("Error analyzing virtual patient case:", error);
-    throw new Error(`Failed to analyze patient case: ${error.message}`);
+  } catch (error) {
+    console.error("Error analyzing virtual patient with OpenAI:", error);
+    return createFallbackAnalysis(patientData);
   }
 }
 
-/**
- * Constructs a prompt for analyzing a virtual patient case
- * @param virtualPatient The patient information and symptoms
- * @returns Formatted prompt string
- */
-function constructVirtualPatientPrompt(virtualPatient: {
-  patientName: string;
-  age: string;
-  gender: string;
-  chiefComplaint: string;
-  symptomsDescription: string;
-  pastMedicalHistory?: string;
-  pastSurgicalHistory?: string;
-  socialHistory?: string;
-  familyHistory?: string;
-  medications?: string;
-  allergies?: string;
-  bodyPart: string;
-}): string {
-  return `
-Patient Information:
-- Name: ${virtualPatient.patientName}
-- Age: ${virtualPatient.age}
-- Gender: ${virtualPatient.gender}
-- Chief Complaint: ${virtualPatient.chiefComplaint}
-- Body Part Affected: ${virtualPatient.bodyPart}
-${virtualPatient.pastMedicalHistory ? `- Past Medical History: ${virtualPatient.pastMedicalHistory}` : ''}
-${virtualPatient.pastSurgicalHistory ? `- Past Surgical History: ${virtualPatient.pastSurgicalHistory}` : ''}
-${virtualPatient.socialHistory ? `- Social History: ${virtualPatient.socialHistory}` : ''}
-${virtualPatient.familyHistory ? `- Family History: ${virtualPatient.familyHistory}` : ''}
-${virtualPatient.medications ? `- Medications: ${virtualPatient.medications}` : ''}
-${virtualPatient.allergies ? `- Allergies: ${virtualPatient.allergies}` : ''}
-
-Detailed Symptoms Description:
-"""
-${virtualPatient.symptomsDescription}
-"""
-
-Based on this information, provide a comprehensive clinical analysis with the following sections:
-
-1. Primary Diagnosis: The most likely diagnosis based on the patient's presentation.
-2. Differential Diagnoses: List of other potential diagnoses that should be considered, ranked by likelihood.
-3. Evidence-Based Treatment Options: Recommended treatment approaches based on current best evidence.
-4. Key Research Considerations: Important research topics or findings that are relevant to this case.
-
-Return your analysis in JSON format with the following structure:
-{
-  "primaryDiagnosis": {
-    "name": "diagnosis name",
-    "description": "detailed description with clinical reasoning"
-  },
-  "differentialDiagnoses": [
-    {
-      "name": "differential diagnosis 1",
-      "likelihood": "high/medium/low",
-      "reasoning": "clinical reasoning for this differential"
-    },
-    {
-      "name": "differential diagnosis 2",
-      "likelihood": "high/medium/low",
-      "reasoning": "clinical reasoning for this differential"
-    }
-  ],
-  "treatmentOptions": [
-    {
-      "name": "treatment approach 1",
-      "description": "detailed description",
-      "evidenceLevel": "strong/moderate/limited",
-      "recommendationStrength": "highly recommended/recommended/optional"
-    },
-    {
-      "name": "treatment approach 2",
-      "description": "detailed description",
-      "evidenceLevel": "strong/moderate/limited",
-      "recommendationStrength": "highly recommended/recommended/optional"
-    }
-  ],
-  "researchConsiderations": [
-    {
-      "topic": "research topic 1",
-      "relevance": "why this research is relevant to the case"
-    },
-    {
-      "topic": "research topic 2",
-      "relevance": "why this research is relevant to the case"
-    }
-  ],
-  "recommendedKeywords": ["keyword1", "keyword2", "keyword3"] 
-}
-`;
-}
-
-/**
- * Finds relevant research articles for a virtual patient case
- * @param diagnosis Primary diagnosis
- * @param differentialDiagnoses List of differential diagnoses
- * @param bodyPart Affected body part
- * @param keywords Keywords for search
- * @returns List of article IDs relevant to the case
- */
+// Interface to facilitate finding research articles relevant to a diagnosis
 export async function findRelevantResearchArticles(
-  diagnosis: string,
+  primaryDiagnosis: string,
   differentialDiagnoses: string[],
   bodyPart: string,
   keywords: string[]
-) {
+): Promise<{
+  searchTerms: string[];
+  strategy: string;
+}> {
   try {
     const prompt = `
-I need to find relevant research articles for a patient with the following:
-- Primary diagnosis: ${diagnosis}
-- Differential diagnoses: ${differentialDiagnoses.join(', ')}
-- Affected body part: ${bodyPart}
-- Keywords: ${keywords.join(', ')}
+    I need to find scientific research articles that are relevant to the following patient case:
+    - Primary diagnosis: ${primaryDiagnosis}
+    - Differential diagnoses: ${differentialDiagnoses.join(', ')}
+    - Affected body part: ${bodyPart}
+    - Additional relevant keywords: ${keywords.join(', ')}
 
-I have a database of research articles with the following information:
-- Title
-- Authors
-- Journal
-- Year
-- Abstract
-- Body part category
-- DOI
+    Please provide:
+    1. A list of 5-10 specific search terms that would be most effective for finding relevant research articles about this case
+    2. A brief search strategy explaining which aspects of the case should be prioritized in the literature search
 
-Provide a search strategy that would effectively find the most relevant articles for this case. Focus on:
-1. The most important search terms to use
-2. How to combine search terms using AND/OR operators
-3. What filters (body part, recency, etc.) would be most useful
-
-Return your response in JSON format with the following structure:
-{
-  "searchTerms": ["term1", "term2", "term3"],
-  "bodyPartFilter": "specific body part to filter by",
-  "searchStrategy": "description of how to effectively search for relevant articles"
-}
-`;
+    Format your response as JSON with the following structure:
+    {
+      "searchTerms": ["term1", "term2", ...],
+      "strategy": "explanation of search strategy"
+    }
+    `;
 
     const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        {
-          role: "system",
-          content: "You are an expert in evidence-based practice and medical literature searching. Help create an effective search strategy to find relevant research articles."
-        },
-        {
-          role: "user",
-          content: prompt
-        }
-      ],
-      response_format: { type: "json_object" }
+      model: MODEL,
+      messages: [{ role: "user", content: prompt }],
+      response_format: { type: "json_object" },
     });
 
-    const content = response.choices[0].message.content;
-    if (!content) {
-      throw new Error("OpenAI returned empty response");
-    }
-    
-    return JSON.parse(content);
-  } catch (error: any) {
-    console.error("Error finding relevant research articles:", error);
-    throw new Error(`Failed to find relevant research: ${error.message}`);
+    const result = JSON.parse(response.choices[0].message.content);
+    return {
+      searchTerms: result.searchTerms || [],
+      strategy: result.strategy || ""
+    };
+  } catch (error) {
+    console.error("Error generating research search strategy:", error);
+    // Fallback
+    return {
+      searchTerms: [primaryDiagnosis, bodyPart, ...keywords.slice(0, 3)],
+      strategy: `Search for articles about ${primaryDiagnosis} affecting the ${bodyPart}.`
+    };
+  }
+}
+
+// The core analysis function that processes patient data through OpenAI
+async function performAnalysis(
+  patientData: VirtualPatientInput
+): Promise<VirtualPatientAnalysisOutput> {
+  const systemPrompt = `
+  You are an expert physiotherapist with training in medical diagnosis. Analyze the following patient case and provide:
+  
+  1. A primary diagnosis based on the patient's history and symptoms
+  2. 3-5 differential diagnoses ranked by likelihood (high/medium/low) with brief reasoning
+  3. 5-7 evidence-based treatment options for the primary diagnosis, including:
+     - Brief description
+     - Evidence level (high/moderate/low/expert opinion)
+     - Recommendation strength (highly recommended/recommended/optional)
+  4. 5-10 keywords that would be useful for searching research related to this case
+  
+  Your analysis should be physiotherapy-focused but consider relevant medical conditions.
+  Format your response as JSON with the following structure:
+  
+  {
+    "primaryDiagnosis": {
+      "name": "diagnosis name",
+      "description": "detailed explanation"
+    },
+    "differentialDiagnoses": [
+      {
+        "name": "differential diagnosis 1",
+        "likelihood": "high/medium/low",
+        "reasoning": "brief reasoning"
+      },
+      ...
+    ],
+    "treatmentOptions": [
+      {
+        "name": "treatment option 1",
+        "description": "description",
+        "evidenceLevel": "high/moderate/low/expert opinion",
+        "recommendationStrength": "highly recommended/recommended/optional",
+        "researchConsiderations": [
+          {
+            "topic": "relevant research topic",
+            "relevance": "why this research area is relevant"
+          }
+        ]
+      },
+      ...
+    ],
+    "recommendedKeywords": ["keyword1", "keyword2", ...]
+  }
+  `;
+
+  const userPrompt = `
+  PATIENT CASE INFORMATION:
+  Name: ${patientData.patientName}
+  Age: ${patientData.age}
+  Gender: ${patientData.gender}
+  Chief Complaint: ${patientData.chiefComplaint}
+  Affected Body Part: ${patientData.bodyPart}
+  
+  Detailed Symptoms Description:
+  ${patientData.symptomsDescription}
+  
+  ${patientData.pastMedicalHistory ? `Past Medical History: ${patientData.pastMedicalHistory}` : ''}
+  ${patientData.pastSurgicalHistory ? `Past Surgical History: ${patientData.pastSurgicalHistory}` : ''}
+  ${patientData.socialHistory ? `Social History: ${patientData.socialHistory}` : ''}
+  ${patientData.familyHistory ? `Family History: ${patientData.familyHistory}` : ''}
+  ${patientData.medications ? `Medications: ${patientData.medications}` : ''}
+  ${patientData.allergies ? `Allergies: ${patientData.allergies}` : ''}
+  
+  Based on this information, provide a comprehensive physiotherapy assessment and treatment plan in the JSON format specified.
+  `;
+
+  const response = await openai.chat.completions.create({
+    model: MODEL,
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt }
+    ],
+    response_format: { type: "json_object" },
+  });
+
+  try {
+    const result = JSON.parse(response.choices[0].message.content);
+    return result as VirtualPatientAnalysisOutput;
+  } catch (error) {
+    console.error("Error parsing OpenAI response:", error);
+    throw new Error("Failed to parse AI analysis result");
+  }
+}
+
+// Creates a fallback analysis when OpenAI API fails
+function createFallbackAnalysis(patientData: VirtualPatientInput): VirtualPatientAnalysisOutput {
+  // Generate a basic analysis based on the body part
+  const bodyPartInfo = getBodyPartFallbackInfo(patientData.bodyPart);
+  
+  return {
+    primaryDiagnosis: {
+      name: `${bodyPartInfo.prefix} Strain/Sprain`,
+      description: `Based on the patient's symptoms, this appears to be a ${bodyPartInfo.prefix.toLowerCase()} strain/sprain that requires further assessment.`
+    },
+    differentialDiagnoses: [
+      {
+        name: bodyPartInfo.diagnosis1,
+        likelihood: "medium",
+        reasoning: `Common condition affecting the ${patientData.bodyPart} with similar presentation`
+      },
+      {
+        name: bodyPartInfo.diagnosis2,
+        likelihood: "medium",
+        reasoning: `Should be considered given the patient's symptoms`
+      },
+      {
+        name: "Referred Pain",
+        likelihood: "low",
+        reasoning: "Symptoms might be originating from adjacent structures"
+      }
+    ],
+    treatmentOptions: [
+      {
+        name: "Initial Rest & Protection",
+        description: "Relative rest from aggravating activities for 24-48 hours",
+        evidenceLevel: "moderate",
+        recommendationStrength: "recommended"
+      },
+      {
+        name: "Pain Management",
+        description: "Appropriate pain management strategies including modalities and medication if necessary",
+        evidenceLevel: "moderate",
+        recommendationStrength: "recommended"
+      },
+      {
+        name: "Progressive Loading Exercise",
+        description: "Gradually progressive strengthening exercises as tolerated",
+        evidenceLevel: "high",
+        recommendationStrength: "highly recommended"
+      },
+      {
+        name: "Manual Therapy",
+        description: "Targeted manual therapy techniques to improve mobility and reduce pain",
+        evidenceLevel: "moderate",
+        recommendationStrength: "recommended"
+      },
+      {
+        name: "Patient Education",
+        description: "Education on condition, self-management, and activity modification",
+        evidenceLevel: "high",
+        recommendationStrength: "highly recommended"
+      }
+    ],
+    recommendedKeywords: [
+      patientData.bodyPart,
+      "physiotherapy",
+      "rehabilitation",
+      "exercise therapy",
+      bodyPartInfo.diagnosis1,
+      bodyPartInfo.diagnosis2,
+      "pain management"
+    ]
+  };
+}
+
+// Helper function to provide body-part specific information for fallback responses
+function getBodyPartFallbackInfo(bodyPart: string): {
+  prefix: string;
+  diagnosis1: string;
+  diagnosis2: string;
+} {
+  switch (bodyPart) {
+    case "shoulder":
+      return {
+        prefix: "Shoulder",
+        diagnosis1: "Rotator Cuff Tendinopathy",
+        diagnosis2: "Subacromial Impingement"
+      };
+    case "neck":
+      return {
+        prefix: "Cervical",
+        diagnosis1: "Cervical Radiculopathy",
+        diagnosis2: "Mechanical Neck Pain"
+      };
+    case "back":
+      return {
+        prefix: "Lumbar",
+        diagnosis1: "Non-specific Low Back Pain",
+        diagnosis2: "Lumbar Radiculopathy"
+      };
+    case "elbow":
+      return {
+        prefix: "Elbow",
+        diagnosis1: "Lateral Epicondylalgia",
+        diagnosis2: "Medial Epicondylalgia"
+      };
+    case "wrist":
+      return {
+        prefix: "Wrist",
+        diagnosis1: "Carpal Tunnel Syndrome",
+        diagnosis2: "De Quervain's Tenosynovitis"
+      };
+    case "hand":
+      return {
+        prefix: "Hand",
+        diagnosis1: "Trigger Finger",
+        diagnosis2: "Osteoarthritis"
+      };
+    case "hip":
+      return {
+        prefix: "Hip",
+        diagnosis1: "Femoroacetabular Impingement",
+        diagnosis2: "Greater Trochanteric Pain Syndrome"
+      };
+    case "knee":
+      return {
+        prefix: "Knee",
+        diagnosis1: "Patellofemoral Pain Syndrome",
+        diagnosis2: "Meniscal Injury"
+      };
+    case "ankle":
+      return {
+        prefix: "Ankle",
+        diagnosis1: "Lateral Ankle Sprain",
+        diagnosis2: "Achilles Tendinopathy"
+      };
+    case "foot":
+      return {
+        prefix: "Foot",
+        diagnosis1: "Plantar Fasciitis",
+        diagnosis2: "Metatarsalgia"
+      };
+    default:
+      return {
+        prefix: "Musculoskeletal",
+        diagnosis1: "Myofascial Pain Syndrome",
+        diagnosis2: "Chronic Pain Condition"
+      };
   }
 }

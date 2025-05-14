@@ -137,7 +137,7 @@ export default function VirtualPatientDetail({ patientId, onBackToList }: Virtua
       </CardHeader>
       <CardContent className="p-0">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="info" className="flex items-center">
               <User className="h-4 w-4 mr-2" />
               Patient Info
@@ -145,6 +145,14 @@ export default function VirtualPatientDetail({ patientId, onBackToList }: Virtua
             <TabsTrigger value="diagnosis" disabled={!hasDiagnosis} className="flex items-center">
               <Brain className="h-4 w-4 mr-2" />
               Diagnosis
+            </TabsTrigger>
+            <TabsTrigger value="assessment" disabled={!hasDiagnosis} className="flex items-center">
+              <Clipboard className="h-4 w-4 mr-2" />
+              Assessment Tests
+            </TabsTrigger>
+            <TabsTrigger value="findings" disabled={!hasDiagnosis} className="flex items-center">
+              <ClipboardCheck className="h-4 w-4 mr-2" />
+              Objective Findings
             </TabsTrigger>
             <TabsTrigger value="research" disabled={!hasDiagnosis} className="flex items-center">
               <BookOpen className="h-4 w-4 mr-2" />
@@ -535,6 +543,270 @@ export default function VirtualPatientDetail({ patientId, onBackToList }: Virtua
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* Assessment Tests Tab */}
+          <TabsContent value="assessment" className="p-6">
+            {!hasDiagnosis ? (
+              <div className="text-center p-8">
+                <Clipboard className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium mb-2">No assessment tests available</h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  Analyze the patient data to see recommended assessment tests.
+                </p>
+                <Button 
+                  onClick={() => analyzePatientMutation.mutate()}
+                  disabled={analyzePatientMutation.isPending}
+                >
+                  {analyzePatientMutation.isPending ? (
+                    <>
+                      <Activity className="mr-2 h-4 w-4 animate-pulse" />
+                      Analyzing...
+                    </>
+                  ) : (
+                    <>
+                      <Activity className="mr-2 h-4 w-4" />
+                      Analyze Patient Data
+                    </>
+                  )}
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <h3 className="text-lg font-semibold mb-3 flex items-center">
+                  <Clipboard className="h-5 w-5 mr-2 text-blue-500" />
+                  Recommended Assessment Tests
+                </h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  The following clinical tests can help confirm the diagnosis, determine the extent of injury, and identify related issues.
+                </p>
+                
+                <div className="space-y-4">
+                  {patient.differentialDiagnosis?.assessmentTests?.map((test: any, idx: number) => (
+                    <div key={idx} className="border rounded-lg p-4 bg-white shadow-sm">
+                      <div className="flex justify-between items-start mb-2">
+                        <h4 className="text-md font-semibold">{test.name}</h4>
+                        <Badge variant={
+                          test.relevance === "primary" ? "default" : 
+                          test.relevance === "secondary" ? "secondary" : 
+                          "outline"
+                        }>
+                          {test.relevance} test
+                        </Badge>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                        <div>
+                          <h5 className="text-sm font-medium mb-1">Purpose</h5>
+                          <p className="text-sm">{test.purpose}</p>
+                        </div>
+                        
+                        <div>
+                          <h5 className="text-sm font-medium mb-1">Procedure</h5>
+                          <p className="text-sm">{test.procedure}</p>
+                        </div>
+                        
+                        <div>
+                          <h5 className="text-sm font-medium mb-1">Positive Findings</h5>
+                          <p className="text-sm">{test.positiveFindings}</p>
+                        </div>
+                        
+                        <div>
+                          <h5 className="text-sm font-medium mb-1">Negative Findings</h5>
+                          <p className="text-sm">{test.negativeFindings}</p>
+                        </div>
+                      </div>
+                      
+                      <div className="mt-4 pt-3 border-t">
+                        <div className="flex flex-wrap gap-3 mb-2">
+                          {test.sensitivity && (
+                            <Badge variant="outline" className="bg-blue-50">
+                              Sensitivity: {test.sensitivity}
+                            </Badge>
+                          )}
+                          {test.specificity && (
+                            <Badge variant="outline" className="bg-green-50">
+                              Specificity: {test.specificity}
+                            </Badge>
+                          )}
+                        </div>
+                        
+                        <div className="mt-3">
+                          <h5 className="text-sm font-medium mb-1">Research Support</h5>
+                          <p className="text-sm">{test.supportingResearch}</p>
+                        </div>
+                        
+                        <div className="mt-3">
+                          <h5 className="text-sm font-medium mb-1">Expert Recommendation</h5>
+                          <p className="text-sm">{test.expertRecommendation}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {(!patient.differentialDiagnosis?.assessmentTests || patient.differentialDiagnosis.assessmentTests.length === 0) && (
+                    <div className="text-center p-4 border rounded-lg bg-gray-50">
+                      <p className="text-sm text-gray-500">No specific assessment tests available for this case.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </TabsContent>
+          
+          {/* Objective Findings Tab */}
+          <TabsContent value="findings" className="p-6">
+            {!hasDiagnosis ? (
+              <div className="text-center p-8">
+                <ClipboardCheck className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium mb-2">No objective findings available</h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  Analyze the patient data to see expected objective findings.
+                </p>
+                <Button 
+                  onClick={() => analyzePatientMutation.mutate()}
+                  disabled={analyzePatientMutation.isPending}
+                >
+                  {analyzePatientMutation.isPending ? (
+                    <>
+                      <Activity className="mr-2 h-4 w-4 animate-pulse" />
+                      Analyzing...
+                    </>
+                  ) : (
+                    <>
+                      <Activity className="mr-2 h-4 w-4" />
+                      Analyze Patient Data
+                    </>
+                  )}
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <h3 className="text-lg font-semibold mb-3 flex items-center">
+                  <ClipboardCheck className="h-5 w-5 mr-2 text-green-500" />
+                  Expected Objective Findings
+                </h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  Expected clinical presentation based on the patient's condition. These findings would help confirm the diagnosis and inform treatment planning.
+                </p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  {/* Range of Motion */}
+                  <div className="border rounded-lg p-4 bg-white shadow-sm">
+                    <h4 className="text-md font-semibold mb-3 flex items-center">
+                      <ArrowRight className="h-4 w-4 mr-2 text-blue-500" />
+                      Range of Motion
+                    </h4>
+                    {patient.differentialDiagnosis?.objectiveFindings?.rangeOfMotion?.map((rom: any, idx: number) => (
+                      <div key={idx} className="mb-3 pb-3 border-b last:border-0">
+                        <div className="flex justify-between items-start">
+                          <h5 className="text-sm font-medium">{rom.movement}</h5>
+                        </div>
+                        <p className="text-sm mt-1"><strong>Finding:</strong> {rom.finding}</p>
+                        <p className="text-xs mt-1 text-gray-600"><strong>Significance:</strong> {rom.significance}</p>
+                      </div>
+                    ))}
+                    {(!patient.differentialDiagnosis?.objectiveFindings?.rangeOfMotion || 
+                      patient.differentialDiagnosis.objectiveFindings.rangeOfMotion.length === 0) && (
+                      <p className="text-sm text-gray-500">No range of motion findings specified.</p>
+                    )}
+                  </div>
+                  
+                  {/* Strength */}
+                  <div className="border rounded-lg p-4 bg-white shadow-sm">
+                    <h4 className="text-md font-semibold mb-3 flex items-center">
+                      <ThumbsUp className="h-4 w-4 mr-2 text-amber-500" />
+                      Strength
+                    </h4>
+                    {patient.differentialDiagnosis?.objectiveFindings?.strength?.map((strength: any, idx: number) => (
+                      <div key={idx} className="mb-3 pb-3 border-b last:border-0">
+                        <div className="flex justify-between items-start">
+                          <h5 className="text-sm font-medium">{strength.muscleGroup}</h5>
+                          <Badge variant="outline">{strength.gradingScale}</Badge>
+                        </div>
+                        <p className="text-sm mt-1"><strong>Finding:</strong> {strength.finding}</p>
+                        <p className="text-xs mt-1 text-gray-600"><strong>Significance:</strong> {strength.significance}</p>
+                      </div>
+                    ))}
+                    {(!patient.differentialDiagnosis?.objectiveFindings?.strength || 
+                      patient.differentialDiagnosis.objectiveFindings.strength.length === 0) && (
+                      <p className="text-sm text-gray-500">No strength findings specified.</p>
+                    )}
+                  </div>
+                  
+                  {/* Neurological Signs */}
+                  <div className="border rounded-lg p-4 bg-white shadow-sm">
+                    <h4 className="text-md font-semibold mb-3 flex items-center">
+                      <Lightbulb className="h-4 w-4 mr-2 text-yellow-500" />
+                      Neurological Signs
+                    </h4>
+                    {patient.differentialDiagnosis?.objectiveFindings?.neurologicalSigns?.map((neuro: any, idx: number) => (
+                      <div key={idx} className="mb-3 pb-3 border-b last:border-0">
+                        <h5 className="text-sm font-medium">{neuro.test}</h5>
+                        <p className="text-sm mt-1"><strong>Finding:</strong> {neuro.finding}</p>
+                        <p className="text-xs mt-1 text-gray-600"><strong>Significance:</strong> {neuro.significance}</p>
+                      </div>
+                    ))}
+                    {(!patient.differentialDiagnosis?.objectiveFindings?.neurologicalSigns || 
+                      patient.differentialDiagnosis.objectiveFindings.neurologicalSigns.length === 0) && (
+                      <p className="text-sm text-gray-500">No neurological findings specified.</p>
+                    )}
+                  </div>
+                  
+                  {/* Palpation Findings */}
+                  <div className="border rounded-lg p-4 bg-white shadow-sm">
+                    <h4 className="text-md font-semibold mb-3 flex items-center">
+                      <ThumbsDown className="h-4 w-4 mr-2 text-red-500" />
+                      Palpation Findings
+                    </h4>
+                    {patient.differentialDiagnosis?.objectiveFindings?.palpationFindings?.map((palp: any, idx: number) => (
+                      <div key={idx} className="mb-3 pb-3 border-b last:border-0">
+                        <h5 className="text-sm font-medium">{palp.structure}</h5>
+                        <p className="text-sm mt-1"><strong>Finding:</strong> {palp.finding}</p>
+                        <p className="text-xs mt-1 text-gray-600"><strong>Significance:</strong> {palp.significance}</p>
+                      </div>
+                    ))}
+                    {(!patient.differentialDiagnosis?.objectiveFindings?.palpationFindings || 
+                      patient.differentialDiagnosis.objectiveFindings.palpationFindings.length === 0) && (
+                      <p className="text-sm text-gray-500">No palpation findings specified.</p>
+                    )}
+                  </div>
+                  
+                  {/* Functional Tests */}
+                  <div className="border rounded-lg p-4 bg-white shadow-sm">
+                    <h4 className="text-md font-semibold mb-3 flex items-center">
+                      <Activity className="h-4 w-4 mr-2 text-indigo-500" />
+                      Functional Tests
+                    </h4>
+                    {patient.differentialDiagnosis?.objectiveFindings?.functionalTests?.map((func: any, idx: number) => (
+                      <div key={idx} className="mb-3 pb-3 border-b last:border-0">
+                        <h5 className="text-sm font-medium">{func.test}</h5>
+                        <p className="text-sm mt-1"><strong>Finding:</strong> {func.finding}</p>
+                        <p className="text-xs mt-1 text-gray-600"><strong>Significance:</strong> {func.significance}</p>
+                      </div>
+                    ))}
+                    {(!patient.differentialDiagnosis?.objectiveFindings?.functionalTests || 
+                      patient.differentialDiagnosis.objectiveFindings.functionalTests.length === 0) && (
+                      <p className="text-sm text-gray-500">No functional test findings specified.</p>
+                    )}
+                  </div>
+                  
+                  {/* Additional Observations */}
+                  <div className="border rounded-lg p-4 bg-white shadow-sm md:col-span-2">
+                    <h4 className="text-md font-semibold mb-3">Additional Observations</h4>
+                    {patient.differentialDiagnosis?.objectiveFindings?.additionalObservations?.length > 0 ? (
+                      <ul className="list-disc list-inside space-y-1">
+                        {patient.differentialDiagnosis.objectiveFindings.additionalObservations.map((obs: string, idx: number) => (
+                          <li key={idx} className="text-sm">{obs}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-sm text-gray-500">No additional observations specified.</p>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
           </TabsContent>

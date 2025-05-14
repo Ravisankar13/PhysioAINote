@@ -29,7 +29,7 @@ const Header = () => {
     { href: "/research", label: "Research" },
     { href: "/exercises", label: "Exercise Library" },
     { href: "/manual-therapy", label: "Manual Therapy" },
-    { href: "/virtual-patient", label: "Virtual Patients" },
+    { href: "/virtual-patients", label: "Virtual Patients" },
     { href: "/membership", label: "Membership" },
   ];
 
@@ -131,10 +131,10 @@ const Header = () => {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem className="flex items-center" asChild>
-                    <Link href="/virtual-patient">
+                    <Link href="/virtual-patients">
                       <div className="flex items-center cursor-pointer w-full">
                         <Activity className="mr-2 h-4 w-4" />
-                        <span>Virtual Patient</span>
+                        <span>Virtual Patients</span>
                       </div>
                     </Link>
                   </DropdownMenuItem>

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Helmet } from 'react-helmet';
-import ExerciseList from '@/components/exercises/ExerciseList';
+import ExerciseList from '@/components/exercises/ExerciseListNew';
 
 export default function ExercisePage() {
   return (

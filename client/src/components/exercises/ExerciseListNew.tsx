@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Loader2, Filter, Plus, ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { Loader2, Filter, Plus, Search } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { useLocation } from 'wouter';
@@ -20,8 +19,7 @@ import {
   PaginationItem, 
   PaginationLink, 
   PaginationNext, 
-  PaginationPrevious,
-  PaginationEllipsis
+  PaginationPrevious
 } from '@/components/ui/pagination';
 
 // Exercise type matching database schema
@@ -40,6 +38,92 @@ interface Exercise {
   imageUrl: string | null;
   videoUrl: string | null;
   aiGenerated: boolean;
+}
+
+// Exercise card component
+function ExerciseCard({ exercise }: { exercise: Exercise }) {
+  return (
+    <Card className="h-full flex flex-col hover:shadow-md transition-shadow duration-300">
+      <CardHeader className="pb-3">
+        <div className="flex justify-between items-start gap-2">
+          <CardTitle className="text-lg line-clamp-2">{exercise.title}</CardTitle>
+          <Badge 
+            variant={
+              exercise.difficulty === 'beginner' ? 'outline' : 
+              exercise.difficulty === 'intermediate' ? 'secondary' : 
+              'default'
+            }
+            className="whitespace-nowrap"
+          >
+            {exercise.difficulty}
+          </Badge>
+        </div>
+        <CardDescription className="line-clamp-2 mt-1">{exercise.description}</CardDescription>
+        <div className="flex flex-wrap gap-1 mt-2">
+          <Badge variant="outline" className="capitalize">{exercise.bodyPart}</Badge>
+          {exercise.aiGenerated && <Badge variant="secondary">AI Generated</Badge>}
+        </div>
+      </CardHeader>
+      
+      <CardContent className="flex-grow py-2">
+        <Accordion type="single" collapsible className="w-full">
+          <AccordionItem value="instructions" className="border-b-0">
+            <AccordionTrigger className="py-2 text-sm hover:no-underline hover:text-primary">
+              <span className="underline underline-offset-4">Instructions</span>
+            </AccordionTrigger>
+            <AccordionContent>
+              <div className="whitespace-pre-wrap text-sm">{exercise.instructions}</div>
+            </AccordionContent>
+          </AccordionItem>
+          
+          <AccordionItem value="details" className="border-b-0">
+            <AccordionTrigger className="py-2 text-sm hover:no-underline hover:text-primary">
+              <span className="underline underline-offset-4">Target Muscles</span>
+            </AccordionTrigger>
+            <AccordionContent>
+              <div className="whitespace-pre-wrap text-sm">{exercise.targetMuscles}</div>
+            </AccordionContent>
+          </AccordionItem>
+          
+          {exercise.precautions && (
+            <AccordionItem value="precautions" className="border-b-0">
+              <AccordionTrigger className="py-2 text-sm hover:no-underline hover:text-primary">
+                <span className="underline underline-offset-4">Precautions</span>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="whitespace-pre-wrap text-sm">{exercise.precautions}</div>
+              </AccordionContent>
+            </AccordionItem>
+          )}
+        </Accordion>
+      </CardContent>
+      
+      <CardFooter className="flex flex-col items-start border-t pt-3 pb-3">
+        <div className="flex flex-wrap w-full gap-3 text-xs">
+          {exercise.repetitions && (
+            <div className="bg-muted rounded-md px-2 py-1 flex items-center">
+              <span className="font-medium mr-1">Reps:</span>
+              {exercise.repetitions}
+            </div>
+          )}
+          
+          {exercise.sets && (
+            <div className="bg-muted rounded-md px-2 py-1 flex items-center">
+              <span className="font-medium mr-1">Sets:</span>
+              {exercise.sets}
+            </div>
+          )}
+          
+          {exercise.duration && (
+            <div className="bg-muted rounded-md px-2 py-1 flex items-center">
+              <span className="font-medium mr-1">Duration:</span>
+              {exercise.duration}
+            </div>
+          )}
+        </div>
+      </CardFooter>
+    </Card>
+  );
 }
 
 // Exercise list component
@@ -388,7 +472,7 @@ export default function ExerciseList() {
                   </div>
                   <ExerciseCard exercise={exercise} />
                 </div>
-              )) || []}
+              ))}
             </div>
           )}
         </div>
@@ -420,7 +504,7 @@ export default function ExerciseList() {
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                   {currentExercises?.map((exercise) => (
                     <ExerciseCard key={exercise.id} exercise={exercise} />
-                  )) || []}
+                  ))}
                 </div>
               </>
             ) : (
@@ -429,183 +513,86 @@ export default function ExerciseList() {
           </TabsContent>
         </Tabs>
       )}
-              
-              {/* Pagination controls */}
-              {totalPages > 1 && (
-                <Pagination className="mt-8">
-                  <PaginationContent>
-                    <div className="hidden sm:flex items-center space-x-2 mr-2 text-sm text-muted-foreground">
-                      <span>Page {currentPage} of {totalPages}</span>
-                    </div>
-                    {currentPage > 1 && (
-                      <PaginationItem>
-                        <PaginationPrevious onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} />
+      
+      {/* Pagination controls */}
+      {totalPages > 1 && (
+        <Pagination className="mt-8">
+          <PaginationContent>
+            <div className="hidden sm:flex items-center space-x-2 mr-2 text-sm text-muted-foreground">
+              <span>Page {currentPage} of {totalPages}</span>
+            </div>
+            {currentPage > 1 && (
+              <PaginationItem>
+                <PaginationPrevious onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} />
+              </PaginationItem>
+            )}
+            
+            {/* Display limited page numbers */}
+            {Array.from({ length: totalPages }, (_, i) => i + 1)
+              .filter(page => {
+                // Always show first and last page
+                if (page === 1 || page === totalPages) return true;
+                // Show pages near current page
+                if (Math.abs(page - currentPage) <= 1) return true;
+                return false;
+              })
+              .map((page, index, array) => {
+                // Add ellipsis between non-consecutive pages
+                if (index > 0 && array[index] - array[index - 1] > 1) {
+                  return (
+                    <React.Fragment key={`ellipsis-${page}`}>
+                      <PaginationItem key={`ellipsis-before-${page}`}>
+                        <span className="flex h-9 w-9 items-center justify-center">
+                          ...
+                        </span>
                       </PaginationItem>
-                    )}
-                    
-                    {/* Display limited page numbers with ellipsis for many pages */}
-                    {Array.from({ length: totalPages }, (_, i) => i + 1)
-                      .filter(page => {
-                        // Always show first and last page
-                        if (page === 1 || page === totalPages) return true;
-                        // Show pages near current page
-                        if (Math.abs(page - currentPage) <= 1) return true;
-                        return false;
-                      })
-                      .map((page, index, array) => {
-                        // Add ellipsis between non-consecutive pages
-                        if (index > 0 && array[index] - array[index - 1] > 1) {
-                          return (
-                            <React.Fragment key={`ellipsis-${page}`}>
-                              <PaginationItem key={`ellipsis-before-${page}`}>
-                                <span className="flex h-9 w-9 items-center justify-center">
-                                  ...
-                                </span>
-                              </PaginationItem>
-                              <PaginationItem key={page}>
-                                <PaginationLink 
-                                  isActive={page === currentPage} 
-                                  onClick={() => setCurrentPage(page)}
-                                >
-                                  {page}
-                                </PaginationLink>
-                              </PaginationItem>
-                            </React.Fragment>
-                          );
-                        }
-                        return (
-                          <PaginationItem key={page}>
-                            <PaginationLink 
-                              isActive={page === currentPage} 
-                              onClick={() => setCurrentPage(page)}
-                            >
-                              {page}
-                            </PaginationLink>
-                          </PaginationItem>
-                        );
-                      })}
-                    
-                    {currentPage < totalPages && (
-                      <PaginationItem>
-                        <PaginationNext onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} />
+                      <PaginationItem key={page}>
+                        <PaginationLink 
+                          isActive={page === currentPage} 
+                          onClick={() => setCurrentPage(page)}
+                        >
+                          {page}
+                        </PaginationLink>
                       </PaginationItem>
-                    )}
-                  </PaginationContent>
-                </Pagination>
-              )}
-              
-              <div className="mt-4 text-center text-sm text-muted-foreground">
-                Showing <span className="font-medium">{(currentPage - 1) * exercisesPerPage + 1}</span> to <span className="font-medium">{Math.min(currentPage * exercisesPerPage, totalExercises)}</span> of <span className="font-medium">{totalExercises}</span> exercises
-              </div>
-              
-              {/* Optimize loading by prefetching adjacent pages */}
-              {Array.from(
-                { length: 2 }, 
-                (_, i) => currentPage + (i === 0 ? -1 : 1)
-              )
-                .filter(page => page > 0 && page <= totalPages)
-                .map(page => (
-                  <div key={`prefetch-page-${page}`} className="hidden">
-                    {/* This invisible container helps prefetch adjacent pages */}
-                  </div>
-                ))}
-            </>
+                    </React.Fragment>
+                  );
+                }
+                return (
+                  <PaginationItem key={page}>
+                    <PaginationLink 
+                      isActive={page === currentPage} 
+                      onClick={() => setCurrentPage(page)}
+                    >
+                      {page}
+                    </PaginationLink>
+                  </PaginationItem>
+                );
+              })}
+            
+            {currentPage < totalPages && (
+              <PaginationItem>
+                <PaginationNext onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} />
+              </PaginationItem>
+            )}
+          </PaginationContent>
+        </Pagination>
+      )}
+      
+      {totalExercises > 0 && totalExercises < 5 && activeTab !== 'all' && (
+        <div className="mt-8 bg-muted p-4 rounded-lg">
+          <h3 className="text-lg font-medium mb-2">Need more exercises?</h3>
+          <p className="text-muted-foreground mb-4">Generate more exercises for this body part and expand your library.</p>
+          {user ? (
+            <Button onClick={() => handleGenerateExercises(activeTab, '', 3)}>
+              Generate More {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Exercises
+            </Button>
           ) : (
-            <div className="text-center py-12 border rounded-lg">
-              <p className="text-muted-foreground mb-4">No exercises found for the selected filters.</p>
-              {user && (
-                <Button onClick={() => handleGenerateExercises(activeTab !== 'all' ? activeTab : 'general', 'beginner')}>
-                  Generate {activeTab !== 'all' ? activeTab : ''} Exercises
-                </Button>
-              )}
-            </div>
+            <Button onClick={() => navigate('/auth')}>
+              Log in to generate exercises
+            </Button>
           )}
-        </TabsContent>
-      </Tabs>
+        </div>
+      )}
     </div>
-  );
-}
-
-// Exercise card component
-function ExerciseCard({ exercise }: { exercise: Exercise }) {
-  return (
-    <Card className="h-full flex flex-col hover:shadow-md transition-shadow duration-300">
-      <CardHeader className="pb-3">
-        <div className="flex justify-between items-start gap-2">
-          <CardTitle className="text-lg line-clamp-2">{exercise.title}</CardTitle>
-          <Badge 
-            variant={
-              exercise.difficulty === 'beginner' ? 'outline' : 
-              exercise.difficulty === 'intermediate' ? 'secondary' : 
-              'default'
-            }
-            className="whitespace-nowrap"
-          >
-            {exercise.difficulty}
-          </Badge>
-        </div>
-        <CardDescription className="line-clamp-2 mt-1">{exercise.description}</CardDescription>
-        <div className="flex flex-wrap gap-1 mt-2">
-          <Badge variant="outline" className="capitalize">{exercise.bodyPart}</Badge>
-          {exercise.aiGenerated && <Badge variant="secondary">AI Generated</Badge>}
-        </div>
-      </CardHeader>
-      
-      <CardContent className="flex-grow py-2">
-        <Accordion type="single" collapsible className="w-full">
-          <AccordionItem value="instructions" className="border-b-0">
-            <AccordionTrigger className="py-2 text-sm hover:no-underline hover:text-primary">
-              <span className="underline underline-offset-4">Instructions</span>
-            </AccordionTrigger>
-            <AccordionContent>
-              <div className="whitespace-pre-wrap text-sm">{exercise.instructions}</div>
-            </AccordionContent>
-          </AccordionItem>
-          
-          <AccordionItem value="details" className="border-b-0">
-            <AccordionTrigger className="py-2 text-sm hover:no-underline hover:text-primary">
-              <span className="underline underline-offset-4">Target Muscles</span>
-            </AccordionTrigger>
-            <AccordionContent>
-              <div className="whitespace-pre-wrap text-sm">{exercise.targetMuscles}</div>
-            </AccordionContent>
-          </AccordionItem>
-          
-          {exercise.precautions && (
-            <AccordionItem value="precautions" className="border-b-0">
-              <AccordionTrigger className="py-2 text-sm hover:no-underline hover:text-primary">
-                <span className="underline underline-offset-4">Precautions</span>
-              </AccordionTrigger>
-              <AccordionContent>
-                <div className="whitespace-pre-wrap text-sm">{exercise.precautions}</div>
-              </AccordionContent>
-            </AccordionItem>
-          )}
-        </Accordion>
-      </CardContent>
-      
-      <CardFooter className="flex flex-col items-start border-t pt-3 pb-3">
-        <div className="flex flex-wrap w-full gap-3 text-xs">
-          {exercise.repetitions && (
-            <div className="bg-muted rounded-md px-2 py-1 flex items-center">
-              <span className="font-medium mr-1">Reps:</span>
-              <span>{exercise.repetitions}</span>
-            </div>
-          )}
-          {exercise.sets && (
-            <div className="bg-muted rounded-md px-2 py-1 flex items-center">
-              <span className="font-medium mr-1">Sets:</span>
-              <span>{exercise.sets}</span>
-            </div>
-          )}
-          {exercise.duration && (
-            <div className="bg-muted rounded-md px-2 py-1 flex items-center">
-              <span className="font-medium mr-1">Duration:</span>
-              <span>{exercise.duration}</span>
-            </div>
-          )}
-        </div>
-      </CardFooter>
-    </Card>
   );
 }

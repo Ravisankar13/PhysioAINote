@@ -42,16 +42,22 @@ const HeroSection = () => {
               </div>
             </div>
             <div className="mt-10 flex flex-col sm:flex-row gap-4">
-              <Link href="/membership">
+              <Link href="/clinical-notes">
                 <Button size="lg" className="bg-white text-primary hover:bg-white/90 shadow-md flex items-center gap-2">
-                  <BadgeDollarSign className="h-5 w-5" />
-                  <span className="font-semibold">View Membership Plans</span>
+                  <Sparkles className="h-5 w-5" />
+                  <span className="font-semibold">Try AI Notes Demo</span>
                 </Button>
               </Link>
-              <Link href="#features">
+              <Link href="/shared-cases">
                 <Button size="lg" variant="outline" className="text-white border-white/30 bg-white/10 hover:bg-white/20 hover:border-white/40 shadow-sm flex items-center gap-2">
-                  <Sparkles className="h-5 w-5" />
-                  <span>Explore Features</span>
+                  <Users className="h-5 w-5" />
+                  <span>Browse Peer Exchange</span>
+                </Button>
+              </Link>
+              <Link href="/membership">
+                <Button size="lg" variant="ghost" className="text-white hover:bg-white/10 flex items-center gap-2">
+                  <BadgeDollarSign className="h-5 w-5" />
+                  <span>View Pricing</span>
                 </Button>
               </Link>
             </div>

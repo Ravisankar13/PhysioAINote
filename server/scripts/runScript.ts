@@ -1,4 +1,5 @@
 import { exec } from 'child_process';
+import { fileURLToPath } from 'url';
 import path from 'path';
 
 // Get the script name from command line arguments
@@ -9,6 +10,10 @@ if (!scriptName) {
   console.error('Usage: npm run script <scriptName>');
   process.exit(1);
 }
+
+// Get the directory of the current module
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Build the full path to the script
 const scriptPath = path.join(__dirname, `${scriptName}.ts`);

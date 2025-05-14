@@ -1,6 +1,7 @@
 import { db } from "../db";
 import { researchArticles, bodyPartEnum, type InsertResearchArticle } from "@shared/schema";
 import OpenAI from "openai";
+import { eq, sql } from "drizzle-orm";
 
 // Initialize OpenAI client
 const openai = new OpenAI({
@@ -114,9 +115,9 @@ async function generateAllArticles() {
     
     for (const bodyPart of bodyParts) {
       // Check existing articles for this body part
-      const existingArticles = await db.select({ count: db.fn.count() })
+      const existingArticles = await db.select({ count: sql`count(*)` })
         .from(researchArticles)
-        .where(db.eq(researchArticles.bodyPart, bodyPart));
+        .where(eq(researchArticles.bodyPart, bodyPart as any));
       
       const existingCount = Number(existingArticles[0]?.count || 0);
       console.log(`${bodyPart}: ${existingCount} existing articles`);

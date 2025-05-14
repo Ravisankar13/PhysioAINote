@@ -2,7 +2,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { generateSoapNote } from "./openai";
-import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema } from "@shared/schema";
+import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, type ResearchArticle } from "@shared/schema";
 import { ZodError } from "zod";
 import { fromZodError } from "zod-validation-error";
 import multer from "multer";
@@ -644,11 +644,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const assessmentText = note.assessment || "";
       const subjectiveText = note.subjective || "";
       
-      // Get all research articles for this body part
-      const allArticles = await storage.getResearchArticles(bodyPart);
+      // Get all research articles for this body part, no pagination needed for relevance sorting
+      const result = await storage.getResearchArticles(bodyPart, 1, 1000); // Get a large batch for relevance sorting
+      const allArticles = result.articles;
       
       // Calculate relevance score for each article
-      let scoredArticles = allArticles.map(article => {
+      let scoredArticles = allArticles.map((article: ResearchArticle) => {
         let score = 0;
         
         // Higher score for matching body part
@@ -691,11 +692,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       // Sort by relevance score and take top 5
-      scoredArticles.sort((a, b) => b.relevanceScore - a.relevanceScore);
+      scoredArticles.sort((a: { relevanceScore: number }, b: { relevanceScore: number }) => b.relevanceScore - a.relevanceScore);
       const relatedArticles = scoredArticles
         .slice(0, 5)
-        .filter(item => item.relevanceScore > 3) // Only include relevant articles
-        .map(item => item.article);
+        .filter((item: { relevanceScore: number }) => item.relevanceScore > 3) // Only include relevant articles
+        .map((item: { article: ResearchArticle }) => item.article);
       
       return res.json(relatedArticles);
     } catch (error) {
@@ -741,12 +742,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // API route to get all research articles
+  // API route to get all research articles with pagination
   app.get("/api/research", async (req: Request, res: Response) => {
     try {
       const bodyPart = req.query.bodyPart as string;
-      const articles = await storage.getResearchArticles(bodyPart);
-      return res.json(articles);
+      const page = parseInt(req.query.page as string) || 1;
+      const pageSize = parseInt(req.query.pageSize as string) || 10;
+      
+      const result = await storage.getResearchArticles(bodyPart, page, pageSize);
+      
+      return res.json({
+        data: result.articles,
+        pagination: {
+          page,
+          pageSize,
+          totalItems: result.total,
+          totalPages: Math.ceil(result.total / pageSize)
+        }
+      });
     } catch (error) {
       console.error("Error fetching research articles:", error);
       return res.status(500).json({ message: "Failed to fetch research articles" });

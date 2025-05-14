@@ -40,7 +40,14 @@ export interface IStorage {
   
   // Research Article Operations
   getResearchArticle(id: number): Promise<ResearchArticle | undefined>;
-  getResearchArticles(bodyPart?: string): Promise<ResearchArticle[]>;
+  getResearchArticles(
+    bodyPart?: string,
+    page?: number,
+    pageSize?: number
+  ): Promise<{
+    articles: ResearchArticle[],
+    total: number
+  }>;
   createResearchArticle(article: InsertResearchArticle): Promise<ResearchArticle>;
   
   // Exercise Operations

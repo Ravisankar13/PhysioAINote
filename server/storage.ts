@@ -284,19 +284,36 @@ export class DatabaseStorage implements IStorage {
     return results.length > 0 ? results[0] : undefined;
   }
   
-  async getResearchArticles(bodyPart?: string): Promise<ResearchArticle[]> {
-    // If bodyPart is provided, filter by it
+  async getResearchArticles(
+    bodyPart?: string,
+    page: number = 1,
+    pageSize: number = 10
+  ): Promise<{ articles: ResearchArticle[], total: number }> {
+    // Calculate offset based on page and pageSize
+    const offset = (page - 1) * pageSize;
+    
+    // Build base query
+    let query = db.select().from(researchArticles);
+    
+    // If bodyPart is provided and valid, filter by it
     if (bodyPart && Object.values(researchArticles.bodyPart.enumValues).includes(bodyPart)) {
-      return db.select()
-        .from(researchArticles)
-        .where(eq(researchArticles.bodyPart, bodyPart as any))
-        .orderBy(desc(researchArticles.publicationDate));
+      query = query.where(eq(researchArticles.bodyPart, bodyPart as any));
     }
     
-    // Otherwise, return all articles
-    return db.select()
+    // First get total count for pagination metadata
+    const countResult = await db.select({ count: sql<number>`count(*)` })
       .from(researchArticles)
-      .orderBy(desc(researchArticles.publicationDate));
+      .where(bodyPart ? eq(researchArticles.bodyPart, bodyPart as any) : undefined);
+      
+    const total = countResult[0]?.count || 0;
+    
+    // Then get the paginated results
+    const articles = await query
+      .orderBy(desc(researchArticles.publicationDate))
+      .limit(pageSize)
+      .offset(offset);
+    
+    return { articles, total };
   }
   
   async createResearchArticle(article: InsertResearchArticle): Promise<ResearchArticle> {

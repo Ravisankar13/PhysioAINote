@@ -630,7 +630,22 @@ function getManualTherapyTechniquesForBodyPart(bodyPart: string): Array<{
 }
 
 // Functions to provide expert-based exercises by body part
-function getExercisesForBodyPart(bodyPart: string) {
+function getExercisesForBodyPart(bodyPart: string): Array<{
+  name: string;
+  description: string;
+  targetMuscleGroup: string;
+  loadingParameters: {
+    sets: string;
+    reps: string;
+    frequency: string;
+    intensity: string;
+    progressionCriteria: string;
+  };
+  evidenceLevel: "high" | "moderate" | "low" | "expert opinion";
+  recommendationStrength: "highly recommended" | "recommended" | "optional";
+  researchSupport: string;
+  modificationOptions: string[];
+}> {
   switch (bodyPart) {
     case "shoulder":
       return [

@@ -20,6 +20,7 @@ import ManualTherapyPage from "@/pages/ManualTherapyPage";
 import TestAudioTranscription from "@/pages/TestAudioTranscription";
 import TestNoteGenerator from "@/pages/TestNoteGenerator";
 import SessionsPage from "@/pages/SessionsPage";
+import VirtualPatientPage from "@/pages/VirtualPatientPage";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { ThemeProvider } from "next-themes";

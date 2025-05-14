@@ -2,7 +2,8 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { generateSoapNote } from "./openai";
-import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle } from "@shared/schema";
+import { analyzeVirtualPatientCase, findRelevantResearchArticles } from "./virtualPatientOpenai";
+import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema } from "@shared/schema";
 import { ZodError } from "zod";
 import { fromZodError } from "zod-validation-error";
 import multer from "multer";
@@ -1208,6 +1209,201 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Error counting manual therapy techniques:', error);
       res.status(500).json({ 
         message: 'Failed to count manual therapy techniques',
+        error: (error as Error).message 
+      });
+    }
+  });
+
+  // Virtual Patient API Routes
+  
+  // Get all virtual patients for the current user
+  app.get("/api/virtual-patients", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      const virtualPatients = await storage.getUserVirtualPatients(userId);
+      res.json(virtualPatients);
+    } catch (error) {
+      console.error('Error fetching virtual patients:', error);
+      res.status(500).json({ 
+        message: 'Failed to fetch virtual patients',
+        error: (error as Error).message 
+      });
+    }
+  });
+
+  // Get a specific virtual patient by ID
+  app.get("/api/virtual-patients/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const patientId = parseInt(req.params.id);
+      if (isNaN(patientId)) {
+        return res.status(400).json({ message: 'Invalid patient ID' });
+      }
+
+      const virtualPatient = await storage.getVirtualPatient(patientId);
+      
+      if (!virtualPatient) {
+        return res.status(404).json({ message: 'Virtual patient not found' });
+      }
+      
+      // Check if user owns this virtual patient
+      if (virtualPatient.userId !== req.user?.id) {
+        return res.status(403).json({ message: 'You do not have permission to access this virtual patient' });
+      }
+      
+      res.json(virtualPatient);
+    } catch (error) {
+      console.error('Error fetching virtual patient:', error);
+      res.status(500).json({ 
+        message: 'Failed to fetch virtual patient',
+        error: (error as Error).message 
+      });
+    }
+  });
+
+  // Create a new virtual patient
+  app.post("/api/virtual-patients", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      // Validate input data
+      const validatedData = insertVirtualPatientSchema.parse(req.body);
+      
+      // Associate with the current user
+      const virtualPatientData = {
+        ...validatedData,
+        userId: req.user?.id
+      };
+      
+      // Create the virtual patient
+      const virtualPatient = await storage.createVirtualPatient(virtualPatientData);
+      
+      res.status(201).json(virtualPatient);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        const validationError = fromZodError(error);
+        return res.status(400).json({ 
+          message: "Validation error", 
+          errors: validationError.details 
+        });
+      }
+      
+      console.error("Error creating virtual patient:", error);
+      res.status(500).json({ 
+        message: 'Failed to create virtual patient',
+        error: (error as Error).message 
+      });
+    }
+  });
+
+  // Update a virtual patient's basic information
+  app.patch("/api/virtual-patients/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const patientId = parseInt(req.params.id);
+      if (isNaN(patientId)) {
+        return res.status(400).json({ message: 'Invalid patient ID' });
+      }
+      
+      // Get the existing virtual patient
+      const existingPatient = await storage.getVirtualPatient(patientId);
+      
+      if (!existingPatient) {
+        return res.status(404).json({ message: 'Virtual patient not found' });
+      }
+      
+      // Check if user owns this virtual patient
+      if (existingPatient.userId !== req.user?.id) {
+        return res.status(403).json({ message: 'You do not have permission to modify this virtual patient' });
+      }
+      
+      // Update the virtual patient
+      const updatedPatient = await storage.updateVirtualPatient(patientId, req.body);
+      
+      res.json(updatedPatient);
+    } catch (error) {
+      console.error('Error updating virtual patient:', error);
+      res.status(500).json({ 
+        message: 'Failed to update virtual patient',
+        error: (error as Error).message 
+      });
+    }
+  });
+
+  // Generate diagnosis and treatment options for a virtual patient
+  app.post("/api/virtual-patients/:id/analyze", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const patientId = parseInt(req.params.id);
+      if (isNaN(patientId)) {
+        return res.status(400).json({ message: 'Invalid patient ID' });
+      }
+      
+      // Get the existing virtual patient
+      const virtualPatient = await storage.getVirtualPatient(patientId);
+      
+      if (!virtualPatient) {
+        return res.status(404).json({ message: 'Virtual patient not found' });
+      }
+      
+      // Check if user owns this virtual patient
+      if (virtualPatient.userId !== req.user?.id) {
+        return res.status(403).json({ message: 'You do not have permission to analyze this virtual patient' });
+      }
+
+      // Analyze the virtual patient case
+      const analysisResult = await analyzeVirtualPatientCase({
+        patientName: virtualPatient.patientName,
+        age: virtualPatient.age,
+        gender: virtualPatient.gender,
+        chiefComplaint: virtualPatient.chiefComplaint,
+        symptomsDescription: virtualPatient.symptomsDescription,
+        pastMedicalHistory: virtualPatient.pastMedicalHistory,
+        pastSurgicalHistory: virtualPatient.pastSurgicalHistory,
+        socialHistory: virtualPatient.socialHistory,
+        familyHistory: virtualPatient.familyHistory,
+        medications: virtualPatient.medications,
+        allergies: virtualPatient.allergies,
+        bodyPart: virtualPatient.bodyPart
+      });
+
+      // Extract diagnosis info for finding related articles
+      const primaryDiagnosis = analysisResult.primaryDiagnosis.name;
+      const differentialDiagnoses = analysisResult.differentialDiagnoses.map(d => d.name);
+      const keywords = analysisResult.recommendedKeywords || [];
+
+      // Get relevant research articles
+      const articleSearchStrategy = await findRelevantResearchArticles(
+        primaryDiagnosis, 
+        differentialDiagnoses, 
+        virtualPatient.bodyPart,
+        keywords
+      );
+
+      // Find articles based on the search strategy
+      // For now, just fetch articles for the body part and filter later
+      const { articles } = await storage.getResearchArticles(
+        virtualPatient.bodyPart, 
+        1, 
+        50
+      );
+
+      // TODO: Implement more sophisticated article matching based on search strategy
+      const relevantArticleIds = articles.slice(0, 5).map(article => article.id);
+
+      // Update the virtual patient with diagnosis and treatment information
+      const updatedPatient = await storage.updateVirtualPatientDiagnosis(
+        patientId,
+        primaryDiagnosis,
+        analysisResult.differentialDiagnoses,
+        analysisResult.treatmentOptions,
+        relevantArticleIds
+      );
+      
+      res.json({
+        patient: updatedPatient,
+        analysis: analysisResult,
+        articleSearchStrategy
+      });
+    } catch (error) {
+      console.error('Error analyzing virtual patient:', error);
+      res.status(500).json({ 
+        message: 'Failed to analyze virtual patient',
         error: (error as Error).message 
       });
     }

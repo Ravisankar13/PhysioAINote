@@ -32,13 +32,37 @@ export interface VirtualPatientAnalysisOutput {
     reasoning: string;
   }>;
   treatmentOptions: Array<{
-    name: string;
-    description: string;
-    evidenceLevel: "high" | "moderate" | "low" | "expert opinion";
-    recommendationStrength: "highly recommended" | "recommended" | "optional";
-    researchConsiderations?: Array<{
+    category: "Manual Therapy" | "Progressive Loading Exercises" | "Patient Education";
+    techniques?: Array<{
+      name: string;
+      description: string;
+      targetTissue: string;
+      evidenceLevel: "high" | "moderate" | "low" | "expert opinion";
+      recommendationStrength: "highly recommended" | "recommended" | "optional";
+      researchSupport: string;
+      contraindications: string[];
+    }>;
+    exercises?: Array<{
+      name: string;
+      description: string;
+      targetMuscleGroup: string;
+      loadingParameters: {
+        sets: string;
+        reps: string;
+        frequency: string;
+        intensity: string;
+        progressionCriteria: string;
+      };
+      evidenceLevel: "high" | "moderate" | "low" | "expert opinion";
+      recommendationStrength: "highly recommended" | "recommended" | "optional";
+      researchSupport: string;
+      modificationOptions: string[];
+    }>;
+    recommendations?: Array<{
       topic: string;
-      relevance: string;
+      keyPoints: string[];
+      evidenceLevel: "high" | "moderate" | "low" | "expert opinion";
+      recommendationStrength: "highly recommended" | "recommended" | "optional";
     }>;
   }>;
   recommendedKeywords: string[];
@@ -282,34 +306,115 @@ function createFallbackAnalysis(patientData: VirtualPatientInput): VirtualPatien
     ],
     treatmentOptions: [
       {
-        name: "Initial Rest & Protection",
-        description: "Relative rest from aggravating activities for 24-48 hours",
-        evidenceLevel: "moderate",
-        recommendationStrength: "recommended"
+        category: "Manual Therapy",
+        techniques: [
+          {
+            name: `${patientData.bodyPart.charAt(0).toUpperCase() + patientData.bodyPart.slice(1)} Mobilization Technique`,
+            description: `Gentle oscillatory mobilization to the ${patientData.bodyPart} joint applying grades I-IV depending on irritability. Perform with patient in a comfortable position with adequate support.`,
+            targetTissue: `${patientData.bodyPart} joint complex`,
+            evidenceLevel: "moderate",
+            recommendationStrength: "recommended",
+            researchSupport: "Multiple RCTs have shown efficacy for pain reduction and improved range of motion",
+            contraindications: ["Acute inflammation", "Recent fracture", "Instability"]
+          },
+          {
+            name: "Soft Tissue Massage",
+            description: `Targeted massage to surrounding musculature of the ${patientData.bodyPart} using moderate pressure and focusing on areas of tension. Perform for 5-10 minutes per muscle group.`,
+            targetTissue: `${patientData.bodyPart} regional musculature`,
+            evidenceLevel: "moderate",
+            recommendationStrength: "recommended",
+            researchSupport: "Systematic reviews support effectiveness for pain reduction and muscle relaxation",
+            contraindications: ["Skin infection", "Deep vein thrombosis", "Recent injury"]
+          }
+        ]
       },
       {
-        name: "Pain Management",
-        description: "Appropriate pain management strategies including modalities and medication if necessary",
-        evidenceLevel: "moderate",
-        recommendationStrength: "recommended"
+        category: "Progressive Loading Exercises",
+        exercises: [
+          {
+            name: `${patientData.bodyPart.charAt(0).toUpperCase() + patientData.bodyPart.slice(1)} Isometric Exercise`,
+            description: `Gentle isometric contraction of ${patientData.bodyPart} muscles against fixed resistance. Start in pain-free position and maintain contraction.`,
+            targetMuscleGroup: `Primary ${patientData.bodyPart} stabilizers`,
+            loadingParameters: {
+              sets: "3-5 sets",
+              reps: "5-10 repetitions",
+              frequency: "2-3 times daily",
+              intensity: "Submaximal (40-70% of maximum contraction)",
+              progressionCriteria: "Progress when able to complete with minimal pain and good form"
+            },
+            evidenceLevel: "high",
+            recommendationStrength: "highly recommended",
+            researchSupport: "Strong evidence for pain modulation and neuromuscular activation",
+            modificationOptions: ["Adjust contraction intensity", "Modify position for comfort"]
+          },
+          {
+            name: `Progressive ${patientData.bodyPart.charAt(0).toUpperCase() + patientData.bodyPart.slice(1)} Loading`,
+            description: `Gradual introduction of load to ${patientData.bodyPart} structures through controlled range of motion exercises with increasing resistance.`,
+            targetMuscleGroup: `${patientData.bodyPart} prime movers and stabilizers`,
+            loadingParameters: {
+              sets: "2-4 sets",
+              reps: "8-12 repetitions",
+              frequency: "Every other day",
+              intensity: "Start with body weight or light resistance, increase by 5-10% weekly",
+              progressionCriteria: "Progress when able to complete all sets and reps with proper form and minimal discomfort"
+            },
+            evidenceLevel: "high",
+            recommendationStrength: "highly recommended",
+            researchSupport: "Systematic reviews show effectiveness for tissue adaptation and functional improvement",
+            modificationOptions: ["Modify range of motion", "Adjust resistance", "Change exercise speed"]
+          },
+          {
+            name: "Functional Movement Pattern Training",
+            description: `Integration of ${patientData.bodyPart} function into daily movement patterns and activities, focusing on proper biomechanics and control.`,
+            targetMuscleGroup: "Integrated movement chains",
+            loadingParameters: {
+              sets: "2-3 sets",
+              reps: "8-10 repetitions",
+              frequency: "3-4 times weekly",
+              intensity: "Progress from unloaded to loaded movements",
+              progressionCriteria: "Progress when movement quality is maintained with current load"
+            },
+            evidenceLevel: "moderate",
+            recommendationStrength: "recommended",
+            researchSupport: "Research supports functional training for return to activities and injury prevention",
+            modificationOptions: ["Simplify movement pattern", "Reduce speed or complexity"]
+          }
+        ]
       },
       {
-        name: "Progressive Loading Exercise",
-        description: "Gradually progressive strengthening exercises as tolerated",
-        evidenceLevel: "high",
-        recommendationStrength: "highly recommended"
-      },
-      {
-        name: "Manual Therapy",
-        description: "Targeted manual therapy techniques to improve mobility and reduce pain",
-        evidenceLevel: "moderate",
-        recommendationStrength: "recommended"
-      },
-      {
-        name: "Patient Education",
-        description: "Education on condition, self-management, and activity modification",
-        evidenceLevel: "high",
-        recommendationStrength: "highly recommended"
+        category: "Patient Education",
+        recommendations: [
+          {
+            topic: "Pain Management Strategies",
+            keyPoints: [
+              "Initial relative rest from aggravating activities for 24-48 hours",
+              "Appropriate use of cold/heat for symptom management",
+              "Gradual return to modified activities as tolerated"
+            ],
+            evidenceLevel: "moderate",
+            recommendationStrength: "recommended"
+          },
+          {
+            topic: "Understanding Pain Mechanisms",
+            keyPoints: [
+              "Pain doesn't always indicate tissue damage",
+              "Activity modification, not avoidance, is recommended",
+              "Gradually increasing activity tolerance is important for recovery"
+            ],
+            evidenceLevel: "high",
+            recommendationStrength: "highly recommended"
+          },
+          {
+            topic: "Self-Management Strategies",
+            keyPoints: [
+              "Recognizing and modifying aggravating factors",
+              "Implementing home exercise program consistently",
+              "Using appropriate pain management techniques"
+            ],
+            evidenceLevel: "high",
+            recommendationStrength: "highly recommended"
+          }
+        ]
       }
     ],
     recommendedKeywords: [

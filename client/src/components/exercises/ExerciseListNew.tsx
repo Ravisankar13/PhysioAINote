@@ -679,9 +679,107 @@ export default function ExerciseList() {
               }}
             />
           </div>
+          
+          {/* Program Creation */}
+          <Sheet open={isProgramSheetOpen} onOpenChange={setIsProgramSheetOpen}>
+            <SheetTrigger asChild>
+              <Button
+                variant={selectedExercises.length > 0 ? "default" : "outline"} 
+                className="gap-2"
+                disabled={selectedExercises.length === 0}
+              >
+                <Download className="h-4 w-4" />
+                Program ({selectedExercises.length})
+              </Button>
+            </SheetTrigger>
+            <SheetContent>
+              <SheetHeader>
+                <SheetTitle>Create Exercise Program</SheetTitle>
+                <SheetDescription>
+                  Create a downloadable PDF with your selected exercises.
+                </SheetDescription>
+              </SheetHeader>
+              
+              <div className="py-4 space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="program-name">Program Name</Label>
+                  <Input
+                    id="program-name"
+                    value={programName}
+                    onChange={(e) => setProgramName(e.target.value)}
+                    placeholder="My Exercise Program"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label>Selected Exercises ({selectedExercises.length})</Label>
+                  <div className="border rounded-md p-2 max-h-[400px] overflow-y-auto">
+                    {selectedExercises.length === 0 ? (
+                      <p className="text-sm text-muted-foreground py-2 text-center">
+                        No exercises selected. Select exercises from the library first.
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        {selectedExercises.map((exercise) => (
+                          <div key={exercise.id} className="flex items-center justify-between p-2 border rounded-md">
+                            <div>
+                              <p className="font-medium">{exercise.title}</p>
+                              <p className="text-xs text-muted-foreground">{exercise.bodyPart} | {exercise.difficulty}</p>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleToggleSelect(exercise)}
+                            >
+                              <Trash className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              <SheetFooter className="pt-2">
+                <Button
+                  onClick={generatePDF}
+                  disabled={selectedExercises.length === 0 || isGeneratingPdf}
+                  className="w-full"
+                >
+                  {isGeneratingPdf ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Generating PDF...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="mr-2 h-4 w-4" />
+                      Download PDF
+                    </>
+                  )}
+                </Button>
+              </SheetFooter>
+            </SheetContent>
+          </Sheet>
+          
+          {/* Clear Selection Button */}
+          {selectedExercises.length > 0 && (
+            <Button 
+              variant="outline" 
+              size="icon"
+              onClick={clearSelectedExercises}
+              className="h-9 w-9 ml-2"
+              title="Clear selection"
+            >
+              <Trash className="h-4 w-4" />
+            </Button>
+          )}
+          
+          {/* Filters */}
           <Sheet>
             <SheetTrigger asChild>
-              <Button variant="outline" className="gap-2">
+              <Button variant="outline" className="gap-2 ml-2">
                 <Filter className="h-4 w-4" />
                 Filter
               </Button>

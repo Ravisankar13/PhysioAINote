@@ -34,20 +34,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginMutation = useMutation({
     mutationFn: async (credentials: LoginData) => {
-      const res = await apiRequest("POST", "/api/login", credentials);
-      return await res.json();
+      console.log("Attempting login with credentials:", { username: credentials.username });
+      try {
+        // Use fetch directly to have more control
+        const res = await fetch("/api/login", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(credentials),
+          credentials: "include", // Important for cookies
+        });
+        
+        if (!res.ok) {
+          const errorData = await res.text();
+          console.error("Login error response:", errorData);
+          throw new Error(errorData || res.statusText);
+        }
+        
+        const userData = await res.json();
+        console.log("Login successful, user data:", userData);
+        return userData;
+      } catch (error) {
+        console.error("Login error:", error);
+        throw error;
+      }
     },
     onSuccess: (user: SelectUser) => {
+      console.log("Setting user data in query cache");
       queryClient.setQueryData(["/api/user"], user);
+      // Invalidate any queries that depend on authentication
+      queryClient.invalidateQueries();
       toast({
         title: "Login successful",
         description: `Welcome back, ${user.username}!`,
       });
     },
     onError: (error: Error) => {
+      console.error("Login mutation error:", error);
       toast({
         title: "Login failed",
-        description: error.message,
+        description: error.message || "Authentication failed",
         variant: "destructive",
       });
     },
@@ -55,20 +82,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const registerMutation = useMutation({
     mutationFn: async (credentials: InsertUser) => {
-      const res = await apiRequest("POST", "/api/register", credentials);
-      return await res.json();
+      console.log("Attempting to register user:", { username: credentials.username });
+      try {
+        // Use fetch directly for more control
+        const res = await fetch("/api/register", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(credentials),
+          credentials: "include", // Important for cookies
+        });
+        
+        if (!res.ok) {
+          const errorData = await res.text();
+          console.error("Registration error response:", errorData);
+          throw new Error(errorData || res.statusText);
+        }
+        
+        const userData = await res.json();
+        console.log("Registration successful, user data:", userData);
+        return userData;
+      } catch (error) {
+        console.error("Registration error:", error);
+        throw error;
+      }
     },
     onSuccess: (user: SelectUser) => {
+      console.log("Setting user data in query cache after registration");
       queryClient.setQueryData(["/api/user"], user);
+      // Invalidate any queries that depend on authentication
+      queryClient.invalidateQueries();
       toast({
         title: "Registration successful",
         description: "Your account has been created",
       });
     },
     onError: (error: Error) => {
+      console.error("Registration mutation error:", error);
       toast({
         title: "Registration failed",
-        description: error.message,
+        description: error.message || "Failed to create account",
         variant: "destructive",
       });
     },
@@ -76,19 +130,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
-      await apiRequest("POST", "/api/logout");
+      console.log("Attempting to log out");
+      try {
+        // Use fetch directly for more control
+        const res = await fetch("/api/logout", {
+          method: "POST",
+          credentials: "include", // Important for cookies
+        });
+        
+        if (!res.ok) {
+          const errorData = await res.text();
+          console.error("Logout error response:", errorData);
+          throw new Error(errorData || res.statusText);
+        }
+        
+        console.log("Logout successful");
+      } catch (error) {
+        console.error("Logout error:", error);
+        throw error;
+      }
     },
     onSuccess: () => {
+      console.log("Clearing user data from query cache");
       queryClient.setQueryData(["/api/user"], null);
+      // Invalidate any queries that depend on authentication
+      queryClient.invalidateQueries();
       toast({
         title: "Logged out",
         description: "You have been logged out successfully",
       });
     },
     onError: (error: Error) => {
+      console.error("Logout mutation error:", error);
       toast({
         title: "Logout failed",
-        description: error.message,
+        description: error.message || "Failed to log out",
         variant: "destructive",
       });
     },

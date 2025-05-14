@@ -98,13 +98,28 @@ export default function VirtualPatientForm({ onPatientCreated, onCancel }: Virtu
 
   const createPatientMutation = useMutation({
     mutationFn: async (data: FormData) => {
-      console.log("Submitting data:", data);
+      console.log("Submitting virtual patient data");
       
       try {
-        const response = await apiRequest("POST", "/api/virtual-patients", data);
+        // Use fetch directly with credentials for better control
+        const response = await fetch("/api/virtual-patients", {
+          method: "POST",
+          body: JSON.stringify(data),
+          headers: {
+            "Content-Type": "application/json"
+          },
+          credentials: "include" // Important for sending cookies
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`Virtual patient creation failed (${response.status}):`, errorText);
+          throw new Error(errorText || `Error ${response.status}: ${response.statusText}`);
+        }
+        
         return await response.json();
       } catch (error) {
-        console.error("API request error:", error);
+        console.error("Virtual patient creation error:", error);
         throw error;
       }
     },

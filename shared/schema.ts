@@ -196,6 +196,7 @@ export const researchArticles = pgTable("research_articles", {
   bodyPart: bodyPartEnum("body_part").default("general").notNull(), // Body part category
   keyFindings: text("key_findings"), // Summary of key findings
   clinicalRelevance: text("clinical_relevance"), // How this relates to clinical practice
+  methodology: text("methodology"), // Study design and methodology
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

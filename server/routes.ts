@@ -116,6 +116,129 @@ const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
 
+// Helper functions for research article relevance scoring
+
+// Extract medical terminology from clinical note text
+function extractMedicalTerms(text: string): string[] {
+  // Common medical and physiotherapy terminology to look for
+  const medicalPrefixes = [
+    "hyper", "hypo", "osteo", "arthro", "myelo", "neuro", "tendin", "fasci", 
+    "myo", "chondro", "spondylo", "radicu", "syndrome", "pathology", "dysfunction"
+  ];
+  
+  // Common medical suffixes
+  const medicalSuffixes = [
+    "itis", "algia", "opathy", "osis", "sclerosis", "stenosis", "pathy", 
+    "lysis", "graphy", "ectomy", "plasty"
+  ];
+  
+  // Look for terms matching medical patterns
+  const words = text.toLowerCase().split(/\s+/);
+  const medicalTerms = new Set<string>();
+  
+  // Extract terms with medical prefixes/suffixes
+  words.forEach(word => {
+    // Clean the word of punctuation
+    const cleanWord = word.replace(/[.,;:!?()]/g, '');
+    if (cleanWord.length < 4) return;
+    
+    // Check for medical prefixes
+    for (const prefix of medicalPrefixes) {
+      if (cleanWord.startsWith(prefix)) {
+        medicalTerms.add(cleanWord);
+        break;
+      }
+    }
+    
+    // Check for medical suffixes
+    for (const suffix of medicalSuffixes) {
+      if (cleanWord.endsWith(suffix)) {
+        medicalTerms.add(cleanWord);
+        break;
+      }
+    }
+  });
+  
+  // Add common condition and diagnostic terms that might appear in notes
+  const diagnosticPhrases = text.toLowerCase().match(/(?:diagnosis|impression|assessment)[^a-z]+([\w\s,-]+)/g);
+  if (diagnosticPhrases) {
+    diagnosticPhrases.forEach(phrase => {
+      const diagnosis = phrase.replace(/^(diagnosis|impression|assessment)[^a-z]+/i, '').trim();
+      if (diagnosis.length > 3) {
+        medicalTerms.add(diagnosis);
+      }
+    });
+  }
+  
+  return Array.from(medicalTerms);
+}
+
+// Extract physiotherapy assessment terminology
+function extractPhysiotherapyAssessmentTerms(text: string): string[] {
+  const assessmentTerms = new Set<string>();
+  
+  // Common assessment tests and measures in physiotherapy
+  const assessmentPatterns = [
+    "rom", "range of motion", "strength", "manual muscle test", "mmt", "special test",
+    "palpation", "tender", "muscle length", "flexibility", "proprioception", "balance",
+    "gait", "functional test", "neurodynamic", "mobility", "stability", "motor control",
+    "straight leg raise", "slr", "vascular", "sensory", "reflexes", "joint play",
+    "accessory motion", "posture", "alignment", "symmetry", "asymmetry", "recruitment",
+    "movement pattern", "compensation", "capsular pattern", "non-capsular", "centralization",
+    "peripheralization", "directional preference", "joint position", "passive intervertebral",
+    "paivm", "ppivms", "positive", "negative", "degrees", "impingement", "apprehension"
+  ];
+  
+  // Look for assessment terms in the text
+  const lowerText = text.toLowerCase();
+  
+  assessmentPatterns.forEach(term => {
+    if (lowerText.includes(term)) {
+      assessmentTerms.add(term);
+    }
+  });
+  
+  // Find measurement patterns (e.g., "5/5 strength", "ROM 0-120 degrees")
+  const measurementPatterns = lowerText.match(/\d+\/\d+|\d+\s*-\s*\d+\s*degrees|\d+\s*degrees/g);
+  if (measurementPatterns) {
+    measurementPatterns.forEach(match => {
+      assessmentTerms.add(match);
+    });
+  }
+  
+  return Array.from(assessmentTerms);
+}
+
+// Extract treatment and intervention terms
+function extractTreatmentTerms(text: string): string[] {
+  const treatmentTerms = new Set<string>();
+  
+  // Common physiotherapy treatments and interventions
+  const treatmentPatterns = [
+    "exercise", "strengthening", "stretching", "mobilization", "manipulation", 
+    "massage", "soft tissue", "manual therapy", "modalities", "ultrasound", 
+    "electrical stimulation", "tens", "heat", "cold", "ice", "taping", 
+    "bracing", "education", "advice", "neuromuscular", "proprioceptive", 
+    "balance training", "gait training", "functional training", "progressive", 
+    "loading", "graded exposure", "motor control", "coordination", "eccentric", 
+    "concentric", "isometric", "isotonic", "rehabilitation", "therapeutic exercise",
+    "mckenzie", "mulligan", "maitland", "kaltenborn", "exercise prescription",
+    "home exercise program", "hep", "cognitive functional therapy", "cft",
+    "pain neuroscience education", "pne", "specific exercise", "general exercise"
+  ];
+  
+  // Look for treatment terms in the text
+  const lowerText = text.toLowerCase();
+  
+  treatmentPatterns.forEach(term => {
+    if (lowerText.includes(term)) {
+      treatmentTerms.add(term);
+    }
+  });
+  
+  return Array.from(treatmentTerms);
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication routes
   setupAuth(app);
@@ -649,19 +772,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const result = await storage.getResearchArticles(bodyPart, 1, 1000); // Get a large batch for relevance sorting
       const allArticles = result.articles;
       
-      // Calculate relevance score for each article
+      // Calculate relevance score for each article using an enhanced expert-based algorithm
       let scoredArticles = allArticles.map((article: ResearchArticle) => {
         let score = 0;
         
-        // Higher score for matching body part
+        // Higher score for matching body part (primary filter)
         if (article.bodyPart === bodyPart) {
           score += 10;
         }
         
-        // Extract key diagnostic terms and conditions from the note
+        // Extract diagnostic terms, assessment findings, and keywords from the note
         const noteContent = (assessmentText + " " + subjectiveText).toLowerCase();
+        const objectiveText = note.objective || "";
+        const planText = note.plan || "";
+        const fullNoteContent = (assessmentText + " " + subjectiveText + " " + objectiveText + " " + planText).toLowerCase();
         
-        // Check if article content appears in the note
+        // Prepare article content for matching
         const articleKeywords = [
           article.title.toLowerCase(),
           article.abstract.toLowerCase(),
@@ -669,24 +795,99 @@ export async function registerRoutes(app: Express): Promise<Server> {
           article.clinicalRelevance?.toLowerCase() || ""
         ].join(" ");
         
-        // Increase score based on keyword matches
-        // This is a simple relevance algorithm that can be improved later
+        // Extract diagnoses and conditions from the assessment
+        const diagnosisRegex = /(?:diagnosis|impression|assessment)(?:[^a-z]+)([a-z\s,()-]+)/gi;
+        // Safely extract diagnosis matches
+        const diagnosisMatches: RegExpMatchArray[] = [];
+        let match: RegExpMatchArray | null;
+        while ((match = diagnosisRegex.exec(assessmentText.toLowerCase())) !== null) {
+          diagnosisMatches.push(match);
+        }
+        
+        // Process matches to extract diagnoses
+        const diagnoses = diagnosisMatches.flatMap(match => {
+          if (match[1]) {
+            return match[1].split(/[,;]/).map((d: string) => d.trim());
+          }
+          return [];
+        }).filter((d: string) => d.length > 3);
+        
+        // Score matches for identified diagnoses (high weight)
+        diagnoses.forEach(diagnosis => {
+          if (articleKeywords.includes(diagnosis)) {
+            score += 8;
+          }
+        });
+        
+        // Extract key clinical terms and findings
+        const medicalTerms = extractMedicalTerms(fullNoteContent);
+        
+        // Score for medical terminology matches
+        medicalTerms.forEach(term => {
+          if (articleKeywords.includes(term)) {
+            // Higher score for technical medical terms matching in the article
+            score += 4;
+          }
+        });
+        
+        // Extract common physiotherapy assessment terms
+        const assessmentTerms = extractPhysiotherapyAssessmentTerms(fullNoteContent);
+        
+        // Score for assessment term matches
+        assessmentTerms.forEach(term => {
+          if (articleKeywords.includes(term)) {
+            score += 3;
+          }
+        });
+        
+        // Extract treatment terms from the plan
+        const treatmentTerms = extractTreatmentTerms(planText);
+        
+        // Score for treatment term matches
+        treatmentTerms.forEach(term => {
+          if (articleKeywords.includes(term)) {
+            score += 3;
+          }
+        });
+        
+        // Extract expert names from the note (if mentioned)
+        const expertNames = [
+          "jill cook", "peter o'sullivan", "alison grimaldi", "jo gibson", 
+          "jeremy lewis", "kay crossley", "mark laslett", "robin mckenzie", 
+          "brian mulligan", "stuart mcgill", "tom goon", "claire patella"
+        ];
+        
+        // Higher score for articles matching mentioned experts
+        expertNames.forEach(expert => {
+          if (fullNoteContent.includes(expert) && articleKeywords.includes(expert)) {
+            score += 10; // High score for specific expert match
+          }
+        });
+        
+        // Fallback keyword matching for any remaining terms
         const keyTerms = noteContent.split(/\s+/)
           .filter(term => term.length > 4) // Only consider meaningful terms
-          .filter(term => !["patient", "reported", "history", "present", "treatment"].includes(term));
+          .filter(term => !["patient", "reported", "history", "present", "treatment", "noted", "states", "reports"].includes(term));
           
         for (const term of keyTerms) {
           if (articleKeywords.includes(term)) {
-            score += 2;
+            score += 1.5;
           }
         }
         
-        // Recent publications get a slight boost
+        // Recent publications get a boost with a graduated scale
         const pubDate = new Date(article.publicationDate);
         const now = new Date();
-        const monthsAgo = (now.getFullYear() - pubDate.getFullYear()) * 12 + now.getMonth() - pubDate.getMonth();
-        if (monthsAgo < 12) { // Published in the last year
+        const yearDiff = now.getFullYear() - pubDate.getFullYear();
+        
+        if (yearDiff <= 1) { // Published in the last year
+          score += 4;
+        } else if (yearDiff <= 3) { // Published in the last 3 years
+          score += 3;
+        } else if (yearDiff <= 5) { // Published in the last 5 years
           score += 2;
+        } else if (yearDiff <= 10) { // Published in the last 10 years
+          score += 1;
         }
         
         return { article, relevanceScore: score };

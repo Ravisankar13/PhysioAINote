@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Loader2, Filter, Plus, Search } from 'lucide-react';
+import { Loader2, Filter, Plus, Search, Download, Trash, Check, BookmarkPlus } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger, SheetFooter } from '@/components/ui/sheet';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { useLocation } from 'wouter';
 import { Input } from '@/components/ui/input';
@@ -21,6 +21,7 @@ import {
   PaginationNext, 
   PaginationPrevious
 } from '@/components/ui/pagination';
+import { jsPDF } from "jspdf";
 
 // Exercise type matching database schema
 interface Exercise {
@@ -159,7 +160,15 @@ const bodyPartImages: Record<string, string> = {
 };
 
 // Exercise card component
-function ExerciseCard({ exercise }: { exercise: Exercise }) {
+function ExerciseCard({ 
+  exercise, 
+  isSelected = false, 
+  onToggleSelect 
+}: { 
+  exercise: Exercise, 
+  isSelected?: boolean,
+  onToggleSelect?: (exercise: Exercise) => void
+}) {
   // Find the most appropriate image for the exercise
   const getImageUrl = () => {
     // Use custom image if available
@@ -202,11 +211,31 @@ function ExerciseCard({ exercise }: { exercise: Exercise }) {
     return bodyPartImages[exercise.bodyPart] || bodyPartImages.general;
   };
 
+  const handleSelectClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (onToggleSelect) {
+      onToggleSelect(exercise);
+    }
+  };
+
   return (
-    <Card className="h-full flex flex-col hover:shadow-md transition-shadow duration-300">
+    <Card className={`h-full flex flex-col hover:shadow-md transition-shadow duration-300 ${isSelected ? 'border-primary border-2' : ''}`}>
       <CardHeader className="pb-3">
         <div className="flex justify-between items-start gap-2">
-          <CardTitle className="text-lg line-clamp-2">{exercise.title}</CardTitle>
+          <div className="flex items-start gap-2 flex-1">
+            {onToggleSelect && (
+              <Button 
+                variant={isSelected ? "default" : "outline"} 
+                size="icon" 
+                className="h-7 w-7 rounded-full flex-shrink-0 mt-0.5"
+                onClick={handleSelectClick}
+              >
+                {isSelected ? <Check className="h-4 w-4" /> : <BookmarkPlus className="h-4 w-4" />}
+              </Button>
+            )}
+            <CardTitle className="text-lg line-clamp-2">{exercise.title}</CardTitle>
+          </div>
           <Badge 
             variant={
               exercise.difficulty === 'beginner' ? 'outline' : 

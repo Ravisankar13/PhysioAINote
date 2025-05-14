@@ -104,11 +104,15 @@ export default function TechniqueForm() {
   const onSubmit = (data: TechniqueFormValues) => {
     // Transform empty strings to null
     const formattedData = {
-      ...data,
-      contraindications: data.contraindications || null,
-      evidence: data.evidence || null,
-      videoUrl: data.videoUrl || null,
-      imageUrl: data.imageUrl || null,
+      title: data.title,
+      bodyPart: data.bodyPart,
+      description: data.description,
+      indications: data.indications,
+      technique: data.technique,
+      contraindications: data.contraindications || undefined,
+      evidence: data.evidence || undefined,
+      videoUrl: data.videoUrl || undefined,
+      imageUrl: data.imageUrl || undefined,
     };
     
     createTechniqueMutation.mutate(formattedData);

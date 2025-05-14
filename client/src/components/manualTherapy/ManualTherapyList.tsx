@@ -31,6 +31,7 @@ import {
   PaginationNext,
   PaginationPrevious
 } from '@/components/ui/pagination';
+import BodyHeatMap from './BodyHeatMap';
 
 // Manual Therapy Technique type
 interface ManualTherapyTechnique {
@@ -131,6 +132,7 @@ export default function ManualTherapyList() {
   const [isSearching, setIsSearching] = useState(false);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const techniquesPerPage = 6;
+  const [viewMode, setViewMode] = useState<'tabs' | 'heatmap'>('heatmap');
 
   // Fetch manual therapy techniques
   const { data: techniques, isLoading, error } = useQuery<ManualTherapyTechnique[]>({
@@ -203,119 +205,157 @@ export default function ManualTherapyList() {
           Browse evidence-based manual therapy techniques for different body parts
         </p>
 
-        {/* Search Bar */}
-        <div className="relative w-full md:w-64">
-          <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-            <Search className="h-4 w-4 text-muted-foreground" />
+        <div className="flex items-center gap-2">
+          {/* View Mode Toggle */}
+          <div className="flex items-center space-x-2 mr-2">
+            <Button 
+              variant={viewMode === 'heatmap' ? "default" : "outline"} 
+              size="sm"
+              onClick={() => setViewMode('heatmap')}
+            >
+              Heat Map
+            </Button>
+            <Button 
+              variant={viewMode === 'tabs' ? "default" : "outline"} 
+              size="sm"
+              onClick={() => setViewMode('tabs')}
+            >
+              Tabs
+            </Button>
           </div>
-          <Input
-            type="search"
-            placeholder="Search techniques..."
-            className="pl-10"
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              setCurrentPage(1); // Reset to first page when searching
-              if (e.target.value.length > 2) {
-                setIsSearching(true);
-              } else {
-                setIsSearching(false);
-              }
-            }}
-          />
+
+          {/* Search Bar */}
+          <div className="relative w-full md:w-64">
+            <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+              <Search className="h-4 w-4 text-muted-foreground" />
+            </div>
+            <Input
+              type="search"
+              placeholder="Search techniques..."
+              className="pl-10"
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setCurrentPage(1); // Reset to first page when searching
+                if (e.target.value.length > 2) {
+                  setIsSearching(true);
+                } else {
+                  setIsSearching(false);
+                }
+              }}
+            />
+          </div>
         </div>
       </div>
 
+      {/* Body Heat Map View */}
+      {viewMode === 'heatmap' && (
+        <div className="my-6">
+          <BodyHeatMap 
+            onSelectBodyPart={(bodyPart) => {
+              setActiveTab(bodyPart);
+              setCurrentPage(1);
+              setSearchQuery('');
+              setIsSearching(false);
+            }}
+            selectedBodyPart={activeTab}
+          />
+        </div>
+      )}
+
       {/* Body Part Tabs */}
-      <Tabs value={activeTab} onValueChange={(value) => {
-        setActiveTab(value);
-        setCurrentPage(1); // Reset to first page when changing tabs
-        setSearchQuery(''); // Clear search when changing tabs
-        setIsSearching(false);
-      }}>
-        <TabsList className="mb-4 flex flex-wrap h-auto">
-          {bodyPartTabs.map(tab => (
-            <TabsTrigger key={tab.id} value={tab.id} className="capitalize">
-              {tab.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+      {viewMode === 'tabs' && (
+        <Tabs value={activeTab} onValueChange={(value) => {
+          setActiveTab(value);
+          setCurrentPage(1); // Reset to first page when changing tabs
+          setSearchQuery(''); // Clear search when changing tabs
+          setIsSearching(false);
+        }}>
+          <TabsList className="mb-4 flex flex-wrap h-auto">
+            {bodyPartTabs.map(tab => (
+              <TabsTrigger key={tab.id} value={tab.id} className="capitalize">
+                {tab.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+      )}
 
-        <TabsContent value={activeTab} className="space-y-6">
-          {isLoading ? (
-            <div className="flex justify-center items-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      {/* Techniques Content */}
+      <div className="space-y-6">
+        {isLoading ? (
+          <div className="flex justify-center items-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        ) : error ? (
+          <div className="text-center py-12">
+            <p className="text-red-500">Error loading techniques. Please try again later.</p>
+          </div>
+        ) : currentTechniques.length === 0 ? (
+          <div className="text-center py-12">
+            <Info className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+            <h3 className="text-lg font-medium">No techniques found</h3>
+            <p className="text-muted-foreground mt-2">
+              {isSearching 
+                ? "No techniques match your search criteria. Try a different search term."
+                : `No techniques available for ${activeTab}. Check back later or select a different body part.`
+              }
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {currentTechniques.map((technique) => (
+                <TechniqueCard key={technique.id} technique={technique} />
+              ))}
             </div>
-          ) : error ? (
-            <div className="text-center py-12">
-              <p className="text-red-500">Error loading techniques. Please try again later.</p>
-            </div>
-          ) : currentTechniques.length === 0 ? (
-            <div className="text-center py-12">
-              <Info className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-medium">No techniques found</h3>
-              <p className="text-muted-foreground mt-2">
-                {isSearching 
-                  ? "No techniques match your search criteria. Try a different search term."
-                  : `No techniques available for ${activeTab}. Check back later or select a different body part.`
-                }
-              </p>
-            </div>
-          ) : (
-            <>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {currentTechniques.map((technique) => (
-                  <TechniqueCard key={technique.id} technique={technique} />
-                ))}
-              </div>
 
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <Pagination className="mt-6">
-                  <PaginationContent>
-                    <PaginationItem>
-                      <PaginationPrevious 
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <Pagination className="mt-6">
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious 
+                      href="#" 
+                      onClick={(e) => {
+                        e.preventDefault();
+                        if (currentPage > 1) handlePageChange(currentPage - 1);
+                      }}
+                      className={currentPage <= 1 ? "pointer-events-none opacity-50" : ""}
+                    />
+                  </PaginationItem>
+                  
+                  {Array.from({ length: totalPages }).map((_, i) => (
+                    <PaginationItem key={i}>
+                      <PaginationLink 
                         href="#" 
+                        isActive={currentPage === i + 1}
                         onClick={(e) => {
                           e.preventDefault();
-                          if (currentPage > 1) handlePageChange(currentPage - 1);
+                          handlePageChange(i + 1);
                         }}
-                        className={currentPage <= 1 ? "pointer-events-none opacity-50" : ""}
-                      />
+                      >
+                        {i + 1}
+                      </PaginationLink>
                     </PaginationItem>
-                    
-                    {Array.from({ length: totalPages }).map((_, i) => (
-                      <PaginationItem key={i}>
-                        <PaginationLink 
-                          href="#" 
-                          isActive={currentPage === i + 1}
-                          onClick={(e) => {
-                            e.preventDefault();
-                            handlePageChange(i + 1);
-                          }}
-                        >
-                          {i + 1}
-                        </PaginationLink>
-                      </PaginationItem>
-                    ))}
-                    
-                    <PaginationItem>
-                      <PaginationNext 
-                        href="#" 
-                        onClick={(e) => {
-                          e.preventDefault();
-                          if (currentPage < totalPages) handlePageChange(currentPage + 1);
-                        }}
-                        className={currentPage >= totalPages ? "pointer-events-none opacity-50" : ""}
-                      />
-                    </PaginationItem>
-                  </PaginationContent>
-                </Pagination>
-              )}
-            </>
-          )}
-        </TabsContent>
-      </Tabs>
+                  ))}
+                  
+                  <PaginationItem>
+                    <PaginationNext 
+                      href="#" 
+                      onClick={(e) => {
+                        e.preventDefault();
+                        if (currentPage < totalPages) handlePageChange(currentPage + 1);
+                      }}
+                      className={currentPage >= totalPages ? "pointer-events-none opacity-50" : ""}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }

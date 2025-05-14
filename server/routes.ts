@@ -1179,6 +1179,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
   });
+  
+  // Endpoint to count manual therapy techniques by body part
+  app.get("/api/manual-therapy/counts", async (req: Request, res: Response) => {
+    try {
+      // Get all techniques
+      const allTechniques = await storage.getManualTherapyTechniques();
+      
+      // Count techniques by body part
+      const bodyPartCounts = allTechniques.reduce((counts: {bodyPart: string, count: number}[], technique) => {
+        const existingCount = counts.find(c => c.bodyPart === technique.bodyPart);
+        if (existingCount) {
+          existingCount.count++;
+        } else {
+          counts.push({ bodyPart: technique.bodyPart, count: 1 });
+        }
+        return counts;
+      }, []);
+      
+      res.json(bodyPartCounts);
+    } catch (error) {
+      console.error('Error counting manual therapy techniques:', error);
+      res.status(500).json({ 
+        message: 'Failed to count manual therapy techniques',
+        error: (error as Error).message 
+      });
+    }
+  });
 
   const httpServer = createServer(app);
   return httpServer;

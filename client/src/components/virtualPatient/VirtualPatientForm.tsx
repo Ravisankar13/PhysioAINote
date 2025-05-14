@@ -26,6 +26,7 @@ import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
+import { bodyPartEnum } from "@shared/schema";
 
 const genderOptions = [
   { value: "male", label: "Male" },
@@ -55,7 +56,10 @@ const formSchema = z.object({
   gender: z.string().min(1, { message: "Gender is required." }),
   chiefComplaint: z.string().min(5, { message: "Chief complaint must be at least 5 characters." }),
   symptomsDescription: z.string().min(20, { message: "Please provide a detailed symptoms description." }),
-  bodyPart: z.string().min(1, { message: "Body part is required." }),
+  bodyPart: z.enum(bodyPartEnum.enumValues, {
+    required_error: "Body part is required.",
+    invalid_type_error: "Body part must be valid."
+  }),
   pastMedicalHistory: z.string().optional(),
   pastSurgicalHistory: z.string().optional(),
   socialHistory: z.string().optional(),
@@ -82,7 +86,7 @@ export default function VirtualPatientForm({ onPatientCreated, onCancel }: Virtu
       gender: "",
       chiefComplaint: "",
       symptomsDescription: "",
-      bodyPart: "",
+      bodyPart: "other",
       pastMedicalHistory: "",
       pastSurgicalHistory: "",
       socialHistory: "",

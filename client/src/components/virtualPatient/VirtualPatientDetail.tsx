@@ -299,25 +299,159 @@ export default function VirtualPatientDetail({ patientId, onBackToList }: Virtua
                     <ClipboardCheck className="h-5 w-5 mr-2 text-green-500" />
                     Treatment Options
                   </h3>
-                  <div className="space-y-3">
-                    {patient.treatmentOptions && patient.treatmentOptions.map((treatment: any, idx: number) => (
-                      <div key={idx} className="border rounded-lg p-3">
-                        <div className="flex justify-between items-start mb-1">
-                          <h4 className="text-md font-medium">{treatment.name}</h4>
-                          <div className="flex space-x-2">
-                            <Badge variant="outline">
-                              {treatment.evidenceLevel} evidence
-                            </Badge>
-                            <Badge variant={
-                              treatment.recommendationStrength === "highly recommended" ? "default" : 
-                              treatment.recommendationStrength === "recommended" ? "secondary" : 
-                              "outline"
-                            }>
-                              {treatment.recommendationStrength}
-                            </Badge>
+                  <div className="space-y-6">
+                    {patient.treatmentOptions && patient.treatmentOptions.map((treatmentCategory: any, idx: number) => (
+                      <div key={idx} className="border rounded-lg p-4">
+                        <h4 className="text-md font-semibold mb-3 bg-primary/10 p-2 rounded">
+                          {treatmentCategory.category}
+                        </h4>
+                        
+                        {/* Manual Therapy Techniques */}
+                        {treatmentCategory.techniques && treatmentCategory.techniques.length > 0 && (
+                          <div className="mb-4 space-y-3">
+                            {treatmentCategory.techniques.map((technique: any, techIdx: number) => (
+                              <div key={techIdx} className="border border-gray-200 rounded-md p-3">
+                                <div className="flex justify-between items-start mb-2">
+                                  <h5 className="text-md font-medium">{technique.name}</h5>
+                                  <div className="flex space-x-2">
+                                    <Badge variant="outline">
+                                      {technique.evidenceLevel} evidence
+                                    </Badge>
+                                    <Badge variant={
+                                      technique.recommendationStrength === "highly recommended" ? "default" : 
+                                      technique.recommendationStrength === "recommended" ? "secondary" : 
+                                      "outline"
+                                    }>
+                                      {technique.recommendationStrength}
+                                    </Badge>
+                                  </div>
+                                </div>
+                                <p className="text-sm mb-2"><strong>Description:</strong> {technique.description}</p>
+                                <p className="text-sm mb-2"><strong>Target Tissue:</strong> {technique.targetTissue}</p>
+                                <p className="text-sm mb-2"><strong>Research Support:</strong> {technique.researchSupport}</p>
+                                {technique.contraindications && technique.contraindications.length > 0 && (
+                                  <div className="mt-2">
+                                    <p className="text-sm font-medium">Contraindications:</p>
+                                    <ul className="list-disc list-inside text-sm ml-2">
+                                      {technique.contraindications.map((contraindication: string, i: number) => (
+                                        <li key={i}>{contraindication}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
                           </div>
-                        </div>
-                        <p className="text-sm">{treatment.description}</p>
+                        )}
+                        
+                        {/* Progressive Loading Exercises */}
+                        {treatmentCategory.exercises && treatmentCategory.exercises.length > 0 && (
+                          <div className="mb-4 space-y-3">
+                            {treatmentCategory.exercises.map((exercise: any, exIdx: number) => (
+                              <div key={exIdx} className="border border-gray-200 rounded-md p-3">
+                                <div className="flex justify-between items-start mb-2">
+                                  <h5 className="text-md font-medium">{exercise.name}</h5>
+                                  <div className="flex space-x-2">
+                                    <Badge variant="outline">
+                                      {exercise.evidenceLevel} evidence
+                                    </Badge>
+                                    <Badge variant={
+                                      exercise.recommendationStrength === "highly recommended" ? "default" : 
+                                      exercise.recommendationStrength === "recommended" ? "secondary" : 
+                                      "outline"
+                                    }>
+                                      {exercise.recommendationStrength}
+                                    </Badge>
+                                  </div>
+                                </div>
+                                <p className="text-sm mb-2"><strong>Description:</strong> {exercise.description}</p>
+                                <p className="text-sm mb-2"><strong>Target Muscle Group:</strong> {exercise.targetMuscleGroup}</p>
+                                
+                                <div className="bg-gray-50 p-2 rounded my-2">
+                                  <p className="text-sm font-medium mb-1">Loading Parameters:</p>
+                                  <div className="grid grid-cols-2 gap-2 text-sm">
+                                    <p><strong>Sets:</strong> {exercise.loadingParameters.sets}</p>
+                                    <p><strong>Reps:</strong> {exercise.loadingParameters.reps}</p>
+                                    <p><strong>Frequency:</strong> {exercise.loadingParameters.frequency}</p>
+                                    <p><strong>Intensity:</strong> {exercise.loadingParameters.intensity}</p>
+                                  </div>
+                                  <p className="text-sm mt-1"><strong>Progression Criteria:</strong> {exercise.loadingParameters.progressionCriteria}</p>
+                                </div>
+                                
+                                <p className="text-sm mb-2"><strong>Research Support:</strong> {exercise.researchSupport}</p>
+                                
+                                {exercise.modificationOptions && exercise.modificationOptions.length > 0 && (
+                                  <div className="mt-2">
+                                    <p className="text-sm font-medium">Modification Options:</p>
+                                    <ul className="list-disc list-inside text-sm ml-2">
+                                      {exercise.modificationOptions.map((modification: string, i: number) => (
+                                        <li key={i}>{modification}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        
+                        {/* Patient Education */}
+                        {treatmentCategory.recommendations && treatmentCategory.recommendations.length > 0 && (
+                          <div className="space-y-3">
+                            {treatmentCategory.recommendations.map((education: any, eduIdx: number) => (
+                              <div key={eduIdx} className="border border-gray-200 rounded-md p-3">
+                                <div className="flex justify-between items-start mb-2">
+                                  <h5 className="text-md font-medium">{education.topic}</h5>
+                                  <div className="flex space-x-2">
+                                    <Badge variant="outline">
+                                      {education.evidenceLevel} evidence
+                                    </Badge>
+                                    <Badge variant={
+                                      education.recommendationStrength === "highly recommended" ? "default" : 
+                                      education.recommendationStrength === "recommended" ? "secondary" : 
+                                      "outline"
+                                    }>
+                                      {education.recommendationStrength}
+                                    </Badge>
+                                  </div>
+                                </div>
+                                
+                                {education.keyPoints && education.keyPoints.length > 0 && (
+                                  <div>
+                                    <p className="text-sm font-medium">Key Points:</p>
+                                    <ul className="list-disc list-inside text-sm ml-2">
+                                      {education.keyPoints.map((point: string, i: number) => (
+                                        <li key={i}>{point}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        
+                        {/* Legacy format fallback - still handle old structure */}
+                        {!treatmentCategory.category && treatmentCategory.name && (
+                          <div className="border border-gray-200 rounded-md p-3">
+                            <div className="flex justify-between items-start mb-1">
+                              <h5 className="text-md font-medium">{treatmentCategory.name}</h5>
+                              <div className="flex space-x-2">
+                                <Badge variant="outline">
+                                  {treatmentCategory.evidenceLevel} evidence
+                                </Badge>
+                                <Badge variant={
+                                  treatmentCategory.recommendationStrength === "highly recommended" ? "default" : 
+                                  treatmentCategory.recommendationStrength === "recommended" ? "secondary" : 
+                                  "outline"
+                                }>
+                                  {treatmentCategory.recommendationStrength}
+                                </Badge>
+                              </div>
+                            </div>
+                            <p className="text-sm">{treatmentCategory.description}</p>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

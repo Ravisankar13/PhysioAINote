@@ -649,9 +649,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const bodyPart = req.query.bodyPart as string | undefined;
       const page = parseInt(req.query.page as string || '1');
       const pageSize = parseInt(req.query.pageSize as string || '10');
+      const all = req.query.all === 'true';
       
-      const result = await storage.getResearchArticles(bodyPart, page, pageSize);
-      res.json(result);
+      const result = await storage.getResearchArticles(bodyPart, page, pageSize, all);
+      
+      // Format the response to match what the frontend expects
+      const response = {
+        data: result.articles,
+        pagination: {
+          page: page,
+          pageSize: pageSize,
+          totalItems: result.total,
+          totalPages: Math.ceil(result.total / pageSize)
+        }
+      };
+      
+      res.json(response);
     } catch (error) {
       if (error instanceof Error) {
         res.status(500).json({ error: error.message });

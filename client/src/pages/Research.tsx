@@ -8,6 +8,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ExternalLink, BookOpen, Info, Award, Calendar, Users } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
+import { 
+  Pagination, 
+  PaginationContent, 
+  PaginationItem, 
+  PaginationLink, 
+  PaginationNext, 
+  PaginationPrevious,
+  PaginationEllipsis 
+} from "@/components/ui/pagination";
 import MembershipRequired from "@/components/MembershipRequired";
 
 interface ResearchArticle {
@@ -141,22 +150,45 @@ export default function Research() {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [searchResults, setSearchResults] = useState<ResearchArticle[]>([]);
   
-  // Fetch all research articles
-  const { data: articles, isLoading, error } = useQuery<ResearchArticle[]>({
-    queryKey: ["/api/research"],
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const pageSize = 10; // Number of articles per page
+  
+  // Fetch paginated research articles
+  const { data: articlesResponse, isLoading, error } = useQuery<{
+    data: ResearchArticle[],
+    pagination: {
+      page: number,
+      pageSize: number,
+      totalItems: number,
+      totalPages: number
+    }
+  }>({
+    queryKey: ["/api/research", selectedTab, currentPage, pageSize],
+    queryFn: async () => {
+      const response = await fetch(`/api/research?bodyPart=${selectedTab}&page=${currentPage}&pageSize=${pageSize}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch research articles');
+      }
+      return response.json();
+    }
   });
   
-  // When tab changes or articles load, filter articles for the selected body part
+  // Reset to first page when changing tabs
   useEffect(() => {
-    if (articles) {
-      // Filter articles by body part for the default tab view
-      const articlesByBodyPart = articles.filter(article => article.bodyPart === selectedTab);
-      setFilteredArticles(articlesByBodyPart);
+    setCurrentPage(1);
+  }, [selectedTab]);
+
+  // When tab changes, articles load, or pagination changes
+  useEffect(() => {
+    if (articlesResponse) {
+      // Get articles for the current page
+      setFilteredArticles(articlesResponse.data);
       
-      // If there's a search query, search across ALL articles regardless of body part
+      // If there's a search query, search across ALL articles
+      // Note: We may need to adjust this to search server-side for better performance with large datasets
       if (searchQuery.trim()) {
         const searchTermLower = searchQuery.toLowerCase();
-        const allMatchingArticles = articles.filter(article => 
+        const allMatchingArticles = articlesResponse.data.filter(article => 
           article.title.toLowerCase().includes(searchTermLower) ||
           article.abstract.toLowerCase().includes(searchTermLower) ||
           article.authors.toLowerCase().includes(searchTermLower) ||
@@ -165,20 +197,17 @@ export default function Research() {
           article.clinicalRelevance?.toLowerCase().includes(searchTermLower)
         );
         
-        // If we have search results, prioritize showing results from the selected tab first
-        // by sorting them so that the current tab's articles appear first
-        const sortedResults = [...allMatchingArticles].sort((a, b) => {
-          if (a.bodyPart === selectedTab && b.bodyPart !== selectedTab) return -1;
-          if (a.bodyPart !== selectedTab && b.bodyPart === selectedTab) return 1;
-          return 0;
-        });
-        
-        setSearchResults(sortedResults);
+        setSearchResults(allMatchingArticles);
       } else {
         setSearchResults([]);
       }
     }
-  }, [selectedTab, articles, searchQuery]);
+  }, [selectedTab, articlesResponse, searchQuery]);
+  
+  // Handle page change
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
   
   // Handle error in fetching articles
   useEffect(() => {
@@ -290,14 +319,98 @@ export default function Research() {
                       )}
                     </div>
                   ) : (
-                    // When not searching, show normal tabs view
+                    // When not searching, show normal tabs view with pagination
                     Object.keys(bodyPartInfo).map((key) => (
                       <TabsContent key={key} value={key} className="mt-0">
                         {filteredArticles.length > 0 ? (
-                          <div className="space-y-4">
-                            {filteredArticles.map((article) => (
-                              <ArticleCard key={article.id} article={article} />
-                            ))}
+                          <div className="space-y-6">
+                            <div className="space-y-4">
+                              {filteredArticles.map((article) => (
+                                <ArticleCard key={article.id} article={article} />
+                              ))}
+                            </div>
+                            
+                            {/* Pagination component */}
+                            {articlesResponse && articlesResponse.pagination.totalPages > 1 && (
+                              <Pagination className="mt-8">
+                                <PaginationContent>
+                                  {currentPage > 1 && (
+                                    <PaginationItem>
+                                      <PaginationPrevious onClick={() => handlePageChange(currentPage - 1)} />
+                                    </PaginationItem>
+                                  )}
+                                  
+                                  {/* First page */}
+                                  {currentPage > 2 && (
+                                    <PaginationItem>
+                                      <PaginationLink onClick={() => handlePageChange(1)}>1</PaginationLink>
+                                    </PaginationItem>
+                                  )}
+                                  
+                                  {/* Ellipsis for pages before current */}
+                                  {currentPage > 3 && (
+                                    <PaginationItem>
+                                      <PaginationEllipsis />
+                                    </PaginationItem>
+                                  )}
+                                  
+                                  {/* Previous page */}
+                                  {currentPage > 1 && (
+                                    <PaginationItem>
+                                      <PaginationLink onClick={() => handlePageChange(currentPage - 1)}>
+                                        {currentPage - 1}
+                                      </PaginationLink>
+                                    </PaginationItem>
+                                  )}
+                                  
+                                  {/* Current page */}
+                                  <PaginationItem>
+                                    <PaginationLink isActive>{currentPage}</PaginationLink>
+                                  </PaginationItem>
+                                  
+                                  {/* Next page */}
+                                  {currentPage < articlesResponse.pagination.totalPages && (
+                                    <PaginationItem>
+                                      <PaginationLink onClick={() => handlePageChange(currentPage + 1)}>
+                                        {currentPage + 1}
+                                      </PaginationLink>
+                                    </PaginationItem>
+                                  )}
+                                  
+                                  {/* Ellipsis for pages after current */}
+                                  {currentPage < articlesResponse.pagination.totalPages - 2 && (
+                                    <PaginationItem>
+                                      <PaginationEllipsis />
+                                    </PaginationItem>
+                                  )}
+                                  
+                                  {/* Last page */}
+                                  {currentPage < articlesResponse.pagination.totalPages - 1 && (
+                                    <PaginationItem>
+                                      <PaginationLink onClick={() => handlePageChange(articlesResponse.pagination.totalPages)}>
+                                        {articlesResponse.pagination.totalPages}
+                                      </PaginationLink>
+                                    </PaginationItem>
+                                  )}
+                                  
+                                  {currentPage < articlesResponse.pagination.totalPages && (
+                                    <PaginationItem>
+                                      <PaginationNext onClick={() => handlePageChange(currentPage + 1)} />
+                                    </PaginationItem>
+                                  )}
+                                </PaginationContent>
+                              </Pagination>
+                            )}
+                            
+                            {/* Display pagination info */}
+                            {articlesResponse && (
+                              <div className="text-center text-sm text-muted-foreground mt-2">
+                                Showing {filteredArticles.length} of {articlesResponse.pagination.totalItems} articles
+                                {articlesResponse.pagination.totalPages > 1 && (
+                                  <span> (Page {currentPage} of {articlesResponse.pagination.totalPages})</span>
+                                )}
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <div className="flex flex-col items-center justify-center py-10 text-center">

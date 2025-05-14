@@ -294,11 +294,9 @@ export class DatabaseStorage implements IStorage {
   async getResearchArticles(
     bodyPart?: string,
     page: number = 1,
-    pageSize: number = 10
+    pageSize: number = 10,
+    getAll: boolean = false
   ): Promise<{ articles: ResearchArticle[], total: number }> {
-    // Calculate offset based on page and pageSize
-    const offset = (page - 1) * pageSize;
-    
     // Build base query
     let query = db.select().from(researchArticles);
     
@@ -313,6 +311,15 @@ export class DatabaseStorage implements IStorage {
       .where(bodyPart ? eq(researchArticles.bodyPart, bodyPart as any) : undefined);
       
     const total = countResult[0]?.count || 0;
+    
+    // If getAll is true, return all articles without pagination
+    if (getAll) {
+      const articles = await query.orderBy(desc(researchArticles.publicationDate));
+      return { articles, total };
+    }
+    
+    // Otherwise calculate offset based on page and pageSize
+    const offset = (page - 1) * pageSize;
     
     // Then get the paginated results
     const articles = await query

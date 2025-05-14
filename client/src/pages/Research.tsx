@@ -178,31 +178,70 @@ export default function Research() {
     setCurrentPage(1);
   }, [selectedTab]);
 
+  // For storing all articles from all body parts when searching
+  const [allArticles, setAllArticles] = useState<ResearchArticle[]>([]);
+
   // When tab changes, articles load, or pagination changes
   useEffect(() => {
     if (articlesResponse) {
       // Get articles for the current page
       setFilteredArticles(articlesResponse.data);
-      
-      // If there's a search query, search across ALL articles
-      // Note: We may need to adjust this to search server-side for better performance with large datasets
+    }
+  }, [selectedTab, articlesResponse]);
+  
+  // Handle search - search across ALL body parts
+  useEffect(() => {
+    const performSearch = async () => {
       if (searchQuery.trim()) {
         const searchTermLower = searchQuery.toLowerCase();
-        const allMatchingArticles = articlesResponse.data.filter(article => 
-          article.title.toLowerCase().includes(searchTermLower) ||
-          article.abstract.toLowerCase().includes(searchTermLower) ||
-          article.authors.toLowerCase().includes(searchTermLower) ||
-          article.journal.toLowerCase().includes(searchTermLower) ||
-          article.keyFindings?.toLowerCase().includes(searchTermLower) ||
-          article.clinicalRelevance?.toLowerCase().includes(searchTermLower)
-        );
         
-        setSearchResults(allMatchingArticles);
+        try {
+          // If we don't have all articles yet, fetch them all
+          if (allArticles.length === 0) {
+            const allArticlesResponse = await fetch('/api/research?all=true');
+            if (!allArticlesResponse.ok) {
+              throw new Error('Failed to fetch all articles');
+            }
+            const data = await allArticlesResponse.json();
+            setAllArticles(data.data || []);
+            
+            // Filter the newly fetched articles
+            const matchingArticles = data.data.filter((article: ResearchArticle) => 
+              article.title.toLowerCase().includes(searchTermLower) ||
+              article.abstract.toLowerCase().includes(searchTermLower) ||
+              article.authors.toLowerCase().includes(searchTermLower) ||
+              article.journal.toLowerCase().includes(searchTermLower) ||
+              article.keyFindings?.toLowerCase().includes(searchTermLower) ||
+              article.clinicalRelevance?.toLowerCase().includes(searchTermLower)
+            );
+            setSearchResults(matchingArticles);
+          } else {
+            // Use existing all articles
+            const matchingArticles = allArticles.filter(article => 
+              article.title.toLowerCase().includes(searchTermLower) ||
+              article.abstract.toLowerCase().includes(searchTermLower) ||
+              article.authors.toLowerCase().includes(searchTermLower) ||
+              article.journal.toLowerCase().includes(searchTermLower) ||
+              article.keyFindings?.toLowerCase().includes(searchTermLower) ||
+              article.clinicalRelevance?.toLowerCase().includes(searchTermLower)
+            );
+            setSearchResults(matchingArticles);
+          }
+        } catch (error) {
+          console.error('Error searching articles:', error);
+          toast({
+            title: "Search failed",
+            description: "Could not search across all articles. Please try again.",
+            variant: "destructive",
+          });
+        }
       } else {
         setSearchResults([]);
       }
-    }
-  }, [selectedTab, articlesResponse, searchQuery]);
+    };
+    
+    performSearch();
+  }, [searchQuery, toast, allArticles]);
   
   // Handle page change
   const handlePageChange = (page: number) => {

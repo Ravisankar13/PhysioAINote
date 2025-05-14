@@ -1183,21 +1183,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Endpoint to count manual therapy techniques by body part
   app.get("/api/manual-therapy/counts", async (req: Request, res: Response) => {
     try {
-      // Get all techniques
-      const allTechniques = await storage.getManualTherapyTechniques();
-      
-      // Count techniques by body part
-      const bodyPartCounts = allTechniques.reduce((counts: {bodyPart: string, count: number}[], technique) => {
-        const existingCount = counts.find(c => c.bodyPart === technique.bodyPart);
-        if (existingCount) {
-          existingCount.count++;
-        } else {
-          counts.push({ bodyPart: technique.bodyPart, count: 1 });
-        }
-        return counts;
-      }, []);
-      
-      res.json(bodyPartCounts);
+      try {
+        // Get all techniques
+        const allTechniques = await storage.getManualTherapyTechniques();
+        
+        // Count techniques by body part
+        const bodyPartCounts = allTechniques.reduce((counts: {bodyPart: string, count: number}[], technique) => {
+          const existingCount = counts.find(c => c.bodyPart === technique.bodyPart);
+          if (existingCount) {
+            existingCount.count++;
+          } else {
+            counts.push({ bodyPart: technique.bodyPart, count: 1 });
+          }
+          return counts;
+        }, []);
+        
+        res.json(bodyPartCounts);
+      } catch (innerError) {
+        console.error('Error in counting techniques:', innerError);
+        // Return empty counts as fallback
+        res.json([]);
+      }
     } catch (error) {
       console.error('Error counting manual therapy techniques:', error);
       res.status(500).json({ 

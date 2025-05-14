@@ -748,8 +748,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const bodyPart = req.query.bodyPart as string;
       const page = parseInt(req.query.page as string) || 1;
       const pageSize = parseInt(req.query.pageSize as string) || 10;
+      const getAll = req.query.all === "true";
       
-      const result = await storage.getResearchArticles(bodyPart, page, pageSize);
+      // If 'all' parameter is true, fetch all articles for search functionality
+      const result = await storage.getResearchArticles(bodyPart, page, pageSize, getAll);
       
       return res.json({
         data: result.articles,

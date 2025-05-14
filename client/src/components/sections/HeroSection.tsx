@@ -41,21 +41,27 @@ const HeroSection = () => {
                 <span className="text-sm md:text-base">Research</span>
               </div>
             </div>
-            <div className="mt-10 flex flex-col sm:flex-row gap-4">
+            <div className="mt-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <Link href="/clinical-notes">
-                <Button size="lg" className="bg-white text-primary hover:bg-white/90 shadow-md flex items-center gap-2">
+                <Button size="lg" className="w-full bg-white text-primary hover:bg-white/90 shadow-md flex items-center justify-center gap-2">
                   <Sparkles className="h-5 w-5" />
-                  <span className="font-semibold">Try AI Notes Demo</span>
+                  <span className="font-semibold">Try AI Notes</span>
+                </Button>
+              </Link>
+              <Link href="/virtual-patients">
+                <Button size="lg" className="w-full bg-secondary/90 text-white hover:bg-secondary shadow-md flex items-center justify-center gap-2">
+                  <Activity className="h-5 w-5" />
+                  <span className="font-semibold">Virtual Patients</span>
                 </Button>
               </Link>
               <Link href="/shared-cases">
-                <Button size="lg" variant="outline" className="text-white border-white/30 bg-white/10 hover:bg-white/20 hover:border-white/40 shadow-sm flex items-center gap-2">
+                <Button size="lg" variant="outline" className="w-full text-white border-white/30 bg-white/10 hover:bg-white/20 hover:border-white/40 shadow-sm flex items-center justify-center gap-2">
                   <Users className="h-5 w-5" />
-                  <span>Browse Peer Exchange</span>
+                  <span>Peer Exchange</span>
                 </Button>
               </Link>
               <Link href="/membership">
-                <Button size="lg" variant="ghost" className="text-white hover:bg-white/10 flex items-center gap-2">
+                <Button size="lg" variant="ghost" className="w-full text-white hover:bg-white/10 flex items-center justify-center gap-2">
                   <BadgeDollarSign className="h-5 w-5" />
                   <span>View Pricing</span>
                 </Button>

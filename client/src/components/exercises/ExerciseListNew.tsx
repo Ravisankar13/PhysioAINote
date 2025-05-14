@@ -40,8 +40,29 @@ interface Exercise {
   aiGenerated: boolean;
 }
 
+// Default images for different body parts
+const bodyPartImages: Record<string, string> = {
+  shoulder: 'https://images.unsplash.com/photo-1590507621108-433608c97823?q=80&w=2070&auto=format&fit=crop',
+  neck: 'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?q=80&w=2094&auto=format&fit=crop',
+  back: 'https://images.unsplash.com/photo-1603287681836-b174ce5074c2?q=80&w=2071&auto=format&fit=crop',
+  elbow: 'https://images.unsplash.com/photo-1576678927484-cc907957088c?q=80&w=1974&auto=format&fit=crop',
+  wrist: 'https://images.unsplash.com/photo-1556139966-56c3df1ddc63?q=80&w=2070&auto=format&fit=crop',
+  hand: 'https://images.unsplash.com/photo-1506374322094-6021fc3926f1?q=80&w=2070&auto=format&fit=crop',
+  hip: 'https://images.unsplash.com/photo-1434682881908-b43d0467b798?q=80&w=2074&auto=format&fit=crop',
+  knee: 'https://images.unsplash.com/photo-1548690312-e3b507d8c110?q=80&w=2069&auto=format&fit=crop',
+  ankle: 'https://images.unsplash.com/photo-1603744229289-64bfc37c5dd8?q=80&w=2070&auto=format&fit=crop',
+  foot: 'https://images.unsplash.com/photo-1508387027939-27cccde53673?q=80&w=2070&auto=format&fit=crop',
+  general: 'https://images.unsplash.com/photo-1518611012118-696072aa579a?q=80&w=2070&auto=format&fit=crop'
+};
+
 // Exercise card component
 function ExerciseCard({ exercise }: { exercise: Exercise }) {
+  // Get default image URL based on body part
+  const getImageUrl = () => {
+    if (exercise.imageUrl) return exercise.imageUrl;
+    return bodyPartImages[exercise.bodyPart] || bodyPartImages.general;
+  };
+
   return (
     <Card className="h-full flex flex-col hover:shadow-md transition-shadow duration-300">
       <CardHeader className="pb-3">
@@ -64,6 +85,46 @@ function ExerciseCard({ exercise }: { exercise: Exercise }) {
           {exercise.aiGenerated && <Badge variant="secondary">AI Generated</Badge>}
         </div>
       </CardHeader>
+      
+      {/* Image Display - Always show an image (either custom or default) */}
+      <div className="px-6 pb-2">
+        <div className="relative w-full h-48 overflow-hidden rounded-md bg-muted">
+          <img 
+            src={getImageUrl()} 
+            alt={`${exercise.title} exercise`} 
+            className="object-cover w-full h-full"
+            onError={(e) => {
+              // If custom image fails, try to fallback to default
+              const target = e.target as HTMLImageElement;
+              if (target.src !== bodyPartImages[exercise.bodyPart] && bodyPartImages[exercise.bodyPart]) {
+                target.src = bodyPartImages[exercise.bodyPart];
+              } else if (target.src !== bodyPartImages.general) {
+                target.src = bodyPartImages.general;
+              } else {
+                // If all fallbacks fail, hide the image
+                target.style.display = 'none';
+              }
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Video Display */}
+      {exercise.videoUrl && (
+        <div className="px-6 pb-2">
+          <div className="relative w-full h-48 overflow-hidden rounded-md bg-muted">
+            <video
+              src={exercise.videoUrl}
+              controls
+              className="object-cover w-full h-full"
+              onError={(e) => {
+                // Hide broken videos
+                (e.target as HTMLVideoElement).style.display = 'none';
+              }}
+            />
+          </div>
+        </div>
+      )}
       
       <CardContent className="flex-grow py-2">
         <Accordion type="single" collapsible className="w-full">

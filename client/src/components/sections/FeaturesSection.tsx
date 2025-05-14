@@ -3,9 +3,11 @@ import {
   Sparkles, 
   BookOpen, 
   Share2, 
-  BadgeDollarSign,
+  Activity,
+  Dumbbell,
   ArrowRight,
-  Zap
+  Zap,
+  Users
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -58,11 +60,38 @@ const FeaturesSection = () => {
   const features = [
     {
       icon: <Sparkles className="h-6 w-6" />,
-      title: "AI-Powered Note Generation",
-      description: "Generate comprehensive SOAP notes in seconds. Our AI assistant turns your patient interactions into structured clinical documentation, saving you valuable time.",
+      title: "AI-Powered Clinical Notes",
+      description: "Generate comprehensive SOAP notes in seconds. Our AI assistant converts audio recordings into structured clinical documentation, saving you valuable time.",
       linkText: "Try AI Notes",
       linkHref: "/clinical-notes",
       bgClass: "bg-gradient-to-br from-purple-600 to-indigo-700",
+      iconClass: "bg-white/20"
+    },
+    {
+      icon: <Activity className="h-6 w-6" />,
+      title: "Virtual Patients",
+      description: "Practice clinical reasoning with AI-generated virtual patients. Test your diagnostic skills and treatment planning with realistic case simulations.",
+      linkText: "Access Virtual Patients",
+      linkHref: "/virtual-patients",
+      bgClass: "bg-gradient-to-br from-rose-600 to-pink-700",
+      iconClass: "bg-white/20"
+    },
+    {
+      icon: <Users className="h-6 w-6" />,
+      title: "Peer Exchange",
+      description: "Share anonymized case studies and collaborate with fellow physiotherapists on challenging clinical cases. Learn from collective expertise and improve patient outcomes.",
+      linkText: "Join Peer Exchange",
+      linkHref: "/shared-cases",
+      bgClass: "bg-gradient-to-br from-emerald-600 to-teal-700",
+      iconClass: "bg-white/20"
+    },
+    {
+      icon: <Dumbbell className="h-6 w-6" />,
+      title: "Exercise & Manual Therapy",
+      description: "Access our extensive library of evidence-based exercises and manual therapy techniques, categorized by body part and difficulty to enhance your treatment planning.",
+      linkText: "Explore Library",
+      linkHref: "/exercises",
+      bgClass: "bg-gradient-to-br from-amber-600 to-orange-700",
       iconClass: "bg-white/20"
     },
     {
@@ -72,24 +101,6 @@ const FeaturesSection = () => {
       linkText: "Browse Research",
       linkHref: "/research",
       bgClass: "bg-gradient-to-br from-blue-600 to-cyan-700",
-      iconClass: "bg-white/20"
-    },
-    {
-      icon: <Share2 className="h-6 w-6" />,
-      title: "Collaborative Clinical Notes",
-      description: "Share de-identified notes with colleagues and students. Collaborate, provide feedback, and learn from shared clinical experiences.",
-      linkText: "View Shared Notes",
-      linkHref: "/shared-notes",
-      bgClass: "bg-gradient-to-br from-emerald-600 to-teal-700",
-      iconClass: "bg-white/20"
-    },
-    {
-      icon: <BadgeDollarSign className="h-6 w-6" />,
-      title: "Tiered Membership Plans",
-      description: "Choose the plan that fits your needs. Basic ($3.99/week), Standard ($7.99/week), or Premium ($9.99/week) with increasing levels of access to all features.",
-      linkText: "See Pricing",
-      linkHref: "/membership",
-      bgClass: "bg-gradient-to-br from-amber-600 to-orange-700",
       iconClass: "bg-white/20"
     }
   ];
@@ -110,7 +121,7 @@ const FeaturesSection = () => {
           </p>
         </div>
 
-        <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           {features.map((feature, index) => (
             <FeatureCard
               key={index}

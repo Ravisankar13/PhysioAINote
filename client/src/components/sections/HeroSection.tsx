@@ -1,6 +1,6 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { BadgeDollarSign, Sparkles } from "lucide-react";
+import { BadgeDollarSign, Sparkles, Dumbbell, BookOpen, Activity, Users } from "lucide-react";
 
 const HeroSection = () => {
   return (
@@ -17,8 +17,30 @@ const HeroSection = () => {
               <span className="text-white/90 inline-block bg-secondary px-2 rounded-lg mt-2">powered by AI</span>
             </h1>
             <p className="mt-6 text-xl text-white/80 max-w-2xl">
-              Streamline your clinical documentation, access research, share knowledge, and enhance patient care with our all-in-one professional platform designed for physiotherapists.
+              Elevate your practice with AI-powered clinical notes, virtual patients, peer exchange, comprehensive exercise libraries, and evidence-based research - all in one professional platform designed for physiotherapists.
             </p>
+            <div className="mt-6 grid grid-cols-2 md:grid-cols-5 gap-4 max-w-2xl">
+              <div className="flex items-center gap-2 text-white/90">
+                <Sparkles className="h-5 w-5 text-white" />
+                <span className="text-sm md:text-base">AI Notes</span>
+              </div>
+              <div className="flex items-center gap-2 text-white/90">
+                <Activity className="h-5 w-5 text-white" />
+                <span className="text-sm md:text-base">Virtual Patients</span>
+              </div>
+              <div className="flex items-center gap-2 text-white/90">
+                <Users className="h-5 w-5 text-white" />
+                <span className="text-sm md:text-base">Peer Exchange</span>
+              </div>
+              <div className="flex items-center gap-2 text-white/90">
+                <Dumbbell className="h-5 w-5 text-white" />
+                <span className="text-sm md:text-base">Exercise Library</span>
+              </div>
+              <div className="flex items-center gap-2 text-white/90">
+                <BookOpen className="h-5 w-5 text-white" />
+                <span className="text-sm md:text-base">Research</span>
+              </div>
+            </div>
             <div className="mt-10 flex flex-col sm:flex-row gap-4">
               <Link href="/membership">
                 <Button size="lg" className="bg-white text-primary hover:bg-white/90 shadow-md flex items-center gap-2">

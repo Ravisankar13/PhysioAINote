@@ -1272,14 +1272,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: 'Not authenticated' });
       }
       
+      console.log("Received virtual patient data:", req.body);
+      
       // Validate input data
-      const validatedData = insertVirtualPatientSchema.parse(req.body);
+      try {
+        var validatedData = insertVirtualPatientSchema.parse(req.body);
+        console.log("Validation passed:", validatedData);
+      } catch (validationError) {
+        console.error("Validation failed:", validationError);
+        throw validationError; // Re-throw to be caught by the outer catch
+      }
       
       // Associate with the current user
       const virtualPatientData = {
         ...validatedData,
         userId: userId
       };
+      
+      console.log("Creating virtual patient with data:", virtualPatientData);
       
       // Create the virtual patient
       const virtualPatient = await storage.createVirtualPatient(virtualPatientData);

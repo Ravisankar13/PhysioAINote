@@ -94,10 +94,19 @@ export default function VirtualPatientForm({ onPatientCreated, onCancel }: Virtu
 
   const createPatientMutation = useMutation({
     mutationFn: async (data: FormData) => {
+      console.log("Submitting data:", data);
+      
       const response = await apiRequest("POST", "/api/virtual-patients", data);
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("Server response error:", errorData);
+        throw new Error(errorData.message || "Server error");
+      }
+      
       return await response.json();
     },
     onSuccess: (data) => {
+      console.log("Success response:", data);
       queryClient.invalidateQueries({ queryKey: ["/api/virtual-patients"] });
       toast({
         title: "Success",
@@ -106,6 +115,7 @@ export default function VirtualPatientForm({ onPatientCreated, onCancel }: Virtu
       onPatientCreated(data.id);
     },
     onError: (error: Error) => {
+      console.error("Mutation error:", error);
       toast({
         title: "Error",
         description: `Failed to create virtual patient: ${error.message}`,

@@ -24,11 +24,20 @@ export default function VirtualPatientList({ onPatientSelect, onCreateNew }: Vir
   } = useQuery<any[]>({
     queryKey: ["/api/virtual-patients"],
     queryFn: async () => {
-      const response = await fetch("/api/virtual-patients");
-      if (!response.ok) {
-        throw new Error("Failed to fetch virtual patients");
+      try {
+        const response = await fetch("/api/virtual-patients");
+        if (response.status === 401) {
+          // User is not authenticated, we'll handle this case in the UI
+          return [];
+        }
+        if (!response.ok) {
+          throw new Error("Failed to fetch virtual patients");
+        }
+        return response.json();
+      } catch (err) {
+        console.error("Error fetching virtual patients:", err);
+        throw err;
       }
-      return response.json();
     },
   });
 

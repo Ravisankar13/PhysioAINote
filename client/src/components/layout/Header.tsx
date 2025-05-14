@@ -155,7 +155,7 @@ const Header = () => {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem className="flex items-center" asChild>
-                    <Link href="/virtual-patient">
+                    <Link href="/virtual-patients">
                       <div className="flex items-center cursor-pointer w-full">
                         <Activity className="mr-2 h-4 w-4" />
                         <span>Virtual Patients</span>

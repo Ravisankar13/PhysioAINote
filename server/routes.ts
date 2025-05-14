@@ -1009,8 +1009,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const bodyPart = req.query.bodyPart as string;
       const difficulty = req.query.difficulty as string;
+      const getAll = req.query.all === "true";
       
-      const exercises = await storage.getExercises(bodyPart, difficulty);
+      const exercises = await storage.getExercises(bodyPart, difficulty, getAll);
       res.json(exercises);
     } catch (error) {
       console.error("Error fetching exercises:", error);

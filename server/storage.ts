@@ -419,18 +419,21 @@ export class DatabaseStorage implements IStorage {
     return result[0];
   }
   
-  async getExercises(bodyPart?: string, difficulty?: string): Promise<Exercise[]> {
+  async getExercises(bodyPart?: string, difficulty?: string, getAll: boolean = false): Promise<Exercise[]> {
     // Start with the base query
     let query = db.select().from(exercises);
     
-    // If bodyPart is provided and valid, filter by it
-    if (bodyPart && bodyPartEnum.enumValues.includes(bodyPart as any)) {
-      query = query.where(eq(exercises.bodyPart, bodyPart as typeof bodyPartEnum.enumValues[number]));
-    }
-    
-    // If difficulty is provided and valid, filter by it
-    if (difficulty && difficultyEnum.enumValues.includes(difficulty as any)) {
-      query = query.where(eq(exercises.difficulty, difficulty as typeof difficultyEnum.enumValues[number]));
+    // Only apply filters if getAll is false
+    if (!getAll) {
+      // If bodyPart is provided and valid, filter by it
+      if (bodyPart && bodyPartEnum.enumValues.includes(bodyPart as any)) {
+        query = query.where(eq(exercises.bodyPart, bodyPart as typeof bodyPartEnum.enumValues[number]));
+      }
+      
+      // If difficulty is provided and valid, filter by it
+      if (difficulty && difficultyEnum.enumValues.includes(difficulty as any)) {
+        query = query.where(eq(exercises.difficulty, difficulty as typeof difficultyEnum.enumValues[number]));
+      }
     }
     
     // Execute the query with any applied filters

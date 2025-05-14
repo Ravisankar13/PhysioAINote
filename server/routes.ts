@@ -1220,6 +1220,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/virtual-patients", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: 'Not authenticated' });
+      }
+      
       const virtualPatients = await storage.getUserVirtualPatients(userId);
       res.json(virtualPatients);
     } catch (error) {
@@ -1263,13 +1267,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create a new virtual patient
   app.post("/api/virtual-patients", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: 'Not authenticated' });
+      }
+      
       // Validate input data
       const validatedData = insertVirtualPatientSchema.parse(req.body);
       
       // Associate with the current user
       const virtualPatientData = {
         ...validatedData,
-        userId: req.user?.id
+        userId: userId
       };
       
       // Create the virtual patient

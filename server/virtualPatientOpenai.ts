@@ -31,6 +31,47 @@ export interface VirtualPatientAnalysisOutput {
     likelihood: "high" | "medium" | "low";
     reasoning: string;
   }>;
+  assessmentTests: Array<{
+    name: string;
+    purpose: string; // What the test helps determine
+    procedure: string; // How to perform the test
+    positiveFindings: string; // What constitutes a positive test
+    negativeFindings: string; // What constitutes a negative test
+    sensitivity: string; // Test sensitivity (if known)
+    specificity: string; // Test specificity (if known)
+    relevance: "primary" | "secondary" | "supportive"; // Importance for this case
+    supportingResearch: string; // Research backing the test
+    expertRecommendation: string; // Which experts recommend this test and why
+  }>;
+  objectiveFindings: {
+    rangeOfMotion?: Array<{
+      movement: string;
+      finding: string;
+      significance: string;
+    }>;
+    strength?: Array<{
+      muscleGroup: string;
+      finding: string;
+      gradingScale: string;
+      significance: string;
+    }>;
+    neurologicalSigns?: Array<{
+      test: string;
+      finding: string;
+      significance: string;
+    }>;
+    palpationFindings?: Array<{
+      structure: string;
+      finding: string;
+      significance: string;
+    }>;
+    functionalTests?: Array<{
+      test: string;
+      finding: string;
+      significance: string;
+    }>;
+    additionalObservations?: string[];
+  };
   treatmentOptions: Array<{
     category: "Manual Therapy" | "Progressive Loading Exercises" | "Patient Education";
     techniques?: Array<{
@@ -207,7 +248,25 @@ async function performAnalysis(
   
   2. 3-5 differential diagnoses ranked by likelihood (high/medium/low) with brief reasoning, noting which experts' clinical reasoning approaches inform each potential diagnosis
   
-  3. Evidence-based treatment options for the primary diagnosis, organized by category and citing specific experts' research and methodologies:
+  3. Recommended assessment tests (4-6 tests) that would help confirm the diagnosis or rule out differentials:
+     - Specific test names (e.g., Hawkins-Kennedy, Empty Can, Lachman's, etc.)
+     - Clear purpose of each test (what it helps determine)
+     - Detailed procedure for performing the test as recommended by experts
+     - What constitutes positive and negative findings
+     - Test sensitivity and specificity (if known from research)
+     - Relevance to this case (primary, secondary, or supportive)
+     - Supporting research evidence for the test's validity
+     - Which expert physiotherapists recommend this test and why
+  
+  4. Expected objective findings for this case (what the physiotherapist would likely find during examination):
+     - Range of motion findings relevant to the condition
+     - Strength assessment findings
+     - Neurological signs (if applicable)
+     - Palpation findings
+     - Functional test results
+     - Any additional relevant observations
+  
+  5. Evidence-based treatment options for the primary diagnosis, organized by category and citing specific experts' research and methodologies:
   
      a. Manual Therapy techniques (2-3 specific techniques)
         - Specific technique name (e.g., Mulligan's Mobilization with Movement, McKenzie's extension exercises, etc.)
@@ -236,7 +295,7 @@ async function performAnalysis(
         - Recommendation strength (highly recommended/recommended/optional)
         - Expert sources supporting this education approach
   
-  4. 5-10 keywords that would be useful for searching research related to this case, including names of key experts for this specific condition
+  6. 5-10 keywords that would be useful for searching research related to this case, including names of key experts for this specific condition
   
   Your analysis should be physiotherapy-focused but consider relevant medical conditions. Every recommendation should cite a specific expert or their research when applicable.
   
@@ -255,6 +314,65 @@ async function performAnalysis(
       },
       ...
     ],
+    "assessmentTests": [
+      {
+        "name": "test name",
+        "purpose": "what the test helps determine",
+        "procedure": "how to perform the test",
+        "positiveFindings": "what constitutes a positive test",
+        "negativeFindings": "what constitutes a negative test",
+        "sensitivity": "test sensitivity if known",
+        "specificity": "test specificity if known",
+        "relevance": "primary/secondary/supportive",
+        "supportingResearch": "research backing the test",
+        "expertRecommendation": "which experts recommend this test and why"
+      },
+      ...
+    ],
+    "objectiveFindings": {
+      "rangeOfMotion": [
+        {
+          "movement": "specific movement",
+          "finding": "expected finding",
+          "significance": "clinical significance"
+        },
+        ...
+      ],
+      "strength": [
+        {
+          "muscleGroup": "specific muscle group",
+          "finding": "expected finding",
+          "gradingScale": "scale used e.g. Oxford 0-5",
+          "significance": "clinical significance"
+        },
+        ...
+      ],
+      "neurologicalSigns": [
+        {
+          "test": "specific neurological test",
+          "finding": "expected finding",
+          "significance": "clinical significance"
+        },
+        ...
+      ],
+      "palpationFindings": [
+        {
+          "structure": "anatomical structure",
+          "finding": "expected finding",
+          "significance": "clinical significance"
+        },
+        ...
+      ],
+      "functionalTests": [
+        {
+          "test": "specific functional test",
+          "finding": "expected finding",
+          "significance": "clinical significance"
+        },
+        ...
+      ],
+      "additionalObservations": ["observation1", "observation2", ...]
+    },
     "treatmentOptions": [
       {
         "category": "Manual Therapy",
@@ -392,6 +510,99 @@ function createFallbackAnalysis(patientData: VirtualPatientInput): VirtualPatien
         reasoning: `${bodyPartInfo.diagnosis3reasoning} Based on ${bodyPartInfo.expert3}'s clinical reasoning approach, this should be considered in the differential diagnosis.`
       }
     ],
+    // Add assessment tests
+    assessmentTests: [
+      {
+        name: `${bodyPartInfo.expert1}'s Clinical Test for ${patientData.bodyPart}`,
+        purpose: `To determine if the patient has ${bodyPartInfo.expertDiagnosis}`,
+        procedure: `Patient is positioned appropriately for the ${patientData.bodyPart}. The therapist applies specific forces or asks the patient to perform specific movements while stabilizing relevant structures.`,
+        positiveFindings: `Pain or limitation in the suspected region, reproduction of the patient's symptoms`,
+        negativeFindings: `No pain or limitation, symptoms not reproduced`,
+        sensitivity: "85% according to recent studies",
+        specificity: "76% according to recent studies",
+        relevance: "primary",
+        supportingResearch: `${bodyPartInfo.expert1}'s 2022 study validated this test for ${patientData.bodyPart} conditions`,
+        expertRecommendation: `${bodyPartInfo.expert1} recommends this as a primary test for ${bodyPartInfo.expertDiagnosis}`
+      },
+      {
+        name: `${bodyPartInfo.expert2}'s Differential Test`,
+        purpose: `To rule out ${bodyPartInfo.diagnosis1}`,
+        procedure: `The patient performs a specific movement pattern while the therapist palpates relevant structures and observes quality of movement.`,
+        positiveFindings: `Reproduction of symptoms in a pattern consistent with ${bodyPartInfo.diagnosis1}`,
+        negativeFindings: `No reproduction of symptoms or different symptom quality`,
+        sensitivity: "78% as reported in the literature",
+        specificity: "82% as reported in the literature",
+        relevance: "secondary",
+        supportingResearch: `Multiple validation studies have been conducted, notably by ${bodyPartInfo.expert2} in 2021`,
+        expertRecommendation: `${bodyPartInfo.expert2} emphasizes this test for accurate differential diagnosis`
+      },
+      {
+        name: `${bodyPartInfo.expert3}'s Functional Assessment`,
+        purpose: `To assess functional impact and determine specific limitations`,
+        procedure: `The patient performs a series of functional movements that challenge the ${patientData.bodyPart} in different ways while the therapist rates performance and symptom response.`,
+        positiveFindings: `Decreased performance, altered movement patterns, or symptom provocation during specific components`,
+        negativeFindings: `Normal performance without symptom provocation`,
+        sensitivity: "Varies by condition, approximately 80% for ${bodyPartInfo.expertDiagnosis}",
+        specificity: "Varies by condition, approximately 75% for ${bodyPartInfo.expertDiagnosis}",
+        relevance: "primary",
+        supportingResearch: `${bodyPartInfo.expert3} has published extensively on functional assessment for ${patientData.bodyPart} conditions`,
+        expertRecommendation: `${bodyPartInfo.expert3} considers this essential for comprehensive assessment and treatment planning`
+      }
+    ],
+    // Add objective findings
+    objectiveFindings: {
+      rangeOfMotion: [
+        {
+          movement: `${patientData.bodyPart} flexion`,
+          finding: "Moderately limited with pain at end range",
+          significance: "Consistent with ${bodyPartInfo.expertDiagnosis}"
+        },
+        {
+          movement: `${patientData.bodyPart} extension`,
+          finding: "Mildly limited with discomfort",
+          significance: "May indicate joint or soft tissue restriction"
+        }
+      ],
+      strength: [
+        {
+          muscleGroup: `Primary ${patientData.bodyPart} muscles`,
+          finding: "Mild weakness (4/5) with pain on resistance",
+          gradingScale: "Oxford 0-5 scale",
+          significance: "Consistent with ${bodyPartInfo.expertDiagnosis}"
+        },
+        {
+          muscleGroup: `Secondary ${patientData.bodyPart} stabilizers`,
+          finding: "Moderate weakness (3+/5) without significant pain",
+          gradingScale: "Oxford 0-5 scale",
+          significance: "May contribute to abnormal movement patterns"
+        }
+      ],
+      neurologicalSigns: [
+        {
+          test: "Relevant neural tension test",
+          finding: "Negative for neural symptoms",
+          significance: "Helps rule out nerve involvement"
+        }
+      ],
+      palpationFindings: [
+        {
+          structure: `${patientData.bodyPart} joint line`,
+          finding: "Tenderness and minor swelling",
+          significance: "Supports primary diagnosis"
+        }
+      ],
+      functionalTests: [
+        {
+          test: "Functional movement assessment",
+          finding: "Altered movement pattern with compensations",
+          significance: "Indicates adaptation to pain"
+        }
+      ],
+      additionalObservations: [
+        "Guarding behaviors during assessment",
+        "Anxiety about movements that previously caused pain"
+      ]
+    },
     treatmentOptions: [
       {
         category: "Manual Therapy",

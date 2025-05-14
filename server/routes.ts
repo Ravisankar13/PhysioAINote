@@ -1274,12 +1274,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log("Received virtual patient data:", req.body);
       
+      // Create form schema without userId for validating client-submitted data
+      const clientFormSchema = z.object({
+        patientName: z.string().min(2),
+        age: z.string().min(1),
+        gender: z.string().min(1),
+        chiefComplaint: z.string().min(5),
+        symptomsDescription: z.string().min(20),
+        bodyPart: z.enum(bodyPartEnum.enumValues),
+        pastMedicalHistory: z.string().optional(),
+        pastSurgicalHistory: z.string().optional(),
+        socialHistory: z.string().optional(),
+        familyHistory: z.string().optional(),
+        medications: z.string().optional(),
+        allergies: z.string().optional(),
+      });
+      
       // Validate input data
       try {
-        var validatedData = insertVirtualPatientSchema.parse(req.body);
-        console.log("Validation passed:", validatedData);
+        var validatedData = clientFormSchema.parse(req.body);
+        console.log("Client validation passed:", validatedData);
       } catch (validationError) {
-        console.error("Validation failed:", validationError);
+        console.error("Client validation failed:", validationError);
         throw validationError; // Re-throw to be caught by the outer catch
       }
       
@@ -1288,6 +1304,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...validatedData,
         userId: userId
       };
+      
+      // Validate the complete data with insertVirtualPatientSchema
+      try {
+        insertVirtualPatientSchema.parse(virtualPatientData);
+        console.log("Full validation passed with userId");
+      } catch (validationError) {
+        console.error("Full validation failed:", validationError);
+        throw validationError;
+      }
       
       console.log("Creating virtual patient with data:", virtualPatientData);
       

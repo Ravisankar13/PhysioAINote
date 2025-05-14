@@ -21,6 +21,9 @@ import TestAudioTranscription from "@/pages/TestAudioTranscription";
 import TestNoteGenerator from "@/pages/TestNoteGenerator";
 import SessionsPage from "@/pages/SessionsPage";
 import VirtualPatientPage from "@/pages/VirtualPatientPage";
+import SharedCasesPage from "@/pages/SharedCasesPage";
+import SharedCaseDetailPage from "@/pages/SharedCaseDetailPage";
+import SharedCaseFormPage from "@/pages/SharedCaseFormPage";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { ThemeProvider } from "next-themes";
@@ -45,6 +48,10 @@ function Router() {
           <Route path="/skeleton-3d-tool" component={Skeleton3DTool} />
           <ProtectedRoute path="/virtual-patients" component={VirtualPatientPage} />
           <ProtectedRoute path="/virtual-patient" component={VirtualPatientPage} />
+          <ProtectedRoute path="/shared-cases/new" component={SharedCaseFormPage} />
+          <ProtectedRoute path="/shared-cases/:id/edit" component={SharedCaseFormPage} />
+          <Route path="/shared-cases/:id" component={SharedCaseDetailPage} />
+          <Route path="/shared-cases" component={SharedCasesPage} />
           <Route path="/membership" component={Membership} />
           <Route path="/about" component={About} />
           <Route path="/contact" component={Contact} />

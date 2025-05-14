@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { generateSoapNote } from "./openai";
 import { analyzeVirtualPatientCase, findRelevantResearchArticles } from "./virtualPatientOpenai";
-import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum } from "@shared/schema";
+import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, discussionUpvotes } from "@shared/schema";
 import { ZodError, z } from "zod";
 import { fromZodError } from "zod-validation-error";
 import multer from "multer";
@@ -1298,6 +1298,384 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else {
         res.status(500).json({ error: 'An unknown error occurred' });
       }
+    }
+  });
+
+  // Peer Knowledge Exchange - Shared Cases Operations
+  app.get("/api/shared-cases", async (req: Request, res: Response) => {
+    try {
+      const bodyPart = req.query.bodyPart as string | undefined;
+      const expertiseLevel = req.query.expertiseLevel as string | undefined;
+      const complexityLevel = req.query.complexityLevel as string | undefined;
+      const searchTerm = req.query.search as string | undefined;
+      const page = req.query.page ? parseInt(req.query.page as string) : 1;
+      const pageSize = req.query.pageSize ? parseInt(req.query.pageSize as string) : 10;
+      
+      const result = await storage.getSharedCases(
+        bodyPart,
+        expertiseLevel,
+        complexityLevel,
+        searchTerm,
+        page,
+        pageSize
+      );
+      
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching shared cases:", error);
+      res.status(500).json({ error: "Failed to fetch shared cases" });
+    }
+  });
+  
+  app.get("/api/shared-cases/:id", async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid case ID" });
+      }
+      
+      const sharedCase = await storage.getSharedCase(id);
+      
+      if (!sharedCase) {
+        return res.status(404).json({ error: "Case not found" });
+      }
+      
+      // Increment the view count
+      await storage.incrementCaseViews(id);
+      
+      res.json(sharedCase);
+    } catch (error) {
+      console.error("Error fetching shared case:", error);
+      res.status(500).json({ error: "Failed to fetch shared case" });
+    }
+  });
+  
+  app.get("/api/users/:userId/shared-cases", async (req: Request, res: Response) => {
+    try {
+      const userId = parseInt(req.params.userId);
+      
+      if (isNaN(userId)) {
+        return res.status(400).json({ error: "Invalid user ID" });
+      }
+      
+      const cases = await storage.getUserSharedCases(userId);
+      res.json(cases);
+    } catch (error) {
+      console.error("Error fetching user's shared cases:", error);
+      res.status(500).json({ error: "Failed to fetch user's shared cases" });
+    }
+  });
+  
+  app.get("/api/my-shared-cases", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const cases = await storage.getUserSharedCases(req.user!.id);
+      res.json(cases);
+    } catch (error) {
+      console.error("Error fetching user's shared cases:", error);
+      res.status(500).json({ error: "Failed to fetch your shared cases" });
+    }
+  });
+  
+  app.post("/api/shared-cases", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      // Set the user ID from the authenticated user
+      const sharedCase = {
+        ...req.body,
+        userId: req.user!.id,
+        isApproved: req.user!.membershipTier !== "none" // Auto-approve for paid users
+      };
+      
+      const newCase = await storage.createSharedCase(sharedCase);
+      
+      // Add tags if provided
+      if (req.body.tagIds && Array.isArray(req.body.tagIds)) {
+        for (const tagId of req.body.tagIds) {
+          await storage.addCaseTag(newCase.id, tagId);
+        }
+      }
+      
+      res.status(201).json(newCase);
+    } catch (error) {
+      console.error("Error creating shared case:", error);
+      res.status(500).json({ error: "Failed to create shared case" });
+    }
+  });
+  
+  app.put("/api/shared-cases/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid case ID" });
+      }
+      
+      // Get the case to check ownership
+      const existingCase = await storage.getSharedCase(id);
+      
+      if (!existingCase) {
+        return res.status(404).json({ error: "Case not found" });
+      }
+      
+      // Check if the user owns the case
+      if (existingCase.userId !== req.user!.id) {
+        return res.status(403).json({ error: "You do not have permission to update this case" });
+      }
+      
+      const updatedCase = await storage.updateSharedCase(id, req.body);
+      
+      // Update tags if provided
+      if (req.body.tagIds && Array.isArray(req.body.tagIds)) {
+        // Get existing tag mappings
+        const existingTagMappings = await db.select()
+          .from(caseTagsMapping)
+          .where(eq(caseTagsMapping.caseId, id));
+          
+        // Remove tags that are no longer in the list
+        for (const mapping of existingTagMappings) {
+          if (!req.body.tagIds.includes(mapping.tagId)) {
+            await storage.removeCaseTag(id, mapping.tagId);
+          }
+        }
+        
+        // Add new tags
+        for (const tagId of req.body.tagIds) {
+          const exists = existingTagMappings.some(m => m.tagId === tagId);
+          if (!exists) {
+            await storage.addCaseTag(id, tagId);
+          }
+        }
+      }
+      
+      res.json(updatedCase);
+    } catch (error) {
+      console.error("Error updating shared case:", error);
+      res.status(500).json({ error: "Failed to update shared case" });
+    }
+  });
+  
+  app.delete("/api/shared-cases/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid case ID" });
+      }
+      
+      // Get the case to check ownership
+      const existingCase = await storage.getSharedCase(id);
+      
+      if (!existingCase) {
+        return res.status(404).json({ error: "Case not found" });
+      }
+      
+      // Check if the user owns the case or is an admin
+      if (existingCase.userId !== req.user!.id && req.user!.membershipTier !== "premium") {
+        return res.status(403).json({ error: "You do not have permission to delete this case" });
+      }
+      
+      // Delete the case (this will cascade to delete related data)
+      await db.delete(sharedCases).where(eq(sharedCases.id, id));
+      
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting shared case:", error);
+      res.status(500).json({ error: "Failed to delete shared case" });
+    }
+  });
+  
+  app.post("/api/shared-cases/:id/upvote", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const caseId = parseInt(req.params.id);
+      
+      if (isNaN(caseId)) {
+        return res.status(400).json({ error: "Invalid case ID" });
+      }
+      
+      const result = await storage.upvoteCase(caseId, req.user!.id);
+      res.json(result);
+    } catch (error) {
+      console.error("Error upvoting case:", error);
+      res.status(500).json({ error: "Failed to upvote case" });
+    }
+  });
+  
+  app.delete("/api/shared-cases/:id/upvote", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const caseId = parseInt(req.params.id);
+      
+      if (isNaN(caseId)) {
+        return res.status(400).json({ error: "Invalid case ID" });
+      }
+      
+      const result = await storage.removeUpvoteCase(caseId, req.user!.id);
+      res.json(result);
+    } catch (error) {
+      console.error("Error removing case upvote:", error);
+      res.status(500).json({ error: "Failed to remove case upvote" });
+    }
+  });
+  
+  // Peer Knowledge Exchange - Case Discussions Operations
+  app.get("/api/shared-cases/:caseId/discussions", async (req: Request, res: Response) => {
+    try {
+      const caseId = parseInt(req.params.caseId);
+      
+      if (isNaN(caseId)) {
+        return res.status(400).json({ error: "Invalid case ID" });
+      }
+      
+      const discussions = await storage.getCaseDiscussions(caseId);
+      res.json(discussions);
+    } catch (error) {
+      console.error("Error fetching case discussions:", error);
+      res.status(500).json({ error: "Failed to fetch case discussions" });
+    }
+  });
+  
+  app.get("/api/case-discussions/:discussionId/replies", async (req: Request, res: Response) => {
+    try {
+      const discussionId = parseInt(req.params.discussionId);
+      
+      if (isNaN(discussionId)) {
+        return res.status(400).json({ error: "Invalid discussion ID" });
+      }
+      
+      const replies = await storage.getDiscussionReplies(discussionId);
+      res.json(replies);
+    } catch (error) {
+      console.error("Error fetching discussion replies:", error);
+      res.status(500).json({ error: "Failed to fetch discussion replies" });
+    }
+  });
+  
+  app.post("/api/shared-cases/:caseId/discussions", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const caseId = parseInt(req.params.caseId);
+      
+      if (isNaN(caseId)) {
+        return res.status(400).json({ error: "Invalid case ID" });
+      }
+      
+      // Make sure the case exists
+      const sharedCase = await storage.getSharedCase(caseId);
+      
+      if (!sharedCase) {
+        return res.status(404).json({ error: "Case not found" });
+      }
+      
+      // Create the discussion
+      const discussion = {
+        ...req.body,
+        caseId,
+        userId: req.user!.id
+      };
+      
+      const newDiscussion = await storage.createCaseDiscussion(discussion);
+      res.status(201).json(newDiscussion);
+    } catch (error) {
+      console.error("Error creating case discussion:", error);
+      res.status(500).json({ error: "Failed to create case discussion" });
+    }
+  });
+  
+  app.put("/api/case-discussions/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid discussion ID" });
+      }
+      
+      // Get the discussion to check ownership
+      const existingDiscussion = await storage.getCaseDiscussion(id);
+      
+      if (!existingDiscussion) {
+        return res.status(404).json({ error: "Discussion not found" });
+      }
+      
+      // Check if the user owns the discussion
+      if (existingDiscussion.userId !== req.user!.id) {
+        return res.status(403).json({ error: "You do not have permission to update this discussion" });
+      }
+      
+      const updatedDiscussion = await storage.updateCaseDiscussion(id, req.body.content);
+      res.json(updatedDiscussion);
+    } catch (error) {
+      console.error("Error updating case discussion:", error);
+      res.status(500).json({ error: "Failed to update case discussion" });
+    }
+  });
+  
+  app.post("/api/case-discussions/:id/upvote", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const discussionId = parseInt(req.params.id);
+      
+      if (isNaN(discussionId)) {
+        return res.status(400).json({ error: "Invalid discussion ID" });
+      }
+      
+      const result = await storage.upvoteDiscussion(discussionId, req.user!.id);
+      res.json(result);
+    } catch (error) {
+      console.error("Error upvoting discussion:", error);
+      res.status(500).json({ error: "Failed to upvote discussion" });
+    }
+  });
+  
+  app.delete("/api/case-discussions/:id/upvote", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const discussionId = parseInt(req.params.id);
+      
+      if (isNaN(discussionId)) {
+        return res.status(400).json({ error: "Invalid discussion ID" });
+      }
+      
+      const result = await storage.removeUpvoteDiscussion(discussionId, req.user!.id);
+      res.json(result);
+    } catch (error) {
+      console.error("Error removing discussion upvote:", error);
+      res.status(500).json({ error: "Failed to remove discussion upvote" });
+    }
+  });
+  
+  // Peer Knowledge Exchange - Tags Operations
+  app.get("/api/case-tags", async (req: Request, res: Response) => {
+    try {
+      const category = req.query.category as string | undefined;
+      
+      let tags;
+      if (category) {
+        tags = await storage.getCaseTagsByCategory(category);
+      } else {
+        tags = await storage.getCaseTags();
+      }
+      
+      res.json(tags);
+    } catch (error) {
+      console.error("Error fetching case tags:", error);
+      res.status(500).json({ error: "Failed to fetch case tags" });
+    }
+  });
+  
+  app.post("/api/case-tags", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      // Check if the user has permission to create tags (premium members only)
+      if (req.user!.membershipTier !== "premium") {
+        return res.status(403).json({ error: "Only premium members can create new tags" });
+      }
+      
+      const { name, category, color } = req.body;
+      
+      if (!name || !category || !color) {
+        return res.status(400).json({ error: "Name, category, and color are required" });
+      }
+      
+      const newTag = await storage.createCaseTag(name, category, color);
+      res.status(201).json(newTag);
+    } catch (error) {
+      console.error("Error creating case tag:", error);
+      res.status(500).json({ error: "Failed to create case tag" });
     }
   });
 

@@ -16,6 +16,7 @@ import Skeleton3DTool from "@/pages/Skeleton3DTool";
 import Research from "@/pages/Research";
 import Membership from "@/pages/Membership";
 import ExercisePage from "@/pages/ExercisePage";
+import ManualTherapyPage from "@/pages/ManualTherapyPage";
 import TestAudioTranscription from "@/pages/TestAudioTranscription";
 import TestNoteGenerator from "@/pages/TestNoteGenerator";
 import SessionsPage from "@/pages/SessionsPage";
@@ -38,6 +39,7 @@ function Router() {
           <ProtectedRoute path="/my-notes" component={MyNotes} />
           <ProtectedRoute path="/notes/:id?" component={SessionsPage} />
           <Route path="/exercises" component={ExercisePage} />
+          <Route path="/manual-therapy" component={ManualTherapyPage} />
           <Route path="/skeleton-tool" component={SkeletonTool} />
           <Route path="/skeleton-3d-tool" component={Skeleton3DTool} />
           <Route path="/membership" component={Membership} />

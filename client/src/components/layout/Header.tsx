@@ -28,6 +28,7 @@ const Header = () => {
     { href: "/shared-notes", label: "Shared Notes" },
     { href: "/research", label: "Research" },
     { href: "/exercises", label: "Exercise Library" },
+    { href: "/manual-therapy", label: "Manual Therapy" },
     { href: "/membership", label: "Membership" },
     { href: "/about", label: "About" },
     { href: "/contact", label: "Contact" },
@@ -139,6 +140,14 @@ const Header = () => {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem className="flex items-center" asChild>
+                    <Link href="/manual-therapy">
+                      <div className="flex items-center cursor-pointer w-full">
+                        <Bone className="mr-2 h-4 w-4" />
+                        <span>Manual Therapy</span>
+                      </div>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="flex items-center" asChild>
                     <Link href="/membership">
                       <div className="flex items-center cursor-pointer w-full">
                         <CreditCard className="mr-2 h-4 w-4" />
@@ -232,6 +241,14 @@ const Header = () => {
                             onClick={() => setOpen(false)}
                           >
                             Exercise Library
+                          </span>
+                        </Link>
+                        <Link href="/manual-therapy">
+                          <span
+                            className="px-2 py-2 text-base block cursor-pointer text-muted-foreground hover:text-foreground"
+                            onClick={() => setOpen(false)}
+                          >
+                            Manual Therapy
                           </span>
                         </Link>
                         <Link href="/membership">

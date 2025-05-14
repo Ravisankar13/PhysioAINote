@@ -29,142 +29,74 @@ function generateSoapSectionsFromInsights(transcript: string, insights: string):
   assessment: string;
   plan: string;
 } {
-  // Default empty structure
-  const soapNote = {
-    subjective: "",
-    objective: "",
-    assessment: "",
-    plan: ""
-  };
-  
   try {
-    // Look for SOAP section markers in the insights text
-    const subjectiveMatch = insights.match(/(?:Subjective|S):\s*([\s\S]*?)(?=(?:Objective|O):|$)/i);
-    const objectiveMatch = insights.match(/(?:Objective|O):\s*([\s\S]*?)(?=(?:Assessment|A):|$)/i);
-    const assessmentMatch = insights.match(/(?:Assessment|A):\s*([\s\S]*?)(?=(?:Plan|P):|$)/i);
-    const planMatch = insights.match(/(?:Plan|P):\s*([\s\S]*?)(?=$)/i);
-    
-    // Extract the sections if found
-    if (subjectiveMatch && subjectiveMatch[1]) {
-      soapNote.subjective = subjectiveMatch[1].trim();
+    const lines = insights.trim().split('\n');
+    let currentSection = '';
+    const sections: Record<string, string[]> = {
+      'subjective': [],
+      'objective': [],
+      'assessment': [],
+      'plan': []
+    };
+
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      if (trimmedLine.toLowerCase().startsWith('subjective:')) {
+        currentSection = 'subjective';
+        sections[currentSection].push(trimmedLine.substring('subjective:'.length).trim());
+      } else if (trimmedLine.toLowerCase().startsWith('objective:')) {
+        currentSection = 'objective';
+        sections[currentSection].push(trimmedLine.substring('objective:'.length).trim());
+      } else if (trimmedLine.toLowerCase().startsWith('assessment:')) {
+        currentSection = 'assessment';
+        sections[currentSection].push(trimmedLine.substring('assessment:'.length).trim());
+      } else if (trimmedLine.toLowerCase().startsWith('plan:')) {
+        currentSection = 'plan';
+        sections[currentSection].push(trimmedLine.substring('plan:'.length).trim());
+      } else if (currentSection && trimmedLine) {
+        sections[currentSection].push(trimmedLine);
+      }
     }
-    
-    if (objectiveMatch && objectiveMatch[1]) {
-      soapNote.objective = objectiveMatch[1].trim();
-    }
-    
-    if (assessmentMatch && assessmentMatch[1]) {
-      soapNote.assessment = assessmentMatch[1].trim();
-    }
-    
-    if (planMatch && planMatch[1]) {
-      soapNote.plan = planMatch[1].trim();
-    }
-    
-    // If no structured sections found but we have transcript text, try simpler structure
-    if (!soapNote.subjective && !soapNote.objective && !soapNote.assessment && !soapNote.plan && transcript) {
-      // Use heuristics to extract potential sections
-      const lines = transcript.split('\n');
+
+    const soapNote = {
+      subjective: sections['subjective'].join('\n').trim(),
+      objective: sections['objective'].join('\n').trim(),
+      assessment: sections['assessment'].join('\n').trim(),
+      plan: sections['plan'].join('\n').trim()
+    };
+
+    // If we couldn't parse the insights properly, try to extract content from the transcript
+    if (!soapNote.subjective && !soapNote.objective && !soapNote.assessment && !soapNote.plan) {
+      const transcriptLower = transcript.toLowerCase();
       
-      // Simple heuristic: first 30% of lines are subjective
-      const subjectiveLines = Math.floor(lines.length * 0.3);
-      soapNote.subjective = lines.slice(0, subjectiveLines).join(' ');
+      // Simple fallback extraction
+      if (transcriptLower.includes('complain') || transcriptLower.includes('report') || transcriptLower.includes('history')) {
+        soapNote.subjective = 'Patient reports symptoms based on transcript. Detailed subjective information needs review.';
+      }
       
-      // Next 30% are objective findings
-      const objectiveLines = Math.floor(lines.length * 0.3);
-      soapNote.objective = lines.slice(subjectiveLines, subjectiveLines + objectiveLines).join(' ');
+      if (transcriptLower.includes('exam') || transcriptLower.includes('test') || transcriptLower.includes('observation')) {
+        soapNote.objective = 'Physical examination performed. Detailed objective findings need review.';
+      }
       
-      // Next 20% are assessment
-      const assessmentLines = Math.floor(lines.length * 0.2);
-      soapNote.assessment = lines.slice(subjectiveLines + objectiveLines, 
-                                        subjectiveLines + objectiveLines + assessmentLines).join(' ');
+      if (transcriptLower.includes('diagnos') || transcriptLower.includes('impression') || transcriptLower.includes('condition')) {
+        soapNote.assessment = 'Clinical assessment based on available information. Detailed assessment needs review.';
+      }
       
-      // Last 20% are plan
-      soapNote.plan = lines.slice(subjectiveLines + objectiveLines + assessmentLines).join(' ');
+      if (transcriptLower.includes('treat') || transcriptLower.includes('recommend') || transcriptLower.includes('exercise')) {
+        soapNote.plan = 'Treatment plan discussed. Detailed plan needs review.';
+      }
     }
+  
+    return soapNote;
   } catch (error) {
-    console.error("Error parsing SOAP sections:", error);
+    console.error('Error parsing SOAP note from insights:', error);
+    return {
+      subjective: 'Error extracting subjective information.',
+      objective: 'Error extracting objective information.',
+      assessment: 'Error extracting assessment information.',
+      plan: 'Error extracting plan information.'
+    };
   }
-  
-  return soapNote;
-}
-
-// Initialize Stripe with secret key
-if (!process.env.STRIPE_SECRET_KEY) {
-  console.warn("Warning: STRIPE_SECRET_KEY not found in environment variables. Stripe payment processing will be unavailable.");
-}
-
-const stripe = process.env.STRIPE_SECRET_KEY
-  ? new Stripe(process.env.STRIPE_SECRET_KEY)
-  : null;
-
-// Helper functions for research article relevance scoring and note processing
-
-// Generate SOAP note sections from clinical insights text
-function generateSoapSectionsFromInsights(transcript: string, insights: string): {
-  subjective: string;
-  objective: string;
-  assessment: string;
-  plan: string;
-} {
-  // Default empty structure
-  const soapNote = {
-    subjective: "",
-    objective: "",
-    assessment: "",
-    plan: ""
-  };
-  
-  try {
-    // Look for SOAP section markers in the insights text
-    const subjectiveMatch = insights.match(/(?:Subjective|S):\s*([\s\S]*?)(?=(?:Objective|O):|$)/i);
-    const objectiveMatch = insights.match(/(?:Objective|O):\s*([\s\S]*?)(?=(?:Assessment|A):|$)/i);
-    const assessmentMatch = insights.match(/(?:Assessment|A):\s*([\s\S]*?)(?=(?:Plan|P):|$)/i);
-    const planMatch = insights.match(/(?:Plan|P):\s*([\s\S]*?)(?=$)/i);
-    
-    // Extract the sections if found
-    if (subjectiveMatch && subjectiveMatch[1]) {
-      soapNote.subjective = subjectiveMatch[1].trim();
-    }
-    
-    if (objectiveMatch && objectiveMatch[1]) {
-      soapNote.objective = objectiveMatch[1].trim();
-    }
-    
-    if (assessmentMatch && assessmentMatch[1]) {
-      soapNote.assessment = assessmentMatch[1].trim();
-    }
-    
-    if (planMatch && planMatch[1]) {
-      soapNote.plan = planMatch[1].trim();
-    }
-    
-    // If no structured sections found but we have transcript text, try simpler structure
-    if (!soapNote.subjective && !soapNote.objective && !soapNote.assessment && !soapNote.plan && transcript) {
-      // Use heuristics to extract potential sections
-      const lines = transcript.split('\n');
-      
-      // Simple heuristic: first 30% of lines are subjective
-      const subjectiveLines = Math.floor(lines.length * 0.3);
-      soapNote.subjective = lines.slice(0, subjectiveLines).join(' ');
-      
-      // Next 30% are objective findings
-      const objectiveLines = Math.floor(lines.length * 0.3);
-      soapNote.objective = lines.slice(subjectiveLines, subjectiveLines + objectiveLines).join(' ');
-      
-      // Next 20% are assessment
-      const assessmentLines = Math.floor(lines.length * 0.2);
-      soapNote.assessment = lines.slice(subjectiveLines + objectiveLines, 
-                                        subjectiveLines + objectiveLines + assessmentLines).join(' ');
-      
-      // Last 20% are plan
-      soapNote.plan = lines.slice(subjectiveLines + objectiveLines + assessmentLines).join(' ');
-    }
-  } catch (error) {
-    console.error("Error parsing SOAP sections:", error);
-  }
-  
-  return soapNote;
 }
 
 // Extract medical terminology from clinical note text
@@ -288,1520 +220,1061 @@ function extractTreatmentTerms(text: string): string[] {
   return Array.from(treatmentTerms);
 }
 
+// Initialize Stripe with secret key
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
+  apiVersion: '2023-10-16',
+});
+
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+// Configure multer for file uploads
+const storage_config = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const uploadDir = path.join(process.cwd(), 'test-uploads');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({
+  storage: storage_config,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10 MB file size limit
+  },
+  fileFilter: function (req, file, cb) {
+    // Accept audio files only
+    if (file.mimetype.startsWith('audio/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only audio files are allowed!'));
+    }
+  }
+});
+
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Setup authentication routes
+  // Use auth setup from auth.ts
   setupAuth(app);
   
-  // Register patient session routes
-  app.use('/api', sessionRoutes);
-  
-  // Add a test endpoint to validate OpenAI API key
+  // Register session routes
+  app.use(sessionRoutes);
+
   app.get('/api/openai-validate', async (req: Request, res: Response) => {
     try {
-      if (!process.env.OPENAI_API_KEY) {
-        return res.status(500).json({ 
-          valid: false, 
-          message: 'OpenAI API key not found in environment variables' 
-        });
-      }
-      
-      // Try a simple OpenAI API call to verify the key
-      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-      await openai.models.list();
-      
-      return res.status(200).json({ 
-        valid: true, 
-        message: 'OpenAI API key is valid' 
+      const completion = await openai.chat.completions.create({
+        messages: [{ role: 'user', content: 'Say "OpenAI API is working!" if you can read this.' }],
+        model: 'gpt-4o',
+        max_tokens: 20,
       });
+
+      res.send({ message: completion.choices[0].message.content });
     } catch (error: any) {
-      console.error('OpenAI key validation error:', error);
-      return res.status(500).json({ 
-        valid: false, 
-        message: error.message || 'Invalid OpenAI API key' 
-      });
+      console.error('OpenAI API error:', error);
+      res.status(500).send({ error: error.message });
     }
   });
-  
-  // Middleware to ensure user is authenticated for protected routes
+
   const ensureAuthenticated = (req: Request, res: Response, next: NextFunction) => {
     if (req.isAuthenticated()) {
       return next();
     }
-    res.status(401).json({ message: "Unauthorized - Please log in" });
+    res.status(401).send('Unauthorized - Please log in');
   };
-  // Set up multer for file uploads
-  const upload = multer({
-    storage: multer.diskStorage({
-      destination: (_req, _file, cb) => {
-        const tempDir = path.join(os.tmpdir(), 'physioai-uploads');
-        // Create the temp directory if it doesn't exist
-        if (!fs.existsSync(tempDir)) {
-          fs.mkdirSync(tempDir, { recursive: true });
-        }
-        cb(null, tempDir);
-      },
-      filename: (_req, file, cb) => {
-        // Generate a unique filename
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, uniqueSuffix + path.extname(file.originalname));
+
+  // PayPal Setup
+  app.get("/paypal/setup", async (req, res) => {
+    await loadPaypalDefault(req, res);
+  });
+
+  app.post("/paypal/order", async (req, res) => {
+    await createPaypalOrder(req, res);
+  });
+
+  app.post("/paypal/order/:orderID/capture", async (req, res) => {
+    await capturePaypalOrder(req, res);
+  });
+
+  app.post('/api/transcribe', upload.single('audio'), async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: 'No audio file uploaded' });
       }
-    }),
-    limits: {
-      fileSize: 10 * 1024 * 1024, // Limit file size to 10MB
-    },
-    fileFilter: (_req, file, cb) => {
-      // Accept only audio files
-      const mimeTypes = [
-        'audio/wav', 
-        'audio/mpeg', 
-        'audio/mp4', 
-        'audio/webm', 
-        'audio/ogg',
-        'audio/x-wav',
-        'audio/webm; codecs=opus',
-        'audio/webm;codecs=opus',
-        'audio/*'  // Accept any audio type as fallback
-      ];
+
+      const transcription = await transcribeAudio(req.file.path);
       
-      console.log('Received file mimetype:', file.mimetype);
+      // Analyze the transcription for clinical insights
+      const insights = await analyzeTranscription(transcription);
       
-      // Check if the mimetype starts with audio/ or is in our list
-      if (file.mimetype.startsWith('audio/') || mimeTypes.includes(file.mimetype)) {
-        cb(null, true);
-      } else {
-        cb(new Error(`Invalid file type: ${file.mimetype}. Only audio files are allowed.`) as any, false);
-      }
+      // Parse the insights into SOAP note structure
+      const soapNote = generateSoapSectionsFromInsights(transcription, insights);
+
+      res.json({
+        transcription,
+        insights,
+        soapNote
+      });
+    } catch (error: any) {
+      console.error('Error in transcription:', error);
+      res.status(500).json({ error: error.message || 'Failed to transcribe audio' });
     }
   });
 
-  // API route to handle audio transcription
-  app.post('/api/transcribe', upload.single('audio'), async (req: Request, res: Response) => {
-    let filePath = '';
-    
-    try {
-      // Check if we have a file
-      if (!req.file) {
-        console.error('Transcription error: No audio file provided');
-        return res.status(400).json({ message: 'No audio file provided' });
-      }
-      
-      // Store file path for cleanup in finally block
-      filePath = req.file.path;
-      
-      // Log file details for debugging
-      console.log('Received audio file:', {
-        filename: req.file.originalname,
-        mimetype: req.file.mimetype,
-        size: req.file.size,
-        path: filePath
-      });
-      
-      // Check file size
-      if (req.file.size === 0) {
-        console.error('Transcription error: Empty audio file');
-        return res.status(400).json({ message: 'Audio file is empty' });
-      }
-      
-      // If file is too large, return error immediately
-      if (req.file.size > 25 * 1024 * 1024) { // 25 MB
-        console.error('Transcription error: File too large');
-        return res.status(400).json({ 
-          message: 'Audio file is too large. Please upload a recording smaller than 25MB.',
-          transcript: "",
-          transcription: "",
-          clinicalInsights: "Error: The recording is too large. Please try a shorter session or reduce the audio quality."
-        });
-      }
-      
-      // Validate file type - ensure it's an audio file
-      if (!req.file.mimetype.startsWith('audio/')) {
-        console.error(`Transcription error: Invalid file type ${req.file.mimetype}`);
-        return res.status(400).json({ message: 'Invalid file type. Only audio files are allowed.' });
-      }
-      
-      // Verify OPENAI_API_KEY is set and valid
-      if (!process.env.OPENAI_API_KEY) {
-        console.error('Transcription error: OpenAI API key not found');
-        return res.status(500).json({ 
-          message: 'OpenAI API key not found in environment variables. Please configure your API key.'
-        });
-      }
-      
-      try {
-        // Start a timer to track total processing time
-        const startTime = Date.now();
-        
-        // Transcribe the audio with enhanced error handling and retries
-        console.log('Starting optimized audio transcription...');
-        const transcript = await transcribeAudio(filePath);
-        const transcriptionTime = Date.now() - startTime;
-        console.log(`Transcription completed in ${transcriptionTime}ms, analyzing content...`);
-        
-        if (!transcript || transcript.trim() === '') {
-          console.error('Transcription returned empty result');
-          return res.status(422).json({ 
-            message: 'No speech detected in the audio',
-            transcript: "",
-            transcription: "",
-            clinicalInsights: "No speech detected in the audio recording. Please try again with a clear voice recording."
-          });
-        }
-        
-        // Generate clinical insights from the transcript
-        const analysisResult = await analyzeTranscription(transcript);
-        const totalTime = Date.now() - startTime;
-        console.log(`Clinical analysis complete (total processing time: ${totalTime}ms)`);
-        
-        // Generate sample SOAP sections
-        let soapSections = generateSoapSectionsFromInsights(transcript, analysisResult.clinicalInsights);
-        
-        // Return the transcript and analysis with SOAP sections
-        return res.json({
-          transcript: transcript,
-          transcription: transcript,
-          clinicalInsights: analysisResult.clinicalInsights,
-          // Include SOAP fields with realistic content
-          subjective: soapSections.subjective,
-          objective: soapSections.objective,
-          assessment: soapSections.assessment,
-          plan: soapSections.plan
-        });
-      } catch (transcriptionError: any) {
-        console.error('Error in OpenAI transcription:', transcriptionError);
-        
-        // Extract and clean up the error message for better user feedback
-        const errorMessage = transcriptionError.message || 'Unknown error';
-        
-        // Handle specific error types with targeted responses
-        if (errorMessage.includes('API key')) {
-          return res.status(500).json({
-            message: 'OpenAI API key error. Please check your API key configuration.',
-            error: errorMessage,
-            transcript: "",
-            transcription: "",
-            clinicalInsights: "Error processing audio: API key validation failed."
-          });
-        } else if (errorMessage.includes('format')) {
-          return res.status(400).json({
-            message: 'Audio format not supported. Please use a different audio format.',
-            error: errorMessage,
-            transcript: "",
-            transcription: "",
-            clinicalInsights: "Error processing audio: Format not supported. Try using a common format like MP3 or WAV."
-          });
-        } else if (errorMessage.includes('rate limit') || errorMessage.includes('429')) {
-          return res.status(429).json({
-            message: 'OpenAI API rate limit exceeded. Please try again later.',
-            error: errorMessage,
-            transcript: "",
-            transcription: "",
-            clinicalInsights: "Error processing audio: Service temporarily unavailable. Please try again in a few minutes."
-          });
-        } else if (errorMessage.includes('timed out') || errorMessage.includes('ECONNRESET') || errorMessage.includes('Connection error')) {
-          console.log('Connection issues with OpenAI API, using mock clinical data for demo');
-          
-          // Generate random patient details for demo
-          const patientAge = Math.floor(Math.random() * 40) + 25; // 25-65 years
-          const painLevel = Math.floor(Math.random() * 6) + 3; // 3-8 out of 10
-          const bodyParts = ['knee', 'shoulder', 'lower back', 'ankle', 'hip', 'neck'];
-          const randomBodyPart = bodyParts[Math.floor(Math.random() * bodyParts.length)];
-          const conditions = ['strain', 'sprain', 'tendinitis', 'bursitis', 'muscle tear'];
-          const randomCondition = conditions[Math.floor(Math.random() * conditions.length)];
-          
-          // For demo purposes, return realistic sample data
-          return res.json({
-            transcript: "Patient recorded description of symptoms and concerns.",
-            transcription: "Patient recorded description of symptoms and concerns.",
-            clinicalInsights: `Patient is a ${patientAge}-year-old presenting with ${randomBodyPart} pain that has been present for approximately 3 weeks. Pain described as dull and aching, rated ${painLevel}/10 at worst, improving with rest and worsening with activity. Patient reports the pain began after increasing physical activity level.`,
-            subjective: `Patient is a ${patientAge}-year-old presenting with ${randomBodyPart} pain that has been present for approximately 3 weeks. Pain described as dull and aching, rated ${painLevel}/10 at worst, improving with rest and worsening with activity. Patient reports the pain began after increasing physical activity level. No prior treatment sought.`,
-            objective: `Physical examination reveals mild tenderness to palpation of the ${randomBodyPart}. Range of motion is limited by approximately 15% compared to unaffected side. Strength testing 4+/5. No significant swelling observed. Special tests for instability negative.`,
-            assessment: `1. ${randomBodyPart.charAt(0).toUpperCase() + randomBodyPart.slice(1)} ${randomCondition}, mild to moderate severity\n2. Possible overuse syndrome\n3. Rule out underlying structural abnormalities`,
-            plan: `1. Begin physical therapy program focusing on gradual strengthening and flexibility\n2. Home exercise program provided\n3. Activity modification for 2-3 weeks\n4. NSAIDs as needed for pain management\n5. Follow-up appointment in 2 weeks to assess progress`
-          });
-        } else {
-          // Generic fallback error
-          return res.status(500).json({
-            message: 'Error transcribing audio. Please try again with a clearer recording.',
-            error: errorMessage,
-            transcript: "",
-            transcription: "",
-            clinicalInsights: "Error processing audio. Please try recording again with a clearer voice and less background noise."
-          });
-        }
-      }
-    } catch (error: any) {
-      console.error('Error in transcription endpoint:', error);
-      return res.status(500).json({ 
-        message: 'Error processing audio. Please try again.',
-        error: error.message,
-        transcript: "",
-        transcription: "",
-        clinicalInsights: "An unexpected error occurred. Please try recording again."
-      });
-    }
-  });
-  // API route to generate a SOAP note (protected)
   app.post("/api/notes/generate", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
-      // Validate input data
-      const validatedData = soapNoteInputSchema.parse(req.body);
-      
-      // Generate the SOAP note using OpenAI
-      const generatedNote = await generateSoapNote(validatedData);
-      
-      // Return the generated note
-      return res.json(generatedNote);
+      const input = soapNoteInputSchema.parse(req.body);
+      const soapNote = await generateSoapNote(input);
+      res.json(soapNote);
     } catch (error) {
       if (error instanceof ZodError) {
-        const validationError = fromZodError(error);
-        return res.status(400).json({ 
-          message: "Validation error", 
-          errors: validationError.details 
-        });
+        res.status(400).json({ error: fromZodError(error).message });
+      } else if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
       }
-      
-      console.error("Error generating SOAP note:", error);
-      return res.status(500).json({ 
-        message: "Failed to generate SOAP note" 
-      });
     }
   });
 
-  // API route to save a clinical note (protected)
   app.post("/api/notes", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
-      // Validate input data
-      const validatedData = insertClinicalNoteSchema.parse({
-        ...req.body,
-        userId: req.user!.id, // Add the user ID from the authenticated user
-      });
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const data = insertClinicalNoteSchema.parse({ ...req.body, userId });
       
-      // Save the note
-      const savedNote = await storage.createClinicalNote(validatedData);
+      // Create a de-identified version of the clinical note
+      const deIdentifiedData = deIdentifyNote(data);
       
-      // Return the saved note
-      return res.json(savedNote);
+      // Use the de-identified data for the note creation
+      const note = await storage.createClinicalNote(deIdentifiedData);
+      
+      res.status(201).json(note);
     } catch (error) {
       if (error instanceof ZodError) {
-        const validationError = fromZodError(error);
-        return res.status(400).json({ 
-          message: "Validation error", 
-          errors: validationError.details 
-        });
+        res.status(400).json({ error: fromZodError(error).message });
+      } else if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
       }
-      
-      console.error("Error saving clinical note:", error);
-      return res.status(500).json({ 
-        message: "Failed to save clinical note" 
-      });
     }
   });
 
-  // API route to get all clinical notes (filtered by visibility and user)
   app.get("/api/notes", async (req: Request, res: Response) => {
     try {
-      // If user is authenticated, get their notes + public notes
-      // If not authenticated, only get public notes
-      const userId = req.isAuthenticated() ? req.user!.id : undefined;
-      const notes = await storage.getClinicalNotes(userId);
-      return res.json(notes);
+      const currentUserId = req.user?.id;
+      const notes = await storage.getClinicalNotes(currentUserId);
+      res.json(notes);
     } catch (error) {
-      console.error("Error fetching clinical notes:", error);
-      return res.status(500).json({ 
-        message: "Failed to fetch clinical notes" 
-      });
+      if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
+      }
     }
   });
 
-  // API route to get the current user's notes
   app.get("/api/my-notes", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
-      const notes = await storage.getUserNotes(req.user!.id);
-      return res.json(notes);
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+      
+      const notes = await storage.getUserNotes(userId);
+      res.json(notes);
     } catch (error) {
-      console.error("Error fetching user notes:", error);
-      return res.status(500).json({ 
-        message: "Failed to fetch your notes" 
-      });
+      if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
+      }
     }
   });
 
-  // API route to get a specific clinical note
   app.get("/api/notes/:id", async (req: Request, res: Response) => {
     try {
-      const id = parseInt(req.params.id);
-      
-      if (isNaN(id)) {
-        return res.status(400).json({ message: "Invalid note ID" });
+      const noteId = parseInt(req.params.id);
+      if (isNaN(noteId)) {
+        return res.status(400).json({ error: 'Invalid note ID' });
       }
       
-      // Pass the current user ID if authenticated
-      const currentUserId = req.isAuthenticated() ? req.user!.id : undefined;
-      const note = await storage.getClinicalNote(id, currentUserId);
+      const currentUserId = req.user?.id;
+      const note = await storage.getClinicalNote(noteId, currentUserId);
       
       if (!note) {
-        return res.status(404).json({ message: "Clinical note not found" });
-      }
-
-      // If note is private, check if user is authenticated and is the owner
-      if (note.visibility === "private") {
-        if (!req.isAuthenticated() || note.userId !== req.user!.id) {
-          return res.status(403).json({ message: "You don't have permission to view this note" });
-        }
+        return res.status(404).json({ error: 'Note not found' });
       }
       
-      // For shared notes, check if user is authenticated
-      if (note.visibility === "shared" && !req.isAuthenticated()) {
-        return res.status(403).json({ message: "You must be logged in to view shared notes" });
-      }
-      
-      return res.json(note);
+      res.json(note);
     } catch (error) {
-      console.error("Error fetching clinical note:", error);
-      return res.status(500).json({ 
-        message: "Failed to fetch clinical note" 
-      });
+      if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
+      }
     }
   });
-  
-  // API route to update note visibility
+
   app.patch("/api/notes/:id/visibility", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
-      const id = parseInt(req.params.id);
-      
-      if (isNaN(id)) {
-        return res.status(400).json({ message: "Invalid note ID" });
+      const noteId = parseInt(req.params.id);
+      if (isNaN(noteId)) {
+        return res.status(400).json({ error: 'Invalid note ID' });
       }
-      
-      const note = await storage.getClinicalNote(id);
-      
-      if (!note) {
-        return res.status(404).json({ message: "Clinical note not found" });
+
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
       }
+
+      const data = updateNoteVisibilitySchema.parse(req.body);
       
       // Ensure the user is the owner of the note
-      if (note.userId !== req.user!.id) {
-        return res.status(403).json({ message: "You don't have permission to modify this note" });
+      const note = await storage.getClinicalNote(noteId);
+      if (!note) {
+        return res.status(404).json({ error: 'Note not found' });
       }
       
-      try {
-        // Validate the input data
-        const updateData = updateNoteVisibilitySchema.parse(req.body);
-        
-        // Update the note with visibility and de-identification if needed
-        const updatedNote = await storage.updateNoteVisibility(id, updateData);
-        
-        return res.json(updatedNote);
-      } catch (error) {
-        if (error instanceof ZodError) {
-          return res.status(400).json({ 
-            message: "Invalid update data", 
-            errors: fromZodError(error).message 
-          });
-        }
-        throw error;
+      if (note.userId !== userId) {
+        return res.status(403).json({ error: 'You do not have permission to update this note' });
       }
+      
+      const updatedNote = await storage.updateNoteVisibility(noteId, {
+        visibility: data.visibility,
+        userId
+      });
+      
+      res.json(updatedNote);
     } catch (error) {
-      console.error("Error updating note visibility:", error);
-      return res.status(500).json({ message: "Failed to update note visibility" });
+      if (error instanceof ZodError) {
+        res.status(400).json({ error: fromZodError(error).message });
+      } else if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
+      }
     }
   });
-  
-  // API route to add a comment to a note
+
   app.post("/api/notes/:id/comments", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const noteId = parseInt(req.params.id);
-      
       if (isNaN(noteId)) {
-        return res.status(400).json({ message: "Invalid note ID" });
+        return res.status(400).json({ error: 'Invalid note ID' });
       }
-      
-      const note = await storage.getClinicalNote(noteId);
-      
+
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      // Ensure the note exists and is either public or belongs to the user
+      const note = await storage.getClinicalNote(noteId, userId);
       if (!note) {
-        return res.status(404).json({ message: "Clinical note not found" });
+        return res.status(404).json({ error: 'Note not found or you do not have permission to comment on it' });
       }
-      
-      // Ensure the note is not private or if it is, it belongs to the current user
-      if (note.visibility === "private" && note.userId !== req.user!.id) {
-        return res.status(403).json({ message: "You don't have permission to comment on this note" });
-      }
-      
-      const validatedData = insertCommentSchema.parse({
+
+      const data = insertCommentSchema.parse({
         ...req.body,
         noteId,
-        userId: req.user!.id
+        userId
       });
       
-      const comment = await storage.createComment(validatedData);
-      return res.status(201).json(comment);
+      const comment = await storage.createComment(data);
+      res.status(201).json(comment);
     } catch (error) {
       if (error instanceof ZodError) {
-        const validationError = fromZodError(error);
-        return res.status(400).json({ 
-          message: "Validation error", 
-          errors: validationError.details 
-        });
+        res.status(400).json({ error: fromZodError(error).message });
+      } else if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
       }
-      
-      console.error("Error adding comment:", error);
-      return res.status(500).json({ message: "Failed to add comment" });
     }
   });
-  
-  // API route to get comments for a note
+
   app.get("/api/notes/:id/comments", async (req: Request, res: Response) => {
     try {
       const noteId = parseInt(req.params.id);
-      
       if (isNaN(noteId)) {
-        return res.status(400).json({ message: "Invalid note ID" });
+        return res.status(400).json({ error: 'Invalid note ID' });
       }
       
-      const note = await storage.getClinicalNote(noteId);
+      const currentUserId = req.user?.id;
       
+      // Ensure the note exists and is either public or belongs to the user
+      const note = await storage.getClinicalNote(noteId, currentUserId);
       if (!note) {
-        return res.status(404).json({ message: "Clinical note not found" });
-      }
-      
-      // Ensure the note is not private or if it is, it belongs to the current user
-      if (note.visibility === "private") {
-        if (!req.isAuthenticated() || note.userId !== req.user!.id) {
-          return res.status(403).json({ message: "You don't have permission to view comments on this note" });
-        }
+        return res.status(404).json({ error: 'Note not found or you do not have permission to view it' });
       }
       
       const comments = await storage.getNoteComments(noteId);
-      return res.json(comments);
+      res.json(comments);
     } catch (error) {
-      console.error("Error fetching comments:", error);
-      return res.status(500).json({ message: "Failed to fetch comments" });
+      if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
+      }
     }
   });
-  
-  // API route to get relevant research articles for a clinical note
+
   app.get("/api/notes/:id/related-research", async (req: Request, res: Response) => {
     try {
       const noteId = parseInt(req.params.id);
-      
       if (isNaN(noteId)) {
-        return res.status(400).json({ message: "Invalid note ID" });
+        return res.status(400).json({ error: 'Invalid note ID' });
       }
       
-      const note = await storage.getClinicalNote(noteId);
+      const currentUserId = req.user?.id;
       
+      // Retrieve the note
+      const note = await storage.getClinicalNote(noteId, currentUserId);
       if (!note) {
-        return res.status(404).json({ message: "Clinical note not found" });
+        return res.status(404).json({ error: 'Note not found or you do not have permission to view it' });
       }
       
-      // Ensure the note is accessible to the current user
-      if (note.visibility === "private") {
-        if (!req.isAuthenticated() || note.userId !== req.user!.id) {
-          return res.status(403).json({ message: "You don't have permission to access this note's research" });
-        }
+      // Extract condition and body part from the note
+      const condition = extractCondition(note);
+      const bodyPart = note.bodyPart;
+      
+      // Get all articles, potentially filtered by body part
+      const { articles: allArticles } = await storage.getResearchArticles(bodyPart);
+      
+      // If no condition was extracted, return all articles for the body part
+      if (!condition) {
+        return res.json(allArticles.slice(0, 10)); // Limit to 10 articles
       }
       
-      // If user is not authenticated and tries to access shared note
-      if (note.visibility === "shared" && !req.isAuthenticated()) {
-        return res.status(401).json({ message: "You must be logged in to view research for shared notes" });
-      }
+      // Score articles based on relevance to the note
+      const noteText = `${note.subjective} ${note.objective} ${note.assessment} ${note.plan}`;
       
-      // If the note has a raw transcript but no processed SOAP sections, try to parse it
-      if (note.transcript && (!note.subjective || !note.assessment)) {
-        try {
-          // Generate SOAP sections from the transcript
-          const generatedSections = generateSoapSectionsFromInsights(note.transcript, note.transcript);
-          
-          // Merge with existing note data, preserving existing content if available
-          note.subjective = note.subjective || generatedSections.subjective;
-          note.objective = note.objective || generatedSections.objective;
-          note.assessment = note.assessment || generatedSections.assessment;
-          note.plan = note.plan || generatedSections.plan;
-        } catch (error) {
-          console.error("Error generating SOAP sections from transcript:", error);
-          // Continue with any existing data, don't fail the whole request
-        }
-      }
+      // Extract important terms from the note
+      const medicalTerms = extractMedicalTerms(noteText);
+      const assessmentTerms = extractPhysiotherapyAssessmentTerms(noteText);
+      const treatmentTerms = extractTreatmentTerms(noteText);
       
-      // Get the note's body part and extract keywords from the note content
-      // Ensure we're using a valid bodyPart value from the enum
-      const validBodyParts = ["shoulder", "neck", "back", "elbow", "wrist", "hand", "hip", "knee", "ankle", "foot", "general", "other"];
-      const bodyPart = note.bodyPart && validBodyParts.includes(note.bodyPart) 
-        ? note.bodyPart 
-        : "general";
-      
-      // Extract key terms from the assessment and subjective sections
-      const assessmentText = note.assessment || "";
-      const subjectiveText = note.subjective || "";
-      
-      // Get all research articles for this body part, no pagination needed for relevance sorting
-      const result = await storage.getResearchArticles(bodyPart, 1, 1000); // Get a large batch for relevance sorting
-      const allArticles = result.articles;
-      
-      // Calculate relevance score for each article using an enhanced expert-based algorithm
       let scoredArticles = allArticles.map((article: ResearchArticle) => {
+        // Base score starts at 0
         let score = 0;
         
-        // Higher score for matching body part (primary filter)
-        if (article.bodyPart === bodyPart) {
-          score += 10;
+        // Check if condition appears in title or abstract
+        if (article.title.toLowerCase().includes(condition.toLowerCase())) {
+          score += 5;
         }
         
-        // Extract diagnostic terms, assessment findings, and keywords from the note
-        const noteContent = (assessmentText + " " + subjectiveText).toLowerCase();
-        const objectiveText = note.objective || "";
-        const planText = note.plan || "";
-        const fullNoteContent = (assessmentText + " " + subjectiveText + " " + objectiveText + " " + planText).toLowerCase();
-        
-        // Prepare article content for matching
-        const articleKeywords = [
-          article.title.toLowerCase(),
-          article.abstract.toLowerCase(),
-          article.keyFindings ? article.keyFindings.toLowerCase() : "",
-          article.clinicalRelevance ? article.clinicalRelevance.toLowerCase() : "",
-          // Include methodology field for better matching of research designs
-          (article as any).methodology ? (article as any).methodology.toLowerCase() : ""
-        ].join(" ");
-        
-        // Extract diagnoses and conditions from the assessment
-        const diagnosisRegex = /(?:diagnosis|impression|assessment)(?:[^a-z]+)([a-z\s,()-]+)/gi;
-        // Safely extract diagnosis matches
-        const diagnosisMatches: RegExpMatchArray[] = [];
-        let match: RegExpMatchArray | null;
-        while ((match = diagnosisRegex.exec(assessmentText.toLowerCase())) !== null) {
-          diagnosisMatches.push(match);
+        if (article.abstract.toLowerCase().includes(condition.toLowerCase())) {
+          score += 3;
         }
         
-        // Process matches to extract diagnoses
-        const diagnoses = diagnosisMatches.flatMap(match => {
-          if (match[1]) {
-            return match[1].split(/[,;]/).map((d: string) => d.trim());
+        // Score based on medical terminology matches
+        for (const term of medicalTerms) {
+          if (article.title.toLowerCase().includes(term.toLowerCase()) || 
+              article.abstract.toLowerCase().includes(term.toLowerCase())) {
+            score += 2;
           }
-          return [];
-        }).filter((d: string) => d.length > 3);
+        }
         
-        // Score matches for identified diagnoses (high weight)
-        diagnoses.forEach(diagnosis => {
-          if (articleKeywords.includes(diagnosis)) {
-            score += 8;
-          }
-        });
-        
-        // Extract key clinical terms and findings
-        const medicalTerms = extractMedicalTerms(fullNoteContent);
-        
-        // Score for medical terminology matches
-        medicalTerms.forEach(term => {
-          if (articleKeywords.includes(term)) {
-            // Higher score for technical medical terms matching in the article
-            score += 4;
-          }
-        });
-        
-        // Extract common physiotherapy assessment terms
-        const assessmentTerms = extractPhysiotherapyAssessmentTerms(fullNoteContent);
-        
-        // Score for assessment term matches
-        assessmentTerms.forEach(term => {
-          if (articleKeywords.includes(term)) {
-            score += 3;
-          }
-        });
-        
-        // Extract treatment terms from the plan
-        const treatmentTerms = extractTreatmentTerms(planText);
-        
-        // Score for treatment term matches
-        treatmentTerms.forEach(term => {
-          if (articleKeywords.includes(term)) {
-            score += 3;
-          }
-        });
-        
-        // Extract expert names from the note (if mentioned)
-        const expertNames = [
-          "jill cook", "peter o'sullivan", "alison grimaldi", "jo gibson", 
-          "jeremy lewis", "kay crossley", "mark laslett", "robin mckenzie", 
-          "brian mulligan", "stuart mcgill", "tom goon", "claire patella"
-        ];
-        
-        // Higher score for articles matching mentioned experts
-        expertNames.forEach(expert => {
-          if (fullNoteContent.includes(expert) && articleKeywords.includes(expert)) {
-            score += 10; // High score for specific expert match
-          }
-        });
-        
-        // Fallback keyword matching for any remaining terms
-        const keyTerms = noteContent.split(/\s+/)
-          .filter(term => term.length > 4) // Only consider meaningful terms
-          .filter(term => !["patient", "reported", "history", "present", "treatment", "noted", "states", "reports"].includes(term));
-          
-        for (const term of keyTerms) {
-          if (articleKeywords.includes(term)) {
+        // Score based on assessment terminology matches
+        for (const term of assessmentTerms) {
+          if (article.title.toLowerCase().includes(term.toLowerCase()) || 
+              article.abstract.toLowerCase().includes(term.toLowerCase())) {
             score += 1.5;
           }
         }
         
-        // Recent publications get a boost with a graduated scale
-        const pubDate = new Date(article.publicationDate);
-        const now = new Date();
-        const yearDiff = now.getFullYear() - pubDate.getFullYear();
+        // Score based on treatment terminology matches
+        for (const term of treatmentTerms) {
+          if (article.title.toLowerCase().includes(term.toLowerCase()) || 
+              article.abstract.toLowerCase().includes(term.toLowerCase())) {
+            score += 1.5;
+          }
+        }
         
-        if (yearDiff <= 1) { // Published in the last year
-          score += 4;
-        } else if (yearDiff <= 3) { // Published in the last 3 years
-          score += 3;
-        } else if (yearDiff <= 5) { // Published in the last 5 years
-          score += 2;
-        } else if (yearDiff <= 10) { // Published in the last 10 years
+        // Add bonus for newer articles (published within last 5 years)
+        const publicationYear = new Date(article.publicationDate).getFullYear();
+        const currentYear = new Date().getFullYear();
+        if (currentYear - publicationYear <= 5) {
           score += 1;
         }
         
-        return { article, relevanceScore: score };
-      });
+        // Add bonus for methodology - RCTs and systematic reviews
+        if (article.methodology && 
+            (article.methodology.toLowerCase().includes('randomized') || 
+             article.methodology.toLowerCase().includes('systematic review'))) {
+          score += 2;
+        }
+        
+        return {
+          article,
+          score
+        };
+      })
+      .sort((a, b) => b.score - a.score) // Sort by score in descending order
+      .slice(0, 10) // Take top 10 articles
+      .map((item: { article: ResearchArticle }) => item.article);
       
-      // Sort by relevance score and take top 5
-      scoredArticles.sort((a: { relevanceScore: number }, b: { relevanceScore: number }) => b.relevanceScore - a.relevanceScore);
-      const relatedArticles = scoredArticles
-        .slice(0, 5)
-        .filter((item: { relevanceScore: number }) => item.relevanceScore > 3) // Only include relevant articles
-        .map((item: { article: ResearchArticle }) => item.article);
-      
-      return res.json(relatedArticles);
+      res.json(scoredArticles);
     } catch (error) {
-      console.error("Error fetching related research:", error);
-      return res.status(500).json({ message: "Failed to fetch related research" });
+      if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
+      }
     }
   });
-  
-  // API route to get sample notes by body part category
+
   app.get("/api/sample-notes", (req: Request, res: Response) => {
-    try {
-      const bodyPart = req.query.bodyPart as string;
-      
-      if (bodyPart) {
-        // Filter by body part if provided
-        const filteredNotes = sampleNotes.filter(note => note.bodyPart === bodyPart);
-        return res.json(filteredNotes);
-      }
-      
-      // Return all sample notes
-      return res.json(sampleNotes);
-    } catch (error) {
-      console.error("Error fetching sample notes:", error);
-      return res.status(500).json({ message: "Failed to fetch sample notes" });
-    }
+    res.json(sampleNotes);
   });
 
   app.get("/api/sample-notes/:bodyPart", (req: Request, res: Response) => {
-    try {
-      const bodyPart = req.params.bodyPart;
-      
-      // Find sample note for the requested body part
-      const note = sampleNotes.find(note => note.bodyPart === bodyPart);
-      
-      if (!note) {
-        return res.status(404).json({ message: "Sample note not found for this body part" });
-      }
-      
-      return res.json(note);
-    } catch (error) {
-      console.error("Error fetching sample note:", error);
-      return res.status(500).json({ message: "Failed to fetch sample note" });
-    }
+    const bodyPart = req.params.bodyPart;
+    const filteredNotes = sampleNotes.filter(note => 
+      note.bodyPart.toLowerCase() === bodyPart.toLowerCase()
+    );
+    res.json(filteredNotes);
   });
 
-  // API route to get all research articles with pagination
   app.get("/api/research", async (req: Request, res: Response) => {
     try {
-      const bodyPart = req.query.bodyPart as string;
-      const page = parseInt(req.query.page as string) || 1;
-      const pageSize = parseInt(req.query.pageSize as string) || 10;
-      const getAll = req.query.all === "true";
+      const bodyPart = req.query.bodyPart as string | undefined;
+      const page = parseInt(req.query.page as string || '1');
+      const pageSize = parseInt(req.query.pageSize as string || '10');
       
-      // If 'all' parameter is true, fetch all articles for search functionality
-      const result = await storage.getResearchArticles(bodyPart, page, pageSize, getAll);
-      
-      return res.json({
-        data: result.articles,
-        pagination: {
-          page,
-          pageSize,
-          totalItems: result.total,
-          totalPages: Math.ceil(result.total / pageSize)
-        }
-      });
+      const result = await storage.getResearchArticles(bodyPart, page, pageSize);
+      res.json(result);
     } catch (error) {
-      console.error("Error fetching research articles:", error);
-      return res.status(500).json({ message: "Failed to fetch research articles" });
+      if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
+      }
     }
   });
 
-  // API route to get a specific research article by ID
   app.get("/api/research/:id", async (req: Request, res: Response) => {
     try {
-      const id = parseInt(req.params.id);
-      
-      if (isNaN(id)) {
-        return res.status(400).json({ message: "Invalid article ID" });
+      const articleId = parseInt(req.params.id);
+      if (isNaN(articleId)) {
+        return res.status(400).json({ error: 'Invalid article ID' });
       }
       
-      const article = await storage.getResearchArticle(id);
-      
+      const article = await storage.getResearchArticle(articleId);
       if (!article) {
-        return res.status(404).json({ message: "Research article not found" });
+        return res.status(404).json({ error: 'Article not found' });
       }
       
-      return res.json(article);
+      res.json(article);
     } catch (error) {
-      console.error("Error fetching research article:", error);
-      return res.status(500).json({ message: "Failed to fetch research article" });
+      if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
+      }
     }
   });
-  
-  // API route to create a new research article (admin only)
+
   app.post("/api/research", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
-      // TODO: Add admin role check here
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const data = insertResearchArticleSchema.parse({
+        ...req.body,
+        submittedBy: userId
+      });
       
-      // Validate request body
-      const articleData = insertResearchArticleSchema.parse(req.body);
-      
-      // Create the article
-      const newArticle = await storage.createResearchArticle(articleData);
-      return res.status(201).json(newArticle);
+      const article = await storage.createResearchArticle(data);
+      res.status(201).json(article);
     } catch (error) {
       if (error instanceof ZodError) {
-        const validationError = fromZodError(error);
-        return res.status(400).json({ 
-          message: "Validation error", 
-          errors: validationError.details 
-        });
+        res.status(400).json({ error: fromZodError(error).message });
+      } else if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
       }
-      
-      console.error("Error creating research article:", error);
-      return res.status(500).json({ message: "Failed to create research article" });
     }
   });
 
-  // ===== SUBSCRIPTION AND PAYMENT ROUTES =====
-
-  // Get all subscription plans
   app.get("/api/subscriptions", async (req: Request, res: Response) => {
     try {
-      const plans = await storage.getSubscriptionPlans();
-      return res.json(plans);
+      const subscriptionPlans = await storage.getSubscriptionPlans();
+      res.json(subscriptionPlans);
     } catch (error) {
-      console.error("Error fetching subscription plans:", error);
-      return res.status(500).json({ message: "Failed to fetch subscription plans" });
+      if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
+      }
     }
   });
 
-  // Get user's subscription status
   app.get("/api/user/subscription", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
-      const user = await storage.getUser(req.user!.id);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
       }
       
-      // Special case for fateofjustice who gets free access to everything
-      if (user.username === "Fateofjustice") {
-        return res.json({
-          tier: "premium",
-          expiry: new Date("2125-05-01").toISOString(), // Far future date for essentially permanent access
-          subscriptionId: null
-        });
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
       }
-
-      // For regular users
-      return res.json({
+      
+      // Retrieve subscription details from the user object
+      const subscriptionInfo = {
         tier: user.membershipTier,
-        expiry: user.membershipExpiry ? user.membershipExpiry.toISOString() : null,
-        subscriptionId: user.paypalSubscriptionId || user.stripeSubscriptionId,
-      });
+        expiryDate: user.membershipExpiry,
+        subscriptionId: user.stripeSubscriptionId || null
+      };
+      
+      res.json(subscriptionInfo);
     } catch (error) {
-      console.error("Error fetching user subscription:", error);
-      return res.status(500).json({ message: "Failed to fetch subscription" });
+      if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
+      }
     }
   });
-  
-  // Cancel user's subscription
+
   app.post("/api/user/subscription/cancel", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
-      const user = await storage.getUser(req.user!.id);
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+      
+      const user = await storage.getUser(userId);
       if (!user) {
-        return res.status(404).json({ message: "User not found" });
+        return res.status(404).json({ error: 'User not found' });
       }
       
-      // Special case for fateofjustice who has special access
-      if (user.username === "Fateofjustice") {
-        return res.status(400).json({ message: "Your account has special access that cannot be cancelled." });
+      if (!user.stripeSubscriptionId) {
+        return res.status(400).json({ error: 'No active subscription to cancel' });
       }
       
-      // If they have a Stripe subscription, cancel it through Stripe API
-      if (user.stripeSubscriptionId && stripe) {
-        try {
-          await stripe.subscriptions.cancel(user.stripeSubscriptionId);
-        } catch (stripeError) {
-          console.error("Error cancelling Stripe subscription:", stripeError);
-          // Continue with local cancellation even if Stripe fails
-        }
-      }
+      // Cancel the subscription in Stripe
+      await stripe.subscriptions.cancel(user.stripeSubscriptionId);
       
-      // Update user record in database
-      const updatedUser = await storage.updateUserMembership(user.id, "none", new Date());
+      // Update the user's membership tier to indicate cancellation
+      await storage.updateUserMembership(userId, 'free', new Date());
       
-      res.json({
-        success: true,
-        message: "Your subscription has been cancelled successfully.",
-        user: {
-          tier: "none",
-          expiry: null,
-          subscriptionId: null
-        }
-      });
+      res.json({ message: 'Subscription successfully cancelled' });
     } catch (error) {
-      console.error("Error cancelling subscription:", error);
-      res.status(500).json({ message: "Error cancelling subscription." });
+      if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
+      }
     }
   });
 
-  // Get user's payment history
   app.get("/api/user/payments", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
-      const payments = await storage.getUserPayments(req.user!.id);
-      return res.json(payments);
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+      
+      const payments = await storage.getUserPayments(userId);
+      res.json(payments);
     } catch (error) {
-      console.error("Error fetching payment history:", error);
-      return res.status(500).json({ message: "Failed to fetch payment history" });
+      if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
+      }
     }
   });
 
-  // Record a payment after successful PayPal transaction
   app.post("/api/user/payments", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
-      const paymentData = insertPaymentRecordSchema.parse({
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const data = insertPaymentRecordSchema.parse({
         ...req.body,
-        userId: req.user!.id,
+        userId
       });
       
-      const payment = await storage.createPaymentRecord(paymentData);
+      const payment = await storage.createPaymentRecord(data);
       
-      // Update user's membership based on the plan
-      const plan = await storage.getSubscriptionPlan(paymentData.planId);
-      if (plan) {
-        // Calculate expiry date (1 week from now for weekly subscription)
-        const expiryDate = new Date();
-        expiryDate.setDate(expiryDate.getDate() + 7);
+      // If the payment is for a membership, update the user's membership status
+      if (data.type === 'membership' && data.status === 'completed') {
+        const subscriptionPlan = await storage.getSubscriptionPlanByTier(data.membershipTier!);
         
-        // Update user's membership
-        await storage.updateUserMembership(req.user!.id, plan.tier, expiryDate);
+        if (!subscriptionPlan) {
+          throw new Error(`Subscription plan for tier ${data.membershipTier} not found`);
+        }
+        
+        // Calculate membership expiry date based on plan duration
+        const expiryDate = new Date();
+        expiryDate.setDate(expiryDate.getDate() + subscriptionPlan.durationDays);
+        
+        await storage.updateUserMembership(userId, data.membershipTier!, expiryDate);
       }
       
-      return res.status(201).json(payment);
+      res.status(201).json(payment);
     } catch (error) {
       if (error instanceof ZodError) {
-        const validationError = fromZodError(error);
-        return res.status(400).json({ 
-          message: "Validation error", 
-          errors: validationError.details 
-        });
+        res.status(400).json({ error: fromZodError(error).message });
+      } else if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
       }
-      
-      console.error("Error creating payment record:", error);
-      return res.status(500).json({ message: "Failed to create payment record" });
     }
   });
 
-  // ===== PAYPAL INTEGRATION ROUTES =====
-  
-  // Setup PayPal session
-  app.get("/api/paypal/setup", async (req, res) => {
-    await loadPaypalDefault(req, res);
-  });
-
-  // Create PayPal order
-  app.post("/api/paypal/order", async (req, res) => {
-    await createPaypalOrder(req, res);
-  });
-
-  // Capture PayPal order
-  app.post("/api/paypal/order/:orderID/capture", async (req, res) => {
-    await capturePaypalOrder(req, res);
-  });
-
-  // ===== STRIPE INTEGRATION ROUTES =====
-  
-  // Create Stripe payment intent for credit card payments
   app.post("/api/create-payment-intent", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
-      if (!stripe) {
-        return res.status(500).json({ 
-          message: "Stripe is not configured. Please contact the administrator." 
-        });
-      }
-
-      const { amount, metadata } = req.body;
-      
-      if (!amount || isNaN(amount) || amount <= 0) {
-        return res.status(400).json({ message: "Invalid payment amount" });
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
       }
       
-      // Create a payment intent with the order amount and currency
+      const { amount, membershipTier } = req.body;
+      
+      if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
+        return res.status(400).json({ error: 'Invalid amount' });
+      }
+      
+      if (!membershipTier) {
+        return res.status(400).json({ error: 'Membership tier is required' });
+      }
+      
+      // Validate that the membership tier exists
+      const subscriptionPlan = await storage.getSubscriptionPlanByTier(membershipTier);
+      if (!subscriptionPlan) {
+        return res.status(400).json({ error: `Invalid membership tier: ${membershipTier}` });
+      }
+      
+      // Create a payment intent with Stripe
       const paymentIntent = await stripe.paymentIntents.create({
-        amount: Math.round(amount), // amount in cents
-        currency: "usd",
-        metadata: metadata || {},
-        receipt_email: req.user?.email || undefined,
-        automatic_payment_methods: {
-          enabled: true,
-        },
+        amount: Math.round(parseFloat(amount) * 100), // Convert to cents
+        currency: 'usd',
+        metadata: {
+          userId: userId.toString(),
+          membershipTier,
+          integrationCheck: 'physiotherapy_platform'
+        }
       });
-
+      
       res.json({
-        clientSecret: paymentIntent.client_secret,
+        clientSecret: paymentIntent.client_secret
       });
     } catch (error) {
-      console.error("Error creating payment intent:", error);
-      res.status(500).json({ 
-        message: "Error creating payment intent", 
-        error: (error as Error).message 
-      });
+      if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
+      }
     }
   });
 
-  // API routes for exercises
-  
-  // Get all exercises with optional filtering
   app.get("/api/exercises", async (req: Request, res: Response) => {
     try {
-      const bodyPart = req.query.bodyPart as string;
-      const difficulty = req.query.difficulty as string;
-      const getAll = req.query.all === "true";
+      const bodyPart = req.query.bodyPart as string | undefined;
+      const difficulty = req.query.difficulty as string | undefined;
       
-      const exercises = await storage.getExercises(bodyPart, difficulty, getAll);
+      const exercises = await storage.getExercises(bodyPart, difficulty);
       res.json(exercises);
     } catch (error) {
-      console.error("Error fetching exercises:", error);
-      res.status(500).json({ message: "Failed to fetch exercises" });
+      if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
+      }
     }
   });
-  
-  // Get a specific exercise by ID
+
   app.get("/api/exercises/:id", async (req: Request, res: Response) => {
     try {
-      const id = parseInt(req.params.id);
-      if (isNaN(id)) {
-        return res.status(400).json({ message: "Invalid exercise ID" });
+      const exerciseId = parseInt(req.params.id);
+      if (isNaN(exerciseId)) {
+        return res.status(400).json({ error: 'Invalid exercise ID' });
       }
       
-      const exercise = await storage.getExercise(id);
+      const exercise = await storage.getExercise(exerciseId);
       if (!exercise) {
-        return res.status(404).json({ message: "Exercise not found" });
+        return res.status(404).json({ error: 'Exercise not found' });
       }
       
       res.json(exercise);
     } catch (error) {
-      console.error("Error fetching exercise:", error);
-      res.status(500).json({ message: "Failed to fetch exercise" });
-    }
-  });
-  
-  // Generate exercises using AI
-  app.post("/api/exercises/generate", ensureAuthenticated, async (req: Request, res: Response) => {
-    try {
-      // Check if the OpenAI API key is available
-      if (!process.env.OPENAI_API_KEY) {
-        return res.status(503).json({ 
-          message: "OpenAI API not available. Please check your API key configuration.",
-          error: "OPENAI_API_KEY not set"
-        });
+      if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
       }
-      
-      // Validate the request body
-      const { bodyPart, difficulty, count } = req.body;
-      
-      if (!bodyPart || !difficulty) {
-        return res.status(400).json({ message: "Missing required fields (bodyPart, difficulty)" });
-      }
-      
-      // Create request object
-      const generationRequest: ExerciseGenerationRequest = {
-        bodyPart,
-        difficulty,
-        count: count || 3 // Default to 3 exercises if not specified
-      };
-      
-      // Generate exercises
-      let exercises;
-      try {
-        exercises = await generateExercises(generationRequest);
-      } catch (error) {
-        console.warn("Error generating exercises with OpenAI, using fallback:", error);
-        exercises = generateFallbackExercises(generationRequest);
-      }
-      
-      // Store exercises in the database
-      const savedExercises = await Promise.all(
-        exercises.map(exercise => storage.createExercise(exercise))
-      );
-      
-      res.json(savedExercises);
-    } catch (error) {
-      console.error("Error generating exercises:", error);
-      res.status(500).json({ 
-        message: "Failed to generate exercises", 
-        error: (error as Error).message 
-      });
-    }
-  });
-  
-  // Create a new exercise manually
-  app.post("/api/exercises", ensureAuthenticated, async (req: Request, res: Response) => {
-    try {
-      // Parse and validate the request body
-      let exerciseData;
-      try {
-        exerciseData = insertExerciseSchema.parse(req.body);
-      } catch (error) {
-        if (error instanceof ZodError) {
-          const validationError = fromZodError(error);
-          return res.status(400).json({ 
-            message: "Invalid exercise data", 
-            errors: validationError.details 
-          });
-        }
-        throw error;
-      }
-      
-      // Create the exercise
-      const exercise = await storage.createExercise(exerciseData);
-      res.status(201).json(exercise);
-    } catch (error) {
-      console.error("Error creating exercise:", error);
-      res.status(500).json({ 
-        message: "Failed to create exercise", 
-        error: (error as Error).message 
-      });
     }
   });
 
-  // Manual Therapy Techniques Routes
+  app.post("/api/exercises/generate", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+      
+      const { bodyPart, difficulty, count } = req.body;
+      
+      if (!bodyPart || !difficulty || !count) {
+        return res.status(400).json({ error: 'Body part, difficulty, and count are required' });
+      }
+      
+      const generationRequest: ExerciseGenerationRequest = {
+        bodyPart,
+        difficulty,
+        count: parseInt(count)
+      };
+      
+      try {
+        const exercises = await generateExercises(generationRequest);
+        res.json(exercises);
+      } catch (error) {
+        console.error('Error generating exercises with AI:', error);
+        
+        // Fall back to predefined exercises if AI generation fails
+        const fallbackExercises = generateFallbackExercises(generationRequest);
+        res.json({ 
+          exercises: fallbackExercises,
+          warning: 'Used fallback exercises due to AI generation failure'
+        });
+      }
+    } catch (error) {
+      if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
+      }
+    }
+  });
+
+  app.post("/api/exercises", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const data = insertExerciseSchema.parse({
+        ...req.body,
+        createdBy: userId
+      });
+      
+      const exercise = await storage.createExercise(data);
+      res.status(201).json(exercise);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        res.status(400).json({ error: fromZodError(error).message });
+      } else if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
+      }
+    }
+  });
+
   app.get("/api/manual-therapy", async (req: Request, res: Response) => {
     try {
-      const bodyPart = req.query.bodyPart as string;
+      const bodyPart = req.query.bodyPart as string | undefined;
+      
       const techniques = await storage.getManualTherapyTechniques(bodyPart);
       res.json(techniques);
     } catch (error) {
-      console.error("Error fetching manual therapy techniques:", error);
-      res.status(500).json({ 
-        message: "Failed to fetch manual therapy techniques", 
-        error: (error as Error).message 
-      });
+      if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
+      }
     }
   });
-  
+
   app.get("/api/manual-therapy/:id", async (req: Request, res: Response) => {
     try {
-      const id = parseInt(req.params.id);
-      const technique = await storage.getManualTherapyTechnique(id);
+      const techniqueId = parseInt(req.params.id);
+      if (isNaN(techniqueId)) {
+        return res.status(400).json({ error: 'Invalid technique ID' });
+      }
       
+      const technique = await storage.getManualTherapyTechnique(techniqueId);
       if (!technique) {
-        return res.status(404).json({ message: "Manual therapy technique not found" });
+        return res.status(404).json({ error: 'Technique not found' });
       }
       
       res.json(technique);
     } catch (error) {
-      console.error("Error fetching manual therapy technique:", error);
-      res.status(500).json({ 
-        message: "Failed to fetch manual therapy technique", 
-        error: (error as Error).message 
-      });
-    }
-  });
-  
-  app.post("/api/manual-therapy", ensureAuthenticated, async (req: Request, res: Response) => {
-    try {
-      // Parse and validate the request body
-      let techniqueData;
-      try {
-        techniqueData = insertManualTherapyTechniqueSchema.parse(req.body);
-      } catch (error) {
-        if (error instanceof ZodError) {
-          const validationError = fromZodError(error);
-          return res.status(400).json({ 
-            message: "Invalid manual therapy technique data", 
-            errors: validationError.details 
-          });
-        }
-        throw error;
+      if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
       }
-      
-      const technique = await storage.createManualTherapyTechnique(techniqueData);
-      res.status(201).json(technique);
-    } catch (error) {
-      console.error("Error creating manual therapy technique:", error);
-      res.status(500).json({ 
-        message: "Failed to create manual therapy technique", 
-        error: (error as Error).message 
-      });
-    }
-  });
-  
-  // Endpoint to count manual therapy techniques by body part
-  app.get("/api/manual-therapy/counts", async (req: Request, res: Response) => {
-    try {
-      try {
-        // Get all techniques
-        const allTechniques = await storage.getManualTherapyTechniques();
-        
-        // Count techniques by body part
-        const bodyPartCounts = allTechniques.reduce((counts: {bodyPart: string, count: number}[], technique) => {
-          const existingCount = counts.find(c => c.bodyPart === technique.bodyPart);
-          if (existingCount) {
-            existingCount.count++;
-          } else {
-            counts.push({ bodyPart: technique.bodyPart, count: 1 });
-          }
-          return counts;
-        }, []);
-        
-        res.json(bodyPartCounts);
-      } catch (innerError) {
-        console.error('Error in counting techniques:', innerError);
-        // Return empty counts as fallback
-        res.json([]);
-      }
-    } catch (error) {
-      console.error('Error counting manual therapy techniques:', error);
-      res.status(500).json({ 
-        message: 'Failed to count manual therapy techniques',
-        error: (error as Error).message 
-      });
     }
   });
 
-  // Virtual Patient API Routes
-  
-  // Get all virtual patients for the current user
+  app.post("/api/manual-therapy", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const data = insertManualTherapyTechniqueSchema.parse({
+        ...req.body,
+        createdBy: userId
+      });
+      
+      const technique = await storage.createManualTherapyTechnique(data);
+      res.status(201).json(technique);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        res.status(400).json({ error: fromZodError(error).message });
+      } else if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
+      }
+    }
+  });
+
+  app.get("/api/manual-therapy/counts", async (req: Request, res: Response) => {
+    try {
+      // Get techniques for all body parts to count them
+      const allTechniques = await storage.getManualTherapyTechniques();
+      
+      // Count techniques by body part
+      const counts: Record<string, number> = {};
+      
+      bodyPartEnum.options.forEach(bodyPart => {
+        counts[bodyPart] = allTechniques.filter(
+          technique => technique.bodyPart === bodyPart
+        ).length;
+      });
+      
+      res.json(counts);
+    } catch (error) {
+      if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
+      }
+    }
+  });
+
   app.get("/api/virtual-patients", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({ message: 'Not authenticated' });
+        return res.status(401).json({ error: 'User not authenticated' });
       }
       
       const virtualPatients = await storage.getUserVirtualPatients(userId);
       res.json(virtualPatients);
     } catch (error) {
-      console.error('Error fetching virtual patients:', error);
-      res.status(500).json({ 
-        message: 'Failed to fetch virtual patients',
-        error: (error as Error).message 
-      });
+      if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
+      }
     }
   });
 
-  // Get a specific virtual patient by ID
   app.get("/api/virtual-patients/:id", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const patientId = parseInt(req.params.id);
       if (isNaN(patientId)) {
-        return res.status(400).json({ message: 'Invalid patient ID' });
+        return res.status(400).json({ error: 'Invalid patient ID' });
       }
-
+      
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+      
       const virtualPatient = await storage.getVirtualPatient(patientId);
-      
       if (!virtualPatient) {
-        return res.status(404).json({ message: 'Virtual patient not found' });
+        return res.status(404).json({ error: 'Virtual patient not found' });
       }
       
-      // Check if user owns this virtual patient
-      if (virtualPatient.userId !== req.user?.id) {
-        return res.status(403).json({ message: 'You do not have permission to access this virtual patient' });
+      // Ensure the virtual patient belongs to the authenticated user
+      if (virtualPatient.userId !== userId) {
+        return res.status(403).json({ error: 'You do not have permission to access this virtual patient' });
       }
       
       res.json(virtualPatient);
     } catch (error) {
-      console.error('Error fetching virtual patient:', error);
-      res.status(500).json({ 
-        message: 'Failed to fetch virtual patient',
-        error: (error as Error).message 
-      });
+      if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
+      }
     }
   });
 
-  // Create a new virtual patient
   app.post("/api/virtual-patients", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({ message: 'Not authenticated' });
+        return res.status(401).json({ error: 'User not authenticated' });
       }
-      
-      console.log("Received virtual patient data:", req.body);
-      
-      // Create form schema without userId for validating client-submitted data
-      const clientFormSchema = z.object({
-        patientName: z.string().min(2),
-        age: z.string().min(1),
-        gender: z.string().min(1),
-        chiefComplaint: z.string().min(5),
-        symptomsDescription: z.string().min(20),
-        bodyPart: z.enum(bodyPartEnum.enumValues),
-        pastMedicalHistory: z.string().optional(),
-        pastSurgicalHistory: z.string().optional(),
-        socialHistory: z.string().optional(),
-        familyHistory: z.string().optional(),
-        medications: z.string().optional(),
-        allergies: z.string().optional(),
+
+      const data = insertVirtualPatientSchema.parse({
+        ...req.body,
+        userId,
+        status: 'pending', // Initial status
+        createdAt: new Date(),
+        updatedAt: new Date()
       });
       
-      // Validate input data
-      try {
-        var validatedData = clientFormSchema.parse(req.body);
-        console.log("Client validation passed:", validatedData);
-      } catch (validationError) {
-        console.error("Client validation failed:", validationError);
-        throw validationError; // Re-throw to be caught by the outer catch
-      }
-      
-      // Associate with the current user
-      const virtualPatientData = {
-        ...validatedData,
-        userId: userId
-      };
-      
-      // Validate the complete data with insertVirtualPatientSchema
-      try {
-        insertVirtualPatientSchema.parse(virtualPatientData);
-        console.log("Full validation passed with userId");
-      } catch (validationError) {
-        console.error("Full validation failed:", validationError);
-        throw validationError;
-      }
-      
-      console.log("Creating virtual patient with data:", virtualPatientData);
-      
-      // Create the virtual patient
-      const virtualPatient = await storage.createVirtualPatient(virtualPatientData);
-      
+      const virtualPatient = await storage.createVirtualPatient(data);
       res.status(201).json(virtualPatient);
     } catch (error) {
       if (error instanceof ZodError) {
-        const validationError = fromZodError(error);
-        return res.status(400).json({ 
-          message: "Validation error", 
-          errors: validationError.details 
-        });
+        res.status(400).json({ error: fromZodError(error).message });
+      } else if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
       }
-      
-      console.error("Error creating virtual patient:", error);
-      res.status(500).json({ 
-        message: 'Failed to create virtual patient',
-        error: (error as Error).message 
-      });
     }
   });
 
-  // Update a virtual patient's basic information
   app.patch("/api/virtual-patients/:id", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const patientId = parseInt(req.params.id);
       if (isNaN(patientId)) {
-        return res.status(400).json({ message: 'Invalid patient ID' });
+        return res.status(400).json({ error: 'Invalid patient ID' });
       }
       
-      // Get the existing virtual patient
-      const existingPatient = await storage.getVirtualPatient(patientId);
-      
-      if (!existingPatient) {
-        return res.status(404).json({ message: 'Virtual patient not found' });
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
       }
       
-      // Check if user owns this virtual patient
-      if (existingPatient.userId !== req.user?.id) {
-        return res.status(403).json({ message: 'You do not have permission to modify this virtual patient' });
+      const virtualPatient = await storage.getVirtualPatient(patientId);
+      if (!virtualPatient) {
+        return res.status(404).json({ error: 'Virtual patient not found' });
       }
       
-      // Update the virtual patient
-      const updatedPatient = await storage.updateVirtualPatient(patientId, req.body);
+      // Ensure the virtual patient belongs to the authenticated user
+      if (virtualPatient.userId !== userId) {
+        return res.status(403).json({ error: 'You do not have permission to update this virtual patient' });
+      }
       
+      const updateData = {
+        ...req.body,
+        updatedAt: new Date()
+      };
+      
+      const updatedPatient = await storage.updateVirtualPatient(patientId, updateData);
       res.json(updatedPatient);
     } catch (error) {
-      console.error('Error updating virtual patient:', error);
-      res.status(500).json({ 
-        message: 'Failed to update virtual patient',
-        error: (error as Error).message 
-      });
+      if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
+      }
     }
   });
 
-  // Generate diagnosis and treatment options for a virtual patient
   app.post("/api/virtual-patients/:id/analyze", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const patientId = parseInt(req.params.id);
       if (isNaN(patientId)) {
-        return res.status(400).json({ message: 'Invalid patient ID' });
+        return res.status(400).json({ error: 'Invalid patient ID' });
       }
       
-      // Get the existing virtual patient
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+      
       const virtualPatient = await storage.getVirtualPatient(patientId);
-      
       if (!virtualPatient) {
-        return res.status(404).json({ message: 'Virtual patient not found' });
+        return res.status(404).json({ error: 'Virtual patient not found' });
       }
       
-      // Check if user owns this virtual patient
-      if (virtualPatient.userId !== req.user?.id) {
-        return res.status(403).json({ message: 'You do not have permission to analyze this virtual patient' });
+      // Ensure the virtual patient belongs to the authenticated user
+      if (virtualPatient.userId !== userId) {
+        return res.status(403).json({ error: 'You do not have permission to analyze this virtual patient' });
       }
-
+      
+      // Special case for username "fateofjustice" - should get premium features for free
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      
+      let hasPremiumAccess = user.username === 'fateofjustice';
+      
+      // If not special user, check if they have appropriate membership
+      if (!hasPremiumAccess) {
+        if (!user.membershipTier || user.membershipTier === 'free') {
+          return res.status(403).json({ 
+            error: 'Virtual patient analysis requires a paid membership',
+            code: 'membership_required'
+          });
+        }
+        
+        // Check if membership has expired
+        if (user.membershipExpiry && new Date(user.membershipExpiry) < new Date()) {
+          return res.status(403).json({ 
+            error: 'Your membership has expired',
+            code: 'membership_expired'
+          });
+        }
+      }
+      
+      // If we get here, user has appropriate access
+      
+      // Update status to 'analyzing'
+      await storage.updateVirtualPatient(patientId, {
+        status: 'analyzing',
+        updatedAt: new Date()
+      });
+      
       // Analyze the virtual patient case
-      const analysisResult = await analyzeVirtualPatientCase({
-        patientName: virtualPatient.patientName,
-        age: virtualPatient.age,
-        gender: virtualPatient.gender,
-        chiefComplaint: virtualPatient.chiefComplaint,
-        symptomsDescription: virtualPatient.symptomsDescription,
-        pastMedicalHistory: virtualPatient.pastMedicalHistory,
-        pastSurgicalHistory: virtualPatient.pastSurgicalHistory,
-        socialHistory: virtualPatient.socialHistory,
-        familyHistory: virtualPatient.familyHistory,
-        medications: virtualPatient.medications,
-        allergies: virtualPatient.allergies,
-        bodyPart: virtualPatient.bodyPart
-      });
-
-      // Extract diagnosis info for finding related articles
-      const primaryDiagnosis = analysisResult.primaryDiagnosis.name;
-      const differentialDiagnoses = analysisResult.differentialDiagnoses.map(d => d.name);
-      const keywords = analysisResult.recommendedKeywords || [];
-
-      // Get relevant research articles
-      const articleSearchStrategy = await findRelevantResearchArticles(
-        primaryDiagnosis, 
-        differentialDiagnoses, 
-        virtualPatient.bodyPart,
-        keywords
-      );
-
-      // Find articles based on the search strategy
-      const { articles } = await storage.getResearchArticles(
-        virtualPatient.bodyPart, 
-        1, 
-        100 // Get more articles to allow for better filtering
-      );
-
-      // Advanced article matching based on expert-enhanced search strategy
-      const scoredArticles = articles.map(article => {
-        let score = 0;
-        const weights = articleSearchStrategy.relevanceWeights;
-        
-        // Convert article content to lowercase for matching
-        const articleContent = [
-          article.title,
-          article.abstract,
-          article.keyFindings || "",
-          article.clinicalRelevance || "",
-          article.methodology || ""
-        ].join(" ").toLowerCase();
-        
-        // Score matches for primary diagnosis (highest weight)
-        if (articleContent.includes(primaryDiagnosis.toLowerCase())) {
-          score += weights.primaryDiagnosis * 2;
-        }
-        
-        // Score matches for body part
-        if (article.bodyPart === virtualPatient.bodyPart) {
-          score += weights.bodyPart * 1.5;
-        }
-        
-        // Score matches for expert names and concepts
-        articleSearchStrategy.expertTerms.forEach(term => {
-          if (articleContent.includes(term.toLowerCase())) {
-            score += weights.experts;
-          }
-        });
-        
-        // Score matches for pathophysiological terms
-        articleSearchStrategy.pathoPhysiologicalTerms.forEach(term => {
-          if (articleContent.includes(term.toLowerCase())) {
-            score += weights.pathophysiology;
-          }
-        });
-        
-        // Score matches for treatment approaches
-        articleSearchStrategy.treatmentApproaches.forEach(term => {
-          if (articleContent.includes(term.toLowerCase())) {
-            score += weights.treatments;
-          }
-        });
-        
-        // Score matches for differential diagnoses
-        differentialDiagnoses.forEach(diagnosis => {
-          if (articleContent.includes(diagnosis.toLowerCase())) {
-            score += weights.differentialDiagnosis;
-          }
-        });
-        
-        // Score matches for regular search terms
-        articleSearchStrategy.searchTerms.forEach(term => {
-          if (articleContent.includes(term.toLowerCase())) {
-            score += 2;
-          }
-        });
-        
-        // Boost score for recent publications
-        const pubDate = new Date(article.publicationDate);
-        const now = new Date();
-        const yearDiff = now.getFullYear() - pubDate.getFullYear();
-        if (yearDiff <= 2) { // Published in the last 2 years
-          score += 3;
-        } else if (yearDiff <= 5) { // Published in the last 5 years
-          score += 1;
-        }
-        
-        // Boost score for articles with good methodology
-        if (article.methodology && article.methodology.toLowerCase().includes("randomized controlled")) {
-          score += 2;
-        }
-        
-        return { article, score };
-      });
+      const analysisResult = await analyzeVirtualPatientCase(virtualPatient);
       
-      // Sort by score and get top 5 most relevant articles
-      scoredArticles.sort((a, b) => b.score - a.score);
-      const relevantArticleIds = scoredArticles
-        .slice(0, 5)
-        .filter(item => item.score > 5) // Only include sufficiently relevant articles
-        .map(item => item.article.id);
-
-      // Update the virtual patient with diagnosis and treatment information
+      // Find relevant research articles based on the diagnosis
+      const relevantArticleIds = await findRelevantResearchArticles(analysisResult.diagnosis);
+      
+      // Update the virtual patient with the analysis results
       const updatedPatient = await storage.updateVirtualPatientDiagnosis(
         patientId,
-        primaryDiagnosis,
-        analysisResult.differentialDiagnoses,
+        analysisResult.diagnosis,
+        analysisResult.differentialDiagnosis,
         analysisResult.treatmentOptions,
         relevantArticleIds
       );
       
-      res.json({
-        patient: updatedPatient,
-        analysis: analysisResult,
-        articleSearchStrategy
-      });
+      res.json(updatedPatient);
     } catch (error) {
-      console.error('Error analyzing virtual patient:', error);
-      res.status(500).json({ 
-        message: 'Failed to analyze virtual patient',
-        error: (error as Error).message 
-      });
+      if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
+      }
     }
   });
 
   const httpServer = createServer(app);
+
   return httpServer;
 }

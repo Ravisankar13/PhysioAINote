@@ -1,0 +1,50 @@
+import type { Express, Request, Response, NextFunction } from "express";
+import { createServer, type Server } from "http";
+import { storage } from "./storage";
+import { generateSoapNote } from "./openai";
+import { analyzeVirtualPatientCase, findRelevantResearchArticles } from "./virtualPatientOpenai";
+import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum } from "@shared/schema";
+import { ZodError, z } from "zod";
+import { fromZodError } from "zod-validation-error";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
+import os from "os";
+import { transcribeAudio, analyzeTranscription } from "./transcription";
+import { setupAuth } from "./auth";
+import { calculateAgeRange, deIdentifyNote, extractCondition } from "./utilities/deIdentify";
+import { sampleNotes } from "./routes/sampleNotes";
+import { createPaypalOrder, capturePaypalOrder, loadPaypalDefault } from "./paypal";
+import Stripe from "stripe";
+import OpenAI from "openai";
+import { generateExercises, generateFallbackExercises, ExerciseGenerationRequest } from "./exerciseGenerator";
+import sessionRoutes from "./routes/sessionRoutes";
+
+// Helper functions for research article relevance scoring and note processing
+
+// Generate SOAP note sections from clinical insights text
+function generateSoapSectionsFromInsights(transcript: string, insights: string): {
+  subjective: string;
+  objective: string;
+  assessment: string;
+  plan: string;
+} {
+  // Default empty structure
+  const soapNote = {
+    subjective: "",
+    objective: "",
+    assessment: "",
+    plan: ""
+  };
+  
+  try {
+    // Look for SOAP section markers in the insights text
+    const subjectiveMatch = insights.match(/(?:Subjective|S):\s*([\s\S]*?)(?=(?:Objective|O):|$)/i);
+    const objectiveMatch = insights.match(/(?:Objective|O):\s*([\s\S]*?)(?=(?:Assessment|A):|$)/i);
+    const assessmentMatch = insights.match(/(?:Assessment|A):\s*([\s\S]*?)(?=(?:Plan|P):|$)/i);
+    const planMatch = insights.match(/(?:Plan|P):\s*([\s\S]*?)(?=$)/i);
+    
+    // Extract the sections if found
+    if (subjectiveMatch && subjectiveMatch[1]) {
+      soapNote.subjective = subjectiveMatch[1].trim();
+    }

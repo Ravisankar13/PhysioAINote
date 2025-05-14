@@ -82,6 +82,19 @@ export interface IStorage {
   // Audio Recording Operations
   createAudioRecording(recording: InsertAudioRecording): Promise<AudioRecording>;
   getSessionAudioRecordings(sessionId: number): Promise<AudioRecording[]>;
+
+  // Virtual Patient Operations
+  getVirtualPatient(id: number): Promise<VirtualPatient | undefined>;
+  getUserVirtualPatients(userId: number): Promise<VirtualPatient[]>;
+  createVirtualPatient(virtualPatient: InsertVirtualPatient): Promise<VirtualPatient>;
+  updateVirtualPatient(id: number, data: Partial<VirtualPatient>): Promise<VirtualPatient>;
+  updateVirtualPatientDiagnosis(
+    id: number, 
+    diagnosis: string, 
+    differentialDiagnosis: any, 
+    treatmentOptions: any, 
+    relatedArticleIds: any
+  ): Promise<VirtualPatient>;
 }
 
 export class DatabaseStorage implements IStorage {

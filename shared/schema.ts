@@ -409,3 +409,48 @@ export const insertManualTherapyTechniqueSchema = createInsertSchema(manualThera
 
 export type InsertManualTherapyTechnique = z.infer<typeof insertManualTherapyTechniqueSchema>;
 export type ManualTherapyTechnique = typeof manualTherapyTechniques.$inferSelect;
+
+// Virtual Patient Schema
+export const virtualPatients = pgTable("virtual_patients", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  patientName: text("patient_name").notNull(),
+  age: text("age").notNull(),
+  gender: text("gender").notNull(),
+  chiefComplaint: text("chief_complaint").notNull(),
+  symptomsDescription: text("symptoms_description").notNull(),
+  pastMedicalHistory: text("past_medical_history"),
+  pastSurgicalHistory: text("past_surgical_history"),
+  socialHistory: text("social_history"),
+  familyHistory: text("family_history"),
+  medications: text("medications"),
+  allergies: text("allergies"),
+  bodyPart: bodyPartEnum("body_part").default("other").notNull(),
+  diagnosis: text("diagnosis"),
+  differentialDiagnosis: json("differential_diagnosis"),
+  treatmentOptions: json("treatment_options"),
+  relatedArticleIds: json("related_article_ids"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertVirtualPatientSchema = createInsertSchema(virtualPatients).omit({
+  id: true,
+  diagnosis: true,
+  differentialDiagnosis: true,
+  treatmentOptions: true,
+  relatedArticleIds: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertVirtualPatient = z.infer<typeof insertVirtualPatientSchema>;
+export type VirtualPatient = typeof virtualPatients.$inferSelect;
+
+// Virtual patient relations
+export const virtualPatientRelations = relations(virtualPatients, ({ one }) => ({
+  user: one(users, {
+    fields: [virtualPatients.userId],
+    references: [users.id],
+  }),
+}));

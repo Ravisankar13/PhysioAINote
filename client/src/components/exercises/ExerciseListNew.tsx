@@ -357,6 +357,11 @@ function ExerciseCard({
 
 // Exercise list component
 export default function ExerciseList() {
+  // State for exercise program
+  const [selectedExercises, setSelectedExercises] = useState<Exercise[]>([]);
+  const [programName, setProgramName] = useState('My Exercise Program');
+  const [isProgramSheetOpen, setIsProgramSheetOpen] = useState(false);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
   const [, navigate] = useLocation();
@@ -439,6 +444,135 @@ export default function ExerciseList() {
   ) : [];
   
   // Handle exercise generation
+  // Handle exercise selection
+  const handleToggleSelect = (exercise: Exercise) => {
+    setSelectedExercises(prev => {
+      const isSelected = prev.some(ex => ex.id === exercise.id);
+      if (isSelected) {
+        return prev.filter(ex => ex.id !== exercise.id);
+      } else {
+        return [...prev, exercise];
+      }
+    });
+  };
+  
+  // Check if an exercise is selected
+  const isExerciseSelected = (exercise: Exercise) => {
+    return selectedExercises.some(ex => ex.id === exercise.id);
+  };
+  
+  // Clear all selected exercises
+  const clearSelectedExercises = () => {
+    setSelectedExercises([]);
+  };
+  
+  // Generate PDF for the exercise program
+  const generatePDF = () => {
+    if (selectedExercises.length === 0) {
+      toast({
+        title: "No exercises selected",
+        description: "Please select at least one exercise to create a program.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setIsGeneratingPdf(true);
+    
+    try {
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+      
+      // Add program title
+      doc.setFontSize(20);
+      doc.setTextColor(0, 0, 0);
+      doc.text(programName, 105, 20, { align: 'center' });
+      
+      // Add date
+      doc.setFontSize(10);
+      doc.text(`Created: ${new Date().toLocaleDateString()}`, 105, 30, { align: 'center' });
+      
+      // Add exercises
+      doc.setFontSize(12);
+      let y = 45;
+      
+      selectedExercises.forEach((exercise, index) => {
+        // If we're about to go off the page, add a new page
+        if (y > 260) {
+          doc.addPage();
+          y = 20;
+        }
+        
+        // Add exercise title
+        doc.setFontSize(14);
+        doc.setTextColor(0, 0, 150);
+        doc.text(`${index + 1}. ${exercise.title}`, 20, y);
+        y += 8;
+        
+        // Add body part and difficulty
+        doc.setFontSize(10);
+        doc.setTextColor(100, 100, 100);
+        doc.text(`Body Part: ${exercise.bodyPart} | Difficulty: ${exercise.difficulty}`, 20, y);
+        y += 6;
+        
+        // Add description
+        doc.setFontSize(10);
+        doc.setTextColor(0, 0, 0);
+        
+        const splitDescription = doc.splitTextToSize(exercise.description, 170);
+        doc.text(splitDescription, 20, y);
+        y += splitDescription.length * 5 + 4;
+        
+        // Add instructions
+        doc.setFontSize(10);
+        doc.setTextColor(0, 0, 0);
+        doc.text('Instructions:', 20, y);
+        y += 5;
+        
+        const splitInstructions = doc.splitTextToSize(exercise.instructions, 170);
+        doc.text(splitInstructions, 25, y);
+        y += splitInstructions.length * 5 + 4;
+        
+        // Add reps/sets/duration if available
+        let repInfo = '';
+        if (exercise.repetitions) repInfo += `Reps: ${exercise.repetitions} `;
+        if (exercise.sets) repInfo += `Sets: ${exercise.sets} `;
+        if (exercise.duration) repInfo += `Duration: ${exercise.duration}`;
+        
+        if (repInfo) {
+          doc.setFontSize(10);
+          doc.setTextColor(0, 0, 0);
+          doc.text(repInfo, 20, y);
+          y += 5;
+        }
+        
+        // Add space between exercises
+        y += 8;
+      });
+      
+      // Save the PDF
+      doc.save(`${programName.replace(/\s+/g, '_')}.pdf`);
+      
+      toast({
+        title: "PDF Generated",
+        description: "Your exercise program has been downloaded as a PDF.",
+      });
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      toast({
+        title: "Error",
+        description: "Failed to generate PDF. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsGeneratingPdf(false);
+      setIsProgramSheetOpen(false);
+    }
+  };
+  
   const handleGenerateExercises = async (bodyPart: string, difficulty: string, count: number = 3) => {
     if (!user) {
       toast({
@@ -699,7 +833,11 @@ export default function ExerciseList() {
                   <div className="absolute -top-2 -right-2 z-10">
                     <Badge className="capitalize">{exercise.bodyPart}</Badge>
                   </div>
-                  <ExerciseCard exercise={exercise} />
+                  <ExerciseCard 
+                    exercise={exercise}
+                    isSelected={isExerciseSelected(exercise)}
+                    onToggleSelect={handleToggleSelect} 
+                  />
                 </div>
               ))}
             </div>
@@ -732,7 +870,12 @@ export default function ExerciseList() {
               <>
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                   {currentExercises?.map((exercise) => (
-                    <ExerciseCard key={exercise.id} exercise={exercise} />
+                    <ExerciseCard 
+                      key={exercise.id} 
+                      exercise={exercise}
+                      isSelected={isExerciseSelected(exercise)}
+                      onToggleSelect={handleToggleSelect} 
+                    />
                   ))}
                 </div>
               </>

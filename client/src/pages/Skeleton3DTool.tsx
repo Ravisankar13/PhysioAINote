@@ -166,8 +166,10 @@ export default function Skeleton3DTool() {
               <div className="bg-white rounded-lg p-6 shadow-sm">
                 <h2 className="text-xl font-bold mb-4">Realistic 3D Skeletal Model</h2>
                 <p className="text-muted-foreground mb-4">
-                  This high-fidelity 3D model provides detailed visualization of anatomical structures.
-                  Use the controls to rotate, zoom, and examine the model from any angle. Adjust limb sizes with the controls.
+                  This high-fidelity 3D model provides detailed visualization of anatomical structures, 
+                  featuring a professionally rigged skeletal system with accurate proportions and joint positions.
+                  Use the controls to rotate, zoom, and examine the model from any angle. Adjust the size of 
+                  specific body regions using the sliders for in-depth anatomical exploration and patient education.
                 </p>
                 <SkeletonModelViewer />
               </div>

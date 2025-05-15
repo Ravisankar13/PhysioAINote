@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import { Group } from 'three';
 
 // Import skeleton model
-const MODEL_PATH = "/f13554ef-1daa-49cc-bd2d-ff0cdf430bde.glb";
+const MODEL_PATH = "/skeleton_rig.glb"; // New skeletal rig from Sketchfab
 
 interface ModelProps {
   rotationSpeed?: number;
@@ -35,6 +35,18 @@ function Model({ rotationSpeed = 0, limbScales, ...props }: ModelProps) {
     // Clone the scene to avoid mutating the cached original
     if (!sceneRef.current) {
       sceneRef.current = scene.clone();
+      
+      // Initial positioning and scale for the new skeleton model
+      if (sceneRef.current) {
+        // Center the model properly - adjusted for the new skeletal model
+        sceneRef.current.position.set(0, -0.8, 0);
+        
+        // Set initial scale for better visibility - adjusted for the new skeletal model
+        sceneRef.current.scale.set(1.2, 1.2, 1.2);
+        
+        // Initial rotation to face forward
+        sceneRef.current.rotation.set(0, Math.PI, 0);
+      }
     }
   }, [scene]);
   
@@ -44,6 +56,9 @@ function Model({ rotationSpeed = 0, limbScales, ...props }: ModelProps) {
     
     // Find and scale specific bone groups in the model
     sceneRef.current.traverse((object) => {
+      // Skip if not a mesh (we only want to scale actual visible parts)
+      if (!(object instanceof THREE.Mesh)) return;
+      
       // Get original scale if not yet set
       if (!object.userData.originalScale) {
         object.userData.originalScale = object.scale.clone();
@@ -55,37 +70,40 @@ function Model({ rotationSpeed = 0, limbScales, ...props }: ModelProps) {
       
       const name = object.name.toLowerCase();
       
-      // Scale arms
+      // Scale arms - add or modify these conditions based on the actual model structure
       if (name.includes('arm') || name.includes('shoulder') || 
           name.includes('humerus') || name.includes('radius') || 
-          name.includes('ulna')) {
+          name.includes('ulna') || name.includes('upper_arm') || 
+          name.includes('forearm')) {
         object.scale.multiplyScalar(limbScales.arms);
       }
       // Scale legs
       else if (name.includes('leg') || name.includes('femur') || 
               name.includes('tibia') || name.includes('fibula') || 
-              name.includes('thigh')) {
+              name.includes('thigh') || name.includes('shin')) {
         object.scale.multiplyScalar(limbScales.legs);
       }
       // Scale torso
       else if (name.includes('spine') || name.includes('rib') || 
               name.includes('chest') || name.includes('torso') || 
-              name.includes('pelvis')) {
+              name.includes('pelvis') || name.includes('trunk') ||
+              name.includes('vertebrae')) {
         object.scale.multiplyScalar(limbScales.torso);
       }
       // Scale hands
       else if (name.includes('hand') || name.includes('finger') || 
-              name.includes('wrist')) {
+              name.includes('wrist') || name.includes('palm')) {
         object.scale.multiplyScalar(limbScales.hands);
       }
       // Scale feet
       else if (name.includes('foot') || name.includes('ankle') || 
-              name.includes('toe')) {
+              name.includes('toe') || name.includes('heel')) {
         object.scale.multiplyScalar(limbScales.feet);
       }
       // Scale head
       else if (name.includes('head') || name.includes('skull') || 
-              name.includes('cranium') || name.includes('neck')) {
+              name.includes('cranium') || name.includes('neck') ||
+              name.includes('mandible') || name.includes('jaw')) {
         object.scale.multiplyScalar(limbScales.head);
       }
     });
@@ -150,28 +168,24 @@ export default function SkeletonModelViewer() {
           <div className="md:col-span-8">
             <div className="w-full aspect-[4/3] rounded-md overflow-hidden border model-container">
               <Suspense fallback={<div className="flex items-center justify-center h-full bg-muted">Loading 3D Model...</div>}>
-                <Canvas camera={{ position: [0, 0, 5], fov: 50 }} key={`canvas-${JSON.stringify(limbScales)}`}>
-                  <ambientLight intensity={0.7} />
-                  <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} />
+                <Canvas camera={{ position: [0, 0, 3.5], fov: 45 }} key={`canvas-${JSON.stringify(limbScales)}`}>
+                  <ambientLight intensity={0.8} />
+                  <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={0.7} />
+                  <spotLight position={[-10, -10, -10]} angle={0.15} penumbra={1} intensity={0.4} />
                   <PresentationControls
                     global
-                    zoom={0.8}
+                    zoom={1}
                     rotation={[0, 0, 0]}
-                    polar={[-Math.PI / 4, Math.PI / 4]}
-                    azimuth={[-Math.PI / 4, Math.PI / 4]}>
+                    polar={[-Math.PI / 3, Math.PI / 3]}
+                    azimuth={[-Math.PI / 3, Math.PI / 3]}>
                     <Model rotationSpeed={rotationSpeed} limbScales={limbScales} />
                   </PresentationControls>
-                  <OrbitControls enableZoom={true} enablePan={true} />
-                  <Environment preset="city" />
+                  <OrbitControls enableZoom={true} enablePan={true} minDistance={2} maxDistance={10} />
+                  <Environment preset="sunset" />
                 </Canvas>
               </Suspense>
             </div>
-            <style jsx>{`
-              .reset-animation {
-                opacity: 0.8;
-                transition: opacity 0.3s ease;
-              }
-            `}</style>
+            {/* Reset animation styles */}
           </div>
           
           {/* Adjustment Controls - takes up 4/12 columns on medium screens and above */}

@@ -1,11 +1,37 @@
 import { Helmet } from "react-helmet";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import SimpleSkeletonViewer from "@/components/skeleton/SimpleSkeletonViewer";
+import GLBSkeletonViewer from "@/components/skeleton/GLBSkeletonViewer";
 import MembershipRequired from "@/components/MembershipRequired";
 
 export default function Skeleton3DTool() {
   const [isSaved, setIsSaved] = useState(false);
+  const [useGLBViewer, setUseGLBViewer] = useState(true);
+  const [viewerError, setViewerError] = useState(false);
+
+  // Global error handler to catch Three.js errors
+  useEffect(() => {
+    const handleError = (event: ErrorEvent) => {
+      // If error is related to Three.js or WebGL, switch to simple viewer
+      if (
+        event.message && 
+        (event.message.includes('THREE') || 
+         event.message.includes('WebGL') ||
+         event.message.includes('acc[key2]'))
+      ) {
+        console.error('3D model error detected, switching to simple viewer');
+        setViewerError(true);
+        setUseGLBViewer(false);
+      }
+    };
+
+    window.addEventListener('error', handleError);
+    
+    return () => {
+      window.removeEventListener('error', handleError);
+    };
+  }, []);
 
   const handleSaveModel = () => {
     setIsSaved(true);
@@ -15,6 +41,10 @@ export default function Skeleton3DTool() {
   const handleExportImage = () => {
     // In a production app, we would implement actual export functionality
     alert("Export functionality will be available in the next update");
+  };
+
+  const toggleViewerType = () => {
+    setUseGLBViewer(!useGLBViewer);
   };
 
   return (
@@ -42,6 +72,16 @@ export default function Skeleton3DTool() {
               {isSaved ? "Model Saved!" : "Save Model"}
             </Button>
             <Button variant="outline" onClick={handleExportImage}>Export Image</Button>
+            
+            {viewerError && (
+              <Button 
+                variant="outline" 
+                onClick={toggleViewerType}
+                className="ml-2"
+              >
+                {useGLBViewer ? "Use Simple Viewer" : "Try 3D Model"}
+              </Button>
+            )}
           </div>
           
           <div className="bg-white rounded-lg p-6 shadow-sm">
@@ -52,7 +92,8 @@ export default function Skeleton3DTool() {
               Use the controls to rotate, zoom, and examine the model from any angle. Adjust the size of 
               specific body regions using the sliders for in-depth anatomical exploration and patient education.
             </p>
-            <SimpleSkeletonViewer />
+            
+            {useGLBViewer ? <GLBSkeletonViewer /> : <SimpleSkeletonViewer />}
           </div>
           
           <div className="bg-white rounded-lg p-6 shadow-sm">

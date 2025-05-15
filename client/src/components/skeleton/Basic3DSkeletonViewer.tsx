@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
@@ -16,16 +16,115 @@ export default function Basic3DSkeletonViewer() {
   const [rotationSpeed, setRotationSpeed] = useState(0);
   const [selectedModel, setSelectedModel] = useState(models[0].value);
   
-  // Define model paths to display based on selection
-  const getModelImage = () => {
+  // Add CSS animation for rotation when component mounts
+  useEffect(() => {
+    const styleSheet = document.createElement("style");
+    styleSheet.textContent = `
+      @keyframes rotate {
+        from { transform: rotateY(0deg); }
+        to { transform: rotateY(360deg); }
+      }
+    `;
+    document.head.appendChild(styleSheet);
+    
+    return () => {
+      document.head.removeChild(styleSheet);
+    };
+  }, []);
+  
+  // Create different SVG configurations based on the selected model
+  const getModelView = () => {
     switch(selectedModel) {
       case 'running':
-        return '/models/running_pose.png'; // This would be a placeholder
+        return (
+          <svg 
+            xmlns="http://www.w3.org/2000/svg" 
+            width="200" 
+            height="200" 
+            viewBox="0 0 24 24" 
+            fill="none" 
+            stroke="currentColor" 
+            strokeWidth="0.8" 
+            strokeLinecap="round" 
+            strokeLinejoin="round" 
+            className="text-blue-400"
+            style={{
+              animation: rotationSpeed > 0 
+                ? `rotate ${20/rotationSpeed}s infinite linear` 
+                : 'none'
+            }}
+          >
+            {/* Running pose - legs and arms at angles */}
+            <circle cx="12" cy="4" r="2"></circle>
+            <line x1="12" y1="6" x2="12" y2="10"></line>
+            <line x1="12" y1="10" x2="15" y2="13"></line> {/* Right arm up */}
+            <line x1="12" y1="10" x2="8" y2="12"></line> {/* Left arm down */}
+            <line x1="12" y1="10" x2="12" y2="16"></line>
+            <line x1="12" y1="16" x2="15" y2="20"></line> {/* Right leg forward */}
+            <line x1="12" y1="16" x2="8" y2="18"></line> {/* Left leg back */}
+          </svg>
+        );
       case 'sitting':
-        return '/models/sitting_pose.png'; // This would be a placeholder
+        return (
+          <svg 
+            xmlns="http://www.w3.org/2000/svg" 
+            width="200" 
+            height="200" 
+            viewBox="0 0 24 24" 
+            fill="none" 
+            stroke="currentColor" 
+            strokeWidth="0.8" 
+            strokeLinecap="round" 
+            strokeLinejoin="round" 
+            className="text-green-400"
+            style={{
+              animation: rotationSpeed > 0 
+                ? `rotate ${20/rotationSpeed}s infinite linear` 
+                : 'none'
+            }}
+          >
+            {/* Sitting pose - folded legs */}
+            <circle cx="12" cy="4" r="2"></circle>
+            <line x1="12" y1="6" x2="12" y2="10"></line>
+            <line x1="12" y1="10" x2="16" y2="12"></line> {/* Arms out */}
+            <line x1="12" y1="10" x2="8" y2="12"></line>
+            <line x1="12" y1="10" x2="12" y2="14"></line> {/* Shorter torso */}
+            <line x1="12" y1="14" x2="14" y2="14"></line> {/* Bent knees */}
+            <line x1="12" y1="14" x2="10" y2="14"></line>
+            <line x1="14" y1="14" x2="16" y2="18"></line> {/* Lower legs */}
+            <line x1="10" y1="14" x2="8" y2="18"></line>
+          </svg>
+        );
       case 'skeleton':
       default:
-        return '/models/skeleton_model.png'; // This would be a placeholder
+        return (
+          <svg 
+            xmlns="http://www.w3.org/2000/svg" 
+            width="200" 
+            height="200" 
+            viewBox="0 0 24 24" 
+            fill="none" 
+            stroke="currentColor" 
+            strokeWidth="0.8" 
+            strokeLinecap="round" 
+            strokeLinejoin="round" 
+            className="text-gray-700"
+            style={{
+              animation: rotationSpeed > 0 
+                ? `rotate ${20/rotationSpeed}s infinite linear` 
+                : 'none'
+            }}
+          >
+            {/* Standard standing pose */}
+            <circle cx="12" cy="4" r="2"></circle>
+            <line x1="12" y1="6" x2="12" y2="10"></line>
+            <line x1="12" y1="10" x2="16" y2="14"></line>
+            <line x1="12" y1="10" x2="8" y2="14"></line>
+            <line x1="12" y1="10" x2="12" y2="16"></line>
+            <line x1="12" y1="16" x2="14" y2="20"></line>
+            <line x1="12" y1="16" x2="10" y2="20"></line>
+          </svg>
+        );
     }
   };
 
@@ -37,46 +136,8 @@ export default function Basic3DSkeletonViewer() {
           <div className="md:col-span-8">
             <div className="w-full aspect-[4/3] rounded-md overflow-hidden border model-container bg-gray-100">
               <div className="h-full flex flex-col items-center justify-center p-6 text-center relative">
-                <div 
-                  className="w-full h-full" 
-                  style={{
-                    backgroundImage: `url(${getModelImage()})`,
-                    backgroundSize: 'contain',
-                    backgroundPosition: 'center',
-                    backgroundRepeat: 'no-repeat',
-                    animation: rotationSpeed > 0 
-                      ? `rotate ${20/rotationSpeed}s infinite linear` 
-                      : 'none'
-                  }}
-                />
-                
-                {/* Fallback SVG if image doesn't load */}
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <svg 
-                    xmlns="http://www.w3.org/2000/svg" 
-                    width="150" 
-                    height="150" 
-                    viewBox="0 0 24 24" 
-                    fill="none" 
-                    stroke="currentColor" 
-                    strokeWidth="0.5" 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round" 
-                    className="text-gray-400"
-                    style={{
-                      animation: rotationSpeed > 0 
-                        ? `rotate ${20/rotationSpeed}s infinite linear` 
-                        : 'none'
-                    }}
-                  >
-                    <circle cx="12" cy="4" r="2"></circle>
-                    <line x1="12" y1="6" x2="12" y2="10"></line>
-                    <line x1="12" y1="10" x2="16" y2="14"></line>
-                    <line x1="12" y1="10" x2="8" y2="14"></line>
-                    <line x1="12" y1="10" x2="12" y2="16"></line>
-                    <line x1="12" y1="16" x2="14" y2="20"></line>
-                    <line x1="12" y1="16" x2="10" y2="20"></line>
-                  </svg>
+                  {getModelView()}
                 </div>
                 
                 <div className="absolute bottom-0 left-0 right-0 p-4 bg-background/80 backdrop-blur-sm">
@@ -166,13 +227,3 @@ export default function Basic3DSkeletonViewer() {
     </Card>
   );
 }
-
-// Add CSS animation for rotation
-const styleSheet = document.createElement("style");
-styleSheet.textContent = `
-  @keyframes rotate {
-    from { transform: rotateY(0deg); }
-    to { transform: rotateY(360deg); }
-  }
-`;
-document.head.appendChild(styleSheet);

@@ -57,31 +57,28 @@ export default function Skeleton3DTool() {
           
           <div className="bg-white rounded-lg p-6 shadow-sm">
             <h2 className="text-xl font-bold mb-4 text-center">How to Use This Tool</h2>
-            <p className="mb-4">This interactive 3D skeletal model allows you to:</p>
+            <p className="mb-4">This interactive 3D model viewer allows you to:</p>
             <ul className="list-disc pl-6 space-y-2 mb-6">
-              <li>Visualize a 3D skeletal representation with accurate proportions</li>
-              <li>Rotate, zoom, and pan the model for detailed examination</li>
-              <li>Adjust bone lengths and proportions to match patient anatomy</li>
-              <li>Control limb size adjustments and rotation speed for both models</li>
-              <li>Switch between a generated model and a detailed realistic model</li>
-              <li>See both the model view and adjustment controls side-by-side</li>
-              <li>Animate common physiotherapy movements: squat, step up, step down, and lunge</li>
-              <li>Use animations to educate patients on proper movement patterns and range of motion</li>
+              <li>Explore a professionally rendered 3D model with interactive controls</li>
+              <li>Rotate, zoom, and pan the model for examining from multiple angles</li>
+              <li>Control rotation speed through the adjustment controls</li>
+              <li>Use the model to understand spatial relationships and anatomical structures</li>
+              <li>View the model and controls side-by-side in an intuitive interface</li>
             </ul>
             
             <div className="border-t pt-4">
-              <h3 className="font-medium mb-2">Tips for Physiotherapists:</h3>
+              <h3 className="font-medium mb-2">Upcoming Features:</h3>
               <p className="text-sm text-muted-foreground mb-3">
-                Use this tool in conjunction with clinical assessments. The adjustable features 
-                help to visualize proportional differences and can assist in treatment planning, 
-                but should not replace professional clinical judgment.
+                In upcoming updates, this tool will support a fully detailed skeletal model with 
+                adjustable bone lengths and proportions, allowing you to customize the model to match 
+                individual patient anatomy for more personalized education and visualization.
               </p>
-              <h3 className="font-medium mb-2">Using Movement Animations:</h3>
+              <h3 className="font-medium mb-2">Professional Applications:</h3>
               <p className="text-sm text-muted-foreground">
-                The animated movements can help demonstrate proper form to patients and highlight 
-                problematic movement patterns. Use these animations to explain biomechanical concepts, 
-                show how different muscles and joints work together during functional movements, and 
-                identify areas that may need focus during rehabilitation.
+                Physiotherapists can use 3D models to enhance patient education, explain 
+                injury mechanisms, demonstrate movement patterns, and help patients visualize 
+                their treatment goals. This 3D visualization tool serves as a powerful 
+                supplement to hands-on clinical assessments and interventions.
               </p>
             </div>
           </div>

@@ -1,28 +1,121 @@
 import { Suspense, useRef, useState } from 'react';
-import { Canvas } from '@react-three/fiber';
-import { OrbitControls, useGLTF } from '@react-three/drei';
+import { Canvas, useFrame } from '@react-three/fiber';
+import { OrbitControls } from '@react-three/drei';
 import { Card, CardContent } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-// Import the model directly using Vite's asset imports
-import skeletonModel from "@assets/skeleton_rig.glb";
+import * as THREE from 'three';
 
-// Use the imported model path
-const MODEL_PATH = skeletonModel;
-
-function SkeletonModel() {
-  // Load the GLB file
-  const { scene } = useGLTF(MODEL_PATH);
-  const modelRef = useRef();
+// Create a basic skeleton model using primitives
+function SkeletonModel({ rotationSpeed = 0 }) {
+  const groupRef = useRef<THREE.Group>(null);
+  
+  // Auto-rotate if speed is provided
+  useFrame(() => {
+    if (groupRef.current && rotationSpeed) {
+      groupRef.current.rotation.y += rotationSpeed * 0.01;
+    }
+  });
 
   return (
-    <primitive 
-      ref={modelRef} 
-      object={scene} 
-      position={[0, -1, 0]} 
-      scale={0.7} 
-    />
+    <group ref={groupRef}>
+      {/* Skull */}
+      <mesh position={[0, 2, 0]} scale={[0.4, 0.5, 0.4]}>
+        <boxGeometry />
+        <meshStandardMaterial color="#f0e6d8" />
+      </mesh>
+      
+      {/* Neck */}
+      <mesh position={[0, 1.6, 0]} scale={[0.2, 0.3, 0.2]}>
+        <boxGeometry />
+        <meshStandardMaterial color="#f0e6d8" />
+      </mesh>
+      
+      {/* Torso */}
+      <mesh position={[0, 0.8, 0]} scale={[0.8, 1.2, 0.4]}>
+        <boxGeometry />
+        <meshStandardMaterial color="#f0e6d8" />
+      </mesh>
+      
+      {/* Left Arm */}
+      <mesh position={[-0.5, 1.4, 0]} scale={[0.15, 0.15, 0.15]}>
+        <sphereGeometry args={[1, 16, 16]} />
+        <meshStandardMaterial color="#d1c7b7" />
+      </mesh>
+      <mesh position={[-0.8, 1.2, 0]} rotation={[0, 0, -0.5]} scale={[0.6, 0.2, 0.2]}>
+        <boxGeometry />
+        <meshStandardMaterial color="#f0e6d8" />
+      </mesh>
+      <mesh position={[-1.1, 1.0, 0]} scale={[0.15, 0.15, 0.15]}>
+        <sphereGeometry args={[1, 16, 16]} />
+        <meshStandardMaterial color="#d1c7b7" />
+      </mesh>
+      <mesh position={[-1.4, 0.8, 0]} rotation={[0, 0, -0.3]} scale={[0.6, 0.18, 0.18]}>
+        <boxGeometry />
+        <meshStandardMaterial color="#f0e6d8" />
+      </mesh>
+      
+      {/* Right Arm */}
+      <mesh position={[0.5, 1.4, 0]} scale={[0.15, 0.15, 0.15]}>
+        <sphereGeometry args={[1, 16, 16]} />
+        <meshStandardMaterial color="#d1c7b7" />
+      </mesh>
+      <mesh position={[0.8, 1.2, 0]} rotation={[0, 0, 0.5]} scale={[0.6, 0.2, 0.2]}>
+        <boxGeometry />
+        <meshStandardMaterial color="#f0e6d8" />
+      </mesh>
+      <mesh position={[1.1, 1.0, 0]} scale={[0.15, 0.15, 0.15]}>
+        <sphereGeometry args={[1, 16, 16]} />
+        <meshStandardMaterial color="#d1c7b7" />
+      </mesh>
+      <mesh position={[1.4, 0.8, 0]} rotation={[0, 0, 0.3]} scale={[0.6, 0.18, 0.18]}>
+        <boxGeometry />
+        <meshStandardMaterial color="#f0e6d8" />
+      </mesh>
+      
+      {/* Pelvis */}
+      <mesh position={[0, 0.2, 0]} scale={[0.6, 0.3, 0.3]}>
+        <boxGeometry />
+        <meshStandardMaterial color="#f0e6d8" />
+      </mesh>
+      
+      {/* Left Leg */}
+      <mesh position={[-0.3, 0, 0]} scale={[0.15, 0.15, 0.15]}>
+        <sphereGeometry args={[1, 16, 16]} />
+        <meshStandardMaterial color="#d1c7b7" />
+      </mesh>
+      <mesh position={[-0.3, -0.5, 0]} scale={[0.25, 0.8, 0.25]}>
+        <boxGeometry />
+        <meshStandardMaterial color="#f0e6d8" />
+      </mesh>
+      <mesh position={[-0.3, -1, 0]} scale={[0.15, 0.15, 0.15]}>
+        <sphereGeometry args={[1, 16, 16]} />
+        <meshStandardMaterial color="#d1c7b7" />
+      </mesh>
+      <mesh position={[-0.3, -1.5, 0]} scale={[0.22, 0.8, 0.22]}>
+        <boxGeometry />
+        <meshStandardMaterial color="#f0e6d8" />
+      </mesh>
+      
+      {/* Right Leg */}
+      <mesh position={[0.3, 0, 0]} scale={[0.15, 0.15, 0.15]}>
+        <sphereGeometry args={[1, 16, 16]} />
+        <meshStandardMaterial color="#d1c7b7" />
+      </mesh>
+      <mesh position={[0.3, -0.5, 0]} scale={[0.25, 0.8, 0.25]}>
+        <boxGeometry />
+        <meshStandardMaterial color="#f0e6d8" />
+      </mesh>
+      <mesh position={[0.3, -1, 0]} scale={[0.15, 0.15, 0.15]}>
+        <sphereGeometry args={[1, 16, 16]} />
+        <meshStandardMaterial color="#d1c7b7" />
+      </mesh>
+      <mesh position={[0.3, -1.5, 0]} scale={[0.22, 0.8, 0.22]}>
+        <boxGeometry />
+        <meshStandardMaterial color="#f0e6d8" />
+      </mesh>
+    </group>
   );
 }
 
@@ -36,37 +129,6 @@ export default function GLBSkeletonViewer() {
           {/* 3D Model Viewer - takes up 8/12 columns on medium screens and above */}
           <div className="md:col-span-8">
             <div className="w-full aspect-[4/3] rounded-md overflow-hidden border model-container">
-              {/* Fallback content that will show if the 3D model fails to load */}
-              <div className="absolute inset-0 flex items-center justify-center bg-gray-100 opacity-0 pointer-events-none error-fallback">
-                <div className="text-center p-6">
-                  <svg 
-                    xmlns="http://www.w3.org/2000/svg" 
-                    width="80" 
-                    height="80" 
-                    viewBox="0 0 24 24" 
-                    fill="none" 
-                    stroke="currentColor" 
-                    strokeWidth="1" 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round" 
-                    className="text-gray-400 mx-auto mb-4"
-                  >
-                    <circle cx="12" cy="4" r="2"></circle>
-                    <line x1="12" y1="6" x2="12" y2="10"></line>
-                    <line x1="12" y1="10" x2="16" y2="14"></line>
-                    <line x1="12" y1="10" x2="8" y2="14"></line>
-                    <line x1="12" y1="10" x2="12" y2="16"></line>
-                    <line x1="12" y1="16" x2="14" y2="20"></line>
-                    <line x1="12" y1="16" x2="10" y2="20"></line>
-                  </svg>
-                  <h3 className="text-lg font-medium mb-2">Model Loading Error</h3>
-                  <p className="text-muted-foreground">
-                    We're having trouble loading the 3D model. 
-                    Please try again later.
-                  </p>
-                </div>
-              </div>
-
               {/* The Canvas element for the 3D viewer */}
               <Suspense fallback={
                 <div className="flex items-center justify-center h-full bg-muted">
@@ -78,19 +140,12 @@ export default function GLBSkeletonViewer() {
               }>
                 <Canvas 
                   camera={{ position: [0, 0, 5], fov: 45 }}
-                  onError={(error) => {
-                    console.error("Canvas error:", error);
-                    // Show fallback content if there's an error
-                    document.querySelector('.error-fallback')?.classList.remove('opacity-0', 'pointer-events-none');
-                  }}
                 >
                   <ambientLight intensity={0.7} />
                   <pointLight position={[10, 10, 10]} intensity={0.5} />
                   <pointLight position={[-10, -10, -5]} intensity={0.5} />
                   
-                  <group rotation={[0, rotationSpeed * 0.01, 0]}>
-                    <SkeletonModel />
-                  </group>
+                  <SkeletonModel rotationSpeed={rotationSpeed} />
                   
                   <OrbitControls 
                     enableZoom={true} 
@@ -143,6 +198,16 @@ export default function GLBSkeletonViewer() {
                   <li>Double-click to reset the view</li>
                 </ul>
               </div>
+              
+              <div className="border-t pt-4 mt-4">
+                <h4 className="text-sm font-semibold mb-2">Coming Soon:</h4>
+                <ul className="space-y-1 text-sm text-muted-foreground list-disc pl-4">
+                  <li>Detailed anatomical model</li>
+                  <li>Movement animations</li>
+                  <li>Posture analysis</li>
+                  <li>Customizable anatomy</li>
+                </ul>
+              </div>
             </div>
           </div>
         </div>
@@ -150,15 +215,3 @@ export default function GLBSkeletonViewer() {
     </Card>
   );
 }
-
-// Add this script to handle errors in loading the model
-const errorScript = document.createElement('script');
-errorScript.innerHTML = `
-  window.addEventListener('error', function(event) {
-    if (event.message && event.message.includes('THREE')) {
-      console.error('Three.js error detected:', event);
-      document.querySelector('.error-fallback')?.classList.remove('opacity-0', 'pointer-events-none');
-    }
-  }, true);
-`;
-document.head.appendChild(errorScript);

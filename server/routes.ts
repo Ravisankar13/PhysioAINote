@@ -145,10 +145,10 @@ function extractMedicalTerms(text: string): string[] {
   });
   
   // Add common condition and diagnostic terms that might appear in notes
-  const diagnosticPhrases = text.toLowerCase().match(/(?:diagnosis|impression|assessment)[^a-z]+([\w\s,-]+)/g);
+  const diagnosticPhrases = text?.toLowerCase()?.match(/(?:diagnosis|impression|assessment)[^a-z]+([\w\s,-]+)/g);
   if (diagnosticPhrases) {
     diagnosticPhrases.forEach(phrase => {
-      const diagnosis = phrase.replace(/^(diagnosis|impression|assessment)[^a-z]+/i, '').trim();
+      const diagnosis = phrase?.replace(/^(diagnosis|impression|assessment)[^a-z]+/i, '').trim();
       if (diagnosis.length > 3) {
         medicalTerms.add(diagnosis);
       }
@@ -225,7 +225,7 @@ function extractTreatmentTerms(text: string): string[] {
 }
 
 // Initialize Stripe with secret key
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
+const stripe = new Stripe('sk_test_51RP2StQgGBJQM85ZPrDkbY7AHdR6P5wrPjnA6pduuVnGjWX6kzSTQoQBp13lzq2ICGsKWay6NmVsym7whYJqWqqX009jZOQTgI', {
   apiVersion: '2023-10-16',
 });
 

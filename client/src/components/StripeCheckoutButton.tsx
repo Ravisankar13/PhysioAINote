@@ -56,7 +56,7 @@ const StripeCheckoutButton: React.FC<StripeCheckoutButtonProps> = ({
       // Create a payment intent on the server
       const { clientSecret } = await apiRequest('POST', '/api/create-payment-intent', {
         amount,
-        planId,
+        "membershipTier": "premium"
       }).then(res => res.json());
 
       // Confirm the payment with the card element

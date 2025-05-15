@@ -195,7 +195,7 @@ function ExerciseCard({
       }
       
       // Check how many times the keyword appears in all text
-      const matches = (allText.match(new RegExp(keyword, 'g')) || []).length;
+      const matches = (allText?.match(new RegExp(keyword, 'g')) || []).length;
       if (matches > bestScore) {
         bestScore = matches;
         bestMatch = imageUrl;

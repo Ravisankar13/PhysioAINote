@@ -32,6 +32,12 @@ async function comparePasswords(supplied: string, stored: string) {
   return timingSafeEqual(hashedBuf, suppliedBuf);
 }
 
+// Session cookie duration constants
+const SESSION_DURATION = {
+  DEFAULT: 1000 * 60 * 60 * 24 * 7, // 1 week (default)
+  EXTENDED: 1000 * 60 * 60 * 24 * 30, // 30 days (remember me)
+};
+
 export function setupAuth(app: Express) {
   const sessionSettings: session.SessionOptions = {
     secret: process.env.SESSION_SECRET || 'your-secret-key',
@@ -44,7 +50,7 @@ export function setupAuth(app: Express) {
     }),
     cookie: {
       secure: process.env.NODE_ENV === "production",
-      maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
+      maxAge: SESSION_DURATION.DEFAULT,
       httpOnly: true,
       sameSite: 'lax'
     },
@@ -111,7 +117,20 @@ export function setupAuth(app: Express) {
       req.login(user, (err) => {
         if (err) return next(err);
         console.log(`User authenticated: ${user.username}, ID: ${user.id}`);
-        // Save session immediately to ensure it's stored
+        
+        // Check if "remember me" was selected
+        if (req.body.rememberMe) {
+          console.log(`Extended session requested for user: ${user.username}`);
+          // Set the session cookie to longer duration (30 days)
+          if (req.session.cookie) {
+            req.session.cookie.maxAge = SESSION_DURATION.EXTENDED;
+            console.log(`Session expiry extended to ${SESSION_DURATION.EXTENDED}ms`);
+          }
+        } else {
+          console.log(`Standard session for user: ${user.username}`);
+        }
+        
+        // Save session immediately to ensure it's stored with updated settings
         req.session.save((err) => {
           if (err) {
             console.error("Session save error:", err);

@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Leaf, LockKeyhole, User, Mail, ArrowRight, Loader2 } from "lucide-react";
 
@@ -16,6 +17,7 @@ import { Leaf, LockKeyhole, User, Mail, ArrowRight, Loader2 } from "lucide-react
 const loginSchema = z.object({
   username: z.string().min(1, { message: "Username is required" }),
   password: z.string().min(1, { message: "Password is required" }),
+  rememberMe: z.boolean().default(false),
 });
 
 // Define the registration form schema
@@ -40,6 +42,7 @@ const AuthPage = () => {
     defaultValues: {
       username: "",
       password: "",
+      rememberMe: false,
     },
   });
 
@@ -158,6 +161,28 @@ const AuthPage = () => {
                                 </div>
                               </FormControl>
                               <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={loginForm.control}
+                          name="rememberMe"
+                          render={({ field }) => (
+                            <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md p-2">
+                              <FormControl>
+                                <Checkbox
+                                  checked={field.value}
+                                  onCheckedChange={field.onChange}
+                                />
+                              </FormControl>
+                              <div className="space-y-1 leading-none">
+                                <FormLabel>
+                                  Keep me logged in
+                                </FormLabel>
+                                <FormDescription>
+                                  Stay signed in for 30 days
+                                </FormDescription>
+                              </div>
                             </FormItem>
                           )}
                         />

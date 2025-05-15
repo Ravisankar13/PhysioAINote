@@ -1,7 +1,7 @@
 import { Helmet } from "react-helmet";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import SkeletonModelViewer from "@/components/skeleton/SkeletonModelViewer";
+import SimpleSkeletonViewer from "@/components/skeleton/SimpleSkeletonViewer";
 import MembershipRequired from "@/components/MembershipRequired";
 
 export default function Skeleton3DTool() {
@@ -52,7 +52,7 @@ export default function Skeleton3DTool() {
               Use the controls to rotate, zoom, and examine the model from any angle. Adjust the size of 
               specific body regions using the sliders for in-depth anatomical exploration and patient education.
             </p>
-            <SkeletonModelViewer />
+            <SimpleSkeletonViewer />
           </div>
           
           <div className="bg-white rounded-lg p-6 shadow-sm">

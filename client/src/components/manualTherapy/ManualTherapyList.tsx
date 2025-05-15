@@ -32,6 +32,7 @@ import {
   PaginationPrevious
 } from '@/components/ui/pagination';
 import BodyHeatMap from './BodyHeatMap';
+import { getTherapyTechniqueImage, getBodyPartGradient } from '../../lib/therapyImageUtils';
 
 // Manual Therapy Technique type
 interface ManualTherapyTechnique {
@@ -72,32 +73,25 @@ function TechniqueCard({ technique }: { technique: ManualTherapyTechnique }) {
 
       {/* Image display */}
       <div className="px-6 pb-2">
-        <div className="relative w-full h-48 overflow-hidden rounded-md bg-muted">
-          {technique.imageUrl ? (
-            <img 
-              src={technique.imageUrl} 
-              alt={`${technique.title} technique`} 
-              className="object-cover w-full h-full"
-              onError={(e) => {
-                // Replace with default image on error
-                e.currentTarget.src = 'https://placehold.co/600x400/e2e8f0/64748b?text=Technique';
-              }}
-            />
-          ) : (
-            // Default image when none is available
-            <div className="w-full h-full flex items-center justify-center bg-gray-200">
-              <div className="text-center p-4">
-                <div className="text-gray-500 text-4xl mb-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
-                    <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
-                    <circle cx="9" cy="9" r="2" />
-                    <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-                  </svg>
-                </div>
-                <p className="text-gray-500">{technique.bodyPart} technique</p>
-              </div>
+        <div 
+          className={`relative w-full h-48 overflow-hidden rounded-md bg-gradient-to-br ${getBodyPartGradient(technique.bodyPart)}`}
+        >
+          <img 
+            src={technique.imageUrl || getTherapyTechniqueImage(technique.title, technique.bodyPart)} 
+            alt={`${technique.title} technique`} 
+            className="object-cover w-full h-full"
+            onError={(e) => {
+              // If the image fails to load, we show a custom color gradient with an icon
+              e.currentTarget.style.display = 'none';
+              // The gradient background is already set as a fallback
+            }}
+          />
+          <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 hover:opacity-100 transition-opacity duration-300">
+            <div className="text-white text-center p-2">
+              <h4 className="font-medium text-sm">{technique.title}</h4>
+              <p className="text-xs capitalize mt-1">{technique.bodyPart} Technique</p>
             </div>
-          )}
+          </div>
         </div>
       </div>
 

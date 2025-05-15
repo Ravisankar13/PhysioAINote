@@ -1,5 +1,7 @@
 import OpenAI from "openai";
 import { InsertExercise, bodyPartEnum, difficultyEnum } from "@shared/schema";
+import { config } from 'dotenv';
+config();
 
 // Initialize OpenAI with API key from environment variables
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });

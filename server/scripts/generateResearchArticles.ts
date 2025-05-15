@@ -2,6 +2,8 @@ import { db } from "../db";
 import { researchArticles, bodyPartEnum, type InsertResearchArticle } from "@shared/schema";
 import OpenAI from "openai";
 import { eq, sql } from "drizzle-orm";
+import { config } from 'dotenv';
+config();
 
 // Initialize OpenAI client
 const openai = new OpenAI({

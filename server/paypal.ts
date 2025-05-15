@@ -17,7 +17,7 @@ import { Request, Response } from "express";
 
 /* PayPal Controllers Setup */
 
-const { PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET } = process.env;
+const { PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET } = { 'PAYPAL_CLIENT_ID': "abc", "PAYPAL_CLIENT_SECRET": "abc" };
 
 // For development, use placeholder values if credentials are missing
 const isMissingCredentials = !PAYPAL_CLIENT_ID || !PAYPAL_CLIENT_SECRET;

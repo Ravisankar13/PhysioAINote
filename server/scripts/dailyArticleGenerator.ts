@@ -6,6 +6,8 @@ import { db } from "../db";
 import { researchArticles, type InsertResearchArticle, bodyPartEnum } from "@shared/schema";
 import OpenAI from "openai";
 import { storage } from "../storage";
+import { config } from 'dotenv';
+config();
 
 // Initialize OpenAI client
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });

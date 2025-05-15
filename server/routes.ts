@@ -21,6 +21,8 @@ import Stripe from "stripe";
 import OpenAI from "openai";
 import { generateExercises, generateFallbackExercises, ExerciseGenerationRequest } from "./exerciseGenerator";
 import sessionRoutes from "./routes/sessionRoutes";
+import { config } from 'dotenv';
+config();
 
 // Helper functions for research article relevance scoring and note processing
 

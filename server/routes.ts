@@ -878,20 +878,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: 'User not authenticated' });
       }
       
-      const { amount, membershipTier } = req.body;
+      const { amount, planId } = req.body;
       
       if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
         return res.status(400).json({ error: 'Invalid amount' });
       }
       
-      if (!membershipTier) {
-        return res.status(400).json({ error: 'Membership tier is required' });
+      if (!planId) {
+        return res.status(400).json({ error: 'Plan ID is required' });
       }
       
-      // Validate that the membership tier exists
-      const subscriptionPlan = await storage.getSubscriptionPlanByTier(membershipTier);
+      // Validate that the subscription plan exists
+      const subscriptionPlan = await storage.getSubscriptionPlan(planId);
       if (!subscriptionPlan) {
-        return res.status(400).json({ error: `Invalid membership tier: ${membershipTier}` });
+        return res.status(400).json({ error: `Invalid subscription plan ID: ${planId}` });
       }
       
       // Create a payment intent with Stripe
@@ -900,7 +900,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         currency: 'usd',
         metadata: {
           userId: userId.toString(),
-          membershipTier,
+          planId: planId.toString(),
+          planTier: subscriptionPlan.tier,
           integrationCheck: 'physiotherapy_platform'
         }
       });

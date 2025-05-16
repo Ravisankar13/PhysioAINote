@@ -15,7 +15,7 @@ interface CaseStudyListProps {
 }
 
 const bodyPartOptions = [
-  { value: "", label: "All Body Parts" },
+  { value: "all", label: "All Body Parts" },
   { value: "shoulder", label: "Shoulder" },
   { value: "neck", label: "Neck" },
   { value: "back", label: "Back" },
@@ -31,7 +31,7 @@ const bodyPartOptions = [
 ];
 
 const complexityOptions = [
-  { value: "", label: "All Levels" },
+  { value: "all", label: "All Levels" },
   { value: "beginner", label: "Beginner" },
   { value: "intermediate", label: "Intermediate" },
   { value: "advanced", label: "Advanced" },
@@ -50,8 +50,8 @@ export default function CaseStudyList({ onSelectCase, onCreateCase }: CaseStudyL
     queryKey: ['/api/case-studies', bodyPart, complexity, page, pageSize],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (bodyPart) params.append('bodyPart', bodyPart);
-      if (complexity) params.append('complexity', complexity);
+      if (bodyPart && bodyPart !== 'all') params.append('bodyPart', bodyPart);
+      if (complexity && complexity !== 'all') params.append('complexity', complexity);
       params.append('page', page.toString());
       params.append('pageSize', pageSize.toString());
       

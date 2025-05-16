@@ -557,6 +557,138 @@ export class DatabaseStorage implements IStorage {
     const result = await db.insert(manualTherapyTechniques).values(technique).returning();
     return result[0];
   }
+  
+  // AI Case Study Methods
+  async getAICaseStudy(id: number): Promise<AICaseStudy | undefined> {
+    try {
+      const results = await db.select().from(aiCaseStudies).where(eq(aiCaseStudies.id, id));
+      return results.length > 0 ? results[0] : undefined;
+    } catch (error) {
+      console.error("Error fetching AI case study:", error);
+      return undefined;
+    }
+  }
+
+  async getUserAICaseStudies(userId: number): Promise<AICaseStudy[]> {
+    try {
+      return await db.select()
+        .from(aiCaseStudies)
+        .where(eq(aiCaseStudies.userId, userId))
+        .orderBy(desc(aiCaseStudies.createdAt));
+    } catch (error) {
+      console.error("Error fetching user AI case studies:", error);
+      return [];
+    }
+  }
+
+  async getAICaseStudies(
+    bodyPart?: string,
+    complexity?: string,
+    page: number = 1,
+    pageSize: number = 10
+  ): Promise<{
+    caseStudies: AICaseStudy[],
+    total: number
+  }> {
+    try {
+      // Initialize the query
+      let query = db.select().from(aiCaseStudies);
+      let countQuery = db.select({ count: sql<number>`count(*)` }).from(aiCaseStudies);
+      
+      // Apply filters if provided
+      if (bodyPart) {
+        query = query.where(eq(aiCaseStudies.bodyPart, bodyPart));
+        countQuery = countQuery.where(eq(aiCaseStudies.bodyPart, bodyPart));
+      }
+      
+      if (complexity) {
+        query = query.where(eq(aiCaseStudies.complexity, complexity));
+        countQuery = countQuery.where(eq(aiCaseStudies.complexity, complexity));
+      }
+      
+      // Execute both queries
+      const offset = (page - 1) * pageSize;
+      const [caseStudies, countResult] = await Promise.all([
+        query.orderBy(desc(aiCaseStudies.createdAt)).limit(pageSize).offset(offset),
+        countQuery
+      ]);
+      
+      return {
+        caseStudies,
+        total: Number(countResult[0]?.count || 0)
+      };
+    } catch (error) {
+      console.error("Error fetching AI case studies:", error);
+      return { caseStudies: [], total: 0 };
+    }
+  }
+
+  async createAICaseStudy(caseStudy: InsertAICaseStudy): Promise<AICaseStudy> {
+    try {
+      const result = await db.insert(aiCaseStudies).values(caseStudy).returning();
+      return result[0];
+    } catch (error) {
+      console.error("Error creating AI case study:", error);
+      throw error;
+    }
+  }
+  
+  // Case Study Attempt Methods
+  async getCaseStudyAttempt(id: number): Promise<CaseStudyAttempt | undefined> {
+    try {
+      const results = await db.select().from(caseStudyAttempts).where(eq(caseStudyAttempts.id, id));
+      return results.length > 0 ? results[0] : undefined;
+    } catch (error) {
+      console.error("Error fetching case study attempt:", error);
+      return undefined;
+    }
+  }
+
+  async getUserAttemptsForCase(userId: number, caseStudyId: number): Promise<CaseStudyAttempt[]> {
+    try {
+      return await db.select()
+        .from(caseStudyAttempts)
+        .where(
+          and(
+            eq(caseStudyAttempts.userId, userId),
+            eq(caseStudyAttempts.caseStudyId, caseStudyId)
+          )
+        )
+        .orderBy(desc(caseStudyAttempts.createdAt));
+    } catch (error) {
+      console.error("Error fetching user attempts for case:", error);
+      return [];
+    }
+  }
+
+  async createCaseStudyAttempt(attempt: InsertCaseStudyAttempt): Promise<CaseStudyAttempt> {
+    try {
+      const result = await db.insert(caseStudyAttempts).values(attempt).returning();
+      return result[0];
+    } catch (error) {
+      console.error("Error creating case study attempt:", error);
+      throw error;
+    }
+  }
+
+  async updateCaseStudyAttemptFeedback(id: number, feedback: any, accuracy: number): Promise<CaseStudyAttempt> {
+    try {
+      const result = await db.update(caseStudyAttempts)
+        .set({
+          feedback,
+          overallAccuracy: accuracy,
+          completed: true,
+          updatedAt: new Date()
+        })
+        .where(eq(caseStudyAttempts.id, id))
+        .returning();
+      
+      return result[0];
+    } catch (error) {
+      console.error("Error updating case study attempt feedback:", error);
+      throw error;
+    }
+  }
 
   // Virtual Patient Methods
   async getVirtualPatient(id: number): Promise<VirtualPatient | undefined> {

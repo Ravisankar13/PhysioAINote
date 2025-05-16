@@ -25,6 +25,8 @@ export interface IStorage {
   // User Operations
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
+  getAllUsers(): Promise<User[]>;
+  getUserCount(): Promise<number>;
   createUser(user: InsertUser): Promise<User>;
   updateUserMembership(userId: number, membershipTier: string, expiryDate: Date): Promise<User>;
   updateStripeCustomerId(userId: number, customerId: string): Promise<User>;

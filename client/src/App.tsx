@@ -24,6 +24,7 @@ import VirtualPatientPage from "@/pages/VirtualPatientPage";
 import SharedCasesPage from "@/pages/SharedCasesPage";
 import SharedCaseDetailPage from "@/pages/SharedCaseDetailPage";
 import SharedCaseFormPage from "@/pages/SharedCaseFormPage";
+import AdminDashboard from "@/pages/admin-dashboard";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { ThemeProvider } from "next-themes";

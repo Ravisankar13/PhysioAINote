@@ -57,6 +57,7 @@ function Router() {
           <Route path="/about" component={About} />
           <Route path="/contact" component={Contact} />
           <Route path="/auth" component={AuthPage} />
+          <ProtectedRoute path="/admin" component={AdminDashboard} />
           <Route path="/test-audio-transcription" component={TestAudioTranscription} />
           <Route path="/test-note-generator" component={TestNoteGenerator} />
           <Route component={NotFound} />

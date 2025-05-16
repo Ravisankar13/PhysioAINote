@@ -1,19 +1,16 @@
 import OpenAI from "openai";
-import { bodyPartEnum } from "@shared/schema";
+import { AICaseStudy, bodyPartEnum } from "@shared/schema";
 
-// the newest OpenAI model is "gpt-4o" which was released May 13, 2024
-const MODEL = "gpt-4o";
-
+// Create OpenAI client
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// Interface for research-based case generation
+// Define input types
 export interface AICaseStudyInput {
   bodyPart: typeof bodyPartEnum.enumValues[number];
   complexity: "beginner" | "intermediate" | "advanced";
   includeResearch: boolean;
 }
 
-// Interface for feedback on user's diagnostic approach
 export interface DiagnosticFeedbackInput {
   caseStudyId: number;
   userDiagnosis: string;
@@ -42,172 +39,234 @@ export interface AICaseStudy {
   createdAt?: Date;
 }
 
-// Generate a research-based case study
+// Sample expert sources for different body parts to reference in generated content
+const expertSourcesByBodyPart: Record<string, string[]> = {
+  shoulder: [
+    "Jeremy Lewis - Rotator Cuff Related Shoulder Pain Research",
+    "Jo Gibson - Upper Limb Rehabilitation Protocols",
+    "Ann Cools - Scapular Dyskinesis Research",
+    "Chris Littlewood - Self-Managed Exercise Programs for Shoulder Pain"
+  ],
+  neck: [
+    "Gwendolen Jull - Cervical Spine Research",
+    "Deborah Falla - Motor Control in Neck Pain",
+    "Michele Sterling - Whiplash Associated Disorders Research",
+    "Peter O'Sullivan - Cognitive Functional Therapy for Neck Pain"
+  ],
+  back: [
+    "Peter O'Sullivan - Cognitive Functional Therapy for Low Back Pain",
+    "Lorimer Moseley - Pain Neuroscience Education",
+    "Stuart McGill - Spine Biomechanics Research",
+    "Kieran O'Sullivan - Low Back Pain Management Approach"
+  ],
+  knee: [
+    "Kay Crossley - Patellofemoral Pain Research",
+    "Ewa Roos - GLAD Program for Knee Osteoarthritis",
+    "Adam Weir - Tendinopathy Management Protocols",
+    "Timothy Hewett - ACL Injury Prevention Research"
+  ],
+  hip: [
+    "Alison Grimaldi - Hip and Gluteal Tendinopathy Research",
+    "Joanne Kemp - Hip-Related Pain Management",
+    "Inger Mechlenburg - Hip Dysplasia Rehabilitation",
+    "Ricci Plastow - Femoroacetabular Impingement Management"
+  ],
+  ankle: [
+    "Claire Hiller - Ankle Instability Research",
+    "Bill Vicenzino - Ankle Sprain Rehabilitation",
+    "Karin Grävare Silbernagel - Achilles Tendon Rehabilitation",
+    "Eamonn Delahunt - Ankle Sprains and Instability Protocols"
+  ],
+  foot: [
+    "Christian Barton - Running-Related Injuries Research",
+    "Michael Rathleff - Plantar Fasciopathy Management",
+    "Tom McPoil - Foot Function Assessment",
+    "Rebecca Mellsop - Foot Orthoses Research"
+  ],
+  elbow: [
+    "Leanne Bissett - Lateral Epicondylalgia Management",
+    "Jill Cook - Tendon Research",
+    "Bill Vicenzino - Lateral Elbow Pain Research",
+    "Jeremy Lewis - Upper Limb Tendinopathy Management"
+  ],
+  wrist: [
+    "Joy MacDermid - Wrist Outcome Measures",
+    "Mark Ross - Carpal Tunnel Syndrome Management",
+    "Sarah Mee - TFCC Injury Rehabilitation",
+    "Lisa Hodges - Wrist Instability Management"
+  ],
+  hand: [
+    "Susan Michlovitz - Hand Therapy Protocols",
+    "Joy MacDermid - Hand Outcome Measures",
+    "Katherine Rundell - Post-Surgical Hand Rehabilitation",
+    "Mark Ross - Complex Regional Pain Syndrome Management"
+  ],
+  general: [
+    "Lorimer Moseley - Pain Science Education",
+    "David Butler - Neurodynamics Research",
+    "Bronnie Thompson - Biopsychosocial Approach to Persistent Pain",
+    "Paul Hodges - Motor Control Research"
+  ],
+  other: [
+    "Peter Malliaras - Tendinopathy Rehabilitation",
+    "Jill Cook - Tendinopathy Research",
+    "Jeremy Lewis - Shoulder and Upper Limb Research",
+    "Peter O'Sullivan - Cognitive Functional Therapy"
+  ]
+};
+
+/**
+ * Generates an AI case study based on input parameters
+ * @param input The input parameters for generating a case study
+ * @param userId The user ID creating the case study
+ * @returns A complete AI case study object
+ */
 export async function generateAICaseStudy(
   input: AICaseStudyInput,
   userId: number
 ): Promise<AICaseStudy> {
   try {
-    const { bodyPart, complexity, includeResearch } = input;
-    
-    // Build the prompt for generating a research-based case
-    const prompt = `
-    Create a realistic and evidence-based physiotherapy case study for a ${complexity} level student focusing on the ${bodyPart} region.
-    
-    Include:
-    1. Patient demographic information and history
-    2. Detailed current symptoms and presentation
-    3. Hidden objective findings the student should discover through correct assessment
-    4. The correct diagnosis based on current best evidence
-    5. 2-3 reasonable differential diagnoses
-    6. 3-5 evidence-based assessment tests that would be appropriate to perform
-    7. The correct treatment approach based on current research evidence
-    ${includeResearch ? "8. 3-5 recent research papers or expert sources that inform this case" : ""}
-    
-    Based on complexity level (${complexity}):
-    - Beginner: Common condition with clear presentation and straightforward assessment/treatment path
-    - Intermediate: Condition with some complexity or comorbidities requiring careful differential diagnosis
-    - Advanced: Complex case with potential red flags, multiple systems involvement, or requiring sophisticated clinical reasoning
-    
-    Incorporate real evidence-based practice from renowned physiotherapy experts like:
-    - Shoulder: Jeremy Lewis, Jo Gibson, Ann Cools
-    - Knee: Kay Crossley, Christian Barton
-    - Low back: Peter O'Sullivan, Lorimer Moseley
-    - Hip: Alison Grimaldi, Joanne Kemp
-    - Neck: Gwendolen Jull, Deborah Falla
-    - Other relevant experts for this specific ${bodyPart} region
-    
-    Format your response as JSON with the following structure:
-    {
-      "title": "Brief descriptive title of the case",
-      "patientDescription": "Age, gender, occupation, relevant characteristics",
-      "history": "Patient's past medical history, injury mechanism if applicable",
-      "presentingSymptoms": "Chief complaints and presentation",
-      "vitalSigns": "Any relevant physical findings",
-      "bodyPart": "${bodyPart}",
-      "complexity": "${complexity}",
-      "hiddenFindings": {
-        "rangeOfMotion": "Findings a student should discover when testing ROM",
-        "strength": "Strength testing findings",
-        "specialTests": "Results of key tests",
-        "palpation": "Palpation findings",
-        "additionalObservations": "Other relevant findings"
-      },
-      "correctDiagnosis": "The evidence-based diagnosis",
-      "differentialDiagnoses": ["differential1", "differential2", "differential3"],
-      "correctAssessmentApproach": ["test1", "test2", "test3", "test4", "test5"],
-      "correctTreatmentApproach": "Evidence-based treatment approach overview",
-      ${includeResearch ? `"researchBasis": ["study1", "study2", "study3"],
-      "expertSources": ["expert1 approach", "expert2 protocol", "expert3 technique"],` : ""}
-      "userId": ${userId}
-    }
-    `;
+    // Create a detailed prompt for GPT
+    const prompt = `Generate a detailed physiotherapy case study for a patient with a ${input.bodyPart} issue. 
+      This should be a ${input.complexity} level case appropriate for physiotherapy students or practitioners.
+      
+      Please structure your response as a JSON object with the following format:
+      {
+        "title": "Brief but descriptive title for the case",
+        "patientDescription": "Brief demographic information and relevant background",
+        "history": "Detailed patient history of present condition",
+        "presentingSymptoms": "Current symptoms and patient complaints",
+        "vitalSigns": "Any relevant vital signs if applicable",
+        "hiddenFindings": {
+          "rangeOfMotion": "Findings from ROM testing",
+          "strength": "Findings from strength testing",
+          "specialTests": "Results from special tests",
+          "palpation": "Findings from palpation",
+          "additionalObservations": "Any other relevant clinical findings"
+        },
+        "correctDiagnosis": "The correct diagnosis with specific details",
+        "differentialDiagnoses": ["List of 3-5 differential diagnoses to consider"],
+        "correctAssessmentApproach": ["List of 5-8 specific assessment procedures that should be used"],
+        "correctTreatmentApproach": "Detailed evidence-based treatment plan"
+        ${input.includeResearch ? `,
+        "researchBasis": ["List of 3-5 recent (last 5 years) research papers supporting this approach"],
+        "expertSources": ["List of 2-3 expert physiotherapists known for work in this area"]` : ""}
+      }
+      
+      For the ${input.bodyPart} case, make sure to include:
+      1. Realistic, clinically accurate presentation for the complexity level
+      2. Accurate special tests with correct expected results
+      3. Evidence-based assessment and treatment approaches
+      4. If including research, cite real, recent studies with authors and approximate years
+      
+      Make the case realistic but educational, highlighting key clinical reasoning aspects appropriate for a ${input.complexity} level.`;
 
+    // Call OpenAI API to generate case study
     const response = await openai.chat.completions.create({
-      model: MODEL,
-      messages: [{ role: "user", content: prompt }],
-      response_format: { type: "json_object" },
+      model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+      messages: [
+        {
+          role: "system",
+          content: "You are an expert physiotherapist and educator specialized in creating realistic clinical case studies based on current evidence and best practice."
+        },
+        { role: "user", content: prompt }
+      ],
+      temperature: 0.7,
+      max_tokens: 2000,
+      response_format: { type: "json_object" }
     });
 
-    // Parse and return the generated case
-    const content = (response.choices[0].message.content as string) || "{}";
-    const result = JSON.parse(content);
-    
+    // Parse the response
+    const generatedCase = JSON.parse(response.choices[0].message.content);
+
+    // Add some expert sources if none were provided or if expert sources are needed
+    if (input.includeResearch && (!generatedCase.expertSources || generatedCase.expertSources.length === 0)) {
+      generatedCase.expertSources = expertSourcesByBodyPart[input.bodyPart] || 
+                                    expertSourcesByBodyPart.general;
+    }
+
+    // Return the case study with user ID
     return {
-      title: result.title || `${complexity.charAt(0).toUpperCase() + complexity.slice(1)} ${bodyPart} case`,
-      patientDescription: result.patientDescription || "Patient information not available",
-      history: result.history || "No history provided",
-      presentingSymptoms: result.presentingSymptoms || "Symptoms not specified",
-      vitalSigns: result.vitalSigns || "No vital signs recorded",
-      bodyPart: bodyPart,
-      complexity: complexity,
-      hiddenFindings: result.hiddenFindings || {},
-      correctDiagnosis: result.correctDiagnosis || "Diagnosis not specified",
-      differentialDiagnoses: result.differentialDiagnoses || [],
-      correctAssessmentApproach: result.correctAssessmentApproach || [],
-      correctTreatmentApproach: result.correctTreatmentApproach || "Treatment approach not specified",
-      researchBasis: result.researchBasis || [],
-      expertSources: result.expertSources || [],
-      userId: userId
+      ...generatedCase,
+      bodyPart: input.bodyPart,
+      complexity: input.complexity,
+      userId: userId,
+      createdAt: new Date()
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error generating AI case study:", error);
     throw new Error(`Failed to generate case study: ${error.message}`);
   }
 }
 
-// Generate feedback on a user's diagnostic approach
+/**
+ * Generates diagnostic feedback for a user's attempt at a case study
+ * @param input The user's diagnostic attempt
+ * @param caseStudy The original case study
+ * @returns Feedback object with scores and comments
+ */
 export async function generateDiagnosticFeedback(
   input: DiagnosticFeedbackInput,
   caseStudy: AICaseStudy
-): Promise<{
-  overallAccuracy: number;
-  diagnosisFeedback: string;
-  assessmentFeedback: string;
-  treatmentFeedback: string;
-  keyLearningPoints: string[];
-  suggestedResources?: string[];
-}> {
+): Promise<any> {
   try {
-    // Extract user input and case details
-    const { userDiagnosis, userReasoning, assessmentTests, proposedTreatment } = input;
-    const { correctDiagnosis, correctAssessmentApproach, correctTreatmentApproach, expertSources } = caseStudy;
+    // Create a detailed prompt for feedback generation
+    const prompt = `As an expert physiotherapy educator, provide detailed feedback on a student's diagnostic attempt for a case study.
     
-    // Build the feedback generation prompt
-    const prompt = `
-    You are an expert physiotherapy clinical educator providing feedback on a student's approach to a clinical case.
+    THE CASE STUDY:
+    Title: ${caseStudy.title}
+    Body Part: ${caseStudy.bodyPart}
+    Complexity: ${caseStudy.complexity}
+    Correct Diagnosis: ${caseStudy.correctDiagnosis}
+    Differential Diagnoses: ${caseStudy.differentialDiagnoses.join(', ')}
+    Correct Assessment Approach: ${caseStudy.correctAssessmentApproach.join(', ')}
+    Correct Treatment Approach: ${caseStudy.correctTreatmentApproach}
     
-    CASE DETAILS:
-    - Correct diagnosis: ${correctDiagnosis}
-    - Appropriate assessment tests: ${correctAssessmentApproach.join(", ")}
-    - Evidence-based treatment approach: ${correctTreatmentApproach}
-    ${expertSources && expertSources.length > 0 ? `- Expert approaches: ${expertSources.join(", ")}` : ""}
+    THE STUDENT'S ATTEMPT:
+    Diagnosis: ${input.userDiagnosis}
+    Clinical Reasoning: ${input.userReasoning}
+    Assessment Tests Selected: ${input.assessmentTests.join(', ')}
+    Proposed Treatment: ${input.proposedTreatment}
     
-    STUDENT'S APPROACH:
-    - Student's diagnosis: ${userDiagnosis}
-    - Student's clinical reasoning: ${userReasoning}
-    - Assessment tests selected: ${assessmentTests.join(", ")}
-    - Proposed treatment plan: ${proposedTreatment}
-    
-    Provide constructive clinical feedback that:
-    1. Evaluates the accuracy of the student's diagnosis (0-100%)
-    2. Analyzes the appropriateness of their selected assessment tests
-    3. Assesses their treatment plan's alignment with evidence-based practice
-    4. Identifies 3-5 key learning points they should focus on
-    5. Suggests 2-3 specific resources (research papers, textbooks, or expert techniques) for further learning
-    
-    Your feedback should be educational, supportive, and reference specific evidence or expert approaches where appropriate.
-    
-    Format your response as JSON with the following structure:
+    Please evaluate the attempt and provide detailed feedback in the following JSON format:
     {
-      "overallAccuracy": 85,
-      "diagnosisFeedback": "Detailed feedback on diagnosis",
-      "assessmentFeedback": "Detailed feedback on assessment approach",
-      "treatmentFeedback": "Detailed feedback on treatment plan",
-      "keyLearningPoints": ["learning point 1", "learning point 2", "learning point 3"],
-      "suggestedResources": ["specific resource 1", "specific resource 2", "specific resource 3"]
+      "diagnosisFeedback": "Detailed feedback on diagnosis accuracy and clinical reasoning",
+      "assessmentFeedback": "Feedback on assessment test selection",
+      "treatmentFeedback": "Feedback on treatment plan appropriateness",
+      "keyLearningPoints": ["3-5 specific learning points"],
+      "suggestedResources": ["2-3 specific resources for further learning"],
+      "diagnosisAccuracy": 0-100,
+      "assessmentAccuracy": 0-100,
+      "treatmentAccuracy": 0-100,
+      "overallAccuracy": 0-100
     }
-    `;
+    
+    Score each area (diagnosis, assessment, treatment) from 0-100 based on:
+    - Accuracy compared to correct answer
+    - Completeness of approach
+    - Clinical reasoning quality
+    - Evidence-based decision making
+    
+    Be constructive, educational, and specific in your feedback. Include what was done well and what could be improved.`;
 
+    // Call OpenAI API to generate feedback
     const response = await openai.chat.completions.create({
-      model: MODEL,
-      messages: [{ role: "user", content: prompt }],
-      response_format: { type: "json_object" },
+      model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+      messages: [
+        {
+          role: "system",
+          content: "You are an expert physiotherapy educator specialized in providing educational feedback on clinical reasoning and practice."
+        },
+        { role: "user", content: prompt }
+      ],
+      temperature: 0.5,
+      max_tokens: 1500,
+      response_format: { type: "json_object" }
     });
 
     // Parse and return the feedback
-    const content = (response.choices[0].message.content as string) || "{}";
-    const result = JSON.parse(content);
-    
-    return {
-      overallAccuracy: result.overallAccuracy || 0,
-      diagnosisFeedback: result.diagnosisFeedback || "No feedback available on diagnosis.",
-      assessmentFeedback: result.assessmentFeedback || "No feedback available on assessment approach.",
-      treatmentFeedback: result.treatmentFeedback || "No feedback available on treatment plan.",
-      keyLearningPoints: result.keyLearningPoints || ["No specific learning points identified."],
-      suggestedResources: result.suggestedResources || []
-    };
-  } catch (error: any) {
+    return JSON.parse(response.choices[0].message.content);
+  } catch (error) {
     console.error("Error generating diagnostic feedback:", error);
     throw new Error(`Failed to generate feedback: ${error.message}`);
   }

@@ -157,4 +157,47 @@ export function setupAuth(app: Express) {
     const { password, ...userWithoutPassword } = req.user as SelectUser;
     res.json(userWithoutPassword);
   });
+  
+  // Admin endpoint to view user statistics - only accessible by specific admin users
+  app.get("/api/admin/users", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+    
+    // Only specific users can access admin functions (for security)
+    const adminUsernames = ["Fateofjustice"]; // You can add more admin usernames here
+    if (!adminUsernames.includes(req.user!.username)) {
+      return res.status(403).json({ message: "Not authorized for admin access" });
+    }
+    
+    try {
+      // Get user count
+      const userCount = await storage.getUserCount();
+      
+      // Get list of users without passwords (sensitive information)
+      const users = await storage.getAllUsers();
+      const safeUsers = users.map(user => {
+        const { password, ...userWithoutPassword } = user;
+        return {
+          ...userWithoutPassword,
+          createdAt: user.createdAt || 'N/A'
+        };
+      });
+      
+      // Return user stats
+      res.json({
+        totalUsers: userCount,
+        users: safeUsers,
+        byMembership: {
+          basic: safeUsers.filter(u => u.membershipTier === 'basic').length,
+          standard: safeUsers.filter(u => u.membershipTier === 'standard').length,
+          premium: safeUsers.filter(u => u.membershipTier === 'premium').length,
+          none: safeUsers.filter(u => u.membershipTier === 'none').length
+        }
+      });
+    } catch (error) {
+      console.error("Error fetching admin user data:", error);
+      res.status(500).json({ message: "Failed to fetch user data" });
+    }
+  });
 }

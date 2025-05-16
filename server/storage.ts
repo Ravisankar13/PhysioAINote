@@ -188,6 +188,15 @@ export class DatabaseStorage implements IStorage {
     const results = await db.select().from(users).where(eq(users.username, username));
     return results.length > 0 ? results[0] : undefined;
   }
+  
+  async getAllUsers(): Promise<User[]> {
+    return await db.select().from(users).orderBy(users.id);
+  }
+  
+  async getUserCount(): Promise<number> {
+    const result = await db.select({ count: sql<number>`count(*)` }).from(users);
+    return result[0]?.count || 0;
+  }
 
   async createUser(insertUser: InsertUser): Promise<User> {
     const result = await db.insert(users).values(insertUser).returning();

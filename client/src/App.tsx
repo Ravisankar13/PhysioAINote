@@ -54,6 +54,7 @@ function Router() {
           <ProtectedRoute path="/shared-cases/:id/edit" component={SharedCaseFormPage} />
           <Route path="/shared-cases/:id" component={SharedCaseDetailPage} />
           <Route path="/shared-cases" component={SharedCasesPage} />
+          <ProtectedRoute path="/case-studies" component={CaseStudyPage} />
           <Route path="/membership" component={Membership} />
           <Route path="/about" component={About} />
           <Route path="/contact" component={Contact} />

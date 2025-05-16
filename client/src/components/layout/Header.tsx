@@ -29,6 +29,7 @@ const Header = () => {
     { href: "/notes", label: "Patient Sessions" },
     { href: "/skeleton-tool", label: "2D Skeleton Tool" },
     { href: "/skeleton-3d-tool", label: "3D Skeleton Tool" },
+    { href: "/case-studies", label: "AI Case Studies" },
     { href: "/shared-cases", label: "Peer Exchange" },
     { href: "/research", label: "Research" },
     { href: "/exercises", label: "Exercise Library" },

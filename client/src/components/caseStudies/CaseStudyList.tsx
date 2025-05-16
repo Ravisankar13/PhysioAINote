@@ -40,8 +40,8 @@ const complexityOptions = [
 export default function CaseStudyList({ onSelectCase, onCreateCase }: CaseStudyListProps) {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
-  const [bodyPart, setBodyPart] = useState<string>("");
-  const [complexity, setComplexity] = useState<string>("");
+  const [bodyPart, setBodyPart] = useState<string>("all");
+  const [complexity, setComplexity] = useState<string>("all");
   const [page, setPage] = useState(1);
   const pageSize = 10;
 
@@ -49,17 +49,32 @@ export default function CaseStudyList({ onSelectCase, onCreateCase }: CaseStudyL
   const { data, isLoading, error } = useQuery({
     queryKey: ['/api/case-studies', bodyPart, complexity, page, pageSize],
     queryFn: async () => {
-      const params = new URLSearchParams();
-      if (bodyPart && bodyPart !== 'all') params.append('bodyPart', bodyPart);
-      if (complexity && complexity !== 'all') params.append('complexity', complexity);
-      params.append('page', page.toString());
-      params.append('pageSize', pageSize.toString());
-      
-      const response = await fetch(`/api/case-studies?${params.toString()}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch case studies');
+      try {
+        const params = new URLSearchParams();
+        if (bodyPart && bodyPart !== 'all') params.append('bodyPart', bodyPart);
+        if (complexity && complexity !== 'all') params.append('complexity', complexity);
+        params.append('page', page.toString());
+        params.append('pageSize', pageSize.toString());
+        
+        console.log('Fetching case studies with params:', params.toString());
+        const response = await fetch(`/api/case-studies?${params.toString()}`);
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch case studies: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        console.log('Case studies data:', result);
+        return result;
+      } catch (err) {
+        console.error('Error fetching case studies:', err);
+        toast({
+          title: "Error fetching case studies",
+          description: err.message || "Please try again later",
+          variant: "destructive"
+        });
+        return { caseStudies: [], total: 0 };
       }
-      return response.json();
     }
   });
 

@@ -780,15 +780,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: 'User not found' });
       }
       
-      if (!user.stripeSubscriptionId) {
+      // Check if user has an active membership
+      if (user.membershipTier === 'none') {
         return res.status(400).json({ error: 'No active subscription to cancel' });
       }
       
-      // Cancel the subscription in Stripe
-      await stripe.subscriptions.cancel(user.stripeSubscriptionId);
+      // If user has a Stripe subscription, cancel it
+      if (user.stripeSubscriptionId) {
+        try {
+          await stripe.subscriptions.cancel(user.stripeSubscriptionId);
+        } catch (stripeError) {
+          console.error("Error cancelling Stripe subscription:", stripeError);
+          // Continue with membership cancellation even if Stripe API fails
+        }
+      }
       
-      // Update the user's membership tier to indicate cancellation
-      await storage.updateUserMembership(userId, 'free', new Date());
+      // Update the user's membership tier to 'none'
+      await storage.updateUserMembership(userId, 'none', new Date());
       
       res.json({ message: 'Subscription successfully cancelled' });
     } catch (error) {

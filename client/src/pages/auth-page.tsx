@@ -1,16 +1,37 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Helmet } from "react-helmet";
-import { useLocation } from "wouter";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/use-auth";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Leaf, LockKeyhole, User, Mail, ArrowRight, Loader2 } from "lucide-react";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import {
+  Leaf,
+  LockKeyhole,
+  User,
+  Mail,
+  ArrowRight,
+  Loader2,
+} from "lucide-react";
 
 // Define the login form schema
 const loginSchema = z.object({
@@ -20,9 +41,17 @@ const loginSchema = z.object({
 
 // Define the registration form schema
 const registerSchema = z.object({
-  username: z.string().min(3, { message: "Username must be at least 3 characters" }),
-  password: z.string().min(6, { message: "Password must be at least 6 characters" }),
-  email: z.string().email({ message: "Please enter a valid email address" }).optional().or(z.literal("")),
+  username: z
+    .string()
+    .min(3, { message: "Username must be at least 3 characters" }),
+  password: z
+    .string()
+    .min(6, { message: "Password must be at least 6 characters" }),
+  email: z
+    .string()
+    .email({ message: "Please enter a valid email address" })
+    .optional()
+    .or(z.literal("")),
   fullName: z.string().optional().or(z.literal("")),
 });
 
@@ -31,7 +60,8 @@ type RegisterFormValues = z.infer<typeof registerSchema>;
 
 const AuthPage = () => {
   const [activeTab, setActiveTab] = useState<string>("login");
-  const [location, navigate] = useLocation();
+  const navigate = useNavigate();
+  const location = useLocation();
   const { user, loginMutation, registerMutation } = useAuth();
 
   // Create the login form
@@ -73,8 +103,14 @@ const AuthPage = () => {
   }
 
   // Redirect if user is already logged in
+  useEffect(() => {
+    if (user) {
+      navigate("/");
+    }
+  }, [user, navigate]);
+
+  // If user is already logged in, don't render the component
   if (user) {
-    navigate("/");
     return null;
   }
 
@@ -88,9 +124,11 @@ const AuthPage = () => {
         />
       </Helmet>
 
+      {/* Rest of the component remains the same */}
       <div className="flex min-h-[calc(100vh-4rem)] flex-col lg:flex-row">
         {/* Form Section */}
         <div className="flex flex-col justify-center px-4 py-12 lg:w-1/2 lg:px-20">
+          {/* Your existing form content */}
           <div className="mx-auto w-full max-w-md space-y-6">
             <div className="space-y-2 text-center">
               <div className="inline-block rounded-full bg-primary/10 p-2 text-primary">
@@ -98,11 +136,16 @@ const AuthPage = () => {
               </div>
               <h1 className="text-3xl font-bold">Welcome to PhysioAI</h1>
               <p className="text-muted-foreground">
-                Sign in to your account or create a new one to access the AI-powered clinical note generation
+                Sign in to your account or create a new one to access the
+                AI-powered clinical note generation
               </p>
             </div>
 
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <Tabs
+              value={activeTab}
+              onValueChange={setActiveTab}
+              className="w-full"
+            >
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="login">Sign In</TabsTrigger>
                 <TabsTrigger value="register">Register</TabsTrigger>
@@ -119,7 +162,10 @@ const AuthPage = () => {
                   </CardHeader>
                   <CardContent>
                     <Form {...loginForm}>
-                      <form onSubmit={loginForm.handleSubmit(onLoginSubmit)} className="space-y-4">
+                      <form
+                        onSubmit={loginForm.handleSubmit(onLoginSubmit)}
+                        className="space-y-4"
+                      >
                         <FormField
                           control={loginForm.control}
                           name="username"
@@ -190,7 +236,11 @@ const AuthPage = () => {
                   </CardHeader>
                   <CardContent>
                     <Form {...registerForm}>
-                      <form onSubmit={registerForm.handleSubmit(onRegisterSubmit)} className="space-y-4">
+                      <form
+                        onSubmit={registerForm.handleSubmit(onRegisterSubmit)}
+                        className="space-y-4"
+                      >
+                        {/* Register form fields remain the same */}
                         <FormField
                           control={registerForm.control}
                           name="username"
@@ -295,15 +345,20 @@ const AuthPage = () => {
 
         {/* Hero Section */}
         <div className="hidden bg-gradient-to-br from-primary to-secondary p-12 lg:flex lg:w-1/2 lg:flex-col lg:items-center lg:justify-center">
+          {/* Hero content remains the same */}
           <div className="mx-auto max-w-md text-center text-white">
             <div className="mb-8 flex justify-center">
               <div className="rounded-full bg-white/10 p-4 backdrop-blur-sm">
                 <Leaf className="h-12 w-12 text-white" />
               </div>
             </div>
-            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">PhysioAI Conversation</h2>
+            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
+              PhysioAI Conversation
+            </h2>
             <p className="mt-4 text-lg">
-              Transform your physiotherapy practice with our AI-powered clinical documentation platform. Generate comprehensive SOAP notes and collaborate with other professionals.
+              Transform your physiotherapy practice with our AI-powered clinical
+              documentation platform. Generate comprehensive SOAP notes and
+              collaborate with other professionals.
             </p>
             <div className="mt-10">
               <div className="rounded-xl bg-white/10 p-6 backdrop-blur-sm border border-white/20">
@@ -311,32 +366,74 @@ const AuthPage = () => {
                 <ul className="space-y-3 text-left">
                   <li className="flex items-start">
                     <div className="mr-2 rounded-full bg-secondary/70 p-1">
-                      <svg className="h-3 w-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M5 13l4 4L19 7"></path>
+                      <svg
+                        className="h-3 w-3 text-white"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="4"
+                          d="M5 13l4 4L19 7"
+                        ></path>
                       </svg>
                     </div>
                     <span>AI-powered SOAP note generation</span>
                   </li>
                   <li className="flex items-start">
                     <div className="mr-2 rounded-full bg-secondary/70 p-1">
-                      <svg className="h-3 w-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M5 13l4 4L19 7"></path>
+                      <svg
+                        className="h-3 w-3 text-white"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="4"
+                          d="M5 13l4 4L19 7"
+                        ></path>
                       </svg>
                     </div>
                     <span>Voice transcription for patient sessions</span>
                   </li>
                   <li className="flex items-start">
                     <div className="mr-2 rounded-full bg-secondary/70 p-1">
-                      <svg className="h-3 w-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M5 13l4 4L19 7"></path>
+                      <svg
+                        className="h-3 w-3 text-white"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="4"
+                          d="M5 13l4 4L19 7"
+                        ></path>
                       </svg>
                     </div>
-                    <span>Share notes and collaborate with other professionals</span>
+                    <span>
+                      Share notes and collaborate with other professionals
+                    </span>
                   </li>
                   <li className="flex items-start">
                     <div className="mr-2 rounded-full bg-secondary/70 p-1">
-                      <svg className="h-3 w-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M5 13l4 4L19 7"></path>
+                      <svg
+                        className="h-3 w-3 text-white"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="4"
+                          d="M5 13l4 4L19 7"
+                        ></path>
                       </svg>
                     </div>
                     <span>Secure and HIPAA-compliant data storage</span>

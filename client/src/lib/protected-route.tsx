@@ -1,6 +1,6 @@
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
-import { Redirect, Route } from "wouter";
+import { Route } from "react-router-dom";
 
 export function ProtectedRoute({
   path,
@@ -24,10 +24,12 @@ export function ProtectedRoute({
   if (!user) {
     return (
       <Route path={path}>
-        <Redirect to="/auth" />
+        <div className="flex items-center justify-center min-h-screen">
+          <h1 className="text-2xl font-bold">Access Denied</h1>
+        </div>
       </Route>
     );
   }
 
-  return <Route path={path} component={Component} />;
+  return <Route path={path} element={<Component />} />;
 }

@@ -1,12 +1,12 @@
-import React from 'react';
-import { useAuth } from '@/hooks/use-auth';
-import SessionManager from '@/components/sessions/SessionManager';
-import { Button } from '@/components/ui/button';
-import { useLocation } from 'wouter';
+import React from "react";
+import { useAuth } from "@/hooks/use-auth";
+import SessionManager from "@/components/sessions/SessionManager";
+import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router-dom";
 
 function SessionsPage() {
   const { user } = useAuth();
-  const [, navigate] = useLocation();
+  const navigate = useNavigate();
 
   if (!user) {
     return (
@@ -15,9 +15,7 @@ function SessionsPage() {
         <p className="text-muted-foreground mb-6 text-center max-w-md">
           Please log in to access your patient sessions and clinical notes.
         </p>
-        <Button onClick={() => navigate('/auth')}>
-          Log In
-        </Button>
+        <Button onClick={() => navigate("/auth")}>Log In</Button>
       </div>
     );
   }
@@ -28,14 +26,15 @@ function SessionsPage() {
         <div>
           <h1 className="text-3xl font-bold">Patient Sessions</h1>
           <p className="text-muted-foreground mt-2">
-            Manage your patient sessions, record audio, generate transcripts, and create SOAP notes.
+            Manage your patient sessions, record audio, generate transcripts,
+            and create SOAP notes.
           </p>
         </div>
-        
+
         <SessionManager />
       </div>
     </div>
   );
-};
+}
 
 export default SessionsPage;

@@ -1726,6 +1726,150 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // AI Case Studies API Routes
+  app.get("/api/case-studies", async (req: Request, res: Response) => {
+    try {
+      const { bodyPart, complexity } = req.query;
+      const page = parseInt(req.query.page as string) || 1;
+      const pageSize = parseInt(req.query.pageSize as string) || 10;
+      
+      const result = await storage.getAICaseStudies(
+        bodyPart as string, 
+        complexity as string,
+        page,
+        pageSize
+      );
+      
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching case studies:", error);
+      res.status(500).json({ error: "Error fetching case studies" });
+    }
+  });
+
+  app.get("/api/case-studies/:id", async (req: Request, res: Response) => {
+    try {
+      const caseId = parseInt(req.params.id);
+      const caseStudy = await storage.getAICaseStudy(caseId);
+      
+      if (!caseStudy) {
+        return res.status(404).json({ error: "Case study not found" });
+      }
+      
+      res.json(caseStudy);
+    } catch (error) {
+      console.error("Error fetching case study:", error);
+      res.status(500).json({ error: "Error fetching case study" });
+    }
+  });
+
+  app.post("/api/case-studies", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      // Check if user has required membership for AI case studies
+      if (req.user.username !== "Fateofjustice" && 
+          (req.user.membershipTier === "none" || !req.user.membershipTier)) {
+        return res.status(403).json({ 
+          error: "Paid membership required", 
+          code: "membership_required" 
+        });
+      }
+      
+      const { bodyPart, complexity, includeResearch } = req.body;
+      
+      // Validate input
+      if (!bodyPart || !complexity) {
+        return res.status(400).json({ error: "Body part and complexity are required" });
+      }
+      
+      // Generate the AI case study
+      const caseStudy = await generateAICaseStudy(
+        { bodyPart, complexity, includeResearch: includeResearch ?? true },
+        req.user.id
+      );
+      
+      // Save to database
+      const savedCaseStudy = await storage.createAICaseStudy(caseStudy);
+      
+      res.status(201).json(savedCaseStudy);
+    } catch (error) {
+      console.error("Error creating case study:", error);
+      res.status(500).json({ error: "Error creating case study" });
+    }
+  });
+
+  app.get("/api/case-studies/:id/attempts", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const caseId = parseInt(req.params.id);
+      const userId = req.user.id;
+      
+      const attempts = await storage.getUserAttemptsForCase(userId, caseId);
+      
+      res.json(attempts);
+    } catch (error) {
+      console.error("Error fetching case study attempts:", error);
+      res.status(500).json({ error: "Error fetching case study attempts" });
+    }
+  });
+
+  app.post("/api/case-studies/:id/attempt", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const caseId = parseInt(req.params.id);
+      const userId = req.user.id;
+      
+      // Get the case study
+      const caseStudy = await storage.getAICaseStudy(caseId);
+      if (!caseStudy) {
+        return res.status(404).json({ error: "Case study not found" });
+      }
+      
+      // Create the attempt record
+      const attemptData = {
+        caseStudyId: caseId,
+        userId,
+        userDiagnosis: req.body.userDiagnosis,
+        userReasoning: req.body.userReasoning,
+        assessmentTests: req.body.assessmentTests,
+        proposedTreatment: req.body.proposedTreatment,
+        completed: false
+      };
+      
+      const attempt = await storage.createCaseStudyAttempt(attemptData);
+      
+      // Generate feedback
+      const feedback = await generateDiagnosticFeedback({
+        caseStudyId: caseId,
+        userDiagnosis: req.body.userDiagnosis,
+        userReasoning: req.body.userReasoning,
+        assessmentTests: req.body.assessmentTests,
+        proposedTreatment: req.body.proposedTreatment
+      }, caseStudy);
+      
+      // Update the attempt with feedback
+      const updatedAttempt = await storage.updateCaseStudyAttemptFeedback(
+        attempt.id,
+        feedback,
+        feedback.overallAccuracy
+      );
+      
+      res.status(201).json(updatedAttempt);
+    } catch (error) {
+      console.error("Error submitting case study attempt:", error);
+      res.status(500).json({ error: "Error submitting case study attempt" });
+    }
+  });
+
+  app.get("/api/user/case-studies", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user.id;
+      const caseStudies = await storage.getUserAICaseStudies(userId);
+      
+      res.json(caseStudies);
+    } catch (error) {
+      console.error("Error fetching user case studies:", error);
+      res.status(500).json({ error: "Error fetching user case studies" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

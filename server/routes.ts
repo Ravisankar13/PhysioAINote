@@ -1733,12 +1733,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const page = parseInt(req.query.page as string) || 1;
       const pageSize = parseInt(req.query.pageSize as string) || 10;
       
+      // Get existing case studies
       const result = await storage.getAICaseStudies(
         bodyPart as string, 
         complexity as string,
         page,
         pageSize
       );
+      
+      // Check if we need to load sample case studies (if none exist)
+      if (result.total === 0 || result.caseStudies.length === 0) {
+        console.log("No case studies found, loading sample case studies...");
+        try {
+          // Import and add sample case studies
+          const { addSampleCaseStudies } = await import('./sampleCaseStudies');
+          await addSampleCaseStudies(storage);
+          
+          // Try to fetch again after adding samples
+          const updatedResult = await storage.getAICaseStudies(
+            bodyPart as string,
+            complexity as string,
+            page,
+            pageSize
+          );
+          
+          return res.json(updatedResult);
+        } catch (sampleError) {
+          console.error("Error loading sample case studies:", sampleError);
+          // Continue with original empty result if sample loading fails
+        }
+      }
       
       res.json(result);
     } catch (error) {

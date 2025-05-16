@@ -832,19 +832,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const payment = await storage.createPaymentRecord(data);
       
-      // If the payment is for a membership, update the user's membership status
-      if (data.type === 'membership' && data.status === 'completed') {
-        const subscriptionPlan = await storage.getSubscriptionPlanByTier(data.membershipTier!);
+      // If the payment is completed, update the user's membership status based on the plan
+      if (data.status === 'completed') {
+        // Get the subscription plan from the planId in the payment data
+        const subscriptionPlan = await storage.getSubscriptionPlan(data.planId);
         
         if (!subscriptionPlan) {
-          throw new Error(`Subscription plan for tier ${data.membershipTier} not found`);
+          throw new Error(`Subscription plan with ID ${data.planId} not found`);
         }
         
-        // Calculate membership expiry date based on plan duration
+        // Calculate membership expiry date - default to 30 days if not specified
         const expiryDate = new Date();
-        expiryDate.setDate(expiryDate.getDate() + subscriptionPlan.durationDays);
+        // Calculate based on interval (weekly, monthly, yearly)
+        if (subscriptionPlan.interval === 'weekly') {
+          expiryDate.setDate(expiryDate.getDate() + 7);
+        } else if (subscriptionPlan.interval === 'monthly') {
+          expiryDate.setMonth(expiryDate.getMonth() + 1);
+        } else if (subscriptionPlan.interval === 'yearly') {
+          expiryDate.setFullYear(expiryDate.getFullYear() + 1);
+        } else {
+          // Default to 30 days
+          expiryDate.setDate(expiryDate.getDate() + 30);
+        }
         
-        await storage.updateUserMembership(userId, data.membershipTier!, expiryDate);
+        // Update user membership with the tier from the subscription plan
+        await storage.updateUserMembership(userId, subscriptionPlan.tier, expiryDate);
       }
       
       res.status(201).json(payment);

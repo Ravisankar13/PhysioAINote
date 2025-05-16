@@ -12,6 +12,7 @@
     "script": "tsx server/scripts/runScript.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.37.0",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
     "@hookform/resolvers": "^3.10.0",

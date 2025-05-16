@@ -130,7 +130,7 @@ export async function generateAICaseStudy(
       expertSources: result.expertSources || [],
       userId: userId
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error generating AI case study:", error);
     throw new Error(`Failed to generate case study: ${error.message}`);
   }
@@ -207,7 +207,7 @@ export async function generateDiagnosticFeedback(
       keyLearningPoints: result.keyLearningPoints || ["No specific learning points identified."],
       suggestedResources: result.suggestedResources || []
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error generating diagnostic feedback:", error);
     throw new Error(`Failed to generate feedback: ${error.message}`);
   }

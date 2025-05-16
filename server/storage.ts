@@ -14,7 +14,9 @@ import {
   sessionStatusEnum,
   sharedCases, type InsertSharedCase, type SharedCase,
   caseDiscussions, type InsertCaseDiscussion, type CaseDiscussion,
-  caseTags, caseTagsMapping, caseUpvotes, discussionUpvotes
+  caseTags, caseTagsMapping, caseUpvotes, discussionUpvotes,
+  aiCaseStudies, type AICaseStudy, type InsertAICaseStudy,
+  caseStudyAttempts, type CaseStudyAttempt, type InsertCaseStudyAttempt
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, isNull, sql } from "drizzle-orm";
@@ -56,6 +58,26 @@ export interface IStorage {
     total: number
   }>;
   createResearchArticle(article: InsertResearchArticle): Promise<ResearchArticle>;
+  
+  // AI Case Study Operations
+  getAICaseStudy(id: number): Promise<AICaseStudy | undefined>;
+  getUserAICaseStudies(userId: number): Promise<AICaseStudy[]>;
+  getAICaseStudies(
+    bodyPart?: string,
+    complexity?: string,
+    page?: number,
+    pageSize?: number
+  ): Promise<{
+    caseStudies: AICaseStudy[],
+    total: number
+  }>;
+  createAICaseStudy(caseStudy: InsertAICaseStudy): Promise<AICaseStudy>;
+  
+  // Case Study Attempt Operations
+  getCaseStudyAttempt(id: number): Promise<CaseStudyAttempt | undefined>;
+  getUserAttemptsForCase(userId: number, caseStudyId: number): Promise<CaseStudyAttempt[]>;
+  createCaseStudyAttempt(attempt: InsertCaseStudyAttempt): Promise<CaseStudyAttempt>;
+  updateCaseStudyAttemptFeedback(id: number, feedback: any, accuracy: number): Promise<CaseStudyAttempt>;
   
   // Exercise Operations
   getExercise(id: number): Promise<Exercise | undefined>;

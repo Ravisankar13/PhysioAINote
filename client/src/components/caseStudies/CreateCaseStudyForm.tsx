@@ -121,7 +121,16 @@ export default function CreateCaseStudyForm({ onCaseCreated, onCancel }: CreateC
           description: "You need a paid membership to create AI case studies",
           variant: "destructive",
         });
-      } else {
+      } 
+      // Check for OpenAI API rate limiting error
+      else if (error.message.includes('429') || error.message.includes('quota') || error.message.includes('rate limit')) {
+        toast({
+          title: "AI Service Unavailable",
+          description: "The AI service is currently at capacity. Please try again later or use the existing case studies.",
+          variant: "destructive",
+        });
+      }
+      else {
         toast({
           title: "Error",
           description: `Failed to create case study: ${error.message}`,

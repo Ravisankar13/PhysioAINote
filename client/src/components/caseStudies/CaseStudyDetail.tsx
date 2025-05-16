@@ -433,20 +433,27 @@ export default function CaseStudyDetail({ caseId, onBackToList }: CaseStudyDetai
                               name="assessmentTests"
                               render={({ field }) => {
                                 return (
-                                  <CheckboxItem
-                                    checked={field.value?.includes(test)}
-                                    onCheckedChange={(checked) => {
-                                      return checked
-                                        ? field.onChange([...field.value, test])
-                                        : field.onChange(
-                                            field.value?.filter(
-                                              (value) => value !== test
-                                            )
-                                          );
-                                    }}
-                                  >
-                                    {test}
-                                  </CheckboxItem>
+                                  <div className="flex items-center space-x-2">
+                                    <Checkbox
+                                      id={`test-${test.replace(/\s+/g, '-').toLowerCase()}-${index}`}
+                                      checked={field.value?.includes(test)}
+                                      onCheckedChange={(checked) => {
+                                        return checked
+                                          ? field.onChange([...field.value, test])
+                                          : field.onChange(
+                                              field.value?.filter(
+                                                (value) => value !== test
+                                              )
+                                            );
+                                      }}
+                                    />
+                                    <Label 
+                                      htmlFor={`test-${test.replace(/\s+/g, '-').toLowerCase()}-${index}`}
+                                      className="text-sm font-normal"
+                                    >
+                                      {test}
+                                    </Label>
+                                  </div>
                                 );
                               }}
                             />

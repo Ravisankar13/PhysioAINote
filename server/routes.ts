@@ -1681,6 +1681,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin API Routes
+  app.get("/api/admin/users", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      // Check if user is admin (case insensitive check for better compatibility)
+      if (!req.user || !['fateofjustice', 'Fateofjustice'].includes(req.user.username)) {
+        return res.status(403).json({ error: "Unauthorized access" });
+      }
+      
+      // Get all users
+      const users = await storage.getAllUsers();
+      const totalUsers = await storage.getUserCount();
+      
+      // Count membership tiers
+      const byMembership = {
+        basic: 0,
+        standard: 0,
+        premium: 0,
+        none: 0
+      };
+      
+      users.forEach(user => {
+        const tier = user.membershipTier || 'none';
+        byMembership[tier] += 1;
+      });
+      
+      res.json({
+        totalUsers,
+        users: users.map(user => ({
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          fullName: user.fullName,
+          membershipTier: user.membershipTier || 'none',
+          membershipExpiry: user.membershipExpiry ? user.membershipExpiry.toISOString() : null,
+          createdAt: user.createdAt ? user.createdAt.toISOString() : 'N/A'
+        })),
+        byMembership
+      });
+    } catch (error) {
+      console.error("Error fetching admin stats:", error);
+      res.status(500).json({ error: "Failed to fetch admin statistics" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

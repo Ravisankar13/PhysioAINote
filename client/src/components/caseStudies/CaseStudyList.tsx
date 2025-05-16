@@ -78,14 +78,18 @@ export default function CaseStudyList({ onSelectCase, onCreateCase }: CaseStudyL
     }
   });
 
+  // Ensure we have default values to prevent rendering errors
   // Filter cases by search term if provided
-  const filteredCases = searchTerm && data?.caseStudies
-    ? data.caseStudies.filter((c: any) => 
-        c.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        c.patientDescription.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        c.correctDiagnosis.toLowerCase().includes(searchTerm.toLowerCase())
+  const caseStudiesData = data?.caseStudies || [];
+  console.log('Case studies available:', caseStudiesData.length);
+  
+  const filteredCases = searchTerm 
+    ? caseStudiesData.filter((c: any) => 
+        c.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        c.patientDescription?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        c.correctDiagnosis?.toLowerCase().includes(searchTerm.toLowerCase())
       )
-    : data?.caseStudies || [];
+    : caseStudiesData;
 
   const totalPages = data ? Math.ceil(data.total / pageSize) : 0;
 

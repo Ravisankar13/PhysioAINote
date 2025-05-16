@@ -11,13 +11,17 @@ import {
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Leaf, MessageSquareText, Menu, LogOut, User, Bone, CreditCard, FileAudio, Stethoscope, Activity, Users } from "lucide-react";
+import { Leaf, MessageSquareText, Menu, LogOut, User, Bone, CreditCard, FileAudio, Stethoscope, Activity, Users, BarChart3 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 
 const Header = () => {
   const [location] = useLocation();
   const [open, setOpen] = useState(false);
   const { user, logoutMutation } = useAuth();
+  
+  // Check if user is admin
+  const adminUsernames = ['Fateofjustice'];
+  const isAdmin = user && adminUsernames.includes(user.username);
 
   const navItems = [
     { href: "/", label: "Home" },
@@ -178,6 +182,19 @@ const Header = () => {
                       </div>
                     </Link>
                   </DropdownMenuItem>
+                  
+                  {/* Admin Dashboard - only visible to admin users */}
+                  {isAdmin && (
+                    <DropdownMenuItem className="flex items-center" asChild>
+                      <Link href="/admin">
+                        <div className="flex items-center cursor-pointer w-full">
+                          <BarChart3 className="mr-2 h-4 w-4" />
+                          <span>Admin Dashboard</span>
+                        </div>
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
+                  
                   <DropdownMenuItem className="flex items-center cursor-pointer" onClick={handleLogout}>
                     <LogOut className="mr-2 h-4 w-4" />
                     <span>Logout</span>

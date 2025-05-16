@@ -19,6 +19,7 @@ import ExercisePage from "@/pages/ExercisePage";
 import ManualTherapyPage from "@/pages/ManualTherapyPage";
 import TestAudioTranscription from "@/pages/TestAudioTranscription";
 import TestNoteGenerator from "@/pages/TestNoteGenerator";
+import TestCaseStudiesPage from "@/pages/TestCaseStudiesPage";
 import SessionsPage from "@/pages/SessionsPage";
 import VirtualPatientPage from "@/pages/VirtualPatientPage";
 import SharedCasesPage from "@/pages/SharedCasesPage";
@@ -62,6 +63,7 @@ function Router() {
           <ProtectedRoute path="/admin" component={AdminDashboard} />
           <Route path="/test-audio-transcription" component={TestAudioTranscription} />
           <Route path="/test-note-generator" component={TestNoteGenerator} />
+          <Route path="/test-case-studies" component={TestCaseStudiesPage} />
           <Route component={NotFound} />
         </Switch>
       </main>

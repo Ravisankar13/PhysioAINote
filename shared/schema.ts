@@ -48,7 +48,8 @@ export const users = pgTable("users", {
   paypalSubscriptionId: text("paypal_subscription_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),
   stripeCustomerId: text("stripe_customer_id"),
-  isAdmin: boolean("is_admin").default(false),
+  // isAdmin will be added in the future via migration
+  // isAdmin: boolean("is_admin").default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

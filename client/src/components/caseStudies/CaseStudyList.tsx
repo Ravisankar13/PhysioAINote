@@ -66,7 +66,7 @@ export default function CaseStudyList({ onSelectCase, onCreateCase }: CaseStudyL
         const result = await response.json();
         console.log('Case studies data:', result);
         return result;
-      } catch (err) {
+      } catch (err: any) {
         console.error('Error fetching case studies:', err);
         toast({
           title: "Error fetching case studies",

@@ -80,8 +80,7 @@ export function setupAuth(app: Express) {
               password: await hashPassword("password"),
               email: "",
               fullName: "Admin User",
-              membershipTier: "premium",
-              isAdmin: true
+              // We don't need to specify these fields as they're handled in the storage layer
             });
             return done(null, adminUser);
           }

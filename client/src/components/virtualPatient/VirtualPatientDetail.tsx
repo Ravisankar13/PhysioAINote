@@ -31,9 +31,10 @@ import { Link } from "wouter";
 interface VirtualPatientDetailProps {
   patientId: number;
   onBackToList: () => void;
+  onEditPatient?: (patient: any) => void;
 }
 
-export default function VirtualPatientDetail({ patientId, onBackToList }: VirtualPatientDetailProps) {
+export default function VirtualPatientDetail({ patientId, onBackToList, onEditPatient }: VirtualPatientDetailProps) {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("info");
 
@@ -128,6 +129,17 @@ export default function VirtualPatientDetail({ patientId, onBackToList }: Virtua
             <CardTitle>{patient.patientName}</CardTitle>
           </div>
           <div className="flex items-center space-x-2">
+            {onEditPatient && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="mr-2"
+                onClick={() => onEditPatient(patient)}
+              >
+                <Pencil className="h-4 w-4 mr-1" />
+                Edit Patient
+              </Button>
+            )}
             <Badge variant="outline">{patient.age} years</Badge>
             <Badge variant="outline">{patient.gender}</Badge>
             <Badge>{patient.bodyPart}</Badge>

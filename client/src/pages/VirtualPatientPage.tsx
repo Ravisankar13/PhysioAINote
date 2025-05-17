@@ -99,10 +99,19 @@ export default function VirtualPatientPage() {
           />
         )}
 
+        {currentView === VirtualPatientView.EDIT && patientToEdit && (
+          <VirtualPatientForm 
+            onPatientCreated={handlePatientCreated}
+            onCancel={handleBackToList}
+            existingPatient={patientToEdit}
+          />
+        )}
+
         {currentView === VirtualPatientView.DETAIL && selectedPatientId && (
           <VirtualPatientDetail 
             patientId={selectedPatientId}
             onBackToList={handleBackToList}
+            onEditPatient={handleEditPatient}
           />
         )}
       </div>

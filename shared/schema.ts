@@ -1,32 +1,56 @@
-import { pgTable, text, serial, integer, timestamp, json, boolean, pgEnum } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  text,
+  serial,
+  integer,
+  timestamp,
+  json,
+  boolean,
+  pgEnum,
+} from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
 
 // Visibility enum for notes
-export const visibilityEnum = pgEnum("visibility", ["private", "public", "shared"]);
+export const visibilityEnum = pgEnum("visibility", [
+  "private",
+  "public",
+  "shared",
+]);
 
 // Body part category enum
 export const bodyPartEnum = pgEnum("body_part", [
-  "shoulder", 
-  "neck", 
-  "back", 
-  "elbow", 
-  "wrist", 
-  "hand", 
-  "hip", 
-  "knee", 
-  "ankle", 
+  "shoulder",
+  "neck",
+  "back",
+  "elbow",
+  "wrist",
+  "hand",
+  "hip",
+  "knee",
+  "ankle",
   "foot",
   "general",
-  "other"
+  "other",
 ]);
 
 // Membership tier enum
-export const membershipTierEnum = pgEnum("membership_tier", ["none", "basic", "standard", "premium"]);
+export const membershipTierEnum = pgEnum("membership_tier", [
+  "none",
+  "basic",
+  "standard",
+  "premium",
+]);
 
 // Session status enum for tracking recording and processing states
-export const sessionStatusEnum = pgEnum("session_status", ["draft", "recorded", "transcribed", "processing", "completed"]);
+export const sessionStatusEnum = pgEnum("session_status", [
+  "draft",
+  "recorded",
+  "transcribed",
+  "processing",
+  "completed",
+]);
 
 // Users
 export const users = pgTable("users", {
@@ -37,7 +61,9 @@ export const users = pgTable("users", {
   fullName: text("full_name"),
   profileImage: text("profile_image"),
   bio: text("bio"),
-  membershipTier: membershipTierEnum("membership_tier").default("none").notNull(),
+  membershipTier: membershipTierEnum("membership_tier")
+    .default("none")
+    .notNull(),
   membershipExpiry: timestamp("membership_expiry"),
   paypalSubscriptionId: text("paypal_subscription_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),
@@ -58,7 +84,9 @@ export type User = typeof users.$inferSelect;
 // Clinical Note Schema
 export const clinicalNotes = pgTable("clinical_notes", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
   patientName: text("patient_name").notNull(),
   patientId: text("patient_id").notNull(),
   dateOfBirth: text("date_of_birth").notNull(),
@@ -89,10 +117,22 @@ export const insertClinicalNoteSchema = createInsertSchema(clinicalNotes).omit({
 // Schema for updating note visibility and de-identification
 export const updateNoteVisibilitySchema = z.object({
   visibility: z.enum(["private", "public", "shared"]),
-  bodyPart: z.enum([
-    "shoulder", "neck", "back", "elbow", "wrist", "hand", 
-    "hip", "knee", "ankle", "foot", "general", "other"
-  ]).default("other"),
+  bodyPart: z
+    .enum([
+      "shoulder",
+      "neck",
+      "back",
+      "elbow",
+      "wrist",
+      "hand",
+      "hip",
+      "knee",
+      "ankle",
+      "foot",
+      "general",
+      "other",
+    ])
+    .default("other"),
   condition: z.string().optional(),
   ageRange: z.string().optional(),
   deIdentifiedNote: z.record(z.any()).optional(),
@@ -105,8 +145,12 @@ export type ClinicalNote = typeof clinicalNotes.$inferSelect;
 // Comments on clinical notes
 export const comments = pgTable("comments", {
   id: serial("id").primaryKey(),
-  noteId: integer("note_id").notNull().references(() => clinicalNotes.id, { onDelete: 'cascade' }),
-  userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  noteId: integer("note_id")
+    .notNull()
+    .references(() => clinicalNotes.id, { onDelete: "cascade" }),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
   content: text("content").notNull(),
   parentId: integer("parent_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -133,24 +177,31 @@ export const tags = pgTable("tags", {
 // Junction table for many-to-many relationship between notes and tags
 export const noteTags = pgTable("note_tags", {
   id: serial("id").primaryKey(),
-  noteId: integer("note_id").notNull().references(() => clinicalNotes.id, { onDelete: 'cascade' }),
-  tagId: integer("tag_id").notNull().references(() => tags.id, { onDelete: 'cascade' }),
+  noteId: integer("note_id")
+    .notNull()
+    .references(() => clinicalNotes.id, { onDelete: "cascade" }),
+  tagId: integer("tag_id")
+    .notNull()
+    .references(() => tags.id, { onDelete: "cascade" }),
 });
 
 // Define relations after all tables are defined
 export const userRelations = relations(users, ({ many }) => ({
   clinicalNotes: many(clinicalNotes),
-  comments: many(comments)
+  comments: many(comments),
 }));
 
-export const clinicalNoteRelations = relations(clinicalNotes, ({ one, many }) => ({
-  user: one(users, {
-    fields: [clinicalNotes.userId],
-    references: [users.id],
-  }),
-  comments: many(comments),
-  tags: many(noteTags)
-}));
+export const clinicalNoteRelations = relations(
+  clinicalNotes,
+  ({ one, many }) => ({
+    user: one(users, {
+      fields: [clinicalNotes.userId],
+      references: [users.id],
+    }),
+    comments: many(comments),
+    tags: many(noteTags),
+  })
+);
 
 export const commentRelations = relations(comments, ({ one, many }) => ({
   note: one(clinicalNotes, {
@@ -165,11 +216,11 @@ export const commentRelations = relations(comments, ({ one, many }) => ({
     fields: [comments.parentId],
     references: [comments.id],
   }),
-  replies: many(comments, { relationName: "replies" })
+  replies: many(comments, { relationName: "replies" }),
 }));
 
 export const tagRelations = relations(tags, ({ many }) => ({
-  notes: many(noteTags)
+  notes: many(noteTags),
 }));
 
 export const noteTagsRelations = relations(noteTags, ({ one }) => ({
@@ -180,7 +231,7 @@ export const noteTagsRelations = relations(noteTags, ({ one }) => ({
   tag: one(tags, {
     fields: [noteTags.tagId],
     references: [tags.id],
-  })
+  }),
 }));
 
 // Research Articles Schema
@@ -201,7 +252,9 @@ export const researchArticles = pgTable("research_articles", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertResearchArticleSchema = createInsertSchema(researchArticles).omit({
+export const insertResearchArticleSchema = createInsertSchema(
+  researchArticles
+).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -211,9 +264,12 @@ export type InsertResearchArticle = z.infer<typeof insertResearchArticleSchema>;
 export type ResearchArticle = typeof researchArticles.$inferSelect;
 
 // Define research article relations
-export const researchArticleRelations = relations(researchArticles, ({ many }) => ({
-  tags: many(tags),
-}));
+export const researchArticleRelations = relations(
+  researchArticles,
+  ({ many }) => ({
+    tags: many(tags),
+  })
+);
 
 // Subscription Plans
 export const subscriptionPlans = pgTable("subscription_plans", {
@@ -228,19 +284,27 @@ export const subscriptionPlans = pgTable("subscription_plans", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const insertSubscriptionPlanSchema = createInsertSchema(subscriptionPlans).omit({
+export const insertSubscriptionPlanSchema = createInsertSchema(
+  subscriptionPlans
+).omit({
   id: true,
   createdAt: true,
 });
 
-export type InsertSubscriptionPlan = z.infer<typeof insertSubscriptionPlanSchema>;
+export type InsertSubscriptionPlan = z.infer<
+  typeof insertSubscriptionPlanSchema
+>;
 export type SubscriptionPlan = typeof subscriptionPlans.$inferSelect;
 
 // Payment Records
 export const paymentRecords = pgTable("payment_records", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
-  planId: integer("plan_id").notNull().references(() => subscriptionPlans.id),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  planId: integer("plan_id")
+    .notNull()
+    .references(() => subscriptionPlans.id),
   amount: text("amount").notNull(),
   paymentDate: timestamp("payment_date").defaultNow().notNull(),
   paymentMethod: text("payment_method").notNull(),
@@ -249,7 +313,9 @@ export const paymentRecords = pgTable("payment_records", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const insertPaymentRecordSchema = createInsertSchema(paymentRecords).omit({
+export const insertPaymentRecordSchema = createInsertSchema(
+  paymentRecords
+).omit({
   id: true,
   createdAt: true,
 });
@@ -275,8 +341,12 @@ export const soapNoteInputSchema = z.object({
   patientId: z.string().min(1, { message: "Patient ID is required" }),
   dateOfBirth: z.string().min(1, { message: "Date of birth is required" }),
   dateOfVisit: z.string().min(1, { message: "Date of visit is required" }),
-  subjective: z.string().min(1, { message: "Subjective information is required" }),
-  objective: z.string().min(1, { message: "Objective information is required" }),
+  subjective: z
+    .string()
+    .min(1, { message: "Subjective information is required" }),
+  objective: z
+    .string()
+    .min(1, { message: "Objective information is required" }),
   assessment: z.string().optional(),
   plan: z.string().optional(),
   visibility: z.enum(["private", "public", "shared"]).default("private"),
@@ -285,7 +355,11 @@ export const soapNoteInputSchema = z.object({
 export type SoapNoteInput = z.infer<typeof soapNoteInputSchema>;
 
 // Exercise difficulty enum
-export const difficultyEnum = pgEnum("difficulty", ["beginner", "intermediate", "advanced"]);
+export const difficultyEnum = pgEnum("difficulty", [
+  "beginner",
+  "intermediate",
+  "advanced",
+]);
 
 // Exercise Library Schema
 export const exercises = pgTable("exercises", {
@@ -319,7 +393,9 @@ export type Exercise = typeof exercises.$inferSelect;
 // Patient Session Schema
 export const patientSessions = pgTable("patient_sessions", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
   sessionName: text("session_name").notNull(),
   firstName: text("first_name"),
   middleName: text("middle_name"),
@@ -339,7 +415,9 @@ export const patientSessions = pgTable("patient_sessions", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertPatientSessionSchema = createInsertSchema(patientSessions).omit({
+export const insertPatientSessionSchema = createInsertSchema(
+  patientSessions
+).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -353,24 +431,31 @@ export type InsertPatientSession = z.infer<typeof insertPatientSessionSchema>;
 export type PatientSession = typeof patientSessions.$inferSelect;
 
 // Define session relations
-export const patientSessionRelations = relations(patientSessions, ({ one }) => ({
-  user: one(users, {
-    fields: [patientSessions.userId],
-    references: [users.id],
-  }),
-}));
+export const patientSessionRelations = relations(
+  patientSessions,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [patientSessions.userId],
+      references: [users.id],
+    }),
+  })
+);
 
 // Audio Recording Schema
 export const audioRecordings = pgTable("audio_recordings", {
-  id: serial("id").primaryKey(), 
-  sessionId: integer("session_id").notNull().references(() => patientSessions.id, { onDelete: 'cascade' }),
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id")
+    .notNull()
+    .references(() => patientSessions.id, { onDelete: "cascade" }),
   audioUrl: text("audio_url").notNull(),
   audioS3Uri: text("audio_s3_uri").notNull(),
   duration: integer("duration").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const insertAudioRecordingSchema = createInsertSchema(audioRecordings).omit({
+export const insertAudioRecordingSchema = createInsertSchema(
+  audioRecordings
+).omit({
   id: true,
   createdAt: true,
 });
@@ -379,9 +464,271 @@ export type InsertAudioRecording = z.infer<typeof insertAudioRecordingSchema>;
 export type AudioRecording = typeof audioRecordings.$inferSelect;
 
 // Define audio recording relations
-export const audioRecordingRelations = relations(audioRecordings, ({ one }) => ({
-  session: one(patientSessions, {
-    fields: [audioRecordings.sessionId],
-    references: [patientSessions.id],
+export const audioRecordingRelations = relations(
+  audioRecordings,
+  ({ one }) => ({
+    session: one(patientSessions, {
+      fields: [audioRecordings.sessionId],
+      references: [patientSessions.id],
+    }),
   })
+);
+
+// Manual Therapy Technique Schema
+export const manualTherapyTechniques = pgTable("manual_therapy_techniques", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  bodyPart: bodyPartEnum("body_part").default("general").notNull(),
+  targetStructures: text("target_structures").notNull(),
+  instructions: text("instructions").notNull(),
+  precautions: text("precautions"),
+  indications: text("indications"),
+  contraindications: text("contraindications"),
+  imageUrl: text("image_url"),
+  videoUrl: text("video_url"),
+  aiGenerated: boolean("ai_generated").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertManualTherapyTechniqueSchema = createInsertSchema(
+  manualTherapyTechniques
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertManualTherapyTechnique = z.infer<
+  typeof insertManualTherapyTechniqueSchema
+>;
+export type ManualTherapyTechnique =
+  typeof manualTherapyTechniques.$inferSelect;
+
+// Virtual Patient Schema
+export const virtualPatients = pgTable("virtual_patients", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  age: integer("age").notNull(),
+  gender: text("gender").notNull(),
+  chiefComplaint: text("chief_complaint").notNull(),
+  medicalHistory: text("medical_history"),
+  painLevel: integer("pain_level"),
+  bodyPart: bodyPartEnum("body_part").default("general").notNull(),
+  symptoms: text("symptoms").notNull(),
+  assessment: text("assessment"),
+  diagnosis: text("diagnosis"),
+  differentialDiagnosis: json("differential_diagnosis"),
+  treatmentOptions: json("treatment_options"),
+  relatedArticleIds: json("related_article_ids"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertVirtualPatientSchema = createInsertSchema(
+  virtualPatients
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  diagnosis: true,
+  differentialDiagnosis: true,
+  treatmentOptions: true,
+  relatedArticleIds: true,
+});
+
+export type InsertVirtualPatient = z.infer<typeof insertVirtualPatientSchema>;
+export type VirtualPatient = typeof virtualPatients.$inferSelect;
+
+// Define virtual patient relations
+export const virtualPatientRelations = relations(
+  virtualPatients,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [virtualPatients.userId],
+      references: [users.id],
+    }),
+  })
+);
+
+// Expertise level enum for shared cases
+export const expertiseLevelEnum = pgEnum("expertise_level", [
+  "student",
+  "entry",
+  "intermediate",
+  "advanced",
+  "expert",
+]);
+
+// Complexity level enum for shared cases
+export const complexityLevelEnum = pgEnum("complexity_level", [
+  "basic",
+  "moderate",
+  "complex",
+  "challenging",
+]);
+
+// Shared Cases Schema (Peer Knowledge Exchange)
+export const sharedCases = pgTable("shared_cases", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  condition: text("condition").notNull(),
+  bodyPart: bodyPartEnum("body_part").default("other").notNull(),
+  presentingComplaints: text("presenting_complaints").notNull(),
+  assessmentFindings: text("assessment_findings").notNull(),
+  diagnosis: text("diagnosis").notNull(),
+  treatmentApproach: text("treatment_approach").notNull(),
+  expertiseLevel: expertiseLevelEnum("expertise_level")
+    .default("intermediate")
+    .notNull(),
+  complexityLevel: complexityLevelEnum("complexity_level")
+    .default("moderate")
+    .notNull(),
+  learningPoints: text("learning_points"),
+  imageUrls: json("image_urls"),
+  videoUrls: json("video_urls"),
+  upvotes: integer("upvotes").default(0).notNull(),
+  views: integer("views").default(0).notNull(),
+  isApproved: boolean("is_approved").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertSharedCaseSchema = createInsertSchema(sharedCases).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  upvotes: true,
+  views: true,
+  isApproved: true,
+});
+
+export type InsertSharedCase = z.infer<typeof insertSharedCaseSchema>;
+export type SharedCase = typeof sharedCases.$inferSelect;
+
+// Case Discussions Schema
+export const caseDiscussions = pgTable("case_discussions", {
+  id: serial("id").primaryKey(),
+  caseId: integer("case_id")
+    .notNull()
+    .references(() => sharedCases.id, { onDelete: "cascade" }),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  content: text("content").notNull(),
+  parentId: integer("parent_id"),
+  upvotes: integer("upvotes").default(0).notNull(),
+  isEdited: boolean("is_edited").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertCaseDiscussionSchema = createInsertSchema(
+  caseDiscussions
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  upvotes: true,
+  isEdited: true,
+});
+
+export type InsertCaseDiscussion = z.infer<typeof insertCaseDiscussionSchema>;
+export type CaseDiscussion = typeof caseDiscussions.$inferSelect;
+
+// Case Tags Schema
+export const caseTags = pgTable("case_tags", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  category: text("category").notNull(),
+  color: text("color").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Case Tags Mapping (Junction table)
+export const caseTagsMapping = pgTable("case_tags_mapping", {
+  id: serial("id").primaryKey(),
+  caseId: integer("case_id")
+    .notNull()
+    .references(() => sharedCases.id, { onDelete: "cascade" }),
+  tagId: integer("tag_id")
+    .notNull()
+    .references(() => caseTags.id, { onDelete: "cascade" }),
+});
+
+// Case Upvotes Schema
+export const caseUpvotes = pgTable("case_upvotes", {
+  id: serial("id").primaryKey(),
+  caseId: integer("case_id")
+    .notNull()
+    .references(() => sharedCases.id, { onDelete: "cascade" }),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Discussion Upvotes Schema
+export const discussionUpvotes = pgTable("discussion_upvotes", {
+  id: serial("id").primaryKey(),
+  discussionId: integer("discussion_id")
+    .notNull()
+    .references(() => caseDiscussions.id, { onDelete: "cascade" }),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Define relations for case-related tables
+export const sharedCaseRelations = relations(sharedCases, ({ one, many }) => ({
+  user: one(users, {
+    fields: [sharedCases.userId],
+    references: [users.id],
+  }),
+  discussions: many(caseDiscussions),
+  tagMappings: many(caseTagsMapping),
+  upvotes: many(caseUpvotes),
 }));
+
+export const caseDiscussionRelations = relations(
+  caseDiscussions,
+  ({ one, many }) => ({
+    case: one(sharedCases, {
+      fields: [caseDiscussions.caseId],
+      references: [sharedCases.id],
+    }),
+    user: one(users, {
+      fields: [caseDiscussions.userId],
+      references: [users.id],
+    }),
+    parent: one(caseDiscussions, {
+      fields: [caseDiscussions.parentId],
+      references: [caseDiscussions.id],
+    }),
+    replies: many(caseDiscussions, { relationName: "replies" }),
+    upvotes: many(discussionUpvotes),
+  })
+);
+
+export const caseTagsMappingRelations = relations(
+  caseTagsMapping,
+  ({ one }) => ({
+    case: one(sharedCases, {
+      fields: [caseTagsMapping.caseId],
+      references: [sharedCases.id],
+    }),
+    tag: one(caseTags, {
+      fields: [caseTagsMapping.tagId],
+      references: [caseTags.id],
+    }),
+  })
+);

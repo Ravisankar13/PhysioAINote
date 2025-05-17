@@ -1,27 +1,62 @@
-import React, { useState, useRef } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Loader2, Filter, Plus, Search, Download, Trash, Check, BookmarkPlus } from 'lucide-react';
-import { useAuth } from '@/hooks/use-auth';
-import { useToast } from '@/hooks/use-toast';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger, SheetFooter } from '@/components/ui/sheet';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { useLocation } from 'wouter';
-import { Input } from '@/components/ui/input';
-import { 
-  Pagination, 
-  PaginationContent, 
-  PaginationItem, 
-  PaginationLink, 
-  PaginationNext, 
-  PaginationPrevious
-} from '@/components/ui/pagination';
+import React, { useState, useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
+import {
+  Loader2,
+  Filter,
+  Plus,
+  Search,
+  Download,
+  Trash,
+  Check,
+  BookmarkPlus,
+} from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
+import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+  SheetFooter,
+} from "@/components/ui/sheet";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { Input } from "@/components/ui/input";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import { jsPDF } from "jspdf";
+import { useNavigate } from "react-router-dom";
 
 // Exercise type matching database schema
 interface Exercise {
@@ -44,169 +79,255 @@ interface Exercise {
 // Specific exercise images for common exercises
 const specificExerciseImages: Record<string, string> = {
   // Shoulder exercises
-  'shoulder press': 'https://static.strengthlevel.com/images/illustrations/dumbbell-shoulder-press-1000x1000.jpg',
-  'overhead press': 'https://static.strengthlevel.com/images/illustrations/dumbbell-shoulder-press-1000x1000.jpg',
-  'lateral raise': 'https://static.strengthlevel.com/images/illustrations/dumbbell-lateral-raise-1000x1000.jpg',
-  'front raise': 'https://static.strengthlevel.com/images/illustrations/dumbbell-front-raise-1000x1000.jpg',
-  'rear delt': 'https://static.strengthlevel.com/images/illustrations/reverse-dumbbell-fly-1000x1000.jpg',
-  'shrug': 'https://static.strengthlevel.com/images/illustrations/dumbbell-shrug-1000x1000.jpg',
-  'rotator cuff': 'https://www.spotebi.com/wp-content/uploads/2015/02/rotator-cuff-exercise-illustration.jpg',
-  'external rotation': 'https://www.spotebi.com/wp-content/uploads/2016/07/shoulder-external-rotation-exercise-illustration.jpg',
-  'internal rotation': 'https://www.physiomed.co.uk/uploads/images/homepages/resist_band_rotation_home.jpg',
-  'face pull': 'https://static.strengthlevel.com/images/illustrations/face-pull-1000x1000.jpg',
-  'upright row': 'https://static.strengthlevel.com/images/illustrations/upright-row-1000x1000.jpg',
-  
+  "shoulder press":
+    "https://static.strengthlevel.com/images/illustrations/dumbbell-shoulder-press-1000x1000.jpg",
+  "overhead press":
+    "https://static.strengthlevel.com/images/illustrations/dumbbell-shoulder-press-1000x1000.jpg",
+  "lateral raise":
+    "https://static.strengthlevel.com/images/illustrations/dumbbell-lateral-raise-1000x1000.jpg",
+  "front raise":
+    "https://static.strengthlevel.com/images/illustrations/dumbbell-front-raise-1000x1000.jpg",
+  "rear delt":
+    "https://static.strengthlevel.com/images/illustrations/reverse-dumbbell-fly-1000x1000.jpg",
+  shrug:
+    "https://static.strengthlevel.com/images/illustrations/dumbbell-shrug-1000x1000.jpg",
+  "rotator cuff":
+    "https://www.spotebi.com/wp-content/uploads/2015/02/rotator-cuff-exercise-illustration.jpg",
+  "external rotation":
+    "https://www.spotebi.com/wp-content/uploads/2016/07/shoulder-external-rotation-exercise-illustration.jpg",
+  "internal rotation":
+    "https://www.physiomed.co.uk/uploads/images/homepages/resist_band_rotation_home.jpg",
+  "face pull":
+    "https://static.strengthlevel.com/images/illustrations/face-pull-1000x1000.jpg",
+  "upright row":
+    "https://static.strengthlevel.com/images/illustrations/upright-row-1000x1000.jpg",
+
   // Neck exercises
-  'neck rotation': 'https://www.spotebi.com/wp-content/uploads/2015/04/neck-rotation-exercise-illustration.jpg',
-  'neck flexion': 'https://www.spotebi.com/wp-content/uploads/2015/03/neck-flexion-exercise-illustration.jpg',
-  'neck extension': 'https://www.neckfit.com.au/wp-content/uploads/2021/11/neck-extension-exercise-illustration.jpg',
-  'chin tuck': 'https://images.squarespace-cdn.com/content/v1/5c5f2b43e8ba447cacee3a00/1629149254553-7Z1AQZM4EZCXL7EUW4BL/Chin+Tuck.jpg',
-  
+  "neck rotation":
+    "https://www.spotebi.com/wp-content/uploads/2015/04/neck-rotation-exercise-illustration.jpg",
+  "neck flexion":
+    "https://www.spotebi.com/wp-content/uploads/2015/03/neck-flexion-exercise-illustration.jpg",
+  "neck extension":
+    "https://www.neckfit.com.au/wp-content/uploads/2021/11/neck-extension-exercise-illustration.jpg",
+  "chin tuck":
+    "https://images.squarespace-cdn.com/content/v1/5c5f2b43e8ba447cacee3a00/1629149254553-7Z1AQZM4EZCXL7EUW4BL/Chin+Tuck.jpg",
+
   // Back exercises
-  'pull-up': 'https://static.strengthlevel.com/images/illustrations/pull-ups-1000x1000.jpg',
-  'lat pulldown': 'https://static.strengthlevel.com/images/illustrations/lat-pulldown-1000x1000.jpg',
-  'seated row': 'https://static.strengthlevel.com/images/illustrations/seated-cable-row-1000x1000.jpg',
-  'bent over row': 'https://static.strengthlevel.com/images/illustrations/bent-over-row-1000x1000.jpg',
-  'deadlift': 'https://static.strengthlevel.com/images/illustrations/deadlift-1000x1000.jpg',
-  'superman': 'https://www.spotebi.com/wp-content/uploads/2015/01/superman-exercise-illustration.jpg',
-  'bird dog': 'https://www.spotebi.com/wp-content/uploads/2015/01/bird-dog-exercise-illustration.jpg',
-  'cat cow': 'https://www.spotebi.com/wp-content/uploads/2015/05/cat-cow-exercise-illustration.jpg',
-  'mckenzie press up': 'https://www.researchgate.net/profile/Stephen-Pheasant/publication/303864059/figure/fig2/AS:668749290856457@1536456321164/The-McKenzie-press-up-exercise-drawing-by-the-first-author.png',
-  'good morning': 'https://static.strengthlevel.com/images/illustrations/good-morning-1000x1000.jpg',
-  
+  "pull-up":
+    "https://static.strengthlevel.com/images/illustrations/pull-ups-1000x1000.jpg",
+  "lat pulldown":
+    "https://static.strengthlevel.com/images/illustrations/lat-pulldown-1000x1000.jpg",
+  "seated row":
+    "https://static.strengthlevel.com/images/illustrations/seated-cable-row-1000x1000.jpg",
+  "bent over row":
+    "https://static.strengthlevel.com/images/illustrations/bent-over-row-1000x1000.jpg",
+  deadlift:
+    "https://static.strengthlevel.com/images/illustrations/deadlift-1000x1000.jpg",
+  superman:
+    "https://www.spotebi.com/wp-content/uploads/2015/01/superman-exercise-illustration.jpg",
+  "bird dog":
+    "https://www.spotebi.com/wp-content/uploads/2015/01/bird-dog-exercise-illustration.jpg",
+  "cat cow":
+    "https://www.spotebi.com/wp-content/uploads/2015/05/cat-cow-exercise-illustration.jpg",
+  "mckenzie press up":
+    "https://www.researchgate.net/profile/Stephen-Pheasant/publication/303864059/figure/fig2/AS:668749290856457@1536456321164/The-McKenzie-press-up-exercise-drawing-by-the-first-author.png",
+  "good morning":
+    "https://static.strengthlevel.com/images/illustrations/good-morning-1000x1000.jpg",
+
   // Elbow exercises
-  'bicep curl': 'https://static.strengthlevel.com/images/illustrations/dumbbell-curl-1000x1000.jpg',
-  'hammer curl': 'https://static.strengthlevel.com/images/illustrations/hammer-curl-1000x1000.jpg',
-  'tricep extension': 'https://static.strengthlevel.com/images/illustrations/cable-tricep-pushdown-1000x1000.jpg',
-  'skull crusher': 'https://static.strengthlevel.com/images/illustrations/lying-tricep-extension-1000x1000.jpg',
-  'close grip bench press': 'https://static.strengthlevel.com/images/illustrations/close-grip-bench-press-1000x1000.jpg',
-  'wrist curl': 'https://static.strengthlevel.com/images/illustrations/wrist-curl-1000x1000.jpg',
-  'reverse wrist curl': 'https://static.strengthlevel.com/images/illustrations/reverse-wrist-curl-1000x1000.jpg',
-  'pronation': 'https://www.piesantyhealth.com/photos/shared/resisted-forearm-pronation.jpg',
-  'supination': 'https://www.piesantyhealth.com/photos/shared/resisted-forearm-supination.jpg',
-  
+  "bicep curl":
+    "https://static.strengthlevel.com/images/illustrations/dumbbell-curl-1000x1000.jpg",
+  "hammer curl":
+    "https://static.strengthlevel.com/images/illustrations/hammer-curl-1000x1000.jpg",
+  "tricep extension":
+    "https://static.strengthlevel.com/images/illustrations/cable-tricep-pushdown-1000x1000.jpg",
+  "skull crusher":
+    "https://static.strengthlevel.com/images/illustrations/lying-tricep-extension-1000x1000.jpg",
+  "close grip bench press":
+    "https://static.strengthlevel.com/images/illustrations/close-grip-bench-press-1000x1000.jpg",
+  "wrist curl":
+    "https://static.strengthlevel.com/images/illustrations/wrist-curl-1000x1000.jpg",
+  "reverse wrist curl":
+    "https://static.strengthlevel.com/images/illustrations/reverse-wrist-curl-1000x1000.jpg",
+  pronation:
+    "https://www.piesantyhealth.com/photos/shared/resisted-forearm-pronation.jpg",
+  supination:
+    "https://www.piesantyhealth.com/photos/shared/resisted-forearm-supination.jpg",
+
   // Hip exercises
-  'squat': 'https://static.strengthlevel.com/images/illustrations/squat-1000x1000.jpg',
-  'hip thrust': 'https://static.strengthlevel.com/images/illustrations/hip-thrust-1000x1000.jpg',
-  'hip extension': 'https://static.strengthlevel.com/images/illustrations/hip-thrust-1000x1000.jpg',
-  'glute bridge': 'https://www.spotebi.com/wp-content/uploads/2015/01/glute-bridge-exercise-illustration.jpg',
-  'clam': 'https://www.spotebi.com/wp-content/uploads/2015/01/clams-exercise-illustration.jpg',
-  'glute clam': 'https://www.spotebi.com/wp-content/uploads/2015/01/clams-exercise-illustration.jpg',
-  'side-lying hip abduction': 'https://www.spotebi.com/wp-content/uploads/2015/01/side-lying-leg-raise-exercise-illustration.jpg',
-  'leg raise': 'https://www.spotebi.com/wp-content/uploads/2015/01/side-lying-leg-raise-exercise-illustration.jpg',
-  'dead bug': 'https://www.spotebi.com/wp-content/uploads/2016/06/dead-bug-exercise-illustration.jpg',
-  'fire hydrant': 'https://www.spotebi.com/wp-content/uploads/2016/10/fire-hydrant-exercise-illustration.jpg',
-  'donkey kick': 'https://www.spotebi.com/wp-content/uploads/2015/01/donkey-kicks-exercise-illustration.jpg',
-  'hip flexor stretch': 'https://www.spotebi.com/wp-content/uploads/2015/02/hip-flexor-stretch-exercise-illustration.jpg',
-  'pigeon pose': 'https://www.spotebi.com/wp-content/uploads/2015/02/pigeon-pose-exercise-illustration.jpg',
-  
+  squat:
+    "https://static.strengthlevel.com/images/illustrations/squat-1000x1000.jpg",
+  "hip thrust":
+    "https://static.strengthlevel.com/images/illustrations/hip-thrust-1000x1000.jpg",
+  "hip extension":
+    "https://static.strengthlevel.com/images/illustrations/hip-thrust-1000x1000.jpg",
+  "glute bridge":
+    "https://www.spotebi.com/wp-content/uploads/2015/01/glute-bridge-exercise-illustration.jpg",
+  clam: "https://www.spotebi.com/wp-content/uploads/2015/01/clams-exercise-illustration.jpg",
+  "glute clam":
+    "https://www.spotebi.com/wp-content/uploads/2015/01/clams-exercise-illustration.jpg",
+  "side-lying hip abduction":
+    "https://www.spotebi.com/wp-content/uploads/2015/01/side-lying-leg-raise-exercise-illustration.jpg",
+  "leg raise":
+    "https://www.spotebi.com/wp-content/uploads/2015/01/side-lying-leg-raise-exercise-illustration.jpg",
+  "dead bug":
+    "https://www.spotebi.com/wp-content/uploads/2016/06/dead-bug-exercise-illustration.jpg",
+  "fire hydrant":
+    "https://www.spotebi.com/wp-content/uploads/2016/10/fire-hydrant-exercise-illustration.jpg",
+  "donkey kick":
+    "https://www.spotebi.com/wp-content/uploads/2015/01/donkey-kicks-exercise-illustration.jpg",
+  "hip flexor stretch":
+    "https://www.spotebi.com/wp-content/uploads/2015/02/hip-flexor-stretch-exercise-illustration.jpg",
+  "pigeon pose":
+    "https://www.spotebi.com/wp-content/uploads/2015/02/pigeon-pose-exercise-illustration.jpg",
+
   // Knee exercises
-  'leg extension': 'https://static.strengthlevel.com/images/illustrations/leg-extension-1000x1000.jpg',
-  'leg curl': 'https://static.strengthlevel.com/images/illustrations/seated-leg-curl-1000x1000.jpg',
-  'lunge': 'https://static.strengthlevel.com/images/illustrations/dumbbell-lunge-1000x1000.jpg',
-  'step up': 'https://www.spotebi.com/wp-content/uploads/2015/03/step-up-exercise-illustration.jpg',
-  'terminal knee extension': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQwGEzSMgTZOxaQBfgWz2_M6TExG95uZm5-ZQ&usqp=CAU',
-  'wall slide': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQIvJf3SH1h8Wqe-z5-_xzW1SbEh_ReSH5BGA&usqp=CAU',
-  'leg press': 'https://static.strengthlevel.com/images/illustrations/leg-press-1000x1000.jpg',
-  'bulgarian split squat': 'https://static.strengthlevel.com/images/illustrations/bulgarian-split-squat-1000x1000.jpg',
-  'quad stretch': 'https://www.spotebi.com/wp-content/uploads/2015/02/quad-stretch-exercise-illustration.jpg',
-  
+  "leg extension":
+    "https://static.strengthlevel.com/images/illustrations/leg-extension-1000x1000.jpg",
+  "leg curl":
+    "https://static.strengthlevel.com/images/illustrations/seated-leg-curl-1000x1000.jpg",
+  lunge:
+    "https://static.strengthlevel.com/images/illustrations/dumbbell-lunge-1000x1000.jpg",
+  "step up":
+    "https://www.spotebi.com/wp-content/uploads/2015/03/step-up-exercise-illustration.jpg",
+  "terminal knee extension":
+    "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQwGEzSMgTZOxaQBfgWz2_M6TExG95uZm5-ZQ&usqp=CAU",
+  "wall slide":
+    "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQIvJf3SH1h8Wqe-z5-_xzW1SbEh_ReSH5BGA&usqp=CAU",
+  "leg press":
+    "https://static.strengthlevel.com/images/illustrations/leg-press-1000x1000.jpg",
+  "bulgarian split squat":
+    "https://static.strengthlevel.com/images/illustrations/bulgarian-split-squat-1000x1000.jpg",
+  "quad stretch":
+    "https://www.spotebi.com/wp-content/uploads/2015/02/quad-stretch-exercise-illustration.jpg",
+
   // Ankle exercises
-  'ankle alphabet': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT77YW1QbUCQDGxtTdS9KK2wpHwajwKcCm9hg&usqp=CAU',
-  'ankle circles': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT77YW1QbUCQDGxtTdS9KK2wpHwajwKcCm9hg&usqp=CAU',
-  'ankle dorsiflexion': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQiIhC7aU99_SHyEgjAU3AcdO76vYQu96B4OA&usqp=CAU',
-  'ankle plantarflexion': 'https://static.strengthlevel.com/images/illustrations/standing-calf-raise-1000x1000.jpg',
-  'calf raise': 'https://static.strengthlevel.com/images/illustrations/standing-calf-raise-1000x1000.jpg',
-  'heel drop': 'https://www.ankle-joint-pain.com/images/xheal-drop-exercise.jpg.pagespeed.ic.5_YQWqt7L_.jpg',
-  'heel raise': 'https://static.strengthlevel.com/images/illustrations/standing-calf-raise-1000x1000.jpg',
-  'ankle inversion': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTZTJPBxtRQjQEV6fhOEBtO-xRtDnA0hHNZPA&usqp=CAU',
-  'ankle eversion': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT4OznNXBvd4m4PG1eo6BJa4eVhRkLuuJzYww&usqp=CAU',
-  
+  "ankle alphabet":
+    "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT77YW1QbUCQDGxtTdS9KK2wpHwajwKcCm9hg&usqp=CAU",
+  "ankle circles":
+    "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT77YW1QbUCQDGxtTdS9KK2wpHwajwKcCm9hg&usqp=CAU",
+  "ankle dorsiflexion":
+    "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQiIhC7aU99_SHyEgjAU3AcdO76vYQu96B4OA&usqp=CAU",
+  "ankle plantarflexion":
+    "https://static.strengthlevel.com/images/illustrations/standing-calf-raise-1000x1000.jpg",
+  "calf raise":
+    "https://static.strengthlevel.com/images/illustrations/standing-calf-raise-1000x1000.jpg",
+  "heel drop":
+    "https://www.ankle-joint-pain.com/images/xheal-drop-exercise.jpg.pagespeed.ic.5_YQWqt7L_.jpg",
+  "heel raise":
+    "https://static.strengthlevel.com/images/illustrations/standing-calf-raise-1000x1000.jpg",
+  "ankle inversion":
+    "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTZTJPBxtRQjQEV6fhOEBtO-xRtDnA0hHNZPA&usqp=CAU",
+  "ankle eversion":
+    "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT4OznNXBvd4m4PG1eo6BJa4eVhRkLuuJzYww&usqp=CAU",
+
   // Foot exercises
-  'toe curl': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS-Cw2VDRQnqlMX0JVGtvPIbXw9a4LE0ASBGA&usqp=CAU',
-  'toe spread': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQyxqDf9LULLCJulqnJeNVfRoQ6B6BI_1bZwQ&usqp=CAU',
-  'towel scrunch': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTaPG_f9jF2SfK1q-Y1DzxFhJFBbhBVuF11KQ&usqp=CAU',
-  'marble pickup': 'https://i.pinimg.com/originals/03/fa/44/03fa44e9b15307ee5ae0378cd6484ebe.jpg',
-  'short foot exercise': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTxvg5lZB-y_c1J3YSUkLbEfuRY-jt4c1q_yQ&usqp=CAU',
-  
+  "toe curl":
+    "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS-Cw2VDRQnqlMX0JVGtvPIbXw9a4LE0ASBGA&usqp=CAU",
+  "toe spread":
+    "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQyxqDf9LULLCJulqnJeNVfRoQ6B6BI_1bZwQ&usqp=CAU",
+  "towel scrunch":
+    "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTaPG_f9jF2SfK1q-Y1DzxFhJFBbhBVuF11KQ&usqp=CAU",
+  "marble pickup":
+    "https://i.pinimg.com/originals/03/fa/44/03fa44e9b15307ee5ae0378cd6484ebe.jpg",
+  "short foot exercise":
+    "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTxvg5lZB-y_c1J3YSUkLbEfuRY-jt4c1q_yQ&usqp=CAU",
+
   // General exercises
-  'plank': 'https://static.strengthlevel.com/images/illustrations/plank-1000x1000.jpg',
-  'side plank': 'https://static.strengthlevel.com/images/illustrations/side-plank-1000x1000.jpg',
-  'push-up': 'https://static.strengthlevel.com/images/illustrations/push-ups-1000x1000.jpg',
-  'bench press': 'https://static.strengthlevel.com/images/illustrations/bench-press-1000x1000.jpg',
-  'mountain climber': 'https://www.spotebi.com/wp-content/uploads/2014/10/mountain-climbers-exercise-illustration.jpg',
-  'burpee': 'https://www.spotebi.com/wp-content/uploads/2015/03/burpees-exercise-illustration.jpg',
-  'crunch': 'https://static.strengthlevel.com/images/illustrations/crunch-1000x1000.jpg',
-  'sit-up': 'https://static.strengthlevel.com/images/illustrations/sit-up-1000x1000.jpg',
-  'jumping jack': 'https://www.spotebi.com/wp-content/uploads/2015/09/jumping-jacks-exercise-illustration.jpg',
-  'jumping rope': 'https://www.spotebi.com/wp-content/uploads/2017/07/jump-rope-exercise-illustration.jpg',
-  'russian twist': 'https://www.spotebi.com/wp-content/uploads/2016/10/russian-twist-exercise-illustration.jpg',
-  'high knees': 'https://www.spotebi.com/wp-content/uploads/2014/10/high-knees-exercise-illustration.jpg',
+  plank:
+    "https://static.strengthlevel.com/images/illustrations/plank-1000x1000.jpg",
+  "side plank":
+    "https://static.strengthlevel.com/images/illustrations/side-plank-1000x1000.jpg",
+  "push-up":
+    "https://static.strengthlevel.com/images/illustrations/push-ups-1000x1000.jpg",
+  "bench press":
+    "https://static.strengthlevel.com/images/illustrations/bench-press-1000x1000.jpg",
+  "mountain climber":
+    "https://www.spotebi.com/wp-content/uploads/2014/10/mountain-climbers-exercise-illustration.jpg",
+  burpee:
+    "https://www.spotebi.com/wp-content/uploads/2015/03/burpees-exercise-illustration.jpg",
+  crunch:
+    "https://static.strengthlevel.com/images/illustrations/crunch-1000x1000.jpg",
+  "sit-up":
+    "https://static.strengthlevel.com/images/illustrations/sit-up-1000x1000.jpg",
+  "jumping jack":
+    "https://www.spotebi.com/wp-content/uploads/2015/09/jumping-jacks-exercise-illustration.jpg",
+  "jumping rope":
+    "https://www.spotebi.com/wp-content/uploads/2017/07/jump-rope-exercise-illustration.jpg",
+  "russian twist":
+    "https://www.spotebi.com/wp-content/uploads/2016/10/russian-twist-exercise-illustration.jpg",
+  "high knees":
+    "https://www.spotebi.com/wp-content/uploads/2014/10/high-knees-exercise-illustration.jpg",
 };
 
 // Default images for different body parts (used as fallback)
 const bodyPartImages: Record<string, string> = {
-  shoulder: 'https://static.strengthlevel.com/images/illustrations/dumbbell-shoulder-press-1000x1000.jpg',
-  neck: 'https://www.spotebi.com/wp-content/uploads/2015/04/neck-rotation-exercise-illustration.jpg',
-  back: 'https://static.strengthlevel.com/images/illustrations/lat-pulldown-1000x1000.jpg',
-  elbow: 'https://static.strengthlevel.com/images/illustrations/dumbbell-curl-1000x1000.jpg',
-  wrist: 'https://static.strengthlevel.com/images/illustrations/wrist-curl-1000x1000.jpg',
-  hand: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSwBvpGJBirJgMXKPvNBaRXygfXm0qB0xIoAw&usqp=CAU',
-  hip: 'https://static.strengthlevel.com/images/illustrations/hip-thrust-1000x1000.jpg',
-  knee: 'https://static.strengthlevel.com/images/illustrations/leg-extension-1000x1000.jpg',
-  ankle: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT77YW1QbUCQDGxtTdS9KK2wpHwajwKcCm9hg&usqp=CAU',
-  foot: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS-Cw2VDRQnqlMX0JVGtvPIbXw9a4LE0ASBGA&usqp=CAU',
-  general: 'https://static.strengthlevel.com/images/illustrations/push-ups-1000x1000.jpg'
+  shoulder:
+    "https://static.strengthlevel.com/images/illustrations/dumbbell-shoulder-press-1000x1000.jpg",
+  neck: "https://www.spotebi.com/wp-content/uploads/2015/04/neck-rotation-exercise-illustration.jpg",
+  back: "https://static.strengthlevel.com/images/illustrations/lat-pulldown-1000x1000.jpg",
+  elbow:
+    "https://static.strengthlevel.com/images/illustrations/dumbbell-curl-1000x1000.jpg",
+  wrist:
+    "https://static.strengthlevel.com/images/illustrations/wrist-curl-1000x1000.jpg",
+  hand: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSwBvpGJBirJgMXKPvNBaRXygfXm0qB0xIoAw&usqp=CAU",
+  hip: "https://static.strengthlevel.com/images/illustrations/hip-thrust-1000x1000.jpg",
+  knee: "https://static.strengthlevel.com/images/illustrations/leg-extension-1000x1000.jpg",
+  ankle:
+    "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT77YW1QbUCQDGxtTdS9KK2wpHwajwKcCm9hg&usqp=CAU",
+  foot: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS-Cw2VDRQnqlMX0JVGtvPIbXw9a4LE0ASBGA&usqp=CAU",
+  general:
+    "https://static.strengthlevel.com/images/illustrations/push-ups-1000x1000.jpg",
 };
 
 // Exercise card component
-function ExerciseCard({ 
-  exercise, 
-  isSelected = false, 
-  onToggleSelect 
-}: { 
-  exercise: Exercise, 
-  isSelected?: boolean,
-  onToggleSelect?: (exercise: Exercise) => void
+function ExerciseCard({
+  exercise,
+  isSelected = false,
+  onToggleSelect,
+}: {
+  exercise: Exercise;
+  isSelected?: boolean;
+  onToggleSelect?: (exercise: Exercise) => void;
 }) {
   // Find the most appropriate image for the exercise
   const getImageUrl = () => {
     // Use custom image if available
     if (exercise.imageUrl) return exercise.imageUrl;
-    
+
     // Convert title, description, and target muscles to lowercase for matching
     const title = exercise.title.toLowerCase();
     const description = exercise.description.toLowerCase();
     const targetMuscles = exercise.targetMuscles.toLowerCase();
     const instructions = exercise.instructions.toLowerCase();
-    
+
     // Combine all text for comprehensive matching
     const allText = `${title} ${description} ${targetMuscles} ${instructions}`;
-    
+
     // Create a scoring system for better matches
-    let bestMatch = '';
+    let bestMatch = "";
     let bestScore = 0;
-    
+
     // Find a specific exercise image by looking for keywords in all the text
     for (const [keyword, imageUrl] of Object.entries(specificExerciseImages)) {
       // Title match is highest priority
       if (title.includes(keyword)) {
         return imageUrl; // Immediate match if keyword is in title
       }
-      
+
       // Check how many times the keyword appears in all text
-      const matches = (allText?.match(new RegExp(keyword, 'g')) || []).length;
+      const matches = (allText?.match(new RegExp(keyword, "g")) || []).length;
       if (matches > bestScore) {
         bestScore = matches;
         bestMatch = imageUrl;
       }
     }
-    
+
     // If we found any match in the combined text, use it
     if (bestMatch && bestScore > 0) {
       return bestMatch;
     }
-    
+
     // Fall back to body part image if no specific exercise match
     return bodyPartImages[exercise.bodyPart] || bodyPartImages.general;
   };
@@ -220,57 +341,78 @@ function ExerciseCard({
   };
 
   return (
-    <Card className={`h-full flex flex-col hover:shadow-md transition-shadow duration-300 ${isSelected ? 'border-primary border-2' : ''}`}>
+    <Card
+      className={`h-full flex flex-col hover:shadow-md transition-shadow duration-300 ${
+        isSelected ? "border-primary border-2" : ""
+      }`}
+    >
       <CardHeader className="pb-3">
         <div className="flex justify-between items-start gap-2">
           <div className="flex items-start gap-2 flex-1">
             {onToggleSelect && (
-              <Button 
-                variant={isSelected ? "default" : "outline"} 
-                size="icon" 
+              <Button
+                variant={isSelected ? "default" : "outline"}
+                size="icon"
                 className="h-7 w-7 rounded-full flex-shrink-0 mt-0.5"
                 onClick={handleSelectClick}
               >
-                {isSelected ? <Check className="h-4 w-4" /> : <BookmarkPlus className="h-4 w-4" />}
+                {isSelected ? (
+                  <Check className="h-4 w-4" />
+                ) : (
+                  <BookmarkPlus className="h-4 w-4" />
+                )}
               </Button>
             )}
-            <CardTitle className="text-lg line-clamp-2">{exercise.title}</CardTitle>
+            <CardTitle className="text-lg line-clamp-2">
+              {exercise.title}
+            </CardTitle>
           </div>
-          <Badge 
+          <Badge
             variant={
-              exercise.difficulty === 'beginner' ? 'outline' : 
-              exercise.difficulty === 'intermediate' ? 'secondary' : 
-              'default'
+              exercise.difficulty === "beginner"
+                ? "outline"
+                : exercise.difficulty === "intermediate"
+                ? "secondary"
+                : "default"
             }
             className="whitespace-nowrap"
           >
             {exercise.difficulty}
           </Badge>
         </div>
-        <CardDescription className="line-clamp-2 mt-1">{exercise.description}</CardDescription>
+        <CardDescription className="line-clamp-2 mt-1">
+          {exercise.description}
+        </CardDescription>
         <div className="flex flex-wrap gap-1 mt-2">
-          <Badge variant="outline" className="capitalize">{exercise.bodyPart}</Badge>
-          {exercise.aiGenerated && <Badge variant="secondary">AI Generated</Badge>}
+          <Badge variant="outline" className="capitalize">
+            {exercise.bodyPart}
+          </Badge>
+          {exercise.aiGenerated && (
+            <Badge variant="secondary">AI Generated</Badge>
+          )}
         </div>
       </CardHeader>
-      
+
       {/* Image Display - Always show an image (either custom or default) */}
       <div className="px-6 pb-2">
         <div className="relative w-full h-48 overflow-hidden rounded-md bg-muted">
-          <img 
-            src={getImageUrl()} 
-            alt={`${exercise.title} exercise`} 
+          <img
+            src={getImageUrl()}
+            alt={`${exercise.title} exercise`}
             className="object-cover w-full h-full"
             onError={(e) => {
               // If custom image fails, try to fallback to default
               const target = e.target as HTMLImageElement;
-              if (target.src !== bodyPartImages[exercise.bodyPart] && bodyPartImages[exercise.bodyPart]) {
+              if (
+                target.src !== bodyPartImages[exercise.bodyPart] &&
+                bodyPartImages[exercise.bodyPart]
+              ) {
                 target.src = bodyPartImages[exercise.bodyPart];
               } else if (target.src !== bodyPartImages.general) {
                 target.src = bodyPartImages.general;
               } else {
                 // If all fallbacks fail, hide the image
-                target.style.display = 'none';
+                target.style.display = "none";
               }
             }}
           />
@@ -287,13 +429,13 @@ function ExerciseCard({
               className="object-cover w-full h-full"
               onError={(e) => {
                 // Hide broken videos
-                (e.target as HTMLVideoElement).style.display = 'none';
+                (e.target as HTMLVideoElement).style.display = "none";
               }}
             />
           </div>
         </div>
       )}
-      
+
       <CardContent className="flex-grow py-2">
         <Accordion type="single" collapsible className="w-full">
           <AccordionItem value="instructions" className="border-b-0">
@@ -301,32 +443,42 @@ function ExerciseCard({
               <span className="underline underline-offset-4">Instructions</span>
             </AccordionTrigger>
             <AccordionContent>
-              <div className="whitespace-pre-wrap text-sm">{exercise.instructions}</div>
+              <div className="whitespace-pre-wrap text-sm">
+                {exercise.instructions}
+              </div>
             </AccordionContent>
           </AccordionItem>
-          
+
           <AccordionItem value="details" className="border-b-0">
             <AccordionTrigger className="py-2 text-sm hover:no-underline hover:text-primary">
-              <span className="underline underline-offset-4">Target Muscles</span>
+              <span className="underline underline-offset-4">
+                Target Muscles
+              </span>
             </AccordionTrigger>
             <AccordionContent>
-              <div className="whitespace-pre-wrap text-sm">{exercise.targetMuscles}</div>
+              <div className="whitespace-pre-wrap text-sm">
+                {exercise.targetMuscles}
+              </div>
             </AccordionContent>
           </AccordionItem>
-          
+
           {exercise.precautions && (
             <AccordionItem value="precautions" className="border-b-0">
               <AccordionTrigger className="py-2 text-sm hover:no-underline hover:text-primary">
-                <span className="underline underline-offset-4">Precautions</span>
+                <span className="underline underline-offset-4">
+                  Precautions
+                </span>
               </AccordionTrigger>
               <AccordionContent>
-                <div className="whitespace-pre-wrap text-sm">{exercise.precautions}</div>
+                <div className="whitespace-pre-wrap text-sm">
+                  {exercise.precautions}
+                </div>
               </AccordionContent>
             </AccordionItem>
           )}
         </Accordion>
       </CardContent>
-      
+
       <CardFooter className="flex flex-col items-start border-t pt-3 pb-3">
         <div className="flex flex-wrap w-full gap-3 text-xs">
           {exercise.repetitions && (
@@ -335,14 +487,14 @@ function ExerciseCard({
               {exercise.repetitions}
             </div>
           )}
-          
+
           {exercise.sets && (
             <div className="bg-muted rounded-md px-2 py-1 flex items-center">
               <span className="font-medium mr-1">Sets:</span>
               {exercise.sets}
             </div>
           )}
-          
+
           {exercise.duration && (
             <div className="bg-muted rounded-md px-2 py-1 flex items-center">
               <span className="font-medium mr-1">Duration:</span>
@@ -359,203 +511,226 @@ function ExerciseCard({
 export default function ExerciseList() {
   // State for exercise program
   const [selectedExercises, setSelectedExercises] = useState<Exercise[]>([]);
-  const [programName, setProgramName] = useState('My Exercise Program');
+  const [programName, setProgramName] = useState("My Exercise Program");
   const [isProgramSheetOpen, setIsProgramSheetOpen] = useState(false);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
-  const [, navigate] = useLocation();
-  
+  const navigate = useNavigate();
+
   // State for filters
-  const [bodyPart, setBodyPart] = useState<string>('');
-  const [difficulty, setDifficulty] = useState<string>('');
-  const [activeTab, setActiveTab] = useState('all');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [bodyPart, setBodyPart] = useState<string>("");
+  const [difficulty, setDifficulty] = useState<string>("");
+  const [activeTab, setActiveTab] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
-  
+
   // Pagination state
   const [currentPage, setCurrentPage] = useState<number>(1);
   const exercisesPerPage = 6; // Number of exercises per page
-  
+
   // Fetch exercises with filters
-  const { data: exercises, isLoading, isError, error, refetch } = useQuery<Exercise[]>({
-    queryKey: ['/api/exercises', bodyPart, difficulty],
+  const {
+    data: exercises,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery<Exercise[]>({
+    queryKey: ["/api/exercises", bodyPart, difficulty],
     queryFn: async () => {
-      let url = '/api/exercises';
-      
+      let url = "/api/exercises";
+
       // Add query parameters if filters are set
       const params = new URLSearchParams();
-      if (bodyPart) params.append('bodyPart', bodyPart);
-      if (difficulty) params.append('difficulty', difficulty);
-      
+      if (bodyPart) params.append("bodyPart", bodyPart);
+      if (difficulty) params.append("difficulty", difficulty);
+
       if (params.toString()) {
         url += `?${params.toString()}`;
       }
-      
-      return fetch(url).then(res => {
-        if (!res.ok) throw new Error('Failed to fetch exercises');
-        return res.json();
-      });
-    }
-  });
-  
-  // Fetch all exercises for search functionality
-  const { data: allExercises, isLoading: allExercisesLoading } = useQuery<Exercise[]>({
-    queryKey: ['/api/exercises', 'all'],
-    queryFn: async () => {
-      return fetch('/api/exercises?all=true').then(res => {
-        if (!res.ok) throw new Error('Failed to fetch all exercises');
+
+      return fetch(url).then((res) => {
+        if (!res.ok) throw new Error("Failed to fetch exercises");
         return res.json();
       });
     },
-    enabled: isSearching || searchQuery.length > 2
   });
-  
+
+  // Fetch all exercises for search functionality
+  const { data: allExercises, isLoading: allExercisesLoading } = useQuery<
+    Exercise[]
+  >({
+    queryKey: ["/api/exercises", "all"],
+    queryFn: async () => {
+      return fetch("/api/exercises?all=true").then((res) => {
+        if (!res.ok) throw new Error("Failed to fetch all exercises");
+        return res.json();
+      });
+    },
+    enabled: isSearching || searchQuery.length > 2,
+  });
+
   // Search function
   const searchResults = React.useMemo(() => {
     if (!searchQuery || searchQuery.length < 3 || !allExercises) return null;
-    
+
     const query = searchQuery.toLowerCase();
-    return allExercises.filter(exercise => {
+    return allExercises.filter((exercise) => {
       return (
         exercise.title.toLowerCase().includes(query) ||
         exercise.description.toLowerCase().includes(query) ||
         exercise.instructions.toLowerCase().includes(query) ||
-        (exercise.targetMuscles && exercise.targetMuscles.toLowerCase().includes(query)) ||
-        (exercise.precautions && exercise.precautions.toLowerCase().includes(query))
+        (exercise.targetMuscles &&
+          exercise.targetMuscles.toLowerCase().includes(query)) ||
+        (exercise.precautions &&
+          exercise.precautions.toLowerCase().includes(query))
       );
     });
   }, [searchQuery, allExercises]);
-  
+
   // Filter exercises by tab (only when not searching)
-  const filteredExercises = searchResults || exercises?.filter(exercise => {
-    if (activeTab === 'all') return true;
-    return exercise.bodyPart === activeTab;
-  });
-  
+  const filteredExercises =
+    searchResults ||
+    exercises?.filter((exercise) => {
+      if (activeTab === "all") return true;
+      return exercise.bodyPart === activeTab;
+    });
+
   // Calculate pagination
   const totalExercises = filteredExercises?.length || 0;
   const totalPages = Math.ceil(totalExercises / exercisesPerPage);
-  
+
   // Get current page exercises
-  const currentExercises = filteredExercises ? filteredExercises.slice(
-    (currentPage - 1) * exercisesPerPage,
-    currentPage * exercisesPerPage
-  ) : [];
-  
+  const currentExercises = filteredExercises
+    ? filteredExercises.slice(
+        (currentPage - 1) * exercisesPerPage,
+        currentPage * exercisesPerPage
+      )
+    : [];
+
   // Handle exercise generation
   // Handle exercise selection
   const handleToggleSelect = (exercise: Exercise) => {
-    setSelectedExercises(prev => {
-      const isSelected = prev.some(ex => ex.id === exercise.id);
+    setSelectedExercises((prev) => {
+      const isSelected = prev.some((ex) => ex.id === exercise.id);
       if (isSelected) {
-        return prev.filter(ex => ex.id !== exercise.id);
+        return prev.filter((ex) => ex.id !== exercise.id);
       } else {
         return [...prev, exercise];
       }
     });
   };
-  
+
   // Check if an exercise is selected
   const isExerciseSelected = (exercise: Exercise) => {
-    return selectedExercises.some(ex => ex.id === exercise.id);
+    return selectedExercises.some((ex) => ex.id === exercise.id);
   };
-  
+
   // Clear all selected exercises
   const clearSelectedExercises = () => {
     setSelectedExercises([]);
   };
-  
+
   // Generate PDF for the exercise program
   const generatePDF = () => {
     if (selectedExercises.length === 0) {
       toast({
         title: "No exercises selected",
         description: "Please select at least one exercise to create a program.",
-        variant: "destructive"
+        variant: "destructive",
       });
       return;
     }
-    
+
     setIsGeneratingPdf(true);
-    
+
     try {
       const doc = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4'
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
       });
-      
+
       // Add program title
       doc.setFontSize(20);
       doc.setTextColor(0, 0, 0);
-      doc.text(programName, 105, 20, { align: 'center' });
-      
+      doc.text(programName, 105, 20, { align: "center" });
+
       // Add date
       doc.setFontSize(10);
-      doc.text(`Created: ${new Date().toLocaleDateString()}`, 105, 30, { align: 'center' });
-      
+      doc.text(`Created: ${new Date().toLocaleDateString()}`, 105, 30, {
+        align: "center",
+      });
+
       // Add exercises
       doc.setFontSize(12);
       let y = 45;
-      
+
       selectedExercises.forEach((exercise, index) => {
         // If we're about to go off the page, add a new page
         if (y > 260) {
           doc.addPage();
           y = 20;
         }
-        
+
         // Add exercise title
         doc.setFontSize(14);
         doc.setTextColor(0, 0, 150);
         doc.text(`${index + 1}. ${exercise.title}`, 20, y);
         y += 8;
-        
+
         // Add body part and difficulty
         doc.setFontSize(10);
         doc.setTextColor(100, 100, 100);
-        doc.text(`Body Part: ${exercise.bodyPart} | Difficulty: ${exercise.difficulty}`, 20, y);
+        doc.text(
+          `Body Part: ${exercise.bodyPart} | Difficulty: ${exercise.difficulty}`,
+          20,
+          y
+        );
         y += 6;
-        
+
         // Add description
         doc.setFontSize(10);
         doc.setTextColor(0, 0, 0);
-        
+
         const splitDescription = doc.splitTextToSize(exercise.description, 170);
         doc.text(splitDescription, 20, y);
         y += splitDescription.length * 5 + 4;
-        
+
         // Add instructions
         doc.setFontSize(10);
         doc.setTextColor(0, 0, 0);
-        doc.text('Instructions:', 20, y);
+        doc.text("Instructions:", 20, y);
         y += 5;
-        
-        const splitInstructions = doc.splitTextToSize(exercise.instructions, 170);
+
+        const splitInstructions = doc.splitTextToSize(
+          exercise.instructions,
+          170
+        );
         doc.text(splitInstructions, 25, y);
         y += splitInstructions.length * 5 + 4;
-        
+
         // Add reps/sets/duration if available
-        let repInfo = '';
+        let repInfo = "";
         if (exercise.repetitions) repInfo += `Reps: ${exercise.repetitions} `;
         if (exercise.sets) repInfo += `Sets: ${exercise.sets} `;
         if (exercise.duration) repInfo += `Duration: ${exercise.duration}`;
-        
+
         if (repInfo) {
           doc.setFontSize(10);
           doc.setTextColor(0, 0, 0);
           doc.text(repInfo, 20, y);
           y += 5;
         }
-        
+
         // Add space between exercises
         y += 8;
       });
-      
+
       // Save the PDF
-      doc.save(`${programName.replace(/\s+/g, '_')}.pdf`);
-      
+      doc.save(`${programName.replace(/\s+/g, "_")}.pdf`);
+
       toast({
         title: "PDF Generated",
         description: "Your exercise program has been downloaded as a PDF.",
@@ -565,71 +740,75 @@ export default function ExerciseList() {
       toast({
         title: "Error",
         description: "Failed to generate PDF. Please try again.",
-        variant: "destructive"
+        variant: "destructive",
       });
     } finally {
       setIsGeneratingPdf(false);
       setIsProgramSheetOpen(false);
     }
   };
-  
-  const handleGenerateExercises = async (bodyPart: string, difficulty: string, count: number = 3) => {
+
+  const handleGenerateExercises = async (
+    bodyPart: string,
+    difficulty: string,
+    count: number = 3
+  ) => {
     if (!user) {
       toast({
         title: "Login Required",
         description: "You need to be logged in to generate exercises.",
-        variant: "destructive"
+        variant: "destructive",
       });
-      navigate('/auth');
+      navigate("/auth");
       return;
     }
-    
+
     try {
-      const response = await fetch('/api/exercises/generate', {
-        method: 'POST',
+      const response = await fetch("/api/exercises/generate", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json'
+          "Content-Type": "application/json",
         },
-        body: JSON.stringify({ bodyPart, difficulty, count })
+        body: JSON.stringify({ bodyPart, difficulty, count }),
       });
-      
+
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to generate exercises');
+        throw new Error(errorData.message || "Failed to generate exercises");
       }
-      
+
       const generatedExercises = await response.json();
-      
+
       toast({
         title: "Exercises Generated",
-        description: `Successfully generated ${generatedExercises.length} new exercises.`
+        description: `Successfully generated ${generatedExercises.length} new exercises.`,
       });
-      
+
       // Refetch exercises to include newly generated ones
       refetch();
-      
+
       // Set filters to match the generated exercises
       setBodyPart(bodyPart);
       setDifficulty(difficulty);
       setActiveTab(bodyPart);
-      
     } catch (error) {
-      console.error('Error generating exercises:', error);
+      console.error("Error generating exercises:", error);
       toast({
         title: "Generation Failed",
-        description: error instanceof Error ? error.message : "An unknown error occurred",
-        variant: "destructive"
+        description:
+          error instanceof Error ? error.message : "An unknown error occurred",
+        variant: "destructive",
       });
     }
   };
-  
+
   // Reset filters
   const resetFilters = () => {
-    setBodyPart('');
-    setDifficulty('');
+    setBodyPart("");
+    setDifficulty("");
     setCurrentPage(1); // Reset to first page when filters change
   };
-  
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -637,26 +816,32 @@ export default function ExerciseList() {
       </div>
     );
   }
-  
+
   if (isError) {
     return (
       <div className="text-center py-8">
-        <p className="text-destructive mb-4">Error loading exercises: {error instanceof Error ? error.message : 'Unknown error'}</p>
+        <p className="text-destructive mb-4">
+          Error loading exercises:{" "}
+          {error instanceof Error ? error.message : "Unknown error"}
+        </p>
         <Button onClick={() => refetch()}>Try Again</Button>
       </div>
     );
   }
-  
+
   return (
     <div className="container mx-auto py-6">
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Exercise Library</h1>
+          <h1 className="text-3xl font-bold tracking-tight">
+            Exercise Library
+          </h1>
           <p className="text-muted-foreground mt-1">
-            Browse evidence-based exercises for different body parts and difficulty levels
+            Browse evidence-based exercises for different body parts and
+            difficulty levels
           </p>
         </div>
-        
+
         <div className="flex mt-4 md:mt-0 space-x-2">
           {/* Search Bar */}
           <div className="relative w-full md:w-64 mr-2">
@@ -679,12 +864,12 @@ export default function ExerciseList() {
               }}
             />
           </div>
-          
+
           {/* Program Creation */}
           <Sheet open={isProgramSheetOpen} onOpenChange={setIsProgramSheetOpen}>
             <SheetTrigger asChild>
               <Button
-                variant={selectedExercises.length > 0 ? "default" : "outline"} 
+                variant={selectedExercises.length > 0 ? "default" : "outline"}
                 className="gap-2"
                 disabled={selectedExercises.length === 0}
               >
@@ -699,7 +884,7 @@ export default function ExerciseList() {
                   Create a downloadable PDF with your selected exercises.
                 </SheetDescription>
               </SheetHeader>
-              
+
               <div className="py-4 space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="program-name">Program Name</Label>
@@ -710,21 +895,27 @@ export default function ExerciseList() {
                     placeholder="My Exercise Program"
                   />
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label>Selected Exercises ({selectedExercises.length})</Label>
                   <div className="border rounded-md p-2 max-h-[400px] overflow-y-auto">
                     {selectedExercises.length === 0 ? (
                       <p className="text-sm text-muted-foreground py-2 text-center">
-                        No exercises selected. Select exercises from the library first.
+                        No exercises selected. Select exercises from the library
+                        first.
                       </p>
                     ) : (
                       <div className="space-y-2">
                         {selectedExercises.map((exercise) => (
-                          <div key={exercise.id} className="flex items-center justify-between p-2 border rounded-md">
+                          <div
+                            key={exercise.id}
+                            className="flex items-center justify-between p-2 border rounded-md"
+                          >
                             <div>
                               <p className="font-medium">{exercise.title}</p>
-                              <p className="text-xs text-muted-foreground">{exercise.bodyPart} | {exercise.difficulty}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {exercise.bodyPart} | {exercise.difficulty}
+                              </p>
                             </div>
                             <Button
                               variant="ghost"
@@ -740,7 +931,7 @@ export default function ExerciseList() {
                   </div>
                 </div>
               </div>
-              
+
               <SheetFooter className="pt-2">
                 <Button
                   onClick={generatePDF}
@@ -762,11 +953,11 @@ export default function ExerciseList() {
               </SheetFooter>
             </SheetContent>
           </Sheet>
-          
+
           {/* Clear Selection Button */}
           {selectedExercises.length > 0 && (
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               size="icon"
               onClick={clearSelectedExercises}
               className="h-9 w-9 ml-2"
@@ -775,7 +966,7 @@ export default function ExerciseList() {
               <Trash className="h-4 w-4" />
             </Button>
           )}
-          
+
           {/* Filters */}
           <Sheet>
             <SheetTrigger asChild>
@@ -791,14 +982,11 @@ export default function ExerciseList() {
                   Narrow down exercises by body part and difficulty level
                 </SheetDescription>
               </SheetHeader>
-              
+
               <div className="py-6 space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="bodyPart">Body Part</Label>
-                  <Select 
-                    value={bodyPart} 
-                    onValueChange={setBodyPart}
-                  >
+                  <Select value={bodyPart} onValueChange={setBodyPart}>
                     <SelectTrigger id="bodyPart">
                       <SelectValue placeholder="All body parts" />
                     </SelectTrigger>
@@ -818,13 +1006,10 @@ export default function ExerciseList() {
                     </SelectContent>
                   </Select>
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="difficulty">Difficulty Level</Label>
-                  <Select 
-                    value={difficulty} 
-                    onValueChange={setDifficulty}
-                  >
+                  <Select value={difficulty} onValueChange={setDifficulty}>
                     <SelectTrigger id="difficulty">
                       <SelectValue placeholder="All difficulty levels" />
                     </SelectTrigger>
@@ -837,14 +1022,16 @@ export default function ExerciseList() {
                   </Select>
                 </div>
               </div>
-              
+
               <div className="flex justify-between">
-                <Button variant="outline" onClick={resetFilters}>Reset</Button>
+                <Button variant="outline" onClick={resetFilters}>
+                  Reset
+                </Button>
                 <Button onClick={() => refetch()}>Apply Filters</Button>
               </div>
             </SheetContent>
           </Sheet>
-          
+
           {user && (
             <Sheet>
               <SheetTrigger asChild>
@@ -860,14 +1047,11 @@ export default function ExerciseList() {
                     Create AI-generated exercises for specific body parts
                   </SheetDescription>
                 </SheetHeader>
-                
+
                 <div className="py-6 space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="genBodyPart">Body Part</Label>
-                    <Select 
-                      value={bodyPart} 
-                      onValueChange={setBodyPart}
-                    >
+                    <Select value={bodyPart} onValueChange={setBodyPart}>
                       <SelectTrigger id="genBodyPart">
                         <SelectValue placeholder="Select body part" />
                       </SelectTrigger>
@@ -885,26 +1069,25 @@ export default function ExerciseList() {
                       </SelectContent>
                     </Select>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="genDifficulty">Difficulty Level</Label>
-                    <Select 
-                      value={difficulty} 
-                      onValueChange={setDifficulty}
-                    >
+                    <Select value={difficulty} onValueChange={setDifficulty}>
                       <SelectTrigger id="genDifficulty">
                         <SelectValue placeholder="Select difficulty" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="beginner">Beginner</SelectItem>
-                        <SelectItem value="intermediate">Intermediate</SelectItem>
+                        <SelectItem value="intermediate">
+                          Intermediate
+                        </SelectItem>
                         <SelectItem value="advanced">Advanced</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
-                
-                <Button 
+
+                <Button
                   onClick={() => handleGenerateExercises(bodyPart, difficulty)}
                   disabled={!bodyPart || !difficulty}
                   className="w-full"
@@ -916,11 +1099,11 @@ export default function ExerciseList() {
           )}
         </div>
       </div>
-      
+
       {searchQuery && searchQuery.length > 2 ? (
         <div className="mb-6">
           <h2 className="text-lg font-semibold mb-2">
-            {searchResults && searchResults.length > 0 
+            {searchResults && searchResults.length > 0
               ? `Search results for "${searchQuery}"`
               : `No results found for "${searchQuery}"`}
           </h2>
@@ -931,10 +1114,10 @@ export default function ExerciseList() {
                   <div className="absolute -top-2 -right-2 z-10">
                     <Badge className="capitalize">{exercise.bodyPart}</Badge>
                   </div>
-                  <ExerciseCard 
+                  <ExerciseCard
                     exercise={exercise}
                     isSelected={isExerciseSelected(exercise)}
-                    onToggleSelect={handleToggleSelect} 
+                    onToggleSelect={handleToggleSelect}
                   />
                 </div>
               ))}
@@ -942,13 +1125,14 @@ export default function ExerciseList() {
           )}
         </div>
       ) : (
-        <Tabs 
-          defaultValue="all" 
-          value={activeTab} 
+        <Tabs
+          defaultValue="all"
+          value={activeTab}
           onValueChange={(value) => {
             setActiveTab(value);
             setCurrentPage(1); // Reset to first page when changing tabs
-          }}>
+          }}
+        >
           <TabsList className="mb-4 flex overflow-x-auto pb-2 max-w-full">
             <TabsTrigger value="all">All</TabsTrigger>
             <TabsTrigger value="shoulder">Shoulder</TabsTrigger>
@@ -962,44 +1146,52 @@ export default function ExerciseList() {
             <TabsTrigger value="ankle">Ankle</TabsTrigger>
             <TabsTrigger value="foot">Foot</TabsTrigger>
           </TabsList>
-          
+
           <TabsContent value={activeTab} className="mt-0">
             {filteredExercises && filteredExercises.length > 0 ? (
               <>
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                   {currentExercises?.map((exercise) => (
-                    <ExerciseCard 
-                      key={exercise.id} 
+                    <ExerciseCard
+                      key={exercise.id}
                       exercise={exercise}
                       isSelected={isExerciseSelected(exercise)}
-                      onToggleSelect={handleToggleSelect} 
+                      onToggleSelect={handleToggleSelect}
                     />
                   ))}
                 </div>
               </>
             ) : (
-              <p className="text-center py-10 text-muted-foreground">No exercises found for the selected filters.</p>
+              <p className="text-center py-10 text-muted-foreground">
+                No exercises found for the selected filters.
+              </p>
             )}
           </TabsContent>
         </Tabs>
       )}
-      
+
       {/* Pagination controls */}
       {totalPages > 1 && (
         <Pagination className="mt-8">
           <PaginationContent>
             <div className="hidden sm:flex items-center space-x-2 mr-2 text-sm text-muted-foreground">
-              <span>Page {currentPage} of {totalPages}</span>
+              <span>
+                Page {currentPage} of {totalPages}
+              </span>
             </div>
             {currentPage > 1 && (
               <PaginationItem>
-                <PaginationPrevious onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} />
+                <PaginationPrevious
+                  onClick={() =>
+                    setCurrentPage((prev) => Math.max(prev - 1, 1))
+                  }
+                />
               </PaginationItem>
             )}
-            
+
             {/* Display limited page numbers */}
             {Array.from({ length: totalPages }, (_, i) => i + 1)
-              .filter(page => {
+              .filter((page) => {
                 // Always show first and last page
                 if (page === 1 || page === totalPages) return true;
                 // Show pages near current page
@@ -1017,8 +1209,8 @@ export default function ExerciseList() {
                         </span>
                       </PaginationItem>
                       <PaginationItem key={page}>
-                        <PaginationLink 
-                          isActive={page === currentPage} 
+                        <PaginationLink
+                          isActive={page === currentPage}
                           onClick={() => setCurrentPage(page)}
                         >
                           {page}
@@ -1029,8 +1221,8 @@ export default function ExerciseList() {
                 }
                 return (
                   <PaginationItem key={page}>
-                    <PaginationLink 
-                      isActive={page === currentPage} 
+                    <PaginationLink
+                      isActive={page === currentPage}
                       onClick={() => setCurrentPage(page)}
                     >
                       {page}
@@ -1038,26 +1230,33 @@ export default function ExerciseList() {
                   </PaginationItem>
                 );
               })}
-            
+
             {currentPage < totalPages && (
               <PaginationItem>
-                <PaginationNext onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} />
+                <PaginationNext
+                  onClick={() =>
+                    setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+                  }
+                />
               </PaginationItem>
             )}
           </PaginationContent>
         </Pagination>
       )}
-      
-      {totalExercises > 0 && totalExercises < 5 && activeTab !== 'all' && (
+
+      {totalExercises > 0 && totalExercises < 5 && activeTab !== "all" && (
         <div className="mt-8 bg-muted p-4 rounded-lg">
           <h3 className="text-lg font-medium mb-2">Need more exercises?</h3>
-          <p className="text-muted-foreground mb-4">Generate more exercises for this body part and expand your library.</p>
+          <p className="text-muted-foreground mb-4">
+            Generate more exercises for this body part and expand your library.
+          </p>
           {user ? (
-            <Button onClick={() => handleGenerateExercises(activeTab, '', 3)}>
-              Generate More {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Exercises
+            <Button onClick={() => handleGenerateExercises(activeTab, "", 3)}>
+              Generate More{" "}
+              {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Exercises
             </Button>
           ) : (
-            <Button onClick={() => navigate('/auth')}>
+            <Button onClick={() => navigate("/auth")}>
               Log in to generate exercises
             </Button>
           )}

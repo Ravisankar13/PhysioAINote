@@ -4,8 +4,8 @@ import {
   useMutation,
   UseMutationResult,
 } from "@tanstack/react-query";
-import { insertUserSchema, User as SelectUser, InsertUser } from "@shared/schema";
-import { getQueryFn, apiRequest, queryClient } from "../lib/queryClient";
+import { User as SelectUser, InsertUser } from "@shared/schema";
+import { getQueryFn, queryClient } from "../lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 type AuthContextType = {
@@ -34,7 +34,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginMutation = useMutation({
     mutationFn: async (credentials: LoginData) => {
-      console.log("Attempting login with credentials:", { username: credentials.username });
+      console.log("Attempting login with credentials:", {
+        username: credentials.username,
+      });
       try {
         // Use fetch directly to have more control
         const res = await fetch("/api/login", {
@@ -45,13 +47,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           body: JSON.stringify(credentials),
           credentials: "include", // Important for cookies
         });
-        
+
         if (!res.ok) {
           const errorData = await res.text();
           console.error("Login error response:", errorData);
           throw new Error(errorData || res.statusText);
         }
-        
+
         const userData = await res.json();
         console.log("Login successful, user data:", userData);
         return userData;
@@ -82,7 +84,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const registerMutation = useMutation({
     mutationFn: async (credentials: InsertUser) => {
-      console.log("Attempting to register user:", { username: credentials.username });
+      console.log("Attempting to register user:", {
+        username: credentials.username,
+      });
       try {
         // Use fetch directly for more control
         const res = await fetch("/api/register", {
@@ -93,13 +97,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           body: JSON.stringify(credentials),
           credentials: "include", // Important for cookies
         });
-        
+
         if (!res.ok) {
           const errorData = await res.text();
           console.error("Registration error response:", errorData);
           throw new Error(errorData || res.statusText);
         }
-        
+
         const userData = await res.json();
         console.log("Registration successful, user data:", userData);
         return userData;
@@ -137,13 +141,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           method: "POST",
           credentials: "include", // Important for cookies
         });
-        
+
         if (!res.ok) {
           const errorData = await res.text();
           console.error("Logout error response:", errorData);
           throw new Error(errorData || res.statusText);
         }
-        
+
         console.log("Logout successful");
       } catch (error) {
         console.error("Logout error:", error);

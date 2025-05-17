@@ -1,24 +1,47 @@
-import React, { useState, useCallback } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { soapNoteInputSchema, SoapNoteInput } from '@shared/schema';
-import { z } from 'zod';
+import React, { useState, useCallback } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { soapNoteInputSchema, SoapNoteInput } from "@shared/schema";
+import { z } from "zod";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { Redirect } from "wouter";
+import { Navigate } from "react-router-dom";
 
 // Create a modified schema without the visibility requirement for the generator form
-const noteGeneratorSchema = soapNoteInputSchema.omit({ visibility: true }).extend({
-  bodyPart: z.string().min(1, { message: "Body part is required" }),
-});
+const noteGeneratorSchema = soapNoteInputSchema
+  .omit({ visibility: true })
+  .extend({
+    bodyPart: z.string().min(1, { message: "Body part is required" }),
+  });
 
 // Define the type for our form
 type NoteGeneratorInput = z.infer<typeof noteGeneratorSchema>;
@@ -28,7 +51,7 @@ const TestNoteGenerator = () => {
   const [generatedNote, setGeneratedNote] = useState<any>(null);
   const { toast } = useToast();
   const { user } = useAuth();
-  
+
   // Redirect to auth page if not logged in
   if (!user) {
     toast({
@@ -36,7 +59,7 @@ const TestNoteGenerator = () => {
       description: "You need to log in to use the note generator.",
       variant: "destructive",
     });
-    return <Redirect to="/auth" />;
+    return <Navigate to="/auth" replace />;
   }
 
   const form = useForm({
@@ -45,7 +68,7 @@ const TestNoteGenerator = () => {
       patientName: "",
       patientId: "",
       dateOfBirth: "",
-      dateOfVisit: new Date().toISOString().split('T')[0],
+      dateOfVisit: new Date().toISOString().split("T")[0],
       subjective: "",
       objective: "",
       assessment: "",
@@ -54,50 +77,54 @@ const TestNoteGenerator = () => {
     },
   });
 
-  const onSubmit = useCallback(async (data: NoteGeneratorInput) => {
-    // Prepare data for API - omit bodyPart which isn't part of the SOAP note input schema
-    const { bodyPart, ...submitData } = data;
-    setIsGenerating(true);
-    try {
-      const response = await fetch('/api/notes/generate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(submitData),
-      });
+  const onSubmit = useCallback(
+    async (data: NoteGeneratorInput) => {
+      // Prepare data for API - omit bodyPart which isn't part of the SOAP note input schema
+      const { bodyPart, ...submitData } = data;
+      setIsGenerating(true);
+      try {
+        const response = await fetch("/api/notes/generate", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(submitData),
+        });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Error generating note');
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || "Error generating note");
+        }
+
+        const generatedData = await response.json();
+        setGeneratedNote(generatedData);
+
+        toast({
+          title: "Note generated successfully",
+          description: "AI has enhanced your clinical note.",
+        });
+      } catch (error: any) {
+        console.error("Error generating note:", error);
+        toast({
+          title: "Failed to generate note",
+          description:
+            error.message || "An error occurred while generating the note.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsGenerating(false);
       }
-
-      const generatedData = await response.json();
-      setGeneratedNote(generatedData);
-      
-      toast({
-        title: "Note generated successfully",
-        description: "AI has enhanced your clinical note.",
-      });
-    } catch (error: any) {
-      console.error('Error generating note:', error);
-      toast({
-        title: "Failed to generate note",
-        description: error.message || "An error occurred while generating the note.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsGenerating(false);
-    }
-  }, [toast]);
+    },
+    [toast]
+  );
 
   const saveGeneratedNote = async () => {
     if (!generatedNote) return;
-    
+
     try {
       // Get the selected body part from the form
       const bodyPart = form.getValues().bodyPart;
-      
+
       // Prepare the note for saving with proper visibility
       const noteToSave = {
         patientName: generatedNote.patientName,
@@ -109,33 +136,34 @@ const TestNoteGenerator = () => {
         assessment: generatedNote.assessment || "",
         plan: generatedNote.plan || "",
         bodyPart: bodyPart,
-        visibility: "private" as const
+        visibility: "private" as const,
       };
 
-      const response = await fetch('/api/notes', {
-        method: 'POST',
+      const response = await fetch("/api/notes", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(noteToSave),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Error saving note');
+        throw new Error(errorData.message || "Error saving note");
       }
 
       const savedNote = await response.json();
-      
+
       toast({
         title: "Note saved successfully",
         description: "Your clinical note has been saved to your account.",
       });
     } catch (error: any) {
-      console.error('Error saving note:', error);
+      console.error("Error saving note:", error);
       toast({
         title: "Failed to save note",
-        description: error.message || "An error occurred while saving the note.",
+        description:
+          error.message || "An error occurred while saving the note.",
         variant: "destructive",
       });
     }
@@ -144,18 +172,23 @@ const TestNoteGenerator = () => {
   return (
     <div className="container mx-auto py-8 max-w-5xl">
       <h1 className="text-3xl font-bold mb-6">AI SOAP Note Generator</h1>
-      
+
       <div className="grid grid-cols-1 gap-8">
         <Card>
           <CardHeader>
             <CardTitle>Clinical Note Information</CardTitle>
             <CardDescription>
-              Enter the basic patient information and clinical observations below. The AI will enhance and format your notes into a comprehensive SOAP format.
+              Enter the basic patient information and clinical observations
+              below. The AI will enhance and format your notes into a
+              comprehensive SOAP format.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              <form
+                onSubmit={form.handleSubmit(onSubmit)}
+                className="space-y-6"
+              >
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
@@ -219,7 +252,10 @@ const TestNoteGenerator = () => {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Body Part</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <Select
+                          onValueChange={field.onChange}
+                          defaultValue={field.value}
+                        >
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="Select a body part" />
@@ -251,10 +287,10 @@ const TestNoteGenerator = () => {
                     <FormItem>
                       <FormLabel>Subjective</FormLabel>
                       <FormControl>
-                        <Textarea 
+                        <Textarea
                           placeholder="Patient reports pain in right knee after running. Pain is 5/10 and worse with stairs."
                           className="min-h-[100px]"
-                          {...field} 
+                          {...field}
                         />
                       </FormControl>
                       <FormDescription>
@@ -272,14 +308,15 @@ const TestNoteGenerator = () => {
                     <FormItem>
                       <FormLabel>Objective</FormLabel>
                       <FormControl>
-                        <Textarea 
+                        <Textarea
                           placeholder="ROM: Flexion 0-120°, Extension -5°. Pain on palpation of medial joint line."
                           className="min-h-[100px]"
-                          {...field} 
+                          {...field}
                         />
                       </FormControl>
                       <FormDescription>
-                        Physical examination findings, measurements, and observations.
+                        Physical examination findings, measurements, and
+                        observations.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -293,14 +330,15 @@ const TestNoteGenerator = () => {
                     <FormItem>
                       <FormLabel>Assessment (Optional)</FormLabel>
                       <FormControl>
-                        <Textarea 
+                        <Textarea
                           placeholder="Suspected meniscal injury. Mild joint effusion."
                           className="min-h-[100px]"
-                          {...field} 
+                          {...field}
                         />
                       </FormControl>
                       <FormDescription>
-                        Clinical impression, diagnosis, or assessment of the patient's condition.
+                        Clinical impression, diagnosis, or assessment of the
+                        patient's condition.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -314,10 +352,10 @@ const TestNoteGenerator = () => {
                     <FormItem>
                       <FormLabel>Plan (Optional)</FormLabel>
                       <FormControl>
-                        <Textarea 
+                        <Textarea
                           placeholder="Strengthening exercises for quadriceps. Ice 20 min 3x/day."
                           className="min-h-[100px]"
-                          {...field} 
+                          {...field}
                         />
                       </FormControl>
                       <FormDescription>
@@ -329,12 +367,10 @@ const TestNoteGenerator = () => {
                 />
 
                 <div className="flex justify-end">
-                  <Button 
-                    type="submit" 
-                    size="lg"
-                    disabled={isGenerating}
-                  >
-                    {isGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  <Button type="submit" size="lg" disabled={isGenerating}>
+                    {isGenerating && (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    )}
                     {isGenerating ? "Generating..." : "Generate SOAP Note"}
                   </Button>
                 </div>
@@ -357,61 +393,85 @@ const TestNoteGenerator = () => {
                   <TabsTrigger value="formatted">Formatted Note</TabsTrigger>
                   <TabsTrigger value="sections">By Section</TabsTrigger>
                 </TabsList>
-                
+
                 <TabsContent value="formatted" className="space-y-4">
                   <div className="prose max-w-none">
                     <h3>Patient Information</h3>
-                    <p><strong>Name:</strong> {generatedNote.patientName}</p>
-                    <p><strong>ID:</strong> {generatedNote.patientId}</p>
-                    <p><strong>DOB:</strong> {generatedNote.dateOfBirth}</p>
-                    <p><strong>Visit Date:</strong> {generatedNote.dateOfVisit}</p>
-                    
+                    <p>
+                      <strong>Name:</strong> {generatedNote.patientName}
+                    </p>
+                    <p>
+                      <strong>ID:</strong> {generatedNote.patientId}
+                    </p>
+                    <p>
+                      <strong>DOB:</strong> {generatedNote.dateOfBirth}
+                    </p>
+                    <p>
+                      <strong>Visit Date:</strong> {generatedNote.dateOfVisit}
+                    </p>
+
                     <h3>Subjective</h3>
                     <p>{generatedNote.subjective}</p>
-                    
+
                     <h3>Objective</h3>
                     <p>{generatedNote.objective}</p>
-                    
+
                     <h3>Assessment</h3>
                     <p>{generatedNote.assessment}</p>
-                    
+
                     <h3>Plan</h3>
                     <p>{generatedNote.plan}</p>
                   </div>
                 </TabsContent>
-                
+
                 <TabsContent value="sections" className="space-y-6">
                   <div>
                     <h3 className="font-semibold mb-2">Subjective:</h3>
-                    <Textarea readOnly value={generatedNote.subjective} className="min-h-[100px]" />
+                    <Textarea
+                      readOnly
+                      value={generatedNote.subjective}
+                      className="min-h-[100px]"
+                    />
                   </div>
-                  
+
                   <div>
                     <h3 className="font-semibold mb-2">Objective:</h3>
-                    <Textarea readOnly value={generatedNote.objective} className="min-h-[100px]" />
+                    <Textarea
+                      readOnly
+                      value={generatedNote.objective}
+                      className="min-h-[100px]"
+                    />
                   </div>
-                  
+
                   <div>
                     <h3 className="font-semibold mb-2">Assessment:</h3>
-                    <Textarea readOnly value={generatedNote.assessment} className="min-h-[100px]" />
+                    <Textarea
+                      readOnly
+                      value={generatedNote.assessment}
+                      className="min-h-[100px]"
+                    />
                   </div>
-                  
+
                   <div>
                     <h3 className="font-semibold mb-2">Plan:</h3>
-                    <Textarea readOnly value={generatedNote.plan} className="min-h-[100px]" />
+                    <Textarea
+                      readOnly
+                      value={generatedNote.plan}
+                      className="min-h-[100px]"
+                    />
                   </div>
                 </TabsContent>
               </Tabs>
             </CardContent>
             <CardFooter className="flex justify-end">
-              <Button 
+              <Button
                 onClick={saveGeneratedNote}
                 variant="secondary"
                 className="mr-2"
               >
                 Save Note
               </Button>
-              <Button 
+              <Button
                 onClick={() => {
                   setGeneratedNote(null);
                   form.reset();

@@ -118,36 +118,6 @@ export default function VirtualPatientDetail({ patientId, onBackToList, onEditPa
 
   const hasDiagnosis = !!patient?.diagnosis;
 
-  // Renders the analyze button consistently across tabs
-  const renderAnalyzeButton = () => (
-    <Button 
-      onClick={() => analyzePatientMutation.mutate()}
-      disabled={analyzePatientMutation.isPending}
-    >
-      {analyzePatientMutation.isPending ? (
-        <>
-          <Activity className="mr-2 h-4 w-4 animate-pulse" />
-          Analyzing...
-        </>
-      ) : (
-        <>
-          <Activity className="mr-2 h-4 w-4" />
-          Analyze Patient Data
-        </>
-      )}
-    </Button>
-  );
-
-  // Renders the empty state message for tabs when there's no diagnosis yet
-  const renderEmptyState = (icon: React.ReactNode, title: string, description: string) => (
-    <div className="text-center p-8">
-      {icon}
-      <h3 className="text-lg font-medium mb-2">{title}</h3>
-      <p className="text-sm text-gray-500 mb-4">{description}</p>
-      {renderAnalyzeButton()}
-    </div>
-  );
-
   return (
     <Card className="max-w-5xl mx-auto">
       <CardHeader>
@@ -208,7 +178,7 @@ export default function VirtualPatientDetail({ patientId, onBackToList, onEditPa
             </TabsTrigger>
           </TabsList>
 
-          {/* PATIENT INFO TAB */}
+          {/* Patient Info Tab */}
           <TabsContent value="info" className="p-6">
             <div className="space-y-6">
               <div>
@@ -285,14 +255,32 @@ export default function VirtualPatientDetail({ patientId, onBackToList, onEditPa
             </div>
           </TabsContent>
 
-          {/* DIAGNOSIS TAB */}
+          {/* Diagnosis Tab */}
           <TabsContent value="diagnosis" className="p-6">
             {!hasDiagnosis ? (
-              renderEmptyState(
-                <Activity className="h-12 w-12 text-gray-400 mx-auto mb-4" />,
-                "No diagnosis available",
-                "Analyze the patient data to generate a diagnosis and treatment recommendations."
-              )
+              <div className="text-center p-8">
+                <Activity className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium mb-2">No diagnosis available</h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  Analyze the patient data to generate a diagnosis and treatment recommendations.
+                </p>
+                <Button 
+                  onClick={() => analyzePatientMutation.mutate()}
+                  disabled={analyzePatientMutation.isPending}
+                >
+                  {analyzePatientMutation.isPending ? (
+                    <>
+                      <Activity className="mr-2 h-4 w-4 animate-pulse" />
+                      Analyzing...
+                    </>
+                  ) : (
+                    <>
+                      <Activity className="mr-2 h-4 w-4" />
+                      Analyze Patient Data
+                    </>
+                  )}
+                </Button>
+              </div>
             ) : (
               <div className="space-y-6">
                 <div className="bg-primary/5 p-4 rounded-lg">
@@ -335,14 +323,32 @@ export default function VirtualPatientDetail({ patientId, onBackToList, onEditPa
             )}
           </TabsContent>
 
-          {/* ASSESSMENT TESTS TAB - Enhanced with clinical tests */}
+          {/* Assessment Tests Tab - Enhanced with clinical tests */}
           <TabsContent value="assessment" className="p-6">
             {!hasDiagnosis ? (
-              renderEmptyState(
-                <Clipboard className="h-12 w-12 text-gray-400 mx-auto mb-4" />,
-                "No assessment data available",
-                "Analyze the patient data to view relevant assessment tests."
-              )
+              <div className="text-center p-8">
+                <Clipboard className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium mb-2">No assessment data available</h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  Analyze the patient data to view relevant assessment tests.
+                </p>
+                <Button 
+                  onClick={() => analyzePatientMutation.mutate()}
+                  disabled={analyzePatientMutation.isPending}
+                >
+                  {analyzePatientMutation.isPending ? (
+                    <>
+                      <Activity className="mr-2 h-4 w-4 animate-pulse" />
+                      Analyzing...
+                    </>
+                  ) : (
+                    <>
+                      <Activity className="mr-2 h-4 w-4" />
+                      Analyze Patient Data
+                    </>
+                  )}
+                </Button>
+              </div>
             ) : (
               <div className="space-y-6">
                 <div className="bg-primary/5 p-4 rounded-lg">
@@ -388,14 +394,32 @@ export default function VirtualPatientDetail({ patientId, onBackToList, onEditPa
             )}
           </TabsContent>
 
-          {/* OBJECTIVE FINDINGS TAB */}
+          {/* Objective Findings Tab */}
           <TabsContent value="findings" className="p-6">
             {!hasDiagnosis ? (
-              renderEmptyState(
-                <ClipboardCheck className="h-12 w-12 text-gray-400 mx-auto mb-4" />,
-                "No objective findings available",
-                "Analyze the patient data to view objective findings."
-              )
+              <div className="text-center p-8">
+                <ClipboardCheck className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium mb-2">No objective findings available</h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  Analyze the patient data to view objective findings.
+                </p>
+                <Button 
+                  onClick={() => analyzePatientMutation.mutate()}
+                  disabled={analyzePatientMutation.isPending}
+                >
+                  {analyzePatientMutation.isPending ? (
+                    <>
+                      <Activity className="mr-2 h-4 w-4 animate-pulse" />
+                      Analyzing...
+                    </>
+                  ) : (
+                    <>
+                      <Activity className="mr-2 h-4 w-4" />
+                      Analyze Patient Data
+                    </>
+                  )}
+                </Button>
+              </div>
             ) : (
               <div className="space-y-6">
                 {patient.objectiveFindings && patient.objectiveFindings.map((finding: any, idx: number) => (
@@ -430,14 +454,32 @@ export default function VirtualPatientDetail({ patientId, onBackToList, onEditPa
             )}
           </TabsContent>
 
-          {/* TREATMENT OPTIONS TAB */}
+          {/* Treatment Options Tab - Moved from Diagnosis tab to here */}
           <TabsContent value="treatment" className="p-6">
             {!hasDiagnosis ? (
-              renderEmptyState(
-                <Activity className="h-12 w-12 text-gray-400 mx-auto mb-4" />,
-                "No treatment options available",
-                "Analyze the patient data to generate treatment recommendations."
-              )
+              <div className="text-center p-8">
+                <Activity className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium mb-2">No treatment options available</h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  Analyze the patient data to generate treatment recommendations.
+                </p>
+                <Button 
+                  onClick={() => analyzePatientMutation.mutate()}
+                  disabled={analyzePatientMutation.isPending}
+                >
+                  {analyzePatientMutation.isPending ? (
+                    <>
+                      <Activity className="mr-2 h-4 w-4 animate-pulse" />
+                      Analyzing...
+                    </>
+                  ) : (
+                    <>
+                      <Activity className="mr-2 h-4 w-4" />
+                      Analyze Patient Data
+                    </>
+                  )}
+                </Button>
+              </div>
             ) : (
               <div className="space-y-6">
                 <div>
@@ -544,24 +586,24 @@ export default function VirtualPatientDetail({ patientId, onBackToList, onEditPa
                         {/* Patient Education */}
                         {treatmentCategory.recommendations && treatmentCategory.recommendations.length > 0 && (
                           <div className="space-y-3">
-                            {treatmentCategory.recommendations.map((rec: any, eduIdx: number) => (
+                            {treatmentCategory.recommendations.map((education: any, eduIdx: number) => (
                               <div key={eduIdx} className="border border-gray-200 rounded-md p-3">
                                 <div className="flex justify-between items-start mb-2">
-                                  <h5 className="text-md font-medium">{rec.topic}</h5>
+                                  <h5 className="text-md font-medium">{education.topic}</h5>
                                   <Badge variant={
-                                    rec.importance === "high" ? "default" : 
-                                    rec.importance === "medium" ? "secondary" : 
+                                    education.importance === "high" ? "default" : 
+                                    education.importance === "medium" ? "secondary" : 
                                     "outline"
                                   }>
-                                    {rec.importance} importance
+                                    {education.importance} importance
                                   </Badge>
                                 </div>
-                                <p className="text-sm mb-2">{rec.details}</p>
-                                {rec.resources && rec.resources.length > 0 && (
+                                <p className="text-sm mb-2">{education.details}</p>
+                                {education.resources && education.resources.length > 0 && (
                                   <div className="mt-2">
                                     <p className="text-sm font-medium">Resources:</p>
                                     <ul className="list-disc list-inside text-sm ml-2">
-                                      {rec.resources.map((resource: string, i: number) => (
+                                      {education.resources.map((resource: string, i: number) => (
                                         <li key={i}>{resource}</li>
                                       ))}
                                     </ul>
@@ -579,14 +621,32 @@ export default function VirtualPatientDetail({ patientId, onBackToList, onEditPa
             )}
           </TabsContent>
 
-          {/* RESEARCH TAB */}
+          {/* Research Tab */}
           <TabsContent value="research" className="p-6">
             {!hasDiagnosis ? (
-              renderEmptyState(
-                <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />,
-                "No research available",
-                "Analyze the patient data to view relevant research."
-              )
+              <div className="text-center p-8">
+                <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium mb-2">No research available</h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  Analyze the patient data to view relevant research.
+                </p>
+                <Button 
+                  onClick={() => analyzePatientMutation.mutate()}
+                  disabled={analyzePatientMutation.isPending}
+                >
+                  {analyzePatientMutation.isPending ? (
+                    <>
+                      <Activity className="mr-2 h-4 w-4 animate-pulse" />
+                      Analyzing...
+                    </>
+                  ) : (
+                    <>
+                      <Activity className="mr-2 h-4 w-4" />
+                      Analyze Patient Data
+                    </>
+                  )}
+                </Button>
+              </div>
             ) : (
               <div className="space-y-6">
                 <div className="bg-primary/5 p-4 rounded-lg">
@@ -607,7 +667,7 @@ export default function VirtualPatientDetail({ patientId, onBackToList, onEditPa
                     <p className="text-sm mb-3">{research.abstract}</p>
                     
                     <div className="flex flex-wrap gap-2 mb-2">
-                      {research.keywords && research.keywords.map((keyword: string, kidx: number) => (
+                      {research.keywords.map((keyword: string, kidx: number) => (
                         <Badge key={kidx} variant="secondary" className="text-xs">
                           {keyword}
                         </Badge>

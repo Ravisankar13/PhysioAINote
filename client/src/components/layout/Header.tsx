@@ -89,6 +89,19 @@ const Header = () => {
               </Button>
             </Link>
             
+            {/* Direct logout button for mobile - always visible when logged in */}
+            {user && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="md:hidden"
+                onClick={handleLogout}
+              >
+                <LogOut className="h-4 w-4 mr-1" />
+                Logout
+              </Button>
+            )}
+            
             {user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

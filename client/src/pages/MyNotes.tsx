@@ -7,16 +7,16 @@ import { ShareNoteDialog } from "@/components/notes/ShareNoteDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  Search, 
-  PlusCircle, 
-  FilePlus, 
-  Shield, 
-  Users, 
+import {
+  Search,
+  PlusCircle,
+  FilePlus,
+  Shield,
+  Users,
   Globe,
-  Loader2
+  Loader2,
 } from "lucide-react";
-import { Link } from "wouter";
+import { Link } from "react-router-dom";
 
 interface ClinicalNote {
   id: number;
@@ -104,18 +104,23 @@ export default function MyNotes() {
     <div className="container max-w-6xl py-8">
       <Helmet>
         <title>My Clinical Notes | PhysioAI Conversation</title>
-        <meta name="description" content="Manage your clinical notes, edit details, and choose sharing options." />
+        <meta
+          name="description"
+          content="Manage your clinical notes, edit details, and choose sharing options."
+        />
       </Helmet>
 
       <div className="space-y-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">My Clinical Notes</h1>
+            <h1 className="text-3xl font-bold tracking-tight">
+              My Clinical Notes
+            </h1>
             <p className="text-muted-foreground mt-1">
               Manage your clinical notes and control sharing settings
             </p>
           </div>
-          <Link href="/clinical-notes">
+          <Link to="/clinical-notes">
             <Button className="flex items-center gap-2">
               <FilePlus className="h-4 w-4" />
               <span>Create New Note</span>
@@ -138,7 +143,10 @@ export default function MyNotes() {
             <Tabs value={visibilityFilter} onValueChange={setVisibilityFilter}>
               <TabsList>
                 <TabsTrigger value="all">All</TabsTrigger>
-                <TabsTrigger value="private" className="flex items-center gap-1">
+                <TabsTrigger
+                  value="private"
+                  className="flex items-center gap-1"
+                >
                   <Shield className="h-3.5 w-3.5" />
                   <span>Private</span>
                 </TabsTrigger>
@@ -161,7 +169,9 @@ export default function MyNotes() {
           </div>
         ) : error ? (
           <div className="text-center p-12 border rounded-lg bg-red-50 dark:bg-red-900/20">
-            <h3 className="text-lg font-medium text-red-700 dark:text-red-300">Error loading notes</h3>
+            <h3 className="text-lg font-medium text-red-700 dark:text-red-300">
+              Error loading notes
+            </h3>
             <p className="text-red-600 dark:text-red-400 mt-1">
               There was a problem fetching your clinical notes.
             </p>
@@ -175,8 +185,11 @@ export default function MyNotes() {
                 : "You haven't created any clinical notes yet"}
             </p>
             {!searchTerm && visibilityFilter === "all" && (
-              <Link href="/clinical-notes">
-                <Button variant="outline" className="mt-4 flex items-center gap-2">
+              <Link to="/clinical-notes">
+                <Button
+                  variant="outline"
+                  className="mt-4 flex items-center gap-2"
+                >
                   <PlusCircle className="h-4 w-4" />
                   <span>Create Your First Note</span>
                 </Button>
@@ -200,14 +213,21 @@ export default function MyNotes() {
                     <div className="flex items-center mt-2">
                       <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-full px-3 py-1 text-xs">
                         {getNoteStatusIcon(note.visibility)}
-                        <span className="ml-1">{getNoteStatusLabel(note.visibility)}</span>
+                        <span className="ml-1">
+                          {getNoteStatusLabel(note.visibility)}
+                        </span>
                       </div>
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <ShareNoteDialog noteId={note.id} currentVisibility={note.visibility} />
-                    <Link href={`/clinical-notes/${note.id}`}>
-                      <Button variant="default" size="sm">View Note</Button>
+                    <ShareNoteDialog
+                      noteId={note.id}
+                      currentVisibility={note.visibility}
+                    />
+                    <Link to={`/clinical-notes/${note.id}`}>
+                      <Button variant="default" size="sm">
+                        View Note
+                      </Button>
                     </Link>
                   </div>
                 </div>

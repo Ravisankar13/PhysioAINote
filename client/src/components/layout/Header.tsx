@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
@@ -8,33 +7,46 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuTrigger
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Leaf, MessageSquareText, Menu, LogOut, User, Bone, CreditCard, FileAudio, Stethoscope, Activity, Users } from "lucide-react";
+import {
+  Leaf,
+  MessageSquareText,
+  Menu,
+  LogOut,
+  User,
+  Bone,
+  CreditCard,
+  FileAudio,
+  Stethoscope,
+  Activity,
+  Users,
+} from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { Link, useLocation } from "react-router-dom";
 
 const Header = () => {
-  const [location] = useLocation();
   const [open, setOpen] = useState(false);
   const { user, logoutMutation } = useAuth();
+  const location = useLocation().pathname;
 
   const navItems = [
-    { href: "/", label: "Home" },
-    { href: "/clinical-notes", label: "Clinical Notes" },
-    { href: "/notes", label: "Patient Sessions" },
-    { href: "/skeleton-tool", label: "2D Skeleton Tool" },
-    { href: "/skeleton-3d-tool", label: "3D Skeleton Tool" },
-    { href: "/shared-cases", label: "Peer Exchange" },
-    { href: "/research", label: "Research" },
-    { href: "/exercises", label: "Exercise Library" },
-    { href: "/manual-therapy", label: "Manual Therapy" },
-    { href: "/virtual-patients", label: "Virtual Patients" },
-    { href: "/membership", label: "Membership" },
+    { to: "/", label: "Home" },
+    { to: "/clinical-notes", label: "Clinical Notes" },
+    { to: "/notes", label: "Patient Sessions" },
+    { to: "/skeleton-tool", label: "2D Skeleton Tool" },
+    { to: "/skeleton-3d-tool", label: "3D Skeleton Tool" },
+    { to: "/shared-cases", label: "Peer Exchange" },
+    { to: "/research", label: "Research" },
+    { to: "/exercises", label: "Exercise Library" },
+    { to: "/manual-therapy", label: "Manual Therapy" },
+    { to: "/virtual-patients", label: "Virtual Patients" },
+    { to: "/membership", label: "Membership" },
   ];
 
   const isActive = (path: string) => location === path;
-  
+
   const handleLogout = () => {
     logoutMutation.mutate();
   };
@@ -45,7 +57,7 @@ const Header = () => {
         <div className="flex h-16 items-center">
           {/* Logo section (left) */}
           <div className="flex-shrink-0">
-            <Link href="/">
+            <Link to="/">
               <div className="flex items-center cursor-pointer">
                 <Leaf className="text-primary mr-2 h-7 w-7" />
                 <span className="font-bold text-xl tracking-tight text-foreground">
@@ -55,15 +67,15 @@ const Header = () => {
               </div>
             </Link>
           </div>
-          
+
           {/* Navigation Links (centered) */}
           <div className="hidden md:flex flex-1 justify-center">
             <nav className="flex items-center">
               {navItems.map((item) => (
-                <Link key={item.href} href={item.href}>
+                <Link key={item.to} to={item.to}>
                   <span
                     className={`${
-                      isActive(item.href)
+                      isActive(item.to)
                         ? "text-primary font-semibold border-b-2 border-primary"
                         : "text-muted-foreground hover:text-primary transition-colors duration-200"
                     } px-3 py-4 mx-1 text-sm font-medium cursor-pointer whitespace-nowrap`}
@@ -74,20 +86,23 @@ const Header = () => {
               ))}
             </nav>
           </div>
-          
+
           {/* Action buttons (right) */}
           <div className="flex items-center space-x-4">
-            <Link href="/clinical-notes">
+            <Link to="/clinical-notes">
               <Button className="bg-primary hover:bg-primary/90 text-white font-semibold shadow-sm flex items-center gap-2">
                 <MessageSquareText className="h-4 w-4" />
                 <span>AI Notes</span>
               </Button>
             </Link>
-            
+
             {user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="relative h-10 w-10 rounded-full">
+                  <Button
+                    variant="ghost"
+                    className="relative h-10 w-10 rounded-full"
+                  >
                     <Avatar className="h-10 w-10">
                       <AvatarFallback className="bg-primary/10 text-primary">
                         {user.username.substring(0, 2).toUpperCase()}
@@ -99,7 +114,7 @@ const Header = () => {
                   <DropdownMenuLabel>My Account</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem className="flex items-center" asChild>
-                    <Link href="/my-notes">
+                    <Link to="/my-notes">
                       <div className="flex items-center cursor-pointer w-full">
                         <User className="mr-2 h-4 w-4" />
                         <span>My Notes</span>
@@ -107,7 +122,7 @@ const Header = () => {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem className="flex items-center" asChild>
-                    <Link href="/notes">
+                    <Link to="/notes">
                       <div className="flex items-center cursor-pointer w-full">
                         <Stethoscope className="mr-2 h-4 w-4" />
                         <span>Patient Sessions</span>
@@ -115,7 +130,7 @@ const Header = () => {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem className="flex items-center" asChild>
-                    <Link href="/skeleton-tool">
+                    <Link to="/skeleton-tool">
                       <div className="flex items-center cursor-pointer w-full">
                         <Bone className="mr-2 h-4 w-4" />
                         <span>2D Skeleton Tool</span>
@@ -123,7 +138,7 @@ const Header = () => {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem className="flex items-center" asChild>
-                    <Link href="/skeleton-3d-tool">
+                    <Link to="/skeleton-3d-tool">
                       <div className="flex items-center cursor-pointer w-full">
                         <Bone className="mr-2 h-4 w-4" />
                         <span>3D Skeleton Tool</span>
@@ -131,7 +146,7 @@ const Header = () => {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem className="flex items-center" asChild>
-                    <Link href="/virtual-patients">
+                    <Link to="/virtual-patients">
                       <div className="flex items-center cursor-pointer w-full">
                         <Activity className="mr-2 h-4 w-4" />
                         <span>Virtual Patients</span>
@@ -139,7 +154,7 @@ const Header = () => {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem className="flex items-center" asChild>
-                    <Link href="/shared-cases">
+                    <Link to="/shared-cases">
                       <div className="flex items-center cursor-pointer w-full">
                         <Users className="mr-2 h-4 w-4" />
                         <span>Peer Exchange</span>
@@ -147,7 +162,7 @@ const Header = () => {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem className="flex items-center" asChild>
-                    <Link href="/exercises">
+                    <Link to="/exercises">
                       <div className="flex items-center cursor-pointer w-full">
                         <Bone className="mr-2 h-4 w-4" />
                         <span>Exercise Library</span>
@@ -155,7 +170,7 @@ const Header = () => {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem className="flex items-center" asChild>
-                    <Link href="/manual-therapy">
+                    <Link to="/manual-therapy">
                       <div className="flex items-center cursor-pointer w-full">
                         <Bone className="mr-2 h-4 w-4" />
                         <span>Manual Therapy</span>
@@ -163,7 +178,7 @@ const Header = () => {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem className="flex items-center" asChild>
-                    <Link href="/virtual-patients">
+                    <Link to="/virtual-patients">
                       <div className="flex items-center cursor-pointer w-full">
                         <Activity className="mr-2 h-4 w-4" />
                         <span>Virtual Patients</span>
@@ -171,30 +186,39 @@ const Header = () => {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem className="flex items-center" asChild>
-                    <Link href="/membership">
+                    <Link to="/membership">
                       <div className="flex items-center cursor-pointer w-full">
                         <CreditCard className="mr-2 h-4 w-4" />
                         <span>Membership</span>
                       </div>
                     </Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem className="flex items-center cursor-pointer" onClick={handleLogout}>
+                  <DropdownMenuItem
+                    className="flex items-center cursor-pointer"
+                    onClick={handleLogout}
+                  >
                     <LogOut className="mr-2 h-4 w-4" />
                     <span>Logout</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
-              <Link href="/auth">
-                <Button variant="outline" className="hidden md:flex">Sign In</Button>
+              <Link to="/auth">
+                <Button variant="outline" className="hidden md:flex">
+                  Sign In
+                </Button>
               </Link>
             )}
-            
+
             {/* Mobile menu button */}
             <div className="md:hidden flex items-center">
               <Sheet open={open} onOpenChange={setOpen}>
                 <SheetTrigger asChild>
-                  <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground hover:bg-accent">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-muted-foreground hover:text-foreground hover:bg-accent"
+                  >
                     <span className="sr-only">Open main menu</span>
                     <Menu className="h-6 w-6" />
                   </Button>
@@ -209,10 +233,10 @@ const Header = () => {
                   </div>
                   <nav className="flex flex-col gap-4">
                     {navItems.map((item) => (
-                      <Link key={item.href} href={item.href}>
+                      <Link key={item.to} to={item.to}>
                         <span
                           className={`${
-                            isActive(item.href)
+                            isActive(item.to)
                               ? "text-primary font-medium"
                               : "text-muted-foreground hover:text-foreground"
                           } px-2 py-2 text-base block cursor-pointer`}
@@ -222,11 +246,11 @@ const Header = () => {
                         </span>
                       </Link>
                     ))}
-                    
+
                     {/* Auth related mobile menu items */}
                     {user ? (
                       <>
-                        <Link href="/my-notes">
+                        <Link to="/my-notes">
                           <span
                             className="px-2 py-2 text-base block cursor-pointer text-muted-foreground hover:text-foreground"
                             onClick={() => setOpen(false)}
@@ -234,7 +258,7 @@ const Header = () => {
                             My Notes
                           </span>
                         </Link>
-                        <Link href="/notes">
+                        <Link to="/notes">
                           <span
                             className="px-2 py-2 text-base block cursor-pointer text-muted-foreground hover:text-foreground"
                             onClick={() => setOpen(false)}
@@ -242,7 +266,7 @@ const Header = () => {
                             Patient Sessions
                           </span>
                         </Link>
-                        <Link href="/skeleton-tool">
+                        <Link to="/skeleton-tool">
                           <span
                             className="px-2 py-2 text-base block cursor-pointer text-muted-foreground hover:text-foreground"
                             onClick={() => setOpen(false)}
@@ -250,7 +274,7 @@ const Header = () => {
                             2D Skeleton Tool
                           </span>
                         </Link>
-                        <Link href="/skeleton-3d-tool">
+                        <Link to="/skeleton-3d-tool">
                           <span
                             className="px-2 py-2 text-base block cursor-pointer text-muted-foreground hover:text-foreground"
                             onClick={() => setOpen(false)}
@@ -258,7 +282,7 @@ const Header = () => {
                             3D Skeleton Tool
                           </span>
                         </Link>
-                        <Link href="/exercises">
+                        <Link to="/exercises">
                           <span
                             className="px-2 py-2 text-base block cursor-pointer text-muted-foreground hover:text-foreground"
                             onClick={() => setOpen(false)}
@@ -266,7 +290,7 @@ const Header = () => {
                             Exercise Library
                           </span>
                         </Link>
-                        <Link href="/manual-therapy">
+                        <Link to="/manual-therapy">
                           <span
                             className="px-2 py-2 text-base block cursor-pointer text-muted-foreground hover:text-foreground"
                             onClick={() => setOpen(false)}
@@ -274,7 +298,7 @@ const Header = () => {
                             Manual Therapy
                           </span>
                         </Link>
-                        <Link href="/membership">
+                        <Link to="/membership">
                           <span
                             className="px-2 py-2 text-base block cursor-pointer text-muted-foreground hover:text-foreground"
                             onClick={() => setOpen(false)}
@@ -293,7 +317,7 @@ const Header = () => {
                         </span>
                       </>
                     ) : (
-                      <Link href="/auth">
+                      <Link to="/auth">
                         <span
                           className="px-2 py-2 text-base block cursor-pointer text-primary font-medium"
                           onClick={() => setOpen(false)}

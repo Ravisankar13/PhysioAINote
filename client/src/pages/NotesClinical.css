@@ -1,0 +1,819 @@
+/* NotesClinical.css */
+:root {
+  /* --primary-color: #8a42ee; */
+  --primary-color: #410397;
+  --secondary-color: #03dac6;
+  --background-color: #f5f5f5;
+  --card-background: #ffffff;
+  --text-color: #333333;
+  --input-background: rgb(252, 253, 253);
+  --session-background: #e6e6fa;
+  --session-active-background: #b0e0e6;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background-color: var(--background-color);
+}
+
+.home-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  /* color: var(--background-color); */
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #a796e6;
+  color: var(--primary-color);
+  padding: 10px 20px;
+
+  /* box-shadow: 
+  0 4px 8px rgba(123, 31, 162, 0.4),   
+  0 6px 20px rgba(63, 81, 181, 0.3);   
+
+  transition: box-shadow 0.3s ease;  */
+}
+
+/* .sessions-card:hover {
+  box-shadow: 
+    0 6px 12px rgba(123, 31, 162, 0.5),
+    0 8px 24px rgba(63, 81, 181, 0.4);
+} */
+
+.header-left h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+}
+
+.logout-button {
+  background-color: var(--primary-color);
+  color: #fff;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 20px;
+  font-size: 14px;
+  cursor: pointer;
+  margin-right: 15px;
+  transition: background-color 0.3s, transform 0.2s;
+  display: flex;
+  align-items: center;
+}
+
+.logout-button:hover {
+  background-color: #732dbf; /* slightly darker shade of your primary color */
+  transform: translateY(-2px);
+}
+
+.logout-button:active {
+  transform: translateY(1px);
+}
+
+.pagination-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 20px;
+  gap: 15px;
+}
+
+.pagination-controls button {
+  background-color: #8a42ee;
+  color: white;
+  border: none;
+  /* padding: 8px 12px; */
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 10px;
+  width: 55px;
+}
+
+.pagination-controls button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+.pagination-controls span {
+  font-weight: bold;
+  color: black;
+  margin-top: 15px;
+}
+
+.user-icon,
+.settings-icon {
+  font-size: 1.5rem;
+  margin-left: 15px;
+  cursor: pointer;
+}
+
+.main-layout {
+  display: flex;
+  flex: 1;
+  padding: 20px;
+  gap: 20px;
+}
+
+.sessions-card {
+  background-color: var(--session-background);
+  border-radius: 8px;
+  padding: 20px;
+  overflow-y: auto;
+
+  box-shadow: 0 4px 8px rgba(123, 31, 162, 0.4),
+    0 6px 20px rgba(63, 81, 181, 0.3);
+
+  transition: box-shadow 0.3s ease;
+}
+
+.sessions-card:hover {
+  box-shadow: 0 6px 12px rgba(123, 31, 162, 0.5),
+    0 8px 24px rgba(63, 81, 181, 0.4);
+}
+
+/* .sessions-card {
+  flex: 0 0 250px;
+} */
+
+.content-card {
+  flex: 1;
+}
+
+.sessions-card h2,
+.content-card h2 {
+  color: var(--primary-color);
+  margin-top: 0;
+}
+
+.sessions-card ul {
+  list-style-type: none;
+  padding: 0;
+}
+
+.sessions-card li button {
+  width: 100%;
+  text-align: left;
+  padding: 10px;
+  margin-bottom: 10px;
+  /* background-color: var(--session-background); */
+  background-color: #a796e6;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  /* color: var(--primary-color); */
+  color: white;
+
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sessions-card li button.active {
+  background-color: var(--primary-color);
+}
+
+.edit-icon {
+  opacity: 0.5;
+  transition: opacity 0.3s;
+}
+
+.sessions-card li button:hover .edit-icon {
+  opacity: 1;
+}
+
+.editing-session {
+  margin-top: 5px;
+}
+
+.edit-session-input {
+  width: 90%;
+  padding: 10px;
+  background-color: #492ba3;
+  border: none;
+  border-radius: 4px;
+  color: white;
+  margin-bottom: 5px;
+}
+
+.edit-buttons {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.save-edit-btn,
+.cancel-edit-btn {
+  padding: 5px 10px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  color: white;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  /* background-color: #134e7e; */
+  /* width: 0px; */
+}
+
+.save-edit-btn {
+  background-color: #4caf50;
+}
+
+.cancel-edit-btn {
+  background-color: #f44336;
+}
+
+.save-edit-btn:hover,
+.cancel-edit-btn:hover {
+  opacity: 0.9;
+}
+
+.create-session-btn {
+  width: 100%;
+  padding: 10px;
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-bottom: 20px;
+}
+
+/* .header {
+  background-color: var(--background-color);
+  color: #333333;
+} */
+
+.patient-data-card {
+  background-color: var(--session-background);
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 8px rgba(123, 31, 162, 0.4),
+    /* Purple shadow (inner layer) */ 0 6px 20px rgba(63, 81, 181, 0.3); /* Blue shadow (outer layer) */
+
+  transition: box-shadow 0.3s ease;
+}
+
+.card-title {
+  text-align: center;
+  color: var(--primary-color);
+  margin-top: 0;
+  margin-bottom: 20px;
+}
+
+.accordion-item {
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.accordion-header {
+  width: 100%;
+  text-align: left;
+  padding: 15px 0;
+  background-color: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  /* font-weight: bold; */
+  color: #000000;
+  font-size: 16px;
+  font-family: "Arial";
+}
+
+.accordion-header:hover,
+.accordion-header:focus {
+  outline: none;
+  background-color: transparent;
+}
+
+.accordion-content input,
+.accordion-content textarea {
+  width: 98%;
+  padding: 10px;
+  margin-bottom: 10px;
+  border: 1px solid #ccc;
+  border-radius: 10px;
+  font-size: 16px;
+  background-color: aliceblue;
+  color: rgb(62, 60, 60);
+}
+
+.accordion-content textarea {
+  height: 50px;
+  resize: vertical;
+  background-color: aliceblue;
+  color: rgb(62, 60, 60);
+}
+
+.audio-section {
+  margin-top: 10px;
+}
+
+.audio-card {
+  margin-top: 10px;
+  background-color: var(--session-background);
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  /* Purple-blue shadow effect */
+  box-shadow: 0 4px 8px rgba(123, 31, 162, 0.4),
+    /* Purple shadow (inner layer) */ 0 6px 20px rgba(63, 81, 181, 0.3); /* Blue shadow (outer layer) */
+
+  transition: box-shadow 0.3s ease; /* Smooth shadow transition when hovering */
+}
+
+/* Optional hover enhancement: intensifying the shadow on hover */
+.audio-card:hover {
+  box-shadow: 0 6px 12px rgba(123, 31, 162, 0.5),
+    0 8px 24px rgba(63, 81, 181, 0.4);
+}
+
+.record-button {
+  background-color: #2196f3;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 60px;
+  height: 60px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  margin-bottom: 15px;
+}
+
+.mic-icon {
+  font-size: 20px;
+  margin-bottom: 5px;
+}
+
+.stop-button {
+  background-color: #f44336;
+  color: white;
+  border: none;
+  border-radius: 20px;
+  padding: 10px 20px;
+  cursor: pointer;
+  margin-bottom: 15px;
+}
+
+.recording-status {
+  font-size: 14px;
+  color: #666;
+}
+
+.record-time {
+  font-size: 14px;
+  color: #666;
+}
+
+.transcript-card {
+  margin-top: 20px;
+  background-color: var(--session-background);
+  padding: 15px;
+  border-radius: 4px;
+  height: 250px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  /* justify-content: center; */
+  align-items: center;
+
+  /* Hide scrollbar */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* Internet Explorer 10+ */
+
+  box-shadow: 0 4px 8px rgba(123, 31, 162, 0.4),
+    /* Purple shadow (inner layer) */ 0 6px 20px rgba(63, 81, 181, 0.3); /* Blue shadow (outer layer) */
+
+  transition: box-shadow 0.3s ease;
+}
+
+.transcript-card:hover {
+  box-shadow: 0 6px 12px rgba(123, 31, 162, 0.5),
+    0 8px 24px rgba(63, 81, 181, 0.4);
+}
+
+.transcript-card::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, and Opera */
+}
+
+.loader {
+  border: 8px solid #f3f3f3; /* Light grey */
+  border-top: 8px solid #3498db; /* Blue */
+  border-radius: 50%;
+  width: 50px;
+  height: 50px;
+  animation: spin 1s linear infinite;
+  margin: 20px auto; /* Center the loader */
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.soap-note-card {
+  margin-top: 20px;
+  background-color: var(--session-background);
+  padding: 15px;
+  border-radius: 4px;
+  height: 350px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  /* justify-content: center; */
+  align-items: center;
+  color: black;
+
+  /* Hide scrollbar */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* Internet Explorer 10+ */
+
+  box-shadow: 0 4px 8px rgba(123, 31, 162, 0.4),
+    /* Purple shadow (inner layer) */ 0 6px 20px rgba(63, 81, 181, 0.3); /* Blue shadow (outer layer) */
+
+  transition: box-shadow 0.3s ease;
+}
+
+.soap-note-card:hover {
+  box-shadow: 0 6px 12px rgba(123, 31, 162, 0.5),
+    0 8px 24px rgba(63, 81, 181, 0.4);
+}
+
+.soap-note-card::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, and Opera */
+}
+
+.soap-textarea {
+  width: 100%;
+  height: 100px;
+  resize: vertical;
+  margin-top: 5px;
+  padding: 10px;
+  border-radius: 4px;
+  border: 1px solid #9c27b0;
+  background-color: white;
+  color: black;
+  font-family: "Arial";
+}
+.soap-edit-btn,
+.soap-save-btn {
+  margin-top: 8px;
+  margin-right: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  background-color: #6200ea;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.soap-cancel-btn {
+  margin-top: -30px;
+  margin-left: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  background-color: #6200ea;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.soap-save-btn {
+  background-color: #6f62e2;
+}
+
+.soap-cancel-btn {
+  background-color: #6f62e2;
+}
+
+.soap-edit-btn:hover,
+.soap-save-btn:hover,
+.soap-cancel-btn:hover {
+  opacity: 0.9;
+}
+
+.options-list {
+  flex-grow: 1;
+  overflow-y: auto;
+  padding: 0;
+  list-style: none;
+}
+
+.option-item {
+  padding: 8px;
+  background-color: #fff;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  transition: background-color 0.3s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.option-view,
+.edit-view {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.option-controls button {
+  padding: 2px 5px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.option-controls button:hover {
+  opacity: 0.7;
+}
+
+.edit-input {
+  flex-grow: 1;
+  margin-right: 5px;
+  padding: 5px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  outline: none;
+}
+
+.add-option {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+  /* background-color: var(--background-color); */
+}
+
+.add-option input {
+  flex-grow: 1;
+  margin-right: 5px;
+  padding: 6px;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+  background-color: white;
+  color: #000000;
+}
+
+.add-option button {
+  padding: 6px 12px;
+  border: none;
+  background-color: var(--primary-color);
+  color: white;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.add-option button:hover {
+  opacity: 0.9;
+}
+
+.hamburger-btn {
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  position: absolute; /* key to proper positioning within parent div */
+  top: 90px;
+  left: 40px; /* align to top-left side */
+  z-index: 10;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  transition: transform 0.3s ease, background-color 0.3s;
+}
+
+.hamburger-btn:hover {
+  background-color: #732dbf;
+  transform: scale(1.1);
+}
+
+/* sessions card state */
+.sessions-card.collapsed {
+  width: 60px;
+  padding: 20px 10px;
+}
+
+/* hide content smoothly when collapsed */
+.sessions-content {
+  opacity: 1;
+  transition: opacity 0.3s ease;
+  padding-top: 50px; /* ensure space below the button */
+}
+
+.sessions-card.collapsed .sessions-content {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Responsive adjustments for screens smaller than 768px */
+@media (max-width: 768px) {
+  .main-layout {
+    flex-direction: column;
+  }
+
+  .sessions-card {
+    position: absolute;
+    z-index: 10;
+    top: 70px;
+    left: 0;
+    height: calc(100vh - 90px);
+    border-radius: 0 8px 8px 0;
+  }
+
+  .sessions-card.collapsed {
+    width: 50px;
+    padding: 20px 5px;
+  }
+
+  .hamburger-btn {
+    top: 10px;
+    left: 5px;
+  }
+
+  .content-card {
+    margin-left: 60px;
+    transition: margin-left 0.3s ease;
+  }
+
+  .sessions-card:not(.collapsed) + .content-card {
+    margin-left: 260px;
+  }
+}
+
+.transcription-table {
+  margin-top: 2px;
+}
+
+.transcription-table h2 {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.transcription-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.transcription-table th,
+.transcription-table td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: left;
+  color: #000000;
+}
+
+.transcription-table th {
+  background-color: var(--primary-color);
+  color: white;
+  font-weight: bold;
+}
+
+.transcription-table tr:nth-child(even) {
+  background-color: #c7b9e7;
+}
+
+.transcription-table .transcript-cell {
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.loading,
+.error,
+.no-data {
+  text-align: center;
+  margin-top: 20px;
+}
+
+.error {
+  color: red;
+}
+
+.login-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background-color: #f0f2f5;
+  padding: 20px; /* Added padding for smaller screens */
+}
+
+.login-box {
+  background-color: white;
+  padding: 40px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  max-width: 400px;
+  box-sizing: border-box; /* Include padding and border in element's total width and height */
+}
+
+.login-box h2 {
+  color: #8a42ee;
+  text-align: center;
+  margin-bottom: 10px;
+  font-size: 24px;
+}
+
+.login-box p {
+  text-align: center;
+  color: #666;
+  margin-bottom: 20px;
+}
+
+.input-group {
+  margin-bottom: 15px;
+}
+
+.input-group input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  background-color: #f0f8ff;
+  color: #666;
+  transition: background-color 0.3s ease;
+}
+
+.input-group input:focus {
+  background-color: #e6f2ff;
+  outline: none;
+}
+
+button {
+  width: 100%;
+  max-width: 200px;
+  padding: 10px;
+  background-color: #8a42ee;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  display: block;
+  margin: 20px auto 0 auto; /* Center button and add margin-top */
+}
+
+button:hover {
+  background-color: #5a3ea8;
+}
+
+.error-message {
+  color: rgb(233, 15, 15);
+  text-align: center;
+  margin-top: 10px;
+  /* margin-left: auto;
+  margin-right: auto; */
+  margin: 0 auto;
+  width: fit-content;
+}
+
+.no-account {
+  text-align: center;
+  color: #666;
+  margin-top: 20px;
+  font-size: 14px;
+}
+
+/* Media Queries for responsiveness */
+@media (min-width: 768px) {
+  .login-box {
+    padding: 50px;
+  }
+}
+
+@media (min-width: 992px) {
+  .login-box {
+    max-width: 500px;
+  }
+
+  button {
+    max-width: 220px;
+  }
+}

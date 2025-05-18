@@ -14,7 +14,7 @@ import {
   PolarRadiusAxis,
   Radar
 } from 'recharts';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,11 @@ import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format, subWeeks, subMonths } from "date-fns";
-import { Calendar as CalendarIcon, Activity, Target } from "lucide-react";
+import { Calendar as CalendarIcon, Activity, Target, Plus, X } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Slider } from "@/components/ui/slider";
 
 // Define types for our component
 interface ProgressMetrics {
@@ -71,9 +75,31 @@ export default function PatientProgressTracker({
   const [viewMode, setViewMode] = useState<string>("metrics");
   const [date, setDate] = useState<Date | undefined>(new Date());
   
-  // We'll use sample data for now - in a real app, this would come from the API
-  const [data, setData] = useState<ProgressMetrics[]>(initialData || generateSampleData());
-  const [goals, setGoals] = useState<GoalProgress[]>(initialGoals || generateSampleGoals(bodyPart));
+  // Start with empty data arrays - user will input their own data
+  const [data, setData] = useState<ProgressMetrics[]>(initialData || []);
+  const [goals, setGoals] = useState<GoalProgress[]>(initialGoals || []);
+  
+  // State for the data input form
+  const [showDataForm, setShowDataForm] = useState(false);
+  const [newDataPoint, setNewDataPoint] = useState<Partial<ProgressMetrics>>({
+    date: new Date().toISOString().split('T')[0],
+    rangeOfMotion: 5,
+    strength: 5,
+    functionalAbility: 5,
+    painLevel: 5,
+    adherence: 5,
+    goalProgress: 5
+  });
+  
+  // State for the goal input form
+  const [showGoalForm, setShowGoalForm] = useState(false);
+  const [newGoal, setNewGoal] = useState<Partial<GoalProgress>>({
+    goal: "",
+    description: "",
+    targetDate: new Date().toISOString().split('T')[0],
+    progress: 0,
+    status: 'in-progress'
+  });
   
   // Generate filtered data based on the selected time range
   const getFilteredData = () => {
@@ -134,6 +160,18 @@ export default function PatientProgressTracker({
   
   // Get latest data point for the radar chart
   const getLatestData = () => {
+    if (data.length === 0) {
+      return {
+        date: new Date().toISOString().split('T')[0],
+        rangeOfMotion: 0,
+        strength: 0,
+        functionalAbility: 0,
+        painLevel: 0,
+        adherence: 0,
+        goalProgress: 0
+      };
+    }
+    
     const sortedData = [...data].sort((a, b) => 
       new Date(b.date).getTime() - new Date(a.date).getTime()
     );
@@ -155,6 +193,79 @@ export default function PatientProgressTracker({
     ];
   };
   
+  // Handle form input changes for new data points
+  const handleDataInputChange = (field: keyof ProgressMetrics, value: any) => {
+    setNewDataPoint({
+      ...newDataPoint,
+      [field]: value
+    });
+  };
+  
+  // Add a new data point
+  const addDataPoint = () => {
+    // Ensure we have all required fields
+    const completeDataPoint = {
+      date: newDataPoint.date || new Date().toISOString().split('T')[0],
+      rangeOfMotion: newDataPoint.rangeOfMotion || 0,
+      strength: newDataPoint.strength || 0,
+      functionalAbility: newDataPoint.functionalAbility || 0,
+      painLevel: newDataPoint.painLevel || 0,
+      adherence: newDataPoint.adherence || 0,
+      goalProgress: newDataPoint.goalProgress || 0
+    } as ProgressMetrics;
+    
+    setData([...data, completeDataPoint]);
+    
+    // Reset form
+    setNewDataPoint({
+      date: new Date().toISOString().split('T')[0],
+      rangeOfMotion: 5,
+      strength: 5,
+      functionalAbility: 5,
+      painLevel: 5,
+      adherence: 5,
+      goalProgress: 5
+    });
+    
+    setShowDataForm(false);
+  };
+  
+  // Handle form input changes for new goals
+  const handleGoalInputChange = (field: keyof GoalProgress, value: any) => {
+    setNewGoal({
+      ...newGoal,
+      [field]: value
+    });
+  };
+  
+  // Add a new goal
+  const addGoal = () => {
+    if (!newGoal.goal || !newGoal.description) {
+      return; // Don't add incomplete goals
+    }
+    
+    const completeGoal = {
+      goal: newGoal.goal,
+      description: newGoal.description,
+      targetDate: newGoal.targetDate || new Date().toISOString().split('T')[0],
+      progress: newGoal.progress || 0,
+      status: newGoal.status || 'in-progress'
+    } as GoalProgress;
+    
+    setGoals([...goals, completeGoal]);
+    
+    // Reset form
+    setNewGoal({
+      goal: "",
+      description: "",
+      targetDate: new Date().toISOString().split('T')[0],
+      progress: 0,
+      status: 'in-progress'
+    });
+    
+    setShowGoalForm(false);
+  };
+  
   return (
     <Card className="w-full">
       <CardHeader>
@@ -167,433 +278,457 @@ export default function PatientProgressTracker({
           </div>
           
           <div className="flex flex-wrap gap-2">
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" className="w-[240px] justify-start text-left font-normal">
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {date ? format(date, "PPP") : <span>Pick a date</span>}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
-                <Calendar
-                  mode="single"
-                  selected={date}
-                  onSelect={setDate}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
+            {data.length > 0 && (
+              <>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-[240px] justify-start text-left font-normal">
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {date ? format(date, "PPP") : <span>Pick a date</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={date}
+                      onSelect={setDate}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+                
+                <Select defaultValue={timeRange} onValueChange={setTimeRange}>
+                  <SelectTrigger className="w-[150px]">
+                    <SelectValue placeholder="Select timeframe" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="2weeks">2 Weeks</SelectItem>
+                    <SelectItem value="4weeks">4 Weeks</SelectItem>
+                    <SelectItem value="3months">3 Months</SelectItem>
+                    <SelectItem value="6months">6 Months</SelectItem>
+                  </SelectContent>
+                </Select>
+              </>
+            )}
             
-            <Select defaultValue={timeRange} onValueChange={setTimeRange}>
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="Select timeframe" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="2weeks">2 Weeks</SelectItem>
-                <SelectItem value="4weeks">4 Weeks</SelectItem>
-                <SelectItem value="3months">3 Months</SelectItem>
-                <SelectItem value="6months">6 Months</SelectItem>
-              </SelectContent>
-            </Select>
+            <Button 
+              onClick={() => setShowDataForm(!showDataForm)} 
+              variant={showDataForm ? "secondary" : "default"}
+              className="gap-1"
+            >
+              {showDataForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+              {showDataForm ? "Cancel" : "Add Progress Data"}
+            </Button>
           </div>
         </div>
       </CardHeader>
       
       <CardContent>
-        <Tabs defaultValue="metrics" onValueChange={setViewMode} className="mb-6">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="metrics" className="flex items-center">
-              <Activity className="mr-2 h-4 w-4" />
-              Progress Metrics
-            </TabsTrigger>
-            <TabsTrigger value="overview">
-              <Target className="mr-2 h-4 w-4" />
-              Current Status
-            </TabsTrigger>
-            <TabsTrigger value="goals">Goals & Outcomes</TabsTrigger>
-          </TabsList>
-          
-          {/* Progress Metrics Tab */}
-          <TabsContent value="metrics" className="pt-4">
-            <div className="w-full h-[400px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={getFilteredData()}
-                  margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                  <XAxis 
-                    dataKey="date" 
-                    tickFormatter={(date) => format(new Date(date), "MMM d")}
+        {/* Data Input Form */}
+        {showDataForm && (
+          <div className="border rounded-md p-4 mb-6 bg-muted/30">
+            <h3 className="text-lg font-medium mb-4">Add New Progress Assessment</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div>
+                <Label htmlFor="assessment-date">Assessment Date</Label>
+                <Input 
+                  id="assessment-date" 
+                  type="date" 
+                  value={newDataPoint.date} 
+                  onChange={e => handleDataInputChange('date', e.target.value)}
+                />
+              </div>
+
+              <div className="mt-4 md:mt-0">
+                <p className="mb-2 text-sm font-medium">Pain Level (0-10)</p>
+                <div className="flex items-center gap-4">
+                  <Slider
+                    value={[newDataPoint.painLevel || 5]}
+                    min={0}
+                    max={10}
+                    step={1}
+                    onValueChange={([value]) => handleDataInputChange('painLevel', value)}
                   />
-                  <YAxis domain={[0, 10]} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Legend />
-                  
-                  <Bar 
-                    dataKey="rangeOfMotion" 
-                    name="rangeOfMotion"
-                    fill={colorScheme.rangeOfMotion} 
-                  />
-                  <Bar 
-                    dataKey="strength" 
-                    name="strength"
-                    fill={colorScheme.strength} 
-                  />
-                  <Bar 
-                    dataKey="functionalAbility" 
-                    name="functionalAbility"
-                    fill={colorScheme.functionalAbility} 
-                  />
-                  <Bar 
-                    dataKey="painLevel" 
-                    name="painLevel"
-                    fill={colorScheme.painLevel} 
-                  />
-                  <Bar 
-                    dataKey="adherence" 
-                    name="adherence"
-                    fill={colorScheme.adherence} 
-                  />
-                </BarChart>
-              </ResponsiveContainer>
+                  <span className="w-8 text-center font-medium">{newDataPoint.painLevel}</span>
+                </div>
+              </div>
             </div>
-          </TabsContent>
-          
-          {/* Current Status Tab */}
-          <TabsContent value="overview" className="pt-4">
-            <div className="flex flex-col md:flex-row gap-6">
-              <div className="w-full md:w-1/2">
-                <div className="w-full h-[350px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <RadarChart cx="50%" cy="50%" outerRadius="80%" data={getRadarData()}>
-                      <PolarGrid stroke="#e5e7eb" />
-                      <PolarAngleAxis dataKey="subject" />
-                      <PolarRadiusAxis angle={30} domain={[0, 10]} />
-                      <Radar
-                        name="Current Status"
-                        dataKey="A"
-                        stroke={colorScheme.functionalAbility}
-                        fill={colorScheme.functionalAbility}
-                        fillOpacity={0.6}
-                      />
-                    </RadarChart>
-                  </ResponsiveContainer>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div>
+                <p className="mb-2 text-sm font-medium">Range of Motion (0-10)</p>
+                <div className="flex items-center gap-4">
+                  <Slider
+                    value={[newDataPoint.rangeOfMotion || 5]}
+                    min={0}
+                    max={10}
+                    step={1}
+                    onValueChange={([value]) => handleDataInputChange('rangeOfMotion', value)}
+                  />
+                  <span className="w-8 text-center font-medium">{newDataPoint.rangeOfMotion}</span>
                 </div>
               </div>
               
-              <div className="w-full md:w-1/2">
-                <h3 className="text-lg font-medium mb-4">Current Assessment</h3>
-                <div className="space-y-4">
-                  {Object.entries(getLatestData()).map(([key, value]) => {
-                    if (key === 'date') return null;
-                    
-                    // For pain, lower is better. For others, higher is better.
-                    const isPain = key === 'painLevel';
-                    const score = Number(value);
-                    const level = isPain 
-                      ? (score <= 3 ? 'Good' : score <= 6 ? 'Moderate' : 'Poor')
-                      : (score >= 7 ? 'Good' : score >= 4 ? 'Moderate' : 'Poor');
-                    
-                    const variant = level === 'Good' 
-                      ? 'default' 
-                      : level === 'Moderate' 
-                        ? 'secondary' 
-                        : 'destructive';
-                    
-                    return (
-                      <div key={key} className="flex justify-between items-center border-b pb-2">
-                        <span>{formatMetricName(key)}</span>
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{value}/10</span>
-                          <Badge variant={variant}>{level}</Badge>
-                        </div>
-                      </div>
-                    );
-                  })}
+              <div>
+                <p className="mb-2 text-sm font-medium">Strength (0-10)</p>
+                <div className="flex items-center gap-4">
+                  <Slider
+                    value={[newDataPoint.strength || 5]}
+                    min={0}
+                    max={10}
+                    step={1}
+                    onValueChange={([value]) => handleDataInputChange('strength', value)}
+                  />
+                  <span className="w-8 text-center font-medium">{newDataPoint.strength}</span>
                 </div>
               </div>
             </div>
-          </TabsContent>
-          
-          {/* Goals Tab */}
-          <TabsContent value="goals" className="pt-4">
-            <div className="space-y-4">
-              {goals.map((goal, index) => (
-                <div key={index} className="border rounded-md p-4">
-                  <div className="flex justify-between items-start mb-2">
-                    <h3 className="font-medium text-lg">{goal.goal}</h3>
-                    <Badge variant={
-                      goal.status === 'achieved' ? 'default' : 
-                      goal.status === 'in-progress' ? 'secondary' : 
-                      'outline'
-                    }>{goal.status}</Badge>
-                  </div>
-                  
-                  <p className="text-sm text-gray-600 mb-4">{goal.description}</p>
-                  
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm">Target Date: {format(new Date(goal.targetDate), "MMM d, yyyy")}</span>
-                    <span className="font-medium">{goal.progress}%</span>
-                  </div>
-                  
-                  <div className="w-full bg-gray-200 rounded-full h-2.5">
-                    <div 
-                      className="h-2.5 rounded-full" 
-                      style={{ 
-                        width: `${goal.progress}%`, 
-                        backgroundColor: goal.status === 'achieved' 
-                          ? colorScheme.rangeOfMotion 
-                          : colorScheme.goalProgress 
-                      }}
-                    ></div>
-                  </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div>
+                <p className="mb-2 text-sm font-medium">Functional Ability (0-10)</p>
+                <div className="flex items-center gap-4">
+                  <Slider
+                    value={[newDataPoint.functionalAbility || 5]}
+                    min={0}
+                    max={10}
+                    step={1}
+                    onValueChange={([value]) => handleDataInputChange('functionalAbility', value)}
+                  />
+                  <span className="w-8 text-center font-medium">{newDataPoint.functionalAbility}</span>
                 </div>
-              ))}
+              </div>
+              
+              <div>
+                <p className="mb-2 text-sm font-medium">Adherence to Program (0-10)</p>
+                <div className="flex items-center gap-4">
+                  <Slider
+                    value={[newDataPoint.adherence || 5]}
+                    min={0}
+                    max={10}
+                    step={1}
+                    onValueChange={([value]) => handleDataInputChange('adherence', value)}
+                  />
+                  <span className="w-8 text-center font-medium">{newDataPoint.adherence}</span>
+                </div>
+              </div>
             </div>
-          </TabsContent>
-        </Tabs>
-        
-        <div className="mt-4 p-4 bg-muted/30 rounded-md">
-          <h4 className="text-sm font-semibold mb-2">Understanding Progress Metrics</h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-y-2 gap-x-4">
-            <div className="flex items-center">
-              <div className="w-3 h-3 mr-2" style={{ backgroundColor: colorScheme.rangeOfMotion }}></div>
-              <span className="text-sm">Range of Motion (0-10): Higher = Better range</span>
-            </div>
-            <div className="flex items-center">
-              <div className="w-3 h-3 mr-2" style={{ backgroundColor: colorScheme.strength }}></div>
-              <span className="text-sm">Strength (0-10): Higher = Better strength</span>
-            </div>
-            <div className="flex items-center">
-              <div className="w-3 h-3 mr-2" style={{ backgroundColor: colorScheme.functionalAbility }}></div>
-              <span className="text-sm">Functional Ability (0-10): Higher = Better function</span>
-            </div>
-            <div className="flex items-center">
-              <div className="w-3 h-3 mr-2" style={{ backgroundColor: colorScheme.painLevel }}></div>
-              <span className="text-sm">Pain Level (0-10): Higher = More pain</span>
-            </div>
-            <div className="flex items-center">
-              <div className="w-3 h-3 mr-2" style={{ backgroundColor: colorScheme.adherence }}></div>
-              <span className="text-sm">Adherence (0-10): Higher = Better compliance with program</span>
+
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowDataForm(false)}>Cancel</Button>
+              <Button onClick={addDataPoint}>Save Progress Data</Button>
             </div>
           </div>
-        </div>
+        )}
+
+        {/* Empty state message when no data exists */}
+        {!showDataForm && data.length === 0 && (
+          <div className="text-center py-12 border-2 border-dashed rounded-md mb-6">
+            <Activity className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium mb-2">No Progress Data Yet</h3>
+            <p className="text-muted-foreground mb-4">
+              Add progress assessment data to track rehabilitation outcomes over time
+            </p>
+            <Button onClick={() => setShowDataForm(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add First Progress Data
+            </Button>
+          </div>
+        )}
+
+        {/* Only show tabs when we have data */}
+        {data.length > 0 && (
+          <>
+            <Tabs defaultValue="metrics" onValueChange={setViewMode} className="mb-6">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="metrics" className="flex items-center">
+                  <Activity className="mr-2 h-4 w-4" />
+                  Progress Metrics
+                </TabsTrigger>
+                <TabsTrigger value="overview">
+                  <Target className="mr-2 h-4 w-4" />
+                  Current Status
+                </TabsTrigger>
+                <TabsTrigger value="goals">Goals & Outcomes</TabsTrigger>
+              </TabsList>
+            
+              {/* Progress Metrics Tab */}
+              <TabsContent value="metrics" className="pt-4">
+                <div className="w-full h-[400px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={getFilteredData()}
+                      margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                      <XAxis 
+                        dataKey="date" 
+                        tickFormatter={(date) => format(new Date(date), "MMM d")}
+                      />
+                      <YAxis domain={[0, 10]} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Legend />
+                      
+                      <Bar 
+                        dataKey="rangeOfMotion" 
+                        name="rangeOfMotion"
+                        fill={colorScheme.rangeOfMotion} 
+                      />
+                      <Bar 
+                        dataKey="strength" 
+                        name="strength"
+                        fill={colorScheme.strength} 
+                      />
+                      <Bar 
+                        dataKey="functionalAbility" 
+                        name="functionalAbility"
+                        fill={colorScheme.functionalAbility} 
+                      />
+                      <Bar 
+                        dataKey="painLevel" 
+                        name="painLevel"
+                        fill={colorScheme.painLevel} 
+                      />
+                      <Bar 
+                        dataKey="adherence" 
+                        name="adherence"
+                        fill={colorScheme.adherence} 
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </TabsContent>
+              
+              {/* Current Status Tab */}
+              <TabsContent value="overview" className="pt-4">
+                <div className="flex flex-col md:flex-row gap-6">
+                  <div className="w-full md:w-1/2">
+                    <div className="w-full h-[350px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <RadarChart cx="50%" cy="50%" outerRadius="80%" data={getRadarData()}>
+                          <PolarGrid stroke="#e5e7eb" />
+                          <PolarAngleAxis dataKey="subject" />
+                          <PolarRadiusAxis angle={30} domain={[0, 10]} />
+                          <Radar
+                            name="Current Status"
+                            dataKey="A"
+                            stroke={colorScheme.functionalAbility}
+                            fill={colorScheme.functionalAbility}
+                            fillOpacity={0.6}
+                          />
+                        </RadarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                  
+                  <div className="w-full md:w-1/2">
+                    <h3 className="text-lg font-medium mb-4">Current Assessment</h3>
+                    <div className="space-y-4">
+                      {Object.entries(getLatestData()).map(([key, value]) => {
+                        if (key === 'date') return null;
+                        
+                        // For pain, lower is better. For others, higher is better.
+                        const isPain = key === 'painLevel';
+                        const score = Number(value);
+                        const level = isPain 
+                          ? (score <= 3 ? 'Good' : score <= 6 ? 'Moderate' : 'Poor')
+                          : (score >= 7 ? 'Good' : score >= 4 ? 'Moderate' : 'Poor');
+                        
+                        const variant = level === 'Good' 
+                          ? 'default' 
+                          : level === 'Moderate' 
+                            ? 'secondary' 
+                            : 'destructive';
+                        
+                        return (
+                          <div key={key} className="flex justify-between items-center border-b pb-2">
+                            <span>{formatMetricName(key)}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{value}/10</span>
+                              <Badge variant={variant}>{level}</Badge>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </TabsContent>
+              
+              {/* Goals Tab */}
+              <TabsContent value="goals" className="pt-4">
+                {/* Add Goal Button */}
+                <div className="mb-4 flex justify-end">
+                  <Button 
+                    onClick={() => setShowGoalForm(!showGoalForm)}
+                    variant={showGoalForm ? "secondary" : "outline"}
+                    size="sm"
+                    className="gap-1"
+                  >
+                    {showGoalForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                    {showGoalForm ? "Cancel" : "Add New Goal"}
+                  </Button>
+                </div>
+                
+                {/* Goal Input Form */}
+                {showGoalForm && (
+                  <div className="border rounded-md p-4 mb-6 bg-muted/30">
+                    <h3 className="text-lg font-medium mb-4">Add New Rehabilitation Goal</h3>
+                    
+                    <div className="space-y-4 mb-4">
+                      <div>
+                        <Label htmlFor="goal-title">Goal Title</Label>
+                        <Input 
+                          id="goal-title" 
+                          placeholder="e.g., Improve Walking Distance"
+                          value={newGoal.goal}
+                          onChange={e => handleGoalInputChange('goal', e.target.value)}
+                        />
+                      </div>
+                      
+                      <div>
+                        <Label htmlFor="goal-description">Description</Label>
+                        <Textarea 
+                          id="goal-description" 
+                          placeholder="Describe the specific, measurable goal"
+                          value={newGoal.description}
+                          onChange={e => handleGoalInputChange('description', e.target.value)}
+                          rows={3}
+                        />
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="goal-date">Target Date</Label>
+                          <Input 
+                            id="goal-date" 
+                            type="date"
+                            value={newGoal.targetDate} 
+                            onChange={e => handleGoalInputChange('targetDate', e.target.value)}
+                          />
+                        </div>
+                        
+                        <div>
+                          <Label htmlFor="goal-status">Status</Label>
+                          <Select 
+                            defaultValue="in-progress"
+                            onValueChange={(value) => handleGoalInputChange('status', value)}
+                          >
+                            <SelectTrigger id="goal-status">
+                              <SelectValue placeholder="Select goal status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="in-progress">In Progress</SelectItem>
+                              <SelectItem value="achieved">Achieved</SelectItem>
+                              <SelectItem value="modified">Modified</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <Label htmlFor="goal-progress">Current Progress ({newGoal.progress || 0}%)</Label>
+                        <Slider
+                          id="goal-progress"
+                          value={[newGoal.progress || 0]}
+                          min={0}
+                          max={100}
+                          step={5}
+                          onValueChange={([value]) => handleGoalInputChange('progress', value)}
+                          className="mt-2"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="flex justify-end gap-2">
+                      <Button variant="outline" onClick={() => setShowGoalForm(false)}>Cancel</Button>
+                      <Button onClick={addGoal}>Save Goal</Button>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Empty state for goals */}
+                {goals.length === 0 && !showGoalForm && (
+                  <div className="text-center py-12 border-2 border-dashed rounded-md">
+                    <Target className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium mb-2">No Rehabilitation Goals Set</h3>
+                    <p className="text-muted-foreground mb-4">
+                      Add specific, measurable goals to track your patient's rehabilitation progress
+                    </p>
+                    <Button onClick={() => setShowGoalForm(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add First Goal
+                    </Button>
+                  </div>
+                )}
+                
+                {/* Goals List */}
+                {goals.length > 0 && (
+                  <div className="space-y-4">
+                    {goals.map((goal, index) => (
+                      <div key={index} className="border rounded-md p-4">
+                        <div className="flex justify-between items-start mb-2">
+                          <h3 className="font-medium text-lg">{goal.goal}</h3>
+                          <Badge variant={
+                            goal.status === 'achieved' ? 'default' : 
+                            goal.status === 'in-progress' ? 'secondary' : 
+                            'outline'
+                          }>{goal.status}</Badge>
+                        </div>
+                        
+                        <p className="text-sm text-gray-600 mb-4">{goal.description}</p>
+                        
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-sm">Target Date: {format(new Date(goal.targetDate), "MMM d, yyyy")}</span>
+                          <span className="font-medium">{goal.progress}%</span>
+                        </div>
+                        
+                        <div className="w-full bg-gray-200 rounded-full h-2.5">
+                          <div 
+                            className="h-2.5 rounded-full" 
+                            style={{ 
+                              width: `${goal.progress}%`, 
+                              backgroundColor: goal.status === 'achieved' 
+                                ? colorScheme.rangeOfMotion 
+                                : colorScheme.goalProgress 
+                            }}
+                          ></div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
+
+            <div className="mt-4 p-4 bg-muted/30 rounded-md">
+              <h4 className="text-sm font-semibold mb-2">Understanding Progress Metrics</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-y-2 gap-x-4">
+                <div className="flex items-center">
+                  <div className="w-3 h-3 mr-2" style={{ backgroundColor: colorScheme.rangeOfMotion }}></div>
+                  <span className="text-sm">Range of Motion (0-10): Higher = Better range</span>
+                </div>
+                <div className="flex items-center">
+                  <div className="w-3 h-3 mr-2" style={{ backgroundColor: colorScheme.strength }}></div>
+                  <span className="text-sm">Strength (0-10): Higher = Better strength</span>
+                </div>
+                <div className="flex items-center">
+                  <div className="w-3 h-3 mr-2" style={{ backgroundColor: colorScheme.functionalAbility }}></div>
+                  <span className="text-sm">Functional Ability (0-10): Higher = Better function</span>
+                </div>
+                <div className="flex items-center">
+                  <div className="w-3 h-3 mr-2" style={{ backgroundColor: colorScheme.painLevel }}></div>
+                  <span className="text-sm">Pain Level (0-10): Higher = More pain</span>
+                </div>
+                <div className="flex items-center">
+                  <div className="w-3 h-3 mr-2" style={{ backgroundColor: colorScheme.adherence }}></div>
+                  <span className="text-sm">Adherence (0-10): Higher = Better compliance with program</span>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
       </CardContent>
     </Card>
   );
-}
-
-// Helper function to generate synthetic data for demo/development purposes
-function generateSampleData(): ProgressMetrics[] {
-  const data: ProgressMetrics[] = [];
-  const now = new Date();
-  
-  // Create data points representing a rehab progression
-  for (let i = 90; i >= 0; i -= 5) {  // Every 5 days for 90 days
-    const date = new Date();
-    date.setDate(now.getDate() - i);
-    
-    const daysSinceStart = 90 - i;
-    const progressFactor = daysSinceStart / 90;
-    
-    // Generate realistic progress patterns:
-    
-    // Range of Motion - tends to improve steadily after initial slow progress
-    const rangeOfMotion = Math.max(1, Math.min(10, 3 + (progressFactor * 6) + (Math.random() * 1 - 0.5)));
-    
-    // Strength - improves more slowly, following ROM improvements
-    const strength = Math.max(1, Math.min(10, 2 + (Math.max(0, progressFactor - 0.1) * 6) + (Math.random() * 1 - 0.5)));
-    
-    // Functional ability - improves as strength and ROM improve
-    const functionalAbility = Math.max(1, Math.min(10, 2 + (Math.max(0, progressFactor - 0.2) * 7) + (Math.random() * 1 - 0.5)));
-    
-    // Pain - starts high, decreases with therapy (with some fluctuations)
-    const painLevel = Math.max(1, Math.min(10, 9 - (progressFactor * 7) + (Math.random() * 2 - 1)));
-    
-    // Adherence - tends to start strong, dip in the middle, then improve
-    const adherenceFactor = i > 60 ? 0.8 : i > 30 ? 0.6 : 0.9; // Dips in the middle
-    const adherence = Math.max(1, Math.min(10, (adherenceFactor * 10) + (Math.random() * 2 - 1)));
-    
-    // Goal progress - steady improvement with some plateaus
-    const goalProgress = Math.max(1, Math.min(10, (progressFactor * 9) + (Math.random() * 1 - 0.5)));
-    
-    data.push({
-      date: date.toISOString().split('T')[0],
-      rangeOfMotion: Number(rangeOfMotion.toFixed(1)),
-      strength: Number(strength.toFixed(1)),
-      functionalAbility: Number(functionalAbility.toFixed(1)),
-      painLevel: Number(painLevel.toFixed(1)),
-      adherence: Number(adherence.toFixed(1)),
-      goalProgress: Number(goalProgress.toFixed(1)),
-    });
-  }
-  
-  return data;
-}
-
-// Helper function to generate sample goals based on body part
-function generateSampleGoals(bodyPart: string): GoalProgress[] {
-  const now = new Date();
-  const twoWeeks = new Date();
-  twoWeeks.setDate(now.getDate() + 14);
-  
-  const oneMonth = new Date();
-  oneMonth.setDate(now.getDate() + 30);
-  
-  const threeMonths = new Date();
-  threeMonths.setDate(now.getDate() + 90);
-  
-  let goals: GoalProgress[] = [];
-  
-  // Common goals for all body parts
-  goals.push({
-    goal: "Reduce Pain Level",
-    description: "Decrease pain from current level to 3/10 or less during daily activities",
-    targetDate: oneMonth.toISOString().split('T')[0],
-    progress: 65,
-    status: 'in-progress'
-  });
-  
-  // Body part specific goals
-  switch (bodyPart.toLowerCase()) {
-    case 'knee':
-      goals = [
-        ...goals,
-        {
-          goal: "Improve Knee Flexion",
-          description: "Achieve at least 120 degrees of active knee flexion",
-          targetDate: twoWeeks.toISOString().split('T')[0],
-          progress: 80,
-          status: 'in-progress'
-        },
-        {
-          goal: "Strengthen Quadriceps",
-          description: "Build sufficient quad strength to perform a single leg squat to 45 degrees",
-          targetDate: oneMonth.toISOString().split('T')[0],
-          progress: 55,
-          status: 'in-progress'
-        },
-        {
-          goal: "Return to Recreational Activities",
-          description: "Regain ability to participate in preferred recreational activities without pain",
-          targetDate: threeMonths.toISOString().split('T')[0],
-          progress: 30,
-          status: 'in-progress'
-        }
-      ];
-      break;
-    
-    case 'shoulder':
-      goals = [
-        ...goals,
-        {
-          goal: "Restore Overhead Reaching",
-          description: "Regain full overhead reaching capability without compensation",
-          targetDate: oneMonth.toISOString().split('T')[0],
-          progress: 60,
-          status: 'in-progress'
-        },
-        {
-          goal: "Improve Rotator Cuff Strength",
-          description: "Achieve 4+/5 strength in all rotator cuff muscles",
-          targetDate: twoWeeks.toISOString().split('T')[0],
-          progress: 90,
-          status: 'achieved'
-        },
-        {
-          goal: "Return to Work Activities",
-          description: "Safely perform all work-related tasks without pain or limitation",
-          targetDate: threeMonths.toISOString().split('T')[0],
-          progress: 45,
-          status: 'in-progress'
-        }
-      ];
-      break;
-      
-    case 'back':
-    case 'spine':
-    case 'lower back':
-      goals = [
-        ...goals,
-        {
-          goal: "Improve Core Stability",
-          description: "Develop sufficient core strength to maintain neutral spine during daily activities",
-          targetDate: twoWeeks.toISOString().split('T')[0],
-          progress: 75,
-          status: 'in-progress'
-        },
-        {
-          goal: "Increase Sitting Tolerance",
-          description: "Achieve ability to sit comfortably for up to 45 minutes without pain",
-          targetDate: oneMonth.toISOString().split('T')[0],
-          progress: 65,
-          status: 'in-progress'
-        },
-        {
-          goal: "Implement Self-Management",
-          description: "Consistently apply home exercise program and ergonomic modifications",
-          targetDate: threeMonths.toISOString().split('T')[0],
-          progress: 85,
-          status: 'in-progress'
-        }
-      ];
-      break;
-      
-    case 'ankle':
-      goals = [
-        ...goals,
-        {
-          goal: "Restore Normal Gait",
-          description: "Walk without limping or altered pattern for 15+ minutes",
-          targetDate: twoWeeks.toISOString().split('T')[0],
-          progress: 95,
-          status: 'achieved'
-        },
-        {
-          goal: "Improve Balance",
-          description: "Maintain single leg balance for 30 seconds without support",
-          targetDate: oneMonth.toISOString().split('T')[0],
-          progress: 70,
-          status: 'in-progress'
-        },
-        {
-          goal: "Return to Sports",
-          description: "Perform sport-specific movements with full confidence and no pain",
-          targetDate: threeMonths.toISOString().split('T')[0],
-          progress: 40,
-          status: 'in-progress'
-        }
-      ];
-      break;
-      
-    // Default goals for other body parts
-    default:
-      goals = [
-        ...goals,
-        {
-          goal: "Improve Functional Movement",
-          description: "Restore full functional movement patterns relevant to daily activities",
-          targetDate: twoWeeks.toISOString().split('T')[0],
-          progress: 80,
-          status: 'in-progress'
-        },
-        {
-          goal: "Build Strength & Stability",
-          description: "Achieve appropriate strength and stability for the affected area",
-          targetDate: oneMonth.toISOString().split('T')[0],
-          progress: 65,
-          status: 'in-progress'
-        },
-        {
-          goal: "Prevention Strategy",
-          description: "Implement long-term prevention strategy for recurrence",
-          targetDate: threeMonths.toISOString().split('T')[0],
-          progress: 50,
-          status: 'in-progress'
-        }
-      ];
-  }
-  
-  return goals;
 }

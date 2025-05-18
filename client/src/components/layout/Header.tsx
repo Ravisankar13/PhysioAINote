@@ -81,13 +81,23 @@ const Header = () => {
           </div>
           
           {/* Action buttons (right) */}
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-3">
             <Link href="/clinical-notes">
               <Button className="bg-primary hover:bg-primary/90 text-white font-semibold shadow-sm flex items-center gap-2">
                 <MessageSquareText className="h-4 w-4" />
                 <span>AI Notes</span>
               </Button>
             </Link>
+            
+            {/* Login button for users who aren't logged in - visible on all devices */}
+            {!user && (
+              <Link href="/auth">
+                <Button variant="outline" className="flex items-center gap-1 font-medium">
+                  <User className="h-4 w-4" />
+                  <span>Login</span>
+                </Button>
+              </Link>
+            )}
             
             {/* Direct logout button for mobile - always visible when logged in */}
             {user && (
@@ -314,13 +324,16 @@ const Header = () => {
                           </span>
                         </Link>
                         <span
-                          className="px-2 py-2 text-base block cursor-pointer text-muted-foreground hover:text-foreground"
+                          className="px-2 py-2 text-base block cursor-pointer text-muted-foreground hover:text-foreground font-medium"
                           onClick={() => {
                             handleLogout();
                             setOpen(false);
                           }}
                         >
-                          Logout
+                          <div className="flex items-center">
+                            <LogOut className="mr-2 h-4 w-4" />
+                            Logout
+                          </div>
                         </span>
                       </>
                     ) : (
@@ -329,7 +342,10 @@ const Header = () => {
                           className="px-2 py-2 text-base block cursor-pointer text-primary font-medium"
                           onClick={() => setOpen(false)}
                         >
-                          Sign In
+                          <div className="flex items-center">
+                            <User className="mr-2 h-4 w-4" />
+                            Login
+                          </div>
                         </span>
                       </Link>
                     )}

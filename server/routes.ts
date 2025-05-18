@@ -14,6 +14,7 @@ import path from "path";
 import fs from "fs";
 import os from "os";
 import { transcribeAudio, analyzeTranscription } from "./transcription";
+import { uploadToS3, getFileType } from "./s3Uploader";
 import { setupAuth } from "./auth";
 import { calculateAgeRange, deIdentifyNote, extractCondition } from "./utilities/deIdentify";
 import { sampleNotes } from "./routes/sampleNotes";

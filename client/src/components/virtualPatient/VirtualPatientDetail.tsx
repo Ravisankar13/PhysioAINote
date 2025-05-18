@@ -232,7 +232,7 @@ export default function VirtualPatientDetail({ patientId, onBackToList, onEditPa
       </CardHeader>
       <CardContent className="p-0">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="info" className="flex items-center">
               <User className="h-4 w-4 mr-2" />
               Patient Info
@@ -244,10 +244,6 @@ export default function VirtualPatientDetail({ patientId, onBackToList, onEditPa
             <TabsTrigger value="assessment" disabled={!hasDiagnosis} className="flex items-center">
               <Clipboard className="h-4 w-4 mr-2" />
               Assessment Tests
-            </TabsTrigger>
-            <TabsTrigger value="findings" disabled={!hasDiagnosis} className="flex items-center">
-              <ClipboardCheck className="h-4 w-4 mr-2" />
-              Objective Findings
             </TabsTrigger>
             <TabsTrigger value="treatment" disabled={!hasDiagnosis} className="flex items-center">
               <Activity className="h-4 w-4 mr-2" />

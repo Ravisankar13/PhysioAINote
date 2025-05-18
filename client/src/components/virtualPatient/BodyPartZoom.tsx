@@ -419,7 +419,7 @@ export function getDefaultHotspots(bodyPart: string): RegionHotspot[] {
         name: 'Acromioclavicular (AC) Joint',
         x: 25,
         y: 15,
-        description: 'The AC joint is where the acromion process of the scapula meets the clavicle. It's commonly affected by sprains, osteoarthritis and osteolysis.',
+        description: "The AC joint is where the acromion process of the scapula meets the clavicle. It's commonly affected by sprains, osteoarthritis and osteolysis.",
         techniques: [
           {
             id: 'ac-mobilization',

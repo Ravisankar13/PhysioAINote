@@ -63,6 +63,23 @@ export default function VirtualPatientDetail({ patientId, onBackToList, onEditPa
       const data = await response.json();
       console.log("Virtual patient data with research:", data);
       
+      // Process assessment tests if they exist
+      if (data.assessmentTests) {
+        // Ensure assessmentTests is properly parsed if it's a string
+        if (typeof data.assessmentTests === 'string') {
+          try {
+            data.assessmentTests = JSON.parse(data.assessmentTests);
+          } catch (err) {
+            console.error("Error parsing assessment tests:", err);
+            // If parsing fails, set a default empty array
+            data.assessmentTests = [];
+          }
+        }
+      } else {
+        // Initialize with empty array if missing
+        data.assessmentTests = [];
+      }
+      
       // If patient has objective findings stored, parse and set them
       if (data.objectiveFindings) {
         try {
@@ -507,51 +524,55 @@ export default function VirtualPatientDetail({ patientId, onBackToList, onEditPa
                   <p className="text-sm mb-4">These diagnostic tests are recommended to confirm the primary diagnosis.</p>
                 </div>
 
-                {patient.assessmentTests && patient.assessmentTests.map((test: any, idx: number) => (
-                  <div key={idx} className="border rounded-lg p-4">
-                    <div className="flex justify-between items-start mb-2">
-                      <h4 className="text-md font-semibold">{test.name}</h4>
-                      <Badge variant={
-                        test.relevance === "primary" ? "default" : 
-                        test.relevance === "secondary" ? "secondary" : 
-                        "outline"
-                      }>
-                        {test.relevance === "primary" ? "Primary" : 
-                         test.relevance === "secondary" ? "Secondary" : 
-                         "Supportive"} Test
-                      </Badge>
-                    </div>
-                    <p className="text-sm mb-2">{test.purpose || test.description}</p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
-                      <div>
-                        <h5 className="text-sm font-medium mb-1">How to Perform</h5>
-                        <p className="text-sm">{test.procedure}</p>
-                      </div>
-                      <div>
-                        <h5 className="text-sm font-medium mb-1">Positive Findings</h5>
-                        <p className="text-sm">{test.positiveFindings}</p>
-                      </div>
-                    </div>
-                    {test.supportingResearch && (
-                      <div className="mt-3">
-                        <h5 className="text-sm font-medium">Research Support</h5>
-                        <p className="text-sm">{test.supportingResearch}</p>
-                      </div>
-                    )}
-                    {test.sensitivity && (
-                      <div className="flex space-x-2 mt-2">
-                        <Badge variant="outline">
-                          Sensitivity: {test.sensitivity}
-                        </Badge>
-                        {test.specificity && (
-                          <Badge variant="outline">
-                            Specificity: {test.specificity}
+                {Array.isArray(patient.assessmentTests) && patient.assessmentTests.length > 0 ? (
+                  <div className="space-y-4">
+                    {patient.assessmentTests.map((test: any, idx: number) => (
+                      <div key={idx} className="border rounded-lg p-4">
+                        <div className="flex justify-between items-start mb-2">
+                          <h4 className="text-md font-semibold">{test.name || "Unnamed Test"}</h4>
+                          <Badge variant={
+                            test.relevance === "primary" ? "default" : 
+                            test.relevance === "secondary" ? "secondary" : 
+                            "outline"
+                          }>
+                            {test.relevance === "primary" ? "Primary" : 
+                            test.relevance === "secondary" ? "Secondary" : 
+                            "Supportive"} Test
                           </Badge>
+                        </div>
+                        <p className="text-sm mb-2">{test.purpose || test.description || "No description provided"}</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+                          <div>
+                            <h5 className="text-sm font-medium mb-1">How to Perform</h5>
+                            <p className="text-sm">{test.procedure || "No procedure details available"}</p>
+                          </div>
+                          <div>
+                            <h5 className="text-sm font-medium mb-1">Positive Findings</h5>
+                            <p className="text-sm">{test.positiveFindings || "No details on positive findings"}</p>
+                          </div>
+                        </div>
+                        {test.supportingResearch && (
+                          <div className="mt-3">
+                            <h5 className="text-sm font-medium">Research Support</h5>
+                            <p className="text-sm">{test.supportingResearch}</p>
+                          </div>
+                        )}
+                        {test.sensitivity && (
+                          <div className="flex space-x-2 mt-2">
+                            <Badge variant="outline">Sensitivity: {test.sensitivity}</Badge>
+                            {test.specificity && (
+                              <Badge variant="outline">Specificity: {test.specificity}</Badge>
+                            )}
+                          </div>
                         )}
                       </div>
-                    )}
+                    ))}
                   </div>
-                ))}
+                ) : (
+                  <div className="bg-muted/20 rounded-lg p-4 text-center">
+                    <p className="text-sm text-muted-foreground">No assessment tests available for this patient. Try reanalyzing the patient data.</p>
+                  </div>
+                )}
               </div>
             )}
           </TabsContent>

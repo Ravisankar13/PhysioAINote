@@ -29,7 +29,7 @@ import {
   BarChart3,
   ZoomIn
 } from "lucide-react";
-import SymptomProgressionChart from "./SymptomProgressionChart";
+import PatientProgressTracker from "./PatientProgressTracker";
 import BodyPartZoom from "./BodyPartZoom";
 import { getPlaceholderImage, placeholderImages } from "./bodyPartImages";
 import { useToast } from "@/hooks/use-toast";
@@ -768,16 +768,16 @@ export default function VirtualPatientDetail({ patientId, onBackToList, onEditPa
             )}
           </TabsContent>
           
-          {/* SYMPTOM PROGRESSION TAB */}
+          {/* PATIENT PROGRESS TAB */}
           <TabsContent value="progression" className="p-6">
             {!hasDiagnosis ? (
               renderEmptyState(
                 <LineChart className="h-12 w-12 text-gray-400 mx-auto mb-4" />,
-                "No Symptom Progression Data",
-                "Analyze the patient data to view symptom progression tracking."
+                "No Patient Progress Data",
+                "Analyze the patient data to view rehabilitation progress tracking."
               )
             ) : (
-              <SymptomProgressionChart 
+              <PatientProgressTracker 
                 patientId={patient.id} 
                 bodyPart={patient.bodyPart || "general"} 
               />

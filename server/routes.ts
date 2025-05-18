@@ -1770,6 +1770,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const { addSampleCaseStudies } = await import('./sampleCaseStudies');
           await addSampleCaseStudies(storage);
           
+          // Add additional case studies (5 per body part)
+          const { addAdditionalCaseStudies } = await import('./additionalCaseStudies');
+          await addAdditionalCaseStudies(storage);
+          
           // Try to fetch again after adding samples
           const updatedResult = await storage.getAICaseStudies(
             bodyPart as string,

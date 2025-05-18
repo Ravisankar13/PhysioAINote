@@ -27,6 +27,9 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
+import DiscussionForm from '@/components/peerExchange/DiscussionForm';
+import CommentDisplay from '@/components/peerExchange/CommentDisplay';
+import { FileAttachment } from '@/components/peerExchange/FileUploader';
 import { useToast } from '@/hooks/use-toast';
 import { 
   Loader2, 
@@ -136,6 +139,7 @@ export default function SharedCaseDetailPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [comment, setComment] = useState('');
+  const [attachments, setAttachments] = useState<FileAttachment[]>([]);
   const [replyTo, setReplyTo] = useState<CaseDiscussion | null>(null);
   
   // Queries
@@ -221,7 +225,11 @@ export default function SharedCaseDetailPage() {
   });
 
   const addCommentMutation = useMutation({
-    mutationFn: async (data: { content: string, parentId?: number }) => {
+    mutationFn: async (data: { 
+      content: string, 
+      parentId?: number,
+      attachmentUrls?: { url: string; name: string; type: string; size: number; }[]
+    }) => {
       const res = await apiRequest('POST', `/api/shared-cases/${caseId}/discussions`, data);
       return res.json();
     },
@@ -286,13 +294,17 @@ export default function SharedCaseDetailPage() {
   const createdDate = caseData ? new Date(caseData.createdAt).toLocaleDateString() : '';
   const isOwner = user && caseData && user.id === caseData.userId;
 
-  const handleSubmitComment = () => {
-    if (!comment.trim()) return;
+  const handleSubmitComment = (content: string, fileAttachments: FileAttachment[]) => {
+    if (!content.trim()) return;
     
     addCommentMutation.mutate({
-      content: comment,
+      content,
+      attachmentUrls: fileAttachments.length > 0 ? fileAttachments : undefined,
       ...(replyTo ? { parentId: replyTo.id } : {})
     });
+    
+    // Reset attachments
+    setAttachments([]);
   };
 
   if (isLoadingCase) {
@@ -545,31 +557,15 @@ export default function SharedCaseDetailPage() {
                   </div>
                 )}
                 
-                <div className="flex gap-4 mb-6">
-                  <Avatar className="h-10 w-10">
-                    <AvatarFallback>{user.username.substring(0, 2).toUpperCase()}</AvatarFallback>
-                  </Avatar>
-                  
-                  <div className="flex-1 space-y-2">
-                    <Textarea
-                      placeholder={replyTo ? "Write your reply..." : "Add to the discussion..."}
-                      value={comment}
-                      onChange={(e) => setComment(e.target.value)}
-                      rows={4}
-                    />
-                    <div className="flex justify-end">
-                      <Button 
-                        onClick={handleSubmitComment}
-                        disabled={!comment.trim() || addCommentMutation.isPending}
-                      >
-                        {addCommentMutation.isPending && (
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        )}
-                        {replyTo ? 'Post Reply' : 'Post Comment'}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
+                <DiscussionForm
+                  placeholder={replyTo ? "Write your reply..." : "Add to the discussion..."}
+                  buttonText={replyTo ? 'Post Reply' : 'Post Comment'}
+                  onSubmit={handleSubmitComment}
+                  isSubmitting={addCommentMutation.isPending}
+                  showCancel={!!replyTo}
+                  onCancel={() => setReplyTo(null)}
+                  user={user}
+                />
               </>
             ) : (
               <div className="mb-6 p-4 border rounded-md bg-muted/30 text-center">

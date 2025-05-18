@@ -22,6 +22,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { CheckboxGroup } from "@/components/ui/checkbox-group";
 import { 
@@ -368,75 +369,82 @@ export default function CaseStudyDetail({ caseId, onBackToList }: CaseStudyDetai
 
           {/* Diagnostic Attempt Tab */}
           <TabsContent value="attempt" className="p-6">
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                <div>
-                  <h3 className="text-xl font-semibold mb-4">Submit Your Diagnostic Attempt</h3>
-                  <p className="text-muted-foreground mb-6">
-                    Based on the case information, provide your diagnosis, clinical reasoning, assessment approach, and treatment plan.
-                    Your answers will be analyzed against evidence-based practice and expert approaches.
-                  </p>
-                </div>
+            {isLoading ? (
+              <div className="space-y-4">
+                <Skeleton className="h-6 w-48" />
+                <Skeleton className="h-24 w-full" />
+                <Skeleton className="h-24 w-full" />
+                <Skeleton className="h-24 w-full" />
+              </div>
+            ) : (
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                  <div>
+                    <h3 className="text-xl font-semibold mb-4">Submit Your Diagnostic Attempt</h3>
+                    <p className="text-muted-foreground mb-6">
+                      Based on the case information, provide your diagnosis, clinical reasoning, assessment approach, and treatment plan.
+                      Your answers will be analyzed against evidence-based practice and expert approaches.
+                    </p>
+                  </div>
 
-                <FormField
-                  control={form.control}
-                  name="userDiagnosis"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Primary Diagnosis</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Enter your primary diagnosis" {...field} />
-                      </FormControl>
-                      <FormDescription>
-                        What is your primary diagnosis for this patient?
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                  <FormField
+                    control={form.control}
+                    name="userDiagnosis"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Primary Diagnosis</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Enter your primary diagnosis" {...field} />
+                        </FormControl>
+                        <FormDescription>
+                          What is your primary diagnosis for this patient?
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-                <FormField
-                  control={form.control}
-                  name="userReasoning"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Clinical Reasoning</FormLabel>
-                      <FormControl>
-                        <Textarea 
-                          placeholder="Explain your clinical reasoning that led to this diagnosis" 
-                          className="min-h-[120px]"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        Explain your clinical reasoning process and how you arrived at this diagnosis
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                  <FormField
+                    control={form.control}
+                    name="userReasoning"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Clinical Reasoning</FormLabel>
+                        <FormControl>
+                          <Textarea 
+                            placeholder="Explain your clinical reasoning that led to this diagnosis" 
+                            className="min-h-[120px]"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Explain your clinical reasoning process and how you arrived at this diagnosis
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-                <FormField
-                  control={form.control}
-                  name="assessmentTests"
-                  render={() => (
-                    <FormItem>
-                      <FormLabel>Assessment Tests</FormLabel>
-                      <FormDescription>
-                        Select the assessment tests you would perform for this patient
-                      </FormDescription>
-                      <div className="mt-2">
-                        <CheckboxGroup>
-                          {uniqueAssessmentTests.map((test, index) => (
-                            <FormField
-                              key={index}
-                              control={form.control}
-                              name="assessmentTests"
-                              render={({ field }) => {
-                                return (
+                  <div className="border p-4 rounded-md">
+                    <FormField
+                      control={form.control}
+                      name="assessmentTests"
+                      render={() => (
+                        <FormItem>
+                          <FormLabel>Assessment Tests</FormLabel>
+                          <FormDescription>
+                            Select the assessment tests you would perform for this patient
+                          </FormDescription>
+                          <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
+                            {uniqueAssessmentTests.map((test, index) => (
+                              <FormField
+                                key={index}
+                                control={form.control}
+                                name="assessmentTests"
+                                render={({ field }) => (
                                   <div className="flex items-center space-x-2">
                                     <Checkbox
-                                      id={`test-${test.replace(/\s+/g, '-').toLowerCase()}-${index}`}
+                                      id={`test-${index}`}
                                       checked={field.value?.includes(test)}
                                       onCheckedChange={(checked) => {
                                         return checked
@@ -449,68 +457,68 @@ export default function CaseStudyDetail({ caseId, onBackToList }: CaseStudyDetai
                                       }}
                                     />
                                     <Label 
-                                      htmlFor={`test-${test.replace(/\s+/g, '-').toLowerCase()}-${index}`}
+                                      htmlFor={`test-${index}`}
                                       className="text-sm font-normal"
                                     >
                                       {test}
                                     </Label>
                                   </div>
-                                );
-                              }}
-                            />
-                          ))}
-                        </CheckboxGroup>
-                      </div>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                                )}
+                              />
+                            ))}
+                          </div>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
 
-                <FormField
-                  control={form.control}
-                  name="proposedTreatment"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Proposed Treatment Plan</FormLabel>
-                      <FormControl>
-                        <Textarea 
-                          placeholder="Describe your treatment approach for this patient" 
-                          className="min-h-[120px]"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        Outline your evidence-based treatment plan, including manual therapy techniques, exercises, and patient education
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="flex justify-end space-x-4 pt-4">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setActiveTab("case")}
-                  >
-                    Back to Case
-                  </Button>
-                  <Button 
-                    type="submit" 
-                    disabled={submitAttemptMutation.isPending}
-                  >
-                    {submitAttemptMutation.isPending ? (
-                      <>
-                        <Activity className="mr-2 h-4 w-4 animate-pulse" />
-                        Analyzing...
-                      </>
-                    ) : (
-                      "Submit Diagnostic Attempt"
+                  <FormField
+                    control={form.control}
+                    name="proposedTreatment"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Proposed Treatment Plan</FormLabel>
+                        <FormControl>
+                          <Textarea 
+                            placeholder="Describe your treatment approach for this patient" 
+                            className="min-h-[120px]"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Outline your evidence-based treatment plan, including manual therapy techniques, exercises, and patient education
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
                     )}
-                  </Button>
-                </div>
-              </form>
-            </Form>
+                  />
+
+                  <div className="flex justify-end space-x-4 pt-4">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setActiveTab("case")}
+                    >
+                      Back to Case
+                    </Button>
+                    <Button 
+                      type="submit" 
+                      disabled={submitAttemptMutation.isPending}
+                    >
+                      {submitAttemptMutation.isPending ? (
+                        <>
+                          <Activity className="mr-2 h-4 w-4 animate-pulse" />
+                          Analyzing...
+                        </>
+                      ) : (
+                        "Submit Diagnostic Attempt"
+                      )}
+                    </Button>
+                  </div>
+                </form>
+              </Form>
+            )}
           </TabsContent>
 
           {/* Feedback Tab */}

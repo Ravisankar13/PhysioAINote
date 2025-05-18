@@ -10,15 +10,15 @@ import { sql } from "drizzle-orm";
 export async function addReformerPilatesExercises(): Promise<void> {
   console.log("Adding Reformer Pilates exercises to the database...");
   
-  const exercises = getReformerPilatesExercises();
+  const reformerExercises = getReformerPilatesExercises();
   
-  for (const exercise of exercises) {
+  for (const exercise of reformerExercises) {
     try {
       // Check if exercise already exists by title to avoid duplicates
       // Search directly in the database instead of using the missing method
       const existingExercises = await db.select()
         .from(exercises)
-        .where(sql`LOWER(title) LIKE ${`%${exercise.title.toLowerCase()}%`}`)
+        .where(sql`LOWER(${exercises.title}) LIKE ${`%${exercise.title.toLowerCase()}%`}`)
       
       if (existingExercises.some(e => e.title === exercise.title)) {
         console.log(`Exercise "${exercise.title}" already exists, skipping...`);

@@ -1,12 +1,12 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
-import { eq } from "drizzle-orm";
+import { eq, sql, ilike } from "drizzle-orm";
 import { storage } from "./storage";
 import { db } from "./db";
 import { generateSoapNote } from "./openai";
 import { analyzeVirtualPatientCase, findRelevantResearchArticles } from "./virtualPatientOpenai";
 import { generateAICaseStudy, generateDiagnosticFeedback } from "./aiCaseStudyGenerator";
-import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, discussionUpvotes } from "@shared/schema";
+import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, discussionUpvotes, exercises } from "@shared/schema";
 import { ZodError, z } from "zod";
 import { fromZodError } from "zod-validation-error";
 import multer from "multer";
@@ -930,11 +930,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const ensureReformerExercisesAdded = async () => {
     // Get Reformer Pilates exercises by querying the database directly
     try {
-      const results = await db.select()
-        .from(exercises)
-        .where(sql`LOWER(${exercises.title}) LIKE ${'%reformer%'}`);
+      // Use the storage interface to search for reformer exercises
+      const searchResults = await storage.getExercisesBySearchTerm("Reformer");
       
-      if (results.length < 5) {
+      if (searchResults.length < 5) {
         console.log("Adding Reformer Pilates exercises to the database...");
         const { addReformerPilatesExercises } = await import('./routes/addReformerPilatesExercises');
         await addReformerPilatesExercises();
@@ -951,9 +950,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const bodyPart = req.query.bodyPart as string | undefined;
       const difficulty = req.query.difficulty as string | undefined;
+      const searchTerm = req.query.search as string | undefined;
       
-      const exercises = await storage.getExercises(bodyPart, difficulty);
-      res.json(exercises);
+      // If search term is provided, use it for filtering exercises
+      if (searchTerm && searchTerm.trim() !== '') {
+        try {
+          let query = db.select().from(exercises);
+          
+          // Apply body part filter if provided
+          if (bodyPart) {
+            query = query.where(eq(exercises.bodyPart, bodyPart as any));
+          }
+          
+          // Apply difficulty filter if provided
+          if (difficulty) {
+            query = query.where(eq(exercises.difficulty, difficulty as any));
+          }
+          
+          // Apply search term (case insensitive)
+          query = query.where(
+            sql`LOWER(${exercises.title}) LIKE ${`%${searchTerm.toLowerCase()}%`} OR 
+                LOWER(${exercises.description}) LIKE ${`%${searchTerm.toLowerCase()}%`} OR
+                LOWER(${exercises.targetMuscles}) LIKE ${`%${searchTerm.toLowerCase()}%`}`
+          );
+          
+          const results = await query;
+          return res.json(results);
+        } catch (dbError) {
+          console.error("Error searching exercises:", dbError);
+          // Fall back to storage method if DB query fails
+        }
+      }
+      
+      // Use the normal storage method if no search term or if DB query failed
+      const exerciseResults = await storage.getExercises(bodyPart, difficulty);
+      res.json(exerciseResults);
     } catch (error) {
       if (error instanceof Error) {
         res.status(500).json({ error: error.message });

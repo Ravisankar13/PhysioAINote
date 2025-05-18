@@ -268,6 +268,92 @@ export async function generateDiagnosticFeedback(
     return JSON.parse(response.choices[0].message.content);
   } catch (error) {
     console.error("Error generating diagnostic feedback:", error);
-    throw new Error(`Failed to generate feedback: ${error.message}`);
+    // Instead of throwing an error, provide fallback feedback
+    return createFallbackFeedback(input, caseStudy);
   }
+}
+
+/**
+ * Creates fallback feedback when the OpenAI API call fails
+ * @param input The user's diagnostic attempt
+ * @param caseStudy The original case study
+ * @returns A feedback object with basic scores and comments
+ */
+function createFallbackFeedback(input: DiagnosticFeedbackInput, caseStudy: AICaseStudy): any {
+  // Calculate basic diagnosis score
+  let diagnosisAccuracy = calculateSimilarityScore(input.userDiagnosis, caseStudy.correctDiagnosis);
+  
+  // Calculate assessment score based on test selection
+  let assessmentAccuracy = 0;
+  const correctTests = caseStudy.correctAssessmentApproach.map(test => test.toLowerCase());
+  const selectedTests = input.assessmentTests.map(test => test.toLowerCase());
+  
+  // Count matching tests
+  const matchCount = selectedTests.filter(test => 
+    correctTests.some(correct => correct.includes(test) || test.includes(correct))
+  ).length;
+  
+  if (correctTests.length > 0) {
+    assessmentAccuracy = Math.min(100, Math.round((matchCount / correctTests.length) * 100));
+  }
+  
+  // Calculate treatment score
+  let treatmentAccuracy = calculateSimilarityScore(input.proposedTreatment, caseStudy.correctTreatmentApproach);
+  
+  // Calculate overall score
+  const overallAccuracy = Math.round((diagnosisAccuracy + assessmentAccuracy + treatmentAccuracy) / 3);
+  
+  // Prepare feedback
+  return {
+    diagnosisFeedback: `Your diagnosis was ${diagnosisAccuracy}% aligned with the expected diagnosis of "${caseStudy.correctDiagnosis}". ${
+      diagnosisAccuracy > 75 
+        ? "Great work identifying the key clinical presentation."
+        : "Consider reviewing the key symptoms and clinical patterns for this condition."
+    }`,
+    assessmentFeedback: `You selected ${selectedTests.length} assessment tests, with ${matchCount} matching the recommended approach. ${
+      assessmentAccuracy > 75
+        ? "Your assessment selection was comprehensive and targeted."
+        : "Consider including these key tests in your assessment: " + caseStudy.correctAssessmentApproach.join(", ")
+    }`,
+    treatmentFeedback: `Your treatment plan was ${treatmentAccuracy}% aligned with evidence-based recommendations. ${
+      treatmentAccuracy > 75
+        ? "Your proposed interventions demonstrate sound clinical reasoning."
+        : "Consider incorporating these evidence-based approaches: " + caseStudy.correctTreatmentApproach
+    }`,
+    keyLearningPoints: [
+      "Always connect assessment findings directly to your diagnostic reasoning",
+      "Select assessment tests that specifically confirm or rule out your differential diagnoses",
+      "Ensure your treatment approach is aligned with current best practice for this condition",
+      "Consider the patient's specific presentation when developing your treatment plan"
+    ],
+    suggestedResources: [
+      `Current clinical practice guidelines for ${caseStudy.bodyPart} conditions`,
+      `Evidence-based assessment and treatment approaches for ${caseStudy.correctDiagnosis}`
+    ],
+    diagnosisAccuracy,
+    assessmentAccuracy,
+    treatmentAccuracy,
+    overallAccuracy
+  };
+}
+
+/**
+ * Calculates a simple text similarity score
+ * @param text1 First text to compare
+ * @param text2 Second text to compare
+ * @returns Similarity score 0-100
+ */
+function calculateSimilarityScore(text1: string, text2: string): number {
+  const words1 = text1.toLowerCase().split(/\s+/);
+  const words2 = text2.toLowerCase().split(/\s+/);
+  
+  let matchCount = 0;
+  for (const word of words1) {
+    if (word.length > 3 && words2.some(w => w.includes(word) || word.includes(w))) {
+      matchCount++;
+    }
+  }
+  
+  const totalWords = Math.max(words1.length, 1);
+  return Math.min(100, Math.round((matchCount / totalWords) * 100));
 }

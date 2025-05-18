@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow } from "date-fns";
 import { Activity, Plus, ChevronRight, RefreshCcw, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 
 interface VirtualPatientListProps {
   onPatientSelect: (id: number) => void;

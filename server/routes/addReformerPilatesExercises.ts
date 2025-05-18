@@ -1,5 +1,8 @@
 import { storage } from "../storage";
 import { getReformerPilatesExercises } from "../reformerPilatesExercises";
+import { db } from "../db";
+import { exercises } from "@shared/schema";
+import { sql } from "drizzle-orm";
 
 /**
  * Adds Reformer Pilates exercises to the database
@@ -12,7 +15,10 @@ export async function addReformerPilatesExercises(): Promise<void> {
   for (const exercise of exercises) {
     try {
       // Check if exercise already exists by title to avoid duplicates
-      const existingExercises = await storage.getExercisesBySearchTerm(exercise.title);
+      // Search directly in the database instead of using the missing method
+      const existingExercises = await db.select()
+        .from(exercises)
+        .where(sql`LOWER(title) LIKE ${`%${exercise.title.toLowerCase()}%`}`)
       
       if (existingExercises.some(e => e.title === exercise.title)) {
         console.log(`Exercise "${exercise.title}" already exists, skipping...`);

@@ -17,7 +17,8 @@ import {
   Maximize, 
   Minimize,
   ArrowLeft,
-  Info
+  Info,
+  ImageOff
 } from "lucide-react";
 import {
   Tooltip,
@@ -238,11 +239,48 @@ export default function BodyPartZoom({ bodyPart, imageUrl, hotspots = [] }: Body
                 damping: 30
               }}
             >
-              <img 
-                src={imageUrl}
-                alt={`${bodyPart} anatomy`}
-                className="object-contain w-full h-full"
-              />
+              {/* Add image with error handling */}
+              {imageUrl ? (
+                <img 
+                  src={imageUrl}
+                  alt={`${bodyPart} anatomy`}
+                  className="object-contain w-full h-full"
+                  onError={(e) => {
+                    // If image fails to load, replace with fallback content
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                    const parent = target.parentNode as HTMLElement;
+                    if (parent) {
+                      const fallback = document.createElement('div');
+                      fallback.className = 'flex flex-col items-center justify-center w-full h-full text-gray-500';
+                      
+                      const icon = document.createElement('div');
+                      icon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="2" y1="2" x2="22" y2="22"></line><path d="M10.41 10.41a2 2 0 1 1-2.83-2.83"></path><line x1="13.5" y1="13.5" x2="6" y2="21"></line><rect x="2" y="2" width="20" height="20" rx="5"></rect></svg>';
+                      
+                      const title = document.createElement('h3');
+                      title.className = 'mt-4 text-lg font-semibold';
+                      title.textContent = `${bodyPart.charAt(0).toUpperCase() + bodyPart.slice(1)} Anatomy`;
+                      
+                      const text = document.createElement('p');
+                      text.className = 'mt-2 text-sm text-center';
+                      text.textContent = `Interactive visualization for ${bodyPart} anatomy. You can still explore treatment techniques by clicking on the highlighted regions.`;
+                      
+                      fallback.appendChild(icon);
+                      fallback.appendChild(title);
+                      fallback.appendChild(text);
+                      parent.appendChild(fallback);
+                    }
+                  }}
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center w-full h-full text-gray-500">
+                  <ImageOff size={64} />
+                  <h3 className="mt-4 text-lg font-semibold">{bodyPart.charAt(0).toUpperCase() + bodyPart.slice(1)} Anatomy</h3>
+                  <p className="mt-2 text-sm text-center">
+                    Interactive visualization for {bodyPart} anatomy. You can still explore treatment techniques by clicking on the highlighted regions.
+                  </p>
+                </div>
+              )}
               
               {/* Hotspots */}
               {hotspots.map((hotspot) => (

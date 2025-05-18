@@ -31,11 +31,20 @@ export default function VirtualPatientList({ onPatientSelect, onCreateNew }: Vir
       try {
         // If user is not logged in, return empty array early
         if (!user) {
+          console.log("No user found in auth context, cannot fetch virtual patients");
           return [];
         }
         
-        console.log("Fetching virtual patients");
-        const response = await apiRequest("GET", "/api/virtual-patients");
+        console.log("Fetching virtual patients for user:", user.username, "with ID:", user.id);
+        
+        // Force credentials to be included with the request
+        const response = await fetch("/api/virtual-patients", {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include", // Critical for auth cookie
+        });
         
         if (!response.ok) {
           // If we're unauthorized, just return empty array instead of throwing
@@ -54,7 +63,9 @@ export default function VirtualPatientList({ onPatientSelect, onCreateNew }: Vir
           throw new Error(`Failed to fetch virtual patients: ${errorText}`);
         }
         
-        return await response.json();
+        const data = await response.json();
+        console.log("Successfully fetched virtual patients:", data.length);
+        return data;
       } catch (err) {
         console.error("Error fetching virtual patients:", err);
         // Return empty array instead of throwing to avoid breaking the UI

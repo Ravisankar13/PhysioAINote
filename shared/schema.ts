@@ -441,6 +441,7 @@ export const virtualPatients = pgTable("virtual_patients", {
   differentialDiagnosis: json("differential_diagnosis"),
   treatmentOptions: json("treatment_options"),
   relatedArticleIds: json("related_article_ids"),
+  hasBeenEdited: boolean("has_been_edited").default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

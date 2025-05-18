@@ -123,9 +123,14 @@ export default function VirtualPatientForm({ onPatientCreated, onCancel, existin
         
         const method = isEditMode ? "PATCH" : "POST";
         
+        // If we're editing and there's already a diagnosis, mark as edited
+        const requestData = isEditMode && existingPatient?.diagnosis 
+          ? { ...data, hasBeenEdited: true }
+          : data;
+        
         const response = await fetch(url, {
           method: method,
-          body: JSON.stringify(data),
+          body: JSON.stringify(requestData),
           headers: {
             "Content-Type": "application/json"
           },

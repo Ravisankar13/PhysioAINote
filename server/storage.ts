@@ -745,7 +745,8 @@ export class DatabaseStorage implements IStorage {
     diagnosis: string, 
     differentialDiagnosis: any, 
     treatmentOptions: any, 
-    relatedArticleIds: any
+    relatedArticleIds: any,
+    hasBeenEdited: boolean = false
   ): Promise<VirtualPatient> {
     try {
       const result = await db.update(virtualPatients)
@@ -754,6 +755,7 @@ export class DatabaseStorage implements IStorage {
           differentialDiagnosis,
           treatmentOptions,
           relatedArticleIds,
+          hasBeenEdited,
           updatedAt: new Date()
         })
         .where(eq(virtualPatients.id, id))

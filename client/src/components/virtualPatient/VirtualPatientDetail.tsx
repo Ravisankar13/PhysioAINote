@@ -260,7 +260,7 @@ export default function VirtualPatientDetail({ patientId, onBackToList, onEditPa
                 )}
               </div>
 
-              {!hasDiagnosis && (
+              {(!hasDiagnosis || patient?.hasBeenEdited) && (
                 <div className="flex justify-center mt-8">
                   <Button 
                     onClick={() => analyzePatientMutation.mutate()}
@@ -276,7 +276,7 @@ export default function VirtualPatientDetail({ patientId, onBackToList, onEditPa
                     ) : (
                       <>
                         <Activity className="mr-2 h-4 w-4" />
-                        Analyze Patient Data
+                        {hasDiagnosis ? 'Reanalyze Patient Data' : 'Analyze Patient Data'}
                       </>
                     )}
                   </Button>

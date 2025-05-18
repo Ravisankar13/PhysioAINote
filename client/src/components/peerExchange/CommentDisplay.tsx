@@ -37,7 +37,9 @@ const CommentDisplay = ({
   isCurrentUserComment = false
 }: CommentDisplayProps) => {
   const [expanded, setExpanded] = useState(false);
-  const { content, user, createdAt, isEdited, upvotes, attachmentUrls = [] } = comment;
+  const { content, user, createdAt, isEdited, upvotes } = comment;
+  // Handle potential undefined attachmentUrls
+  const attachments = comment.attachmentUrls || [];
   
   // For long comments, only show first 300 characters with "See more" button
   const isLongContent = content.length > 300;
@@ -83,8 +85,8 @@ const CommentDisplay = ({
             </Button>
           )}
           
-          {attachmentUrls.length > 0 && (
-            <AttachmentDisplay attachments={attachmentUrls} />
+          {attachments.length > 0 && (
+            <AttachmentDisplay attachments={attachments} />
           )}
           
           <div className="flex items-center gap-3 mt-2">

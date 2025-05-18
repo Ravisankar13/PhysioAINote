@@ -7,6 +7,7 @@ import { formatDistanceToNow } from "date-fns";
 import { Activity, Plus, ChevronRight, RefreshCcw, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { useAuth } from "@/hooks/use-auth";
 
 interface VirtualPatientListProps {
   onPatientSelect: (id: number) => void;
@@ -15,6 +16,8 @@ interface VirtualPatientListProps {
 
 export default function VirtualPatientList({ onPatientSelect, onCreateNew }: VirtualPatientListProps) {
   const { toast } = useToast();
+  
+  const { user } = useAuth();
   
   const { 
     data: patients = [], 
@@ -26,6 +29,11 @@ export default function VirtualPatientList({ onPatientSelect, onCreateNew }: Vir
     queryKey: ["/api/virtual-patients"],
     queryFn: async () => {
       try {
+        // If user is not logged in, return empty array early
+        if (!user) {
+          return [];
+        }
+        
         console.log("Fetching virtual patients");
         const response = await apiRequest("GET", "/api/virtual-patients");
         
@@ -49,9 +57,12 @@ export default function VirtualPatientList({ onPatientSelect, onCreateNew }: Vir
         return await response.json();
       } catch (err) {
         console.error("Error fetching virtual patients:", err);
-        throw err;
+        // Return empty array instead of throwing to avoid breaking the UI
+        return [];
       }
     },
+    // Only enable this query if user is logged in
+    enabled: !!user,
     refetchOnWindowFocus: false
   });
 

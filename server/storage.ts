@@ -538,6 +538,23 @@ export class DatabaseStorage implements IStorage {
     return result[0];
   }
   
+  async getExercisesBySearchTerm(searchTerm: string): Promise<Exercise[]> {
+    if (!searchTerm || searchTerm.trim() === '') {
+      return [];
+    }
+    
+    const query = `%${searchTerm.toLowerCase()}%`;
+    
+    return await db.select()
+      .from(exercises)
+      .where(
+        sql`LOWER(${exercises.title}) LIKE ${query} OR 
+            LOWER(${exercises.description}) LIKE ${query} OR
+            LOWER(${exercises.targetMuscles}) LIKE ${query}`
+      )
+      .orderBy(exercises.title);
+  }
+  
   // Manual Therapy Technique methods
   async getManualTherapyTechnique(id: number): Promise<ManualTherapyTechnique | undefined> {
     const techniques = await db.select().from(manualTherapyTechniques).where(eq(manualTherapyTechniques.id, id)).limit(1);

@@ -951,38 +951,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const bodyPart = req.query.bodyPart as string | undefined;
       const difficulty = req.query.difficulty as string | undefined;
       const searchTerm = req.query.search as string | undefined;
+      const getAll = req.query.all === 'true';
       
       // If search term is provided, use it for filtering exercises
       if (searchTerm && searchTerm.trim() !== '') {
-        try {
-          let query = db.select().from(exercises);
-          
-          // Apply body part filter if provided
-          if (bodyPart) {
-            query = query.where(eq(exercises.bodyPart, bodyPart as any));
-          }
-          
-          // Apply difficulty filter if provided
-          if (difficulty) {
-            query = query.where(eq(exercises.difficulty, difficulty as any));
-          }
-          
-          // Apply search term (case insensitive)
-          query = query.where(
-            sql`LOWER(${exercises.title}) LIKE ${`%${searchTerm.toLowerCase()}%`} OR 
-                LOWER(${exercises.description}) LIKE ${`%${searchTerm.toLowerCase()}%`} OR
-                LOWER(${exercises.targetMuscles}) LIKE ${`%${searchTerm.toLowerCase()}%`}`
-          );
-          
-          const results = await query;
-          return res.json(results);
-        } catch (dbError) {
-          console.error("Error searching exercises:", dbError);
-          // Fall back to storage method if DB query fails
+        const searchResults = await storage.getExercisesBySearchTerm(searchTerm);
+        
+        // Further filter by body part and difficulty if needed
+        let filteredResults = searchResults;
+        
+        if (bodyPart && bodyPartEnum.enumValues.includes(bodyPart as any)) {
+          filteredResults = filteredResults.filter(ex => ex.bodyPart === bodyPart);
         }
+        
+        if (difficulty && difficultyEnum.enumValues.includes(difficulty as any)) {
+          filteredResults = filteredResults.filter(ex => ex.difficulty === difficulty);
+        }
+        
+        return res.json(filteredResults);
       }
       
-      // Use the normal storage method if no search term or if DB query failed
+      // If "all" parameter is true, retrieve all exercises
+      if (getAll) {
+        const allExercises = await storage.getExercises(undefined, undefined, true);
+        return res.json(allExercises);
+      }
+      
+      // Use the normal storage method if no search term
       const exerciseResults = await storage.getExercises(bodyPart, difficulty);
       res.json(exerciseResults);
     } catch (error) {

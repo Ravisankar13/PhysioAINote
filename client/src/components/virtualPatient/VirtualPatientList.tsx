@@ -26,27 +26,32 @@ export default function VirtualPatientList({ onPatientSelect, onCreateNew }: Vir
     queryFn: async () => {
       try {
         console.log("Fetching virtual patients");
-        const response = await fetch("/api/virtual-patients", {
-          credentials: "include" // Include cookies with the request
-        });
-        if (response.status === 401) {
-          console.log("Not authenticated while fetching virtual patients");
-          toast({
-            title: "Authentication Required",
-            description: "Please log in to view your virtual patients",
-            variant: "destructive"
-          });
-          return [];
-        }
+        const response = await apiRequest("GET", "/api/virtual-patients");
+        
         if (!response.ok) {
-          throw new Error("Failed to fetch virtual patients");
+          // If we're unauthorized, just return empty array instead of throwing
+          if (response.status === 401) {
+            console.log("Not authenticated while fetching virtual patients");
+            toast({
+              title: "Authentication Required",
+              description: "Please log in to view your virtual patients",
+              variant: "destructive"
+            });
+            return [];
+          }
+          
+          // Handle other errors
+          const errorText = await response.text();
+          throw new Error(`Failed to fetch virtual patients: ${errorText}`);
         }
-        return response.json();
+        
+        return await response.json();
       } catch (err) {
         console.error("Error fetching virtual patients:", err);
         throw err;
       }
     },
+    refetchOnWindowFocus: false
   });
 
   if (isError) {

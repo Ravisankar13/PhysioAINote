@@ -928,10 +928,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Helper function to add Reformer Pilates exercises
   const ensureReformerExercisesAdded = async () => {
-    // Check if we have any reformer pilates exercises already
-    const searchResults = await storage.getExercisesBySearchTerm("Reformer");
+    // Check if we have any reformer pilates exercises by searching directly in the database
+    const reformerExercises = await db
+      .select()
+      .from(exercises)
+      .where(ilike(exercises.title, '%Reformer%'))
+      .limit(5);
     
-    if (searchResults.length < 5) {
+    if (reformerExercises.length < 5) {
       console.log("Adding Reformer Pilates exercises to the database...");
       const { addReformerPilatesExercises } = await import('./routes/addReformerPilatesExercises');
       await addReformerPilatesExercises();

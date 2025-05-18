@@ -24,8 +24,14 @@ import {
   Pencil,
   Plus,
   Save,
-  X
+  X,
+  LineChart,
+  BarChart3,
+  ZoomIn
 } from "lucide-react";
+import SymptomProgressionChart from "./SymptomProgressionChart";
+import BodyPartZoom from "./BodyPartZoom";
+import { getPlaceholderImage, getDefaultHotspots } from "./bodyPartImages";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -232,7 +238,7 @@ export default function VirtualPatientDetail({ patientId, onBackToList, onEditPa
       </CardHeader>
       <CardContent className="p-0">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="info" className="flex items-center">
               <User className="h-4 w-4 mr-2" />
               Patient Info
@@ -248,6 +254,14 @@ export default function VirtualPatientDetail({ patientId, onBackToList, onEditPa
             <TabsTrigger value="treatment" disabled={!hasDiagnosis} className="flex items-center">
               <Activity className="h-4 w-4 mr-2" />
               Treatment Options
+            </TabsTrigger>
+            <TabsTrigger value="progression" disabled={!hasDiagnosis} className="flex items-center">
+              <Activity className="h-4 w-4 mr-2" />
+              Symptom Progression
+            </TabsTrigger>
+            <TabsTrigger value="anatomy" className="flex items-center">
+              <Activity className="h-4 w-4 mr-2" />
+              Interactive Anatomy
             </TabsTrigger>
             <TabsTrigger value="research" disabled={!hasDiagnosis} className="flex items-center">
               <BookOpen className="h-4 w-4 mr-2" />

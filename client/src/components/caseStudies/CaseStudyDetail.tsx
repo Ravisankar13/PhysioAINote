@@ -23,6 +23,7 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { CheckboxGroup } from "@/components/ui/checkbox-group";
 import { 
   ChevronLeft, 
   Activity, 

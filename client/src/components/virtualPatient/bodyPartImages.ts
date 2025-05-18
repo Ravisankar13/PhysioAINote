@@ -35,20 +35,20 @@ export function getBodyPartImageUrl(bodyPart: string): string {
   }
 }
 
-// These are fallback placeholders when real images aren't available
+// These are working image URLs for anatomy visualization
 export const placeholderImages: Record<string, string> = {
-  shoulder: 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Shoulder_joint.svg/800px-Shoulder_joint.svg.png',
-  knee: 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/19/Knee_diagram.svg/800px-Knee_diagram.svg.png',
-  back: 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/09/Spinal_column_curvature-en.svg/800px-Spinal_column_curvature-en.svg.png',
-  neck: 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/fc/Gray_111_-_Vertebral_column-coloured.png/800px-Gray_111_-_Vertebral_column-coloured.png',
-  elbow: 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/8d/Elbow_joint_skeletal_anatomy_anterior_view.gif/800px-Elbow_joint_skeletal_anatomy_anterior_view.gif',
-  wrist: 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/34/Wrist_and_hand_deeper_palmar_dissection-en.svg/800px-Wrist_and_hand_deeper_palmar_dissection-en.svg.png',
-  hand: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Hand_anatomy_bones.jpg/800px-Hand_anatomy_bones.jpg',
-  hip: 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/82/Hip_joint_colored.svg/800px-Hip_joint_colored.svg.png',
-  ankle: 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/1d/Ankle.PNG/800px-Ankle.PNG',
-  foot: 'https://upload.wikimedia.org/wikipedia/commons/thumb/d/dc/Skeletal_anatomy_of_human_foot.svg/800px-Skeletal_anatomy_of_human_foot.svg.png',
-  other: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c2/Human_anatomy_chart.svg/800px-Human_anatomy_chart.svg.png',
-  general: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c2/Human_anatomy_chart.svg/800px-Human_anatomy_chart.svg.png',
+  shoulder: 'https://images.unsplash.com/photo-1616279969856-759f14f2f8a7?q=80&w=800&auto=format&fit=crop',
+  knee: 'https://images.unsplash.com/photo-1594009598067-84b0b2280377?q=80&w=800&auto=format&fit=crop',
+  back: 'https://images.unsplash.com/photo-1554344056-d7be7227d7bd?q=80&w=800&auto=format&fit=crop',
+  neck: 'https://images.unsplash.com/photo-1600443272877-847cf8e4ba73?q=80&w=800&auto=format&fit=crop',
+  elbow: 'https://images.unsplash.com/photo-1617636135946-ef19d0c738de?q=80&w=800&auto=format&fit=crop',
+  wrist: 'https://images.unsplash.com/photo-1581963820761-b917a5b0c949?q=80&w=800&auto=format&fit=crop',
+  hand: 'https://images.unsplash.com/photo-1595626269047-deca916c4105?q=80&w=800&auto=format&fit=crop',
+  hip: 'https://images.unsplash.com/photo-1600443272877-847cf8e4ba73?q=80&w=800&auto=format&fit=crop',
+  ankle: 'https://images.unsplash.com/photo-1604005940262-01853f290555?q=80&w=800&auto=format&fit=crop',
+  foot: 'https://images.unsplash.com/photo-1596825205266-79e5ec04a939?q=80&w=800&auto=format&fit=crop',
+  other: 'https://images.unsplash.com/photo-1628087236614-4896e21cbc19?q=80&w=800&auto=format&fit=crop',
+  general: 'https://images.unsplash.com/photo-1564711976302-b26583b66bbb?q=80&w=800&auto=format&fit=crop',
 };
 
 // Get a placeholder image for a given body part

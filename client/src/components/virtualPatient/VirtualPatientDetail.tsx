@@ -31,7 +31,7 @@ import {
 } from "lucide-react";
 import SymptomProgressionChart from "./SymptomProgressionChart";
 import BodyPartZoom from "./BodyPartZoom";
-import { getPlaceholderImage } from "./bodyPartImages";
+import { getPlaceholderImage, placeholderImages } from "./bodyPartImages";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -767,8 +767,13 @@ export default function VirtualPatientDetail({ patientId, onBackToList, onEditPa
           <TabsContent value="anatomy" className="p-6">
             <BodyPartZoom 
               bodyPart={patient.bodyPart || "general"} 
-              imageUrl={getPlaceholderImage(patient.bodyPart || "general")} 
+              imageUrl={placeholderImages[patient.bodyPart?.toLowerCase() || "general"]} 
             />
+            {/* Add fallback message in case image doesn't load */}
+            <div className="text-xs text-center text-muted-foreground mt-2">
+              Note: Interactive model displays anatomy regions for {patient.bodyPart || "general"} body part.
+              Click on highlighted points to explore techniques.
+            </div>
           </TabsContent>
 
           {/* RESEARCH TAB */}

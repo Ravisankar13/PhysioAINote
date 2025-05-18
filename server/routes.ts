@@ -926,8 +926,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Helper function to add Reformer Pilates exercises
+  const ensureReformerExercisesAdded = async () => {
+    // Check if we have any reformer pilates exercises already
+    const searchResults = await storage.getExercisesBySearchTerm("Reformer");
+    
+    if (searchResults.length < 5) {
+      console.log("Adding Reformer Pilates exercises to the database...");
+      const { addReformerPilatesExercises } = await import('./routes/addReformerPilatesExercises');
+      await addReformerPilatesExercises();
+    }
+  };
+
   app.get("/api/exercises", async (req: Request, res: Response) => {
     try {
+      // Ensure Reformer Pilates exercises are added
+      await ensureReformerExercisesAdded();
+      
       const bodyPart = req.query.bodyPart as string | undefined;
       const difficulty = req.query.difficulty as string | undefined;
       
@@ -1253,6 +1268,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (virtualPatient.userId !== userId) {
         return res.status(403).json({ error: 'You do not have permission to analyze this virtual patient' });
       }
+      
+      // Set hasBeenEdited to false since we're now analyzing/reanalyzing
+      await storage.updateVirtualPatient(patientId, {
+        hasBeenEdited: false
+      });
       
       // Special case for username "fateofjustice" - should get premium features for free
       const user = await storage.getUser(userId);

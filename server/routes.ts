@@ -1431,13 +1431,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get relevant article IDs from the search terms
       const relevantArticleIds = searchResults?.searchTerms || [];
       
+      // Include assessment tests in the patient data
+      // First, modify the virtual patient schema to include assessment tests
+      const updatedData = {
+        diagnosis: analysisResult.primaryDiagnosis?.name || "Unknown diagnosis",
+        differentialDiagnosis: analysisResult.differentialDiagnoses || [],
+        treatmentOptions: analysisResult.treatmentOptions || [],
+        relatedArticleIds: relevantArticleIds,
+        // Store assessment tests directly in the differential diagnosis object for now
+        // since we don't have a dedicated field in the database
+        assessmentTests: analysisResult.assessmentTests || []
+      };
+      
       // Update the virtual patient with the analysis results
-      const updatedPatient = await storage.updateVirtualPatientDiagnosis(
+      const updatedPatient = await storage.updateVirtualPatient(
         patientId,
-        analysisResult.primaryDiagnosis?.name || "Unknown diagnosis",
-        analysisResult.differentialDiagnoses || [],
-        analysisResult.treatmentOptions || [],
-        relevantArticleIds
+        updatedData
       );
       
       res.json(updatedPatient);

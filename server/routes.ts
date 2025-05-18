@@ -1205,32 +1205,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Fetch related research articles if there are any related article IDs
       let relatedResearch: any[] = [];
-      if (virtualPatient.related_article_ids && (
-          Array.isArray(virtualPatient.related_article_ids) || 
-          typeof virtualPatient.related_article_ids === 'string'
-        )) {
+      
+      // For debugging - log the field value
+      console.log("Patient related_article_ids:", virtualPatient.related_article_ids);
+      console.log("Patient relatedArticleIds:", virtualPatient.relatedArticleIds);
+      
+      // Try both possible field names for backward compatibility
+      const articleIdsField = virtualPatient.related_article_ids || virtualPatient.relatedArticleIds;
+      
+      if (articleIdsField && (Array.isArray(articleIdsField) || typeof articleIdsField === 'string')) {
         try {
           // Try to parse the IDs if they're in string format
           let articleIds;
-          if (typeof virtualPatient.related_article_ids === 'string') {
+          if (typeof articleIdsField === 'string') {
             try {
-              articleIds = JSON.parse(virtualPatient.related_article_ids);
+              articleIds = JSON.parse(articleIdsField);
             } catch {
               // If it fails to parse as JSON, split by commas (older format)
-              articleIds = virtualPatient.related_article_ids.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+              articleIds = articleIdsField.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
             }
           } else {
-            articleIds = virtualPatient.related_article_ids;
+            articleIds = articleIdsField;
           }
             
           if (Array.isArray(articleIds) && articleIds.length > 0) {
             console.log("Fetching research articles with IDs:", articleIds);
-            // Get research articles by IDs
+            
+            // If no articles found through IDs, get some default ones for this body part
             relatedResearch = await storage.getResearchArticlesByIds(articleIds);
             console.log(`Found ${relatedResearch.length} related research articles`);
+            
+            // If no related articles found by IDs, get some default ones
+            if (relatedResearch.length === 0) {
+              console.log("No articles found by IDs, getting default articles for body part:", virtualPatient.bodyPart);
+              const { articles } = await storage.getResearchArticles(virtualPatient.bodyPart, 1, 5);
+              relatedResearch = articles;
+              console.log(`Using ${relatedResearch.length} default articles for this body part`);
+            }
+          } else {
+            // If no article IDs found, get some default ones for this body part
+            console.log("No article IDs found, getting default articles for body part:", virtualPatient.bodyPart);
+            const { articles } = await storage.getResearchArticles(virtualPatient.bodyPart, 1, 5);
+            relatedResearch = articles;
+            console.log(`Using ${relatedResearch.length} default articles for this body part`);
           }
         } catch (err) {
-          console.error('Error fetching related research articles:', err, virtualPatient.related_article_ids);
+          console.error('Error fetching related research articles:', err, articleIdsField);
+          // Fallback to default articles for this body part
+          try {
+            const { articles } = await storage.getResearchArticles(virtualPatient.bodyPart, 1, 5);
+            relatedResearch = articles;
+            console.log(`Using ${relatedResearch.length} fallback articles for this body part`);
+          } catch (fallbackErr) {
+            console.error('Error fetching fallback articles:', fallbackErr);
+          }
+        }
+      } else {
+        // If no article IDs field found, get some default ones for this body part
+        try {
+          console.log("No article IDs field found, getting default articles for body part:", virtualPatient.bodyPart);
+          const { articles } = await storage.getResearchArticles(virtualPatient.bodyPart, 1, 5);
+          relatedResearch = articles;
+          console.log(`Using ${relatedResearch.length} default articles for this body part`);
+        } catch (err) {
+          console.error('Error fetching default articles:', err);
         }
       }
       

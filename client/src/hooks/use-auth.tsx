@@ -36,6 +36,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     mutationFn: async (credentials: LoginData) => {
       console.log("Attempting login with credentials:", { username: credentials.username });
       try {
+        // Special handling for Fateofjustice account - make sure to match the case
+        const normUsername = credentials.username.toLowerCase();
+        if (normUsername === 'fateofjustice') {
+          credentials.username = 'Fateofjustice'; // Use the correct case
+          console.log("Using special case for admin login:", credentials.username);
+        }
+        
         // Use fetch directly to have more control
         const res = await fetch("/api/login", {
           method: "POST",

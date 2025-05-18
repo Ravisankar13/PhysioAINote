@@ -1817,6 +1817,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // File Upload API for Peer Knowledge Exchange attachments
+  app.post("/api/peer-exchange/upload", ensureAuthenticated, uploadToS3.array("files", 5), async (req: Request, res: Response) => {
+    try {
+      if (!req.files || (Array.isArray(req.files) && req.files.length === 0)) {
+        return res.status(400).json({ error: "No files were uploaded" });
+      }
+
+      const files = Array.isArray(req.files) ? req.files : [req.files];
+      const fileDetails = files.map(file => ({
+        url: (file as any).location,
+        name: file.originalname,
+        type: getFileType(file.mimetype),
+        size: file.size
+      }));
+      
+      res.status(200).json(fileDetails);
+    } catch (error) {
+      console.error("File upload error:", error);
+      if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred during file upload' });
+      }
+    }
+  });
+  
   app.post("/api/case-tags", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       // Check if the user has permission to create tags (premium members only)

@@ -493,7 +493,7 @@ export default function VirtualPatientDetail({ patientId, onBackToList, onEditPa
                   <p className="text-sm mb-4">These diagnostic tests are recommended to confirm the primary diagnosis.</p>
                 </div>
 
-                {patient.clinicalTests && patient.clinicalTests.map((test: any, idx: number) => (
+                {patient.assessmentTests && patient.assessmentTests.map((test: any, idx: number) => (
                   <div key={idx} className="border rounded-lg p-4">
                     <div className="flex justify-between items-start mb-2">
                       <h4 className="text-md font-semibold">{test.name}</h4>

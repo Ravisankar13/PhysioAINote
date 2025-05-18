@@ -598,6 +598,7 @@ export default function VirtualPatientDetail({ patientId, onBackToList, onEditPa
                   <p className="text-sm">Evidence-based research relevant to this case.</p>
                 </div>
 
+                {console.log("Related research data:", patient.relatedResearch)}
                 {Array.isArray(patient.relatedResearch) && patient.relatedResearch.length > 0 ? (
                   patient.relatedResearch.map((research: any, idx: number) => (
                     <div key={idx} className="border rounded-lg p-4 shadow-sm">

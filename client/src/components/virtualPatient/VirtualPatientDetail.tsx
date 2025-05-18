@@ -260,28 +260,27 @@ export default function VirtualPatientDetail({ patientId, onBackToList, onEditPa
                 )}
               </div>
 
-              {(!hasDiagnosis || patient?.hasBeenEdited) && (
-                <div className="flex justify-center mt-8">
-                  <Button 
-                    onClick={() => analyzePatientMutation.mutate()}
-                    disabled={analyzePatientMutation.isPending}
-                    size="lg"
-                    className="w-full md:w-auto"
-                  >
-                    {analyzePatientMutation.isPending ? (
-                      <>
-                        <Activity className="mr-2 h-4 w-4 animate-pulse" />
-                        Analyzing Patient Data...
-                      </>
-                    ) : (
-                      <>
-                        <Activity className="mr-2 h-4 w-4" />
-                        {hasDiagnosis ? 'Reanalyze Patient Data' : 'Analyze Patient Data'}
-                      </>
-                    )}
-                  </Button>
-                </div>
-              )}
+              {/* Always show the analyze button */}
+              <div className="flex justify-center mt-8">
+                <Button 
+                  onClick={() => analyzePatientMutation.mutate()}
+                  disabled={analyzePatientMutation.isPending}
+                  size="lg"
+                  className="w-full md:w-auto"
+                >
+                  {analyzePatientMutation.isPending ? (
+                    <>
+                      <Activity className="mr-2 h-4 w-4 animate-pulse" />
+                      Analyzing Patient Data...
+                    </>
+                  ) : (
+                    <>
+                      <Activity className="mr-2 h-4 w-4" />
+                      {hasDiagnosis ? 'Reanalyze Patient Data' : 'Analyze Patient Data'}
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
           </TabsContent>
 

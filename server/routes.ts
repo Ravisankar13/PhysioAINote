@@ -1205,19 +1205,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Fetch related research articles if there are any related article IDs
       let relatedResearch: any[] = [];
-      if (virtualPatient.relatedArticleIds && Array.isArray(virtualPatient.relatedArticleIds) && virtualPatient.relatedArticleIds.length > 0) {
+      if (virtualPatient.related_article_ids && (
+          Array.isArray(virtualPatient.related_article_ids) || 
+          typeof virtualPatient.related_article_ids === 'string'
+        )) {
         try {
           // Try to parse the IDs if they're in string format
-          const articleIds = typeof virtualPatient.relatedArticleIds === 'string' 
-            ? JSON.parse(virtualPatient.relatedArticleIds) 
-            : virtualPatient.relatedArticleIds;
+          let articleIds;
+          if (typeof virtualPatient.related_article_ids === 'string') {
+            try {
+              articleIds = JSON.parse(virtualPatient.related_article_ids);
+            } catch {
+              // If it fails to parse as JSON, split by commas (older format)
+              articleIds = virtualPatient.related_article_ids.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+            }
+          } else {
+            articleIds = virtualPatient.related_article_ids;
+          }
             
           if (Array.isArray(articleIds) && articleIds.length > 0) {
+            console.log("Fetching research articles with IDs:", articleIds);
             // Get research articles by IDs
             relatedResearch = await storage.getResearchArticlesByIds(articleIds);
+            console.log(`Found ${relatedResearch.length} related research articles`);
           }
         } catch (err) {
-          console.error('Error fetching related research articles:', err);
+          console.error('Error fetching related research articles:', err, virtualPatient.related_article_ids);
         }
       }
       

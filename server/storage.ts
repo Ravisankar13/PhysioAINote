@@ -384,6 +384,28 @@ export class DatabaseStorage implements IStorage {
     return results.length > 0 ? results[0] : undefined;
   }
   
+  // Get multiple research articles by their IDs
+  async getResearchArticlesByIds(ids: number[]): Promise<ResearchArticle[]> {
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return [];
+    }
+    
+    // Filter out any non-numeric values to prevent SQL errors
+    const validIds = ids.filter(id => typeof id === 'number' && !isNaN(id));
+    
+    if (validIds.length === 0) {
+      return [];
+    }
+    
+    // Create a SQL IN condition for the IDs
+    const results = await db.select()
+      .from(researchArticles)
+      .where(sql`${researchArticles.id} IN (${validIds.join(',')})`)
+      .orderBy(desc(researchArticles.publicationDate));
+      
+    return results;
+  }
+  
   async getResearchArticles(
     bodyPart?: string,
     page: number = 1,

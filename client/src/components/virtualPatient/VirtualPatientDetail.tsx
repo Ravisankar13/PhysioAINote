@@ -746,6 +746,30 @@ export default function VirtualPatientDetail({ patientId, onBackToList, onEditPa
               </div>
             )}
           </TabsContent>
+          
+          {/* SYMPTOM PROGRESSION TAB */}
+          <TabsContent value="progression" className="p-6">
+            {!hasDiagnosis ? (
+              renderEmptyState(
+                <LineChart className="h-12 w-12 text-gray-400 mx-auto mb-4" />,
+                "No Symptom Progression Data",
+                "Analyze the patient data to view symptom progression tracking."
+              )
+            ) : (
+              <SymptomProgressionChart 
+                patientId={patient.id} 
+                bodyPart={patient.bodyPart || "general"} 
+              />
+            )}
+          </TabsContent>
+
+          {/* INTERACTIVE ANATOMY TAB */}
+          <TabsContent value="anatomy" className="p-6">
+            <BodyPartZoom 
+              bodyPart={patient.bodyPart || "general"} 
+              imageUrl={getPlaceholderImage(patient.bodyPart || "general")} 
+            />
+          </TabsContent>
 
           {/* RESEARCH TAB */}
           <TabsContent value="research" className="p-6">

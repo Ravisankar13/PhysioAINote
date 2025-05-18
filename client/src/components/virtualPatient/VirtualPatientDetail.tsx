@@ -45,7 +45,9 @@ export default function VirtualPatientDetail({ patientId, onBackToList, onEditPa
       if (!response.ok) {
         throw new Error("Failed to fetch patient details");
       }
-      return response.json();
+      const data = await response.json();
+      console.log("Virtual patient data with research:", data);
+      return data;
     },
   });
 
@@ -596,55 +598,67 @@ export default function VirtualPatientDetail({ patientId, onBackToList, onEditPa
                   <p className="text-sm">Evidence-based research relevant to this case.</p>
                 </div>
 
-                {patient.relatedResearch && patient.relatedResearch.map((research: any, idx: number) => (
-                  <div key={idx} className="border rounded-lg p-4">
-                    <div className="flex justify-between items-start">
-                      <h4 className="text-md font-medium mb-1">{research.title}</h4>
-                      <Badge variant="outline">{research.year}</Badge>
-                    </div>
-                    <p className="text-sm text-gray-500 mb-2">{research.authors.join(", ")}</p>
-                    <p className="text-sm mb-3">{research.abstract}</p>
-                    
-                    <div className="flex flex-wrap gap-2 mb-2">
-                      {research.keywords && research.keywords.map((keyword: string, kidx: number) => (
-                        <Badge key={kidx} variant="secondary" className="text-xs">
-                          {keyword}
-                        </Badge>
-                      ))}
-                    </div>
-                    
-                    <div className="text-sm">
-                      <p><strong>Journal:</strong> {research.journal}</p>
-                      {research.doi && <p><strong>DOI:</strong> {research.doi}</p>}
-                    </div>
-                    
-                    {research.keyFindings && (
-                      <div className="mt-3">
-                        <h5 className="text-sm font-medium mb-1">Key Findings</h5>
-                        <ul className="list-disc list-inside text-sm ml-2">
-                          {research.keyFindings.map((finding: string, fidx: number) => (
-                            <li key={fidx}>{finding}</li>
-                          ))}
-                        </ul>
+                {Array.isArray(patient.relatedResearch) && patient.relatedResearch.length > 0 ? (
+                  patient.relatedResearch.map((research: any, idx: number) => (
+                    <div key={idx} className="border rounded-lg p-4 shadow-sm">
+                      <div className="flex justify-between items-start">
+                        <h4 className="text-md font-medium mb-1">{research.title}</h4>
+                        <Badge variant="outline">{research.publicationYear || research.year || 'N/A'}</Badge>
                       </div>
-                    )}
-
-                    {research.clinicalImplications && (
-                      <div className="mt-3">
-                        <h5 className="text-sm font-medium mb-1">Clinical Implications</h5>
-                        <p className="text-sm">{research.clinicalImplications}</p>
+                      <p className="text-sm text-gray-500 mb-2">
+                        {Array.isArray(research.authors) ? research.authors.join(", ") : research.author}
+                      </p>
+                      <p className="text-sm mb-3">{research.abstract}</p>
+                      
+                      <div className="flex flex-wrap gap-2 mb-2">
+                        {Array.isArray(research.keywords) && research.keywords.map((keyword: string, kidx: number) => (
+                          <Badge key={kidx} variant="secondary" className="text-xs">
+                            {keyword}
+                          </Badge>
+                        ))}
                       </div>
-                    )}
-                    
-                    {research.link && (
-                      <div className="mt-3">
-                        <Button variant="link" size="sm" className="p-0 h-auto" asChild>
-                          <Link to={research.link} target="_blank">View full article</Link>
-                        </Button>
+                      
+                      <div className="text-sm">
+                        <p><strong>Journal:</strong> {research.journal || 'Not specified'}</p>
+                        {research.doi && <p><strong>DOI:</strong> {research.doi}</p>}
                       </div>
-                    )}
+                      
+                      {research.keyFindings && (
+                        <div className="mt-3">
+                          <h5 className="text-sm font-medium mb-1">Key Findings</h5>
+                          <ul className="list-disc list-inside text-sm ml-2">
+                            {Array.isArray(research.keyFindings) ? (
+                              research.keyFindings.map((finding: string, fidx: number) => (
+                                <li key={fidx}>{finding}</li>
+                              ))
+                            ) : (
+                              <li>{String(research.keyFindings)}</li>
+                            )}
+                          </ul>
+                        </div>
+                      )}
+  
+                      {research.clinicalImplications && (
+                        <div className="mt-3">
+                          <h5 className="text-sm font-medium mb-1">Clinical Implications</h5>
+                          <p className="text-sm">{research.clinicalImplications}</p>
+                        </div>
+                      )}
+                      
+                      {research.link && (
+                        <div className="mt-3">
+                          <Button variant="link" size="sm" className="p-0 h-auto" asChild>
+                            <Link to={research.link} target="_blank">View full article</Link>
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-gray-500">No related research articles available for this patient.</p>
                   </div>
-                ))}
+                )}
               </div>
             )}
           </TabsContent>

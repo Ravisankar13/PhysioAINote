@@ -498,14 +498,16 @@ export default function VirtualPatientDetail({ patientId, onBackToList, onEditPa
                     <div className="flex justify-between items-start mb-2">
                       <h4 className="text-md font-semibold">{test.name}</h4>
                       <Badge variant={
-                        test.sensitivity > 0.8 ? "default" : 
-                        test.sensitivity > 0.6 ? "secondary" : 
+                        test.relevance === "primary" ? "default" : 
+                        test.relevance === "secondary" ? "secondary" : 
                         "outline"
                       }>
-                        {test.sensitivity > 0.8 ? "High" : test.sensitivity > 0.6 ? "Moderate" : "Low"} Sensitivity
+                        {test.relevance === "primary" ? "Primary" : 
+                         test.relevance === "secondary" ? "Secondary" : 
+                         "Supportive"} Test
                       </Badge>
                     </div>
-                    <p className="text-sm mb-2">{test.description}</p>
+                    <p className="text-sm mb-2">{test.purpose || test.description}</p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
                       <div>
                         <h5 className="text-sm font-medium mb-1">How to Perform</h5>
@@ -516,10 +518,22 @@ export default function VirtualPatientDetail({ patientId, onBackToList, onEditPa
                         <p className="text-sm">{test.positiveFindings}</p>
                       </div>
                     </div>
-                    {test.evidenceLevel && (
+                    {test.supportingResearch && (
                       <div className="mt-3">
-                        <h5 className="text-sm font-medium">Evidence Level</h5>
-                        <p className="text-sm">{test.evidenceLevel}</p>
+                        <h5 className="text-sm font-medium">Research Support</h5>
+                        <p className="text-sm">{test.supportingResearch}</p>
+                      </div>
+                    )}
+                    {test.sensitivity && (
+                      <div className="flex space-x-2 mt-2">
+                        <Badge variant="outline">
+                          Sensitivity: {test.sensitivity}
+                        </Badge>
+                        {test.specificity && (
+                          <Badge variant="outline">
+                            Specificity: {test.specificity}
+                          </Badge>
+                        )}
                       </div>
                     )}
                   </div>

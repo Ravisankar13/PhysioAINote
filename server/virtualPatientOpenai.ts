@@ -19,6 +19,7 @@ export interface VirtualPatientInput {
   familyHistory?: string;
   medications?: string;
   allergies?: string;
+  objectiveFindings?: Array<{id: number, finding: string}> | string;
 }
 
 export interface VirtualPatientAnalysisOutput {

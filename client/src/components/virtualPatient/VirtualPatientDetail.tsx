@@ -21,12 +21,18 @@ import {
   Clipboard,
   ClipboardCheck,
   Edit,
-  Pencil
+  Pencil,
+  Plus,
+  Save,
+  X
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Link } from "wouter";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 
 interface VirtualPatientDetailProps {
   patientId: number;
@@ -37,6 +43,9 @@ interface VirtualPatientDetailProps {
 export default function VirtualPatientDetail({ patientId, onBackToList, onEditPatient }: VirtualPatientDetailProps) {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("info");
+  const [isAddingObjectiveFindings, setIsAddingObjectiveFindings] = useState(false);
+  const [objectiveFindingsInput, setObjectiveFindingsInput] = useState("");
+  const [objectiveFindings, setObjectiveFindings] = useState<Array<{id: number, finding: string}>>([]);
 
   const { data: patient, isLoading, isError, error } = useQuery<any>({
     queryKey: [`/api/virtual-patients/${patientId}`],
@@ -47,7 +56,47 @@ export default function VirtualPatientDetail({ patientId, onBackToList, onEditPa
       }
       const data = await response.json();
       console.log("Virtual patient data with research:", data);
+      
+      // If patient has objective findings stored, parse and set them
+      if (data.objectiveFindings) {
+        try {
+          const findings = typeof data.objectiveFindings === 'string' 
+            ? JSON.parse(data.objectiveFindings) 
+            : data.objectiveFindings;
+            
+          if (Array.isArray(findings)) {
+            setObjectiveFindings(findings);
+          }
+        } catch (err) {
+          console.error("Error parsing objective findings:", err);
+        }
+      }
+      
       return data;
+    },
+  });
+  
+  // Mutation to save objective findings
+  const updateObjectiveFindingsMutation = useMutation({
+    mutationFn: async (findings: Array<{id: number, finding: string}>) => {
+      const response = await apiRequest("PATCH", `/api/virtual-patients/${patientId}`, {
+        objectiveFindings: findings
+      });
+      return await response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/virtual-patients/${patientId}`] });
+      toast({
+        title: "Findings Saved",
+        description: "Objective findings have been saved successfully.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Save Failed",
+        description: `Failed to save objective findings: ${error.message}`,
+        variant: "destructive",
+      });
     },
   });
 
@@ -260,6 +309,100 @@ export default function VirtualPatientDetail({ patientId, onBackToList, onEditPa
                     <p className="text-sm leading-relaxed">{patient.allergies}</p>
                   </div>
                 )}
+              </div>
+              
+              {/* Objective Findings Section */}
+              <div className="mt-6">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-lg font-semibold">Objective Findings</h3>
+                  {!isAddingObjectiveFindings && (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => setIsAddingObjectiveFindings(true)}
+                    >
+                      <Plus className="mr-1 h-4 w-4" />
+                      Add Finding
+                    </Button>
+                  )}
+                </div>
+                
+                {isAddingObjectiveFindings ? (
+                  <div className="bg-background border rounded-lg p-4 mb-4">
+                    <Label htmlFor="objectiveFinding" className="mb-2 block">Enter Objective Finding</Label>
+                    <Textarea 
+                      id="objectiveFinding" 
+                      value={objectiveFindingsInput}
+                      onChange={(e) => setObjectiveFindingsInput(e.target.value)}
+                      placeholder="Enter clinical observation or measurement (e.g., 'Limited shoulder abduction to 90 degrees with pain at end range')"
+                      className="mb-3"
+                      rows={3}
+                    />
+                    <div className="flex justify-end space-x-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => {
+                          setIsAddingObjectiveFindings(false);
+                          setObjectiveFindingsInput("");
+                        }}
+                      >
+                        <X className="mr-1 h-4 w-4" />
+                        Cancel
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        onClick={() => {
+                          if (objectiveFindingsInput.trim()) {
+                            // Add to local state first
+                            const newFinding = {
+                              id: Date.now(),
+                              finding: objectiveFindingsInput.trim()
+                            };
+                            const updatedFindings = [...objectiveFindings, newFinding];
+                            setObjectiveFindings(updatedFindings);
+                            
+                            // Save to server
+                            updateObjectiveFindingsMutation.mutate(updatedFindings);
+                            
+                            // Reset form
+                            setObjectiveFindingsInput("");
+                            setIsAddingObjectiveFindings(false);
+                          }
+                        }}
+                        disabled={!objectiveFindingsInput.trim()}
+                      >
+                        <Save className="mr-1 h-4 w-4" />
+                        Save Finding
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+                
+                {/* Display existing objective findings */}
+                <div className="space-y-2">
+                  {objectiveFindings.length > 0 ? (
+                    objectiveFindings.map((finding) => (
+                      <div key={finding.id} className="bg-muted/40 rounded-md p-3 flex justify-between items-start">
+                        <p className="text-sm">{finding.finding}</p>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-6 w-6 p-0 ml-2 text-muted-foreground"
+                          onClick={() => {
+                            const updatedFindings = objectiveFindings.filter(f => f.id !== finding.id);
+                            setObjectiveFindings(updatedFindings);
+                            updateObjectiveFindingsMutation.mutate(updatedFindings);
+                          }}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground italic">No objective findings recorded. Click "Add Finding" to add observations.</p>
+                  )}
+                </div>
               </div>
 
               {/* Always show the analyze button */}

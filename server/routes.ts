@@ -1203,7 +1203,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: 'You do not have permission to access this virtual patient' });
       }
       
-      res.json(virtualPatient);
+      // Fetch related research articles if there are any related article IDs
+      let relatedResearch: any[] = [];
+      if (virtualPatient.relatedArticleIds && Array.isArray(virtualPatient.relatedArticleIds) && virtualPatient.relatedArticleIds.length > 0) {
+        try {
+          // Try to parse the IDs if they're in string format
+          const articleIds = typeof virtualPatient.relatedArticleIds === 'string' 
+            ? JSON.parse(virtualPatient.relatedArticleIds) 
+            : virtualPatient.relatedArticleIds;
+            
+          if (Array.isArray(articleIds) && articleIds.length > 0) {
+            // Get research articles by IDs
+            relatedResearch = await storage.getResearchArticlesByIds(articleIds);
+          }
+        } catch (err) {
+          console.error('Error fetching related research articles:', err);
+        }
+      }
+      
+      // Return the virtual patient with related research articles included
+      res.json({
+        ...virtualPatient,
+        relatedResearch
+      });
     } catch (error) {
       if (error instanceof Error) {
         res.status(500).json({ error: error.message });

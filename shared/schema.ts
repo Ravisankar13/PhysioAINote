@@ -761,17 +761,6 @@ export const discussionUpvoteRelations = relations(
   })
 );
 
-// Virtual patient relations
-export const virtualPatientRelations = relations(
-  virtualPatients,
-  ({ one }) => ({
-    user: one(users, {
-      fields: [virtualPatients.userId],
-      references: [users.id],
-    }),
-  })
-);
-
 // AI Case Study (research-based physiotherapy cases)
 export const aiCaseStudies = pgTable("ai_case_studies", {
   id: serial("id").primaryKey(),

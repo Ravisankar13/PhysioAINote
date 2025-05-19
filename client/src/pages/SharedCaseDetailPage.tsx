@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useParams, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import {
   Card,
@@ -13,8 +14,12 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
+import DiscussionForm from "@/components/peerExchange/DiscussionForm";
+import CommentDisplay from "@/components/peerExchange/CommentDisplay";
+import { FileAttachment } from "@/components/peerExchange/FileUploader";
 import { useToast } from "@/hooks/use-toast";
 import {
   Loader2,
@@ -82,6 +87,10 @@ interface CaseDiscussion {
   isEdited: boolean;
   createdAt: string;
   updatedAt: string;
+  attachmentUrls?: FileAttachment[];
+  hasReplies?: boolean;
+  replyCount?: number;
+  upvotedByCurrentUser?: boolean;
   user?: {
     username: string;
     profileImage?: string;
@@ -126,6 +135,7 @@ export default function SharedCaseDetailPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [comment, setComment] = useState("");
+  const [attachments, setAttachments] = useState<FileAttachment[]>([]);
   const [replyTo, setReplyTo] = useState<CaseDiscussion | null>(null);
 
   // Queries
@@ -223,7 +233,16 @@ export default function SharedCaseDetailPage() {
   });
 
   const addCommentMutation = useMutation({
-    mutationFn: async (data: { content: string; parentId?: number }) => {
+    mutationFn: async (data: {
+      content: string;
+      parentId?: number;
+      attachmentUrls?: {
+        url: string;
+        name: string;
+        type: string;
+        size: number;
+      }[];
+    }) => {
       const res = await apiRequest(
         "POST",
         `/api/shared-cases/${caseId}/discussions`,
@@ -319,13 +338,20 @@ export default function SharedCaseDetailPage() {
     : "";
   const isOwner = user && caseData && user.id === caseData.userId;
 
-  const handleSubmitComment = () => {
-    if (!comment.trim()) return;
+  const handleSubmitComment = (
+    content: string,
+    fileAttachments: FileAttachment[]
+  ) => {
+    if (!content.trim()) return;
 
     addCommentMutation.mutate({
-      content: comment,
+      content,
+      attachmentUrls: fileAttachments.length > 0 ? fileAttachments : undefined,
       ...(replyTo ? { parentId: replyTo.id } : {}),
     });
+
+    // Reset attachments
+    setAttachments([]);
   };
 
   if (isLoadingCase) {
@@ -620,39 +646,17 @@ export default function SharedCaseDetailPage() {
                   </div>
                 )}
 
-                <div className="flex gap-4 mb-6">
-                  <Avatar className="h-10 w-10">
-                    <AvatarFallback>
-                      {user.username.substring(0, 2).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-
-                  <div className="flex-1 space-y-2">
-                    <Textarea
-                      placeholder={
-                        replyTo
-                          ? "Write your reply..."
-                          : "Add to the discussion..."
-                      }
-                      value={comment}
-                      onChange={(e) => setComment(e.target.value)}
-                      rows={4}
-                    />
-                    <div className="flex justify-end">
-                      <Button
-                        onClick={handleSubmitComment}
-                        disabled={
-                          !comment.trim() || addCommentMutation.isPending
-                        }
-                      >
-                        {addCommentMutation.isPending && (
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        )}
-                        {replyTo ? "Post Reply" : "Post Comment"}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
+                <DiscussionForm
+                  placeholder={
+                    replyTo ? "Write your reply..." : "Add to the discussion..."
+                  }
+                  buttonText={replyTo ? "Post Reply" : "Post Comment"}
+                  onSubmit={handleSubmitComment}
+                  isSubmitting={addCommentMutation.isPending}
+                  showCancel={!!replyTo}
+                  onCancel={() => setReplyTo(null)}
+                  user={user}
+                />
               </>
             ) : (
               <div className="mb-6 p-4 border rounded-md bg-muted/30 text-center">
@@ -773,7 +777,6 @@ function CommentCard({
   onRemoveUpvote,
   currentUser,
 }: CommentCardProps) {
-  const createdDate = new Date(discussion.createdAt).toLocaleDateString();
   const [showReplies, setShowReplies] = useState(false);
   const { toast } = useToast();
 
@@ -788,151 +791,82 @@ function CommentCard({
   });
 
   return (
-    <div className="border rounded-md p-4">
-      <div className="flex gap-4">
-        <Avatar className="h-10 w-10">
-          {discussion.user?.profileImage ? (
-            <AvatarImage src={discussion.user.profileImage} />
-          ) : (
-            <AvatarFallback>
-              {discussion.user?.username
-                ? discussion.user.username.substring(0, 2).toUpperCase()
-                : "PT"}
-            </AvatarFallback>
-          )}
-        </Avatar>
+    <div className="border rounded-md p-4 mb-4">
+      <CommentDisplay
+        comment={{
+          id: discussion.id,
+          content: discussion.content,
+          upvotes: discussion.upvotes,
+          userId: discussion.userId,
+          createdAt: discussion.createdAt,
+          updatedAt: discussion.updatedAt,
+          isEdited: discussion.isEdited,
+          attachmentUrls: discussion.attachmentUrls,
+          user: discussion.user,
+        }}
+        onReply={() =>
+          currentUser
+            ? onReply()
+            : toast({
+                title: "Authentication required",
+                description: "Please sign in to reply to comments",
+              })
+        }
+        onUpvote={() =>
+          currentUser
+            ? onUpvote()
+            : toast({
+                title: "Authentication required",
+                description: "Please sign in to upvote comments",
+              })
+        }
+        onRemoveUpvote={onRemoveUpvote}
+        isCurrentUserUpvoted={currentUser && discussion.upvotedByCurrentUser}
+        isCurrentUserComment={
+          currentUser && currentUser.id === discussion.userId
+        }
+      />
 
-        <div className="flex-1">
-          <div className="flex justify-between">
-            <div>
-              <span className="font-medium">
-                {discussion.user?.username || "Anonymous"}
-              </span>
-              <span className="text-sm text-muted-foreground ml-2">
-                {createdDate}
-              </span>
-              {discussion.isEdited && (
-                <span className="text-xs text-muted-foreground ml-2">
-                  (edited)
-                </span>
-              )}
-            </div>
-          </div>
-
-          <div className="mt-2 whitespace-pre-line">{discussion.content}</div>
-
-          <div className="mt-3 flex space-x-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() =>
-                currentUser
-                  ? onUpvote()
-                  : toast({
-                      title: "Authentication required",
-                      description: "Please sign in to upvote comments",
-                    })
-              }
-              className="flex items-center"
-            >
-              <ThumbsUp className="mr-1 h-4 w-4" />
-              {discussion.upvotes || 0}
-            </Button>
-
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() =>
-                currentUser
-                  ? onReply()
-                  : toast({
-                      title: "Authentication required",
-                      description: "Please sign in to reply to comments",
-                    })
-              }
-              className="flex items-center"
-            >
-              <Reply className="mr-1 h-4 w-4" />
-              Reply
-            </Button>
-
-            {replies.length > 0 || showReplies ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowReplies(!showReplies)}
-                className="flex items-center"
-              >
-                {showReplies
-                  ? "Hide Replies"
-                  : `Show Replies (${replies.length})`}
-              </Button>
-            ) : null}
-          </div>
-
-          {showReplies && replies.length > 0 && (
-            <div className="mt-4 pl-4 border-l space-y-4">
-              {replies.map((reply) => (
-                <div key={reply.id} className="pt-4">
-                  <div className="flex gap-3">
-                    <Avatar className="h-8 w-8">
-                      {reply.user?.profileImage ? (
-                        <AvatarImage src={reply.user.profileImage} />
-                      ) : (
-                        <AvatarFallback>
-                          {reply.user?.username
-                            ? reply.user.username.substring(0, 2).toUpperCase()
-                            : "PT"}
-                        </AvatarFallback>
-                      )}
-                    </Avatar>
-
-                    <div className="flex-1">
-                      <div>
-                        <span className="font-medium">
-                          {reply.user?.username || "Anonymous"}
-                        </span>
-                        <span className="text-sm text-muted-foreground ml-2">
-                          {new Date(reply.createdAt).toLocaleDateString()}
-                        </span>
-                        {reply.isEdited && (
-                          <span className="text-xs text-muted-foreground ml-2">
-                            (edited)
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="mt-1 whitespace-pre-line">
-                        {reply.content}
-                      </div>
-
-                      <div className="mt-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            currentUser
-                              ? onUpvote()
-                              : toast({
-                                  title: "Authentication required",
-                                  description:
-                                    "Please sign in to upvote replies",
-                                })
-                          }
-                          className="flex items-center"
-                        >
-                          <ThumbsUp className="mr-1 h-4 w-4" />
-                          {reply.upvotes || 0}
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+      <div className="ml-12 mt-2">
+        {(replies.length > 0 || showReplies) && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowReplies(!showReplies)}
+            className="text-sm"
+          >
+            <MessageSquare className="h-4 w-4 mr-1" />
+            {showReplies ? "Hide replies" : `Show replies (${replies.length})`}
+          </Button>
+        )}
       </div>
+
+      {showReplies && replies.length > 0 && (
+        <div className="mt-4 ml-12 pl-4 border-l space-y-4">
+          {replies.map((reply) => (
+            <CommentDisplay
+              key={reply.id}
+              comment={{
+                id: reply.id,
+                content: reply.content,
+                upvotes: reply.upvotes,
+                userId: reply.userId,
+                createdAt: reply.createdAt,
+                updatedAt: reply.updatedAt,
+                isEdited: reply.isEdited,
+                attachmentUrls: reply.attachmentUrls,
+                user: reply.user,
+              }}
+              onReply={() => {}}
+              onUpvote={() => {}}
+              onRemoveUpvote={() => {}}
+              isCurrentUserComment={
+                currentUser && currentUser.id === reply.userId
+              }
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

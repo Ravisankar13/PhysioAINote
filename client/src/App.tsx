@@ -19,11 +19,14 @@ import ExercisePage from "@/pages/ExercisePage";
 import ManualTherapyPage from "@/pages/ManualTherapyPage";
 import TestAudioTranscription from "@/pages/TestAudioTranscription";
 import TestNoteGenerator from "@/pages/TestNoteGenerator";
+import TestCaseStudiesPage from "@/pages/TestCaseStudiesPage";
 import SessionsPage from "@/pages/SessionsPage";
 import VirtualPatientPage from "@/pages/VirtualPatientPage";
 import SharedCasesPage from "@/pages/SharedCasesPage";
 import SharedCaseDetailPage from "@/pages/SharedCaseDetailPage";
 import SharedCaseFormPage from "@/pages/SharedCaseFormPage";
+import CaseStudyPage from "@/pages/CaseStudyPage";
+import AdminDashboard from "@/pages/admin-dashboard";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { ThemeProvider } from "next-themes";
@@ -75,15 +78,24 @@ function Router() {
           />
           <Route path="/shared-cases/:id" element={<SharedCaseDetailPage />} />
           <Route path="/shared-cases" element={<SharedCasesPage />} />
+          <Route
+            path="/case-studies"
+            element={<ProtectedRoute component={CaseStudyPage} />}
+          />
           <Route path="/membership" element={<Membership />} />
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/auth" element={<AuthPage />} />
           <Route
+            path="/admin"
+            element={<ProtectedRoute component={AdminDashboard} />}
+          />
+          <Route
             path="/test-audio-transcription"
             element={<TestAudioTranscription />}
           />
           <Route path="/test-note-generator" element={<TestNoteGenerator />} />
+          <Route path="/test-case-studies" element={<TestCaseStudiesPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>

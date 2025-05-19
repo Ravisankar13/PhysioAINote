@@ -1,11 +1,12 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
-import { eq } from "drizzle-orm";
+import { eq, sql, ilike } from "drizzle-orm";
 import { storage } from "./storage";
 import { db } from "./db";
 import { generateSoapNote } from "./openai";
 import { analyzeVirtualPatientCase, findRelevantResearchArticles } from "./virtualPatientOpenai";
-import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, discussionUpvotes } from "@shared/schema";
+import { generateAICaseStudy, generateDiagnosticFeedback } from "./aiCaseStudyGenerator";
+import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, discussionUpvotes, exercises } from "@shared/schema";
 import { ZodError, z } from "zod";
 import { fromZodError } from "zod-validation-error";
 import multer from "multer";
@@ -13,6 +14,7 @@ import path from "path";
 import fs from "fs";
 import os from "os";
 import { transcribeAudio, analyzeTranscription } from "./transcription";
+import { uploadToS3, getFileType } from "./s3Uploader";
 import { setupAuth } from "./auth";
 import { calculateAgeRange, deIdentifyNote, extractCondition } from "./utilities/deIdentify";
 import { sampleNotes } from "./routes/sampleNotes";
@@ -781,15 +783,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: 'User not found' });
       }
       
-      if (!user.stripeSubscriptionId) {
+      // Check if user has an active membership
+      if (user.membershipTier === 'none') {
         return res.status(400).json({ error: 'No active subscription to cancel' });
       }
       
-      // Cancel the subscription in Stripe
-      await stripe.subscriptions.cancel(user.stripeSubscriptionId);
+      // If user has a Stripe subscription, cancel it
+      if (user.stripeSubscriptionId) {
+        try {
+          await stripe.subscriptions.cancel(user.stripeSubscriptionId);
+        } catch (stripeError) {
+          console.error("Error cancelling Stripe subscription:", stripeError);
+          // Continue with membership cancellation even if Stripe API fails
+        }
+      }
       
-      // Update the user's membership tier to indicate cancellation
-      await storage.updateUserMembership(userId, 'free', new Date());
+      // Update the user's membership tier to 'none'
+      await storage.updateUserMembership(userId, 'none', new Date());
       
       res.json({ message: 'Subscription successfully cancelled' });
     } catch (error) {
@@ -833,19 +843,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const payment = await storage.createPaymentRecord(data);
       
-      // If the payment is for a membership, update the user's membership status
-      if (data.type === 'membership' && data.status === 'completed') {
-        const subscriptionPlan = await storage.getSubscriptionPlanByTier(data.membershipTier!);
+      // If the payment is completed, update the user's membership status based on the plan
+      if (data.status === 'completed') {
+        // Get the subscription plan from the planId in the payment data
+        const subscriptionPlan = await storage.getSubscriptionPlan(data.planId);
         
         if (!subscriptionPlan) {
-          throw new Error(`Subscription plan for tier ${data.membershipTier} not found`);
+          throw new Error(`Subscription plan with ID ${data.planId} not found`);
         }
         
-        // Calculate membership expiry date based on plan duration
+        // Calculate membership expiry date - default to 30 days if not specified
         const expiryDate = new Date();
-        expiryDate.setDate(expiryDate.getDate() + subscriptionPlan.durationDays);
+        // Calculate based on interval (weekly, monthly, yearly)
+        if (subscriptionPlan.interval === 'weekly') {
+          expiryDate.setDate(expiryDate.getDate() + 7);
+        } else if (subscriptionPlan.interval === 'monthly') {
+          expiryDate.setMonth(expiryDate.getMonth() + 1);
+        } else if (subscriptionPlan.interval === 'yearly') {
+          expiryDate.setFullYear(expiryDate.getFullYear() + 1);
+        } else {
+          // Default to 30 days
+          expiryDate.setDate(expiryDate.getDate() + 30);
+        }
         
-        await storage.updateUserMembership(userId, data.membershipTier!, expiryDate);
+        // Update user membership with the tier from the subscription plan
+        await storage.updateUserMembership(userId, subscriptionPlan.tier, expiryDate);
       }
       
       res.status(201).json(payment);
@@ -867,20 +889,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: 'User not authenticated' });
       }
       
-      const { amount, membershipTier } = req.body;
+      const { amount, planId } = req.body;
       
       if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
         return res.status(400).json({ error: 'Invalid amount' });
       }
       
-      if (!membershipTier) {
-        return res.status(400).json({ error: 'Membership tier is required' });
+      if (!planId) {
+        return res.status(400).json({ error: 'Plan ID is required' });
       }
       
-      // Validate that the membership tier exists
-      const subscriptionPlan = await storage.getSubscriptionPlanByTier(membershipTier);
+      // Validate that the subscription plan exists
+      const subscriptionPlan = await storage.getSubscriptionPlan(planId);
       if (!subscriptionPlan) {
-        return res.status(400).json({ error: `Invalid membership tier: ${membershipTier}` });
+        return res.status(400).json({ error: `Invalid subscription plan ID: ${planId}` });
       }
       
       // Create a payment intent with Stripe
@@ -889,7 +911,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         currency: 'usd',
         metadata: {
           userId: userId.toString(),
-          membershipTier,
+          planId: planId.toString(),
+          planTier: subscriptionPlan.tier,
           integrationCheck: 'physiotherapy_platform'
         }
       });
@@ -906,13 +929,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Helper function to add Reformer Pilates exercises
+  const ensureReformerExercisesAdded = async () => {
+    // Get Reformer Pilates exercises by querying the database directly
+    try {
+      // Use the storage interface to search for reformer exercises
+      const searchResults = await storage.getExercisesBySearchTerm("Reformer");
+      
+      if (searchResults.length < 5) {
+        console.log("Adding Reformer Pilates exercises to the database...");
+        const { addReformerPilatesExercises } = await import('./routes/addReformerPilatesExercises');
+        await addReformerPilatesExercises();
+      }
+    } catch (error) {
+      console.error("Error checking for Reformer exercises:", error);
+    }
+  };
+
   app.get("/api/exercises", async (req: Request, res: Response) => {
     try {
+      // Ensure Reformer Pilates exercises are added
+      await ensureReformerExercisesAdded();
+      
       const bodyPart = req.query.bodyPart as string | undefined;
       const difficulty = req.query.difficulty as string | undefined;
+      const searchTerm = req.query.search as string | undefined;
+      const getAll = req.query.all === 'true';
       
-      const exercises = await storage.getExercises(bodyPart, difficulty);
-      res.json(exercises);
+      // If search term is provided, use it for filtering exercises
+      if (searchTerm && searchTerm.trim() !== '') {
+        const searchResults = await storage.getExercisesBySearchTerm(searchTerm);
+        
+        // Further filter by body part and difficulty if needed
+        let filteredResults = searchResults;
+        
+        if (bodyPart && bodyPartEnum.enumValues.includes(bodyPart as any)) {
+          filteredResults = filteredResults.filter(ex => ex.bodyPart === bodyPart);
+        }
+        
+        if (difficulty && difficultyEnum.enumValues.includes(difficulty as any)) {
+          filteredResults = filteredResults.filter(ex => ex.difficulty === difficulty);
+        }
+        
+        return res.json(filteredResults);
+      }
+      
+      // If "all" parameter is true, retrieve all exercises
+      if (getAll) {
+        const allExercises = await storage.getExercises(undefined, undefined, true);
+        return res.json(allExercises);
+      }
+      
+      // Use the normal storage method if no search term
+      const exerciseResults = await storage.getExercises(bodyPart, difficulty);
+      res.json(exerciseResults);
     } catch (error) {
       if (error instanceof Error) {
         res.status(500).json({ error: error.message });
@@ -1136,7 +1206,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: 'You do not have permission to access this virtual patient' });
       }
       
-      res.json(virtualPatient);
+      // Fetch related research articles if there are any related article IDs
+      let relatedResearch: any[] = [];
+      
+      // For debugging - log the field value
+      console.log("Patient related_article_ids:", virtualPatient.related_article_ids);
+      console.log("Patient relatedArticleIds:", virtualPatient.relatedArticleIds);
+      
+      // Try both possible field names for backward compatibility
+      const articleIdsField = virtualPatient.related_article_ids || virtualPatient.relatedArticleIds;
+      
+      if (articleIdsField && (Array.isArray(articleIdsField) || typeof articleIdsField === 'string')) {
+        try {
+          // Try to parse the IDs if they're in string format
+          let articleIds;
+          if (typeof articleIdsField === 'string') {
+            try {
+              articleIds = JSON.parse(articleIdsField);
+            } catch {
+              // If it fails to parse as JSON, split by commas (older format)
+              articleIds = articleIdsField.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+            }
+          } else {
+            articleIds = articleIdsField;
+          }
+            
+          if (Array.isArray(articleIds) && articleIds.length > 0) {
+            console.log("Fetching research articles with IDs:", articleIds);
+            
+            // If no articles found through IDs, get some default ones for this body part
+            relatedResearch = await storage.getResearchArticlesByIds(articleIds);
+            console.log(`Found ${relatedResearch.length} related research articles`);
+            
+            // If no related articles found by IDs, get some default ones
+            if (relatedResearch.length === 0) {
+              console.log("No articles found by IDs, getting default articles for body part:", virtualPatient.bodyPart);
+              const { articles } = await storage.getResearchArticles(virtualPatient.bodyPart, 1, 5);
+              relatedResearch = articles;
+              console.log(`Using ${relatedResearch.length} default articles for this body part`);
+            }
+          } else {
+            // If no article IDs found, get some default ones for this body part
+            console.log("No article IDs found, getting default articles for body part:", virtualPatient.bodyPart);
+            const { articles } = await storage.getResearchArticles(virtualPatient.bodyPart, 1, 5);
+            relatedResearch = articles;
+            console.log(`Using ${relatedResearch.length} default articles for this body part`);
+          }
+        } catch (err) {
+          console.error('Error fetching related research articles:', err, articleIdsField);
+          // Fallback to default articles for this body part
+          try {
+            const { articles } = await storage.getResearchArticles(virtualPatient.bodyPart, 1, 5);
+            relatedResearch = articles;
+            console.log(`Using ${relatedResearch.length} fallback articles for this body part`);
+          } catch (fallbackErr) {
+            console.error('Error fetching fallback articles:', fallbackErr);
+          }
+        }
+      } else {
+        // If no article IDs field found, get some default ones for this body part
+        try {
+          console.log("No article IDs field found, getting default articles for body part:", virtualPatient.bodyPart);
+          const { articles } = await storage.getResearchArticles(virtualPatient.bodyPart, 1, 5);
+          relatedResearch = articles;
+          console.log(`Using ${relatedResearch.length} default articles for this body part`);
+        } catch (err) {
+          console.error('Error fetching default articles:', err);
+        }
+      }
+      
+      // Return the virtual patient with related research articles included
+      res.json({
+        ...virtualPatient,
+        relatedResearch
+      });
     } catch (error) {
       if (error instanceof Error) {
         res.status(500).json({ error: error.message });
@@ -1234,6 +1377,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: 'You do not have permission to analyze this virtual patient' });
       }
       
+      // Set hasBeenEdited to false since we're now analyzing/reanalyzing
+      await storage.updateVirtualPatient(patientId, {
+        hasBeenEdited: false
+      });
+      
       // Special case for username "fateofjustice" - should get premium features for free
       const user = await storage.getUser(userId);
       if (!user) {
@@ -1286,13 +1434,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get relevant article IDs from the search terms
       const relevantArticleIds = searchResults?.searchTerms || [];
       
+      // Include assessment tests in the patient data
+      // First, modify the virtual patient schema to include assessment tests
+      const updatedData = {
+        diagnosis: analysisResult.primaryDiagnosis?.name || "Unknown diagnosis",
+        differentialDiagnosis: analysisResult.differentialDiagnoses || [],
+        treatmentOptions: analysisResult.treatmentOptions || [],
+        relatedArticleIds: relevantArticleIds,
+        // Store assessment tests directly in the differential diagnosis object for now
+        // since we don't have a dedicated field in the database
+        assessmentTests: analysisResult.assessmentTests || []
+      };
+      
       // Update the virtual patient with the analysis results
-      const updatedPatient = await storage.updateVirtualPatientDiagnosis(
+      const updatedPatient = await storage.updateVirtualPatient(
         patientId,
-        analysisResult.primaryDiagnosis?.name || "Unknown diagnosis",
-        analysisResult.differentialDiagnoses || [],
-        analysisResult.treatmentOptions || [],
-        relevantArticleIds
+        updatedData
       );
       
       res.json(updatedPatient);
@@ -1662,6 +1819,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // File Upload API for Peer Knowledge Exchange attachments
+  app.post("/api/peer-exchange/upload", ensureAuthenticated, uploadToS3.array("files", 5), async (req: Request, res: Response) => {
+    try {
+      if (!req.files || (Array.isArray(req.files) && req.files.length === 0)) {
+        return res.status(400).json({ error: "No files were uploaded" });
+      }
+
+      const files = Array.isArray(req.files) ? req.files : [req.files];
+      const fileDetails = files.map(file => ({
+        url: (file as any).location,
+        name: file.originalname,
+        type: getFileType(file.mimetype),
+        size: file.size
+      }));
+      
+      res.status(200).json(fileDetails);
+    } catch (error) {
+      console.error("File upload error:", error);
+      if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred during file upload' });
+      }
+    }
+  });
+  
   app.post("/api/case-tags", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       // Check if the user has permission to create tags (premium members only)
@@ -1680,6 +1863,222 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error creating case tag:", error);
       res.status(500).json({ error: "Failed to create case tag" });
+    }
+  });
+
+  // Admin API Routes
+  app.get("/api/admin/users", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      // Check if user is admin (case insensitive check for better compatibility)
+      if (!req.user || !['fateofjustice', 'Fateofjustice'].includes(req.user.username)) {
+        return res.status(403).json({ error: "Unauthorized access" });
+      }
+      
+      // Get all users
+      const users = await storage.getAllUsers();
+      const totalUsers = await storage.getUserCount();
+      
+      // Count membership tiers
+      const byMembership = {
+        basic: 0,
+        standard: 0,
+        premium: 0,
+        none: 0
+      };
+      
+      users.forEach(user => {
+        const tier = user.membershipTier || 'none';
+        byMembership[tier] += 1;
+      });
+      
+      res.json({
+        totalUsers,
+        users: users.map(user => ({
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          fullName: user.fullName,
+          membershipTier: user.membershipTier || 'none',
+          membershipExpiry: user.membershipExpiry ? user.membershipExpiry.toISOString() : null,
+          createdAt: user.createdAt ? user.createdAt.toISOString() : 'N/A'
+        })),
+        byMembership
+      });
+    } catch (error) {
+      console.error("Error fetching admin stats:", error);
+      res.status(500).json({ error: "Failed to fetch admin statistics" });
+    }
+  });
+
+  // AI Case Studies API Routes
+  app.get("/api/case-studies", async (req: Request, res: Response) => {
+    try {
+      const { bodyPart, complexity } = req.query;
+      const page = parseInt(req.query.page as string) || 1;
+      const pageSize = parseInt(req.query.pageSize as string) || 10;
+      
+      // Get existing case studies
+      const result = await storage.getAICaseStudies(
+        bodyPart as string, 
+        complexity as string,
+        page,
+        pageSize
+      );
+      
+      // Check if we need to load sample case studies (if none exist)
+      if (result.total === 0 || result.caseStudies.length === 0) {
+        console.log("No case studies found, loading sample case studies...");
+        try {
+          // Import and add sample case studies
+          const { addSampleCaseStudies } = await import('./sampleCaseStudies');
+          await addSampleCaseStudies(storage);
+          
+          // Add additional case studies (5 per body part)
+          const { addAdditionalCaseStudies } = await import('./additionalCaseStudies');
+          await addAdditionalCaseStudies(storage);
+          
+          // Try to fetch again after adding samples
+          const updatedResult = await storage.getAICaseStudies(
+            bodyPart as string,
+            complexity as string,
+            page,
+            pageSize
+          );
+          
+          return res.json(updatedResult);
+        } catch (sampleError) {
+          console.error("Error loading sample case studies:", sampleError);
+          // Continue with original empty result if sample loading fails
+        }
+      }
+      
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching case studies:", error);
+      res.status(500).json({ error: "Error fetching case studies" });
+    }
+  });
+
+  app.get("/api/case-studies/:id", async (req: Request, res: Response) => {
+    try {
+      const caseId = parseInt(req.params.id);
+      const caseStudy = await storage.getAICaseStudy(caseId);
+      
+      if (!caseStudy) {
+        return res.status(404).json({ error: "Case study not found" });
+      }
+      
+      res.json(caseStudy);
+    } catch (error) {
+      console.error("Error fetching case study:", error);
+      res.status(500).json({ error: "Error fetching case study" });
+    }
+  });
+
+  app.post("/api/case-studies", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      // Check if user has required membership for AI case studies
+      if (req.user.username !== "Fateofjustice" && 
+          (req.user.membershipTier === "none" || !req.user.membershipTier)) {
+        return res.status(403).json({ 
+          error: "Paid membership required", 
+          code: "membership_required" 
+        });
+      }
+      
+      const { bodyPart, complexity, includeResearch } = req.body;
+      
+      // Validate input
+      if (!bodyPart || !complexity) {
+        return res.status(400).json({ error: "Body part and complexity are required" });
+      }
+      
+      // Generate the AI case study
+      const caseStudy = await generateAICaseStudy(
+        { bodyPart, complexity, includeResearch: includeResearch ?? true },
+        req.user.id
+      );
+      
+      // Save to database
+      const savedCaseStudy = await storage.createAICaseStudy(caseStudy);
+      
+      res.status(201).json(savedCaseStudy);
+    } catch (error) {
+      console.error("Error creating case study:", error);
+      res.status(500).json({ error: "Error creating case study" });
+    }
+  });
+
+  app.get("/api/case-studies/:id/attempts", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const caseId = parseInt(req.params.id);
+      const userId = req.user.id;
+      
+      const attempts = await storage.getUserAttemptsForCase(userId, caseId);
+      
+      res.json(attempts);
+    } catch (error) {
+      console.error("Error fetching case study attempts:", error);
+      res.status(500).json({ error: "Error fetching case study attempts" });
+    }
+  });
+
+  app.post("/api/case-studies/:id/attempt", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const caseId = parseInt(req.params.id);
+      const userId = req.user.id;
+      
+      // Get the case study
+      const caseStudy = await storage.getAICaseStudy(caseId);
+      if (!caseStudy) {
+        return res.status(404).json({ error: "Case study not found" });
+      }
+      
+      // Create the attempt record
+      const attemptData = {
+        caseStudyId: caseId,
+        userId,
+        userDiagnosis: req.body.userDiagnosis,
+        userReasoning: req.body.userReasoning,
+        assessmentTests: req.body.assessmentTests,
+        proposedTreatment: req.body.proposedTreatment,
+        completed: false
+      };
+      
+      const attempt = await storage.createCaseStudyAttempt(attemptData);
+      
+      // Generate feedback
+      const feedback = await generateDiagnosticFeedback({
+        caseStudyId: caseId,
+        userDiagnosis: req.body.userDiagnosis,
+        userReasoning: req.body.userReasoning,
+        assessmentTests: req.body.assessmentTests,
+        proposedTreatment: req.body.proposedTreatment
+      }, caseStudy);
+      
+      // Update the attempt with feedback
+      const updatedAttempt = await storage.updateCaseStudyAttemptFeedback(
+        attempt.id,
+        feedback,
+        feedback.overallAccuracy
+      );
+      
+      res.status(201).json(updatedAttempt);
+    } catch (error) {
+      console.error("Error submitting case study attempt:", error);
+      res.status(500).json({ error: "Error submitting case study attempt" });
+    }
+  });
+
+  app.get("/api/user/case-studies", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user.id;
+      const caseStudies = await storage.getUserAICaseStudies(userId);
+      
+      res.json(caseStudies);
+    } catch (error) {
+      console.error("Error fetching user case studies:", error);
+      res.status(500).json({ error: "Error fetching user case studies" });
     }
   });
 

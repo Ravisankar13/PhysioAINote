@@ -1,0 +1,716 @@
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
+import { 
+  ChevronLeft, 
+  Activity, 
+  ArrowRight, 
+  Brain,
+  Lightbulb,
+  BookOpen,
+  User,
+  ThumbsUp,
+  ThumbsDown,
+  AlertCircle,
+  Clipboard,
+  ClipboardCheck,
+  Edit,
+  Pencil
+} from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Link } from "wouter";
+
+interface VirtualPatientDetailProps {
+  patientId: number;
+  onBackToList: () => void;
+  onEditPatient?: (patient: any) => void;
+}
+
+export default function VirtualPatientDetail({ patientId, onBackToList, onEditPatient }: VirtualPatientDetailProps) {
+  const { toast } = useToast();
+  const [activeTab, setActiveTab] = useState("info");
+
+  const { data: patient, isLoading, isError, error } = useQuery<any>({
+    queryKey: [`/api/virtual-patients/${patientId}`],
+    queryFn: async () => {
+      const response = await fetch(`/api/virtual-patients/${patientId}`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch patient details");
+      }
+      return response.json();
+    },
+  });
+
+  const analyzePatientMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", `/api/virtual-patients/${patientId}/analyze`);
+      return await response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/virtual-patients/${patientId}`] });
+      toast({
+        title: "Analysis Complete",
+        description: "The virtual patient case has been analyzed successfully",
+      });
+      setActiveTab("diagnosis");
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Analysis Failed",
+        description: `Failed to analyze the patient case: ${error.message}`,
+        variant: "destructive",
+      });
+    },
+  });
+
+  if (isError) {
+    return (
+      <Card className="max-w-4xl mx-auto">
+        <CardHeader>
+          <div className="flex items-center mb-2">
+            <Button variant="ghost" onClick={onBackToList} className="h-8 w-8 p-0 mr-2">
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <CardTitle>Error</CardTitle>
+          </div>
+          <CardDescription>
+            Failed to load patient details: {error?.message}
+          </CardDescription>
+        </CardHeader>
+        <CardFooter>
+          <Button variant="outline" onClick={onBackToList}>
+            Return to Patient List
+          </Button>
+        </CardFooter>
+      </Card>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <Card className="max-w-4xl mx-auto">
+        <CardHeader>
+          <div className="flex items-center mb-2">
+            <Button variant="ghost" onClick={onBackToList} className="h-8 w-8 p-0 mr-2">
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Skeleton className="h-8 w-64" />
+          </div>
+          <Skeleton className="h-4 w-full" />
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <Skeleton className="h-40 w-full" />
+            <Skeleton className="h-40 w-full" />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const hasDiagnosis = !!patient?.diagnosis;
+
+  return (
+    <Card className="max-w-5xl mx-auto">
+      <CardHeader>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center">
+            <Button variant="ghost" onClick={onBackToList} className="h-8 w-8 p-0 mr-2">
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <CardTitle>{patient.patientName}</CardTitle>
+          </div>
+          <div className="flex items-center space-x-2">
+            {onEditPatient && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="mr-2"
+                onClick={() => onEditPatient(patient)}
+              >
+                <Pencil className="h-4 w-4 mr-1" />
+                Edit Patient
+              </Button>
+            )}
+            <Badge variant="outline">{patient.age} years</Badge>
+            <Badge variant="outline">{patient.gender}</Badge>
+            <Badge>{patient.bodyPart}</Badge>
+          </div>
+        </div>
+        <CardDescription>
+          Chief Complaint: {patient.chiefComplaint}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="p-0">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-6">
+            <TabsTrigger value="info" className="flex items-center">
+              <User className="h-4 w-4 mr-2" />
+              Patient Info
+            </TabsTrigger>
+            <TabsTrigger value="diagnosis" disabled={!hasDiagnosis} className="flex items-center">
+              <Brain className="h-4 w-4 mr-2" />
+              Diagnosis
+            </TabsTrigger>
+            <TabsTrigger value="assessment" disabled={!hasDiagnosis} className="flex items-center">
+              <Clipboard className="h-4 w-4 mr-2" />
+              Assessment Tests
+            </TabsTrigger>
+            <TabsTrigger value="findings" disabled={!hasDiagnosis} className="flex items-center">
+              <ClipboardCheck className="h-4 w-4 mr-2" />
+              Objective Findings
+            </TabsTrigger>
+            <TabsTrigger value="treatment" disabled={!hasDiagnosis} className="flex items-center">
+              <Activity className="h-4 w-4 mr-2" />
+              Treatment Options
+            </TabsTrigger>
+            <TabsTrigger value="research" disabled={!hasDiagnosis} className="flex items-center">
+              <BookOpen className="h-4 w-4 mr-2" />
+              Research
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Patient Info Tab */}
+          <TabsContent value="info" className="p-6">
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-semibold mb-2">Symptoms Description</h3>
+                <p className="text-sm leading-relaxed">{patient.symptomsDescription}</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {patient.pastMedicalHistory && (
+                  <div>
+                    <h3 className="text-md font-semibold mb-1">Past Medical History</h3>
+                    <p className="text-sm leading-relaxed">{patient.pastMedicalHistory}</p>
+                  </div>
+                )}
+                
+                {patient.pastSurgicalHistory && (
+                  <div>
+                    <h3 className="text-md font-semibold mb-1">Past Surgical History</h3>
+                    <p className="text-sm leading-relaxed">{patient.pastSurgicalHistory}</p>
+                  </div>
+                )}
+                
+                {patient.socialHistory && (
+                  <div>
+                    <h3 className="text-md font-semibold mb-1">Social History</h3>
+                    <p className="text-sm leading-relaxed">{patient.socialHistory}</p>
+                  </div>
+                )}
+                
+                {patient.familyHistory && (
+                  <div>
+                    <h3 className="text-md font-semibold mb-1">Family History</h3>
+                    <p className="text-sm leading-relaxed">{patient.familyHistory}</p>
+                  </div>
+                )}
+                
+                {patient.medications && (
+                  <div>
+                    <h3 className="text-md font-semibold mb-1">Medications</h3>
+                    <p className="text-sm leading-relaxed">{patient.medications}</p>
+                  </div>
+                )}
+                
+                {patient.allergies && (
+                  <div>
+                    <h3 className="text-md font-semibold mb-1">Allergies</h3>
+                    <p className="text-sm leading-relaxed">{patient.allergies}</p>
+                  </div>
+                )}
+              </div>
+
+              {!hasDiagnosis && (
+                <div className="flex justify-center mt-8">
+                  <Button 
+                    onClick={() => analyzePatientMutation.mutate()}
+                    disabled={analyzePatientMutation.isPending}
+                    size="lg"
+                    className="w-full md:w-auto"
+                  >
+                    {analyzePatientMutation.isPending ? (
+                      <>
+                        <Activity className="mr-2 h-4 w-4 animate-pulse" />
+                        Analyzing Patient Data...
+                      </>
+                    ) : (
+                      <>
+                        <Activity className="mr-2 h-4 w-4" />
+                        Analyze Patient Data
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
+          {/* Diagnosis Tab */}
+          <TabsContent value="diagnosis" className="p-6">
+            {!hasDiagnosis ? (
+              <div className="text-center p-8">
+                <Activity className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium mb-2">No diagnosis available</h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  Analyze the patient data to generate a diagnosis and treatment recommendations.
+                </p>
+                <Button 
+                  onClick={() => analyzePatientMutation.mutate()}
+                  disabled={analyzePatientMutation.isPending}
+                >
+                  {analyzePatientMutation.isPending ? (
+                    <>
+                      <Activity className="mr-2 h-4 w-4 animate-pulse" />
+                      Analyzing...
+                    </>
+                  ) : (
+                    <>
+                      <Activity className="mr-2 h-4 w-4" />
+                      Analyze Patient Data
+                    </>
+                  )}
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <div className="bg-primary/5 p-4 rounded-lg">
+                  <h3 className="text-lg font-semibold mb-2 flex items-center">
+                    <Brain className="h-5 w-5 mr-2 text-primary" />
+                    Primary Diagnosis
+                  </h3>
+                  <h4 className="text-md font-medium mb-1">{patient.diagnosis}</h4>
+                  {patient.differentialDiagnosis && patient.differentialDiagnosis[0]?.description && (
+                    <p className="text-sm leading-relaxed">
+                      {patient.differentialDiagnosis[0].description}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <h3 className="text-lg font-semibold mb-3 flex items-center">
+                    <AlertCircle className="h-5 w-5 mr-2 text-amber-500" />
+                    Differential Diagnoses
+                  </h3>
+                  <div className="space-y-3">
+                    {patient.differentialDiagnosis && patient.differentialDiagnosis.slice(1).map((diff: any, idx: number) => (
+                      <div key={idx} className="border rounded-lg p-3">
+                        <div className="flex justify-between items-start mb-1">
+                          <h4 className="text-md font-medium">{diff.name}</h4>
+                          <Badge variant={
+                            diff.likelihood === "high" ? "destructive" : 
+                            diff.likelihood === "medium" ? "secondary" : 
+                            "outline"
+                          }>
+                            {diff.likelihood} likelihood
+                          </Badge>
+                        </div>
+                        <p className="text-sm">{diff.reasoning}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </TabsContent>
+
+          {/* Assessment Tests Tab - Enhanced with clinical tests */}
+          <TabsContent value="assessment" className="p-6">
+            {!hasDiagnosis ? (
+              <div className="text-center p-8">
+                <Clipboard className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium mb-2">No assessment data available</h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  Analyze the patient data to view relevant assessment tests.
+                </p>
+                <Button 
+                  onClick={() => analyzePatientMutation.mutate()}
+                  disabled={analyzePatientMutation.isPending}
+                >
+                  {analyzePatientMutation.isPending ? (
+                    <>
+                      <Activity className="mr-2 h-4 w-4 animate-pulse" />
+                      Analyzing...
+                    </>
+                  ) : (
+                    <>
+                      <Activity className="mr-2 h-4 w-4" />
+                      Analyze Patient Data
+                    </>
+                  )}
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <div className="bg-primary/5 p-4 rounded-lg">
+                  <h3 className="text-lg font-semibold mb-2 flex items-center">
+                    <Clipboard className="h-5 w-5 mr-2 text-primary" />
+                    Relevant Clinical Tests
+                  </h3>
+                  <p className="text-sm mb-4">These diagnostic tests are recommended to confirm the primary diagnosis.</p>
+                </div>
+
+                {patient.clinicalTests && patient.clinicalTests.map((test: any, idx: number) => (
+                  <div key={idx} className="border rounded-lg p-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <h4 className="text-md font-semibold">{test.name}</h4>
+                      <Badge variant={
+                        test.sensitivity > 0.8 ? "default" : 
+                        test.sensitivity > 0.6 ? "secondary" : 
+                        "outline"
+                      }>
+                        {test.sensitivity > 0.8 ? "High" : test.sensitivity > 0.6 ? "Moderate" : "Low"} Sensitivity
+                      </Badge>
+                    </div>
+                    <p className="text-sm mb-2">{test.description}</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+                      <div>
+                        <h5 className="text-sm font-medium mb-1">How to Perform</h5>
+                        <p className="text-sm">{test.procedure}</p>
+                      </div>
+                      <div>
+                        <h5 className="text-sm font-medium mb-1">Positive Findings</h5>
+                        <p className="text-sm">{test.positiveFindings}</p>
+                      </div>
+                    </div>
+                    {test.evidenceLevel && (
+                      <div className="mt-3">
+                        <h5 className="text-sm font-medium">Evidence Level</h5>
+                        <p className="text-sm">{test.evidenceLevel}</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* Objective Findings Tab */}
+          <TabsContent value="findings" className="p-6">
+            {!hasDiagnosis ? (
+              <div className="text-center p-8">
+                <ClipboardCheck className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium mb-2">No objective findings available</h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  Analyze the patient data to view objective findings.
+                </p>
+                <Button 
+                  onClick={() => analyzePatientMutation.mutate()}
+                  disabled={analyzePatientMutation.isPending}
+                >
+                  {analyzePatientMutation.isPending ? (
+                    <>
+                      <Activity className="mr-2 h-4 w-4 animate-pulse" />
+                      Analyzing...
+                    </>
+                  ) : (
+                    <>
+                      <Activity className="mr-2 h-4 w-4" />
+                      Analyze Patient Data
+                    </>
+                  )}
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {patient.objectiveFindings && patient.objectiveFindings.map((finding: any, idx: number) => (
+                  <div key={idx} className="border rounded-lg p-4">
+                    <h4 className="text-md font-semibold mb-3 bg-primary/10 p-2 rounded">
+                      {finding.category}
+                    </h4>
+                    {finding.observations && finding.observations.map((observation: any, obsIdx: number) => (
+                      <div key={obsIdx} className="mb-4">
+                        <h5 className="text-sm font-medium mb-1">{observation.title}</h5>
+                        <p className="text-sm mb-2">{observation.details}</p>
+                        
+                        {observation.measurements && (
+                          <div className="grid grid-cols-2 gap-2 text-sm ml-3 mt-2">
+                            {Object.entries(observation.measurements).map(([key, value]: [string, any], i: number) => (
+                              <div key={i} className="flex justify-between">
+                                <span className="font-medium">{key}:</span>
+                                <span>{value}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        
+                        {observation.notes && (
+                          <p className="text-sm italic mt-2">{observation.notes}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* Treatment Options Tab - Moved from Diagnosis tab to here */}
+          <TabsContent value="treatment" className="p-6">
+            {!hasDiagnosis ? (
+              <div className="text-center p-8">
+                <Activity className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium mb-2">No treatment options available</h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  Analyze the patient data to generate treatment recommendations.
+                </p>
+                <Button 
+                  onClick={() => analyzePatientMutation.mutate()}
+                  disabled={analyzePatientMutation.isPending}
+                >
+                  {analyzePatientMutation.isPending ? (
+                    <>
+                      <Activity className="mr-2 h-4 w-4 animate-pulse" />
+                      Analyzing...
+                    </>
+                  ) : (
+                    <>
+                      <Activity className="mr-2 h-4 w-4" />
+                      Analyze Patient Data
+                    </>
+                  )}
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-lg font-semibold mb-3 flex items-center">
+                    <ClipboardCheck className="h-5 w-5 mr-2 text-green-500" />
+                    Treatment Options
+                  </h3>
+                  <div className="space-y-6">
+                    {patient.treatmentOptions && patient.treatmentOptions.map((treatmentCategory: any, idx: number) => (
+                      <div key={idx} className="border rounded-lg p-4">
+                        <h4 className="text-md font-semibold mb-3 bg-primary/10 p-2 rounded">
+                          {treatmentCategory.category}
+                        </h4>
+                        
+                        {/* Manual Therapy Techniques */}
+                        {treatmentCategory.techniques && treatmentCategory.techniques.length > 0 && (
+                          <div className="mb-4 space-y-3">
+                            {treatmentCategory.techniques.map((technique: any, techIdx: number) => (
+                              <div key={techIdx} className="border border-gray-200 rounded-md p-3">
+                                <div className="flex justify-between items-start mb-2">
+                                  <h5 className="text-md font-medium">{technique.name}</h5>
+                                  <div className="flex space-x-2">
+                                    <Badge variant="outline">
+                                      {technique.evidenceLevel} evidence
+                                    </Badge>
+                                    <Badge variant={
+                                      technique.recommendationStrength === "highly recommended" ? "default" : 
+                                      technique.recommendationStrength === "recommended" ? "secondary" : 
+                                      "outline"
+                                    }>
+                                      {technique.recommendationStrength}
+                                    </Badge>
+                                  </div>
+                                </div>
+                                <p className="text-sm mb-2"><strong>Description:</strong> {technique.description}</p>
+                                <p className="text-sm mb-2"><strong>Target Tissue:</strong> {technique.targetTissue}</p>
+                                <p className="text-sm mb-2"><strong>Research Support:</strong> {technique.researchSupport}</p>
+                                {technique.contraindications && technique.contraindications.length > 0 && (
+                                  <div className="mt-2">
+                                    <p className="text-sm font-medium">Contraindications:</p>
+                                    <ul className="list-disc list-inside text-sm ml-2">
+                                      {technique.contraindications.map((contraindication: string, i: number) => (
+                                        <li key={i}>{contraindication}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        
+                        {/* Progressive Loading Exercises */}
+                        {treatmentCategory.exercises && treatmentCategory.exercises.length > 0 && (
+                          <div className="mb-4 space-y-3">
+                            {treatmentCategory.exercises.map((exercise: any, exIdx: number) => (
+                              <div key={exIdx} className="border border-gray-200 rounded-md p-3">
+                                <div className="flex justify-between items-start mb-2">
+                                  <h5 className="text-md font-medium">{exercise.name}</h5>
+                                  <div className="flex space-x-2">
+                                    <Badge variant="outline">
+                                      {exercise.evidenceLevel} evidence
+                                    </Badge>
+                                    <Badge variant={
+                                      exercise.recommendationStrength === "highly recommended" ? "default" : 
+                                      exercise.recommendationStrength === "recommended" ? "secondary" : 
+                                      "outline"
+                                    }>
+                                      {exercise.recommendationStrength}
+                                    </Badge>
+                                  </div>
+                                </div>
+                                <p className="text-sm mb-2"><strong>Description:</strong> {exercise.description}</p>
+                                <p className="text-sm mb-2"><strong>Target Muscle Group:</strong> {exercise.targetMuscleGroup}</p>
+                                
+                                <div className="bg-gray-50 p-2 rounded my-2">
+                                  <p className="text-sm font-medium mb-1">Loading Parameters:</p>
+                                  <div className="grid grid-cols-2 gap-2 text-sm">
+                                    <p><strong>Sets:</strong> {exercise.loadingParameters.sets}</p>
+                                    <p><strong>Reps:</strong> {exercise.loadingParameters.reps}</p>
+                                    <p><strong>Frequency:</strong> {exercise.loadingParameters.frequency}</p>
+                                    <p><strong>Intensity:</strong> {exercise.loadingParameters.intensity}</p>
+                                  </div>
+                                  <p className="text-sm mt-1"><strong>Progression Criteria:</strong> {exercise.loadingParameters.progressionCriteria}</p>
+                                </div>
+                                
+                                <p className="text-sm mb-2"><strong>Research Support:</strong> {exercise.researchSupport}</p>
+                                
+                                {exercise.modificationOptions && exercise.modificationOptions.length > 0 && (
+                                  <div className="mt-2">
+                                    <p className="text-sm font-medium">Modification Options:</p>
+                                    <ul className="list-disc list-inside text-sm ml-2">
+                                      {exercise.modificationOptions.map((modification: string, i: number) => (
+                                        <li key={i}>{modification}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        
+                        {/* Patient Education */}
+                        {treatmentCategory.recommendations && treatmentCategory.recommendations.length > 0 && (
+                          <div className="space-y-3">
+                            {treatmentCategory.recommendations.map((education: any, eduIdx: number) => (
+                              <div key={eduIdx} className="border border-gray-200 rounded-md p-3">
+                                <div className="flex justify-between items-start mb-2">
+                                  <h5 className="text-md font-medium">{education.topic}</h5>
+                                  <Badge variant={
+                                    education.importance === "high" ? "default" : 
+                                    education.importance === "medium" ? "secondary" : 
+                                    "outline"
+                                  }>
+                                    {education.importance} importance
+                                  </Badge>
+                                </div>
+                                <p className="text-sm mb-2">{education.details}</p>
+                                {education.resources && education.resources.length > 0 && (
+                                  <div className="mt-2">
+                                    <p className="text-sm font-medium">Resources:</p>
+                                    <ul className="list-disc list-inside text-sm ml-2">
+                                      {education.resources.map((resource: string, i: number) => (
+                                        <li key={i}>{resource}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </TabsContent>
+
+          {/* Research Tab */}
+          <TabsContent value="research" className="p-6">
+            {!hasDiagnosis ? (
+              <div className="text-center p-8">
+                <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium mb-2">No research available</h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  Analyze the patient data to view relevant research.
+                </p>
+                <Button 
+                  onClick={() => analyzePatientMutation.mutate()}
+                  disabled={analyzePatientMutation.isPending}
+                >
+                  {analyzePatientMutation.isPending ? (
+                    <>
+                      <Activity className="mr-2 h-4 w-4 animate-pulse" />
+                      Analyzing...
+                    </>
+                  ) : (
+                    <>
+                      <Activity className="mr-2 h-4 w-4" />
+                      Analyze Patient Data
+                    </>
+                  )}
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <div className="bg-primary/5 p-4 rounded-lg">
+                  <h3 className="text-lg font-semibold mb-2 flex items-center">
+                    <BookOpen className="h-5 w-5 mr-2 text-primary" />
+                    Related Research
+                  </h3>
+                  <p className="text-sm">Evidence-based research relevant to this case.</p>
+                </div>
+
+                {patient.relatedResearch && patient.relatedResearch.map((research: any, idx: number) => (
+                  <div key={idx} className="border rounded-lg p-4">
+                    <div className="flex justify-between items-start">
+                      <h4 className="text-md font-medium mb-1">{research.title}</h4>
+                      <Badge variant="outline">{research.year}</Badge>
+                    </div>
+                    <p className="text-sm text-gray-500 mb-2">{research.authors.join(", ")}</p>
+                    <p className="text-sm mb-3">{research.abstract}</p>
+                    
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      {research.keywords.map((keyword: string, kidx: number) => (
+                        <Badge key={kidx} variant="secondary" className="text-xs">
+                          {keyword}
+                        </Badge>
+                      ))}
+                    </div>
+                    
+                    <div className="text-sm">
+                      <p><strong>Journal:</strong> {research.journal}</p>
+                      {research.doi && <p><strong>DOI:</strong> {research.doi}</p>}
+                    </div>
+                    
+                    {research.keyFindings && (
+                      <div className="mt-3">
+                        <h5 className="text-sm font-medium mb-1">Key Findings</h5>
+                        <ul className="list-disc list-inside text-sm ml-2">
+                          {research.keyFindings.map((finding: string, fidx: number) => (
+                            <li key={fidx}>{finding}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {research.clinicalImplications && (
+                      <div className="mt-3">
+                        <h5 className="text-sm font-medium mb-1">Clinical Implications</h5>
+                        <p className="text-sm">{research.clinicalImplications}</p>
+                      </div>
+                    )}
+                    
+                    {research.link && (
+                      <div className="mt-3">
+                        <Button variant="link" size="sm" className="p-0 h-auto" asChild>
+                          <Link to={research.link} target="_blank">View full article</Link>
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
+      </CardContent>
+    </Card>
+  );
+}

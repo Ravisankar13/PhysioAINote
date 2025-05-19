@@ -22,12 +22,19 @@ import {
   type InsertExercise,
   bodyPartEnum,
   difficultyEnum,
+  patientSessions,
+  type PatientSession,
+  type InsertPatientSession,
+  audioRecordings,
+  type AudioRecording,
+  type InsertAudioRecording,
   manualTherapyTechniques,
   type ManualTherapyTechnique,
   type InsertManualTherapyTechnique,
   virtualPatients,
   type VirtualPatient,
   type InsertVirtualPatient,
+  sessionStatusEnum,
   sharedCases,
   type InsertSharedCase,
   type SharedCase,
@@ -38,12 +45,12 @@ import {
   caseTagsMapping,
   caseUpvotes,
   discussionUpvotes,
-  patientSessions,
-  type PatientSession,
-  type InsertPatientSession,
-  audioRecordings,
-  type AudioRecording,
-  type InsertAudioRecording,
+  aiCaseStudies,
+  type AICaseStudy,
+  type InsertAICaseStudy,
+  caseStudyAttempts,
+  type CaseStudyAttempt,
+  type InsertCaseStudyAttempt,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, isNull, sql } from "drizzle-orm";
@@ -58,6 +65,8 @@ export interface IStorage {
   // User Operations
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
+  getAllUsers(): Promise<User[]>;
+  getUserCount(): Promise<number>;
   createUser(user: InsertUser): Promise<User>;
   updateUserMembership(
     userId: number,
@@ -105,6 +114,35 @@ export interface IStorage {
   createResearchArticle(
     article: InsertResearchArticle
   ): Promise<ResearchArticle>;
+
+  // AI Case Study Operations
+  getAICaseStudy(id: number): Promise<AICaseStudy | undefined>;
+  getUserAICaseStudies(userId: number): Promise<AICaseStudy[]>;
+  getAICaseStudies(
+    bodyPart?: string,
+    complexity?: string,
+    page?: number,
+    pageSize?: number
+  ): Promise<{
+    caseStudies: AICaseStudy[];
+    total: number;
+  }>;
+  createAICaseStudy(caseStudy: InsertAICaseStudy): Promise<AICaseStudy>;
+
+  // Case Study Attempt Operations
+  getCaseStudyAttempt(id: number): Promise<CaseStudyAttempt | undefined>;
+  getUserAttemptsForCase(
+    userId: number,
+    caseStudyId: number
+  ): Promise<CaseStudyAttempt[]>;
+  createCaseStudyAttempt(
+    attempt: InsertCaseStudyAttempt
+  ): Promise<CaseStudyAttempt>;
+  updateCaseStudyAttemptFeedback(
+    id: number,
+    feedback: any,
+    accuracy: number
+  ): Promise<CaseStudyAttempt>;
 
   // Exercise Operations
   getExercise(id: number): Promise<Exercise | undefined>;
@@ -315,6 +353,17 @@ export class DatabaseStorage implements IStorage {
     return results.length > 0 ? results[0] : undefined;
   }
 
+  async getAllUsers(): Promise<User[]> {
+    return await db.select().from(users).orderBy(users.id);
+  }
+
+  async getUserCount(): Promise<number> {
+    const result = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(users);
+    return result[0]?.count || 0;
+  }
+
   async createUser(insertUser: InsertUser): Promise<User> {
     const result = await db.insert(users).values(insertUser).returning();
     return result[0];
@@ -494,6 +543,29 @@ export class DatabaseStorage implements IStorage {
       .from(researchArticles)
       .where(eq(researchArticles.id, id));
     return results.length > 0 ? results[0] : undefined;
+  }
+
+  // Get multiple research articles by their IDs
+  async getResearchArticlesByIds(ids: number[]): Promise<ResearchArticle[]> {
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return [];
+    }
+
+    // Filter out any non-numeric values to prevent SQL errors
+    const validIds = ids.filter((id) => typeof id === "number" && !isNaN(id));
+
+    if (validIds.length === 0) {
+      return [];
+    }
+
+    // Create a SQL IN condition for the IDs
+    const results = await db
+      .select()
+      .from(researchArticles)
+      .where(sql`${researchArticles.id} IN (${validIds.join(",")})`)
+      .orderBy(desc(researchArticles.publicationDate));
+
+    return results;
   }
 
   async getResearchArticles(
@@ -707,6 +779,24 @@ export class DatabaseStorage implements IStorage {
     return result[0];
   }
 
+  async getExercisesBySearchTerm(searchTerm: string): Promise<Exercise[]> {
+    if (!searchTerm || searchTerm.trim() === "") {
+      return [];
+    }
+
+    const query = `%${searchTerm.toLowerCase()}%`;
+
+    return await db
+      .select()
+      .from(exercises)
+      .where(
+        sql`LOWER(${exercises.title}) LIKE ${query} OR 
+            LOWER(${exercises.description}) LIKE ${query} OR
+            LOWER(${exercises.targetMuscles}) LIKE ${query}`
+      )
+      .orderBy(exercises.title);
+  }
+
   // Manual Therapy Technique methods
   async getManualTherapyTechnique(
     id: number
@@ -746,6 +836,167 @@ export class DatabaseStorage implements IStorage {
       .values(technique)
       .returning();
     return result[0];
+  }
+
+  // AI Case Study Methods
+  async getAICaseStudy(id: number): Promise<AICaseStudy | undefined> {
+    try {
+      const results = await db
+        .select()
+        .from(aiCaseStudies)
+        .where(eq(aiCaseStudies.id, id));
+      return results.length > 0 ? results[0] : undefined;
+    } catch (error) {
+      console.error("Error fetching AI case study:", error);
+      return undefined;
+    }
+  }
+
+  async getUserAICaseStudies(userId: number): Promise<AICaseStudy[]> {
+    try {
+      return await db
+        .select()
+        .from(aiCaseStudies)
+        .where(eq(aiCaseStudies.userId, userId))
+        .orderBy(desc(aiCaseStudies.createdAt));
+    } catch (error) {
+      console.error("Error fetching user AI case studies:", error);
+      return [];
+    }
+  }
+
+  async getAICaseStudies(
+    bodyPart?: string,
+    complexity?: string,
+    page: number = 1,
+    pageSize: number = 10
+  ): Promise<{
+    caseStudies: AICaseStudy[];
+    total: number;
+  }> {
+    try {
+      // Initialize the query
+      let query = db.select().from(aiCaseStudies);
+      let countQuery = db
+        .select({ count: sql<number>`count(*)` })
+        .from(aiCaseStudies);
+
+      // Apply filters if provided
+      if (bodyPart) {
+        query = query.where(eq(aiCaseStudies.bodyPart, bodyPart));
+        countQuery = countQuery.where(eq(aiCaseStudies.bodyPart, bodyPart));
+      }
+
+      if (complexity) {
+        query = query.where(eq(aiCaseStudies.complexity, complexity));
+        countQuery = countQuery.where(eq(aiCaseStudies.complexity, complexity));
+      }
+
+      // Execute both queries
+      const offset = (page - 1) * pageSize;
+      const [caseStudies, countResult] = await Promise.all([
+        query
+          .orderBy(desc(aiCaseStudies.createdAt))
+          .limit(pageSize)
+          .offset(offset),
+        countQuery,
+      ]);
+
+      return {
+        caseStudies,
+        total: Number(countResult[0]?.count || 0),
+      };
+    } catch (error) {
+      console.error("Error fetching AI case studies:", error);
+      return { caseStudies: [], total: 0 };
+    }
+  }
+
+  async createAICaseStudy(caseStudy: InsertAICaseStudy): Promise<AICaseStudy> {
+    try {
+      const result = await db
+        .insert(aiCaseStudies)
+        .values(caseStudy)
+        .returning();
+      return result[0];
+    } catch (error) {
+      console.error("Error creating AI case study:", error);
+      throw error;
+    }
+  }
+
+  // Case Study Attempt Methods
+  async getCaseStudyAttempt(id: number): Promise<CaseStudyAttempt | undefined> {
+    try {
+      const results = await db
+        .select()
+        .from(caseStudyAttempts)
+        .where(eq(caseStudyAttempts.id, id));
+      return results.length > 0 ? results[0] : undefined;
+    } catch (error) {
+      console.error("Error fetching case study attempt:", error);
+      return undefined;
+    }
+  }
+
+  async getUserAttemptsForCase(
+    userId: number,
+    caseStudyId: number
+  ): Promise<CaseStudyAttempt[]> {
+    try {
+      return await db
+        .select()
+        .from(caseStudyAttempts)
+        .where(
+          and(
+            eq(caseStudyAttempts.userId, userId),
+            eq(caseStudyAttempts.caseStudyId, caseStudyId)
+          )
+        )
+        .orderBy(desc(caseStudyAttempts.createdAt));
+    } catch (error) {
+      console.error("Error fetching user attempts for case:", error);
+      return [];
+    }
+  }
+
+  async createCaseStudyAttempt(
+    attempt: InsertCaseStudyAttempt
+  ): Promise<CaseStudyAttempt> {
+    try {
+      const result = await db
+        .insert(caseStudyAttempts)
+        .values(attempt)
+        .returning();
+      return result[0];
+    } catch (error) {
+      console.error("Error creating case study attempt:", error);
+      throw error;
+    }
+  }
+
+  async updateCaseStudyAttemptFeedback(
+    id: number,
+    feedback: any,
+    accuracy: number
+  ): Promise<CaseStudyAttempt> {
+    try {
+      const result = await db
+        .update(caseStudyAttempts)
+        .set({
+          feedback,
+          overallAccuracy: accuracy,
+          completed: true,
+          updatedAt: new Date(),
+        })
+        .where(eq(caseStudyAttempts.id, id))
+        .returning();
+
+      return result[0];
+    } catch (error) {
+      console.error("Error updating case study attempt feedback:", error);
+      throw error;
+    }
   }
 
   // Virtual Patient Methods
@@ -816,7 +1067,8 @@ export class DatabaseStorage implements IStorage {
     diagnosis: string,
     differentialDiagnosis: any,
     treatmentOptions: any,
-    relatedArticleIds: any
+    relatedArticleIds: any,
+    hasBeenEdited: boolean = false
   ): Promise<VirtualPatient> {
     try {
       const result = await db
@@ -826,6 +1078,7 @@ export class DatabaseStorage implements IStorage {
           differentialDiagnosis,
           treatmentOptions,
           relatedArticleIds,
+          hasBeenEdited,
           updatedAt: new Date(),
         })
         .where(eq(virtualPatients.id, id))

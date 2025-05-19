@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow } from "date-fns";
 import { Activity, Plus, ChevronRight, RefreshCcw, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
+import { useAuth } from "@/hooks/use-auth";
 
 interface VirtualPatientListProps {
   onPatientSelect: (id: number) => void;
@@ -14,6 +16,8 @@ interface VirtualPatientListProps {
 
 export default function VirtualPatientList({ onPatientSelect, onCreateNew }: VirtualPatientListProps) {
   const { toast } = useToast();
+  
+  const { user } = useAuth();
   
   const { 
     data: patients = [], 
@@ -25,28 +29,52 @@ export default function VirtualPatientList({ onPatientSelect, onCreateNew }: Vir
     queryKey: ["/api/virtual-patients"],
     queryFn: async () => {
       try {
-        console.log("Fetching virtual patients");
-        const response = await fetch("/api/virtual-patients", {
-          credentials: "include" // Include cookies with the request
-        });
-        if (response.status === 401) {
-          console.log("Not authenticated while fetching virtual patients");
-          toast({
-            title: "Authentication Required",
-            description: "Please log in to view your virtual patients",
-            variant: "destructive"
-          });
+        // If user is not logged in, return empty array early
+        if (!user) {
+          console.log("No user found in auth context, cannot fetch virtual patients");
           return [];
         }
+        
+        console.log("Fetching virtual patients for user:", user.username, "with ID:", user.id);
+        
+        // Force credentials to be included with the request
+        const response = await fetch("/api/virtual-patients", {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include", // Critical for auth cookie
+        });
+        
         if (!response.ok) {
-          throw new Error("Failed to fetch virtual patients");
+          // If we're unauthorized, just return empty array instead of throwing
+          if (response.status === 401) {
+            console.log("Not authenticated while fetching virtual patients");
+            toast({
+              title: "Authentication Required",
+              description: "Please log in to view your virtual patients",
+              variant: "destructive"
+            });
+            return [];
+          }
+          
+          // Handle other errors
+          const errorText = await response.text();
+          throw new Error(`Failed to fetch virtual patients: ${errorText}`);
         }
-        return response.json();
+        
+        const data = await response.json();
+        console.log("Successfully fetched virtual patients:", data.length);
+        return data;
       } catch (err) {
         console.error("Error fetching virtual patients:", err);
-        throw err;
+        // Return empty array instead of throwing to avoid breaking the UI
+        return [];
       }
     },
+    // Only enable this query if user is logged in
+    enabled: !!user,
+    refetchOnWindowFocus: false
   });
 
   if (isError) {

@@ -22,6 +22,7 @@ import {
   Stethoscope,
   Activity,
   Users,
+  BarChart3,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Link, useLocation } from "react-router-dom";
@@ -31,12 +32,17 @@ const Header = () => {
   const { user, logoutMutation } = useAuth();
   const location = useLocation().pathname;
 
+  // Check if user is admin
+  const adminUsernames = ["Fateofjustice"];
+  const isAdmin = user && adminUsernames.includes(user.username);
+
   const navItems = [
     { to: "/", label: "Home" },
     { to: "/clinical-notes", label: "Clinical Notes" },
     { to: "/notes", label: "Patient Sessions" },
     { to: "/skeleton-tool", label: "2D Skeleton Tool" },
     { to: "/skeleton-3d-tool", label: "3D Skeleton Tool" },
+    { to: "/case-studies", label: "AI Case Studies" },
     { to: "/shared-cases", label: "Peer Exchange" },
     { to: "/research", label: "Research" },
     { to: "/exercises", label: "Exercise Library" },
@@ -95,6 +101,32 @@ const Header = () => {
                 <span>AI Notes</span>
               </Button>
             </Link>
+
+            {/* Login button for users who aren't logged in - visible on all devices */}
+            {!user && (
+              <Link to="/auth">
+                <Button
+                  variant="outline"
+                  className="flex items-center gap-1 font-medium"
+                >
+                  <User className="h-4 w-4" />
+                  <span>Login</span>
+                </Button>
+              </Link>
+            )}
+
+            {/* Direct logout button for mobile - always visible when logged in */}
+            {user && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="md:hidden"
+                onClick={handleLogout}
+              >
+                <LogOut className="h-4 w-4 mr-1" />
+                Logout
+              </Button>
+            )}
 
             {user ? (
               <DropdownMenu>
@@ -193,6 +225,19 @@ const Header = () => {
                       </div>
                     </Link>
                   </DropdownMenuItem>
+
+                  {/* Admin Dashboard - only visible to admin users */}
+                  {isAdmin && (
+                    <DropdownMenuItem className="flex items-center" asChild>
+                      <Link to="/admin">
+                        <div className="flex items-center cursor-pointer w-full">
+                          <BarChart3 className="mr-2 h-4 w-4" />
+                          <span>Admin Dashboard</span>
+                        </div>
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
+
                   <DropdownMenuItem
                     className="flex items-center cursor-pointer"
                     onClick={handleLogout}
@@ -307,13 +352,16 @@ const Header = () => {
                           </span>
                         </Link>
                         <span
-                          className="px-2 py-2 text-base block cursor-pointer text-muted-foreground hover:text-foreground"
+                          className="px-2 py-2 text-base block cursor-pointer text-muted-foreground hover:text-foreground font-medium"
                           onClick={() => {
                             handleLogout();
                             setOpen(false);
                           }}
                         >
-                          Logout
+                          <div className="flex items-center">
+                            <LogOut className="mr-2 h-4 w-4" />
+                            Logout
+                          </div>
                         </span>
                       </>
                     ) : (
@@ -322,7 +370,10 @@ const Header = () => {
                           className="px-2 py-2 text-base block cursor-pointer text-primary font-medium"
                           onClick={() => setOpen(false)}
                         >
-                          Sign In
+                          <div className="flex items-center">
+                            <User className="mr-2 h-4 w-4" />
+                            Login
+                          </div>
                         </span>
                       </Link>
                     )}

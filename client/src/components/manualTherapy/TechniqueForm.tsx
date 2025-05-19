@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { z } from 'zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -22,9 +22,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Card,
+  CardContent,
+} from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
-import { Loader2 } from 'lucide-react';
+import { Loader2, RefreshCw, Check } from 'lucide-react';
+import { getTherapyTechniqueImage, getBodyPartGradient } from '../../lib/therapyImageUtils';
 
 // Schema for the technique form
 const techniqueFormSchema = z.object({
@@ -302,18 +307,119 @@ export default function TechniqueForm() {
           <FormField
             control={form.control}
             name="imageUrl"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Image URL</FormLabel>
-                <FormControl>
-                  <Input placeholder="https://example.com/image.jpg (optional)" {...field} />
-                </FormControl>
-                <FormDescription>
-                  Link to an image showing the technique
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
+            render={({ field }) => {
+              const title = form.watch('title');
+              const bodyPart = form.watch('bodyPart');
+              const [suggestedImageUrl, setSuggestedImageUrl] = useState<string>('');
+              const [isPreviewVisible, setIsPreviewVisible] = useState<boolean>(false);
+
+              // Generate suggested image URL when title and body part are available
+              useEffect(() => {
+                if (title && bodyPart) {
+                  const url = getTherapyTechniqueImage(title, bodyPart);
+                  setSuggestedImageUrl(url);
+                }
+              }, [title, bodyPart]);
+
+              // Apply suggested image URL
+              const applySuggestedImage = () => {
+                if (suggestedImageUrl) {
+                  field.onChange(suggestedImageUrl);
+                  // Show confirmation for a moment
+                  setIsPreviewVisible(true);
+                }
+              };
+
+              return (
+                <FormItem className="space-y-4">
+                  <FormLabel>Image URL</FormLabel>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <FormControl>
+                        <Input 
+                          placeholder="https://example.com/image.jpg (optional)" 
+                          {...field} 
+                          onFocus={() => setIsPreviewVisible(true)}
+                          onBlur={() => {
+                            // Small delay to allow button clicks
+                            setTimeout(() => setIsPreviewVisible(false), 200);
+                          }}
+                        />
+                      </FormControl>
+                      {suggestedImageUrl && (
+                        <Button 
+                          type="button" 
+                          variant="outline" 
+                          size="icon"
+                          title="Use suggested image"
+                          onClick={applySuggestedImage}
+                          className="flex-shrink-0"
+                        >
+                          {field.value === suggestedImageUrl ? (
+                            <Check className="h-4 w-4 text-green-500" />
+                          ) : (
+                            <RefreshCw className="h-4 w-4" />
+                          )}
+                        </Button>
+                      )}
+                    </div>
+
+                    <FormDescription>
+                      Link to an image showing the technique or use the suggested image
+                    </FormDescription>
+                    <FormMessage />
+                  </div>
+                
+                  {/* Image Preview */}
+                  {isPreviewVisible && (field.value || suggestedImageUrl) && (
+                    <div className="mt-2">
+                      <Card className="overflow-hidden">
+                        <CardContent className="p-0">
+                          <div className="space-y-2">
+                            {field.value && (
+                              <div className="rounded overflow-hidden h-40 bg-muted">
+                                <img 
+                                  src={field.value} 
+                                  alt="Preview" 
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = 'none';
+                                  }}
+                                />
+                              </div>
+                            )}
+                            
+                            {!field.value && suggestedImageUrl && (
+                              <div>
+                                <p className="text-xs text-muted-foreground mb-1 px-4 pt-2">Suggested image:</p>
+                                <div className="rounded overflow-hidden h-40 bg-muted">
+                                  <img 
+                                    src={suggestedImageUrl} 
+                                    alt="Suggested" 
+                                    className="w-full h-full object-cover"
+                                  />
+                                </div>
+                                <div className="p-2 text-center">
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={applySuggestedImage}
+                                    className="w-full"
+                                  >
+                                    Use this image
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  )}
+                </FormItem>
+              );
+            }}
           />
         </div>
         

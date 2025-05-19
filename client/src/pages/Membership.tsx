@@ -164,6 +164,25 @@ export default function Membership() {
       transactionId,
       status: "completed",
       paymentDate: new Date().toISOString(),
+    }, {
+      onSuccess: () => {
+        // Force refresh of user subscription data
+        queryClient.invalidateQueries({ queryKey: ["/api/user/subscription"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+        
+        // Close dialog and show success message
+        setShowPaymentDialog(false);
+        toast({
+          title: "Payment Successful",
+          description: "Your subscription has been successfully updated.",
+          variant: "default",
+        });
+        
+        // Refresh page data to show new subscription status
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
+      }
     });
   };
 

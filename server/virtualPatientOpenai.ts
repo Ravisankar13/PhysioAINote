@@ -21,6 +21,7 @@ export interface VirtualPatientInput {
   familyHistory?: string;
   medications?: string;
   allergies?: string;
+  objectiveFindings?: Array<{id: number, finding: string}> | string;
 }
 
 export interface VirtualPatientAnalysisOutput {
@@ -430,6 +431,26 @@ async function performAnalysis(
   }
   `;
 
+  // Process objective findings to include in the prompt
+  let objectiveFindingsText = '';
+  if (patientData.objectiveFindings) {
+    try {
+      let objectiveFindings;
+      if (typeof patientData.objectiveFindings === 'string') {
+        objectiveFindings = JSON.parse(patientData.objectiveFindings);
+      } else {
+        objectiveFindings = patientData.objectiveFindings;
+      }
+      
+      if (Array.isArray(objectiveFindings) && objectiveFindings.length > 0) {
+        objectiveFindingsText = 'Objective Findings:\n' + 
+          objectiveFindings.map(finding => `- ${finding.finding}`).join('\n');
+      }
+    } catch (err) {
+      console.error('Error parsing objective findings:', err);
+    }
+  }
+
   const userPrompt = `
   PATIENT CASE INFORMATION:
   Name: ${patientData.patientName}
@@ -447,8 +468,9 @@ async function performAnalysis(
   ${patientData.familyHistory ? `Family History: ${patientData.familyHistory}` : ''}
   ${patientData.medications ? `Medications: ${patientData.medications}` : ''}
   ${patientData.allergies ? `Allergies: ${patientData.allergies}` : ''}
+  ${objectiveFindingsText ? objectiveFindingsText : ''}
   
-  Based on this information, provide a comprehensive physiotherapy assessment and treatment plan in the JSON format specified.
+  Based on this information, provide a comprehensive physiotherapy assessment and treatment plan in the JSON format specified. IMPORTANT: Pay special attention to any objective findings provided, as these represent direct clinical observations that should significantly influence your diagnosis and treatment recommendations.
   `;
 
   const response = await openai.chat.completions.create({

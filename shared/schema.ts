@@ -68,6 +68,8 @@ export const users = pgTable("users", {
   paypalSubscriptionId: text("paypal_subscription_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),
   stripeCustomerId: text("stripe_customer_id"),
+  // isAdmin will be added in the future via migration
+  // isAdmin: boolean("is_admin").default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -525,6 +527,7 @@ export const virtualPatients = pgTable("virtual_patients", {
   differentialDiagnosis: json("differential_diagnosis"),
   treatmentOptions: json("treatment_options"),
   relatedArticleIds: json("related_article_ids"),
+  hasBeenEdited: boolean("has_been_edited").default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -729,6 +732,150 @@ export const caseTagsMappingRelations = relations(
     tag: one(caseTags, {
       fields: [caseTagsMapping.tagId],
       references: [caseTags.id],
+    }),
+  })
+);
+
+export const caseUpvoteRelations = relations(caseUpvotes, ({ one }) => ({
+  case: one(sharedCases, {
+    fields: [caseUpvotes.caseId],
+    references: [sharedCases.id],
+  }),
+  user: one(users, {
+    fields: [caseUpvotes.userId],
+    references: [users.id],
+  }),
+}));
+
+export const discussionUpvoteRelations = relations(
+  discussionUpvotes,
+  ({ one }) => ({
+    discussion: one(caseDiscussions, {
+      fields: [discussionUpvotes.discussionId],
+      references: [caseDiscussions.id],
+    }),
+    user: one(users, {
+      fields: [discussionUpvotes.userId],
+      references: [users.id],
+    }),
+  })
+);
+
+// Virtual patient relations
+export const virtualPatientRelations = relations(
+  virtualPatients,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [virtualPatients.userId],
+      references: [users.id],
+    }),
+  })
+);
+
+// AI Case Study (research-based physiotherapy cases)
+export const aiCaseStudies = pgTable("ai_case_studies", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id),
+  title: text("title").notNull(),
+  patientDescription: text("patient_description").notNull(),
+  history: text("history").notNull(),
+  presentingSymptoms: text("presenting_symptoms").notNull(),
+  vitalSigns: text("vital_signs"),
+  bodyPart: bodyPartEnum("body_part").notNull(),
+  complexity: text("complexity").notNull(),
+  hiddenFindings: json("hidden_findings").notNull().$type<{
+    rangeOfMotion?: string;
+    strength?: string;
+    specialTests?: string;
+    palpation?: string;
+    additionalObservations?: string;
+  }>(),
+  correctDiagnosis: text("correct_diagnosis").notNull(),
+  differentialDiagnoses: json("differential_diagnoses")
+    .notNull()
+    .$type<string[]>(),
+  correctAssessmentApproach: json("correct_assessment_approach")
+    .notNull()
+    .$type<string[]>(),
+  correctTreatmentApproach: text("correct_treatment_approach").notNull(),
+  researchBasis: json("research_basis").$type<string[]>(),
+  expertSources: json("expert_sources").$type<string[]>(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertAICaseStudySchema = createInsertSchema(aiCaseStudies).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertAICaseStudy = z.infer<typeof insertAICaseStudySchema>;
+export type AICaseStudy = typeof aiCaseStudies.$inferSelect;
+
+// User Case Study Attempts
+export const caseStudyAttempts = pgTable("case_study_attempts", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id),
+  caseStudyId: integer("case_study_id")
+    .notNull()
+    .references(() => aiCaseStudies.id),
+  userDiagnosis: text("user_diagnosis").notNull(),
+  userReasoning: text("user_reasoning").notNull(),
+  assessmentTests: json("assessment_tests").notNull().$type<string[]>(),
+  proposedTreatment: text("proposed_treatment").notNull(),
+  overallAccuracy: integer("overall_accuracy"),
+  feedback: json("feedback").$type<{
+    diagnosisFeedback?: string;
+    assessmentFeedback?: string;
+    treatmentFeedback?: string;
+    keyLearningPoints?: string[];
+    suggestedResources?: string[];
+  }>(),
+  completed: boolean("completed").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertCaseStudyAttemptSchema = createInsertSchema(
+  caseStudyAttempts
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertCaseStudyAttempt = z.infer<
+  typeof insertCaseStudyAttemptSchema
+>;
+export type CaseStudyAttempt = typeof caseStudyAttempts.$inferSelect;
+
+// Relations
+export const aiCaseStudyRelations = relations(
+  aiCaseStudies,
+  ({ one, many }) => ({
+    user: one(users, {
+      fields: [aiCaseStudies.userId],
+      references: [users.id],
+    }),
+    attempts: many(caseStudyAttempts),
+  })
+);
+
+export const caseStudyAttemptRelations = relations(
+  caseStudyAttempts,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [caseStudyAttempts.userId],
+      references: [users.id],
+    }),
+    caseStudy: one(aiCaseStudies, {
+      fields: [caseStudyAttempts.caseStudyId],
+      references: [aiCaseStudies.id],
     }),
   })
 );

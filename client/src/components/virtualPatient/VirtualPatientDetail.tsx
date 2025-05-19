@@ -27,23 +27,45 @@ import {
   AlertCircle,
   Clipboard,
   ClipboardCheck,
+  Edit,
+  Pencil,
+  Plus,
+  Save,
+  X,
+  LineChart,
+  BarChart3,
+  ZoomIn,
 } from "lucide-react";
+import PatientProgressTracker from "./PatientProgressTracker";
+import BodyPartZoom from "./BodyPartZoom";
+import { getPlaceholderImage, placeholderImages } from "./bodyPartImages";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Link } from "react-router-dom";
+import { Link } from "wouter";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 
 interface VirtualPatientDetailProps {
   patientId: number;
   onBackToList: () => void;
+  onEditPatient?: (patient: any) => void;
 }
 
 export default function VirtualPatientDetail({
   patientId,
   onBackToList,
+  onEditPatient,
 }: VirtualPatientDetailProps) {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("info");
+  const [isAddingObjectiveFindings, setIsAddingObjectiveFindings] =
+    useState(false);
+  const [objectiveFindingsInput, setObjectiveFindingsInput] = useState("");
+  const [objectiveFindings, setObjectiveFindings] = useState<
+    Array<{ id: number; finding: string }>
+  >([]);
 
   const {
     data: patient,
@@ -57,7 +79,73 @@ export default function VirtualPatientDetail({
       if (!response.ok) {
         throw new Error("Failed to fetch patient details");
       }
-      return response.json();
+      const data = await response.json();
+      console.log("Virtual patient data with research:", data);
+
+      // Process assessment tests if they exist
+      if (data.assessmentTests) {
+        // Ensure assessmentTests is properly parsed if it's a string
+        if (typeof data.assessmentTests === "string") {
+          try {
+            data.assessmentTests = JSON.parse(data.assessmentTests);
+          } catch (err) {
+            console.error("Error parsing assessment tests:", err);
+            // If parsing fails, set a default empty array
+            data.assessmentTests = [];
+          }
+        }
+      } else {
+        // Initialize with empty array if missing
+        data.assessmentTests = [];
+      }
+
+      // If patient has objective findings stored, parse and set them
+      if (data.objectiveFindings) {
+        try {
+          const findings =
+            typeof data.objectiveFindings === "string"
+              ? JSON.parse(data.objectiveFindings)
+              : data.objectiveFindings;
+
+          if (Array.isArray(findings)) {
+            setObjectiveFindings(findings);
+          }
+        } catch (err) {
+          console.error("Error parsing objective findings:", err);
+        }
+      }
+
+      return data;
+    },
+  });
+
+  // Mutation to save objective findings
+  const updateObjectiveFindingsMutation = useMutation({
+    mutationFn: async (findings: Array<{ id: number; finding: string }>) => {
+      const response = await apiRequest(
+        "PATCH",
+        `/api/virtual-patients/${patientId}`,
+        {
+          objectiveFindings: findings,
+        }
+      );
+      return await response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: [`/api/virtual-patients/${patientId}`],
+      });
+      toast({
+        title: "Findings Saved",
+        description: "Objective findings have been saved successfully.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Save Failed",
+        description: `Failed to save objective findings: ${error.message}`,
+        variant: "destructive",
+      });
     },
   });
 
@@ -143,6 +231,40 @@ export default function VirtualPatientDetail({
 
   const hasDiagnosis = !!patient?.diagnosis;
 
+  // Renders the analyze button consistently across tabs
+  const renderAnalyzeButton = () => (
+    <Button
+      onClick={() => analyzePatientMutation.mutate()}
+      disabled={analyzePatientMutation.isPending}
+    >
+      {analyzePatientMutation.isPending ? (
+        <>
+          <Activity className="mr-2 h-4 w-4 animate-pulse" />
+          Analyzing...
+        </>
+      ) : (
+        <>
+          <Activity className="mr-2 h-4 w-4" />
+          Analyze Patient Data
+        </>
+      )}
+    </Button>
+  );
+
+  // Renders the empty state message for tabs when there's no diagnosis yet
+  const renderEmptyState = (
+    icon: React.ReactNode,
+    title: string,
+    description: string
+  ) => (
+    <div className="text-center p-8">
+      {icon}
+      <h3 className="text-lg font-medium mb-2">{title}</h3>
+      <p className="text-sm text-gray-500 mb-4">{description}</p>
+      {renderAnalyzeButton()}
+    </div>
+  );
+
   return (
     <Card className="max-w-5xl mx-auto">
       <CardHeader>
@@ -158,6 +280,17 @@ export default function VirtualPatientDetail({
             <CardTitle>{patient.patientName}</CardTitle>
           </div>
           <div className="flex items-center space-x-2">
+            {onEditPatient && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="mr-2"
+                onClick={() => onEditPatient(patient)}
+              >
+                <Pencil className="h-4 w-4 mr-1" />
+                Edit Patient
+              </Button>
+            )}
             <Badge variant="outline">{patient.age} years</Badge>
             <Badge variant="outline">{patient.gender}</Badge>
             <Badge>{patient.bodyPart}</Badge>
@@ -169,7 +302,7 @@ export default function VirtualPatientDetail({
       </CardHeader>
       <CardContent className="p-0">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="info" className="flex items-center">
               <User className="h-4 w-4 mr-2" />
               Patient Info
@@ -191,12 +324,24 @@ export default function VirtualPatientDetail({
               Assessment Tests
             </TabsTrigger>
             <TabsTrigger
-              value="findings"
+              value="treatment"
               disabled={!hasDiagnosis}
               className="flex items-center"
             >
-              <ClipboardCheck className="h-4 w-4 mr-2" />
-              Objective Findings
+              <Activity className="h-4 w-4 mr-2" />
+              Treatment Options
+            </TabsTrigger>
+            <TabsTrigger
+              value="progression"
+              disabled={!hasDiagnosis}
+              className="flex items-center"
+            >
+              <LineChart className="h-4 w-4 mr-2" />
+              Symptom Progression
+            </TabsTrigger>
+            <TabsTrigger value="anatomy" className="flex items-center">
+              <ZoomIn className="h-4 w-4 mr-2" />
+              Interactive Anatomy
             </TabsTrigger>
             <TabsTrigger
               value="research"
@@ -208,6 +353,7 @@ export default function VirtualPatientDetail({
             </TabsTrigger>
           </TabsList>
 
+          {/* PATIENT INFO TAB */}
           <TabsContent value="info" className="p-6">
             <div className="space-y-6">
               <div>
@@ -283,59 +429,153 @@ export default function VirtualPatientDetail({
                 )}
               </div>
 
-              {!hasDiagnosis && (
-                <div className="flex justify-center mt-8">
-                  <Button
-                    onClick={() => analyzePatientMutation.mutate()}
-                    disabled={analyzePatientMutation.isPending}
-                    size="lg"
-                    className="w-full md:w-auto"
-                  >
-                    {analyzePatientMutation.isPending ? (
-                      <>
-                        <Activity className="mr-2 h-4 w-4 animate-pulse" />
-                        Analyzing Patient Data...
-                      </>
-                    ) : (
-                      <>
-                        <Activity className="mr-2 h-4 w-4" />
-                        Analyze Patient Data
-                      </>
-                    )}
-                  </Button>
+              {/* Objective Findings Section */}
+              <div className="mt-6">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-lg font-semibold">Objective Findings</h3>
+                  {!isAddingObjectiveFindings && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsAddingObjectiveFindings(true)}
+                    >
+                      <Plus className="mr-1 h-4 w-4" />
+                      Add Finding
+                    </Button>
+                  )}
                 </div>
-              )}
-            </div>
-          </TabsContent>
 
-          <TabsContent value="diagnosis" className="p-6">
-            {!hasDiagnosis ? (
-              <div className="text-center p-8">
-                <Activity className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium mb-2">
-                  No diagnosis available
-                </h3>
-                <p className="text-sm text-gray-500 mb-4">
-                  Analyze the patient data to generate a diagnosis and treatment
-                  recommendations.
-                </p>
+                {isAddingObjectiveFindings ? (
+                  <div className="bg-background border rounded-lg p-4 mb-4">
+                    <Label htmlFor="objectiveFinding" className="mb-2 block">
+                      Enter Objective Finding
+                    </Label>
+                    <Textarea
+                      id="objectiveFinding"
+                      value={objectiveFindingsInput}
+                      onChange={(e) =>
+                        setObjectiveFindingsInput(e.target.value)
+                      }
+                      placeholder="Enter clinical observation or measurement (e.g., 'Limited shoulder abduction to 90 degrees with pain at end range')"
+                      className="mb-3"
+                      rows={3}
+                    />
+                    <div className="flex justify-end space-x-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setIsAddingObjectiveFindings(false);
+                          setObjectiveFindingsInput("");
+                        }}
+                      >
+                        <X className="mr-1 h-4 w-4" />
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          if (objectiveFindingsInput.trim()) {
+                            // Add to local state first
+                            const newFinding = {
+                              id: Date.now(),
+                              finding: objectiveFindingsInput.trim(),
+                            };
+                            const updatedFindings = [
+                              ...objectiveFindings,
+                              newFinding,
+                            ];
+                            setObjectiveFindings(updatedFindings);
+
+                            // Save to server
+                            updateObjectiveFindingsMutation.mutate(
+                              updatedFindings
+                            );
+
+                            // Reset form
+                            setObjectiveFindingsInput("");
+                            setIsAddingObjectiveFindings(false);
+                          }
+                        }}
+                        disabled={!objectiveFindingsInput.trim()}
+                      >
+                        <Save className="mr-1 h-4 w-4" />
+                        Save Finding
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+
+                {/* Display existing objective findings */}
+                <div className="space-y-2">
+                  {objectiveFindings.length > 0 ? (
+                    objectiveFindings.map((finding) => (
+                      <div
+                        key={finding.id}
+                        className="bg-muted/40 rounded-md p-3 flex justify-between items-start"
+                      >
+                        <p className="text-sm">{finding.finding}</p>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0 ml-2 text-muted-foreground"
+                          onClick={() => {
+                            const updatedFindings = objectiveFindings.filter(
+                              (f) => f.id !== finding.id
+                            );
+                            setObjectiveFindings(updatedFindings);
+                            updateObjectiveFindingsMutation.mutate(
+                              updatedFindings
+                            );
+                          }}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground italic">
+                      No objective findings recorded. Click "Add Finding" to add
+                      observations.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Always show the analyze button */}
+              <div className="flex justify-center mt-8">
                 <Button
                   onClick={() => analyzePatientMutation.mutate()}
                   disabled={analyzePatientMutation.isPending}
+                  size="lg"
+                  className="w-full md:w-auto"
                 >
                   {analyzePatientMutation.isPending ? (
                     <>
                       <Activity className="mr-2 h-4 w-4 animate-pulse" />
-                      Analyzing...
+                      Analyzing Patient Data...
                     </>
                   ) : (
                     <>
                       <Activity className="mr-2 h-4 w-4" />
-                      Analyze Patient Data
+                      {hasDiagnosis
+                        ? "Reanalyze Patient Data"
+                        : "Analyze Patient Data"}
                     </>
                   )}
                 </Button>
               </div>
+            </div>
+          </TabsContent>
+
+          {/* DIAGNOSIS TAB */}
+          <TabsContent value="diagnosis" className="p-6">
+            {!hasDiagnosis ? (
+              renderEmptyState(
+                <Activity className="h-12 w-12 text-gray-400 mx-auto mb-4" />,
+                "No diagnosis available",
+                "Analyze the patient data to generate a diagnosis and treatment recommendations."
+              )
             ) : (
               <div className="space-y-6">
                 <div className="bg-primary/5 p-4 rounded-lg">
@@ -386,9 +626,189 @@ export default function VirtualPatientDetail({
                         ))}
                   </div>
                 </div>
+              </div>
+            )}
+          </TabsContent>
 
-                <Separator />
+          {/* ASSESSMENT TESTS TAB - Enhanced with clinical tests */}
+          <TabsContent value="assessment" className="p-6">
+            {!hasDiagnosis ? (
+              renderEmptyState(
+                <Clipboard className="h-12 w-12 text-gray-400 mx-auto mb-4" />,
+                "No assessment data available",
+                "Analyze the patient data to view relevant assessment tests."
+              )
+            ) : (
+              <div className="space-y-6">
+                <div className="bg-primary/5 p-4 rounded-lg">
+                  <h3 className="text-lg font-semibold mb-2 flex items-center">
+                    <Clipboard className="h-5 w-5 mr-2 text-primary" />
+                    Relevant Clinical Tests
+                  </h3>
+                  <p className="text-sm mb-4">
+                    These diagnostic tests are recommended to confirm the
+                    primary diagnosis.
+                  </p>
+                </div>
 
+                {Array.isArray(patient.assessmentTests) &&
+                patient.assessmentTests.length > 0 ? (
+                  <div className="space-y-4">
+                    {patient.assessmentTests.map((test: any, idx: number) => (
+                      <div key={idx} className="border rounded-lg p-4">
+                        <div className="flex justify-between items-start mb-2">
+                          <h4 className="text-md font-semibold">
+                            {test.name || "Unnamed Test"}
+                          </h4>
+                          <Badge
+                            variant={
+                              test.relevance === "primary"
+                                ? "default"
+                                : test.relevance === "secondary"
+                                ? "secondary"
+                                : "outline"
+                            }
+                          >
+                            {test.relevance === "primary"
+                              ? "Primary"
+                              : test.relevance === "secondary"
+                              ? "Secondary"
+                              : "Supportive"}{" "}
+                            Test
+                          </Badge>
+                        </div>
+                        <p className="text-sm mb-2">
+                          {test.purpose ||
+                            test.description ||
+                            "No description provided"}
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+                          <div>
+                            <h5 className="text-sm font-medium mb-1">
+                              How to Perform
+                            </h5>
+                            <p className="text-sm">
+                              {test.procedure ||
+                                "No procedure details available"}
+                            </p>
+                          </div>
+                          <div>
+                            <h5 className="text-sm font-medium mb-1">
+                              Positive Findings
+                            </h5>
+                            <p className="text-sm">
+                              {test.positiveFindings ||
+                                "No details on positive findings"}
+                            </p>
+                          </div>
+                        </div>
+                        {test.supportingResearch && (
+                          <div className="mt-3">
+                            <h5 className="text-sm font-medium">
+                              Research Support
+                            </h5>
+                            <p className="text-sm">{test.supportingResearch}</p>
+                          </div>
+                        )}
+                        {test.sensitivity && (
+                          <div className="flex space-x-2 mt-2">
+                            <Badge variant="outline">
+                              Sensitivity: {test.sensitivity}
+                            </Badge>
+                            {test.specificity && (
+                              <Badge variant="outline">
+                                Specificity: {test.specificity}
+                              </Badge>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="bg-muted/20 rounded-lg p-4 text-center">
+                    <p className="text-sm text-muted-foreground">
+                      No assessment tests available for this patient. Try
+                      reanalyzing the patient data.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* OBJECTIVE FINDINGS TAB */}
+          <TabsContent value="findings" className="p-6">
+            {!hasDiagnosis ? (
+              renderEmptyState(
+                <ClipboardCheck className="h-12 w-12 text-gray-400 mx-auto mb-4" />,
+                "No objective findings available",
+                "Analyze the patient data to view objective findings."
+              )
+            ) : (
+              <div className="space-y-6">
+                {patient.objectiveFindings &&
+                  patient.objectiveFindings.map((finding: any, idx: number) => (
+                    <div key={idx} className="border rounded-lg p-4">
+                      <h4 className="text-md font-semibold mb-3 bg-primary/10 p-2 rounded">
+                        {finding.category}
+                      </h4>
+                      {finding.observations &&
+                        finding.observations.map(
+                          (observation: any, obsIdx: number) => (
+                            <div key={obsIdx} className="mb-4">
+                              <h5 className="text-sm font-medium mb-1">
+                                {observation.title}
+                              </h5>
+                              <p className="text-sm mb-2">
+                                {observation.details}
+                              </p>
+
+                              {observation.measurements && (
+                                <div className="grid grid-cols-2 gap-2 text-sm ml-3 mt-2">
+                                  {Object.entries(observation.measurements).map(
+                                    (
+                                      [key, value]: [string, any],
+                                      i: number
+                                    ) => (
+                                      <div
+                                        key={i}
+                                        className="flex justify-between"
+                                      >
+                                        <span className="font-medium">
+                                          {key}:
+                                        </span>
+                                        <span>{value}</span>
+                                      </div>
+                                    )
+                                  )}
+                                </div>
+                              )}
+
+                              {observation.notes && (
+                                <p className="text-sm italic mt-2">
+                                  {observation.notes}
+                                </p>
+                              )}
+                            </div>
+                          )
+                        )}
+                    </div>
+                  ))}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* TREATMENT OPTIONS TAB */}
+          <TabsContent value="treatment" className="p-6">
+            {!hasDiagnosis ? (
+              renderEmptyState(
+                <Activity className="h-12 w-12 text-gray-400 mx-auto mb-4" />,
+                "No treatment options available",
+                "Analyze the patient data to generate treatment recommendations."
+              )
+            ) : (
+              <div className="space-y-6">
                 <div>
                   <h3 className="text-lg font-semibold mb-3 flex items-center">
                     <ClipboardCheck className="h-5 w-5 mr-2 text-green-500" />
@@ -593,48 +1013,43 @@ export default function VirtualPatientDetail({
                               treatmentCategory.recommendations.length > 0 && (
                                 <div className="space-y-3">
                                   {treatmentCategory.recommendations.map(
-                                    (education: any, eduIdx: number) => (
+                                    (rec: any, eduIdx: number) => (
                                       <div
                                         key={eduIdx}
                                         className="border border-gray-200 rounded-md p-3"
                                       >
                                         <div className="flex justify-between items-start mb-2">
                                           <h5 className="text-md font-medium">
-                                            {education.topic}
+                                            {rec.topic}
                                           </h5>
-                                          <div className="flex space-x-2">
-                                            <Badge variant="outline">
-                                              {education.evidenceLevel} evidence
-                                            </Badge>
-                                            <Badge
-                                              variant={
-                                                education.recommendationStrength ===
-                                                "highly recommended"
-                                                  ? "default"
-                                                  : education.recommendationStrength ===
-                                                    "recommended"
-                                                  ? "secondary"
-                                                  : "outline"
-                                              }
-                                            >
-                                              {education.recommendationStrength}
-                                            </Badge>
-                                          </div>
+                                          <Badge
+                                            variant={
+                                              rec.importance === "high"
+                                                ? "default"
+                                                : rec.importance === "medium"
+                                                ? "secondary"
+                                                : "outline"
+                                            }
+                                          >
+                                            {rec.importance} importance
+                                          </Badge>
                                         </div>
-
-                                        {education.keyPoints &&
-                                          education.keyPoints.length > 0 && (
-                                            <div>
+                                        <p className="text-sm mb-2">
+                                          {rec.details}
+                                        </p>
+                                        {rec.resources &&
+                                          rec.resources.length > 0 && (
+                                            <div className="mt-2">
                                               <p className="text-sm font-medium">
-                                                Key Points:
+                                                Resources:
                                               </p>
                                               <ul className="list-disc list-inside text-sm ml-2">
-                                                {education.keyPoints.map(
+                                                {rec.resources.map(
                                                   (
-                                                    point: string,
+                                                    resource: string,
                                                     i: number
                                                   ) => (
-                                                    <li key={i}>{point}</li>
+                                                    <li key={i}>{resource}</li>
                                                   )
                                                 )}
                                               </ul>
@@ -643,42 +1058,6 @@ export default function VirtualPatientDetail({
                                       </div>
                                     )
                                   )}
-                                </div>
-                              )}
-
-                            {/* Legacy format fallback - still handle old structure */}
-                            {!treatmentCategory.category &&
-                              treatmentCategory.name && (
-                                <div className="border border-gray-200 rounded-md p-3">
-                                  <div className="flex justify-between items-start mb-1">
-                                    <h5 className="text-md font-medium">
-                                      {treatmentCategory.name}
-                                    </h5>
-                                    <div className="flex space-x-2">
-                                      <Badge variant="outline">
-                                        {treatmentCategory.evidenceLevel}{" "}
-                                        evidence
-                                      </Badge>
-                                      <Badge
-                                        variant={
-                                          treatmentCategory.recommendationStrength ===
-                                          "highly recommended"
-                                            ? "default"
-                                            : treatmentCategory.recommendationStrength ===
-                                              "recommended"
-                                            ? "secondary"
-                                            : "outline"
-                                        }
-                                      >
-                                        {
-                                          treatmentCategory.recommendationStrength
-                                        }
-                                      </Badge>
-                                    </div>
-                                  </div>
-                                  <p className="text-sm">
-                                    {treatmentCategory.description}
-                                  </p>
                                 </div>
                               )}
                           </div>
@@ -690,536 +1069,163 @@ export default function VirtualPatientDetail({
             )}
           </TabsContent>
 
+          {/* PATIENT PROGRESS TAB */}
+          <TabsContent value="progression" className="p-6">
+            {!hasDiagnosis ? (
+              renderEmptyState(
+                <LineChart className="h-12 w-12 text-gray-400 mx-auto mb-4" />,
+                "No Patient Progress Data",
+                "Analyze the patient data to view rehabilitation progress tracking."
+              )
+            ) : (
+              <PatientProgressTracker
+                patientId={patient.id}
+                bodyPart={patient.bodyPart || "general"}
+              />
+            )}
+          </TabsContent>
+
+          {/* INTERACTIVE ANATOMY TAB */}
+          <TabsContent value="anatomy" className="p-6">
+            <BodyPartZoom
+              bodyPart={patient.bodyPart || "general"}
+              imageUrl={
+                placeholderImages[patient.bodyPart?.toLowerCase() || "general"]
+              }
+            />
+            {/* Add fallback message in case image doesn't load */}
+            <div className="text-xs text-center text-muted-foreground mt-2">
+              Note: Interactive model displays anatomy regions for{" "}
+              {patient.bodyPart || "general"} body part. Click on highlighted
+              points to explore techniques.
+            </div>
+          </TabsContent>
+
+          {/* RESEARCH TAB */}
           <TabsContent value="research" className="p-6">
             {!hasDiagnosis ? (
-              <div className="text-center p-8">
-                <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium mb-2">
-                  No research available
-                </h3>
-                <p className="text-sm text-gray-500 mb-4">
-                  Analyze the patient data to see relevant research articles.
-                </p>
-                <Button
-                  onClick={() => analyzePatientMutation.mutate()}
-                  disabled={analyzePatientMutation.isPending}
-                >
-                  {analyzePatientMutation.isPending ? (
-                    <>
-                      <Activity className="mr-2 h-4 w-4 animate-pulse" />
-                      Analyzing...
-                    </>
-                  ) : (
-                    <>
-                      <Activity className="mr-2 h-4 w-4" />
-                      Analyze Patient Data
-                    </>
-                  )}
-                </Button>
-              </div>
+              renderEmptyState(
+                <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />,
+                "No research available",
+                "Analyze the patient data to view relevant research."
+              )
             ) : (
-              <div>
-                <h3 className="text-lg font-semibold mb-3">
-                  Relevant Research
-                </h3>
+              <div className="space-y-6">
+                <div className="bg-primary/5 p-4 rounded-lg">
+                  <h3 className="text-lg font-semibold mb-2 flex items-center">
+                    <BookOpen className="h-5 w-5 mr-2 text-primary" />
+                    Related Research
+                  </h3>
+                  <p className="text-sm">
+                    Evidence-based research relevant to this case.
+                  </p>
+                </div>
 
-                {/* Related Articles Section */}
-                {patient.relatedArticleIds &&
-                patient.relatedArticleIds.length > 0 ? (
-                  <div className="space-y-4">
-                    <p className="text-sm text-gray-500 mb-2">
-                      The following research articles may provide valuable
-                      insights for this case:
-                    </p>
+                {console.log("Related research data:", patient.relatedResearch)}
+                {Array.isArray(patient.relatedResearch) &&
+                patient.relatedResearch.length > 0 ? (
+                  patient.relatedResearch.map((research: any, idx: number) => (
+                    <div key={idx} className="border rounded-lg p-4 shadow-sm">
+                      <div className="flex justify-between items-start">
+                        <h4 className="text-md font-medium mb-1">
+                          {research.title}
+                        </h4>
+                        <Badge variant="outline">
+                          {research.publicationYear || research.year || "N/A"}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-gray-500 mb-2">
+                        {Array.isArray(research.authors)
+                          ? research.authors.join(", ")
+                          : research.author}
+                      </p>
+                      <p className="text-sm mb-3">{research.abstract}</p>
 
-                    {/* Article list would be displayed here */}
-                    <div className="space-y-3">
-                      <Card>
-                        <CardHeader className="py-3">
-                          <CardTitle className="text-md">
-                            Related Articles
-                          </CardTitle>
-                          <CardDescription>
-                            View these articles in the Research section for more
-                            information
-                          </CardDescription>
-                        </CardHeader>
-                        <CardContent className="py-0">
-                          <Link
-                            to="/research"
-                            className="text-primary hover:underline text-sm flex items-center"
+                      <div className="flex flex-wrap gap-2 mb-2">
+                        {Array.isArray(research.keywords) &&
+                          research.keywords.map(
+                            (keyword: string, kidx: number) => (
+                              <Badge
+                                key={kidx}
+                                variant="secondary"
+                                className="text-xs"
+                              >
+                                {keyword}
+                              </Badge>
+                            )
+                          )}
+                      </div>
+
+                      <div className="text-sm">
+                        <p>
+                          <strong>Journal:</strong>{" "}
+                          {research.journal || "Not specified"}
+                        </p>
+                        {research.doi && (
+                          <p>
+                            <strong>DOI:</strong> {research.doi}
+                          </p>
+                        )}
+                      </div>
+
+                      {research.keyFindings && (
+                        <div className="mt-3">
+                          <h5 className="text-sm font-medium mb-1">
+                            Key Findings
+                          </h5>
+                          <ul className="list-disc list-inside text-sm ml-2">
+                            {Array.isArray(research.keyFindings) ? (
+                              research.keyFindings.map(
+                                (finding: string, fidx: number) => (
+                                  <li key={fidx}>{finding}</li>
+                                )
+                              )
+                            ) : (
+                              <li>{String(research.keyFindings)}</li>
+                            )}
+                          </ul>
+                        </div>
+                      )}
+
+                      {research.clinicalImplications && (
+                        <div className="mt-3">
+                          <h5 className="text-sm font-medium mb-1">
+                            Clinical Implications
+                          </h5>
+                          <p className="text-sm">
+                            {research.clinicalImplications}
+                          </p>
+                        </div>
+                      )}
+
+                      {research.link && (
+                        <div className="mt-3">
+                          <Button
+                            variant="link"
+                            size="sm"
+                            className="p-0 h-auto"
+                            asChild
                           >
-                            Go to Research Section{" "}
-                            <ArrowRight className="h-4 w-4 ml-1" />
-                          </Link>
-                        </CardContent>
-                      </Card>
+                            <Link to={research.link} target="_blank">
+                              View full article
+                            </Link>
+                          </Button>
+                        </div>
+                      )}
                     </div>
-                  </div>
+                  ))
                 ) : (
-                  <div className="text-center p-4 bg-gray-50 rounded-lg">
-                    <p className="text-sm text-gray-500">
-                      No specific research articles have been linked to this
-                      case yet.
+                  <div className="text-center py-8">
+                    <p className="text-gray-500">
+                      No related research articles available for this patient.
                     </p>
                   </div>
                 )}
-
-                {/* Research Considerations Section */}
-                {patient.treatmentOptions &&
-                  patient.treatmentOptions[0]?.researchConsiderations && (
-                    <div className="mt-6">
-                      <h3 className="text-md font-semibold mb-2">
-                        Key Research Considerations
-                      </h3>
-                      <div className="space-y-3">
-                        {patient.treatmentOptions[0].researchConsiderations.map(
-                          (consideration: any, idx: number) => (
-                            <div key={idx} className="border rounded p-3">
-                              <h4 className="text-sm font-medium mb-1">
-                                {consideration.topic}
-                              </h4>
-                              <p className="text-xs text-gray-600">
-                                {consideration.relevance}
-                              </p>
-                            </div>
-                          )
-                        )}
-                      </div>
-                    </div>
-                  )}
-              </div>
-            )}
-          </TabsContent>
-
-          {/* Assessment Tests Tab */}
-          <TabsContent value="assessment" className="p-6">
-            {!hasDiagnosis ? (
-              <div className="text-center p-8">
-                <Clipboard className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium mb-2">
-                  No assessment tests available
-                </h3>
-                <p className="text-sm text-gray-500 mb-4">
-                  Analyze the patient data to see recommended assessment tests.
-                </p>
-                <Button
-                  onClick={() => analyzePatientMutation.mutate()}
-                  disabled={analyzePatientMutation.isPending}
-                >
-                  {analyzePatientMutation.isPending ? (
-                    <>
-                      <Activity className="mr-2 h-4 w-4 animate-pulse" />
-                      Analyzing...
-                    </>
-                  ) : (
-                    <>
-                      <Activity className="mr-2 h-4 w-4" />
-                      Analyze Patient Data
-                    </>
-                  )}
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                <h3 className="text-lg font-semibold mb-3 flex items-center">
-                  <Clipboard className="h-5 w-5 mr-2 text-blue-500" />
-                  Recommended Assessment Tests
-                </h3>
-                <p className="text-sm text-gray-500 mb-4">
-                  The following clinical tests can help confirm the diagnosis,
-                  determine the extent of injury, and identify related issues.
-                </p>
-
-                <div className="space-y-4">
-                  {patient.differentialDiagnosis?.assessmentTests?.map(
-                    (test: any, idx: number) => (
-                      <div
-                        key={idx}
-                        className="border rounded-lg p-4 bg-white shadow-sm"
-                      >
-                        <div className="flex justify-between items-start mb-2">
-                          <h4 className="text-md font-semibold">{test.name}</h4>
-                          <Badge
-                            variant={
-                              test.relevance === "primary"
-                                ? "default"
-                                : test.relevance === "secondary"
-                                ? "secondary"
-                                : "outline"
-                            }
-                          >
-                            {test.relevance} test
-                          </Badge>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                          <div>
-                            <h5 className="text-sm font-medium mb-1">
-                              Purpose
-                            </h5>
-                            <p className="text-sm">{test.purpose}</p>
-                          </div>
-
-                          <div>
-                            <h5 className="text-sm font-medium mb-1">
-                              Procedure
-                            </h5>
-                            <p className="text-sm">{test.procedure}</p>
-                          </div>
-
-                          <div>
-                            <h5 className="text-sm font-medium mb-1">
-                              Positive Findings
-                            </h5>
-                            <p className="text-sm">{test.positiveFindings}</p>
-                          </div>
-
-                          <div>
-                            <h5 className="text-sm font-medium mb-1">
-                              Negative Findings
-                            </h5>
-                            <p className="text-sm">{test.negativeFindings}</p>
-                          </div>
-                        </div>
-
-                        <div className="mt-4 pt-3 border-t">
-                          <div className="flex flex-wrap gap-3 mb-2">
-                            {test.sensitivity && (
-                              <Badge variant="outline" className="bg-blue-50">
-                                Sensitivity: {test.sensitivity}
-                              </Badge>
-                            )}
-                            {test.specificity && (
-                              <Badge variant="outline" className="bg-green-50">
-                                Specificity: {test.specificity}
-                              </Badge>
-                            )}
-                          </div>
-
-                          <div className="mt-3">
-                            <h5 className="text-sm font-medium mb-1">
-                              Research Support
-                            </h5>
-                            <p className="text-sm">{test.supportingResearch}</p>
-                          </div>
-
-                          <div className="mt-3">
-                            <h5 className="text-sm font-medium mb-1">
-                              Expert Recommendation
-                            </h5>
-                            <p className="text-sm">
-                              {test.expertRecommendation}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  )}
-
-                  {(!patient.differentialDiagnosis?.assessmentTests ||
-                    patient.differentialDiagnosis.assessmentTests.length ===
-                      0) && (
-                    <div className="text-center p-4 border rounded-lg bg-gray-50">
-                      <p className="text-sm text-gray-500">
-                        No specific assessment tests available for this case.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </TabsContent>
-
-          {/* Objective Findings Tab */}
-          <TabsContent value="findings" className="p-6">
-            {!hasDiagnosis ? (
-              <div className="text-center p-8">
-                <ClipboardCheck className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium mb-2">
-                  No objective findings available
-                </h3>
-                <p className="text-sm text-gray-500 mb-4">
-                  Analyze the patient data to see expected objective findings.
-                </p>
-                <Button
-                  onClick={() => analyzePatientMutation.mutate()}
-                  disabled={analyzePatientMutation.isPending}
-                >
-                  {analyzePatientMutation.isPending ? (
-                    <>
-                      <Activity className="mr-2 h-4 w-4 animate-pulse" />
-                      Analyzing...
-                    </>
-                  ) : (
-                    <>
-                      <Activity className="mr-2 h-4 w-4" />
-                      Analyze Patient Data
-                    </>
-                  )}
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                <h3 className="text-lg font-semibold mb-3 flex items-center">
-                  <ClipboardCheck className="h-5 w-5 mr-2 text-green-500" />
-                  Expected Objective Findings
-                </h3>
-                <p className="text-sm text-gray-500 mb-4">
-                  Expected clinical presentation based on the patient's
-                  condition. These findings would help confirm the diagnosis and
-                  inform treatment planning.
-                </p>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  {/* Range of Motion */}
-                  <div className="border rounded-lg p-4 bg-white shadow-sm">
-                    <h4 className="text-md font-semibold mb-3 flex items-center">
-                      <ArrowRight className="h-4 w-4 mr-2 text-blue-500" />
-                      Range of Motion
-                    </h4>
-                    {patient.differentialDiagnosis?.objectiveFindings?.rangeOfMotion?.map(
-                      (rom: any, idx: number) => (
-                        <div
-                          key={idx}
-                          className="mb-3 pb-3 border-b last:border-0"
-                        >
-                          <div className="flex justify-between items-start">
-                            <h5 className="text-sm font-medium">
-                              {rom.movement}
-                            </h5>
-                          </div>
-                          <p className="text-sm mt-1">
-                            <strong>Finding:</strong> {rom.finding}
-                          </p>
-                          <p className="text-xs mt-1 text-gray-600">
-                            <strong>Significance:</strong> {rom.significance}
-                          </p>
-                        </div>
-                      )
-                    )}
-                    {(!patient.differentialDiagnosis?.objectiveFindings
-                      ?.rangeOfMotion ||
-                      patient.differentialDiagnosis.objectiveFindings
-                        .rangeOfMotion.length === 0) && (
-                      <p className="text-sm text-gray-500">
-                        No range of motion findings specified.
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Strength */}
-                  <div className="border rounded-lg p-4 bg-white shadow-sm">
-                    <h4 className="text-md font-semibold mb-3 flex items-center">
-                      <ThumbsUp className="h-4 w-4 mr-2 text-amber-500" />
-                      Strength
-                    </h4>
-                    {patient.differentialDiagnosis?.objectiveFindings?.strength?.map(
-                      (strength: any, idx: number) => (
-                        <div
-                          key={idx}
-                          className="mb-3 pb-3 border-b last:border-0"
-                        >
-                          <div className="flex justify-between items-start">
-                            <h5 className="text-sm font-medium">
-                              {strength.muscleGroup}
-                            </h5>
-                            <Badge variant="outline">
-                              {strength.gradingScale}
-                            </Badge>
-                          </div>
-                          <p className="text-sm mt-1">
-                            <strong>Finding:</strong> {strength.finding}
-                          </p>
-                          <p className="text-xs mt-1 text-gray-600">
-                            <strong>Significance:</strong>{" "}
-                            {strength.significance}
-                          </p>
-                        </div>
-                      )
-                    )}
-                    {(!patient.differentialDiagnosis?.objectiveFindings
-                      ?.strength ||
-                      patient.differentialDiagnosis.objectiveFindings.strength
-                        .length === 0) && (
-                      <p className="text-sm text-gray-500">
-                        No strength findings specified.
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Neurological Signs */}
-                  <div className="border rounded-lg p-4 bg-white shadow-sm">
-                    <h4 className="text-md font-semibold mb-3 flex items-center">
-                      <Lightbulb className="h-4 w-4 mr-2 text-yellow-500" />
-                      Neurological Signs
-                    </h4>
-                    {patient.differentialDiagnosis?.objectiveFindings?.neurologicalSigns?.map(
-                      (neuro: any, idx: number) => (
-                        <div
-                          key={idx}
-                          className="mb-3 pb-3 border-b last:border-0"
-                        >
-                          <h5 className="text-sm font-medium">{neuro.test}</h5>
-                          <p className="text-sm mt-1">
-                            <strong>Finding:</strong> {neuro.finding}
-                          </p>
-                          <p className="text-xs mt-1 text-gray-600">
-                            <strong>Significance:</strong> {neuro.significance}
-                          </p>
-                        </div>
-                      )
-                    )}
-                    {(!patient.differentialDiagnosis?.objectiveFindings
-                      ?.neurologicalSigns ||
-                      patient.differentialDiagnosis.objectiveFindings
-                        .neurologicalSigns.length === 0) && (
-                      <p className="text-sm text-gray-500">
-                        No neurological findings specified.
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Palpation Findings */}
-                  <div className="border rounded-lg p-4 bg-white shadow-sm">
-                    <h4 className="text-md font-semibold mb-3 flex items-center">
-                      <ThumbsDown className="h-4 w-4 mr-2 text-red-500" />
-                      Palpation Findings
-                    </h4>
-                    {patient.differentialDiagnosis?.objectiveFindings?.palpationFindings?.map(
-                      (palp: any, idx: number) => (
-                        <div
-                          key={idx}
-                          className="mb-3 pb-3 border-b last:border-0"
-                        >
-                          <h5 className="text-sm font-medium">
-                            {palp.structure}
-                          </h5>
-                          <p className="text-sm mt-1">
-                            <strong>Finding:</strong> {palp.finding}
-                          </p>
-                          <p className="text-xs mt-1 text-gray-600">
-                            <strong>Significance:</strong> {palp.significance}
-                          </p>
-                        </div>
-                      )
-                    )}
-                    {(!patient.differentialDiagnosis?.objectiveFindings
-                      ?.palpationFindings ||
-                      patient.differentialDiagnosis.objectiveFindings
-                        .palpationFindings.length === 0) && (
-                      <p className="text-sm text-gray-500">
-                        No palpation findings specified.
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Functional Tests */}
-                  <div className="border rounded-lg p-4 bg-white shadow-sm">
-                    <h4 className="text-md font-semibold mb-3 flex items-center">
-                      <Activity className="h-4 w-4 mr-2 text-indigo-500" />
-                      Functional Tests
-                    </h4>
-                    {patient.differentialDiagnosis?.objectiveFindings?.functionalTests?.map(
-                      (func: any, idx: number) => (
-                        <div
-                          key={idx}
-                          className="mb-3 pb-3 border-b last:border-0"
-                        >
-                          <h5 className="text-sm font-medium">{func.test}</h5>
-                          <p className="text-sm mt-1">
-                            <strong>Finding:</strong> {func.finding}
-                          </p>
-                          <p className="text-xs mt-1 text-gray-600">
-                            <strong>Significance:</strong> {func.significance}
-                          </p>
-                        </div>
-                      )
-                    )}
-                    {(!patient.differentialDiagnosis?.objectiveFindings
-                      ?.functionalTests ||
-                      patient.differentialDiagnosis.objectiveFindings
-                        .functionalTests.length === 0) && (
-                      <p className="text-sm text-gray-500">
-                        No functional test findings specified.
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Additional Observations */}
-                  <div className="border rounded-lg p-4 bg-white shadow-sm md:col-span-2">
-                    <h4 className="text-md font-semibold mb-3">
-                      Additional Observations
-                    </h4>
-                    {patient.differentialDiagnosis?.objectiveFindings
-                      ?.additionalObservations?.length > 0 ? (
-                      <ul className="list-disc list-inside space-y-1">
-                        {patient.differentialDiagnosis.objectiveFindings.additionalObservations.map(
-                          (obs: string, idx: number) => (
-                            <li key={idx} className="text-sm">
-                              {obs}
-                            </li>
-                          )
-                        )}
-                      </ul>
-                    ) : (
-                      <p className="text-sm text-gray-500">
-                        No additional observations specified.
-                      </p>
-                    )}
-                  </div>
-                </div>
               </div>
             )}
           </TabsContent>
         </Tabs>
       </CardContent>
-
-      <CardFooter className="border-t p-4">
-        <div className="w-full flex justify-between items-center">
-          <Button variant="outline" onClick={onBackToList}>
-            <ChevronLeft className="h-4 w-4 mr-2" />
-            Back to List
-          </Button>
-
-          {hasDiagnosis && (
-            <div className="flex space-x-2">
-              <Button
-                variant="outline"
-                onClick={() => analyzePatientMutation.mutate()}
-                disabled={analyzePatientMutation.isPending}
-              >
-                <RefreshAnalysis className="h-4 w-4 mr-2" />
-                Refresh Analysis
-              </Button>
-            </div>
-          )}
-        </div>
-      </CardFooter>
     </Card>
-  );
-}
-
-// Custom components
-function RefreshAnalysis(props: any) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      {...props}
-    >
-      <path d="M21 12.5V8.5a4 4 0 0 0-4-4h-8a4 4 0 0 0-4 4v7a4 4 0 0 0 4 4h8" />
-      <path d="M16 9h0" />
-      <path d="M17 15l-4-4" />
-      <path d="M19 17l3 3" />
-      <path d="M19 20a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
-    </svg>
   );
 }

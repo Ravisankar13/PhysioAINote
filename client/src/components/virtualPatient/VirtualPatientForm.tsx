@@ -73,14 +73,29 @@ type FormData = z.infer<typeof formSchema>;
 interface VirtualPatientFormProps {
   onPatientCreated: (patientId: number) => void;
   onCancel: () => void;
+  existingPatient?: any; // For editing mode
 }
 
-export default function VirtualPatientForm({ onPatientCreated, onCancel }: VirtualPatientFormProps) {
+export default function VirtualPatientForm({ onPatientCreated, onCancel, existingPatient }: VirtualPatientFormProps) {
   const { toast } = useToast();
+  const isEditMode = !!existingPatient;
   
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
-    defaultValues: {
+    defaultValues: existingPatient ? {
+      patientName: existingPatient.patientName,
+      age: existingPatient.age,
+      gender: existingPatient.gender,
+      chiefComplaint: existingPatient.chiefComplaint,
+      symptomsDescription: existingPatient.symptomsDescription,
+      bodyPart: existingPatient.bodyPart,
+      pastMedicalHistory: existingPatient.pastMedicalHistory || "",
+      pastSurgicalHistory: existingPatient.pastSurgicalHistory || "",
+      socialHistory: existingPatient.socialHistory || "",
+      familyHistory: existingPatient.familyHistory || "",
+      medications: existingPatient.medications || "",
+      allergies: existingPatient.allergies || "",
+    } : {
       patientName: "",
       age: "",
       gender: "",
@@ -96,15 +111,26 @@ export default function VirtualPatientForm({ onPatientCreated, onCancel }: Virtu
     },
   });
 
-  const createPatientMutation = useMutation({
+  const patientMutation = useMutation({
     mutationFn: async (data: FormData) => {
-      console.log("Submitting virtual patient data");
+      console.log(isEditMode ? "Updating virtual patient data" : "Submitting virtual patient data");
       
       try {
         // Use fetch directly with credentials for better control
-        const response = await fetch("/api/virtual-patients", {
-          method: "POST",
-          body: JSON.stringify(data),
+        const url = isEditMode 
+          ? `/api/virtual-patients/${existingPatient.id}` 
+          : "/api/virtual-patients";
+        
+        const method = isEditMode ? "PATCH" : "POST";
+        
+        // If we're editing and there's already a diagnosis, mark as edited
+        const requestData = isEditMode && existingPatient?.diagnosis 
+          ? { ...data, hasBeenEdited: true }
+          : data;
+        
+        const response = await fetch(url, {
+          method: method,
+          body: JSON.stringify(requestData),
           headers: {
             "Content-Type": "application/json"
           },
@@ -113,37 +139,47 @@ export default function VirtualPatientForm({ onPatientCreated, onCancel }: Virtu
         
         if (!response.ok) {
           const errorText = await response.text();
-          console.error(`Virtual patient creation failed (${response.status}):`, errorText);
+          console.error(`Virtual patient ${isEditMode ? "update" : "creation"} failed (${response.status}):`, errorText);
           throw new Error(errorText || `Error ${response.status}: ${response.statusText}`);
         }
         
         return await response.json();
       } catch (error) {
-        console.error("Virtual patient creation error:", error);
+        console.error(`Virtual patient ${isEditMode ? "update" : "creation"} error:`, error);
         throw error;
       }
     },
     onSuccess: (data) => {
       console.log("Success response:", data);
       queryClient.invalidateQueries({ queryKey: ["/api/virtual-patients"] });
+      
+      if (isEditMode) {
+        queryClient.invalidateQueries({ queryKey: [`/api/virtual-patients/${existingPatient.id}`] });
+      }
+      
       toast({
         title: "Success",
-        description: "Virtual patient created successfully",
+        description: isEditMode 
+          ? "Virtual patient updated successfully" 
+          : "Virtual patient created successfully",
       });
+      
       onPatientCreated(data.id);
     },
     onError: (error: Error) => {
       console.error("Mutation error:", error);
       toast({
         title: "Error",
-        description: `Failed to create virtual patient: ${error.message}`,
+        description: isEditMode 
+          ? `Failed to update virtual patient: ${error.message}`
+          : `Failed to create virtual patient: ${error.message}`,
         variant: "destructive",
       });
     },
   });
 
   function onSubmit(data: FormData) {
-    createPatientMutation.mutate(data);
+    patientMutation.mutate(data);
   }
 
   return (
@@ -390,21 +426,21 @@ export default function VirtualPatientForm({ onPatientCreated, onCancel }: Virtu
                 type="button" 
                 variant="outline" 
                 onClick={onCancel}
-                disabled={createPatientMutation.isPending}
+                disabled={patientMutation.isPending}
               >
                 Cancel
               </Button>
               <Button 
                 type="submit" 
-                disabled={createPatientMutation.isPending}
+                disabled={patientMutation.isPending}
               >
-                {createPatientMutation.isPending ? (
+                {patientMutation.isPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Creating...
+                    {isEditMode ? "Updating..." : "Creating..."}
                   </>
                 ) : (
-                  "Create Virtual Patient"
+                  isEditMode ? "Update Virtual Patient" : "Create Virtual Patient"
                 )}
               </Button>
             </div>

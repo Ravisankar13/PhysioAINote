@@ -17,7 +17,7 @@ type AuthContextType = {
   registerMutation: UseMutationResult<SelectUser, Error, InsertUser>;
 };
 
-type LoginData = Pick<InsertUser, "username" | "password">;
+type LoginData = Pick<InsertUser, "username" | "password"> & { rememberMe: boolean };
 
 export const AuthContext = createContext<AuthContextType | null>(null);
 
@@ -38,6 +38,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         username: credentials.username,
       });
       try {
+        // Special handling for Fateofjustice account - make sure to match the case
+        const normUsername = credentials.username.toLowerCase();
+        if (normUsername === 'fateofjustice') {
+          credentials.username = 'Fateofjustice'; // Use the correct case
+          console.log("Using special case for admin login:", credentials.username);
+        }
+        
         // Use fetch directly to have more control
         const res = await fetch("/api/login", {
           method: "POST",

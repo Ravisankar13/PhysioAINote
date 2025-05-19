@@ -1,95 +1,51 @@
-import { Suspense, useRef, useState, useEffect } from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { OrbitControls, useGLTF, Environment, PresentationControls } from '@react-three/drei';
+import { Suspense, useRef, useState } from 'react';
+import { Canvas, useFrame } from '@react-three/fiber';
+import { OrbitControls } from '@react-three/drei';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import * as THREE from 'three';
-import { Group } from 'three';
 
-// Import skeleton model
-const MODEL_PATH = "/f13554ef-1daa-49cc-bd2d-ff0cdf430bde.glb";
+type BoneProps = {
+  position: [number, number, number];
+  rotation?: [number, number, number];
+  scale: [number, number, number];
+  color?: string;
+};
 
-interface ModelProps {
-  rotationSpeed?: number;
-  limbScales: {
-    arms: number;
-    legs: number;
-    torso: number;
-    hands: number;
-    feet: number;
-    head: number;
-  };
-  [key: string]: any;
+// Simple bone component to create a basic skeleton representation
+function Bone({ position, rotation = [0, 0, 0], scale, color = '#f0e6d8' }: BoneProps) {
+  return (
+    <mesh position={position} rotation={rotation} scale={scale}>
+      <boxGeometry args={[1, 1, 1]} />
+      <meshStandardMaterial color={color} />
+    </mesh>
+  );
 }
 
-function Model({ rotationSpeed = 0, limbScales, ...props }: ModelProps) {
-  const groupRef = useRef<Group>(null);
-  // useGLTF returns a cached result, so this is efficient
-  const { scene } = useGLTF(MODEL_PATH);
-  const sceneRef = useRef<THREE.Object3D | null>(null);
-  
-  // Initialize the scene only once
-  useEffect(() => {
-    // Clone the scene to avoid mutating the cached original
-    if (!sceneRef.current) {
-      sceneRef.current = scene.clone();
-    }
-  }, [scene]);
-  
-  // Apply scaling whenever limbScales changes
-  useEffect(() => {
-    if (!sceneRef.current) return;
-    
-    // Find and scale specific bone groups in the model
-    sceneRef.current.traverse((object) => {
-      // Get original scale if not yet set
-      if (!object.userData.originalScale) {
-        object.userData.originalScale = object.scale.clone();
-      }
-      
-      // Reset to original scale first
-      const originalScale = object.userData.originalScale;
-      object.scale.copy(originalScale);
-      
-      const name = object.name.toLowerCase();
-      
-      // Scale arms
-      if (name.includes('arm') || name.includes('shoulder') || 
-          name.includes('humerus') || name.includes('radius') || 
-          name.includes('ulna')) {
-        object.scale.multiplyScalar(limbScales.arms);
-      }
-      // Scale legs
-      else if (name.includes('leg') || name.includes('femur') || 
-              name.includes('tibia') || name.includes('fibula') || 
-              name.includes('thigh')) {
-        object.scale.multiplyScalar(limbScales.legs);
-      }
-      // Scale torso
-      else if (name.includes('spine') || name.includes('rib') || 
-              name.includes('chest') || name.includes('torso') || 
-              name.includes('pelvis')) {
-        object.scale.multiplyScalar(limbScales.torso);
-      }
-      // Scale hands
-      else if (name.includes('hand') || name.includes('finger') || 
-              name.includes('wrist')) {
-        object.scale.multiplyScalar(limbScales.hands);
-      }
-      // Scale feet
-      else if (name.includes('foot') || name.includes('ankle') || 
-              name.includes('toe')) {
-        object.scale.multiplyScalar(limbScales.feet);
-      }
-      // Scale head
-      else if (name.includes('head') || name.includes('skull') || 
-              name.includes('cranium') || name.includes('neck')) {
-        object.scale.multiplyScalar(limbScales.head);
-      }
-    });
-  }, [limbScales]);
+type JointProps = {
+  position: [number, number, number];
+  size?: number;
+  color?: string;
+};
+
+// Simple joint component
+function Joint({ position, size = 0.15, color = '#d1c7b7' }: JointProps) {
+  return (
+    <mesh position={position}>
+      <sphereGeometry args={[size, 16, 16]} />
+      <meshStandardMaterial color={color} />
+    </mesh>
+  );
+}
+
+type SkeletonModelProps = {
+  rotationSpeed: number;
+};
+
+function SimpleSkeletonModel({ rotationSpeed = 0 }: SkeletonModelProps) {
+  const groupRef = useRef<THREE.Group>(null);
   
   // Auto-rotate if speed is provided
   useFrame(() => {
@@ -98,49 +54,49 @@ function Model({ rotationSpeed = 0, limbScales, ...props }: ModelProps) {
     }
   });
 
-  // Only render if we have a scene
-  if (!sceneRef.current) return null;
-
   return (
-    <group ref={groupRef} {...props}>
-      <primitive object={sceneRef.current} />
+    <group ref={groupRef}>
+      {/* Skull */}
+      <Bone position={[0, 2, 0]} scale={[0.4, 0.5, 0.4]} />
+      
+      {/* Neck */}
+      <Bone position={[0, 1.6, 0]} scale={[0.2, 0.3, 0.2]} />
+      
+      {/* Torso */}
+      <Bone position={[0, 0.8, 0]} scale={[0.8, 1.2, 0.4]} />
+      
+      {/* Left Arm */}
+      <Joint position={[-0.5, 1.4, 0]} />
+      <Bone position={[-0.8, 1.2, 0]} rotation={[0, 0, -0.5]} scale={[0.6, 0.2, 0.2]} />
+      <Joint position={[-1.1, 1.0, 0]} />
+      <Bone position={[-1.4, 0.8, 0]} rotation={[0, 0, -0.3]} scale={[0.6, 0.18, 0.18]} />
+      
+      {/* Right Arm */}
+      <Joint position={[0.5, 1.4, 0]} />
+      <Bone position={[0.8, 1.2, 0]} rotation={[0, 0, 0.5]} scale={[0.6, 0.2, 0.2]} />
+      <Joint position={[1.1, 1.0, 0]} />
+      <Bone position={[1.4, 0.8, 0]} rotation={[0, 0, 0.3]} scale={[0.6, 0.18, 0.18]} />
+      
+      {/* Pelvis */}
+      <Bone position={[0, 0.2, 0]} scale={[0.6, 0.3, 0.3]} />
+      
+      {/* Left Leg */}
+      <Joint position={[-0.3, 0, 0]} />
+      <Bone position={[-0.3, -0.5, 0]} scale={[0.25, 0.8, 0.25]} />
+      <Joint position={[-0.3, -1, 0]} />
+      <Bone position={[-0.3, -1.5, 0]} scale={[0.22, 0.8, 0.22]} />
+      
+      {/* Right Leg */}
+      <Joint position={[0.3, 0, 0]} />
+      <Bone position={[0.3, -0.5, 0]} scale={[0.25, 0.8, 0.25]} />
+      <Joint position={[0.3, -1, 0]} />
+      <Bone position={[0.3, -1.5, 0]} scale={[0.22, 0.8, 0.22]} />
     </group>
   );
 }
 
-// Preload the model
-useGLTF.preload(MODEL_PATH);
-
 export default function SkeletonModelViewer() {
   const [rotationSpeed, setRotationSpeed] = useState(0);
-  
-  // State for limb adjustments
-  const [limbScales, setLimbScales] = useState({
-    arms: 1,
-    legs: 1,
-    torso: 1,
-    hands: 1,
-    feet: 1,
-    head: 1
-  });
-  
-  const handleLimbScaleChange = (limbName: string, value: number) => {
-    setLimbScales(prev => ({
-      ...prev,
-      [limbName]: value
-    }));
-  };
-  
-  const resetLimbScales = () => {
-    setLimbScales({
-      arms: 1,
-      legs: 1,
-      torso: 1,
-      hands: 1,
-      feet: 1,
-      head: 1
-    });
-  };
   
   return (
     <Card className="w-full">
@@ -150,33 +106,27 @@ export default function SkeletonModelViewer() {
           <div className="md:col-span-8">
             <div className="w-full aspect-[4/3] rounded-md overflow-hidden border model-container">
               <Suspense fallback={<div className="flex items-center justify-center h-full bg-muted">Loading 3D Model...</div>}>
-                <Canvas camera={{ position: [0, 0, 5], fov: 50 }} key={`canvas-${JSON.stringify(limbScales)}`}>
-                  <ambientLight intensity={0.7} />
-                  <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} />
-                  <PresentationControls
-                    global
-                    zoom={0.8}
-                    rotation={[0, 0, 0]}
-                    polar={[-Math.PI / 4, Math.PI / 4]}
-                    azimuth={[-Math.PI / 4, Math.PI / 4]}>
-                    <Model rotationSpeed={rotationSpeed} limbScales={limbScales} />
-                  </PresentationControls>
-                  <OrbitControls enableZoom={true} enablePan={true} />
-                  <Environment preset="city" />
+                <Canvas camera={{ position: [0, 0, 5], fov: 50 }}>
+                  <ambientLight intensity={0.8} />
+                  <pointLight position={[10, 10, 10]} intensity={0.6} />
+                  <pointLight position={[-10, -10, -5]} intensity={0.4} />
+                  <SimpleSkeletonModel rotationSpeed={rotationSpeed} />
+                  <OrbitControls 
+                    enableZoom={true} 
+                    enablePan={true} 
+                    minDistance={3} 
+                    maxDistance={10}
+                    minPolarAngle={0}
+                    maxPolarAngle={Math.PI / 1.5}
+                  />
                 </Canvas>
               </Suspense>
             </div>
-            <style jsx>{`
-              .reset-animation {
-                opacity: 0.8;
-                transition: opacity 0.3s ease;
-              }
-            `}</style>
           </div>
           
           {/* Adjustment Controls - takes up 4/12 columns on medium screens and above */}
           <div className="md:col-span-4 space-y-4">
-            <h3 className="text-lg font-semibold">Adjustment Controls</h3>
+            <h3 className="text-lg font-semibold">Interactive Controls</h3>
             
             <div className="space-y-2">
               <Label htmlFor="rotation-speed">Model Rotation Speed</Label>
@@ -195,62 +145,25 @@ export default function SkeletonModelViewer() {
               </div>
             </div>
             
-            <div className="mt-2">
-              <h4 className="text-md font-medium mb-2">Limb Size Adjustments</h4>
-              
-              {Object.entries(limbScales).map(([limb, scale]) => (
-                <div key={limb} className="mb-3">
-                  <Label htmlFor={`${limb}-scale`} className="capitalize text-sm">
-                    {limb} Size: <span className="font-medium">{scale.toFixed(2)}</span>
-                  </Label>
-                  <Slider
-                    id={`${limb}-scale`}
-                    min={0.5}
-                    max={1.5}
-                    step={0.01}
-                    value={[scale]}
-                    onValueChange={(values) => handleLimbScaleChange(limb, values[0])}
-                    className="mt-1"
-                  />
-                </div>
-              ))}
-            </div>
-            
-            <div className="grid grid-cols-2 gap-2 mt-4">
+            <div className="mt-6 space-y-4">
               <Button
                 variant="outline"
                 onClick={() => setRotationSpeed(0)}
                 size="sm"
+                className="w-full"
               >
                 Stop Rotation
               </Button>
-              <Button
-                variant="outline"
-                onClick={resetLimbScales}
-                size="sm"
-              >
-                Reset Limb Sizes
-              </Button>
-              <Button
-                variant="default"
-                className="col-span-2 mt-2"
-                size="sm"
-                onClick={() => {
-                  // Reset everything
-                  setRotationSpeed(0);
-                  resetLimbScales();
-                  // Force a re-render of the model
-                  const modelContainer = document.querySelector('.model-container');
-                  if (modelContainer) {
-                    modelContainer.classList.add('reset-animation');
-                    setTimeout(() => {
-                      modelContainer.classList.remove('reset-animation');
-                    }, 300);
-                  }
-                }}
-              >
-                Reset All
-              </Button>
+              
+              <div className="border-t pt-4">
+                <h4 className="text-sm font-semibold mb-2">Interaction Tips:</h4>
+                <ul className="space-y-1 text-sm text-muted-foreground list-disc pl-4">
+                  <li>Drag to rotate the model</li>
+                  <li>Scroll to zoom in and out</li>
+                  <li>Right-click and drag to pan</li>
+                  <li>Double-click to reset the view</li>
+                </ul>
+              </div>
             </div>
           </div>
         </div>

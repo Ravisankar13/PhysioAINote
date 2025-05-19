@@ -11,13 +11,15 @@ import { Plus, List } from "lucide-react";
 enum VirtualPatientView {
   LIST = "list",
   CREATE = "create",
-  DETAIL = "detail"
+  DETAIL = "detail",
+  EDIT = "edit"
 }
 
 export default function VirtualPatientPage() {
   const { user } = useAuth();
   const [currentView, setCurrentView] = useState<VirtualPatientView>(VirtualPatientView.LIST);
   const [selectedPatientId, setSelectedPatientId] = useState<number | null>(null);
+  const [patientToEdit, setPatientToEdit] = useState<any>(null);
 
   const handlePatientCreated = (patientId: number) => {
     setSelectedPatientId(patientId);
@@ -32,6 +34,13 @@ export default function VirtualPatientPage() {
   const handleBackToList = () => {
     setCurrentView(VirtualPatientView.LIST);
     setSelectedPatientId(null);
+    setPatientToEdit(null);
+  };
+  
+  const handleEditPatient = (patient: any) => {
+    setPatientToEdit(patient);
+    setSelectedPatientId(patient.id);
+    setCurrentView(VirtualPatientView.EDIT);
   };
 
   return (
@@ -90,10 +99,19 @@ export default function VirtualPatientPage() {
           />
         )}
 
+        {currentView === VirtualPatientView.EDIT && patientToEdit && (
+          <VirtualPatientForm 
+            onPatientCreated={handlePatientCreated}
+            onCancel={handleBackToList}
+            existingPatient={patientToEdit}
+          />
+        )}
+
         {currentView === VirtualPatientView.DETAIL && selectedPatientId && (
           <VirtualPatientDetail 
             patientId={selectedPatientId}
             onBackToList={handleBackToList}
+            onEditPatient={handleEditPatient}
           />
         )}
       </div>

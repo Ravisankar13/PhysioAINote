@@ -60,10 +60,9 @@ function NotesClinical(): React.ReactElement {
     pastSurgicalHistory: "",
   });
   const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
-
-  const [jwtToken, setJwtToken] = useState<string>(
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1dWlkIjoiYzY1MjUwZTYtNzFhYS00MmExLWJkMGUtYjllOTYxZmMwNTc4IiwidXNlcm5hbWUiOiJhbnVwIiwiZXhwIjoxNzQ3NDk5NTM1fQ.AmoxqkbQ-ViJOmDFWT7ZH650Yg_CXX9K9jZzFV1oxOg"
-  );
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [jwtToken, setJwtToken] = useState<string>("");
+  const [userId, setUserId] = useState<string | null>(null);
 
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [uploadingAudio, setUploadingAudio] = useState<boolean>(false);
@@ -95,6 +94,41 @@ function NotesClinical(): React.ReactElement {
   const [isPolling, setIsPolling] = useState<boolean>(false);
 
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const handleLogin = async () => {
+      try {
+        const response = await fetch(
+          "https://hqy44mb8l7.execute-api.us-east-2.amazonaws.com/dev/get-auth-token",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ username: "anup", password: "anup123" }),
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error("Login failed");
+        }
+
+        const data = await response.json();
+        const token = data.token;
+        const userId = data.user_id;
+        if (token) {
+          setJwtToken(token);
+          setUserId(userId);
+          setIsLoading(false);
+        } else {
+          console.error("Token not found in response");
+        }
+      } catch (error) {
+        console.error("Error during login:", error);
+      }
+    };
+    handleLogin();
+  }, []);
 
   const fetchSessions = async (lastKey?: string) => {
     try {
@@ -135,19 +169,15 @@ function NotesClinical(): React.ReactElement {
   };
 
   useEffect(() => {
-    fetchSessions();
+    if (jwtToken) {
+      fetchSessions();
 
-    // Reset the editingSessionSaved state if it was true
-    if (editingSessionSaved) {
-      setEditingSessionSaved(false);
+      // Reset the editingSessionSaved state if it was true
+      if (editingSessionSaved) {
+        setEditingSessionSaved(false);
+      }
     }
   }, [jwtToken, editingSessionSaved]);
-
-  const handleLogout = () => {
-    // Clear JWT token from localStorage and redirect to login
-    localStorage.removeItem("jwtToken");
-    navigate("/");
-  };
 
   const toggleSidebar = (): void => {
     setIsCollapsed((prev) => !prev);
@@ -269,8 +299,6 @@ function NotesClinical(): React.ReactElement {
   };
 
   const uploadDemographicData = async (): Promise<void> => {
-    const userId = localStorage.getItem("userId");
-
     if (!jwtToken || !userId) {
       console.error("JWT token or user ID not found");
       return;
@@ -298,7 +326,6 @@ function NotesClinical(): React.ReactElement {
 
   const generateSoapNote = async (): Promise<void> => {
     setIsGeneratingSoapNote(true);
-    const userId = localStorage.getItem("userId");
 
     if (!jwtToken || !userId) {
       console.error("JWT token or user ID not found");
@@ -569,7 +596,6 @@ function NotesClinical(): React.ReactElement {
     const currentDate = new Date();
     console.log("Inside UploadAudio API call", currentDate);
     if (!audioBlob) return;
-    let userId = localStorage.getItem("userId");
 
     try {
       if (!jwtToken) {
@@ -673,6 +699,15 @@ function NotesClinical(): React.ReactElement {
       uploadAudio();
     }
   }, [audioBlob]);
+
+  if (isLoading) {
+    return (
+      <div className="loading-container">
+        <div className="loader" />
+        <p>Loading...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="home-container">

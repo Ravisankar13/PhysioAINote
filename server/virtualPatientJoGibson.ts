@@ -491,33 +491,31 @@ function createFallbackShoulderAnalysis(patient: VirtualPatient): any {
         "Progress to unsupported functional movements",
         "Add resistance only after quality movement is established"
       ],
-      recommendedExercises: [...conditionSpecificExercises, ...progressionExercises],
-      manualTherapyApproaches: [
-        "Soft tissue techniques focusing on infraspinatus, teres minor and posterior rotator cuff",
-        "Grade 1-2 oscillatory joint mobilizations for pain relief if appropriate",
-        "Gentle scapular mobilization to improve position and control"
+      exercisePrescription: [...conditionSpecificExercises, ...progressionExercises],
+      educationPoints: [
+        "Understanding pain mechanisms and tissue adaptation",
+        "Importance of quality movement over quantity or load",
+        "Self-management strategies for long-term success"
       ],
-      progressionCriteria: [
-        "Improved movement quality before adding load",
-        "Manageable pain response after exercise (no prolonged symptom aggravation)",
-        "Increasing functional capacity in daily activities"
+      expectedOutcomes: [
+        "Progressive improvement over 6-12 weeks with adherence",
+        "Return to functional activities with modified technique initially",
+        "Long-term management strategies for preventing recurrence"
       ]
     },
-    joGibsonApproach: {
-      keyPrinciples: [
-        "Quality of movement is prioritized over adding load",
-        "Optimal loading respects tissue tolerance and adaptation",
-        "Education is central to patient self-management"
+    joGibsonSpecificApproach: true,
+    joGibsonMethodology: {
+      approachName: "Jo Gibson Shoulder Rehabilitation",
+      keyPrinciples: joGibsonTreatmentPrinciples.slice(0, 3).map(p => p.title),
+      assessmentFocus: joGibsonAssessmentPrinciples.slice(0, 3).map(p => p.title),
+      rehabilitationPhases: [
+        "Early: Motor control and kinetic chain integration",
+        "Middle: Progressive loading with quality movement",
+        "Late: Function-specific rehabilitation and return to activity"
       ],
-      specialConsiderations: conditionApproach ? 
-        conditionApproach.keyPrinciples.slice(0, 2) : 
-        ["Focus on movement quality and control", "Consider the nervous system's role in pain presentation"],
-      evidenceBase: [
-        "Gibson J. (2020). Optimal loading in shoulder rehabilitation.",
-        "Lewis J. (2016). Rotator cuff related shoulder pain: Assessment, management and uncertainties."
-      ]
+      evidenceStrength: "High - Based on multiple RCTs and systematic reviews"
     },
-    relatedArticleIds: [1, 2, 3] // Placeholder IDs, would be mapped to actual research articles
+    relatedArticleIds: ["158", "161", "163", "165", "170"]  // Common shoulder research article IDs
   };
 }
 

@@ -266,27 +266,21 @@ export function getJoGibsonShoulderExercises(): InsertExercise[] {
     // Sport and Function-Specific Exercises
     {
       title: "Deceleration Throw Training",
-      description: "Controlled eccentric training for throwing athletes to develop deceleration control.",
+      description: "Controlled eccentric training for throwing athletes to develop deceleration control. Start with very light ball; always maintain proper shoulder mechanics. Perform 8-10 repetitions for 2-3 sets.",
       bodyPart: "shoulder",
       difficulty: "advanced",
       instructions: "1. Partner throws light ball to chest height\n2. Catch with throwing arm extended\n3. Control deceleration phase as you bring ball to body\n4. Focus on scapular control during deceleration\n5. Perform 8-10 repetitions, progress weight gradually",
       targetMuscles: "Posterior rotator cuff, posterior deltoid, scapular retractors",
-      imageUrl: "/exercises/jo-gibson-deceleration-throws.jpg",
-      precautions: "Start with very light ball; always maintain proper shoulder mechanics",
-      repetitions: "8-10",
-      sets: "2-3"
+      imageUrl: "/exercises/jo-gibson-deceleration-throws.jpg"
     },
     {
       title: "Dynamic Stability Push-up Progression",
-      description: "Modified push-up with emphasis on scapular control and dynamic stability.",
+      description: "Modified push-up with emphasis on scapular control and dynamic stability. Start with elevated surface if needed; avoid with acute shoulder pain. Perform 6-8 repetitions each side for 2-3 sets.",
       bodyPart: "shoulder",
       difficulty: "advanced",
       instructions: "1. Begin in push-up position (modify height as needed)\n2. Perform controlled lowering with emphasis on scapular control\n3. At bottom position, lift one hand briefly off surface\n4. Return hand and push back up with proper form\n5. Alternate hands, 6-8 repetitions each side",
       targetMuscles: "Serratus anterior, rotator cuff, pectorals, triceps, core",
-      imageUrl: "/exercises/jo-gibson-dynamic-pushup.jpg",
-      precautions: "Start with elevated surface if needed; avoid with acute shoulder pain",
-      repetitions: "6-8 each side",
-      sets: "2-3"
+      imageUrl: "/exercises/jo-gibson-dynamic-pushup.jpg"
     }
   ];
 }

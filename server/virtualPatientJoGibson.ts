@@ -240,8 +240,8 @@ function createFallbackShoulderAnalysis(patient: VirtualPatient): any {
 
   // Determine likely condition based on keywords
   let likelyCondition = "Non-specific shoulder pain";
-  let differentials = [];
-  let assessmentTests = [];
+  let differentials: Array<{condition: string, likelihood: string, rationale: string}> = [];
+  let assessmentTests: Array<{name: string, purpose: string, technique: string, interpretation: string}> = [];
   
   if (symptomsLower.includes("night") && symptomsLower.includes("pain")) {
     likelyCondition = "Rotator cuff tendinopathy";
@@ -303,8 +303,8 @@ function createFallbackShoulderAnalysis(patient: VirtualPatient): any {
 
   return {
     diagnosis: likelyCondition,
-    differentialDiagnosis: differentials,
-    assessmentTests: assessmentTests,
+    differentialDiagnosis: differentials as Array<{condition: string, likelihood: string, rationale: string}>,
+    assessmentTests: assessmentTests as Array<{name: string, purpose: string, technique: string, interpretation: string}>,
     treatmentOptions: {
       immediateInterventions: [
         "Pain management following Jo Gibson's optimal loading principles",

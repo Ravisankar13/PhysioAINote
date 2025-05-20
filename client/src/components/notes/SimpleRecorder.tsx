@@ -120,14 +120,35 @@ export function SimpleRecorder({ onRecordingComplete }: SimpleRecorderProps) {
       
       setProcessingStatus('Sending audio to AI for transcription...');
       
-      // Get the sessionId from URL parameters if available
+      // Look for the sessionId in several places
+      // 1. First check URL parameters
       const urlParams = new URLSearchParams(window.location.search);
-      const sessionId = urlParams.get('sessionId');
+      let sessionId = urlParams.get('sessionId');
+      
+      // 2. If not in URL, check if we're in a path with session ID
+      if (!sessionId) {
+        const pathMatch = window.location.pathname.match(/\/sessions\/(\d+)/);
+        if (pathMatch && pathMatch[1]) {
+          sessionId = pathMatch[1];
+        }
+      }
+      
+      // 3. For compatibility with NotesClinical component, also look for hidden sessionId input
+      if (!sessionId) {
+        const sessionIdInput = document.getElementById('hidden-session-id') as HTMLInputElement;
+        if (sessionIdInput && sessionIdInput.value) {
+          sessionId = sessionIdInput.value;
+        }
+      }
+      
+      console.log('Using session ID for transcription:', sessionId);
       
       // Send to server for transcription
       const response = await fetch(sessionId ? `/api/sessions/${sessionId}/transcribe` : '/api/transcribe', {
         method: 'POST',
-        body: formData
+        body: formData,
+        // Add credentials to ensure auth cookies are sent
+        credentials: 'same-origin'
       });
       
       if (!response.ok) {

@@ -313,6 +313,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'No audio file uploaded' });
       }
 
+      console.log('Processing audio file for transcription:', req.file.path);
       const transcription = await transcribeAudio(req.file.path);
       
       // Analyze the transcription for clinical insights
@@ -329,6 +330,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error('Error in transcription:', error);
       res.status(500).json({ error: error.message || 'Failed to transcribe audio' });
+    }
+  });
+  
+  // Session-specific transcription endpoint
+  app.post('/api/sessions/:id/transcribe', ensureAuthenticated, upload.single('audio'), async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: 'No audio file uploaded' });
+      }
+      
+      const sessionId = parseInt(req.params.id);
+      console.log(`Processing session-specific audio for session ID ${sessionId}`);
+      
+      // Verify session exists and belongs to user
+      const session = await storage.getPatientSession(sessionId);
+      if (!session) {
+        return res.status(404).json({ error: 'Session not found' });
+      }
+      
+      if (session.userId !== req.user!.id) {
+        return res.status(403).json({ error: 'Not authorized to access this session' });
+      }
+      
+      // 1. Save the audio file
+      const audioS3Uri = `s3://mock-bucket/${req.file.filename}`;
+      const audioUrl = `/api/audio/${req.file.filename}`;
+      
+      // Create audio recording record
+      await storage.createAudioRecording({
+        sessionId,
+        audioUrl,
+        audioS3Uri,
+        duration: parseInt(req.body.duration || '0') 
+      });
+      
+      // 2. Transcribe the audio
+      console.log('Transcribing audio file:', req.file.path);
+      const transcription = await transcribeAudio(req.file.path);
+      
+      // 3. Save the transcript
+      const transcriptS3Uri = `s3://mock-bucket/transcript-${sessionId}.csv`;
+      const transcriptUrl = `/api/transcript/${sessionId}`;
+      
+      // Write transcript to file for demo purposes
+      const transcriptFilePath = path.join(process.cwd(), 'test-uploads', `transcript-${sessionId}.csv`);
+      await fs.promises.writeFile(transcriptFilePath, "Timestamp,Transcript\n0,\"" + transcription + "\"");
+      
+      // Update session with transcript
+      await storage.updatePatientSessionTranscript(
+        sessionId, 
+        transcriptUrl, 
+        transcriptS3Uri
+      );
+      
+      // 4. Generate insights and SOAP note
+      const insights = await analyzeTranscription(transcription);
+      const soapNote = generateSoapSectionsFromInsights(transcription, insights);
+      
+      // 5. Save SOAP note to session
+      await storage.updatePatientSessionSoapNote(sessionId, soapNote);
+      
+      // 6. Return all data
+      res.json({
+        sessionId,
+        transcription,
+        insights,
+        soapNote,
+        audioUrl,
+        transcriptUrl
+      });
+      
+    } catch (error: any) {
+      console.error('Error in session transcription:', error);
+      res.status(500).json({ error: error.message || 'Failed to process audio for session' });
     }
   });
 

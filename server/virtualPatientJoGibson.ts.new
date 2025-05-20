@@ -8,8 +8,7 @@
 
 import OpenAI from "openai";
 import { VirtualPatient } from "@shared/schema";
-import { joGibsonAssessmentPrinciples, joGibsonTreatmentPrinciples, joGibsonConditionApproaches } from "./joGibsonShoulderLibrary";
-import { getJoGibsonShoulderExercises } from "./joGibsonShoulderLibrary";
+import { joGibsonAssessmentPrinciples, joGibsonTreatmentPrinciples, joGibsonConditionApproaches, getJoGibsonShoulderExercises, joGibsonResearchArticles } from "./joGibsonShoulderLibrary";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -44,7 +43,7 @@ export async function analyzeShoulderPatientJoGibson(patient: VirtualPatient) {
     // Parse the AI response
     const analysisResult = JSON.parse(response.choices[0].message.content!);
 
-    // Generate related research article IDs based on the diagnosis
+    // Get related research article IDs for the diagnosis
     const relatedArticleIds = await getRelatedShoulderResearchIds(
       analysisResult.diagnosis,
       analysisResult.differentialDiagnosis,
@@ -81,7 +80,6 @@ PATIENT INFORMATION:
 - Symptoms Description: ${patient.symptoms_description}
 - Medical History: ${patient.past_medical_history || "None reported"}
 - Body Part: ${patient.body_part || "shoulder"}
-- Additional Description: ${patient.symptoms_description}
 `;
 
   // Include Jo Gibson's key assessment principles
@@ -206,14 +204,17 @@ async function getRelatedShoulderResearchIds(
     // Combine diagnosis information to create search terms
     const diagnoses = [diagnosis];
     if (differentialDiagnosis && Array.isArray(differentialDiagnosis)) {
-      diagnoses.push(...differentialDiagnosis.map(d => d.condition));
+      differentialDiagnosis.forEach(d => {
+        if (d && d.condition) {
+          diagnoses.push(d.condition);
+        }
+      });
     }
 
     // Get specialized search terms for shoulder research
     const searchTerms = await generateShoulderResearchSearchTerms(diagnoses.join(", "), bodyPart);
     
-    // For now, return the search terms as IDs
-    // In a full implementation, these would be mapped to actual research article IDs
+    // For now, return the search terms as IDs (would be mapped to actual research article IDs in full implementation)
     return searchTerms.slice(0, 5);
   } catch (error) {
     console.error("Error generating related shoulder research IDs:", error);
@@ -411,8 +412,8 @@ function createFallbackShoulderAnalysis(patient: VirtualPatient): any {
 
   return {
     diagnosis: bestMatch.condition,
-    differentialDiagnosis: differentials as Array<{condition: string, likelihood: string, rationale: string}>,
-    assessmentTests: assessmentTests as Array<{name: string, purpose: string, technique: string, interpretation: string}>,
+    differentialDiagnosis: differentials,
+    assessmentTests: assessmentTests,
     treatmentOptions: {
       immediateInterventions: immediateInterventions,
       rehabilitationProgression: [
@@ -432,42 +433,21 @@ function createFallbackShoulderAnalysis(patient: VirtualPatient): any {
         "Increasing functional capacity in daily activities"
       ]
     },
-    references: [
-      "Gibson J. (2020). Optimal loading in shoulder rehabilitation.",
-      "Lewis J. (2016). Rotator cuff related shoulder pain: Assessment, management and uncertainties.",
-      "Gibson J, & Lewis J. (2023). Contemporary management of shoulder pain: the burden of uncertainty and how to guide clinicians.",
-      "Littlewood C, Malliaras P, Bateman M, Stace R, May S, & Walters S. (2019). The central nervous system – An additional consideration in 'rotator cuff tendinopathy' and a potential basis for understanding response to loaded therapeutic exercise."
-    ]
-  };
-}
-
-
-        "Education about condition and expected recovery",
-        "Initial movement within pain limits to maintain tissue health"
+    joGibsonApproach: {
+      keyPrinciples: [
+        "Quality of movement is prioritized over adding load",
+        "Optimal loading respects tissue tolerance and adaptation",
+        "Education is central to patient self-management"
       ],
-      rehabilitationProgression: [
-        "Establish quality movement in supported positions",
-        "Progressive loading based on symptom response",
-        "Integration into functional patterns specific to patient's needs"
-      ],
-      exercisePrescription: relevantExercises,
-      educationPoints: [
-        "Understanding the difference between pain and tissue damage",
-        "Importance of graded exposure to movement",
-        "Self-management strategies for long-term shoulder health"
-      ],
-      expectedOutcomes: [
-        "Gradual improvement in pain and function over 8-12 weeks",
-        "Return to functional activities with modified technique initially",
-        "Long-term management strategies for preventing recurrence"
+      specialConsiderations: conditionApproach ? 
+        conditionApproach.keyPrinciples.slice(0, 2) : 
+        ["Focus on movement quality and control", "Consider the nervous system's role in pain presentation"],
+      evidenceBase: [
+        "Gibson J. (2020). Optimal loading in shoulder rehabilitation.",
+        "Lewis J. (2016). Rotator cuff related shoulder pain: Assessment, management and uncertainties."
       ]
     },
-    joGibsonApproach: {
-      keyPrinciples: relevantTreatmentPrinciples,
-      specialConsiderations: conditionMatch ? conditionMatch.keyPrinciples : ["Individualized approach based on assessment findings", "Focus on quality of movement before quantity"],
-      evidenceBase: conditionMatch ? [conditionMatch.evidence] : ["Evidence supports progressive loading rather than complete rest for most shoulder conditions"]
-    },
-    relatedArticleIds: ["shoulder rehabilitation", "Jo Gibson approach", patient.body_part || "shoulder", "physiotherapy"]
+    relatedArticleIds: [1, 2, 3] // Placeholder IDs, would be mapped to actual research articles
   };
 }
 
@@ -477,15 +457,5 @@ function createFallbackShoulderAnalysis(patient: VirtualPatient): any {
  * @returns Boolean indicating whether the patient has a shoulder condition
  */
 export function isShoulderPatient(patient: VirtualPatient): boolean {
-  // Check if the body part is explicitly shoulder
-  if (patient.body_part?.toLowerCase() === "shoulder") {
-    return true;
-  }
-  
-  // Check for shoulder-related terms in symptoms and complaints
-  const shoulderTerms = ["shoulder", "rotator cuff", "cuff", "acromioclavicular", "glenohumeral", "labrum", "subacromial", "deltoid", "frozen shoulder", "adhesive capsulitis"];
-  
-  const textToSearch = `${patient.chief_complaint} ${patient.symptoms_description} ${patient.past_medical_history || ""}`.toLowerCase();
-  
-  return shoulderTerms.some(term => textToSearch.includes(term));
+  return patient.body_part === "shoulder";
 }

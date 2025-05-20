@@ -120,8 +120,12 @@ export function SimpleRecorder({ onRecordingComplete }: SimpleRecorderProps) {
       
       setProcessingStatus('Sending audio to AI for transcription...');
       
+      // Get the sessionId from URL parameters if available
+      const urlParams = new URLSearchParams(window.location.search);
+      const sessionId = urlParams.get('sessionId');
+      
       // Send to server for transcription
-      const response = await fetch('/api/transcribe', {
+      const response = await fetch(sessionId ? `/api/sessions/${sessionId}/transcribe` : '/api/transcribe', {
         method: 'POST',
         body: formData
       });

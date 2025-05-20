@@ -1494,17 +1494,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Determine if this is a shoulder-related case that should use Jo Gibson's approach
       let analysisResult;
       try {
-        // Check if the patient has shoulder-related issues
-        const isShoulderRelated = virtualPatient.body_part === "shoulder" || 
-          (virtualPatient.chief_complaint && virtualPatient.chief_complaint.toLowerCase().includes("shoulder")) ||
-          (virtualPatient.symptoms_description && virtualPatient.symptoms_description.toLowerCase().includes("shoulder"));
+        // Import the specialized shoulder analysis module
+        const { analyzeShoulderPatientJoGibson, isShoulderPatient } = require('./virtualPatientJoGibson');
+        
+        // Check if the patient has shoulder-related issues using the specialized function
+        const isShoulderRelated = isShoulderPatient(virtualPatient);
           
         if (isShoulderRelated) {
           // Try to use the Jo Gibson approach for shoulder cases
           console.log("Using Jo Gibson shoulder approach for patient analysis");
           
-          // Import the specialized shoulder analysis module
-          const { analyzeShoulderPatientJoGibson } = require('./virtualPatientJoGibson');
           const joGibsonResult = await analyzeShoulderPatientJoGibson(virtualPatient);
           
           // Convert the Jo Gibson specialized format to our standard format
@@ -1532,12 +1531,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const differentialDiagnoses = analysisResult.differentialDiagnoses?.map(d => d.name) || [];
       const keywords = analysisResult.recommendedKeywords || [];
       
-      // Find relevant research articles based on the diagnosis
+      // Find relevant research articles based on the diagnosis and related article IDs
+      let relatedArticleIds = [];
+      
+      // Check if we have pre-defined related article IDs from Jo Gibson's approach
+      if (joGibsonResult && joGibsonResult.relatedArticleIds) {
+        relatedArticleIds = joGibsonResult.relatedArticleIds;
+      }
+      
       const searchResults = await findRelevantResearchArticles(
         analysisResult.primaryDiagnosis?.name || "undefined diagnosis",
         differentialDiagnoses,
         virtualPatient.body_part,
-        keywords
+        keywords,
+        relatedArticleIds
       );
       
       // Get relevant article IDs from the search terms

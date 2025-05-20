@@ -1588,7 +1588,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         updatedData
       );
       
-      // Add Jo Gibson's specialized information for shoulder cases
+      // Determine appropriate specialized approach based on body part and patient characteristics
       if (isShoulderCase) {
         // Get Jo Gibson's specialized info from the library
         const { joGibsonTreatmentPrinciples, joGibsonAssessmentPrinciples } = require('./joGibsonShoulderLibrary');
@@ -1596,9 +1596,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Add specialized information to enhance the response
         res.json({
           ...updatedPatient,
-          joGibsonApproach: true,
-          joGibsonNote: "This analysis incorporates Jo Gibson's specialized shoulder rehabilitation approach.",
-          joGibsonMethodology: {
+          specializedApproach: "Jo Gibson Shoulder Rehabilitation",
+          specializedNote: "This analysis incorporates Jo Gibson's specialized shoulder rehabilitation approach.",
+          specializedMethodology: {
             approachName: "Jo Gibson Shoulder Rehabilitation",
             keyPrinciples: joGibsonTreatmentPrinciples.slice(0, 5).map(p => p.title),
             rehabilitationPhases: [
@@ -1609,7 +1609,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
             evidenceStrength: "High - Based on multiple RCTs and systematic reviews"
           }
         });
-      } else {
+      } 
+      // Check for knee conditions to apply Clinical Edge approach
+      else if (updatedPatient.body_part === "knee") {
+        // Get Clinical Edge specialized info from the library
+        const { clinicalEdgeRegionalApproaches, clinicalEdgeTreatmentPrinciples } = require('./clinicalEdgeLibrary');
+        
+        // Find knee-specific approaches
+        const kneeApproaches = clinicalEdgeRegionalApproaches.find(a => a.bodyPart === "knee");
+        
+        res.json({
+          ...updatedPatient,
+          specializedApproach: "Clinical Edge Knee Rehabilitation",
+          specializedNote: "This analysis incorporates Clinical Edge's specialized knee rehabilitation approach.",
+          specializedMethodology: {
+            approachName: "Clinical Edge Knee Rehabilitation",
+            keyPrinciples: clinicalEdgeTreatmentPrinciples.slice(0, 5).map(p => p.title),
+            specializedPrograms: kneeApproaches ? kneeApproaches.specializedApproaches.map(sa => sa.name) : [],
+            evidenceStrength: "High - Based on multiple RCTs and systematic reviews"
+          }
+        });
+      }
+      // Check for back/neck conditions to apply Physio Network approach
+      else if (updatedPatient.body_part === "back" || updatedPatient.body_part === "neck") {
+        // Get Physio Network specialized info from the library
+        const { physioNetworkPainApproaches, physioNetworkTreatmentPrinciples } = require('./physioNetworkLibrary');
+        
+        res.json({
+          ...updatedPatient,
+          specializedApproach: "Physio Network Pain Science Approach",
+          specializedNote: "This analysis incorporates Physio Network's specialized pain science approach.",
+          specializedMethodology: {
+            approachName: "Physio Network Pain Science Framework",
+            keyPrinciples: physioNetworkTreatmentPrinciples.slice(0, 5).map(p => p.title),
+            painApproaches: physioNetworkPainApproaches.slice(0, 2).map(pa => pa.name),
+            evidenceStrength: "High - Based on multiple RCTs and systematic reviews"
+          }
+        });
+      }
+      // Check for athletic patients or sport injuries to apply Sports Map approach
+      else if (updatedPatient.chief_complaint?.toLowerCase().includes("sport") || 
+               updatedPatient.chief_complaint?.toLowerCase().includes("athlete") ||
+               updatedPatient.chief_complaint?.toLowerCase().includes("running") ||
+               updatedPatient.chief_complaint?.toLowerCase().includes("training")) {
+        // Get Sports Map specialized info from the library
+        const { sportsMapSportSpecificApproaches, sportsMapTreatmentPrinciples } = require('./sportsMapLibrary');
+        
+        res.json({
+          ...updatedPatient,
+          specializedApproach: "Sports Map Performance Rehabilitation",
+          specializedNote: "This analysis incorporates Sports Map's specialized athletic performance rehabilitation approach.",
+          specializedMethodology: {
+            approachName: "Sports Map Performance Framework",
+            keyPrinciples: sportsMapTreatmentPrinciples.slice(0, 5).map(p => p.title),
+            sportSpecificConsiderations: true,
+            evidenceStrength: "High - Based on sport-specific research and performance science"
+          }
+        });
+      }
+      else {
         res.json(updatedPatient);
       }
     } catch (error) {

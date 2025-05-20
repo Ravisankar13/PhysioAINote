@@ -1679,6 +1679,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Get specialized analysis for shoulder cases using Jo Gibson's approach
       let joGibsonSpecificArticles = [];
+      let grimaldiSpecificArticles = [];
+      let bissetSpecificArticles = [];
+      
+      // Handle shoulder cases with Jo Gibson's approach
       if (isShoulderCase) {
         try {
           const joGibsonAnalysis = await analyzeShoulderPatientJoGibson(virtualPatient);
@@ -1692,12 +1696,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
+      // Handle hip cases with Alison Grimaldi's approach
+      if (virtualPatient.body_part === "hip") {
+        try {
+          const grimaldiAnalysis = await analyzePatientGrimaldi(virtualPatient);
+          
+          // Extract the relatedArticleIds from Grimaldi's specialized analysis
+          if (grimaldiAnalysis && grimaldiAnalysis.relatedArticleIds) {
+            grimaldiSpecificArticles = grimaldiAnalysis.relatedArticleIds;
+          }
+        } catch (error) {
+          console.error("Error getting Grimaldi hip analysis:", error);
+        }
+      }
+      
+      // Handle elbow cases with Leanne Bisset's approach
+      if (virtualPatient.body_part === "elbow") {
+        try {
+          const bissetAnalysis = await analyzePatientBisset(virtualPatient);
+          
+          // Extract the relatedArticleIds from Bisset's specialized analysis
+          if (bissetAnalysis && bissetAnalysis.relatedArticleIds) {
+            bissetSpecificArticles = bissetAnalysis.relatedArticleIds;
+          }
+        } catch (error) {
+          console.error("Error getting Bisset elbow analysis:", error);
+        }
+      }
+      
+      // Combine all specialized article IDs
+      const specializedArticleIds = [
+        ...joGibsonSpecificArticles,
+        ...grimaldiSpecificArticles,
+        ...bissetSpecificArticles
+      ];
+      
       const searchResults = await findRelevantResearchArticles(
         analysisResult.primaryDiagnosis?.name || "undefined diagnosis",
         differentialDiagnoses,
         virtualPatient.body_part,
         keywords,
-        joGibsonSpecificArticles
+        specializedArticleIds
       );
       
       // Get relevant article IDs from the search terms
@@ -1706,6 +1745,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Include Jo Gibson's specialized shoulder articles if available
       const joGibsonArticles = isShoulderCase && searchResults?.joGibsonSpecificArticles ? 
         searchResults.joGibsonSpecificArticles : [];
+        
+      // Include Alison Grimaldi's specialized hip articles if available
+      const grimaldiArticles = virtualPatient.body_part === "hip" && searchResults?.specializedArticles ? 
+        searchResults.specializedArticles.filter(a => grimaldiSpecificArticles.includes(a.id.toString())) : [];
+        
+      // Include Leanne Bisset's specialized elbow articles if available
+      const bissetArticles = virtualPatient.body_part === "elbow" && searchResults?.specializedArticles ? 
+        searchResults.specializedArticles.filter(a => bissetSpecificArticles.includes(a.id.toString())) : [];
       
       // Include assessment tests in the patient data
       // First, modify the virtual patient schema to include assessment tests
@@ -1801,6 +1848,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
             keyPrinciples: sportsMapTreatmentPrinciples.slice(0, 5).map(p => p.title),
             sportSpecificConsiderations: true,
             evidenceStrength: "High - Based on sport-specific research and performance science"
+          }
+        });
+      }
+      // Check for hip conditions to apply Alison Grimaldi's approach
+      else if (updatedPatient.body_part === "hip") {
+        // Get Grimaldi's specialized info from the library
+        const { grimaldiHipApproaches, grimaldiTreatmentPrinciples } = require('./grimaldi-hip-library');
+        
+        res.json({
+          ...updatedPatient,
+          specializedApproach: "Alison Grimaldi Hip Rehabilitation",
+          specializedNote: "This analysis incorporates Alison Grimaldi's specialized hip rehabilitation approach.",
+          specializedMethodology: {
+            approachName: "Grimaldi Hip Rehabilitation Framework",
+            focusAreas: [
+              "Gluteal muscle-specific assessment and rehabilitation",
+              "Hip-related pain conditions and their management",
+              "Motor control approach to lateral hip pain"
+            ],
+            keyPrinciples: grimaldiTreatmentPrinciples.slice(0, 5).map(p => p.title),
+            rehabilitationPhases: [
+              "Early: Activation of deep gluteal muscles without compression",
+              "Middle: Progressive loading and motor control in weight-bearing",
+              "Late: Functional and sports-specific rehabilitation"
+            ],
+            evidenceStrength: "High - Based on specialized research in gluteal tendinopathy and hip conditions"
+          }
+        });
+      }
+      // Check for elbow conditions to apply Leanne Bisset's approach
+      else if (updatedPatient.body_part === "elbow") {
+        // Get Bisset's specialized info from the library
+        const { bissetElbowApproaches, bissetTreatmentPrinciples } = require('./bisset-elbow-library');
+        
+        res.json({
+          ...updatedPatient,
+          specializedApproach: "Leanne Bisset Elbow Rehabilitation",
+          specializedNote: "This analysis incorporates Leanne Bisset's specialized elbow rehabilitation approach.",
+          specializedMethodology: {
+            approachName: "Bisset Elbow Rehabilitation Framework",
+            focusAreas: [
+              "Lateral elbow tendinopathy (tennis elbow) assessment and management",
+              "Pain mechanisms and neurophysiological approaches to elbow pain",
+              "Progressive loading for elbow tendinopathy rehabilitation"
+            ],
+            keyPrinciples: bissetTreatmentPrinciples.slice(0, 5).map(p => p.title),
+            rehabilitationPhases: [
+              "Early: Pain modulation and managed loading",
+              "Middle: Progressive tissue loading and motor control training",
+              "Late: Function-specific rehabilitation and return to activities"
+            ],
+            evidenceStrength: "High - Based on multiple RCTs and systematic reviews on lateral elbow tendinopathy"
           }
         });
       }

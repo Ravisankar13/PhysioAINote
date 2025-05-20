@@ -1491,8 +1491,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
         updatedAt: new Date()
       });
       
-      // Analyze the virtual patient case
-      const analysisResult = await analyzeVirtualPatientCase(virtualPatient);
+      // Determine if this is a shoulder-related case that should use Jo Gibson's approach
+      let analysisResult;
+      try {
+        // Check if the patient has shoulder-related issues
+        const isShoulderRelated = virtualPatient.body_part === "shoulder" || 
+          (virtualPatient.chief_complaint && virtualPatient.chief_complaint.toLowerCase().includes("shoulder")) ||
+          (virtualPatient.symptoms_description && virtualPatient.symptoms_description.toLowerCase().includes("shoulder"));
+          
+        if (isShoulderRelated) {
+          // Try to use the Jo Gibson approach for shoulder cases
+          console.log("Using Jo Gibson shoulder approach for patient analysis");
+          
+          // Import the specialized shoulder analysis module
+          const { analyzeShoulderPatientWithJoGibson } = require('./virtualPatientJoGibson');
+          const joGibsonResult = await analyzeShoulderPatientWithJoGibson(virtualPatient);
+          
+          // Convert the Jo Gibson specialized format to our standard format
+          analysisResult = {
+            primaryDiagnosis: { name: joGibsonResult.diagnosis, description: "Based on Jo Gibson's shoulder approach" },
+            differentialDiagnoses: joGibsonResult.differentialDiagnosis.map(d => ({ 
+              name: d.condition, 
+              description: d.rationale,
+              likelihood: d.likelihood
+            })),
+            treatmentOptions: joGibsonResult.treatmentOptions,
+            assessmentTests: joGibsonResult.assessmentTests,
+            recommendedKeywords: ["Jo Gibson", "shoulder rehabilitation", "evidence-based physiotherapy"]
+          };
+        } else {
+          // Use standard analysis for non-shoulder cases
+          analysisResult = await analyzeVirtualPatientCase(virtualPatient);
+        }
+      } catch (error) {
+        console.error("Error in Jo Gibson shoulder analysis, falling back to standard analysis:", error);
+        analysisResult = await analyzeVirtualPatientCase(virtualPatient);
+      }
       
       // Get empty arrays if properties are missing to prevent "cannot read properties of undefined" errors
       const differentialDiagnoses = analysisResult.differentialDiagnoses?.map(d => d.name) || [];

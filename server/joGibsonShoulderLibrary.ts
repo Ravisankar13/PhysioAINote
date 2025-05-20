@@ -184,25 +184,23 @@ export function getJoGibsonShoulderExercises(): InsertExercise[] {
 
     // Motor Control Exercises - Intermediate
     {
-      name: "Bilateral External Rotation with Band",
+      title: "Bilateral External Rotation with Band",
       description: "External rotation with light resistance band to improve rotator cuff endurance and control.",
       bodyPart: "shoulder",
       difficulty: "intermediate",
       instructions: "1. Hold resistance band with both hands, elbows bent at 90 degrees\n2. Keep elbows at sides with towel roll for positioning\n3. Rotate arms outward while maintaining scapular position\n4. Control movement in both directions\n5. Perform 10-15 repetitions for 2-3 sets",
       targetMuscles: "External rotators, scapular stabilizers",
       imageUrl: "/exercises/jo-gibson-bilateral-external-rotation.jpg",
-      evidence: "Provides appropriate load for rotator cuff while training coordination",
       clinicalNotes: "Jo Gibson emphasizes quality over quantity and coordination between both sides"
     },
     {
-      name: "Wall Slide with Scapular Control",
+      title: "Wall Slide with Scapular Control",
       description: "Sliding arms up wall while maintaining scapular control to integrate shoulder and scapular movement.",
       bodyPart: "shoulder",
       difficulty: "intermediate",
       instructions: "1. Stand facing wall with elbows bent and forearms on wall\n2. Set scapulae in good position\n3. Slide arms upward while maintaining scapular control\n4. Only go to range where control can be maintained\n5. Perform 8-12 repetitions for 2-3 sets",
       targetMuscles: "Serratus anterior, lower/middle trapezius, rotator cuff",
       imageUrl: "/exercises/jo-gibson-wall-slide.jpg",
-      evidence: "Trains scapulohumeral rhythm during elevation with feedback from wall",
       clinicalNotes: "Jo Gibson uses this to address scapular dyskinesis during arm elevation"
     },
     {

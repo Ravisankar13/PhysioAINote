@@ -262,50 +262,53 @@ export function getJoGibsonShoulderExercises(): InsertExercise[] {
       sets: "2-3"
     },
     {
-      name: "Rhythmic Stabilization in Athletic Position",
+      title: "Rhythmic Stabilization in Athletic Position",
       description: "Advanced version with arm in athletic position while partner provides multi-directional resistance.",
       bodyPart: "shoulder",
       difficulty: "advanced",
       instructions: "1. Position arm in functional position relevant to sport/activity\n2. Partner provides unpredictable, multi-directional forces\n3. Maintain position while resisting these forces\n4. Progress force based on control\n5. Perform for 30-60 second intervals",
       targetMuscles: "Rotator cuff, deltoid, scapular stabilizers, core",
       imageUrl: "/exercises/jo-gibson-advanced-rhythmic-stabilization.jpg",
-      evidence: "Trains reactive stability in positions specific to functional demands",
-      clinicalNotes: "Jo Gibson emphasizes sport-specific positions in late-stage rehabilitation"
+      precautions: "Ensure proper baseline stabilization before attempting this exercise",
+      duration: "30-60 seconds per interval"
     },
     {
-      name: "Prone Shoulder Integrator",
+      title: "Prone Shoulder Integrator",
       description: "Complex movement pattern combining multiple shoulder motions in prone position.",
       bodyPart: "shoulder",
       difficulty: "advanced",
       instructions: "1. Lie prone on table with arm hanging off edge\n2. Begin with thumb pointing upward\n3. Raise arm to horizontal while maintaining scapular control\n4. Rotate thumb upward (external rotation) at top position\n5. Lower with control, perform 8-10 repetitions for 2-3 sets",
       targetMuscles: "Posterior deltoid, rotator cuff, mid/lower trapezius",
       imageUrl: "/exercises/jo-gibson-prone-integrator.jpg",
-      evidence: "Combines posterior chain strengthening with rotational control",
-      clinicalNotes: "Jo Gibson recommends this for integrating multiple movement components"
+      precautions: "Ensure proper scapular control before attempting; avoid if painful",
+      repetitions: "8-10",
+      sets: "2-3"
     },
 
     // Sport and Function-Specific Exercises
     {
-      name: "Deceleration Throw Training",
+      title: "Deceleration Throw Training",
       description: "Controlled eccentric training for throwing athletes to develop deceleration control.",
       bodyPart: "shoulder",
       difficulty: "advanced",
       instructions: "1. Partner throws light ball to chest height\n2. Catch with throwing arm extended\n3. Control deceleration phase as you bring ball to body\n4. Focus on scapular control during deceleration\n5. Perform 8-10 repetitions, progress weight gradually",
       targetMuscles: "Posterior rotator cuff, posterior deltoid, scapular retractors",
       imageUrl: "/exercises/jo-gibson-deceleration-throws.jpg",
-      evidence: "Trains eccentric control critical for preventing injuries in overhead athletes",
-      clinicalNotes: "Jo Gibson emphasizes this for late-stage rehabilitation of throwing athletes"
+      precautions: "Start with very light ball; always maintain proper shoulder mechanics",
+      repetitions: "8-10",
+      sets: "2-3"
     },
     {
-      name: "Dynamic Stability Push-up Progression",
+      title: "Dynamic Stability Push-up Progression",
       description: "Modified push-up with emphasis on scapular control and dynamic stability.",
       bodyPart: "shoulder",
       difficulty: "advanced",
       instructions: "1. Begin in push-up position (modify height as needed)\n2. Perform controlled lowering with emphasis on scapular control\n3. At bottom position, lift one hand briefly off surface\n4. Return hand and push back up with proper form\n5. Alternate hands, 6-8 repetitions each side",
       targetMuscles: "Serratus anterior, rotator cuff, pectorals, triceps, core",
       imageUrl: "/exercises/jo-gibson-dynamic-pushup.jpg",
-      evidence: "Challenges dynamic stability while under load in functional closed-chain position",
-      clinicalNotes: "Jo Gibson uses this progression for athletes requiring upper extremity weightbearing"
+      precautions: "Start with elevated surface if needed; avoid with acute shoulder pain",
+      repetitions: "6-8 each side",
+      sets: "2-3"
     }
   ];
 }

@@ -81,7 +81,7 @@ PATIENT INFORMATION:
 - Symptoms Description: ${patient.symptoms_description}
 - Medical History: ${patient.past_medical_history || "None reported"}
 - Body Part: ${patient.body_part || "shoulder"}
-${patient.objectiveFindings ? `- Objective Findings: ${JSON.stringify(patient.objectiveFindings)}` : ""}
+${patient.objective_findings ? `- Objective Findings: ${JSON.stringify(patient.objective_findings)}` : ""}
 `;
 
   // Include Jo Gibson's key assessment principles

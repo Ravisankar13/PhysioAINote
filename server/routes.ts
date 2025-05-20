@@ -1524,7 +1524,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
            (virtualPatient.past_medical_history.toLowerCase().includes("sport") ||
             virtualPatient.past_medical_history.toLowerCase().includes("athlete")));
             
-        console.log(`Patient characteristics - Shoulder: ${isShoulderRelated}, Knee: ${isKneeCase}, Spine: ${isSpineCase}, Sports: ${isSportsCase}`);
+        // 5. Check for hip-related issues - Alison Grimaldi approach
+        const isHipCase = virtualPatient.body_part === "hip";
+        
+        // 6. Check for elbow-related issues - Leanne Bisset approach
+        const isElbowCase = virtualPatient.body_part === "elbow";
+            
+        console.log(`Patient characteristics - Shoulder: ${isShoulderRelated}, Knee: ${isKneeCase}, Spine: ${isSpineCase}, Sports: ${isSportsCase}, Hip: ${isHipCase}, Elbow: ${isElbowCase}`);
           
         if (isShoulderRelated) {
           // Try to use the Jo Gibson approach for shoulder cases
@@ -1609,6 +1615,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
             recommendedKeywords: ["Sports Map", "athletic performance", "return to sport"],
             sportsMapSpecificApproach: true,
             relatedArticleIds: sportsMapResult.relatedArticleIds || []
+          };
+        } 
+        // Use Grimaldi approach for hip cases
+        else if (isHipCase) {
+          console.log("Using Alison Grimaldi approach for hip patient analysis");
+          
+          const grimaldiResult = await analyzePatientGrimaldi(virtualPatient);
+          
+          // Convert the Grimaldi specialized format to our standard format
+          analysisResult = {
+            primaryDiagnosis: { name: grimaldiResult.diagnosis, description: "Based on Alison Grimaldi's hip approach" },
+            differentialDiagnoses: grimaldiResult.differentialDiagnosis?.map(d => ({ 
+              name: d.condition, 
+              description: d.rationale,
+              likelihood: d.likelihood
+            })) || [],
+            treatmentOptions: grimaldiResult.treatmentOptions,
+            assessmentTests: grimaldiResult.assessmentTests,
+            recommendedKeywords: ["Alison Grimaldi", "hip rehabilitation", "gluteal function"],
+            grimaldiSpecificApproach: true,
+            relatedArticleIds: grimaldiResult.relatedArticleIds || []
+          };
+        }
+        // Use Bisset approach for elbow cases
+        else if (isElbowCase) {
+          console.log("Using Leanne Bisset approach for elbow patient analysis");
+          
+          const bissetResult = await analyzePatientBisset(virtualPatient);
+          
+          // Convert the Bisset specialized format to our standard format
+          analysisResult = {
+            primaryDiagnosis: { name: bissetResult.diagnosis, description: "Based on Leanne Bisset's elbow approach" },
+            differentialDiagnoses: bissetResult.differentialDiagnosis?.map(d => ({ 
+              name: d.condition, 
+              description: d.rationale,
+              likelihood: d.likelihood
+            })) || [],
+            treatmentOptions: bissetResult.treatmentOptions,
+            assessmentTests: bissetResult.assessmentTests,
+            recommendedKeywords: ["Leanne Bisset", "elbow rehabilitation", "tennis elbow", "lateral epicondylalgia"],
+            bissetSpecificApproach: true,
+            relatedArticleIds: bissetResult.relatedArticleIds || []
           };
         } else {
           // Use standard analysis for cases without a specialized approach

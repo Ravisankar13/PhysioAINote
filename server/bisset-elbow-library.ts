@@ -344,7 +344,7 @@ export function getBissetElbowExercises(): InsertExercise[] {
     {
       title: "Graded Isometric Wrist Extension for Pain Modulation",
       bodyPart: "elbow",
-      type: "isometric",
+      exerciseType: "isometric",
       difficulty: "beginner",
       equipment: ["table or countertop"],
       description: "Evidence-based isometric exercise for lateral elbow tendinopathy based on Bisset's approach, designed to provide immediate pain relief and initiate tendon loading.",
@@ -358,7 +358,7 @@ export function getBissetElbowExercises(): InsertExercise[] {
     {
       title: "Progressive Eccentric Wrist Extension Loading",
       bodyPart: "elbow",
-      type: "eccentric",
+      exerciseType: "eccentric",
       difficulty: "intermediate",
       equipment: ["light dumbbell or weight"],
       description: "Progressive eccentric loading exercise for lateral elbow tendinopathy based on Bisset's approach to tendon rehabilitation and tissue remodeling.",
@@ -374,7 +374,7 @@ export function getBissetElbowExercises(): InsertExercise[] {
     {
       title: "Forearm Rotation Proprioceptive Training",
       bodyPart: "elbow",
-      type: "sensorimotor",
+      exerciseType: "sensorimotor",
       difficulty: "intermediate",
       equipment: ["lightweight dowel or stick"],
       description: "Specialized sensorimotor exercise targeting proprioceptive deficits in forearm rotation control based on Bisset's research on sensorimotor impairments in elbow conditions.",
@@ -388,7 +388,7 @@ export function getBissetElbowExercises(): InsertExercise[] {
     {
       title: "Wrist Positional Control with Feedback",
       bodyPart: "elbow",
-      type: "sensorimotor",
+      exerciseType: "sensorimotor",
       difficulty: "intermediate",
       equipment: ["small ball or object", "target or marker"],
       description: "Evidence-based sensorimotor exercise targeting wrist position sense and control, addressing proprioceptive deficits identified in Bisset's research on elbow conditions.",
@@ -404,7 +404,7 @@ export function getBissetElbowExercises(): InsertExercise[] {
     {
       title: "Radial Nerve Slider Technique",
       bodyPart: "elbow",
-      type: "neural",
+      exerciseType: "neural",
       difficulty: "beginner",
       equipment: ["none"],
       description: "Specialized neural mobilization exercise for the radial nerve based on Bisset's approach to addressing neural tissue contribution to lateral elbow pain.",
@@ -418,7 +418,7 @@ export function getBissetElbowExercises(): InsertExercise[] {
     {
       title: "Sensitized Neural Tissue Desensitization",
       bodyPart: "elbow",
-      type: "neural",
+      exerciseType: "neural",
       difficulty: "intermediate",
       equipment: ["none"],
       description: "Progressive neural desensitization exercise based on Bisset's research on neural tissue involvement in persistent elbow pain conditions.",
@@ -434,7 +434,7 @@ export function getBissetElbowExercises(): InsertExercise[] {
     {
       title: "Graded Grip Strength Training",
       bodyPart: "elbow",
-      type: "strength",
+      exerciseType: "strength",
       difficulty: "intermediate",
       equipment: ["gripper or therapy putty of various resistances"],
       description: "Progressive grip strength exercise based on Bisset's research on motor impairments in lateral elbow pain and functional rehabilitation approaches.",
@@ -448,7 +448,7 @@ export function getBissetElbowExercises(): InsertExercise[] {
     {
       title: "Forearm Supination Strengthening",
       bodyPart: "elbow",
-      type: "strength",
+      exerciseType: "strength",
       difficulty: "intermediate",
       equipment: ["light dumbbell or hammer"],
       description: "Targeted strengthening for forearm supination based on Bisset's research on comprehensive motor system rehabilitation for elbow conditions.",
@@ -464,7 +464,7 @@ export function getBissetElbowExercises(): InsertExercise[] {
     {
       title: "Task-Specific Loading Simulation",
       bodyPart: "elbow",
-      type: "functional",
+      exerciseType: "functional",
       difficulty: "advanced",
       equipment: ["task-specific tools (racquet, tools, or objects related to provoking activities)"],
       description: "Specialized exercise based on Bisset's approach to functional rehabilitation, focusing on progressive exposure to specific aggravating activities with modified technique.",
@@ -478,7 +478,7 @@ export function getBissetElbowExercises(): InsertExercise[] {
     {
       title: "Plyometric Wrist and Forearm Training",
       bodyPart: "elbow",
-      type: "power",
+      exerciseType: "power",
       difficulty: "advanced",
       equipment: ["light medicine ball", "weighted ball", "or sports equipment"],
       description: "Advanced exercise based on Bisset's approach to late-stage rehabilitation for return to sport or high-demand activities requiring dynamic elbow and wrist control.",

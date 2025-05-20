@@ -364,6 +364,21 @@ export const difficultyEnum = pgEnum("difficulty", [
 ]);
 
 // Exercise Library Schema
+export const exerciseTypeEnum = pgEnum("exercise_type", [
+  "strength", 
+  "mobility", 
+  "motor control", 
+  "functional", 
+  "isometric", 
+  "eccentric", 
+  "neural",
+  "sensorimotor",
+  "power",
+  "endurance",
+  "stretching",
+  "other"
+]);
+
 export const exercises = pgTable("exercises", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
@@ -371,6 +386,7 @@ export const exercises = pgTable("exercises", {
   bodyPart: bodyPartEnum("body_part").default("general").notNull(),
   targetMuscles: text("target_muscles").notNull(),
   difficulty: difficultyEnum("difficulty").default("beginner").notNull(),
+  exerciseType: exerciseTypeEnum("exercise_type").default("other"),
   instructions: text("instructions").notNull(),
   precautions: text("precautions"),
   repetitions: text("repetitions"),

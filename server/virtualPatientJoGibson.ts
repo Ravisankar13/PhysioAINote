@@ -94,16 +94,51 @@ PATIENT INFORMATION:
     .map(p => `- ${p.title}: ${p.description}`)
     .join("\n");
 
-  // Include specific condition approaches if they match keywords in the patient description
+  // Enhanced condition detection for more accurate matching to Jo Gibson's approaches
   let matchedConditionApproaches = "";
-  joGibsonConditionApproaches.forEach(condition => {
-    const conditionKeywords = condition.condition.toLowerCase().split(" ");
-    const patientText = `${patient.chief_complaint} ${patient.symptoms_description} ${patient.past_medical_history || ""}`.toLowerCase();
+  
+  // Define symptom-to-condition mappings based on Jo Gibson's approach
+  const symptomMappings = [
+    { 
+      condition: "Rotator Cuff Tendinopathy", 
+      keywords: ["pain with overhead", "night pain", "painful arc", "tendinitis", "tendinopathy", "impingement", "supraspinatus", "catching", "clicking"] 
+    },
+    { 
+      condition: "Frozen Shoulder (Adhesive Capsulitis)", 
+      keywords: ["stiffness", "frozen", "capsulitis", "limited range", "gradual onset", "severe night pain", "difficulty dressing", "restriction"] 
+    },
+    { 
+      condition: "Shoulder Instability", 
+      keywords: ["unstable", "instability", "subluxation", "dislocation", "loose", "give way", "apprehension", "slipping", "falling out", "giving out"] 
+    },
+    { 
+      condition: "Post-surgical Rehabilitation", 
+      keywords: ["surgery", "post-op", "post-operative", "repair", "reconstruction", "arthroscopy", "decompression", "acromioplasty"] 
+    },
+    { 
+      condition: "Scapular Dyskinesis", 
+      keywords: ["scapular winging", "dyskinesis", "abnormal movement", "scapulothoracic", "posture", "dropping shoulder", "scapular control"] 
+    }
+  ];
+  
+  // Combine all patient information for comprehensive symptom matching
+  const patientText = `${patient.chief_complaint || ""} ${patient.symptoms_description || ""} ${patient.past_medical_history || ""} ${patient.objective_findings || ""}`.toLowerCase();
+
+  // Find matching conditions based on symptom keywords
+  const matchedConditions = symptomMappings.filter(mapping => 
+    mapping.keywords.some(keyword => patientText.includes(keyword.toLowerCase()))
+  );
+  
+  // Get corresponding Jo Gibson condition approaches for matched conditions
+  matchedConditions.forEach(match => {
+    const conditionApproach = joGibsonConditionApproaches.find(
+      approach => approach.condition.toLowerCase() === match.condition.toLowerCase()
+    );
     
-    if (conditionKeywords.some(keyword => patientText.includes(keyword))) {
-      matchedConditionApproaches += `\nRELEVANT CONDITION APPROACH: ${condition.condition}\n`;
-      matchedConditionApproaches += condition.keyPrinciples.map(p => `- ${p}`).join("\n");
-      matchedConditionApproaches += `\nEvidence: ${condition.evidence}\n`;
+    if (conditionApproach) {
+      matchedConditionApproaches += `\nRELEVANT CONDITION APPROACH: ${conditionApproach.condition}\n`;
+      matchedConditionApproaches += conditionApproach.keyPrinciples.map(p => `- ${p}`).join("\n");
+      matchedConditionApproaches += `\nEvidence: ${conditionApproach.evidence}\n`;
     }
   });
 
@@ -229,40 +264,43 @@ async function generateShoulderResearchSearchTerms(
 }
 
 /**
- * Creates fallback analysis when AI analysis fails
+ * Creates fallback analysis with Jo Gibson's specialized shoulder approach when AI analysis fails
  * @param patient Virtual patient data
- * @returns Basic analysis with Jo Gibson principles
+ * @returns Comprehensive analysis using Jo Gibson shoulder rehabilitation principles
  */
 function createFallbackShoulderAnalysis(patient: VirtualPatient): any {
-  // Extract key symptoms from patient description
-  const symptomsLower = (patient.symptoms_description || "").toLowerCase();
-  const complaintLower = (patient.chief_complaint || "").toLowerCase();
+  // Extract key symptoms from all patient information for comprehensive analysis
+  const patientText = `${patient.chief_complaint || ""} ${patient.symptoms_description || ""} ${patient.past_medical_history || ""} ${patient.objective_findings || ""}`.toLowerCase();
 
-  // Determine likely condition based on keywords
-  let likelyCondition = "Non-specific shoulder pain";
-  let differentials: Array<{condition: string, likelihood: string, rationale: string}> = [];
-  let assessmentTests: Array<{name: string, purpose: string, technique: string, interpretation: string}> = [];
-  
-  if (symptomsLower.includes("night") && symptomsLower.includes("pain")) {
-    likelyCondition = "Rotator cuff tendinopathy";
-    differentials = [
-      { condition: "Frozen shoulder (early phase)", likelihood: "35%", rationale: "Night pain and progressive stiffness are common features" },
-      { condition: "Subacromial pain syndrome", likelihood: "30%", rationale: "Pain with overhead movements and positive impingement signs" }
-    ];
-    assessmentTests = [
-      { name: "Empty can test", purpose: "Assess supraspinatus involvement", technique: "Arms at 90° in scapular plane, thumbs down, resist downward pressure", interpretation: "Pain or weakness suggests supraspinatus pathology" },
-      { name: "External rotation lag sign", purpose: "Assess rotator cuff integrity", technique: "Support arm in 90° abduction and external rotation, ask patient to maintain position", interpretation: "Lag (inability to maintain position) suggests rotator cuff tear" }
-    ];
-  } else if (symptomsLower.includes("stiff") || symptomsLower.includes("frozen")) {
-    likelyCondition = "Adhesive capsulitis (Frozen shoulder)";
-    differentials = [
-      { condition: "Glenohumeral osteoarthritis", likelihood: "25%", rationale: "Can cause stiffness but typically with more crepitus and gradual onset" },
-      { condition: "Rotator cuff tendinopathy with stiffness", likelihood: "40%", rationale: "Stiffness secondary to pain limitation is common" }
-    ];
-    assessmentTests = [
-      { name: "Passive range of motion assessment", purpose: "Evaluate capsular restriction pattern", technique: "Assess passive external rotation, abduction, and internal rotation", interpretation: "Global restriction in capsular pattern suggests adhesive capsulitis" },
-      { name: "Capsular end-feel assessment", purpose: "Determine nature of restriction", technique: "Assess quality of end-feel in limited ranges", interpretation: "Firm, empty end-feel suggests capsular restriction" }
-    ];
+  // Define enhanced condition detection using Jo Gibson's specialized approach
+  const symptomConditionMappings = [
+    { 
+      condition: "Rotator Cuff Tendinopathy", 
+      keywords: ["pain with overhead", "night pain", "painful arc", "tendinitis", "tendinopathy", "impingement", "supraspinatus", "catching", "clicking", "painful jolt", "weakness raising arm"],
+      tests: [
+        { name: "Empty can test", purpose: "Assess supraspinatus involvement", technique: "Arms at 90° in scapular plane, thumbs down, resist downward pressure", interpretation: "Pain or weakness suggests supraspinatus pathology" },
+        { name: "External rotation lag sign", purpose: "Assess rotator cuff integrity", technique: "Support arm in 90° abduction and external rotation, ask patient to maintain position", interpretation: "Lag (inability to maintain position) suggests rotator cuff tear" },
+        { name: "Painful arc test", purpose: "Assess for subacromial impingement", technique: "Active shoulder abduction noting pain between 60-120°", interpretation: "Pain in this range suggests rotator cuff or subacromial involvement" }
+      ],
+      differentials: [
+        { condition: "Frozen shoulder (early phase)", likelihood: "35%", rationale: "Night pain and progressive stiffness are common features" },
+        { condition: "Subacromial pain syndrome", likelihood: "30%", rationale: "Pain with overhead movements and positive impingement signs" }
+      ],
+      exerciseTypes: ["isometric", "rotator cuff", "scapular control"]
+    },
+    { 
+      condition: "Adhesive Capsulitis (Frozen Shoulder)", 
+      keywords: ["stiff", "frozen", "capsulitis", "limited range", "gradual onset", "severe night pain", "difficulty dressing", "restriction", "can't reach behind"],
+      tests: [
+        { name: "Capsular pattern test", purpose: "Assess for characteristic frozen shoulder limitation pattern", technique: "Assess passive range: external rotation, abduction, internal rotation", interpretation: "Classic pattern shows greater limitation in external rotation and elevation" },
+        { name: "Coracoid pain test", purpose: "Differentiate from impingement", technique: "Palpate coracoid process for tenderness", interpretation: "Typical tenderness in frozen shoulder" }
+      ],
+      differentials: [
+        { condition: "Glenohumeral osteoarthritis", likelihood: "25%", rationale: "Can present with stiffness but different pattern of limitation" },
+        { condition: "Rotator cuff pathology with secondary stiffness", likelihood: "30%", rationale: "Rotator cuff issues can lead to compensatory stiffness" }
+      ],
+      exerciseTypes: ["gentle stretching", "pendulum", "pain-free mobility"]
+    },
   } else if (symptomsLower.includes("unstable") || symptomsLower.includes("dislocation") || complaintLower.includes("instability")) {
     likelyCondition = "Shoulder instability";
     differentials = [

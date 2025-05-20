@@ -1315,15 +1315,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
             
             // If no related articles found by IDs, get some default ones
             if (relatedResearch.length === 0) {
-              console.log("No articles found by IDs, getting default articles for body part:", virtualPatient.bodyPart);
-              const { articles } = await storage.getResearchArticles(virtualPatient.bodyPart, 1, 5);
+              console.log("No articles found by IDs, getting default articles for body part:", virtualPatient.body_part);
+              const { articles } = await storage.getResearchArticles(virtualPatient.body_part, 1, 5);
               relatedResearch = articles;
               console.log(`Using ${relatedResearch.length} default articles for this body part`);
             }
           } else {
             // If no article IDs found, get some default ones for this body part
-            console.log("No article IDs found, getting default articles for body part:", virtualPatient.bodyPart);
-            const { articles } = await storage.getResearchArticles(virtualPatient.bodyPart, 1, 5);
+            console.log("No article IDs found, getting default articles for body part:", virtualPatient.body_part);
+            const { articles } = await storage.getResearchArticles(virtualPatient.body_part, 1, 5);
             relatedResearch = articles;
             console.log(`Using ${relatedResearch.length} default articles for this body part`);
           }

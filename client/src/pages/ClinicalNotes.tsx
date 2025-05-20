@@ -47,7 +47,7 @@ const ClinicalNotes = () => {
             
             <div className="mt-12 bg-white rounded-lg shadow-md overflow-hidden border border-primary/10">
               {showForm ? (
-                <SoapForm onSubmit={handleNoteGenerated} />
+                <SoapForm onNoteGenerated={handleNoteGenerated} />
               ) : (
                 <GeneratedNote 
                   noteData={generatedNote} 

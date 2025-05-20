@@ -398,8 +398,8 @@ const SoapForm = ({ onNoteGenerated }: SoapFormProps) => {
 
                 {/* SOAP Inputs */}
                 <div className="pt-6">
-                  <h4 className="text-lg font-medium text-neutral-900">SOAP Note Details</h4>
-                  <p className="text-sm text-neutral-500 mt-1">
+                  <h4 className="text-lg font-medium text-primary">SOAP Note Details</h4>
+                  <p className="text-sm text-foreground mt-1">
                     Record your voice notes below to automatically generate SOAP note content
                   </p>
                 </div>

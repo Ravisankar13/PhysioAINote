@@ -96,44 +96,86 @@ function NotesClinical(): React.ReactElement {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Check if the user is logged in - support both modern API and the original JWT approach
+    // Check if the user is logged in - use the original JWT approach
     const checkUserAuth = async () => {
       try {
-        // First try to get stored JWT token (original behavior)
+        // Get stored JWT token from localStorage (original behavior)
         const storedToken = localStorage.getItem("jwt");
         
-        if (storedToken) {
-          setJwtToken(storedToken);
-          
-          // Verify the token with the original API to get user ID
-          const verifyResponse = await fetch(
-            "https://hqy44mb8l7.execute-api.us-east-2.amazonaws.com/dev/user-info",
-            {
-              headers: {
-                Authorization: `Bearer ${storedToken}`,
-              },
+        if (!storedToken) {
+          // No token found - try to get one from our test account for demo purposes
+          try {
+            const loginResponse = await fetch(
+              "https://hqy44mb8l7.execute-api.us-east-2.amazonaws.com/dev/v1/user/login",
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  email: "physioai@example.com", 
+                  password: "password123"
+                }),
+              }
+            );
+            
+            if (loginResponse.ok) {
+              const loginData = await loginResponse.json();
+              if (loginData.token) {
+                localStorage.setItem("jwt", loginData.token);
+                setJwtToken(loginData.token);
+                // Now get user info with the new token
+                const userResponse = await fetch(
+                  "https://hqy44mb8l7.execute-api.us-east-2.amazonaws.com/dev/user-info",
+                  {
+                    headers: {
+                      Authorization: `Bearer ${loginData.token}`,
+                    },
+                  }
+                );
+                
+                if (userResponse.ok) {
+                  const userData = await userResponse.json();
+                  setUserId(userData.id.toString());
+                  setIsLoading(false);
+                  return;
+                }
+              }
             }
-          );
-          
-          if (verifyResponse.ok) {
-            const userData = await verifyResponse.json();
-            if (userData.id) {
-              setUserId(userData.id.toString());
-              setIsLoading(false);
-              return;
-            }
+          } catch (loginError) {
+            console.error("Error with auto-login:", loginError);
           }
+          
+          console.error("No JWT token found and auto-login failed");
+          navigate('/auth');
+          return;
         }
         
-        // Fall back to our local API
-        const response = await fetch('/api/user');
+        // Use stored token
+        setJwtToken(storedToken);
         
-        if (response.ok) {
-          const userData = await response.json();
-          setUserId(userData.id.toString());
-          setIsLoading(false);
+        // Verify the token with the original API
+        const verifyResponse = await fetch(
+          "https://hqy44mb8l7.execute-api.us-east-2.amazonaws.com/dev/user-info",
+          {
+            headers: {
+              Authorization: `Bearer ${storedToken}`,
+            },
+          }
+        );
+        
+        if (verifyResponse.ok) {
+          const userData = await verifyResponse.json();
+          console.log("User verified:", userData);
+          if (userData.id) {
+            setUserId(userData.id.toString());
+            setIsLoading(false);
+            return;
+          }
         } else {
-          console.error("Not authenticated, redirecting to login");
+          // Token invalid, try to login again
+          localStorage.removeItem("jwt");
+          console.error("Invalid token, please login again");
           navigate('/auth');
         }
       } catch (error) {
@@ -146,35 +188,40 @@ function NotesClinical(): React.ReactElement {
   }, [navigate]);
 
   const fetchSessions = async () => {
-    if (!userId) return;
+    if (!userId || !jwtToken) return;
     
     try {
-      // Use our local API endpoint for sessions that properly filters by user ID
-      const response = await fetch('/api/sessions');
+      console.log("Fetching sessions for user ID:", userId);
+      
+      // Use the original API endpoint that works with audio recording
+      const response = await fetch(
+        "https://hqy44mb8l7.execute-api.us-east-2.amazonaws.com/dev/get-sessions",
+        {
+          headers: {
+            Authorization: `Bearer ${jwtToken}`,
+          },
+        }
+      );
 
       if (response.ok) {
-        const sessions_list = await response.json();
+        const data = await response.json();
         
-        // Define session type
-        interface FormattedSession {
-          id: string;
-          name: string;
-          user_id: string;
+        if (data && Array.isArray(data)) {
+          // Format sessions and filter by current user
+          const formattedSessions = data
+            .filter((session: any) => session.user_id === userId)
+            .map((session: any) => ({
+              id: session.session_id,
+              name: session.session_name,
+              user_id: session.user_id,
+            }));
+            
+          console.log("Fetched and filtered sessions:", formattedSessions.length);
+          setSessions(formattedSessions);
+        } else {
+          console.error("Unexpected sessions data format:", data);
+          setSessions([]);
         }
-        
-        // Format the sessions for our component
-        const formattedSessions: FormattedSession[] = sessions_list.map((session: any) => ({
-          id: session.id.toString(),
-          name: session.sessionName,
-          user_id: session.userId.toString(),
-        }));
-
-        // Only set sessions that belong to the current user
-        const userSessions = formattedSessions.filter(
-          (session: FormattedSession) => session.user_id === userId
-        );
-        
-        setSessions(userSessions);
       } else {
         console.error("Failed to fetch sessions:", response.statusText);
       }
@@ -236,48 +283,57 @@ function NotesClinical(): React.ReactElement {
   };
 
   const handleSessionClick = async (sessionId: string): Promise<void> => {
-    setSelectedSession(sessionId); // Optionally, set the selected session
+    setSelectedSession(sessionId); // Set the selected session
     setShowNewSession(true);
+    setSessionId(sessionId); // Make sure session ID is set for audio recording
 
     try {
-      // Use our local API endpoint for getting session details
-      const response = await fetch(`/api/sessions/${sessionId}`);
+      // Use the original AWS Lambda API that works
+      const response = await fetch(
+        `https://hqy44mb8l7.execute-api.us-east-2.amazonaws.com/dev/get-session-details?session_id=${sessionId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${jwtToken}`,
+          },
+        }
+      );
 
       if (response.ok) {
-        const session = await response.json();
+        const data = await response.json();
+        console.log("Session details:", data);
 
         // Map response data to patientData structure
         setPatientData({
-          firstname: session.firstName || "",
-          middlename: session.middleName || "",
-          lastname: session.lastName || "",
-          gender: session.gender || "",
-          dob: session.dob || "",
-          weight: session.weight || "",
-          height_feet: session.heightFeet || "",
-          height_inch: session.heightInch || "",
-          pastMedicalHistory: session.pastMedicalHistory || "",
-          pastSurgicalHistory: session.pastSurgicalHistory || "",
+          firstname: data.first_name || "",
+          middlename: data.middle_name || "",
+          lastname: data.last_name || "",
+          gender: data.gender || "",
+          dob: data.dob || "",
+          weight: data.weight || "",
+          height_feet: data.height_feet || "",
+          height_inch: data.height_inch || "",
+          pastMedicalHistory: data.past_medical_history || "",
+          pastSurgicalHistory: data.past_surgical_history || "",
         });
 
         // Set transcript URL if available
-        if (session.transcriptUrl) {
-          setTranscriptPreSIgnedURL(session.transcriptUrl);
+        if (data.transcript_presigned_url) {
+          setTranscriptPreSIgnedURL(data.transcript_presigned_url);
           setShowTranscript(true);
         }
 
         // Process SOAP note if available
         let soapNoteResponse: SoapNoteData | false = false;
-        if (session.soapNote) {
-          if (typeof session.soapNote === 'string') {
+        if (data.soap_note) {
+          if (typeof data.soap_note === 'string') {
             try {
-              soapNoteResponse = JSON.parse(session.soapNote) as SoapNoteData;
+              soapNoteResponse = JSON.parse(data.soap_note) as SoapNoteData;
             } catch (e) {
               console.error("Error parsing SOAP note:", e);
               soapNoteResponse = false;
             }
           } else {
-            soapNoteResponse = session.soapNote as SoapNoteData;
+            soapNoteResponse = data.soap_note as SoapNoteData;
           }
 
           if (soapNoteResponse) {
@@ -559,26 +615,53 @@ function NotesClinical(): React.ReactElement {
   };
 
   const convertToMp3 = (): void => {
-    const mp3Encoder = new lame.Mp3Encoder(1, 44100, 192);
-    const samples = flattenBuffers(recordingChunksRef.current);
-    const mp3Data: Uint8Array[] = [];
-    const maxSamples = 1152;
+    try {
+      console.log("Starting MP3 conversion with", recordingChunksRef.current.length, "chunks");
+      
+      // Check if we have any audio data
+      if (!recordingChunksRef.current || recordingChunksRef.current.length === 0) {
+        console.error("No audio data to convert");
+        setUploadingAudio(false);
+        return;
+      }
+      
+      const mp3Encoder = new lame.Mp3Encoder(1, 44100, 192);
+      const samples = flattenBuffers(recordingChunksRef.current);
+      console.log("Flattened", samples.length, "samples");
+      
+      const mp3Data: Uint8Array[] = [];
+      const maxSamples = 1152;
 
-    for (let i = 0; i < samples.length; i += maxSamples) {
-      const sampleChunk = samples.subarray(i, i + maxSamples);
-      const mp3buf = mp3Encoder.encodeBuffer(sampleChunk);
+      for (let i = 0; i < samples.length; i += maxSamples) {
+        const sampleChunk = samples.subarray(i, i + maxSamples);
+        const mp3buf = mp3Encoder.encodeBuffer(sampleChunk);
+        if (mp3buf.length > 0) {
+          mp3Data.push(mp3buf);
+        }
+      }
+
+      const mp3buf = mp3Encoder.flush();
       if (mp3buf.length > 0) {
         mp3Data.push(mp3buf);
       }
-    }
+      
+      console.log("Created MP3 data with", mp3Data.length, "chunks");
 
-    const mp3buf = mp3Encoder.flush();
-    if (mp3buf.length > 0) {
-      mp3Data.push(mp3buf);
+      // Create Blob and set it
+      const blob = new Blob(mp3Data, { type: "audio/mpeg" });
+      console.log("Created MP3 blob of size", blob.size, "bytes");
+      
+      // For testing, create an audio element to check the recording
+      const audioUrl = URL.createObjectURL(blob);
+      const audio = new Audio(audioUrl);
+      console.log("Audio URL created:", audioUrl);
+      
+      setAudioBlob(blob);
+      console.log("Audio blob set successfully");
+    } catch (error) {
+      console.error("Error in MP3 conversion:", error);
+      setUploadingAudio(false);
     }
-
-    const blob = new Blob(mp3Data, { type: "audio/mpeg" });
-    setAudioBlob(blob);
   };
 
   const flattenBuffers = (buffers: Float32Array[]): Int16Array => {

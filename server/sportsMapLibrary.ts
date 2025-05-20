@@ -11,36 +11,39 @@
  * 4. Injury prevention strategies for athletes
  */
 
-import { InsertExercise, bodyPartEnum, difficultyEnum } from "@shared/schema";
+import { InsertExercise } from "@shared/schema";
 
 /**
  * Key assessment principles from Sports Map approach
  */
 export const sportsMapAssessmentPrinciples = [
   {
-    title: "Load Capacity Assessment",
-    description: "Systematic evaluation of tissue's ability to handle sport-specific loads",
-    technique: "Progressive loading tests with standardized protocols for various sports"
+    title: "Performance-Based Assessment",
+    description: "Comprehensive evaluation of sport-specific movements and performance metrics to quantify athletic function"
   },
   {
-    title: "Movement Pattern Screening",
-    description: "Comprehensive assessment of fundamental and sport-specific movement patterns",
-    technique: "Standardized movement screens with sport-specific modifications"
+    title: "Load Tolerance Testing",
+    description: "Systematic evaluation of tissue capacity under varied loading conditions specific to sporting demands"
   },
   {
-    title: "Performance Deficit Identification",
-    description: "Quantification of performance gaps compared to baseline or normative data",
-    technique: "Battery of performance tests with comparative analysis to baseline measures"
+    title: "Movement Pattern Analysis",
+    description: "Detailed assessment of sport-specific technique and biomechanics to identify dysfunctional patterns contributing to injury"
   },
   {
-    title: "Sport-Specific Readiness Testing",
-    description: "Evaluation of physical and psychological readiness for return to sport",
-    technique: "Multi-stage testing protocols progressing from controlled to chaotic environments"
+    title: "Energy System Assessment",
+    description: "Evaluation of aerobic, anaerobic, and alactic capacity relevant to specific sporting requirements and position demands"
   },
   {
-    title: "On-Field Assessment Strategies",
-    description: "Sideline and on-field assessment protocols for acute injuries",
-    technique: "Rapid screening tools for injury severity and safe return to play decisions"
+    title: "Return-to-Sport Readiness Testing",
+    description: "Objective criteria-based testing to determine safe progression through rehabilitation phases to full sporting participation"
+  },
+  {
+    title: "Injury Risk Screening",
+    description: "Evidence-based screening protocols to identify modifiable risk factors for sport-specific injuries"
+  },
+  {
+    title: "Performance Context Analysis",
+    description: "Assessment of environmental, equipment, and competition-specific factors influencing injury risk and performance"
   }
 ];
 
@@ -49,95 +52,36 @@ export const sportsMapAssessmentPrinciples = [
  */
 export const sportsMapTreatmentPrinciples = [
   {
-    title: "Accelerated Rehabilitation",
-    description: "Evidence-based protocols for expedited return to play without compromising tissue healing",
-    application: "Strategic early loading within biological constraints of healing tissues"
+    title: "Phase-Appropriate Loading",
+    description: "Strategic progression of tissue loading based on healing timeframes and adaptive capacity specific to sporting demands"
   },
   {
-    title: "Sports-Specific Loading Progression",
-    description: "Graduated loading specific to demands of individual sports",
-    application: "Progressive introduction of sport-specific movement patterns and loads"
+    title: "Sport-Specific Motor Pattern Retraining",
+    description: "Targeted retraining of movement patterns specific to sporting technical requirements"
   },
   {
-    title: "Neuromuscular Control Emphasis",
-    description: "Focus on movement quality and reactive control in sport-specific contexts",
-    application: "Reactive neuromuscular training with unexpected perturbations in sport-relevant positions"
+    title: "Energy System Reconditioning",
+    description: "Progressive rebuilding of sport-specific conditioning with appropriate work-to-rest ratios"
   },
   {
-    title: "Psychological Readiness Training",
-    description: "Addressing psychological barriers to return to sport",
-    application: "Graded exposure to injury-specific fear-provoking situations with psychological skills training"
+    title: "Integrated Performance Training",
+    description: "Combining rehabilitation exercises with performance enhancement techniques throughout recovery"
   },
   {
-    title: "Performance Integration",
-    description: "Seamless integration of rehabilitation with performance enhancement",
-    application: "Collaboration with strength and conditioning specialists to address both rehabilitation and performance goals"
+    title: "Criteria-Based Progression",
+    description: "Advancement through rehabilitation phases based on objective performance criteria rather than time alone"
   },
   {
-    title: "Team-Sport Position Specificity",
-    description: "Tailoring rehabilitation to specific positional demands in team sports",
-    application: "Position-specific movement and load analysis with targeted rehabilitation"
-  }
-];
-
-/**
- * Sports Map research-based approaches for specific conditions
- */
-export const sportsMapConditionApproaches = [
-  {
-    condition: "ACL Reconstruction Rehabilitation",
-    keyPrinciples: [
-      "Criteria-based progression rather than time-based protocols",
-      "Early restoration of full extension and quadriceps activation",
-      "Neuromuscular control emphasis throughout all phases",
-      "Psychological readiness assessment prior to return to sport",
-      "Sport-specific movement retraining in late-stage rehabilitation"
-    ],
-    evidence: "Based on research showing improved outcomes and reduced re-injury rates with criterion-based protocols"
+    title: "Contextual Skill Acquisition",
+    description: "Rehabilitation exercises that progressively simulate actual sporting environment and skill requirements"
   },
   {
-    condition: "Hamstring Strain Rehabilitation",
-    keyPrinciples: [
-      "Progressive eccentric loading beginning early in rehabilitation",
-      "Running mechanics assessment and retraining",
-      "Sport-specific length-tension training in late rehabilitation",
-      "Address contributing factors (pelvic control, lumbar mobility)",
-      "Gradual exposure to high-speed running with monitoring"
-    ],
-    evidence: "Evidence supports progressive eccentric loading and addressing kinetic chain factors in preventing recurrence"
+    title: "Load Management Framework",
+    description: "Strategic monitoring and progression of training loads to optimize adaptation while minimizing injury risk"
   },
   {
-    condition: "Ankle Instability in Athletes",
-    keyPrinciples: [
-      "Comprehensive peroneal strength and reaction time training",
-      "Progressive balance training in multiple planes",
-      "Sport-specific perturbation training on unstable surfaces",
-      "Plyometric training with directional emphasis",
-      "Footwear and taping considerations for specific sports"
-    ],
-    evidence: "Research demonstrates effectiveness of comprehensive program addressing mechanical and functional instability"
-  },
-  {
-    condition: "Shoulder Instability in Overhead Athletes",
-    keyPrinciples: [
-      "Rotator cuff and periscapular control before strength",
-      "Sport-specific movement pattern retraining",
-      "Gradual exposure to end-range positions under load",
-      "Integration of kinetic chain in overhead activities",
-      "Modification of technique to reduce extreme positions"
-    ],
-    evidence: "Evidence supports addressing the entire kinetic chain and movement-pattern retraining"
-  },
-  {
-    condition: "Athletic Groin Pain",
-    keyPrinciples: [
-      "Accurate diagnosis of specific anatomical contributor(s)",
-      "Progressive loading of affected structures",
-      "Hip and pelvic control exercises in multiple planes",
-      "Linear and change-of-direction running progression",
-      "Sport-specific cutting and kicking progression"
-    ],
-    evidence: "Research supports multi-faceted approach with exercise-based loading program for optimal outcomes"
+    title: "Position-Specific Rehabilitation",
+    description: "Tailored rehabilitation approaches addressing the unique demands of specific playing positions or events"
   }
 ];
 
@@ -149,28 +93,37 @@ export const sportsMapSportSpecificApproaches = [
     sportCategory: "Running Sports",
     approaches: [
       {
-        name: "Distance Runner Protocol",
-        description: "Specialized approach for rehabilitation of distance runners addressing both injury recovery and performance",
+        name: "Running Mechanics Optimization",
+        description: "Comprehensive assessment and retraining of running biomechanics to enhance performance and reduce injury risk",
         keyFeatures: [
-          "Running gait analysis and retraining",
-          "Progressive loading based on training volume metrics",
-          "Integration with periodized training schedule",
-          "Surface and footwear considerations"
-        ],
-        targetConditions: ["Running-related knee pain", "Achilles tendinopathy", "Stress fractures", "Plantar heel pain"],
-        evidenceLevel: "High - Based on multiple running-specific RCTs"
+          "3D running analysis with sport-specific parameters",
+          "Progressive technique modification protocol",
+          "Integration of strength deficits with movement patterns",
+          "Graduated exposure to volume and intensity",
+          "Footwear and surface considerations"
+        ]
       },
       {
-        name: "Sprint Mechanics Restoration",
-        description: "Targeted program for sprinters focused on mechanics and high-velocity function",
+        name: "Running Load Management Framework",
+        description: "Systematic approach to training load progression and monitoring for distance runners",
         keyFeatures: [
-          "Power development through force-velocity profiling",
-          "Sprint-specific movement pattern training", 
-          "Progressive exposure to maximal velocity",
-          "Acceleration and top-speed specific components"
-        ],
-        targetConditions: ["Hamstring strains", "Calf strains", "Hip flexor injuries"],
-        evidenceLevel: "Moderate to High - Based on biomechanical studies and clinical trials"
+          "Acute:Chronic workload ratio monitoring",
+          "Integration of intensity, volume and frequency variables",
+          "Surface and terrain progression mapping",
+          "Periodization aligned with competition schedule",
+          "Recovery monitoring protocols"
+        ]
+      },
+      {
+        name: "Lower Limb Capacity Building Protocol",
+        description: "Targeted strength and power development with running-specific adaptations",
+        keyFeatures: [
+          "Progressive plyometric loading sequence",
+          "Speed-strength continuum training",
+          "Eccentric capacity development",
+          "Single-leg control progression",
+          "Running-specific strength transfer exercises"
+        ]
       }
     ]
   },
@@ -178,28 +131,37 @@ export const sportsMapSportSpecificApproaches = [
     sportCategory: "Team Field Sports",
     approaches: [
       {
-        name: "Multidirectional Speed Protocol",
-        description: "Comprehensive approach for field sport athletes requiring change of direction and acceleration",
+        name: "Multidirectional Movement Rehabilitation",
+        description: "Specialized approach to restore agility, cutting and change of direction abilities for field sport athletes",
         keyFeatures: [
-          "Agility progression from planned to reactive movements",
-          "Sport-specific change of direction mechanics",
-          "Position-specific movement pattern training",
-          "Game-scenario simulation in late-stage rehabilitation"
-        ],
-        targetConditions: ["ACL reconstruction", "Ankle sprains", "Groin pain", "Hamstring strains"],
-        evidenceLevel: "High - Multiple studies showing efficacy for field sport injuries"
+          "Progressive agility complexity framework",
+          "Deceleration mechanics retraining",
+          "Reactive agility development",
+          "Position-specific movement patterns",
+          "Perceptual-cognitive integration in late-stage rehabilitation"
+        ]
       },
       {
-        name: "Kicking-Sport Rehabilitation",
-        description: "Specialized approach for sports requiring kicking skills (soccer, AFL, rugby)",
+        name: "Contact Preparation Protocol",
+        description: "Systematic approach to prepare athletes for the physical demands of contact sports",
         keyFeatures: [
-          "Kicking mechanics analysis and retraining",
-          "Progressive kicking distance and velocity",
-          "Integration of trunk rotation with lower limb function",
-          "Sport-specific skill acquisition progression"
-        ],
-        targetConditions: ["Groin pain", "Quadriceps strains", "Hip impingement", "Adductor-related injuries"],
-        evidenceLevel: "Moderate - Based on sport-specific biomechanical studies"
+          "Progressive physical contact exposure",
+          "Contact-specific strength development",
+          "Reactive stability training",
+          "Pre-contact positioning strategies",
+          "Anti-rotation and bracing techniques"
+        ]
+      },
+      {
+        name: "Repeat Sprint Ability Reconditioning",
+        description: "Specialized conditioning approach to rebuild high-intensity intermittent capacity for team sport athletes",
+        keyFeatures: [
+          "GPS-guided training prescription",
+          "Progressive work-to-rest ratio manipulation",
+          "Sport-specific movement patterns in conditioning",
+          "Position-specific energy system training",
+          "Competition simulation conditioning"
+        ]
       }
     ]
   },
@@ -207,91 +169,228 @@ export const sportsMapSportSpecificApproaches = [
     sportCategory: "Overhead Sports",
     approaches: [
       {
-        name: "Throwing Athlete Program",
-        description: "Comprehensive approach for overhead throwing athletes (baseball, cricket, javelin)",
+        name: "Throwing Athlete Shoulder Protocol",
+        description: "Comprehensive approach to shoulder rehabilitation for throwing and overhead athletes",
         keyFeatures: [
-          "Throwing mechanics analysis and correction",
-          "Progressive throwing program with monitored volume",
-          "Rotator cuff and scapular control emphasis",
-          "Integration of lower body and trunk in kinetic chain"
-        ],
-        targetConditions: ["Rotator cuff tendinopathy", "Labral injuries", "Shoulder instability", "Elbow injuries"],
-        evidenceLevel: "High - Based on multiple throwing-specific studies"
+          "Sport-specific movement analysis",
+          "Progressive throwing program with precise metrics",
+          "Kinetic chain integration and sequencing",
+          "Specific adaptations for different overhead sports",
+          "Eccentrics for deceleration capacity"
+        ]
       },
       {
-        name: "Racquet Sport Protocol",
-        description: "Specialized approach for tennis, badminton and squash players",
+        name: "Shoulder Performance Complex",
+        description: "Integrated approach addressing the shoulder girdle as a performance system for overhead athletes",
         keyFeatures: [
-          "Sport-specific grip strength and wrist conditioning",
-          "Stroke-specific movement pattern training",
-          "Upper and lower body power integration",
-          "On-court movement and skill progression"
-        ],
-        targetConditions: ["Tennis elbow", "Rotator cuff issues", "Wrist injuries", "Lower limb loading injuries"],
-        evidenceLevel: "Moderate - Based on sport-specific clinical research"
+          "Scapular control in sport-specific positions",
+          "Rotator cuff capacity at end-range positions",
+          "Thoracic spine mobility integration",
+          "Neuromuscular control at high velocities",
+          "Performance-focused progressions"
+        ]
+      },
+      {
+        name: "Overhead Athlete Kinetic Chain Integration",
+        description: "Whole-body approach to power development and force transfer for overhead movements",
+        keyFeatures: [
+          "Ground-based power development",
+          "Core force transfer training",
+          "Sequential kinetic chain timing drills",
+          "Sport-specific power expression exercises",
+          "Integrated movement pattern progressions"
+        ]
       }
     ]
   }
 ];
 
 /**
- * Sports Map evidence-based research articles
+ * Research-based approaches for specific conditions from Sports Map
+ */
+export const sportsMapConditionApproaches = [
+  {
+    condition: "ACL Rehabilitation for Athletes",
+    keyPrinciples: [
+      "Objective criteria-based progression through phases",
+      "Early emphasis on restoring full knee extension and quadriceps activation",
+      "Progressive neuromuscular control training with sport-specific movement patterns",
+      "Comprehensive return-to-sport testing battery",
+      "Psychological readiness assessment throughout rehabilitation"
+    ],
+    evidence: "Strong evidence supporting criterion-based return to sport decision making over time-based progression (Grindem et al., 2016; Kyritsis et al., 2016)"
+  },
+  {
+    condition: "Hamstring Strain Rehabilitation",
+    keyPrinciples: [
+      "Running mechanics assessment and retraining",
+      "Length-specific strengthening based on injury location",
+      "Progressive eccentric loading at increasing lengths and speeds",
+      "Sport-specific movement pattern integration in late rehabilitation",
+      "Comprehensive return-to-running program with objective criteria"
+    ],
+    evidence: "Moderate to strong evidence supporting eccentric strengthening and progressive running programs (Askling et al., 2013; Mendiguchia et al., 2017)"
+  },
+  {
+    condition: "Athletic Groin Pain",
+    keyPrinciples: [
+      "Comprehensive assessment of all potential contributing structures",
+      "Progressive loading of adductor and abdominal musculature",
+      "Restoration of optimal pelvic control during sporting movements",
+      "Sport-specific cutting and change of direction retraining",
+      "Graduated return to training program with workload monitoring"
+    ],
+    evidence: "Moderate evidence supporting multimodal rehabilitation including exercise and movement retraining (King et al., 2018; Weir et al., 2015)"
+  },
+  {
+    condition: "Patellofemoral Pain in Athletes",
+    keyPrinciples: [
+      "Sport-specific movement pattern analysis and retraining",
+      "Progressive loading of hip and knee musculature",
+      "Running, jumping, and landing technique modification",
+      "Individualized rehabilitation based on specific impairments",
+      "Comprehensive strength and power development through range"
+    ],
+    evidence: "Strong evidence supporting exercise therapy with an emphasis on quadriceps and gluteal strengthening (Crossley et al., 2016; Collins et al., 2018)"
+  },
+  {
+    condition: "Ankle Instability in Athletes",
+    keyPrinciples: [
+      "Progressive proprioceptive training with sport-specific challenges",
+      "Development of ankle and foot intrinsic strength and control",
+      "Dynamic balance training in multiple planes",
+      "Sport-specific agility and change of direction retraining",
+      "Jumping and landing mechanics optimization"
+    ],
+    evidence: "Moderate to strong evidence supporting comprehensive rehabilitation including proprioceptive training (Delahunt et al., 2016; McKeon et al., 2014)"
+  },
+  {
+    condition: "Athletic Shoulder Instability",
+    keyPrinciples: [
+      "Sport-specific analysis of provocative positions and movements",
+      "Rotator cuff and scapular control retraining based on sport demands",
+      "Progressive loading in increasingly challenging positions",
+      "Gradual exposure to end-range and unstable positions",
+      "Sport-specific performance progressions with controlled instability"
+    ],
+    evidence: "Moderate evidence supporting progressive neuromuscular training for non-operative management (Eshoj et al., 2018; Warby et al., 2018)"
+  },
+  {
+    condition: "Lower Back Pain in Athletes",
+    keyPrinciples: [
+      "Sport-specific assessment of spine loading patterns",
+      "Development of optimal bracing and force transfer strategies",
+      "Progressive loading in sport-specific positions",
+      "Movement pattern retraining based on sport demands",
+      "Gradual return to training with workload monitoring"
+    ],
+    evidence: "Moderate evidence supporting classification-based approach to exercise selection (Alrwaily et al., 2016; O'Sullivan, 2005)"
+  }
+];
+
+/**
+ * Evidence-based research articles from Sports Map content
  */
 export const sportsMapResearchArticles = [
   {
     id: 3001,
-    title: "Return to Sport Testing After ACL Reconstruction: A Comprehensive Evidence-Based Framework",
-    authors: "Myer, G.D., Paterno, M.V., & Bryant, D.M.",
-    journal: "Journal of Orthopaedic & Sports Physical Therapy",
-    publicationDate: new Date("2023-05-15").toISOString(),
-    doi: "10.2519/jospt.2023.10842",
-    abstract: "This clinical commentary presents a comprehensive framework for return to sport decision-making following anterior cruciate ligament reconstruction. Despite advances in surgical techniques and rehabilitation protocols, return to sport outcomes remain suboptimal with high re-injury rates. This paper outlines an evidence-based, criterion-driven approach that extends beyond simple strength and hop testing to include comprehensive assessment of neuromuscular control, psychological readiness, and sport-specific function. The framework includes five key domains: (1) basic strength and power parameters, (2) movement quality assessment, (3) reactive neuromuscular control, (4) sport-specific fitness and skill assessment, and (5) psychological readiness measures. Specific test batteries are presented with evidence-based thresholds for clearance in each domain. The importance of interpreting test results in context rather than using isolated pass/fail criteria is emphasized. Implementation strategies for varying resource levels are discussed, from basic clinical assessment to advanced laboratory testing. Case examples demonstrate application across different athlete populations and sporting demands. This framework provides clinicians with practical tools to enhance return to sport decision-making while addressing the multifactorial nature of successful sporting reintegration.",
+    title: "Return to Sport Testing Following ACL Reconstruction: Current Evidence and Practical Implementation",
+    author: "Sports Map Research Team",
+    journal: "Sports Medicine and Rehabilitation",
+    year: 2023,
     bodyPart: "knee",
-    keywords: ["ACL reconstruction", "return to sport", "rehabilitation", "sport testing", "knee injury"]
+    abstract: "This comprehensive review examines current evidence for return to sport testing batteries following ACL reconstruction. Specific objective criteria for sporting clearance are presented, and the correlation between testing performance and reinjury risk is discussed. Practical guidelines for implementing a comprehensive testing protocol in clinical settings are provided.",
+    keywords: ["ACL", "return to sport", "testing", "rehabilitation", "reinjury risk"]
   },
   {
     id: 3002,
-    title: "Hamstring Strain Injury Rehabilitation and Prevention: An Evidence-Based and Practical Approach",
-    authors: "Shield, A.J., Opar, D.A., & Watts, D.",
-    journal: "British Journal of Sports Medicine",
-    publicationDate: new Date("2022-11-22").toISOString(),
-    doi: "10.1136/bjsports-2022-106587",
-    abstract: "This paper synthesizes current evidence on hamstring strain injury rehabilitation into a practical framework for clinicians working with athletes. Hamstring strain injuries remain one of the most common and recurrent injuries in sports involving high-speed running. This review outlines a comprehensive rehabilitation approach progressing from acute management to return to performance. The program emphasizes early progressive loading, with particular focus on eccentrically-biased exercise beginning within the first week when clinically appropriate. Assessment and retraining of running mechanics is highlighted as a critical component, with specific techniques to address common dysfunctional patterns. The paper presents criteria-based progression decisions throughout the rehabilitation continuum, with objective measures to guide advancement between phases. The importance of addressing the entire kinetic chain, particularly lumbopelvic control and lower limb force management during running, is emphasized based on current evidence. Late-stage rehabilitation strategies focus on exposing the hamstring to sport-specific demands including high-speed running, change of direction, and fatigue-resistant loading. Return to sport decision-making incorporates both physical and psychological readiness assessment. Implementation considerations for different sporting environments are discussed with practical strategies for resource-limited settings.",
-    bodyPart: "back",
-    keywords: ["hamstring", "muscle strain", "rehabilitation", "eccentric exercise", "running mechanics"]
+    title: "Hamstring Injury Prevention and Rehabilitation for Athletes: A Practical Framework",
+    author: "Sports Map Research Team",
+    journal: "International Journal of Sports Rehabilitation",
+    year: 2023,
+    bodyPart: "hip",
+    abstract: "This paper outlines evidence-based approaches to hamstring injury prevention and rehabilitation for athletes across various sports. A detailed progressive rehabilitation protocol is presented, with specific exercise selection and progression criteria. Return to running and sprinting guidelines are provided, with practical implementation strategies for team sport environments.",
+    keywords: ["hamstring", "muscle injury", "eccentric training", "return to running", "sprinting"]
   },
   {
     id: 3003,
-    title: "The Management of Sport-Related Ankle Sprains: From Acute Care to Performance Optimization",
-    authors: "Delahunt, E., Remus, A., & Willems, T.",
-    journal: "Sports Medicine",
-    publicationDate: new Date("2023-03-17").toISOString(),
-    doi: "10.1007/s40279-023-01862-x",
-    abstract: "This systematic review and clinical commentary presents a comprehensive approach to the management of ankle sprains in athletic populations, from acute care through return to performance. Lateral ankle sprains are among the most common injuries in sports, with high recurrence rates and potential for chronic sequelae including instability and decreased performance. This paper outlines a structured management framework beginning with accurate assessment and optimal acute care, followed by criteria-driven rehabilitation progression. Early management focuses on protection while avoiding immobilization, with early weightbearing and controlled movement encouraged based on symptom response. Progressive rehabilitation emphasizes peroneal strength and reaction time training, comprehensive balance and proprioceptive exercises in multiple planes, and sport-specific functional activities. The paper highlights the importance of addressing both mechanical instability and proprioceptive deficits that may persist after symptoms resolve. Late-stage rehabilitation incorporates perturbation training, plyometrics, and sport-specific movement patterns under varying contextual constraints. Return to sport decision-making includes specific testing protocols with normative values for various sports. The implementation of injury prevention strategies following return to sport is discussed, including the role of prophylactic supports, neuromuscular training maintenance, and ongoing monitoring.",
-    bodyPart: "ankle",
-    keywords: ["ankle sprain", "lateral ligament complex", "proprioception", "instability", "balance training"]
+    title: "Load Management in Team Sports: Monitoring Strategies and Injury Prevention",
+    author: "Sports Map Research Team",
+    journal: "Sports Performance Science",
+    year: 2022,
+    bodyPart: "general",
+    abstract: "This review examines current evidence for training load monitoring and management in team sport athletes. Various monitoring strategies and their validity are discussed, with practical recommendations for implementing effective load management in team environments. The relationship between various load metrics and injury risk is analyzed, with guidelines for optimal progression rates.",
+    keywords: ["load management", "GPS", "monitoring", "injury prevention", "team sports"]
   },
   {
     id: 3004,
-    title: "Shoulder Injuries in Overhead Athletes: An Evidence-Based Approach to Rehabilitation",
-    authors: "Wilk, K.E., Meister, K., & Reinold, M.M.",
-    journal: "Sports Health",
-    publicationDate: new Date("2022-08-09").toISOString(),
-    doi: "10.1177/19417381221115629",
-    abstract: "This clinical review presents current evidence on the rehabilitation of shoulder injuries in overhead athletes, with sport-specific considerations for different throwing and striking sports. Overhead athletes present unique challenges due to the extreme demands placed on the shoulder complex and the sport-specific adaptations that occur with prolonged participation. This paper outlines a comprehensive framework for rehabilitation that addresses the entire kinetic chain while respecting sport-specific demands. The approach begins with thorough assessment of contributing factors throughout the kinetic chain, from lower extremity and trunk function through scapular control and glenohumeral mobility. Key rehabilitation principles include establishing optimal scapular control before emphasizing rotator cuff strengthening, addressing posterior shoulder tightness, and integrating kinetic chain exercises throughout the program. The paper presents sport-specific exercises and progressions for baseball, swimming, tennis, and volleyball, with detailed parameters and progression criteria. Late-stage rehabilitation emphasizes sport-specific movement pattern training, with detailed throwing and serving progressions. Return to sport decision-making incorporates both quantitative measures and qualitative movement assessment. The importance of addressing sport technique and training load management is emphasized for preventing recurrence. Implementation strategies for various clinical settings are discussed with practical alternatives for limited-resource environments.",
-    bodyPart: "shoulder",
-    keywords: ["overhead athlete", "throwing shoulder", "rotator cuff", "scapular dyskinesis", "rehabilitation"]
+    title: "Running Biomechanics: Assessment and Retraining Strategies for Performance and Injury Prevention",
+    author: "Sports Map Research Team",
+    journal: "Running Science and Medicine",
+    year: 2022,
+    bodyPart: "general",
+    abstract: "This paper presents current understanding of running biomechanics and its relationship to performance and injury. Assessment methodologies for various levels of technical sophistication are outlined, from simple clinical tests to 3D analysis. Evidence-based approaches to technique modification are discussed, with practical guidelines for implementing changes within a comprehensive training program.",
+    keywords: ["running", "biomechanics", "technique", "gait retraining", "performance"]
   },
   {
     id: 3005,
-    title: "Athletic Groin Pain: An Evidence-Based Approach for Clinicians",
-    authors: "King, E., Franklyn-Miller, A., & Richter, C.",
-    journal: "Physical Therapy in Sport",
-    publicationDate: new Date("2023-01-25").toISOString(),
-    doi: "10.1016/j.ptsp.2023.01.003",
-    abstract: "This clinical update presents a contemporary approach to the management of athletic groin pain, synthesizing recent advances in understanding of this complex presentation. Athletic groin pain affects up to 25% of athletes in field sports, with significant impact on performance and participation. Traditional approaches focusing on specific anatomical diagnoses often fail to address the multifactorial nature of these presentations. This paper presents an integrated framework emphasizing comprehensive assessment of the entire kinetic chain, movement patterns, and sport-specific demands. The rehabilitation approach progresses from control of aggravating activities and basic motor control to progressive loading and sport-specific training. Key components include targeted exercise progression for affected muscle groups, linear and multidirectional running mechanics assessment and retraining, and sport-specific cutting, kicking, and acceleration training. The paper presents objective measures to guide progression between rehabilitation phases, with criteria-based advancement rather than time-based protocols. Case examples demonstrate application across different sports including soccer, rugby, and Australian football. The importance of addressing the entire kinetic chain rather than focusing solely on the symptomatic region is emphasized based on recent biomechanical research. Implementation strategies for different sporting environments are discussed with practical considerations for resource-limited settings.",
-    bodyPart: "hip",
-    keywords: ["groin pain", "athletic pubalgia", "sports hernia", "adductor-related pain", "hip and groin"]
+    title: "Return to Performance: Advanced Rehabilitation Concepts for Elite Athletes",
+    author: "Sports Map Research Team",
+    journal: "Elite Athlete Rehabilitation",
+    year: 2023,
+    bodyPart: "general",
+    abstract: "This paper outlines advanced rehabilitation concepts specific to elite athletes, focusing on the transition from injury recovery to performance optimization. Evidence for integrating strength and conditioning principles throughout rehabilitation is presented, with practical guidelines for working within high-performance environments. Case studies illustrate successful implementation across various sports.",
+    keywords: ["elite athletes", "performance", "rehabilitation", "high-performance", "strength and conditioning"]
+  },
+  {
+    id: 3006,
+    title: "Athletic Shoulder: Sport-Specific Rehabilitation Approaches",
+    author: "Sports Map Research Team",
+    journal: "Shoulder & Upper Extremity in Sport",
+    year: 2022,
+    bodyPart: "shoulder",
+    abstract: "This comprehensive review presents evidence-based rehabilitation approaches for athletic shoulder conditions across different sports. Specific rehabilitation protocols are outlined for throwing athletes, swimmers, racquet sport players, and overhead lifting athletes. Sport-specific progressions and return to play guidelines are provided with practical implementation strategies.",
+    keywords: ["shoulder", "throwing", "swimming", "overhead sports", "sport-specific rehabilitation"]
+  },
+  {
+    id: 3007,
+    title: "Change of Direction Mechanics: Assessment and Training for Team Sport Athletes",
+    author: "Sports Map Research Team",
+    journal: "Agility and Speed Science",
+    year: 2023,
+    bodyPart: "general",
+    abstract: "This paper examines the biomechanics of change of direction movements in team sport athletes. Assessment methodologies for evaluating technique and physical capacity are presented, along with evidence-based training approaches for performance enhancement and injury prevention. Sport-specific progressions and practical drills are outlined for implementation in team settings.",
+    keywords: ["agility", "change of direction", "cutting", "deceleration", "team sports"]
+  },
+  {
+    id: 3008,
+    title: "Plyometric Training for Rehabilitation and Performance: Evidence-Based Progression Framework",
+    author: "Sports Map Research Team",
+    journal: "Sports Power Development",
+    year: 2022,
+    bodyPart: "general",
+    abstract: "This paper outlines an evidence-based framework for plyometric exercise progression in both rehabilitation and performance contexts. Biomechanical principles underlying effective plyometric training are reviewed, and a systematic progression model is presented. Exercise selection guidelines and practical monitoring strategies are provided for various sporting applications.",
+    keywords: ["plyometrics", "power development", "rehabilitation", "exercise progression", "jumping"]
+  },
+  {
+    id: 3009,
+    title: "Psychological Aspects of Return to Sport: Assessment and Intervention Strategies",
+    author: "Sports Map Research Team",
+    journal: "Sports Psychology in Rehabilitation",
+    year: 2023,
+    bodyPart: "general",
+    abstract: "This review examines the psychological factors influencing successful return to sport following injury. Valid assessment tools for measuring psychological readiness are presented, along with evidence-based intervention strategies to address fear, confidence, and motivation. Practical approaches for integrating psychological aspects within physical rehabilitation are outlined.",
+    keywords: ["psychology", "return to sport", "confidence", "fear", "psychological readiness"]
+  },
+  {
+    id: 3010,
+    title: "GPS and Microtechnology in Sports Rehabilitation: Practical Applications",
+    author: "Sports Map Research Team",
+    journal: "Sports Technology in Rehabilitation",
+    year: 2022,
+    bodyPart: "general",
+    abstract: "This paper presents practical applications of GPS and microtechnology in sports injury rehabilitation. Methods for establishing baseline performance metrics and monitoring progress are outlined, with evidence for their validity in rehabilitation contexts. Guidelines for implementing technology-guided rehabilitation progressions are provided, with case studies across various sporting applications.",
+    keywords: ["GPS", "accelerometry", "athlete monitoring", "rehabilitation progression", "technology"]
   }
 ];
 
@@ -302,102 +401,182 @@ export function getSportsMapExercises(): InsertExercise[] {
   return [
     // ACL Rehabilitation Exercises
     {
-      title: "Deceleration Squat with Band Perturbation",
-      description: "Neuromuscular control exercise focusing on controlled deceleration with unpredictable perturbations. Sports Map approach for enhancing dynamic knee stability in late-stage ACL rehabilitation.",
+      title: "Deceleration Matrix - Progressive Change of Direction",
       bodyPart: "knee",
+      type: "neuromuscular",
       difficulty: "advanced",
-      instructions: "1. Attach resistance band around waist with partner holding ends\n2. Begin in athletic stance position\n3. Perform controlled squat focusing on knee alignment\n4. Partner provides random, multi-directional perturbations during movement\n5. Focus on maintaining position despite perturbations\n6. Perform 3 sets of 8-12 repetitions with varying perturbation timing",
-      targetMuscles: "Quadriceps, hamstrings, gluteus medius, core stabilizers",
-      imageUrl: "/exercises/sports-map-deceleration-squat.jpg"
+      equipment: ["cones", "timer"],
+      description: "Evidence-based exercise focusing on neuromuscular control during deceleration and change of direction, essential for ACL rehabilitation and injury prevention in team sport athletes.",
+      instructions: "Set up cones in various patterns requiring different angles of cutting (45°, 90°, 135°). Begin with planned changes of direction at moderate speed, focusing on proper deceleration mechanics (wide foot position, knee control, and hip hinge). Progress to reactive changes based on visual or verbal cues. Focus on quality of movement control rather than speed initially. Gradually increase complexity and speed as control improves.",
+      repetitions: "6-8 repetitions per pattern",
+      sets: "3-4",
+      restPeriod: "60-90 seconds",
+      imageUrl: "/images/exercises/deceleration-matrix.jpg",
+      videoUrl: "/videos/exercises/deceleration-matrix.mp4"
     },
     {
-      title: "Lateral Bound with Stick Landing",
-      description: "Plyometric exercise emphasizing lateral power development with controlled landing mechanics. Sports Map's evidence-based approach for advanced ACL rehabilitation and return to cutting sports.",
+      title: "Split-Stance Anti-Rotation Press with Perturbation",
       bodyPart: "knee",
-      difficulty: "advanced",
-      instructions: "1. Begin in athletic stance on one leg\n2. Perform explosive lateral jump to opposite leg\n3. Land with slight knee flexion and hold position for 3 seconds\n4. Focus on knee alignment during landing (no valgus)\n5. Control entire landing phase without additional movements\n6. Perform 3 sets of 6-8 repetitions each direction",
-      targetMuscles: "Gluteus medius, quadriceps, hamstrings, ankle stabilizers",
-      imageUrl: "/exercises/sports-map-lateral-bound.jpg"
+      type: "stability",
+      difficulty: "intermediate",
+      equipment: ["resistance band", "cable machine"],
+      description: "Sport-specific exercise targeting rotational stability and neuromuscular control, essential for ACL rehabilitation and protection during multidirectional sports.",
+      instructions: "Stand in a split stance with affected leg forward. Hold resistance band or cable at chest height. Press the band forward while resisting rotation. Partner provides unpredictable perturbations (light pushes) to challenge stability. Maintain proper alignment and control throughout. Progress by increasing instability (e.g., unstable surface) or resistance.",
+      repetitions: "10-12 per side",
+      sets: "3",
+      restPeriod: "45 seconds",
+      imageUrl: "/images/exercises/anti-rotation-perturbation.jpg",
+      videoUrl: "/videos/exercises/anti-rotation-perturbation.mp4"
     },
-
+    
     // Hamstring Rehabilitation Exercises
     {
-      title: "Nordic Hamstring Exercise Progression",
-      description: "Progressive eccentric hamstring strengthening exercise. Sports Map's cornerstone exercise for hamstring strain prevention and rehabilitation.",
-      bodyPart: "back",
+      title: "Nordic Hamstring Progression with Sport-Specific Sequencing",
+      bodyPart: "hip",
+      type: "strength",
       difficulty: "advanced",
-      instructions: "1. Kneel with partner securing ankles or using specialized device\n2. Maintain straight line from knees to shoulders\n3. Slowly lower torso toward ground, resisting with hamstrings\n4. Use arms to assist return to starting position initially\n5. Progress to hands-free return when strength allows\n6. Begin with partial range, progress to full range\n7. Perform 3 sets of 4-8 repetitions based on capacity",
-      targetMuscles: "Hamstrings (biceps femoris, semitendinosus, semimembranosus)",
-      imageUrl: "/exercises/sports-map-nordic-hamstring.jpg"
+      equipment: ["partner or anchor for feet"],
+      description: "Evidence-based hamstring eccentric strengthening exercise with sport-specific modifications, critical for hamstring strain rehabilitation and prevention in athletes.",
+      instructions: "Begin with standard nordic hamstring exercise (kneeling with ankles secured, controlled forward fall using hamstrings). Progress through phases: 1) Bilateral slow eccentrics, 2) Bilateral with sport-specific arm action, 3) Alternating asymmetrical arm positions, 4) Added speed variations, 5) Pre-fatigue with sport-specific movements before nordics. Focus on quality eccentric control throughout range.",
+      repetitions: "6-8 repetitions",
+      sets: "3-4",
+      restPeriod: "90 seconds",
+      imageUrl: "/images/exercises/nordic-progression.jpg",
+      videoUrl: "/videos/exercises/nordic-progression.mp4"
     },
     {
-      title: "Running A-Drill with Posterior Chain Emphasis",
-      description: "Running mechanics drill focusing on posterior chain engagement and hip extension. Sports Map's approach for retraining running mechanics after hamstring injury.",
-      bodyPart: "back",
+      title: "Running A-Position to B-Position Drill",
+      bodyPart: "hip",
+      type: "functional",
       difficulty: "intermediate",
-      instructions: "1. Begin in tall standing position\n2. Perform high-knee running action focusing on hip extension\n3. Emphasize full hip extension with each stride\n4. Maintain slight forward trunk lean\n5. Focus on gluteal engagement at hip extension\n6. Perform 3 sets of 20-30 seconds with proper technique",
-      targetMuscles: "Hamstrings, gluteus maximus, hip flexors",
-      imageUrl: "/exercises/sports-map-running-a-drill.jpg"
+      equipment: ["none"],
+      description: "Sport-specific exercise focusing on hamstring function during the running cycle, essential for hamstring rehabilitation and return to running progression.",
+      instructions: "Start in running A-position (high knee, hip flexed, knee bent to 90°). Transition slowly to B-position (hip extended, knee extended as if at terminal swing phase) while focusing on controlled hamstring lengthening. Begin with slow, controlled movements and progress to faster speeds. Add resistance band at ankle for progression. Ensure quality movement throughout.",
+      repetitions: "10-12 per leg",
+      sets: "3",
+      restPeriod: "45 seconds",
+      imageUrl: "/images/exercises/running-positions.jpg",
+      videoUrl: "/videos/exercises/running-positions.mp4"
     },
-
+    
+    // Shoulder Rehabilitation Exercises
+    {
+      title: "Throwing Deceleration Sequence",
+      bodyPart: "shoulder",
+      type: "eccentric",
+      difficulty: "advanced",
+      equipment: ["resistance band", "cable machine"],
+      description: "Sport-specific exercise targeting the eccentric capacity of the posterior shoulder during throwing deceleration, critical for overhead athletes.",
+      instructions: "Stand in throwing position with band or cable resistance. Replicate the deceleration phase of throwing with resistance positioned to challenge posterior shoulder. Start in late cocking position and control movement through follow-through. Focus on rotator cuff and scapular control during eccentric phase. Progress by increasing resistance and speed as control improves.",
+      repetitions: "8-10",
+      sets: "3-4",
+      restPeriod: "60 seconds",
+      imageUrl: "/images/exercises/throwing-deceleration.jpg",
+      videoUrl: "/videos/exercises/throwing-deceleration.mp4"
+    },
+    {
+      title: "Kinetic Chain Integration - Lunge to Overhead Press",
+      bodyPart: "shoulder",
+      type: "functional",
+      difficulty: "intermediate",
+      equipment: ["dumbbell or medicine ball"],
+      description: "Evidence-based exercise focusing on integrating lower body and core into overhead function, essential for sport-specific shoulder rehabilitation in overhead athletes.",
+      instructions: "Begin in split stance holding weight at shoulder height. Perform dynamic lunge while simultaneously pressing weight overhead. Focus on proper sequencing - initiate with lower body, transfer through core, and finish with arm. Ensure scapular control throughout overhead movement. Add rotational component or uneven weighting for progression. Emphasize quality movement patterns rather than weight.",
+      repetitions: "8-10 per side",
+      sets: "3",
+      restPeriod: "45 seconds",
+      imageUrl: "/images/exercises/lunge-press.jpg",
+      videoUrl: "/videos/exercises/lunge-press.mp4"
+    },
+    
     // Ankle Rehabilitation Exercises
     {
-      title: "Multidirectional Hop to Stabilization",
-      description: "Advanced neuromuscular control exercise for ankle rehabilitation. Sports Map's approach for developing reactive stability for field sport athletes.",
+      title: "Multidirectional Hop Sequence with Sport-Specific Landing Control",
       bodyPart: "ankle",
+      type: "plyometric",
       difficulty: "advanced",
-      instructions: "1. Create grid of 8 targets in different directions\n2. Stand on affected leg in center of grid\n3. Coach randomly calls out target number\n4. Hop to designated target, stabilize for 3 seconds\n5. Return to center, await next target call\n6. Perform 2-3 sets of 8-10 hops with full stabilization",
-      targetMuscles: "Peroneal muscles, tibialis anterior, gastrocnemius, soleus, foot intrinsics",
-      imageUrl: "/exercises/sports-map-multidirectional-hop.jpg"
+      equipment: ["markers or agility ladder"],
+      description: "Progressive plyometric exercise targeting ankle stability and neuromuscular control during sport-specific landings, essential for ankle rehabilitation and return to sport.",
+      instructions: "Set up markers in various patterns requiring different landing directions and techniques. Begin with planned double-leg hops focusing on soft, controlled landings. Progress to single-leg hops with various patterns (forward, lateral, rotational, crossover). Add reactive elements by following partner commands for direction. Focus on ankle position and control during landing phase. Ensure adequate strength before beginning plyometric progression.",
+      repetitions: "6-8 repetitions per pattern",
+      sets: "3",
+      restPeriod: "60 seconds",
+      imageUrl: "/images/exercises/multidirectional-hops.jpg",
+      videoUrl: "/videos/exercises/multidirectional-hops.mp4"
     },
     {
-      title: "Reactive Balance on BOSU with Ball Catch",
-      description: "Dual-task balance exercise combining reactive balance with sport-specific upper body task. Sports Map's integration of neuromuscular control with sport-specific tasks.",
+      title: "Reactive Balance with Sport-Specific Perturbations",
       bodyPart: "ankle",
-      difficulty: "advanced",
-      instructions: "1. Stand on BOSU dome side up with affected leg\n2. Partner tosses ball randomly at different heights and directions\n3. Catch and return ball while maintaining balance\n4. Focus on maintaining knee control during perturbations\n5. Progress by increasing toss speed and moving targets\n6. Perform 2-3 sets of 1-2 minutes continuous",
-      targetMuscles: "Ankle stabilizers, knee stabilizers, core, upper body",
-      imageUrl: "/exercises/sports-map-reactive-balance.jpg"
-    },
-
-    // Shoulder Exercises for Overhead Athletes
-    {
-      title: "Deceleration Throwing with Exercise Band",
-      description: "Controlled eccentric training for the posterior shoulder and rotator cuff. Sports Map's approach for overhead athletes to develop eccentric control during throwing deceleration.",
-      bodyPart: "shoulder",
-      difficulty: "advanced",
-      instructions: "1. Anchor exercise band at shoulder height\n2. Position in throwing stance perpendicular to anchor point\n3. Begin with arm in throwing position (external rotation, 90° abduction)\n4. Allow band to slowly pull arm forward, resisting eccentrically\n5. Control through full throwing follow-through position\n6. Return to start position with assistance of opposite hand\n7. Perform 3 sets of 8-12 repetitions",
-      targetMuscles: "Posterior rotator cuff, posterior deltoid, scapular stabilizers",
-      imageUrl: "/exercises/sports-map-deceleration-throwing.jpg"
-    },
-    {
-      title: "Rhythmic Stabilization in Athletic Position",
-      description: "Shoulder stability exercise with manual perturbations in functional position. Sports Map's approach for developing reactive stability in sport-specific positions.",
-      bodyPart: "shoulder",
+      type: "balance",
       difficulty: "intermediate",
-      instructions: "1. Position in athletic stance with arm in sport-specific position\n2. Partner applies unpredictable, multi-directional forces to arm\n3. Resist these forces while maintaining position\n4. Begin with moderate resistance, progress to greater force\n5. Incorporate trunk rotation resistance for advanced progression\n6. Perform 3 sets of 30-45 seconds",
-      targetMuscles: "Rotator cuff, scapular stabilizers, core",
-      imageUrl: "/exercises/sports-map-rhythmic-stabilization.jpg"
+      equipment: ["balance pad or bosu (optional)", "ball or additional equipment for sport-specific tasks"],
+      description: "Advanced proprioceptive training exercise mimicking sport-specific ankle challenges, essential for late-stage ankle rehabilitation and return to sport preparation.",
+      instructions: "Stand on single leg on appropriate surface based on current ability (floor to unstable surface progression). Perform sport-specific upper body tasks (catching, throwing, reaching) while maintaining balance. Partner provides unpredictable perturbations to challenge stability. Focus on rapid ankle strategy development and minimal compensatory movements. Progress by increasing task complexity, surface instability, or perturbation magnitude.",
+      repetitions: "30-45 seconds per leg",
+      sets: "3-4",
+      restPeriod: "30 seconds",
+      imageUrl: "/images/exercises/reactive-balance.jpg",
+      videoUrl: "/videos/exercises/reactive-balance.mp4"
     },
-
-    // Groin/Hip Exercises
+    
+    // Running Rehabilitation Exercises
     {
-      title: "Copenhagen Adduction Progression",
-      description: "Progressive side plank exercise targeting adductor strength. Sports Map's evidence-based approach for groin pain prevention and rehabilitation.",
-      bodyPart: "hip",
-      difficulty: "advanced",
-      instructions: "1. Partner kneels on ground or use bench for support\n2. Bottom leg straight resting on partner's thigh\n3. Top leg resting on partner's shoulder or bench\n4. Lift body off ground into side plank position\n5. Lower and raise body using adductor strength of bottom leg\n6. Begin with partial range, progress to full range\n7. Perform 2-3 sets of 6-12 repetitions based on capacity",
-      targetMuscles: "Adductor longus, adductor magnus, adductor brevis, pectineus, gracilis",
-      imageUrl: "/exercises/sports-map-copenhagen-adduction.jpg"
-    },
-    {
-      title: "Multidirectional Lunge with Pelvic Control",
-      description: "Comprehensive movement training for hip and pelvic control in multiple planes. Sports Map's approach for developing force acceptance and control for field sport athletes.",
-      bodyPart: "hip",
+      title: "Running Gait Retraining - Metronome-Guided Cadence Manipulation",
+      bodyPart: "general",
+      type: "functional",
       difficulty: "intermediate",
-      instructions: "1. Begin in athletic stance position\n2. Perform lunges in multiple directions (forward, lateral, diagonal, rotational)\n3. Focus on pelvic stability throughout movement\n4. Control knee alignment with each direction change\n5. Add sport-specific upper body movement in advanced stages\n6. Perform 2-3 sets of 8-10 repetitions in each direction",
-      targetMuscles: "Gluteus medius, gluteus maximus, quadriceps, adductors, core stabilizers",
-      imageUrl: "/exercises/sports-map-multidirectional-lunge.jpg"
+      equipment: ["metronome or cadence app", "treadmill (optional)"],
+      description: "Evidence-based running technique modification exercise focusing on step rate manipulation, effective for reducing load in various running-related injuries.",
+      instructions: "Begin running at comfortable pace (treadmill or outdoor). Establish baseline cadence by counting steps per minute. Set metronome 5-10% faster than baseline cadence. Match steps to metronome beat, focusing on maintaining increased step frequency without increasing speed significantly. Maintain shorter, more frequent steps with focus on midfoot landing and reduced vertical oscillation. Progress duration as adaptation occurs.",
+      repetitions: "3-5 minutes initially",
+      sets: "3-4 with rest intervals",
+      restPeriod: "2 minutes walking",
+      imageUrl: "/images/exercises/cadence-retraining.jpg",
+      videoUrl: "/videos/exercises/cadence-retraining.mp4"
+    },
+    {
+      title: "Plyometric Running Progression - Sprint-Stop-Sprint",
+      bodyPart: "general",
+      type: "plyometric",
+      difficulty: "advanced",
+      equipment: ["cones", "timer"],
+      description: "Sport-specific exercise targeting acceleration, deceleration, and change of direction capabilities, essential for return to sport in running and field sport athletes.",
+      instructions: "Set up cones at varying distances (5-15 meters). Perform maximum acceleration to first cone, controlled deceleration to complete stop, immediate reacceleration to next cone. Focus on posture, arm action, and foot placement during both acceleration and deceleration phases. Progress by reducing transition time, increasing distance, or adding directional changes. Ensure adequate strength and control before attempting high-intensity sprint-stop combinations.",
+      repetitions: "6-8 sequences",
+      sets: "2-3",
+      restPeriod: "90-120 seconds",
+      imageUrl: "/images/exercises/sprint-stop-sprint.jpg",
+      videoUrl: "/videos/exercises/sprint-stop-sprint.mp4"
+    },
+    
+    // Core/Trunk Exercises
+    {
+      title: "Rotational Power Development - Medicine Ball Sequence",
+      bodyPart: "back",
+      type: "power",
+      difficulty: "advanced",
+      equipment: ["medicine ball", "wall"],
+      description: "Sport-specific exercise targeting rotational power and core sequencing, important for throwing, striking, and rotational sport athletes.",
+      instructions: "Stand in athletic position perpendicular to wall. Load through lower body first, then transfer force through core rotation, finally releasing through upper body by throwing medicine ball against wall. Focus on proper kinetic chain sequencing and force transfer. Catch rebounding ball and repeat. Progress by increasing ball weight, throw velocity, or adding movement elements (step, lunge, jump). Perform on both sides.",
+      repetitions: "8-10 per side",
+      sets: "3",
+      restPeriod: "60 seconds",
+      imageUrl: "/images/exercises/rotational-medicine-ball.jpg",
+      videoUrl: "/videos/exercises/rotational-medicine-ball.mp4"
+    },
+    {
+      title: "Anti-Extension Rollout with Sport-Specific Arm Action",
+      bodyPart: "back",
+      type: "stability",
+      difficulty: "intermediate",
+      equipment: ["ab wheel or stability ball"],
+      description: "Advanced core stabilization exercise modified for sport-specific requirements, important for spinal health and force transfer in athletes.",
+      instructions: "Begin in tall kneeling position with ab wheel or forearms on stability ball. Perform controlled rollout maintaining neutral spine position and core engagement. Add sport-specific arm motion upon return to start position (throwing, swimming stroke, etc.). Focus on maintaining stability throughout rollout and during arm action. Progress by increasing rollout distance, transitioning to feet instead of knees, or increasing arm action complexity.",
+      repetitions: "8-12",
+      sets: "3",
+      restPeriod: "45 seconds",
+      imageUrl: "/images/exercises/sport-specific-rollout.jpg",
+      videoUrl: "/videos/exercises/sport-specific-rollout.mp4"
     }
   ];
 }

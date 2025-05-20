@@ -293,11 +293,11 @@ export default function VirtualPatientDetail({
             )}
             <Badge variant="outline">{patient.age} years</Badge>
             <Badge variant="outline">{patient.gender}</Badge>
-            <Badge>{patient.bodyPart}</Badge>
+            <Badge>{patient.body_part}</Badge>
           </div>
         </div>
         <CardDescription>
-          Chief Complaint: {patient.chiefComplaint}
+          Chief Complaint: {patient.chief_complaint}
         </CardDescription>
       </CardHeader>
       <CardContent className="p-0">
@@ -366,13 +366,13 @@ export default function VirtualPatientDetail({
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {patient.medicalHistory && (
+                {patient.past_medical_history && (
                   <div>
                     <h3 className="text-md font-semibold mb-1">
                       Medical History
                     </h3>
                     <p className="text-sm leading-relaxed">
-                      {patient.medicalHistory}
+                      {patient.past_medical_history}
                     </p>
                   </div>
                 )}
@@ -1040,7 +1040,7 @@ export default function VirtualPatientDetail({
             ) : (
               <PatientProgressTracker
                 patientId={patient.id}
-                bodyPart={patient.bodyPart || "general"}
+                bodyPart={patient.body_part || "general"}
               />
             )}
           </TabsContent>
@@ -1048,15 +1048,15 @@ export default function VirtualPatientDetail({
           {/* INTERACTIVE ANATOMY TAB */}
           <TabsContent value="anatomy" className="p-6">
             <BodyPartZoom
-              bodyPart={patient.bodyPart || "general"}
+              bodyPart={patient.body_part || "general"}
               imageUrl={
-                placeholderImages[patient.bodyPart?.toLowerCase() || "general"]
+                placeholderImages[patient.body_part?.toLowerCase() || "general"]
               }
             />
             {/* Add fallback message in case image doesn't load */}
             <div className="text-xs text-center text-muted-foreground mt-2">
               Note: Interactive model displays anatomy regions for{" "}
-              {patient.bodyPart || "general"} body part. Click on highlighted
+              {patient.body_part || "general"} body part. Click on highlighted
               points to explore techniques.
             </div>
           </TabsContent>

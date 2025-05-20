@@ -519,7 +519,7 @@ export const virtualPatients = pgTable("virtual_patients", {
   gender: text("gender").notNull(),
   chief_complaint: text("chief_complaint").notNull(),
   past_medical_history: text("past_medical_history"),
-  painLevel: integer("pain_level"),
+  // Removed painLevel field since it doesn't exist in the database
   body_part: bodyPartEnum("body_part").default("general").notNull(),
   symptoms_description: text("symptoms_description").notNull(),
   diagnosis: text("diagnosis"),

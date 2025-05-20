@@ -119,10 +119,15 @@ const GeneratedNote = ({ noteData, onEdit }: GeneratedNoteProps) => {
   return (
     <Card className="bg-white mt-8">
       <CardContent className="p-6 sm:p-10">
-        <div className="pb-5 border-b border-neutral-200 flex justify-between items-center">
-          <h3 className="text-lg leading-6 font-medium text-neutral-900">Generated SOAP Note</h3>
+        <div className="pb-5 border-b border-primary/10 flex justify-between items-center">
+          <h3 className="text-lg leading-6 font-medium text-primary">Generated SOAP Note</h3>
           <div className="flex space-x-3">
-            <Button variant="outline" size="sm" onClick={onEdit}>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={onEdit}
+              className="border-primary/20 hover:bg-primary/5 text-primary"
+            >
               <Edit className="h-4 w-4 mr-2" />
               Edit
             </Button>
@@ -131,7 +136,7 @@ const GeneratedNote = ({ noteData, onEdit }: GeneratedNoteProps) => {
               size="sm" 
               onClick={handleSave} 
               disabled={isSaving}
-              className="text-secondary-700"
+              className="border-secondary/20 hover:bg-secondary/5 text-secondary"
             >
               <Save className="h-4 w-4 mr-2" />
               {isSaving ? "Saving..." : "Save"}
@@ -141,7 +146,7 @@ const GeneratedNote = ({ noteData, onEdit }: GeneratedNoteProps) => {
                 <Button 
                   variant="default" 
                   size="sm" 
-                  className="bg-secondary-600 hover:bg-secondary-700"
+                  className="bg-secondary hover:bg-secondary/90 text-secondary-foreground"
                   disabled={isExporting}
                 >
                   <Download className="h-4 w-4 mr-2" />
@@ -160,25 +165,25 @@ const GeneratedNote = ({ noteData, onEdit }: GeneratedNoteProps) => {
           </div>
         </div>
 
-        <div className="mt-6 text-neutral-700 border border-neutral-200 rounded-lg p-6 bg-neutral-50">
+        <div className="mt-6 text-foreground border border-primary/10 rounded-lg p-6 bg-primary/5">
           {/* Patient Info */}
-          <div className="mb-6 pb-4 border-b border-neutral-200">
+          <div className="mb-6 pb-4 border-b border-primary/10">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="text-sm text-neutral-500">Patient Name</p>
-                <p className="font-medium">{noteData.patientName}</p>
+                <p className="text-sm text-primary/60">Patient Name</p>
+                <p className="font-medium text-foreground">{noteData.patientName}</p>
               </div>
               <div>
-                <p className="text-sm text-neutral-500">Patient ID</p>
-                <p className="font-medium">{noteData.patientId}</p>
+                <p className="text-sm text-primary/60">Patient ID</p>
+                <p className="font-medium text-foreground">{noteData.patientId}</p>
               </div>
               <div>
-                <p className="text-sm text-neutral-500">Date of Birth</p>
-                <p className="font-medium">{formatDate(noteData.dateOfBirth)}</p>
+                <p className="text-sm text-primary/60">Date of Birth</p>
+                <p className="font-medium text-foreground">{formatDate(noteData.dateOfBirth)}</p>
               </div>
               <div>
-                <p className="text-sm text-neutral-500">Date of Visit</p>
-                <p className="font-medium">{formatDate(noteData.dateOfVisit)}</p>
+                <p className="text-sm text-primary/60">Date of Visit</p>
+                <p className="font-medium text-foreground">{formatDate(noteData.dateOfVisit)}</p>
               </div>
             </div>
           </div>
@@ -187,26 +192,26 @@ const GeneratedNote = ({ noteData, onEdit }: GeneratedNoteProps) => {
           <div className="space-y-6">
             {/* Subjective */}
             <div>
-              <h4 className="font-medium text-primary-700">Subjective</h4>
-              <p className="mt-2 text-sm whitespace-pre-line">{noteData.subjective}</p>
+              <h4 className="font-medium text-primary">Subjective</h4>
+              <p className="mt-2 text-sm whitespace-pre-line text-foreground">{noteData.subjective}</p>
             </div>
 
             {/* Objective */}
             <div>
-              <h4 className="font-medium text-primary-700">Objective</h4>
-              <p className="mt-2 text-sm whitespace-pre-line">{noteData.objective}</p>
+              <h4 className="font-medium text-primary">Objective</h4>
+              <p className="mt-2 text-sm whitespace-pre-line text-foreground">{noteData.objective}</p>
             </div>
 
             {/* Assessment */}
             <div>
-              <h4 className="font-medium text-primary-700">Assessment</h4>
-              <p className="mt-2 text-sm whitespace-pre-line">{noteData.assessment}</p>
+              <h4 className="font-medium text-primary">Assessment</h4>
+              <p className="mt-2 text-sm whitespace-pre-line text-foreground">{noteData.assessment}</p>
             </div>
 
             {/* Plan */}
             <div>
-              <h4 className="font-medium text-primary-700">Plan</h4>
-              <p className="mt-2 text-sm whitespace-pre-line">{noteData.plan}</p>
+              <h4 className="font-medium text-primary">Plan</h4>
+              <p className="mt-2 text-sm whitespace-pre-line text-foreground">{noteData.plan}</p>
             </div>
           </div>
         </div>

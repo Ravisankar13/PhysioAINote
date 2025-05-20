@@ -423,16 +423,16 @@ const SoapForm = ({ onNoteGenerated }: SoapFormProps) => {
 
                 <div className="space-y-2 mt-6">
                   <div className="flex justify-between items-center">
-                    <h3 className="text-lg font-medium text-neutral-900">Generated Clinical Notes</h3>
+                    <h3 className="text-lg font-medium text-primary">Generated Clinical Notes</h3>
                     {isLoading && (
                       <div className="flex items-center">
-                        <div className="animate-spin h-5 w-5 mr-2 border-2 border-red-600 border-t-transparent rounded-full"></div>
-                        <span className="text-sm text-red-600">Generating...</span>
+                        <div className="animate-spin h-5 w-5 mr-2 border-2 border-primary border-t-transparent rounded-full"></div>
+                        <span className="text-sm text-primary">Generating...</span>
                       </div>
                     )}
                   </div>
                   
-                  <div className="bg-white border border-neutral-200 rounded-md p-4 min-h-[400px] shadow-inner">
+                  <div className="bg-white border border-primary/10 rounded-md p-4 min-h-[400px] shadow-inner">
                     {/* Combined notes display area */}
                     <div className="space-y-4">
                       {/* Display combined SOAP note content - key is used for forcing re-render */}
@@ -489,9 +489,9 @@ const SoapForm = ({ onNoteGenerated }: SoapFormProps) => {
                       {/* Show placeholder when no content yet */}
                       {!form.getValues().subjective && !form.getValues().objective && 
                        !form.getValues().assessment && !form.getValues().plan && (
-                        <div className="text-center text-neutral-400 py-12">
+                        <div className="text-center text-primary/40 py-12">
                           <p className="text-lg mb-2">No notes generated yet</p>
-                          <p className="text-sm">Click the red microphone button above to start recording</p>
+                          <p className="text-sm">Click the microphone button above to start recording</p>
                         </div>
                       )}
                     </div>
@@ -520,12 +520,17 @@ const SoapForm = ({ onNoteGenerated }: SoapFormProps) => {
                   <Button
                     type="button"
                     variant="outline"
+                    className="border-primary/20 hover:bg-primary/5 text-primary"
                     onClick={handleReset}
                     disabled={isLoading}
                   >
                     Reset Form
                   </Button>
-                  <Button type="submit" disabled={isLoading}>
+                  <Button 
+                    type="submit" 
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground" 
+                    disabled={isLoading}
+                  >
                     {isLoading ? "Generating..." : "Generate SOAP Note"}
                   </Button>
                 </div>

@@ -204,63 +204,62 @@ export function getJoGibsonShoulderExercises(): InsertExercise[] {
       clinicalNotes: "Jo Gibson uses this to address scapular dyskinesis during arm elevation"
     },
     {
-      name: "Rhythmic Stabilization in Supported Position",
+      title: "Rhythmic Stabilization in Supported Position",
       description: "Partner or therapist provides gentle perturbations to shoulder in supported position to enhance stability.",
       bodyPart: "shoulder",
       difficulty: "intermediate",
       instructions: "1. Position arm in supported position at 90 degrees\n2. Partner applies gentle, random perturbations in different directions\n3. Maintain position against these forces\n4. Start with minimal force and gradually increase\n5. Perform for 30-60 second intervals",
       targetMuscles: "Rotator cuff, deltoid, scapular stabilizers",
       imageUrl: "/exercises/jo-gibson-rhythmic-stabilization.jpg",
-      evidence: "Improves reactive muscle activation and joint position sense",
       clinicalNotes: "A cornerstone of Jo Gibson's approach for neuromuscular reeducation"
     },
 
     // Functional Integration Exercises - Intermediate
     {
-      name: "Controlled Weightbearing Through Arms",
+      title: "Controlled Weightbearing Through Arms",
       description: "Gradual introduction of weightbearing through arms to improve proximal stability and force transfer.",
       bodyPart: "shoulder",
       difficulty: "intermediate",
       instructions: "1. Begin in table-top position with hands under shoulders\n2. Focus on proper scapular position - no winging or excessive protraction\n3. Gently shift weight forward and back\n4. Progress to side-to-side weight shifts\n5. Maintain for 20-30 seconds, 3-5 repetitions",
       targetMuscles: "Serratus anterior, rotator cuff, core stabilizers",
       imageUrl: "/exercises/jo-gibson-weightbearing.jpg",
-      evidence: "Closed-chain exercises provide joint compression that enhances stability",
       clinicalNotes: "Jo Gibson progressively introduces controlled loading in weight-bearing positions"
     },
     {
-      name: "Dynamic Huberman Exercise",
+      title: "Dynamic Huberman Exercise",
       description: "Standing dynamic control exercise moving between internal and external rotation positions.",
       bodyPart: "shoulder",
       difficulty: "intermediate",
       instructions: "1. Stand with arms at sides, elbows bent to 90 degrees\n2. Rotate arms outward while maintaining scapular position\n3. Simultaneously raise arms forward to shoulder height\n4. Return to start position with control\n5. Perform 8-12 repetitions for 2-3 sets",
       targetMuscles: "Rotator cuff, deltoid, scapular stabilizers",
       imageUrl: "/exercises/jo-gibson-huberman.jpg",
-      evidence: "Integrates rotation control with elevation in functional pattern",
       clinicalNotes: "Named for its integration of multiple movement planes as advocated by Jo Gibson"
     },
 
     // Advanced Strength and Loading Exercises
     {
-      name: "Swiss Ball Prone Lateral Raise",
+      title: "Swiss Ball Prone Lateral Raise",
       description: "Advanced exercise combining core stability with shoulder strengthening in prone position.",
       bodyPart: "shoulder",
       difficulty: "advanced",
       instructions: "1. Lie prone on Swiss ball with chest supported\n2. Begin with arms hanging down, light weights in hands\n3. Raise arms out to sides while maintaining scapular control\n4. Lower with control\n5. Perform 10-12 repetitions for 2-3 sets",
       targetMuscles: "Posterior deltoid, rotator cuff, scapular stabilizers, core",
       imageUrl: "/exercises/jo-gibson-swiss-ball-lateral-raise.jpg",
-      evidence: "Combines shoulder strengthening with core stabilization in functional position",
-      clinicalNotes: "Jo Gibson incorporates this for athletes and overhead workers when appropriate"
+      precautions: "Avoid if experiencing acute shoulder pain or impingement symptoms",
+      sets: "2-3",
+      repetitions: "10-12"
     },
     {
-      name: "Modified Turkish Get-up Progression",
+      title: "Modified Turkish Get-up Progression",
       description: "Modified version of Turkish get-up to integrate shoulder control with whole body movement.",
       bodyPart: "shoulder",
       difficulty: "advanced",
       instructions: "1. Begin lying supine with arm extended upward\n2. Progress through positions: elbow prop, hand prop, bridge\n3. Maintain shoulder stability throughout\n4. Initially use no weight, progress to light weight when appropriate\n5. Perform 3-5 repetitions each side",
       targetMuscles: "Rotator cuff, deltoid, core, hip stabilizers",
       imageUrl: "/exercises/jo-gibson-turkish-getup.jpg",
-      evidence: "Integrates shoulder control with whole-body movement in multiple planes",
-      clinicalNotes: "Jo Gibson uses this modified progression for comprehensive functional training"
+      precautions: "Start without weights and progress slowly; avoid with acute pain",
+      repetitions: "3-5 each side",
+      sets: "2-3"
     },
     {
       name: "Rhythmic Stabilization in Athletic Position",

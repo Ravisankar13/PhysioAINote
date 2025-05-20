@@ -150,36 +150,30 @@ export function getJoGibsonShoulderExercises(): InsertExercise[] {
     // Motor Control Exercises - Beginner
     {
       title: "Scapular Setting in Supported Position",
-      description: "Gently set shoulders back and down while supported, focusing on quality of movement rather than strength.",
+      description: "Gently set shoulders back and down while supported, focusing on quality of movement rather than strength. Improves neuromuscular control of scapula which is essential for optimal shoulder function. Key exercise from Jo Gibson's approach for establishing baseline scapular control.",
       bodyPart: "shoulder",
       difficulty: "beginner",
       instructions: "1. Sit with back supported\n2. Gently draw shoulder blades back and slightly down\n3. Hold for 5 seconds\n4. Relax and repeat 10 times\n5. Focus on quality, not quantity of movement",
       targetMuscles: "Serratus anterior, lower trapezius",
-      imageUrl: "/exercises/jo-gibson-scapular-setting.jpg",
-      evidence: "Improves neuromuscular control of scapula which is essential for optimal shoulder function",
-      clinicalNotes: "Key exercise from Jo Gibson's approach for establishing baseline scapular control"
+      imageUrl: "/exercises/jo-gibson-scapular-setting.jpg"
     },
     {
       title: "Shoulder Clock Exercise",
-      description: "Gentle arm movements tracing small circles on the wall to improve motor control and proprioception.",
+      description: "Gentle arm movements tracing small circles on the wall to improve motor control and proprioception. Improves joint position sense and control in a supported position. Jo Gibson emphasizes this for early rehabilitation to establish movement quality.",
       bodyPart: "shoulder",
       difficulty: "beginner",
       instructions: "1. Stand facing a wall with arm outstretched\n2. Use finger to trace small circles on wall like a clock face\n3. Maintain good posture throughout\n4. Gradually increase circle size as tolerated\n5. Perform for 30-60 seconds",
       targetMuscles: "Rotator cuff, scapular stabilizers",
-      imageUrl: "/exercises/jo-gibson-shoulder-clock.jpg",
-      evidence: "Improves joint position sense and control in a supported position",
-      clinicalNotes: "Jo Gibson emphasizes this for early rehabilitation to establish movement quality"
+      imageUrl: "/exercises/jo-gibson-shoulder-clock.jpg"
     },
     {
       title: "Isometric External Rotation",
-      description: "Gentle static contraction of external rotators with elbow supported to build baseline endurance.",
+      description: "Gentle static contraction of external rotators with elbow supported to build baseline endurance. Isometric contractions can modulate pain while building baseline capacity. Jo Gibson recommends this for early-stage rotator cuff tendinopathy.",
       bodyPart: "shoulder",
       difficulty: "beginner",
       instructions: "1. Sit with elbow supported at side at 90 degrees\n2. Place towel roll between elbow and body\n3. Gently push outward into a fixed surface without moving\n4. Hold for 20-30 seconds\n5. Relax and repeat 3-5 times",
       targetMuscles: "Infraspinatus, teres minor",
-      imageUrl: "/exercises/jo-gibson-isometric-external-rotation.jpg",
-      evidence: "Isometric contractions can modulate pain while building baseline capacity",
-      clinicalNotes: "Jo Gibson recommends this for early-stage rotator cuff tendinopathy"
+      imageUrl: "/exercises/jo-gibson-isometric-external-rotation.jpg"
     },
 
     // Motor Control Exercises - Intermediate
@@ -355,7 +349,7 @@ export const joGibsonResearchArticles = [
     doi: "10.2217/pmt-2021-0001",
     abstract: "This paper examines Jo Gibson's pioneering integration of pain science education into shoulder rehabilitation within a biopsychosocial framework. Recognizing that persistent shoulder pain often involves complex interactions between tissue pathology, pain processing, psychological factors, and social context, Gibson has developed specific approaches to address these dimensions simultaneously. The paper outlines a structured approach to assessing psychological factors impacting shoulder pain including fear-avoidance beliefs, catastrophizing, expectations, and self-efficacy. Gibson's pain education approach includes targeted explanations about pain physiology, tissue sensitivity, and the distinction between tissue damage and pain. Clinical applications include specific education strategies for common shoulder conditions, integration of education with graduated exposure to feared movements, and methods for addressing unhelpful beliefs while building self-efficacy. Evidence demonstrates that this integrated approach results in superior outcomes including greater function, reduced disability, and higher patient satisfaction compared to biomechanical approaches alone. The authors conclude that pain education represents an essential component of effective shoulder rehabilitation, particularly for persistent pain conditions.",
     bodyPart: "shoulder",
-    fullText: "Persistent shoulder pain frequently involves complex interactions between tissue pathology, pain processing, psychological factors, and social context. Jo Gibson has pioneered the integration of contemporary pain science into shoulder rehabilitation to address these dimensions effectively.\n\nThe paper outlines a comprehensive assessment approach that examines psychological and social factors alongside physical examination, including:\n\n• Fear-avoidance beliefs regarding movement and activity\n• Pain catastrophizing and anxiety about symptoms\n• Illness perceptions and causal attributions\n• Expectations about treatment and recovery\n• Self-efficacy for self-management\n• Contextual factors affecting symptom experience\n\nGibson's structured pain education approach includes:\n\n1. Personalized explanation of pain physiology appropriate to the individual\n2. Clear distinction between tissue damage, nociception, and pain experience\n3. Explanation of tissue sensitivity versus tissue damage\n4. Discussion of factors that influence pain beyond tissue pathology\n5. Strategies for reconceptualizing pain during rehabilitation activities\n\nSpecific education strategies are described for common shoulder conditions including:\n\n• Rotator cuff tendinopathy - Explaining tendon adaptation to load versus "wear and tear"\n• Frozen shoulder - Addressing misconceptions about inflammatory processes and tissue damage\n• Post-surgical rehabilitation - Setting realistic expectations and explaining normal healing sensations\n• Shoulder instability - Distinguishing between structural instability and perceived instability due to protective mechanisms\n\nThe education is integrated with graduated exposure to feared movements, monitoring both physical response and cognitive/emotional responses to guide progression. Evidence from randomized controlled trials demonstrates that this integrated approach yields superior outcomes in terms of function, disability reduction, and patient satisfaction compared to biomechanical approaches alone.\n\nThe authors conclude that pain education represents an essential component of effective shoulder rehabilitation, particularly for persistent pain conditions, by addressing the neurophysiological and psychological dimensions of pain that may perpetuate disability beyond tissue healing."
+    fullText: "Persistent shoulder pain frequently involves complex interactions between tissue pathology, pain processing, psychological factors, and social context. Jo Gibson has pioneered the integration of contemporary pain science into shoulder rehabilitation to address these dimensions effectively.\n\nThe paper outlines a comprehensive assessment approach that examines psychological and social factors alongside physical examination, including:\n\n• Fear-avoidance beliefs regarding movement and activity\n• Pain catastrophizing and anxiety about symptoms\n• Illness perceptions and causal attributions\n• Expectations about treatment and recovery\n• Self-efficacy for self-management\n• Contextual factors affecting symptom experience\n\nGibson's structured pain education approach includes:\n\n1. Personalized explanation of pain physiology appropriate to the individual\n2. Clear distinction between tissue damage, nociception, and pain experience\n3. Explanation of tissue sensitivity versus tissue damage\n4. Discussion of factors that influence pain beyond tissue pathology\n5. Strategies for reconceptualizing pain during rehabilitation activities\n\nSpecific education strategies are described for common shoulder conditions including:\n\n• Rotator cuff tendinopathy - Explaining tendon adaptation to load versus tissue wear\n• Frozen shoulder - Addressing misconceptions about inflammatory processes and tissue damage\n• Post-surgical rehabilitation - Setting realistic expectations and explaining normal healing sensations\n• Shoulder instability - Distinguishing between structural instability and perceived instability due to protective mechanisms\n\nThe education is integrated with graduated exposure to feared movements, monitoring both physical response and cognitive/emotional responses to guide progression. Evidence from randomized controlled trials demonstrates that this integrated approach yields superior outcomes in terms of function, disability reduction, and patient satisfaction compared to biomechanical approaches alone.\n\nThe authors conclude that pain education represents an essential component of effective shoulder rehabilitation, particularly for persistent pain conditions, by addressing the neurophysiological and psychological dimensions of pain that may perpetuate disability beyond tissue healing."
   },
   {
     title: "Jo Gibson's Progressive Approach to Post-Surgical Shoulder Rehabilitation",

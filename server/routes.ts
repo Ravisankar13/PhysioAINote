@@ -1504,8 +1504,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log("Using Jo Gibson shoulder approach for patient analysis");
           
           // Import the specialized shoulder analysis module
-          const { analyzeShoulderPatientWithJoGibson } = require('./virtualPatientJoGibson');
-          const joGibsonResult = await analyzeShoulderPatientWithJoGibson(virtualPatient);
+          const { analyzeShoulderPatientJoGibson } = require('./virtualPatientJoGibson');
+          const joGibsonResult = await analyzeShoulderPatientJoGibson(virtualPatient);
           
           // Convert the Jo Gibson specialized format to our standard format
           analysisResult = {

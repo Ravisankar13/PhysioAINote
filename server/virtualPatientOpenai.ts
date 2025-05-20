@@ -229,7 +229,7 @@ export async function findRelevantResearchArticles(
         `mechanism ${primaryDiagnosis}`,
         `etiology ${bodyPart} pain`
       ],
-      joGibsonSpecificArticles,
+      joGibsonSpecificArticles: joGibsonSpecificArticles,
       treatmentApproaches: [
         `manual therapy ${bodyPart}`,
         `exercise therapy ${primaryDiagnosis}`,

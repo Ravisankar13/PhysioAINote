@@ -5,6 +5,7 @@ import { storage } from "./storage";
 import { db } from "./db";
 import { generateSoapNote } from "./openai";
 import { analyzeVirtualPatientCase, findRelevantResearchArticles } from "./virtualPatientOpenai";
+import { analyzeShoulderPatientJoGibson, isShoulderPatient } from "./virtualPatientJoGibson";
 import { generateAICaseStudy, generateDiagnosticFeedback } from "./aiCaseStudyGenerator";
 import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, discussionUpvotes, exercises } from "@shared/schema";
 import { ZodError, z } from "zod";
@@ -1532,20 +1533,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const keywords = analysisResult.recommendedKeywords || [];
       
       // Find relevant research articles based on the diagnosis and related article IDs
-      let relatedArticleIds = [];
       
       // Check if this is a shoulder case that could benefit from Jo Gibson's approach
       const isShoulderCase = virtualPatient.body_part === "shoulder";
+      
+      // Get specialized analysis for shoulder cases using Jo Gibson's approach
+      let joGibsonSpecificArticles = [];
+      if (isShoulderCase) {
+        try {
+          const joGibsonAnalysis = await analyzeShoulderPatientJoGibson(virtualPatient);
+          
+          // Extract the relatedArticleIds from Jo Gibson's specialized analysis
+          if (joGibsonAnalysis && joGibsonAnalysis.relatedArticleIds) {
+            joGibsonSpecificArticles = joGibsonAnalysis.relatedArticleIds;
+          }
+        } catch (error) {
+          console.error("Error getting Jo Gibson shoulder analysis:", error);
+        }
+      }
       
       const searchResults = await findRelevantResearchArticles(
         analysisResult.primaryDiagnosis?.name || "undefined diagnosis",
         differentialDiagnoses,
         virtualPatient.body_part,
-        keywords
+        keywords,
+        joGibsonSpecificArticles
       );
       
       // Get relevant article IDs from the search terms
       const relevantArticleIds = searchResults?.searchTerms || [];
+      
+      // Include Jo Gibson's specialized shoulder articles if available
+      const joGibsonArticles = searchResults?.joGibsonSpecificArticles || [];
       
       // Include assessment tests in the patient data
       // First, modify the virtual patient schema to include assessment tests
@@ -1553,7 +1572,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         diagnosis: analysisResult.primaryDiagnosis?.name || "Unknown diagnosis",
         differentialDiagnosis: analysisResult.differentialDiagnoses || [],
         treatmentOptions: analysisResult.treatmentOptions || [],
-        relatedArticleIds: relevantArticleIds,
+        relatedArticleIds: [...relevantArticleIds, ...joGibsonArticles],
         // Store assessment tests directly in the differential diagnosis object for now
         // since we don't have a dedicated field in the database
         assessmentTests: analysisResult.assessmentTests || []

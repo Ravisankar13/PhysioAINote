@@ -1534,17 +1534,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Find relevant research articles based on the diagnosis and related article IDs
       let relatedArticleIds = [];
       
-      // Check if we have pre-defined related article IDs from Jo Gibson's approach
-      if (joGibsonResult && joGibsonResult.relatedArticleIds) {
-        relatedArticleIds = joGibsonResult.relatedArticleIds;
-      }
+      // Check if this is a shoulder case that could benefit from Jo Gibson's approach
+      const isShoulderCase = virtualPatient.body_part === "shoulder";
       
       const searchResults = await findRelevantResearchArticles(
         analysisResult.primaryDiagnosis?.name || "undefined diagnosis",
         differentialDiagnoses,
         virtualPatient.body_part,
-        keywords,
-        relatedArticleIds
+        keywords
       );
       
       // Get relevant article IDs from the search terms

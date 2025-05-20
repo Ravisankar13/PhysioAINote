@@ -131,7 +131,8 @@ export async function findRelevantResearchArticles(
   primaryDiagnosis: string,
   differentialDiagnoses: string[],
   bodyPart: string,
-  keywords: string[]
+  keywords: string[],
+  relatedArticleIds: string[] = []
 ): Promise<{
   searchTerms: string[];
   strategy: string;
@@ -139,6 +140,7 @@ export async function findRelevantResearchArticles(
   pathoPhysiologicalTerms: string[];
   treatmentApproaches: string[];
   relevanceWeights: {[key: string]: number};
+  joGibsonSpecificArticles?: string[];
 }> {
   try {
     const prompt = `
@@ -210,18 +212,24 @@ export async function findRelevantResearchArticles(
     };
     
     // Enhanced fallback with expert information
+    // Add Jo Gibson's specialized shoulder approach if available
+    const joGibsonSpecificArticles = bodyPart === "shoulder" && relatedArticleIds.length > 0 
+      ? relatedArticleIds 
+      : undefined;
+      
     return {
       searchTerms: [primaryDiagnosis, bodyPart, ...keywords.slice(0, 5)],
       expertTerms: [
         `${bodyPartInfo.expert1} ${bodyPart}`, 
         `${bodyPartInfo.expert2} ${bodyPart}`,
-        `${bodyPartInfo.expert3} ${primaryDiagnosis}`
+        bodyPart === "shoulder" ? "Jo Gibson shoulder approach" : `${bodyPartInfo.expert3} ${primaryDiagnosis}`
       ],
       pathoPhysiologicalTerms: [
         `pathophysiology ${primaryDiagnosis}`,
         `mechanism ${primaryDiagnosis}`,
         `etiology ${bodyPart} pain`
       ],
+      joGibsonSpecificArticles,
       treatmentApproaches: [
         `manual therapy ${bodyPart}`,
         `exercise therapy ${primaryDiagnosis}`,

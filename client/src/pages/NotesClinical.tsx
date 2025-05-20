@@ -8,6 +8,7 @@ import { FaBars, FaEdit, FaCheck, FaTimes } from "react-icons/fa";
 import TranscriptionTable from "../components/notes-clinical/Transcription";
 import PatientDataForm from "../components/notes-clinical/PatientDataForm";
 import SoapNote from "../components/notes-clinical/SoapSection";
+import { SimpleRecorder } from "../components/notes/SimpleRecorder";
 
 // Define TypeScript interfaces
 interface PatientData {
@@ -856,11 +857,37 @@ function NotesClinical(): React.ReactElement {
                 <input 
                   type="hidden" 
                   id="hidden-session-id" 
-                  value={selectedSession?.id || newSessionId || ''} 
+                  value={selectedSession || ''} 
                 />
                 
-                {/* Use the SimpleRecorder component for better recording capabilities */}
-                <SimpleRecorder onRecordingComplete={handleTranscriptionComplete} />
+                {/* Using the recording component with fix for session association */}
+                <div className="recorder-container">
+                  <SimpleRecorder onRecordingComplete={(audioBlob, result) => {
+                    setUploadingAudio(false);
+                    console.log("Recording complete!", result);
+                    
+                    // Handle transcription results
+                    if (result && result.transcription) {
+                      // Add the new transcription to the transcript display
+                      const newTranscript = {
+                        timestamp: new Date().toISOString(),
+                        content: result.transcription
+                      };
+                      
+                      // Update the transcript display
+                      setTranscription(result.transcription);
+                      
+                      // Update SOAP form with AI-generated content if available
+                      if (result.soapNote) {
+                        // Update the main SOAP fields
+                        setSubjective(result.soapNote.subjective || "");
+                        setObjective(result.soapNote.objective || "");
+                        setAssessment(result.soapNote.assessment || "");
+                        setPlan(result.soapNote.plan || "");
+                      }
+                    }
+                  }} />
+                </div>
                 
                 {/* Legacy UI elements kept for design consistency */}
                 <div className="recording-status">

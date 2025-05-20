@@ -96,70 +96,58 @@ function NotesClinical(): React.ReactElement {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const handleLogin = async () => {
+    // Check if the user is logged in
+    const checkUserAuth = async () => {
       try {
-        const response = await fetch(
-          "https://hqy44mb8l7.execute-api.us-east-2.amazonaws.com/dev/get-auth-token",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ username: "anup", password: "anup123" }),
-          }
-        );
-
-        if (!response.ok) {
-          throw new Error("Login failed");
-        }
-
-        const data = await response.json();
-        const token = data.token;
-        const userId = data.user_id;
-        if (token) {
-          setJwtToken(token);
-          setUserId(userId);
+        const response = await fetch('/api/user');
+        
+        if (response.ok) {
+          const userData = await response.json();
+          setUserId(userData.id.toString());
           setIsLoading(false);
         } else {
-          console.error("Token not found in response");
+          console.error("Not authenticated, redirecting to login");
+          navigate('/auth');
         }
       } catch (error) {
-        console.error("Error during login:", error);
+        console.error("Error checking authentication:", error);
+        navigate('/auth');
       }
     };
-    handleLogin();
-  }, []);
+    
+    checkUserAuth();
+  }, [navigate]);
 
-  const fetchSessions = async (lastKey?: string) => {
+  const fetchSessions = async () => {
+    if (!userId) return;
+    
     try {
-      let url = `https://hqy44mb8l7.execute-api.us-east-2.amazonaws.com/dev/session/get-all`;
-      // if (lastKey)
-      //   url = `https://hqy44mb8l7.execute-api.us-east-2.amazonaws.com/dev/session/get-all?limit=${limit}&last_key=${lastKey}`
-
-      const response = await fetch(url, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${jwtToken}`,
-          "Content-Type": "application/json",
-        },
-      });
+      // Use our local API endpoint for sessions that properly filters by user ID
+      const response = await fetch('/api/sessions');
 
       if (response.ok) {
-        const data = await response.json();
+        const sessions_list = await response.json();
+        
+        // Define session type
+        interface FormattedSession {
+          id: string;
+          name: string;
+          user_id: string;
+        }
+        
+        // Format the sessions for our component
+        const formattedSessions: FormattedSession[] = sessions_list.map((session: any) => ({
+          id: session.id.toString(),
+          name: session.sessionName,
+          user_id: session.userId.toString(),
+        }));
 
-        const sessions_list = data.sessions;
-        // Assuming data is a list of session objects
-        const formattedSessions = sessions_list.map(
-          (session: any, index: number) => ({
-            id: session.session_id ? session.session_id : session.pk,
-            name: session.session_name,
-            user_id: session.user_id,
-          })
+        // Only set sessions that belong to the current user
+        const userSessions = formattedSessions.filter(
+          (session: FormattedSession) => session.user_id === userId
         );
-
-        setLastKey(data.last_key);
-
-        setSessions(formattedSessions);
+        
+        setSessions(userSessions);
       } else {
         console.error("Failed to fetch sessions:", response.statusText);
       }
@@ -169,7 +157,7 @@ function NotesClinical(): React.ReactElement {
   };
 
   useEffect(() => {
-    if (jwtToken) {
+    if (userId) {
       fetchSessions();
 
       // Reset the editingSessionSaved state if it was true
@@ -177,7 +165,7 @@ function NotesClinical(): React.ReactElement {
         setEditingSessionSaved(false);
       }
     }
-  }, [jwtToken, editingSessionSaved]);
+  }, [userId, editingSessionSaved]);
 
   const toggleSidebar = (): void => {
     setIsCollapsed((prev) => !prev);
@@ -203,16 +191,15 @@ function NotesClinical(): React.ReactElement {
         newSessionName = editedSessionName;
       }
 
-      await axios.put(
-        `https://hqy44mb8l7.execute-api.us-east-2.amazonaws.com/dev/session/update?id=${sessionId}`,
-        { session_name: newSessionName },
-        {
-          headers: {
-            Authorization: `Bearer ${jwtToken}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      // Use our local API endpoint for updating sessions
+      await fetch(`/api/sessions/${sessionId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ sessionName: newSessionName })
+      });
+      
       // Update the local state or trigger a refetch of sessions
       setEditingSessionId(null);
       setEditingSessionSaved(true);
@@ -226,49 +213,53 @@ function NotesClinical(): React.ReactElement {
     setShowNewSession(true);
 
     try {
-      const response = await fetch(
-        `https://hqy44mb8l7.execute-api.us-east-2.amazonaws.com/dev/session/get?id=${sessionId}`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${jwtToken}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      // Use our local API endpoint for getting session details
+      const response = await fetch(`/api/sessions/${sessionId}`);
 
       if (response.ok) {
-        const data = await response.json();
+        const session = await response.json();
 
         // Map response data to patientData structure
         setPatientData({
-          firstname: data.firstname || "",
-          middlename: data.middlename || "",
-          lastname: data.lastname || "",
-          gender: data.gender || "",
-          dob: data.dob || "",
-          weight: data.weight || "",
-          height_feet: data.height_feet || "",
-          height_inch: data.height_inch || "",
-          pastMedicalHistory: data.pastMedicalHistory || "",
-          pastSurgicalHistory: data.pastSurgicalHistory || "",
+          firstname: session.firstName || "",
+          middlename: session.middleName || "",
+          lastname: session.lastName || "",
+          gender: session.gender || "",
+          dob: session.dob || "",
+          weight: session.weight || "",
+          height_feet: session.heightFeet || "",
+          height_inch: session.heightInch || "",
+          pastMedicalHistory: session.pastMedicalHistory || "",
+          pastSurgicalHistory: session.pastSurgicalHistory || "",
         });
 
-        setTranscriptPreSIgnedURL(data.transcript_presigned_url);
+        // Set transcript URL if available
+        if (session.transcriptUrl) {
+          setTranscriptPreSIgnedURL(session.transcriptUrl);
+          setShowTranscript(true);
+        }
+
+        // Process SOAP note if available
         let soapNoteResponse: SoapNoteData | false = false;
-        if (data?.soap_note?.subjective) {
-          soapNoteResponse = data.soap_note as SoapNoteData;
-        } else {
-          let parsedNote = data?.soap_note;
-          parsedNote = parsedNote ? JSON.parse(parsedNote) : false;
-          soapNoteResponse = parsedNote;
+        if (session.soapNote) {
+          if (typeof session.soapNote === 'string') {
+            try {
+              soapNoteResponse = JSON.parse(session.soapNote) as SoapNoteData;
+            } catch (e) {
+              console.error("Error parsing SOAP note:", e);
+              soapNoteResponse = false;
+            }
+          } else {
+            soapNoteResponse = session.soapNote as SoapNoteData;
+          }
+
+          if (soapNoteResponse) {
+            setSoapNote(soapNoteResponse);
+            setShowCopyButton(true);
+          }
         }
-        setSoapNote(soapNoteResponse);
-        if (soapNoteResponse) {
-          setShowCopyButton(true);
-        }
-        setShowTranscript(true);
-        setSessionId(data.session_id ? data.session_id : data.pk);
+        
+        setSessionId(session.id.toString());
       } else {
         console.error("Failed to fetch session data:", response.statusText);
       }

@@ -326,9 +326,9 @@ const SoapForm = ({ onNoteGenerated }: SoapFormProps) => {
     <Card className="bg-white">
       <CardContent className="p-6 sm:p-10">
         <div className="space-y-6">
-          <div className="pb-5 border-b-2 border-primary/30">
-            <h3 className="text-xl leading-6 font-semibold text-primary">Patient Information</h3>
-            <p className="mt-2 max-w-4xl text-sm text-primary/70">
+          <div className="pb-5 border-b-2 border-[#00bff3]/30">
+            <h3 className="text-xl leading-6 font-semibold text-[#00bff3]">Patient Information</h3>
+            <p className="mt-2 max-w-4xl text-sm text-[#00bff3]/70">
               Enter patient details and clinical information to generate comprehensive clinical notes. Use the voice recording 
               feature to automatically transcribe and analyze your clinical sessions.
             </p>
@@ -406,12 +406,12 @@ const SoapForm = ({ onNoteGenerated }: SoapFormProps) => {
 
                 {/* Voice Recording Section */}
                 <div className="mb-6 w-full">
-                  <div className="mb-4 p-5 bg-primary/20 border-2 border-primary/30 rounded-lg shadow-md">
-                    <h4 className="text-primary font-semibold text-lg mb-2">Record Your Clinical Notes</h4>
-                    <p className="text-sm text-primary/80">
+                  <div className="mb-4 p-5 bg-[#00bff3]/20 border-2 border-[#00bff3]/30 rounded-lg shadow-md">
+                    <h4 className="text-[#00bff3] font-semibold text-lg mb-2">Record Your Clinical Notes</h4>
+                    <p className="text-sm text-[#00bff3]/80">
                       Use the microphone button below to record your clinical session. Our AI will:
                     </p>
-                    <ul className="text-sm text-primary/80 list-disc pl-5 mt-2">
+                    <ul className="text-sm text-[#00bff3]/80 list-disc pl-5 mt-2">
                       <li>Transcribe your voice recording</li>
                       <li>Extract key clinical information</li>
                       <li>Organize findings into a structured SOAP format</li>
@@ -423,16 +423,16 @@ const SoapForm = ({ onNoteGenerated }: SoapFormProps) => {
 
                 <div className="space-y-2 mt-6">
                   <div className="flex justify-between items-center">
-                    <h3 className="text-xl font-semibold text-primary">Generated Clinical Notes</h3>
+                    <h3 className="text-xl font-semibold text-[#00bff3]">Generated Clinical Notes</h3>
                     {isLoading && (
                       <div className="flex items-center">
-                        <div className="animate-spin h-5 w-5 mr-2 border-2 border-primary border-t-transparent rounded-full"></div>
-                        <span className="text-sm text-primary font-medium">Generating...</span>
+                        <div className="animate-spin h-5 w-5 mr-2 border-2 border-[#00bff3] border-t-transparent rounded-full"></div>
+                        <span className="text-sm text-[#00bff3] font-medium">Generating...</span>
                       </div>
                     )}
                   </div>
                   
-                  <div className="bg-white border-2 border-primary/20 rounded-md p-4 min-h-[400px] shadow-md">
+                  <div className="bg-white border-2 border-[#00bff3]/20 rounded-md p-4 min-h-[400px] shadow-md">
                     {/* Combined notes display area */}
                     <div className="space-y-4">
                       {/* Display combined SOAP note content - key is used for forcing re-render */}
@@ -520,7 +520,7 @@ const SoapForm = ({ onNoteGenerated }: SoapFormProps) => {
                   <Button
                     type="button"
                     variant="outline"
-                    className="border-2 border-primary/30 hover:bg-primary/10 text-primary font-medium px-5 py-2"
+                    className="border-2 border-[#00bff3]/50 hover:bg-[#00bff3]/10 text-[#00bff3] font-medium px-5 py-2"
                     onClick={handleReset}
                     disabled={isLoading}
                   >
@@ -528,7 +528,7 @@ const SoapForm = ({ onNoteGenerated }: SoapFormProps) => {
                   </Button>
                   <Button 
                     type="submit" 
-                    className="bg-primary hover:bg-primary/90 text-white font-semibold shadow-md px-5 py-2" 
+                    className="bg-[#00bff3] hover:bg-[#00bff3]/90 text-white font-semibold shadow-md px-5 py-2" 
                     disabled={isLoading}
                   >
                     {isLoading ? "Generating..." : "Generate SOAP Note"}

@@ -44,13 +44,38 @@ export async function analyzeShoulderPatientJoGibson(patient: VirtualPatient) {
     let analysisResult;
     try {
       analysisResult = JSON.parse(response.choices[0].message.content!);
+      
+      // Ensure fields exist and are properly structured
+      if (!analysisResult.differentialDiagnosis) {
+        analysisResult.differentialDiagnosis = [];
+      }
+      
+      if (!analysisResult.treatmentOptions) {
+        analysisResult.treatmentOptions = {
+          immediateInterventions: [],
+          rehabilitationProgression: [],
+          exercisePrescription: [],
+          educationPoints: [],
+          expectedOutcomes: []
+        };
+      }
+      
+      if (!analysisResult.assessmentTests) {
+        analysisResult.assessmentTests = [];
+      }
     } catch (parseError) {
       console.error("Error parsing Jo Gibson analysis response:", parseError);
       // Use a simplified format if parsing fails, but still proceed
       analysisResult = {
         diagnosis: "Shoulder condition requiring Jo Gibson's approach",
         differentialDiagnosis: [],
-        treatmentOptions: [],
+        treatmentOptions: {
+          immediateInterventions: [],
+          rehabilitationProgression: [],
+          exercisePrescription: [],
+          educationPoints: [],
+          expectedOutcomes: []
+        },
         assessmentTests: []
       };
     }
@@ -65,11 +90,17 @@ export async function analyzeShoulderPatientJoGibson(patient: VirtualPatient) {
     // Enhanced return object with more Jo Gibson-specific content
     return {
       diagnosis: analysisResult.diagnosis,
-      differentialDiagnosis: analysisResult.differentialDiagnosis,
-      treatmentOptions: analysisResult.treatmentOptions,
+      differentialDiagnosis: analysisResult.differentialDiagnosis || [],
+      treatmentOptions: analysisResult.treatmentOptions || {
+        immediateInterventions: [],
+        rehabilitationProgression: [],
+        exercisePrescription: [],
+        educationPoints: [],
+        expectedOutcomes: []
+      },
       joGibsonSpecificApproach: true, // Always true when using this function
-      assessmentTests: analysisResult.assessmentTests,
-      relatedArticleIds: relatedArticleIds,
+      assessmentTests: analysisResult.assessmentTests || [],
+      relatedArticleIds: relatedArticleIds || [],
       joGibsonMethodology: {
         approachName: "Jo Gibson Shoulder Rehabilitation",
         keyPrinciples: joGibsonTreatmentPrinciples.slice(0, 5),
@@ -294,6 +325,21 @@ async function generateShoulderResearchSearchTerms(
  * @returns Comprehensive analysis using Jo Gibson shoulder rehabilitation principles
  */
 function createFallbackShoulderAnalysis(patient: VirtualPatient): any {
+  // Default structure to ensure consistent output
+  const defaultAnalysis = {
+    diagnosis: "Shoulder condition requiring specialized rehabilitation",
+    differentialDiagnosis: [],
+    treatmentOptions: {
+      immediateInterventions: [],
+      rehabilitationProgression: [],
+      exercisePrescription: [],
+      educationPoints: [],
+      expectedOutcomes: []
+    },
+    assessmentTests: [],
+    relatedArticleIds: [],
+    joGibsonSpecificApproach: true
+  };
   // Extract key symptoms from all patient information for comprehensive analysis
   const patientText = `${patient.chief_complaint || ""} ${patient.symptoms_description || ""} ${patient.past_medical_history || ""}`.toLowerCase();
 

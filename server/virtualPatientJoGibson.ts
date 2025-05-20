@@ -81,7 +81,7 @@ PATIENT INFORMATION:
 - Symptoms Description: ${patient.symptoms_description}
 - Medical History: ${patient.past_medical_history || "None reported"}
 - Body Part: ${patient.body_part || "shoulder"}
-${patient.objective_findings ? `- Objective Findings: ${JSON.stringify(patient.objective_findings)}` : ""}
+- Additional Description: ${patient.symptoms_description}
 `;
 
   // Include Jo Gibson's key assessment principles
@@ -295,7 +295,7 @@ function createFallbackShoulderAnalysis(patient: VirtualPatient): any {
     .filter(ex => ex.difficulty === "beginner" || ex.difficulty === "intermediate")
     .slice(0, 3)
     .map(ex => ({
-      name: ex.name,
+      name: ex.title,
       purpose: ex.description,
       technique: ex.instructions,
       progression: "Progress as tolerated following Jo Gibson's optimal loading principles"

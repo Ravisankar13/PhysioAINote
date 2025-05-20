@@ -1536,7 +1536,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const searchResults = await findRelevantResearchArticles(
         analysisResult.primaryDiagnosis?.name || "undefined diagnosis",
         differentialDiagnoses,
-        virtualPatient.bodyPart,
+        virtualPatient.body_part,
         keywords
       );
       

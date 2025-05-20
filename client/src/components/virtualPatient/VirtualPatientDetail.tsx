@@ -361,69 +361,29 @@ export default function VirtualPatientDetail({
                   Symptoms Description
                 </h3>
                 <p className="text-sm leading-relaxed">
-                  {patient.symptomsDescription}
+                  {patient.symptoms}
                 </p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {patient.pastMedicalHistory && (
+                {patient.medicalHistory && (
                   <div>
                     <h3 className="text-md font-semibold mb-1">
-                      Past Medical History
+                      Medical History
                     </h3>
                     <p className="text-sm leading-relaxed">
-                      {patient.pastMedicalHistory}
+                      {patient.medicalHistory}
                     </p>
                   </div>
                 )}
 
-                {patient.pastSurgicalHistory && (
+                {patient.assessment && (
                   <div>
                     <h3 className="text-md font-semibold mb-1">
-                      Past Surgical History
+                      Assessment Information
                     </h3>
                     <p className="text-sm leading-relaxed">
-                      {patient.pastSurgicalHistory}
-                    </p>
-                  </div>
-                )}
-
-                {patient.socialHistory && (
-                  <div>
-                    <h3 className="text-md font-semibold mb-1">
-                      Social History
-                    </h3>
-                    <p className="text-sm leading-relaxed">
-                      {patient.socialHistory}
-                    </p>
-                  </div>
-                )}
-
-                {patient.familyHistory && (
-                  <div>
-                    <h3 className="text-md font-semibold mb-1">
-                      Family History
-                    </h3>
-                    <p className="text-sm leading-relaxed">
-                      {patient.familyHistory}
-                    </p>
-                  </div>
-                )}
-
-                {patient.medications && (
-                  <div>
-                    <h3 className="text-md font-semibold mb-1">Medications</h3>
-                    <p className="text-sm leading-relaxed">
-                      {patient.medications}
-                    </p>
-                  </div>
-                )}
-
-                {patient.allergies && (
-                  <div>
-                    <h3 className="text-md font-semibold mb-1">Allergies</h3>
-                    <p className="text-sm leading-relaxed">
-                      {patient.allergies}
+                      {patient.assessment}
                     </p>
                   </div>
                 )}

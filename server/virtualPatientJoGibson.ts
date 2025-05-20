@@ -270,7 +270,7 @@ async function generateShoulderResearchSearchTerms(
  */
 function createFallbackShoulderAnalysis(patient: VirtualPatient): any {
   // Extract key symptoms from all patient information for comprehensive analysis
-  const patientText = `${patient.chief_complaint || ""} ${patient.symptoms_description || ""} ${patient.past_medical_history || ""} ${patient.objective_findings || ""}`.toLowerCase();
+  const patientText = `${patient.chief_complaint || ""} ${patient.symptoms_description || ""} ${patient.past_medical_history || ""}`.toLowerCase();
 
   // Define enhanced condition detection using Jo Gibson's specialized approach
   const symptomConditionMappings = [
@@ -301,43 +301,145 @@ function createFallbackShoulderAnalysis(patient: VirtualPatient): any {
       ],
       exerciseTypes: ["gentle stretching", "pendulum", "pain-free mobility"]
     },
-  } else if (symptomsLower.includes("unstable") || symptomsLower.includes("dislocation") || complaintLower.includes("instability")) {
-    likelyCondition = "Shoulder instability";
+    { 
+      condition: "Shoulder Instability", 
+      keywords: ["instability", "dislocate", "unstable", "subluxation", "loose", "give way", "apprehension", "slipping", "falling out", "giving out"],
+      tests: [
+        { name: "Apprehension test", purpose: "Assess for anterior instability", technique: "Abduct and externally rotate arm while applying gentle anterior pressure", interpretation: "Apprehension or guarding suggests instability" },
+        { name: "Sulcus sign", purpose: "Assess for inferior instability", technique: "Apply downward traction on arm in neutral position", interpretation: "Visible sulcus below acromion indicates inferior laxity" },
+        { name: "Load and shift test", purpose: "Assess glenohumeral laxity", technique: "Stabilize scapula while applying anterior/posterior force to humeral head", interpretation: "Excessive translation indicates instability" }
+      ],
+      differentials: [
+        { condition: "Multidirectional instability", likelihood: "40%", rationale: "Common in young, hypermobile patients" },
+        { condition: "SLAP lesion", likelihood: "25%", rationale: "Can present with sensations of instability and clicking" }
+      ],
+      exerciseTypes: ["proprioception", "rotator cuff", "closed chain", "rhythmic stabilization"]
+    },
+    { 
+      condition: "Scapular Dyskinesis", 
+      keywords: ["scapular winging", "dyskinesis", "abnormal movement", "scapulothoracic", "posture", "dropping shoulder", "scapular control"],
+      tests: [
+        { name: "Scapular assistance test", purpose: "Assess impact of proper scapular positioning", technique: "Manually assist scapular upward rotation during arm elevation", interpretation: "Improved symptoms with assistance suggests scapular role" },
+        { name: "Scapular retraction test", purpose: "Assess scapular control and stability", technique: "Actively retract scapulae against resistance", interpretation: "Asymmetry or weakness indicates scapular muscle dysfunction" }
+      ],
+      differentials: [
+        { condition: "Long thoracic nerve palsy", likelihood: "20%", rationale: "Causes medial scapular winging due to serratus anterior weakness" },
+        { condition: "Trapezius dysfunction", likelihood: "30%", rationale: "Often presents with altered scapular positioning and movement" }
+      ],
+      exerciseTypes: ["scapular control", "serratus anterior", "trapezius", "postural correction"]
+    }
+  ];
+  
+  // Determine most likely condition based on keyword matching
+  let bestMatch = { condition: "Non-specific shoulder pain", matchCount: 0 };
+  let differentials: Array<{condition: string, likelihood: string, rationale: string}> = [];
+  let assessmentTests: Array<{name: string, purpose: string, technique: string, interpretation: string}> = [];
+  let recommendedExerciseTypes: string[] = [];
+  
+  // Find best matching condition
+  symptomConditionMappings.forEach(mapping => {
+    const matchCount = mapping.keywords.filter(keyword => patientText.includes(keyword)).length;
+    if (matchCount > bestMatch.matchCount) {
+      bestMatch = { condition: mapping.condition, matchCount };
+      differentials = mapping.differentials || [];
+      assessmentTests = mapping.tests || [];
+      recommendedExerciseTypes = mapping.exerciseTypes || [];
+    }
+  });
+  
+  // If no good match, use default values
+  if (bestMatch.matchCount === 0) {
     differentials = [
-      { condition: "SLAP lesion", likelihood: "20%", rationale: "Can cause sense of instability with overhead activities" },
-      { condition: "Scapular dyskinesis", likelihood: "35%", rationale: "Poor scapular control can create sensation of instability" }
+      { condition: "Rotator cuff tendinopathy", likelihood: "30%", rationale: "Common cause of shoulder pain" },
+      { condition: "Subacromial pain syndrome", likelihood: "25%", rationale: "Frequently presents with pain in shoulder region" }
     ];
     assessmentTests = [
-      { name: "Apprehension test", purpose: "Assess anterior instability", technique: "Abduction and external rotation with anterior pressure", interpretation: "Apprehension or guarding suggests instability" },
-      { name: "Relocation test", purpose: "Confirm instability versus impingement", technique: "Apply posterior pressure during apprehension test", interpretation: "Relief of apprehension suggests instability" }
+      { name: "Empty can test", purpose: "Assess supraspinatus involvement", technique: "Arms at 90° in scapular plane, thumbs down, resist downward pressure", interpretation: "Pain or weakness suggests supraspinatus pathology" },
+      { name: "Hawkins-Kennedy test", purpose: "Assess for subacromial impingement", technique: "Flex shoulder and elbow to 90°, then internally rotate", interpretation: "Pain suggests impingement" }
     ];
+    recommendedExerciseTypes = ["rotator cuff", "scapular control", "gentle mobility"];
   }
-
-  // Extract Jo Gibson principles most relevant to the condition
-  const relevantAssessmentPrinciples = joGibsonAssessmentPrinciples
-    .slice(0, 3)
-    .map(p => `${p.title}: ${p.description}`);
-    
-  const relevantTreatmentPrinciples = joGibsonTreatmentPrinciples
-    .slice(0, 3)
-    .map(p => `${p.title}: ${p.description}`);
-
-  // Select relevant condition approach if available
-  const conditionMatch = joGibsonConditionApproaches.find(c => 
-    c.condition.toLowerCase().includes(likelyCondition.toLowerCase().split(" ")[0]) ||
-    likelyCondition.toLowerCase().includes(c.condition.toLowerCase().split(" ")[0])
-  );
-
-  // Select appropriate exercises from Jo Gibson's approach
-  const relevantExercises = getJoGibsonShoulderExercises()
-    .filter(ex => ex.difficulty === "beginner" || ex.difficulty === "intermediate")
+  
+  // Select Jo Gibson exercises specifically for the identified condition
+  const allExercises = getJoGibsonShoulderExercises();
+  
+  // Filter exercises based on condition-specific types and beginner level
+  const conditionSpecificExercises = allExercises
+    .filter(ex => {
+      // Match exercise to condition needs based on description and target muscles
+      const exerciseText = `${ex.title} ${ex.description} ${ex.targetMuscles}`.toLowerCase();
+      return ex.bodyPart === "shoulder" && 
+             ex.difficulty === "beginner" && 
+             recommendedExerciseTypes.some(type => exerciseText.includes(type.toLowerCase()));
+    })
     .slice(0, 3)
     .map(ex => ({
       name: ex.title,
-      purpose: ex.description,
+      purpose: ex.targetMuscles,
       technique: ex.instructions,
-      progression: "Progress as tolerated following Jo Gibson's optimal loading principles"
+      progression: "Progress following Jo Gibson's optimal loading principles"
     }));
+  
+  // Add intermediate exercises for progression
+  const progressionExercises = allExercises
+    .filter(ex => {
+      const exerciseText = `${ex.title} ${ex.description} ${ex.targetMuscles}`.toLowerCase();
+      return ex.bodyPart === "shoulder" && 
+             ex.difficulty === "intermediate" && 
+             recommendedExerciseTypes.some(type => exerciseText.includes(type.toLowerCase()));
+    })
+    .slice(0, 2)
+    .map(ex => ({
+      name: ex.title,
+      purpose: ex.targetMuscles,
+      technique: ex.instructions,
+      progression: "Advance to this after mastering initial exercises"
+    }));
+
+  // Get Jo Gibson treatment principles specific to the condition
+  const conditionApproach = joGibsonConditionApproaches.find(
+    approach => approach.condition === bestMatch.condition
+  );
+  
+  const immediateInterventions = conditionApproach ? 
+    conditionApproach.keyPrinciples.slice(0, 3) : 
+    [
+      "Pain management following Jo Gibson's optimal loading principles",
+      "Education about condition and expected recovery",
+      "Initial movement within pain limits to maintain tissue health"
+    ];
+
+  return {
+    diagnosis: bestMatch.condition,
+    differentialDiagnosis: differentials as Array<{condition: string, likelihood: string, rationale: string}>,
+    assessmentTests: assessmentTests as Array<{name: string, purpose: string, technique: string, interpretation: string}>,
+    treatmentOptions: {
+      immediateInterventions: immediateInterventions,
+      rehabilitationProgression: [
+        "Establish quality movement in supported positions",
+        "Progress to unsupported functional movements",
+        "Add resistance only after quality movement is established"
+      ],
+      recommendedExercises: [...conditionSpecificExercises, ...progressionExercises],
+      manualTherapyApproaches: [
+        "Soft tissue techniques focusing on infraspinatus, teres minor and posterior rotator cuff",
+        "Grade 1-2 oscillatory joint mobilizations for pain relief if appropriate",
+        "Gentle scapular mobilization to improve position and control"
+      ],
+      progressionCriteria: [
+        "Improved movement quality before adding load",
+        "Manageable pain response after exercise (no prolonged symptom aggravation)",
+        "Increasing functional capacity in daily activities"
+      ]
+    },
+    references: [
+      "Gibson J. (2020). Optimal loading in shoulder rehabilitation.",
+      "Lewis J. (2016). Rotator cuff related shoulder pain: Assessment, management and uncertainties.",
+      "Gibson J, & Lewis J. (2023). Contemporary management of shoulder pain: the burden of uncertainty and how to guide clinicians.",
+      "Littlewood C, Malliaras P, Bateman M, Stace R, May S, & Walters S. (2019). The central nervous system – An additional consideration in 'rotator cuff tendinopathy' and a potential basis for understanding response to loaded therapeutic exercise."
+    ]
+  };
+}
 
   return {
     diagnosis: likelyCondition,

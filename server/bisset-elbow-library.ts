@@ -346,7 +346,7 @@ export function getBissetElbowExercises(): InsertExercise[] {
       bodyPart: "elbow",
       exerciseType: "isometric",
       difficulty: "beginner",
-      equipment: ["table or countertop"],
+      targetMuscles: "Wrist extensors, especially extensor carpi radialis brevis",
       description: "Evidence-based isometric exercise for lateral elbow tendinopathy based on Bisset's approach, designed to provide immediate pain relief and initiate tendon loading.",
       instructions: "Sit with forearm supported on table, wrist at edge, palm down. Place opposite hand on top of the affected hand. Generate isometric wrist extension by attempting to extend wrist against resistance of top hand (no actual movement occurs). Gradually build to 70% of maximum effort. Hold contraction for prescribed time, then relax. Monitor pain during and after exercise – should remain below 3/10 discomfort.",
       repetitions: "5 repetitions with 30-45 second holds",

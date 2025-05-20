@@ -1747,12 +1747,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         searchResults.joGibsonSpecificArticles : [];
         
       // Include Alison Grimaldi's specialized hip articles if available
-      const grimaldiArticles = virtualPatient.body_part === "hip" && searchResults?.specializedArticles ? 
-        searchResults.specializedArticles.filter(a => grimaldiSpecificArticles.includes(a.id.toString())) : [];
+      let grimaldiArticles = [];
+      if (virtualPatient.body_part === "hip") {
+        const grimaldiArticleIds = await storage.getResearchArticlesByBodyPart("hip", 1, 20);
+        grimaldiArticles = grimaldiArticleIds.articles.filter(a => 
+          a.title.includes("hip") || a.title.includes("gluteal") || 
+          a.abstract.includes("Grimaldi") || a.authors.includes("Grimaldi"));
+      }
         
       // Include Leanne Bisset's specialized elbow articles if available
-      const bissetArticles = virtualPatient.body_part === "elbow" && searchResults?.specializedArticles ? 
-        searchResults.specializedArticles.filter(a => bissetSpecificArticles.includes(a.id.toString())) : [];
+      let bissetArticles = [];
+      if (virtualPatient.body_part === "elbow") {
+        const bissetArticleIds = await storage.getResearchArticlesByBodyPart("elbow", 1, 20);
+        bissetArticles = bissetArticleIds.articles.filter(a => 
+          a.title.includes("elbow") || a.title.includes("lateral epicondyl") || 
+          a.abstract.includes("Bisset") || a.authors.includes("Bisset"));
+      }
       
       // Include assessment tests in the patient data
       // First, modify the virtual patient schema to include assessment tests

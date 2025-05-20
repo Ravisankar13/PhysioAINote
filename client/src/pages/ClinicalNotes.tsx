@@ -34,18 +34,18 @@ const ClinicalNotes = () => {
       </Helmet>
       
       <MembershipRequired feature="aiNotes">
-        <section className="py-16 bg-neutral-50">
+        <section className="py-16 bg-primary/5">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center">
-              <h1 className="text-3xl font-serif font-bold text-neutral-900 sm:text-4xl">
+              <h1 className="text-3xl font-serif font-bold text-primary sm:text-4xl">
                 AI-Powered Clinical Notes
               </h1>
-              <p className="mt-4 text-xl text-neutral-600 max-w-2xl mx-auto">
+              <p className="mt-4 text-xl text-foreground max-w-2xl mx-auto">
                 Generate comprehensive SOAP format notes based on your assessment data
               </p>
             </div>
             
-            <div className="mt-12 bg-white rounded-lg shadow-sm overflow-hidden">
+            <div className="mt-12 bg-white rounded-lg shadow-md overflow-hidden border border-primary/10">
               {showForm ? (
                 <SoapForm onSubmit={handleNoteGenerated} />
               ) : (

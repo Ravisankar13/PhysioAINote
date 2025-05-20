@@ -326,9 +326,9 @@ const SoapForm = ({ onNoteGenerated }: SoapFormProps) => {
     <Card className="bg-white">
       <CardContent className="p-6 sm:p-10">
         <div className="space-y-6">
-          <div className="pb-5 border-b border-neutral-200">
-            <h3 className="text-lg leading-6 font-medium text-neutral-900">Patient Information</h3>
-            <p className="mt-2 max-w-4xl text-sm text-neutral-500">
+          <div className="pb-5 border-b border-primary/10">
+            <h3 className="text-lg leading-6 font-medium text-primary">Patient Information</h3>
+            <p className="mt-2 max-w-4xl text-sm text-foreground">
               Enter patient details and clinical information to generate comprehensive clinical notes. Use the voice recording 
               feature to automatically transcribe and analyze your clinical sessions.
             </p>
@@ -406,12 +406,12 @@ const SoapForm = ({ onNoteGenerated }: SoapFormProps) => {
 
                 {/* Voice Recording Section */}
                 <div className="mb-6 w-full">
-                  <div className="mb-4 p-5 bg-red-50 border border-red-100 rounded-lg shadow-sm">
-                    <h4 className="text-red-800 font-medium mb-2">Record Your Clinical Notes</h4>
-                    <p className="text-sm text-neutral-700">
-                      Use the red microphone button below to record your clinical session. Our AI will:
+                  <div className="mb-4 p-5 bg-primary/5 border border-primary/20 rounded-lg shadow-sm">
+                    <h4 className="text-primary font-medium mb-2">Record Your Clinical Notes</h4>
+                    <p className="text-sm text-foreground">
+                      Use the microphone button below to record your clinical session. Our AI will:
                     </p>
-                    <ul className="text-sm text-neutral-700 list-disc pl-5 mt-2">
+                    <ul className="text-sm text-foreground list-disc pl-5 mt-2">
                       <li>Transcribe your voice recording</li>
                       <li>Extract key clinical information</li>
                       <li>Organize findings into a structured SOAP format</li>

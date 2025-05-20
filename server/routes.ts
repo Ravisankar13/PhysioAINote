@@ -1517,7 +1517,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             })),
             treatmentOptions: joGibsonResult.treatmentOptions,
             assessmentTests: joGibsonResult.assessmentTests,
-            recommendedKeywords: ["Jo Gibson", "shoulder rehabilitation", "evidence-based physiotherapy"]
+            recommendedKeywords: ["Jo Gibson", "shoulder rehabilitation", "evidence-based physiotherapy"],
+            joGibsonSpecificApproach: true,
+            relatedArticleIds: joGibsonResult.relatedArticleIds || []
           };
         } else {
           // Use standard analysis for non-shoulder cases
@@ -1534,8 +1536,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Find relevant research articles based on the diagnosis and related article IDs
       
-      // Check if this is a shoulder case that could benefit from Jo Gibson's approach
-      const isShoulderCase = virtualPatient.body_part === "shoulder";
+      // Determine if this is a shoulder case that could benefit from Jo Gibson's approach
+      // Use the specialized detection function for accurate identification
+      const isShoulderCase = isShoulderPatient(virtualPatient);
       
       // Get specialized analysis for shoulder cases using Jo Gibson's approach
       let joGibsonSpecificArticles = [];
@@ -1564,7 +1567,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const relevantArticleIds = searchResults?.searchTerms || [];
       
       // Include Jo Gibson's specialized shoulder articles if available
-      const joGibsonArticles = searchResults?.joGibsonSpecificArticles || [];
+      const joGibsonArticles = isShoulderCase && searchResults?.joGibsonSpecificArticles ? 
+        searchResults.joGibsonSpecificArticles : [];
       
       // Include assessment tests in the patient data
       // First, modify the virtual patient schema to include assessment tests
@@ -1584,7 +1588,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         updatedData
       );
       
-      res.json(updatedPatient);
+      // Add a note about Jo Gibson's specialized approach when applicable
+      if (isShoulderCase) {
+        res.json({
+          ...updatedPatient,
+          joGibsonApproach: true,
+          joGibsonNote: "This analysis incorporates Jo Gibson's specialized shoulder rehabilitation approach."
+        });
+      } else {
+        res.json(updatedPatient);
+      }
     } catch (error) {
       if (error instanceof Error) {
         res.status(500).json({ error: error.message });

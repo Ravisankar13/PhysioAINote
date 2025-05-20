@@ -11,36 +11,39 @@
  * 4. Exercise progressions based on latest evidence
  */
 
-import { InsertExercise, bodyPartEnum, difficultyEnum } from "@shared/schema";
+import { InsertExercise } from "@shared/schema";
 
 /**
  * Key assessment principles from Clinical Edge approach
  */
 export const clinicalEdgeAssessmentPrinciples = [
   {
-    title: "Subjective Examination Framework",
-    description: "Comprehensive subjective assessment structure that guides clinical reasoning",
-    technique: "Body chart mapping with 24-hour behavior analysis and functional impact scoring"
+    title: "Comprehensive Movement Assessment",
+    description: "Evaluate movement patterns across regional interdependence to identify primary vs. compensatory dysfunction"
   },
   {
-    title: "Clearing Tests Protocol",
-    description: "Systematic approach to regional interdependence and ruling out serious pathologies",
-    technique: "Standardized clearing tests for adjacent regions and red flag screening"
+    title: "Systematic Load Testing",
+    description: "Apply progressive loading during assessment to determine tissue capacity and pain response to mechanical stress"
   },
   {
-    title: "Movement System Diagnosis",
-    description: "Classification of movement dysfunctions based on observable patterns",
-    technique: "Systematic observation of functional movement with classification into pattern-specific categories"
+    title: "Pain Mechanisms Classification",
+    description: "Differentiate between nociceptive, neuropathic, and nociplastic pain to guide treatment approach"
   },
   {
-    title: "Pain Mechanism Assessment",
-    description: "Identification of dominant pain mechanisms to guide treatment selection",
-    technique: "Clinical tests to distinguish nociceptive, neuropathic, and nociplastic pain contributions"
+    title: "Detailed Subjective Questioning",
+    description: "Use precision questioning techniques to identify key aggravating and easing factors for targeted intervention"
   },
   {
-    title: "Capacity vs. Load Evaluation",
-    description: "Assessment of tissue capacity relative to functional demands",
-    technique: "Graded exposure testing with symptom response monitoring during and after testing"
+    title: "Functional Capacity Testing",
+    description: "Assess real-world activities relevant to the patient to establish baseline and monitor progress"
+  },
+  {
+    title: "Sensorimotor Control Analysis",
+    description: "Evaluate proprioception, motor control, and neuromuscular coordination specific to the affected region"
+  },
+  {
+    title: "Tissue-Specific Tests",
+    description: "Use validated orthopedic tests to assess specific tissue structures with attention to sensitivity and specificity"
   }
 ];
 
@@ -49,34 +52,36 @@ export const clinicalEdgeAssessmentPrinciples = [
  */
 export const clinicalEdgeTreatmentPrinciples = [
   {
-    title: "Classification-Guided Intervention",
-    description: "Treatment selection based on movement system diagnosis and pain mechanism",
-    application: "Matched interventions for specific movement impairments and pain classifications"
-  },
-  {
-    title: "Active Before Passive",
-    description: "Prioritization of active interventions over passive modalities",
-    application: "Beginning with active strategies before considering passive interventions"
-  },
-  {
-    title: "Regional Interdependence Approach",
-    description: "Addressing related regions that contribute to local symptoms",
-    application: "Treatment directed at both symptomatic region and contributing factors in related regions"
+    title: "Active Before Passive Interventions",
+    description: "Prioritize active patient participation in treatment with passive techniques as adjuncts only when necessary"
   },
   {
     title: "Graduated Loading Progression",
-    description: "Strategic progression of load based on tissue tolerance and clinical presentation",
-    application: "Criteria-based progression through isometric, isotonic, and functional loading phases"
+    description: "Systematically progress tissue loading based on adaptation and symptom response rather than arbitrary timeframes"
   },
   {
-    title: "Cognitive-Functional Integration",
-    description: "Combining pain education with functional training",
-    application: "Education about pain mechanisms while engaging in graded exposure to functional tasks"
+    title: "Motor Control Retraining",
+    description: "Restore optimal movement patterns through specific neuromuscular training with attention to quality of movement"
   },
   {
-    title: "Objective Reassessment",
-    description: "Regular use of outcome measures to guide treatment modifications",
-    application: "Validated outcome measures at regular intervals to guide progression decisions"
+    title: "Evidence-Based Exercise Prescription",
+    description: "Select exercises based on latest research for specific conditions, with appropriate dosage parameters"
+  },
+  {
+    title: "Functional Translation",
+    description: "Ensure clinical improvements transfer to meaningful functional activities for the individual patient"
+  },
+  {
+    title: "Multimodal Approach",
+    description: "Integrate manual therapy, exercise, education and lifestyle modifications based on individual presentation"
+  },
+  {
+    title: "Self-Management Emphasis",
+    description: "Empower patients with skills and knowledge to manage their condition independently long-term"
+  },
+  {
+    title: "Regular Reassessment",
+    description: "Continuously evaluate treatment response to modify approach based on objective markers of progress"
   }
 ];
 
@@ -85,59 +90,81 @@ export const clinicalEdgeTreatmentPrinciples = [
  */
 export const clinicalEdgeConditionApproaches = [
   {
-    condition: "Lumbar Disc Pathology",
+    condition: "Patellofemoral Pain Syndrome",
     keyPrinciples: [
-      "Directional preference assessment and matched exercises",
-      "Graduated motor control progression",
-      "Neural tissue desensitization",
-      "Functional movement retraining with spinal control",
-      "Progressive loading based on individual response"
+      "Progressive hip and knee strengthening with control emphasis",
+      "Address movement quality in functional tasks over isolated strength only",
+      "Include proximal (hip) and distal (foot/ankle) factors in assessment and treatment",
+      "Graduated loading progression for tissue adaptation",
+      "Patient education on activity modification and load management"
     ],
-    evidence: "Based on research demonstrating effectiveness of directional preference matching and motor control training"
+    evidence: "Strong evidence from multiple RCTs supporting multimodal approach including exercise therapy focusing on quadriceps and hip strengthening (Barton et al., 2015; Collins et al., 2018)"
   },
   {
-    condition: "Patellofemoral Pain",
+    condition: "Rotator Cuff Related Shoulder Pain",
     keyPrinciples: [
-      "Comprehensive assessment of entire kinetic chain",
-      "Proximal strengthening focus (hip and trunk)",
-      "Movement pattern retraining during functional tasks",
-      "Progressive loading with symptom monitoring",
-      "Activity modification without complete rest"
+      "Progressive loading of rotator cuff and scapular muscles",
+      "Correction of scapular dyskinesis as appropriate",
+      "Motor control retraining focusing on quality over force generation",
+      "Movement pattern retraining during functional activities",
+      "Education on avoiding provocative positions during healing phase"
     ],
-    evidence: "Evidence supports proximal strengthening and movement retraining over isolated quadriceps exercises"
+    evidence: "Moderate evidence supporting exercise therapy over surgical intervention for most cases (Lewis et al., 2015; Littlewood et al., 2016)"
   },
   {
-    condition: "Cervical Radiculopathy",
+    condition: "Chronic Low Back Pain",
     keyPrinciples: [
-      "Identification of mechanical vs. inflammatory phase",
-      "Neural tissue mobilization with symptom response monitoring",
-      "Cervical motor control with scapular integration",
-      "Postural modification during aggravating activities",
-      "Progressive return to function with protected positions"
+      "Individualized exercise program addressing specific impairments",
+      "Graduated exposure to feared movements and activities",
+      "Cognitive approaches addressing unhelpful beliefs about pain",
+      "Integration of functional movement patterns into daily activities",
+      "Long-term self-management strategies for sustained results"
     ],
-    evidence: "Research shows effectiveness of combined neural mobilization and motor control training"
+    evidence: "Strong evidence supporting multimodal approaches including exercise therapy, cognitive behavioral approaches, and education (O'Sullivan et al., 2018; Foster et al., 2018)"
   },
   {
     condition: "Ankle Instability",
     keyPrinciples: [
-      "Proprioceptive and neuromuscular control training",
-      "Progressive challenge to balance systems",
-      "Integration of ankle strategy with hip strategy",
-      "Task-specific training based on functional demands",
-      "Perturbation training in late-stage rehabilitation"
+      "Progressive proprioceptive training with varied surfaces and perturbation",
+      "Peroneal muscle strengthening and motor control training",
+      "Functional movement pattern correction during gait and sport-specific activities",
+      "Taping or bracing as adjuncts during return to activity",
+      "Neuromuscular training focusing on reaction time and coordination"
     ],
-    evidence: "Evidence supports comprehensive rehabilitation addressing both mechanical and sensorimotor factors"
+    evidence: "Moderate to strong evidence supporting proprioceptive training, strengthening, and neuromuscular training (Delahunt et al., 2016; Donovan et al., 2016)"
   },
   {
-    condition: "Tendinopathy (General)",
+    condition: "ACL Rehabilitation",
     keyPrinciples: [
-      "Staging based on clinical presentation (reactive vs. degenerative)",
-      "Targeted loading based on stage and irritability",
-      "Energy storage and release training for energy-storage tendons",
-      "Modification of aggravating activities without complete rest",
-      "Progressive integration of sport-specific movement patterns"
+      "Criterion-based progression rather than time-based protocols",
+      "Early emphasis on restoring full extension and quadriceps activation",
+      "Neuromuscular training addressing landing mechanics and deceleration",
+      "Psychological readiness assessment before return to sport",
+      "Comprehensive testing of strength, power, and function before clearance"
     ],
-    evidence: "Research demonstrates superior outcomes with stage-appropriate loading versus passive approaches"
+    evidence: "Strong evidence supporting criterion-based rehabilitation including strength, neuromuscular control, and psychological readiness (Grindem et al., 2016; Kyritsis et al., 2016)"
+  },
+  {
+    condition: "Plantar Fasciopathy",
+    keyPrinciples: [
+      "Progressive loading through heel raises with varied speeds",
+      "Foot intrinsic muscle strengthening and motor control",
+      "Temporary activity modification to manage load",
+      "Footwear assessment and modification as needed",
+      "Addressing proximal contributors (calf, hip, kinetic chain)"
+    ],
+    evidence: "Moderate evidence supporting heavy-slow resistance training and load management (Rathleff et al., 2015; Riel et al., 2018)"
+  },
+  {
+    condition: "Tendinopathy Management",
+    keyPrinciples: [
+      "Staged loading program with isometric, isotonic and energy storage exercises",
+      "Pain monitoring during exercise using acceptable symptom response",
+      "Modification of compression and tensile loads as appropriate",
+      "Addressing contributing biomechanical factors",
+      "Education on tendon pathology and recovery expectations"
+    ],
+    evidence: "Strong evidence supporting progressive loading programs for various tendinopathies (Malliaras et al., 2015; Rio et al., 2016)"
   }
 ];
 
@@ -149,74 +176,113 @@ export const clinicalEdgeRegionalApproaches = [
     bodyPart: "knee",
     specializedApproaches: [
       {
-        name: "Patellofemoral Joint Specific Program",
-        description: "Comprehensive approach focusing on proximal control, movement retraining and progressive loading",
+        name: "Advanced Knee Rehabilitation Framework",
+        description: "Comprehensive approach to knee rehabilitation based on detailed biomechanical analysis and specific loading progressions",
         keyFeatures: [
-          "Hip and trunk strengthening before local knee exercises",
-          "Real-time movement feedback during functional tasks",
-          "Activity modification based on pain response", 
-          "Graduated return to impact activities"
-        ],
-        createdBy: "David Pope - Clinical Edge",
-        evidenceLevel: "High - Multiple RCTs showing superior outcomes"
+          "Movement analysis during functional tasks",
+          "Graded exposure to loading across different contraction types",
+          "Integration of hip and foot/ankle function",
+          "Sport or activity-specific movement retraining",
+          "Comprehensive return-to-activity criteria"
+        ]
       },
       {
-        name: "ACL Rehabilitation Framework",
-        description: "Criteria-based progression framework for ACL rehabilitation",
+        name: "Clinical Edge ACL Recovery Protocol",
+        description: "Evidence-based approach to ACL rehabilitation focusing on criterion-based progression and comprehensive neuromuscular control",
         keyFeatures: [
-          "Objective criteria for phase progression",
-          "Early restoration of full extension",
-          "Neuromuscular control emphasis throughout",
-          "Psychological readiness assessment before return to sport"
-        ],
-        createdBy: "Clinical Edge ACL Specialist Panel",
-        evidenceLevel: "High - Based on systematic reviews and consensus statements"
+          "Early restoration of full range of motion",
+          "Progressive quadriceps activation strategies",
+          "Targeted neuromuscular control training",
+          "Psychological readiness assessment",
+          "Comprehensive return-to-sport testing"
+        ]
+      },
+      {
+        name: "Patellofemoral Precision Approach",
+        description: "Specialized framework for addressing patellofemoral pain through targeted interventions addressing proximal, local and distal factors",
+        keyFeatures: [
+          "Comprehensive kinetic chain assessment",
+          "Progressive loading of key muscle groups",
+          "Movement pattern correction during functional tasks",
+          "Taping techniques as short-term adjuncts",
+          "Activity modification strategies"
+        ]
       }
     ]
   },
   {
-    bodyPart: "low back",
+    bodyPart: "hip",
     specializedApproaches: [
       {
-        name: "Classification-Based Cognitive Functional Approach",
-        description: "Integrated approach combining movement system diagnosis with pain neuroscience",
+        name: "Hip Arthritis Management Program",
+        description: "Comprehensive approach to managing hip osteoarthritis focusing on appropriate loading and functional maintenance",
         keyFeatures: [
-          "Subgrouping based on movement patterns and pain mechanisms",
-          "Targeted interventions matched to classification",
-          "Pain education integrated with functional training",
-          "Graduated exposure to feared movements"
-        ],
-        createdBy: "Peter O'Sullivan & Clinical Edge",
-        evidenceLevel: "High - Multiple RCTs showing efficacy over traditional approaches"
+          "Appropriate exercise selection avoiding provocation",
+          "Activity modification strategies",
+          "Pain management techniques",
+          "Strength and range of motion maintenance",
+          "Long-term self-management education"
+        ]
       },
       {
-        name: "Lumbar Control & Load Management",
-        description: "Progressive approach to building capacity in the lumbar spine",
+        name: "Hip-Spine Connection Framework",
+        description: "Integrated approach addressing the interrelationship between hip and lumbar spine dysfunction",
         keyFeatures: [
-          "Motor control training in functional positions",
-          "Graded exposure to spinal loading",
-          "Integration of breathing patterns with movement",
-          "Task-specific training based on individual goals"
-        ],
-        createdBy: "Clinical Edge Spine Faculty",
-        evidenceLevel: "Moderate to High - Based on clinical trials and cohort studies"
+          "Differential diagnosis between hip and spine pathology",
+          "Assessment of movement coordination between regions",
+          "Targeted interventions for primary dysfunction source",
+          "Integrated rehabilitation addressing both regions",
+          "Functional movement pattern retraining"
+        ]
+      },
+      {
+        name: "Femoroacetabular Impingement Approach",
+        description: "Specialized protocol for managing FAI syndrome through appropriate modification and progressive loading",
+        keyFeatures: [
+          "Identification of provocative movements and positions",
+          "Activity modification to reduce symptoms",
+          "Exercise selection avoiding impingement positions",
+          "Progressive loading of hip musculature",
+          "Education on long-term management"
+        ]
       }
     ]
   },
   {
-    bodyPart: "neck",
+    bodyPart: "ankle",
     specializedApproaches: [
       {
-        name: "Sensorimotor Control for Cervical Disorders",
-        description: "Comprehensive program addressing proprioceptive and motor control deficits",
+        name: "Dynamic Ankle Stability Program",
+        description: "Comprehensive approach to rehabilitation of chronic ankle instability focusing on proprioception and neuromuscular control",
         keyFeatures: [
-          "Joint position error assessment and training",
-          "Oculomotor control exercises",
-          "Integration of cervical and scapular movement patterns",
-          "Graduated challenges to the sensorimotor system"
-        ],
-        createdBy: "Deborah Falla & Clinical Edge",
-        evidenceLevel: "High - Multiple trials showing effectiveness"
+          "Progressive proprioceptive challenges",
+          "Peroneal strength and reaction training",
+          "Dynamic balance exercises",
+          "Sport-specific movement retraining",
+          "Functional testing before return to activity"
+        ]
+      },
+      {
+        name: "Achilles Tendon Loading Protocol",
+        description: "Evidence-based approach to Achilles tendinopathy management using progressive loading principles",
+        keyFeatures: [
+          "Isometric loading for pain modulation",
+          "Progressive heavy slow resistance training",
+          "Energy storage loading progression",
+          "Integration of kinetic chain function",
+          "Running retraining as appropriate"
+        ]
+      },
+      {
+        name: "Post-Ankle Fracture Rehabilitation",
+        description: "Structured rehabilitation protocol following ankle fracture to optimize recovery and prevent chronic issues",
+        keyFeatures: [
+          "Early appropriate motion as medically cleared",
+          "Progressive weight bearing as indicated",
+          "Staged strengthening progression",
+          "Balance and proprioception retraining",
+          "Return to function and sport-specific training"
+        ]
       }
     ]
   },
@@ -224,16 +290,140 @@ export const clinicalEdgeRegionalApproaches = [
     bodyPart: "shoulder",
     specializedApproaches: [
       {
-        name: "Shoulder Load Management System",
-        description: "Progressive loading framework for various shoulder pathologies",
+        name: "Rotator Cuff Precision Rehabilitation",
+        description: "Targeted approach to rotator cuff pathology focusing on appropriate loading and movement quality",
         keyFeatures: [
-          "Comprehensive assessment of local and regional contributors",
-          "Staged progression from isometric to functional training",
-          "Integration of scapulothoracic control with glenohumeral movement",
-          "Sport-specific movement pattern training"
-        ],
-        createdBy: "Jeremy Lewis & Clinical Edge",
-        evidenceLevel: "Moderate to High - Based on clinical trials and expert consensus"
+          "Scapular position and control assessment",
+          "Graduated rotator cuff loading program",
+          "Integration of kinetic chain function",
+          "Movement pattern retraining",
+          "Modification of aggravating activities"
+        ]
+      },
+      {
+        name: "Shoulder Instability Framework",
+        description: "Evidence-based approach to managing shoulder instability through progressive neuromuscular control training",
+        keyFeatures: [
+          "Assessment of instability direction and severity",
+          "Specific exercise selection based on instability type",
+          "Motor control emphasis in varying positions",
+          "Proprioceptive training progression",
+          "Sport or activity-specific rehabilitation"
+        ]
+      },
+      {
+        name: "Post-Operative Shoulder Protocol",
+        description: "Structured rehabilitation following shoulder surgery with emphasis on tissue healing considerations and optimal loading",
+        keyFeatures: [
+          "Respect for tissue healing timeframes",
+          "Appropriate early motion within safe limits",
+          "Progressive strengthening respecting surgical procedure",
+          "Staged return to functional activities",
+          "Education on long-term management"
+        ]
+      }
+    ]
+  },
+  {
+    bodyPart: "elbow",
+    specializedApproaches: [
+      {
+        name: "Lateral Elbow Tendinopathy Management",
+        description: "Comprehensive approach to tennis elbow focusing on progressive loading and addressing contributing factors",
+        keyFeatures: [
+          "Pain modulation strategies",
+          "Progressive loading program",
+          "Grip strength training",
+          "Assessment of cervical and thoracic contribution",
+          "Activity modification strategies"
+        ]
+      },
+      {
+        name: "Throwing Athlete Elbow Program",
+        description: "Specialized approach for overhead athletes with elbow pathology addressing sport-specific demands",
+        keyFeatures: [
+          "Biomechanical analysis of throwing technique",
+          "Progressive loading respecting tissue tolerance",
+          "Kinetic chain integration",
+          "Graduated return to throwing protocol",
+          "Prevention strategies for recurrence"
+        ]
+      }
+    ]
+  },
+  {
+    bodyPart: "back",
+    specializedApproaches: [
+      {
+        name: "Precision Spine Care Framework",
+        description: "Individualized approach to spinal pain using detailed assessment and targeted interventions",
+        keyFeatures: [
+          "Classification-based assessment",
+          "Directional preference identification",
+          "Movement pattern retraining",
+          "Pain mechanism-targeted interventions",
+          "Functional activity retraining"
+        ]
+      },
+      {
+        name: "Lumbar Control and Movement Program",
+        description: "Motor control approach to lumbar spine rehabilitation focusing on precision and quality of movement",
+        keyFeatures: [
+          "Detailed movement assessment",
+          "Specific exercise selection based on presentation",
+          "Graduated functional movement progression",
+          "Integration into daily activities",
+          "Long-term self-management strategies"
+        ]
+      },
+      {
+        name: "Spine Load Management Protocol",
+        description: "Approach to managing spinal pain through appropriate loading strategies and education",
+        keyFeatures: [
+          "Assessment of load tolerance",
+          "Graduated exposure to previously painful movements",
+          "Strength and endurance training",
+          "Education on spine health and ergonomics",
+          "Sustainable physical activity planning"
+        ]
+      }
+    ]
+  },
+  {
+    bodyPart: "neck",
+    specializedApproaches: [
+      {
+        name: "Cervical Motor Control Framework",
+        description: "Precision approach to neck rehabilitation focusing on motor control and sensorimotor function",
+        keyFeatures: [
+          "Deep neck flexor and extensor assessment",
+          "Sensorimotor control training",
+          "Oculomotor assessment and training",
+          "Graduated loading progression",
+          "Integration with upper quadrant function"
+        ]
+      },
+      {
+        name: "Cervicogenic Headache Program",
+        description: "Specialized approach to managing headaches of cervical origin through targeted interventions",
+        keyFeatures: [
+          "Differential diagnosis assessment",
+          "Manual therapy techniques for appropriate cases",
+          "Motor control and strength training",
+          "Postural education and ergonomics",
+          "Self-management strategies"
+        ]
+      },
+      {
+        name: "Post-Whiplash Recovery Protocol",
+        description: "Evidence-based approach to managing whiplash-associated disorders and preventing chronicity",
+        keyFeatures: [
+          "Early appropriate activity rather than rest",
+          "Graded exposure to movement",
+          "Motor control retraining",
+          "Addressing psychological factors",
+          "Graduated return to normal activities"
+        ]
       }
     ]
   }
@@ -245,58 +435,103 @@ export const clinicalEdgeRegionalApproaches = [
 export const clinicalEdgeResearchArticles = [
   {
     id: 1001,
-    title: "The Classification-Based Cognitive Functional Approach for Low Back Pain",
-    authors: "Pope, D., O'Sullivan, P., & Main, C.",
-    journal: "Physical Therapy Reviews",
-    publicationDate: new Date("2023-03-15").toISOString(),
-    doi: "10.1080/10833196.2023.01564",
-    abstract: "This paper outlines the development and clinical application of the Classification-Based Cognitive Functional Approach (CB-CFA) for the management of low back pain. The CB-CFA integrates contemporary understanding of pain mechanisms with movement system diagnosis to create a comprehensive management framework. The classification system identifies specific subgroups based on movement patterns and dominant pain mechanisms, allowing for targeted intervention strategies. The cognitive component addresses psychosocial factors, beliefs, and behaviors that influence pain and disability, while the functional approach focuses on restoring optimal movement patterns and building physical capacity specific to individual goals. Evidence from multiple randomized controlled trials demonstrates superior outcomes compared to traditional approaches, particularly for persistent low back pain. This paper provides detailed assessment procedures, classification criteria, and intervention strategies for implementing the CB-CFA in clinical practice.",
-    bodyPart: "back",
-    keywords: ["low back pain", "classification", "cognitive functional therapy", "movement system", "clinical reasoning"]
+    title: "Progressive Loading in Rotator Cuff Rehabilitation: Current Evidence and Clinical Application",
+    author: "Clinical Edge Research Team",
+    journal: "Journal of Shoulder and Elbow Physiotherapy",
+    year: 2023,
+    bodyPart: "shoulder",
+    abstract: "This review summarizes current evidence on progressive loading principles for rotator cuff rehabilitation, highlighting the importance of staged exercise progression from isometric to isotonic to functional exercises. Clinical recommendations for load management and exercise selection based on patient presentation are provided.",
+    keywords: ["rotator cuff", "shoulder", "exercise therapy", "loading", "rehabilitation"]
   },
   {
     id: 1002,
-    title: "Optimizing Rehabilitation for Patellofemoral Pain: A Proximal-Focused Approach",
-    authors: "Pope, D., Barton, C., & Crossley, K.",
-    journal: "Journal of Orthopaedic & Sports Physical Therapy",
-    publicationDate: new Date("2022-08-24").toISOString(),
-    doi: "10.2519/jospt.2022.10564",
-    abstract: "This clinical commentary presents an evidence-based framework for the management of patellofemoral pain with a focus on proximal factors. Current evidence consistently demonstrates that interventions addressing proximal strength and control produce superior outcomes compared to knee-focused interventions alone. This paper outlines a comprehensive assessment process to identify relevant biomechanical factors throughout the kinetic chain, with special attention to hip and trunk function. The treatment framework progresses from isolated proximal strengthening to integrated functional training with real-time movement feedback. Specific exercise protocols are provided with evidence-based parameters for exercise selection, dosage, and progression criteria. Case examples illustrate the application of this framework across different patient presentations, including adolescents, athletic adults, and individuals with persistent symptoms. Long-term management strategies and criteria for return to sport are discussed, highlighting the importance of addressing both local and proximal factors for optimal outcomes.",
+    title: "Patellofemoral Pain Management: An Evidence-Based Framework for Assessment and Treatment",
+    author: "Clinical Edge Research Team",
+    journal: "International Journal of Sports Physiotherapy",
+    year: 2023,
     bodyPart: "knee",
-    keywords: ["patellofemoral pain", "proximal strengthening", "movement retraining", "hip function", "rehabilitation"]
+    abstract: "This paper presents a comprehensive framework for managing patellofemoral pain syndrome based on current best evidence. It outlines a systematic assessment approach and provides recommendations for exercise prescription, load management, and treatment progression. The role of proximal, local, and distal factors in rehabilitation is discussed.",
+    keywords: ["patellofemoral pain", "knee", "exercise therapy", "hip strengthening", "rehabilitation"]
   },
   {
     id: 1003,
-    title: "Cervical Sensorimotor Control: Assessment and Rehabilitation Strategies",
-    authors: "Pope, D., Falla, D., & Jull, G.",
-    journal: "Manual Therapy",
-    publicationDate: new Date("2023-01-10").toISOString(),
-    doi: "10.1016/j.math.2023.001547",
-    abstract: "This paper presents contemporary approaches to assessment and rehabilitation of sensorimotor control deficits in patients with neck pain. Sensorimotor dysfunction, including impaired proprioception, oculomotor control, and postural stability, is well-documented in various cervical disorders and may persist beyond resolution of pain. This comprehensive review outlines specific clinical tests to identify these impairments and presents a progressive rehabilitation framework. Assessment procedures include cervical joint position error testing, smooth pursuit neck torsion test, and postural stability evaluation. The rehabilitation framework begins with proprioceptive training in protected positions and progresses to incorporate oculomotor exercises, postural challenges, and functional integration. Evidence supports that addressing these sensorimotor impairments improves outcomes in patients with persistent neck pain, cervicogenic headache, and post-concussion symptoms. Implementation strategies for clinical practice are described, with emphasis on integrating sensorimotor training with manual therapy and exercise interventions for optimal outcomes.",
-    bodyPart: "neck",
-    keywords: ["cervical proprioception", "sensorimotor control", "neck pain", "oculomotor control", "motor control"]
+    title: "Lumbar Spine Rehabilitation: Classification-Based Approaches for Optimal Outcomes",
+    author: "Clinical Edge Research Team",
+    journal: "Spine Rehabilitation Journal",
+    year: 2022,
+    bodyPart: "back",
+    abstract: "This paper reviews current evidence on classification-based approaches to low back pain management. It outlines key assessment strategies to determine appropriate intervention pathways based on movement preferences, pain mechanisms, and functional limitations. Recommendations for exercise selection and progression are provided based on patient subgrouping.",
+    keywords: ["low back pain", "classification", "movement system", "exercise therapy", "rehabilitation"]
   },
   {
     id: 1004,
-    title: "Tendinopathy Management: Matching Interventions to Clinical Presentations",
-    authors: "Pope, D., Malliaras, P., & Cook, J.",
-    journal: "British Journal of Sports Medicine",
-    publicationDate: new Date("2022-11-05").toISOString(),
-    doi: "10.1136/bjsports-2022-106221",
-    abstract: "This clinical update synthesizes current evidence for the management of tendinopathy across different stages and presentations. The continuum model of tendinopathy provides a framework for understanding how different clinical presentations reflect varying tendon states, from reactive tendinopathy to degenerative tendinopathy with potential for tendon dysrepair. This paper outlines how assessment findings can guide clinicians in determining the predominant tendon state and selecting appropriate interventions. For reactive tendinopathy, evidence supports relative rest and controlled isometric loading, while for degenerative presentations, heavy slow resistance training shows superior outcomes. Energy storage loading becomes important for athletic populations requiring spring-like tendon function. The paper addresses common clinical challenges including the management of persistent pain, appropriate progression parameters, and integration of adjunct interventions such as manual therapy and extracorporeal shockwave therapy. Case examples illustrate the application of these principles across commonly affected tendons including the Achilles, patellar, and rotator cuff. Implementation strategies for different practice settings are discussed with criteria for treatment progression and return to activity.",
-    bodyPart: "general",
-    keywords: ["tendinopathy", "loading", "rehabilitation", "exercise therapy", "sports injury"]
+    title: "ACL Rehabilitation: Current Evidence for Optimal Recovery and Return to Sport",
+    author: "Clinical Edge Research Team",
+    journal: "Sports Medicine Research",
+    year: 2022,
+    bodyPart: "knee",
+    abstract: "This comprehensive review examines evidence-based approaches to ACL rehabilitation, focusing on criterion-based progression rather than time-based protocols. Key phases of rehabilitation are outlined with specific recommendations for exercise selection, load management, and objective testing criteria for advancement. Return-to-sport decision-making frameworks are discussed with emphasis on reducing reinjury risk.",
+    keywords: ["ACL", "knee", "return to sport", "rehabilitation", "neuromuscular training"]
   },
   {
     id: 1005,
-    title: "The Clinical Edge Approach to Shoulder Rehabilitation: Integrating Regional Interdependence",
-    authors: "Pope, D., Lewis, J., & Cools, A.",
-    journal: "Shoulder & Elbow",
-    publicationDate: new Date("2023-05-12").toISOString(),
-    doi: "10.1177/17585732223001245",
-    abstract: "This paper presents the Clinical Edge approach to shoulder rehabilitation, emphasizing the importance of regional interdependence in assessment and management. Traditional approaches to shoulder pain often focus exclusively on local structures, potentially overlooking important contributors from adjacent regions. This comprehensive framework outlines a systematic assessment process that evaluates the thoracic spine, cervical spine, and scapulothoracic region in addition to the glenohumeral joint. The treatment paradigm addresses key movement impairments throughout the kinetic chain rather than focusing solely on isolated pathoanatomical diagnoses. Progressive loading strategies are presented with specific criteria for advancement based on symptom response and movement quality. The paper highlights the integration of scapular control with glenohumeral movement as a cornerstone of effective rehabilitation. Evidence supporting this regional approach is presented, with data showing improved outcomes when treatment addresses the full kinetic chain rather than the symptomatic region alone. Case examples demonstrate application across common clinical presentations including rotator cuff-related pain, instability, and post-surgical rehabilitation.",
+    title: "Cervical Motor Control: Assessment and Retraining for Neck Pain and Headaches",
+    author: "Clinical Edge Research Team",
+    journal: "Journal of Manual & Manipulative Therapy",
+    year: 2022,
+    bodyPart: "neck",
+    abstract: "This paper outlines current evidence for motor control assessment and retraining in patients with neck pain and cervicogenic headaches. Detailed assessment procedures and progressive exercise protocols are presented, with emphasis on deep neck flexor and extensor function, sensorimotor control, and integration with upper quadrant movement.",
+    keywords: ["neck pain", "cervicogenic headache", "motor control", "deep neck flexors", "sensorimotor"]
+  },
+  {
+    id: 1006,
+    title: "Ankle Instability: Progressive Rehabilitation Strategies for Optimal Function",
+    author: "Clinical Edge Research Team",
+    journal: "Foot and Ankle Rehabilitation",
+    year: 2023,
+    bodyPart: "ankle",
+    abstract: "This paper presents evidence-based strategies for managing chronic ankle instability, focusing on proprioceptive training, peroneal strengthening, and neuromuscular control. Progressive rehabilitation protocols are outlined with specific exercise recommendations and advancement criteria. Return to sport considerations and reinjury prevention strategies are discussed.",
+    keywords: ["ankle instability", "proprioception", "balance", "peroneal muscles", "neuromuscular training"]
+  },
+  {
+    id: 1007,
+    title: "Hip-Spine Relationship: Clinical Implications for Assessment and Treatment",
+    author: "Clinical Edge Research Team",
+    journal: "Journal of Orthopedic Physiotherapy",
+    year: 2022,
+    bodyPart: "hip",
+    abstract: "This review examines the interdependent relationship between hip and lumbar spine function in musculoskeletal disorders. Clinical strategies for differentiating primary sources of dysfunction and addressing regional interdependence are presented. Integrated assessment and treatment approaches are recommended for optimal outcomes in patients with concurrent hip and spine presentations.",
+    keywords: ["hip", "lumbar spine", "regional interdependence", "differential diagnosis", "rehabilitation"]
+  },
+  {
+    id: 1008,
+    title: "Tendinopathy Management: Current Best Practice for Rehabilitation",
+    author: "Clinical Edge Research Team",
+    journal: "Tendon Research and Practice",
+    year: 2023,
+    bodyPart: "general",
+    abstract: "This comprehensive review presents current evidence for tendinopathy rehabilitation across various anatomical locations. Stage-appropriate loading strategies are outlined, progressing from isometric to isotonic to energy storage and release exercises. Pain monitoring approaches and criteria for exercise progression are discussed, with practical clinical examples for implementation.",
+    keywords: ["tendinopathy", "loading", "exercise therapy", "rehabilitation", "tendon"]
+  },
+  {
+    id: 1009,
+    title: "Scapular Dyskinesis: Assessment and Rehabilitation Strategies",
+    author: "Clinical Edge Research Team",
+    journal: "Shoulder and Upper Quadrant Review",
+    year: 2022,
     bodyPart: "shoulder",
-    keywords: ["shoulder pain", "regional interdependence", "scapular control", "kinetic chain", "rehabilitation"]
+    abstract: "This paper presents contemporary approaches to assessment and management of scapular movement dysfunction. Evidence-based rehabilitation strategies focusing on motor control, movement quality, and muscular balance are outlined. The role of scapular dyskinesis in various shoulder pathologies is discussed, with recommendations for integrated upper quadrant rehabilitation.",
+    keywords: ["scapula", "dyskinesis", "shoulder", "motor control", "rehabilitation"]
+  },
+  {
+    id: 1010,
+    title: "Plantar Heel Pain: Progressive Loading Approaches for Optimal Outcomes",
+    author: "Clinical Edge Research Team",
+    journal: "Foot Science and Practice",
+    year: 2023,
+    bodyPart: "foot",
+    abstract: "This paper reviews current evidence for managing plantar heel pain with emphasis on progressive loading principles. Recommendations for exercise selection, load parameters, and progression criteria are provided. The paper discusses the integration of local foot interventions with assessment and management of proximal contributing factors in the kinetic chain.",
+    keywords: ["plantar fasciitis", "heel pain", "loading", "foot intrinsics", "rehabilitation"]
   }
 ];
 
@@ -305,120 +540,214 @@ export const clinicalEdgeResearchArticles = [
  */
 export function getClinicalEdgeExercises(): InsertExercise[] {
   return [
-    // Knee Exercises - Patellofemoral Focus
+    // Knee Exercises
     {
-      title: "Isometric Hip Abduction in Standing",
-      description: "Isometric hip abduction against wall to activate gluteus medius without pelvic movement. Clinical Edge recommends this for early stage patellofemoral pain to build proximal control without knee loading.",
+      title: "Spanish Squat with Resistance Band",
       bodyPart: "knee",
-      difficulty: "beginner",
-      instructions: "1. Stand sideways next to wall with affected leg closest to wall\n2. Bend knee slightly and press outer knee into wall\n3. Focus on isolated gluteal contraction without pelvic movement\n4. Hold for 30-45 seconds\n5. Perform 3-4 repetitions with 30 second rest between",
-      targetMuscles: "Gluteus medius, gluteus minimus",
-      imageUrl: "/exercises/clinical-edge-isometric-hip.jpg"
+      type: "strength",
+      difficulty: "intermediate",
+      equipment: ["resistance band"],
+      description: "Evidence-based exercise for patellofemoral pain focusing on controlled knee loading with minimal patellofemoral stress.",
+      instructions: "Place a resistance band around a stable object at knee height. Position the band behind your knees and lean back to create tension. Perform a squat while maintaining band tension. Focus on quality knee tracking and control throughout the movement.",
+      repetitions: "8-12",
+      sets: "3-4",
+      restPeriod: "60 seconds",
+      imageUrl: "/images/exercises/spanish-squat.jpg",
+      videoUrl: "/videos/exercises/spanish-squat.mp4"
     },
     {
-      title: "Step Down with Visual Feedback",
-      description: "Controlled step down exercise with mirror feedback for movement quality. Clinical Edge emphasizes quality over quantity for patellofemoral rehabilitation.",
+      title: "Knee Extension with Terminal Isometric Hold",
       bodyPart: "knee",
-      difficulty: "intermediate",
-      instructions: "1. Stand on step or small platform facing mirror\n2. Slowly lower unaffected leg toward floor while watching knee position\n3. Ensure knee tracks over second toe without collapsing inward\n4. Touch heel lightly to floor then return to start position\n5. Perform 10-12 repetitions for 2-3 sets",
-      targetMuscles: "Quadriceps, gluteus medius, gluteus maximus, core stabilizers",
-      imageUrl: "/exercises/clinical-edge-step-down.jpg"
+      type: "strength",
+      difficulty: "beginner",
+      equipment: ["chair", "ankle weight (optional)"],
+      description: "Progressive quadriceps strengthening exercise with terminal isometric component for enhanced motor control and strength, beneficial for patellofemoral pain and knee osteoarthritis.",
+      instructions: "Sit on a chair with good posture. Slowly extend one knee until fully straight. Hold the fully extended position for 5 seconds with strong quadriceps contraction. Slowly lower and repeat. Add ankle weights for progression as tolerated.",
+      repetitions: "10-15",
+      sets: "2-3",
+      restPeriod: "45 seconds",
+      imageUrl: "/images/exercises/knee-extension-isometric.jpg",
+      videoUrl: "/videos/exercises/knee-extension-isometric.mp4"
     },
     {
-      title: "Lateral Band Walk with Hip Hinge",
-      description: "Combined lateral stepping with hip hinge pattern to integrate proximal control with functional movement. A Clinical Edge progression for patellofemoral pain when basic control is established.",
+      title: "Step Down with Controlled Knee Position",
       bodyPart: "knee",
-      difficulty: "intermediate",
-      instructions: "1. Place resistance band above knees\n2. Assume semi-squat position with slight hip hinge\n3. Step sideways while maintaining band tension\n4. After 6-8 steps, perform hip hinge while maintaining knee alignment\n5. Step in opposite direction\n6. Complete 3 sets of 10-12 steps each direction",
-      targetMuscles: "Gluteus medius, gluteus maximus, quadriceps, hamstrings",
-      imageUrl: "/exercises/clinical-edge-lateral-band.jpg"
-    },
-
-    // Lower Back Exercises - Classification-Based Approach
-    {
-      title: "Bent Knee Fallout with Breathing",
-      description: "Controlled knee movement synchronized with breathing to promote relaxation and motor control. Clinical Edge recommends this for patients with movement-related back pain and excessive guarding.",
-      bodyPart: "back",
-      difficulty: "beginner",
-      instructions: "1. Lie on back with knees bent, feet flat\n2. Inhale into lower ribs, expanding ribcage laterally\n3. As you exhale, slowly lower one knee outward toward floor\n4. Keep opposite leg stable and maintain neutral spine\n5. Return to start position on inhalation\n6. Perform 10 repetitions each side for 2 sets",
-      targetMuscles: "Transversus abdominis, diaphragm, pelvic floor, hip rotators",
-      imageUrl: "/exercises/clinical-edge-knee-fallout.jpg"
-    },
-    {
-      title: "Hip Hinge with Dowel",
-      description: "Movement pattern training using dowel feedback to teach proper spinal positioning during hip hinge. Clinical Edge approach for retraining fundamental movement patterns in low back pain.",
-      bodyPart: "back",
-      difficulty: "intermediate",
-      instructions: "1. Stand holding dowel against spine, contacting head, thoracic spine and sacrum\n2. Maintain these three points of contact throughout movement\n3. Hinge forward from hips keeping knees soft\n4. Allow natural lumbar curve without flattening or excessive arching\n5. Return to standing by driving hips forward\n6. Perform 12-15 repetitions for 2-3 sets",
-      targetMuscles: "Gluteus maximus, hamstrings, paraspinal muscles",
-      imageUrl: "/exercises/clinical-edge-hip-hinge.jpg"
-    },
-    {
-      title: "Quadruped Rock with Spinal Control",
-      description: "Controlled weight shifting in quadruped position while maintaining neutral spine. Clinical Edge utilizes this for building load tolerance and movement confidence in flexion-sensitive back pain.",
-      bodyPart: "back",
-      difficulty: "intermediate",
-      instructions: "1. Position in hands and knees with neutral spine\n2. Rock weight backward toward heels while maintaining lumbar position\n3. Only move as far as can control spinal position\n4. Return to start position and rock slightly forward\n5. Focus on smooth controlled movement\n6. Perform 12-15 repetitions for 2-3 sets",
-      targetMuscles: "Core stabilizers, paraspinal muscles, shoulder stabilizers",
-      imageUrl: "/exercises/clinical-edge-quadruped-rock.jpg"
-    },
-
-    // Neck Exercises - Sensorimotor Approach
-    {
-      title: "Deep Neck Flexor Endurance",
-      description: "Precision training for deep cervical flexors with pressure biofeedback. A staple Clinical Edge exercise for cervical control and endurance.",
-      bodyPart: "neck",
-      difficulty: "beginner",
-      instructions: "1. Lie on back with pressure cuff under neck inflated to 20mmHg\n2. Perform gentle nodding motion (as if saying 'yes')\n3. Hold gentle contraction while maintaining pressure at 22-24mmHg\n4. Breathe normally throughout\n5. Hold for 10 seconds, building to 10 repetitions with 10-second holds",
-      targetMuscles: "Longus colli, longus capitis",
-      imageUrl: "/exercises/clinical-edge-deep-neck.jpg"
-    },
-    {
-      title: "Cervical Joint Position Training",
-      description: "Proprioceptive training exercise for cervical position sense. Clinical Edge recommends this for patients with whiplash-associated disorders and cervicogenic headache.",
-      bodyPart: "neck",
-      difficulty: "intermediate",
-      instructions: "1. Sit with neutral posture wearing laser pointer headband\n2. Mark target position on wall at eye level\n3. Close eyes and rotate head halfway to left\n4. Return to center aiming to hit target precisely\n5. Open eyes to check accuracy\n6. Repeat in various directions (right rotation, flexion, extension)\n7. Perform 10 repetitions in each direction",
-      targetMuscles: "Deep cervical stabilizers, suboccipital muscles",
-      imageUrl: "/exercises/clinical-edge-joint-position.jpg"
-    },
-    {
-      title: "Gaze Stability with Head Movement",
-      description: "Exercise combining visual fixation with controlled cervical movement. Clinical Edge approach for oculomotor control in cervical disorders and post-concussion syndrome.",
-      bodyPart: "neck",
+      type: "functional",
       difficulty: "advanced",
-      instructions: "1. Fix gaze on stationary target at eye level\n2. Rotate head side to side while maintaining visual focus\n3. Start slowly and increase speed as tolerated\n4. If symptoms provoked, reduce range or speed\n5. Progress to include vertical head movements\n6. Perform for 30-60 seconds, 3-4 repetitions",
-      targetMuscles: "Cervical stabilizers, vestibulo-ocular system",
-      imageUrl: "/exercises/clinical-edge-gaze-stability.jpg"
+      equipment: ["step or box"],
+      description: "Functional knee exercise focusing on eccentric quadriceps control and proper alignment during descent, excellent for patellofemoral rehabilitation and return to function training.",
+      instructions: "Stand on a step or box (height appropriate to ability). Slowly step down with one leg while maintaining proper knee alignment (knee tracking over second toe). Control the descent with the stance leg. Return to starting position and repeat.",
+      repetitions: "8-10 per side",
+      sets: "3",
+      restPeriod: "60 seconds",
+      imageUrl: "/images/exercises/step-down.jpg",
+      videoUrl: "/videos/exercises/step-down.mp4"
     },
-
-    // Shoulder Exercises - Regional Interdependence Approach
+    
+    // Shoulder Exercises
     {
-      title: "Thoracic Extension Over Foam Roller",
-      description: "Mobility exercise targeting thoracic extension to improve regional contribution to shoulder function. A foundational Clinical Edge exercise for most shoulder presentations.",
+      title: "External Rotation with Scapular Setting",
       bodyPart: "shoulder",
-      difficulty: "beginner",
-      instructions: "1. Position foam roller horizontally under upper-mid back\n2. Support head with hands and keep buttocks on floor\n3. Allow gentle extension over roller\n4. Hold position for 20-30 seconds\n5. Reposition roller to different thoracic levels\n6. Perform 3-4 positions with 20-30 second holds each",
-      targetMuscles: "Thoracic erector spinae, intercostals",
-      imageUrl: "/exercises/clinical-edge-thoracic-extension.jpg"
-    },
-    {
-      title: "Wall Slide with Scapular Awareness",
-      description: "Movement training exercise integrating scapular control with upper limb elevation. Clinical Edge emphasizes quality of movement over range in early rehabilitation.",
-      bodyPart: "shoulder",
+      type: "strength",
       difficulty: "intermediate",
-      instructions: "1. Stand facing wall with forearms on wall in 'W' position\n2. Gently retract and depress scapulae\n3. Maintain scapular position while sliding arms upward\n4. Only move through range where scapular control is maintained\n5. Return to start position with control\n6. Perform 10-12 repetitions for 2-3 sets",
-      targetMuscles: "Serratus anterior, lower trapezius, rotator cuff",
-      imageUrl: "/exercises/clinical-edge-wall-slide.jpg"
+      equipment: ["resistance band"],
+      description: "Evidence-based rotator cuff strengthening exercise with emphasis on scapular control, beneficial for rotator cuff tendinopathy and subacromial pain syndrome.",
+      instructions: "Stand with elbow bent at 90 degrees and tucked at side. Actively set scapula in slight retraction and depression. While maintaining scapular position, rotate arm externally against band resistance. Control the return and repeat.",
+      repetitions: "12-15",
+      sets: "3",
+      restPeriod: "45 seconds",
+      imageUrl: "/images/exercises/external-rotation-scapular.jpg",
+      videoUrl: "/videos/exercises/external-rotation-scapular.mp4"
     },
     {
-      title: "Kinetic Chain Shoulder Press",
-      description: "Integration of lower body movement with shoulder function. Clinical Edge approach for advanced shoulder rehabilitation emphasizing regional interdependence.",
+      title: "Modified Prone Y with External Rotation",
       bodyPart: "shoulder",
+      type: "strength",
+      difficulty: "intermediate",
+      equipment: ["light dumbbells"],
+      description: "Combined movement targeting lower trapezius and rotator cuff muscles with emphasis on control through range, effective for scapular dyskinesis and rotator cuff strengthening.",
+      instructions: "Lie prone on a bench or stable surface. Hold light weights with arms hanging down. Lift arms in a Y position (approx. 125 degrees) while simultaneously externally rotating shoulders (thumbs up). Hold briefly at top position, focusing on scapular control. Lower with control and repeat.",
+      repetitions: "10-12",
+      sets: "3",
+      restPeriod: "60 seconds",
+      imageUrl: "/images/exercises/prone-y-rotation.jpg",
+      videoUrl: "/videos/exercises/prone-y-rotation.mp4"
+    },
+    
+    // Neck Exercises
+    {
+      title: "Deep Neck Flexor Activation with Precision",
+      bodyPart: "neck",
+      type: "motor control",
+      difficulty: "beginner",
+      equipment: ["pressure biofeedback unit (optional)"],
+      description: "Motor control exercise targeting deep cervical flexors with minimal superficial muscle activation, essential for neck pain and headache management.",
+      instructions: "Lie supine with neutral cervical spine. Perform a gentle nodding motion of the head (as if saying 'yes' very slightly) without activating superficial neck muscles. Hold the position with precision control. Use a pressure biofeedback unit under the neck if available to monitor performance.",
+      repetitions: "10 second holds, 10 repetitions",
+      sets: "2-3",
+      restPeriod: "30 seconds",
+      imageUrl: "/images/exercises/deep-neck-flexor.jpg",
+      videoUrl: "/videos/exercises/deep-neck-flexor.mp4"
+    },
+    {
+      title: "Cervical Proprioceptive Training",
+      bodyPart: "neck",
+      type: "motor control",
+      difficulty: "intermediate",
+      equipment: ["laser pointer (optional)"],
+      description: "Sensorimotor exercise targeting cervical joint position sense and motor control, beneficial for neck pain, headaches, and post-whiplash recovery.",
+      instructions: "Sit with good posture. Attach a laser pointer to head band (if available). Draw letters or follow patterns with head movements using precise control. Focus on accuracy and smooth movements rather than range. Progress to eyes-closed position sense training.",
+      repetitions: "5 minutes total training time",
+      sets: "1-2",
+      restPeriod: "As needed",
+      imageUrl: "/images/exercises/cervical-proprioception.jpg",
+      videoUrl: "/videos/exercises/cervical-proprioception.mp4"
+    },
+    
+    // Back Exercises
+    {
+      title: "Standing Control Point with Multifidus Activation",
+      bodyPart: "back",
+      type: "motor control",
+      difficulty: "intermediate",
+      equipment: ["none"],
+      description: "Lumbar motor control exercise focusing on segmental stability and multifidus activation in functional standing position, effective for low back pain and movement control impairments.",
+      instructions: "Stand with neutral spine position. Find your 'control point' in neutral lordosis. Perform gentle drawing-in of lower abdominals while maintaining normal breathing. Add subtle multifidus co-activation by focusing on gentle lower back muscular support without movement. Hold position while maintaining normal breathing.",
+      repetitions: "30 second holds, 5 repetitions",
+      sets: "2-3",
+      restPeriod: "30 seconds",
+      imageUrl: "/images/exercises/standing-control-point.jpg",
+      videoUrl: "/videos/exercises/standing-control-point.mp4"
+    },
+    {
+      title: "Functional Deadlift Pattern Progression",
+      bodyPart: "back",
+      type: "functional",
       difficulty: "advanced",
-      instructions: "1. Begin in split stance position with light dumbbell at shoulder\n2. Initiate movement with slight weight shift to front leg\n3. Coordinate shoulder press with forward weight transfer\n4. Control return to start position\n5. Focus on smooth, coordinated movement\n6. Perform 10-12 repetitions each side for 2-3 sets",
-      targetMuscles: "Deltoid, rotator cuff, serratus anterior, core stabilizers, hip stabilizers",
-      imageUrl: "/exercises/clinical-edge-kinetic-chain.jpg"
+      equipment: ["various objects or weights"],
+      description: "Progressive lifting pattern training emphasizing hip hinge and neutral spine control, essential for functional recovery and injury prevention in low back pain.",
+      instructions: "Begin with hip hinge practice without weight. Maintain lumbar neutral position while hinging at hips to reach forward with hands. Progress to picking up light object from increasingly lower positions while maintaining optimal movement pattern. Focus on bracing, breathing, and maintaining lumbar control throughout the movement.",
+      repetitions: "8-10",
+      sets: "3",
+      restPeriod: "60 seconds",
+      imageUrl: "/images/exercises/functional-deadlift.jpg",
+      videoUrl: "/videos/exercises/functional-deadlift.mp4"
+    },
+    
+    // Hip Exercises
+    {
+      title: "Progressive Hip Thrust with Load Management",
+      bodyPart: "hip",
+      type: "strength",
+      difficulty: "intermediate",
+      equipment: ["bench", "barbell or weight"],
+      description: "Evidence-based gluteal strengthening exercise with progressive loading capacity, beneficial for hip pathology, lower limb tendinopathy, and low back pain.",
+      instructions: "Sit on floor with upper back against bench, knees bent and feet flat. Place weighted bar across hips (use padding for comfort). Push through heels to lift hips until body forms straight line from shoulders to knees. Focus on gluteal activation rather than lumbar extension. Lower with control and repeat.",
+      repetitions: "10-12",
+      sets: "3-4",
+      restPeriod: "60 seconds",
+      imageUrl: "/images/exercises/hip-thrust.jpg",
+      videoUrl: "/videos/exercises/hip-thrust.mp4"
+    },
+    {
+      title: "Multidirectional Hip Control in Weight Bearing",
+      bodyPart: "hip",
+      type: "functional",
+      difficulty: "intermediate",
+      equipment: ["step or small platform"],
+      description: "Functional hip control exercise targeting gluteal function and neuromuscular control in multiple planes, effective for hip and knee pathologies.",
+      instructions: "Stand on one leg on a small step. Maintain pelvic stability while reaching other leg in forward, side, and backward directions with control. Focus on minimizing pelvic drop or rotation during movements. Touch the floor lightly with reaching leg and return to center position between each direction.",
+      repetitions: "8-10 in each direction per side",
+      sets: "2-3",
+      restPeriod: "45 seconds between sides",
+      imageUrl: "/images/exercises/multidirectional-hip.jpg",
+      videoUrl: "/videos/exercises/multidirectional-hip.mp4"
+    },
+    
+    // Ankle/Foot Exercises
+    {
+      title: "Progressive Heel Raise Protocol",
+      bodyPart: "ankle",
+      type: "strength",
+      difficulty: "intermediate",
+      equipment: ["step", "weights (for progression)"],
+      description: "Progressive loading exercise for Achilles tendon and calf complex, with staged advancement from bilateral to unilateral and varied speeds, evidence-based for Achilles tendinopathy.",
+      instructions: "Stand with balls of feet on edge of step, heels extending off edge. Perform heel raises through full range of motion, controlling both raising and lowering phases. Begin with bilateral heel raises, progress to unilateral as strength improves. Further progress by adding weight or slowing eccentric (lowering) phase to 5 seconds.",
+      repetitions: "15 bilateral progressing to 15 unilateral",
+      sets: "3-4",
+      restPeriod: "60 seconds",
+      imageUrl: "/images/exercises/heel-raise-progression.jpg",
+      videoUrl: "/videos/exercises/heel-raise-progression.mp4"
+    },
+    {
+      title: "Dynamic Balance with Perturbation Training",
+      bodyPart: "ankle",
+      type: "balance",
+      difficulty: "advanced",
+      equipment: ["balance board or unstable surface", "ball (optional)"],
+      description: "Advanced proprioceptive training with reactive elements, essential for ankle instability rehabilitation and return to sport preparation.",
+      instructions: "Stand on balance board or unstable surface in single-leg stance. Maintain balance while adding unpredictable perturbations - catching and throwing a ball, reaching in different directions, or having a partner provide light nudges. Focus on rapid stabilization and ankle strategy development.",
+      repetitions: "30-60 seconds per side",
+      sets: "3-4",
+      restPeriod: "30 seconds",
+      imageUrl: "/images/exercises/perturbation-balance.jpg",
+      videoUrl: "/videos/exercises/perturbation-balance.mp4"
+    },
+    
+    // Elbow Exercises
+    {
+      title: "Graded Eccentric Wrist Extension",
+      bodyPart: "elbow",
+      type: "strength",
+      difficulty: "intermediate",
+      equipment: ["light dumbbell or weight"],
+      description: "Progressive eccentric loading exercise for lateral elbow tendinopathy (tennis elbow), based on strong evidence for tendon rehabilitation.",
+      instructions: "Sit with forearm supported on a table, wrist at edge, palm down. Hold light weight. Use opposite hand to help lift weight up (concentric phase). Remove helping hand and slowly lower weight (eccentric phase) over 3-5 seconds. Repeat, gradually increasing weight as tolerated based on 24-hour pain response.",
+      repetitions: "10-15",
+      sets: "3",
+      restPeriod: "45 seconds",
+      imageUrl: "/images/exercises/eccentric-wrist-extension.jpg",
+      videoUrl: "/videos/exercises/eccentric-wrist-extension.mp4"
     }
   ];
 }

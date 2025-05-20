@@ -1492,14 +1492,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
         updatedAt: new Date()
       });
       
-      // Determine if this is a shoulder-related case that should use Jo Gibson's approach
+      // Determine which specialized approach to use based on patient characteristics
       let analysisResult;
       try {
-        // Import the specialized shoulder analysis module
+        // Import all specialized analysis modules
         const { analyzeShoulderPatientJoGibson, isShoulderPatient } = require('./virtualPatientJoGibson');
+        const { analyzePatientClinicalEdge } = require('./virtualPatientClinicalEdge');
+        const { analyzePatientPhysioNetwork } = require('./virtualPatientPhysioNetwork');
+        const { analyzePatientSportsMap } = require('./virtualPatientSportsMap');
         
-        // Check if the patient has shoulder-related issues using the specialized function
+        // Check which specialized approach is most appropriate for this patient
+        
+        // 1. Check for shoulder-related issues - Jo Gibson approach
         const isShoulderRelated = isShoulderPatient(virtualPatient);
+        
+        // 2. Check for knee-related issues - Clinical Edge approach
+        const isKneeCase = virtualPatient.body_part === "knee";
+        
+        // 3. Check for spine-related issues - Physio Network approach
+        const isSpineCase = virtualPatient.body_part === "back" || virtualPatient.body_part === "neck";
+        
+        // 4. Check for sports/athletic issues - Sports Map approach
+        const isSportsCase = 
+          virtualPatient.chief_complaint?.toLowerCase().includes("sport") || 
+          virtualPatient.chief_complaint?.toLowerCase().includes("athlete") ||
+          virtualPatient.chief_complaint?.toLowerCase().includes("running") ||
+          virtualPatient.chief_complaint?.toLowerCase().includes("training") ||
+          (virtualPatient.past_medical_history && 
+           (virtualPatient.past_medical_history.toLowerCase().includes("sport") ||
+            virtualPatient.past_medical_history.toLowerCase().includes("athlete")));
+            
+        console.log(`Patient characteristics - Shoulder: ${isShoulderRelated}, Knee: ${isKneeCase}, Spine: ${isSpineCase}, Sports: ${isSportsCase}`);
           
         if (isShoulderRelated) {
           // Try to use the Jo Gibson approach for shoulder cases
@@ -1521,12 +1544,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
             joGibsonSpecificApproach: true,
             relatedArticleIds: joGibsonResult.relatedArticleIds || []
           };
+        } 
+        // Use Clinical Edge approach for knee cases
+        else if (isKneeCase) {
+          console.log("Using Clinical Edge approach for knee patient analysis");
+          
+          const clinicalEdgeResult = await analyzePatientClinicalEdge(virtualPatient);
+          
+          // Convert the Clinical Edge specialized format to our standard format
+          analysisResult = {
+            primaryDiagnosis: { name: clinicalEdgeResult.diagnosis, description: "Based on Clinical Edge's evidence-based approach" },
+            differentialDiagnoses: clinicalEdgeResult.differentialDiagnosis?.map(d => ({ 
+              name: d.condition, 
+              description: d.rationale,
+              likelihood: d.likelihood
+            })) || [],
+            treatmentOptions: clinicalEdgeResult.treatmentOptions,
+            assessmentTests: clinicalEdgeResult.assessmentTests,
+            recommendedKeywords: ["Clinical Edge", "knee rehabilitation", "evidence-based physiotherapy"],
+            clinicalEdgeSpecificApproach: true,
+            relatedArticleIds: clinicalEdgeResult.relatedArticleIds || []
+          };
+        }
+        // Use Physio Network approach for spine cases
+        else if (isSpineCase) {
+          console.log("Using Physio Network approach for spine patient analysis");
+          
+          const physioNetworkResult = await analyzePatientPhysioNetwork(virtualPatient);
+          
+          // Convert the Physio Network specialized format to our standard format
+          analysisResult = {
+            primaryDiagnosis: { name: physioNetworkResult.diagnosis, description: "Based on Physio Network's pain science approach" },
+            differentialDiagnoses: physioNetworkResult.differentialDiagnosis?.map(d => ({ 
+              name: d.condition, 
+              description: d.rationale,
+              likelihood: d.likelihood
+            })) || [],
+            treatmentOptions: physioNetworkResult.treatmentOptions,
+            assessmentTests: physioNetworkResult.assessmentTests,
+            recommendedKeywords: ["Physio Network", "pain science", "biopsychosocial approach"],
+            physioNetworkSpecificApproach: true,
+            painMechanisms: physioNetworkResult.painMechanisms,
+            relatedArticleIds: physioNetworkResult.relatedArticleIds || []
+          };
+        }
+        // Use Sports Map approach for sports/athletic cases
+        else if (isSportsCase) {
+          console.log("Using Sports Map approach for athletic patient analysis");
+          
+          const sportsMapResult = await analyzePatientSportsMap(virtualPatient);
+          
+          // Convert the Sports Map specialized format to our standard format
+          analysisResult = {
+            primaryDiagnosis: { name: sportsMapResult.diagnosis, description: "Based on Sports Map's athletic performance approach" },
+            differentialDiagnoses: sportsMapResult.differentialDiagnosis?.map(d => ({ 
+              name: d.condition, 
+              description: d.rationale,
+              likelihood: d.likelihood
+            })) || [],
+            treatmentOptions: sportsMapResult.treatmentOptions,
+            assessmentTests: sportsMapResult.assessmentTests,
+            recommendedKeywords: ["Sports Map", "athletic performance", "return to sport"],
+            sportsMapSpecificApproach: true,
+            relatedArticleIds: sportsMapResult.relatedArticleIds || []
+          };
         } else {
-          // Use standard analysis for non-shoulder cases
+          // Use standard analysis for cases without a specialized approach
           analysisResult = await analyzeVirtualPatientCase(virtualPatient);
         }
       } catch (error) {
-        console.error("Error in Jo Gibson shoulder analysis, falling back to standard analysis:", error);
+        console.error("Error in specialized analysis, falling back to standard analysis:", error);
         analysisResult = await analyzeVirtualPatientCase(virtualPatient);
       }
       

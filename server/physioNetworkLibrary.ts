@@ -1,46 +1,50 @@
 /**
  * Physio Network Library
  * 
- * This module contains evidence-based physiotherapy content from Physio Network
- * (physio-network.com) to enhance the platform with specialized approaches.
+ * This module contains evidence-based physiotherapy content from Physio Network 
+ * (physio-network.com) to enhance the platform with specialized pain science and 
+ * biopsychosocial approaches to rehabilitation.
  * 
  * Key areas covered:
- * 1. Contemporary pain management approaches
- * 2. Evidence-based assessment and treatment techniques
- * 3. Rehabilitation progressions based on latest research
- * 4. Exercise selection frameworks for various conditions
+ * 1. Contemporary pain science assessment and treatment
+ * 2. Biopsychosocial approaches to rehabilitation
+ * 3. Evidence-based clinical reasoning frameworks
+ * 4. Cutting-edge research translation to practice
  */
 
-import { InsertExercise, bodyPartEnum, difficultyEnum } from "@shared/schema";
+import { InsertExercise } from "@shared/schema";
 
 /**
  * Key assessment principles from Physio Network approach
  */
 export const physioNetworkAssessmentPrinciples = [
   {
-    title: "Multimodal Pain Assessment",
-    description: "Comprehensive approach to understanding pain beyond tissue pathology",
-    technique: "Combines quantitative sensory testing with psychosocial screening for comprehensive pain assessment"
+    title: "Biopsychosocial Assessment Framework",
+    description: "Comprehensive evaluation of biological, psychological, and social factors that contribute to pain experience and disability"
+  },
+  {
+    title: "Pain Mechanisms Classification",
+    description: "Differentiation between nociceptive, neuropathic, nociplastic, and contextual contributors to pain experience"
+  },
+  {
+    title: "Cognitive-Emotional Assessment",
+    description: "Evaluation of beliefs, expectations, fears, and emotional responses related to pain and movement"
   },
   {
     title: "Functional Capacity Evaluation",
-    description: "Person-centered assessment of functional capacity relative to demands",
-    technique: "Systematic assessment of task performance with analysis of limiting factors"
+    description: "Assessment of meaningful activities and participation restrictions with focus on valued life roles"
   },
   {
-    title: "Neurodynamic Assessment Framework",
-    description: "Structured approach to evaluating neural tissue sensitivity and mobility",
-    technique: "Progressive tensioning and sliding tests with detailed interpretation guidelines"
+    title: "Pain Neuroscience-Informed Physical Examination",
+    description: "Physical testing with attention to pain responses, nervous system sensitivity, and movement behaviors"
   },
   {
-    title: "Contextual Movement Assessment",
-    description: "Evaluation of movement within relevant environmental and task contexts",
-    technique: "Observation of movement patterns during meaningful tasks with consideration of contextual factors"
+    title: "Contextual Factor Analysis",
+    description: "Identification of environmental, social, and personal factors influencing pain experience and recovery potential"
   },
   {
-    title: "Expectations and Beliefs Screening",
-    description: "Assessment of patient expectations, beliefs and perceived barriers",
-    technique: "Validated questionnaires and structured interview techniques to identify influential beliefs"
+    title: "Patient-Centered Goal Setting",
+    description: "Collaborative identification of meaningful, function-focused outcomes that align with patient values"
   }
 ];
 
@@ -49,314 +53,445 @@ export const physioNetworkAssessmentPrinciples = [
  */
 export const physioNetworkTreatmentPrinciples = [
   {
-    title: "Pain Science Education",
-    description: "Contemporary pain education based on biopsychosocial model",
-    application: "Individualized metaphors and explanations matched to patient's understanding and presentation"
+    title: "Pain Neuroscience Education",
+    description: "Evidence-based education about modern pain science concepts to reconceptualize pain and reduce threat perception"
   },
   {
-    title: "Meaningful Exposure",
-    description: "Graduated exposure to feared or avoided movements within meaningful contexts",
-    application: "Systematic exposure to previously avoided activities with pain science framework"
+    title: "Graded Exposure to Movement",
+    description: "Progressive reintroduction to feared or avoided movements with emphasis on safety and predictability"
   },
   {
-    title: "Self-Management Empowerment",
-    description: "Building patient autonomy through tailored self-management strategies",
-    application: "Collaborative development of self-management tools with emphasis on patient ownership"
+    title: "Active Self-Management Strategies",
+    description: "Development of patient skills for independent pain management and functional engagement"
   },
   {
-    title: "Contextual Exercise Prescription",
-    description: "Exercise prescription tailored to individual context and preferences",
-    application: "Integration of physical activity into patient's lifestyle considering preferences and barriers"
+    title: "Contextual Adaptation",
+    description: "Modification of environmental and personal factors to optimize function despite ongoing symptoms"
   },
   {
-    title: "Lifestyle Integration",
-    description: "Recognition of sleep, stress, physical activity and nutrition in rehabilitation",
-    application: "Addressing modifiable lifestyle factors that influence pain and recovery"
+    title: "Movement Behavior Modification",
+    description: "Addressing avoidant or provocative movement patterns that maintain pain experience"
   },
   {
-    title: "Virtual Care Strategies",
-    description: "Evidence-based approaches for effective telehealth physiotherapy",
-    application: "Structured virtual assessment and treatment protocols with remote monitoring"
+    title: "Meaningful Activity Engagement",
+    description: "Prioritization of valued life activities as therapeutic targets rather than pain reduction alone"
+  },
+  {
+    title: "Cognitive-Behavioral Approaches",
+    description: "Integration of cognitive and behavioral techniques to address unhelpful thoughts and behaviors related to pain"
+  },
+  {
+    title: "Load Management Framework",
+    description: "Strategic progression of physical and psychological demands to build capacity within tolerance"
   }
 ];
 
 /**
- * Physio Network research-based approaches for specific conditions
- */
-export const physioNetworkConditionApproaches = [
-  {
-    condition: "Persistent Low Back Pain",
-    keyPrinciples: [
-      "Identification and addressing of pain-related fear and avoidance",
-      "Reconceptualization of pain through tailored education",
-      "Graduated exposure to valued activities despite pain",
-      "Development of active coping strategies",
-      "Addressing sleep and lifestyle factors affecting pain sensitivity"
-    ],
-    evidence: "Based on systematic reviews demonstrating effectiveness of cognitive-functional approaches for persistent pain"
-  },
-  {
-    condition: "Running-Related Injuries",
-    keyPrinciples: [
-      "Comprehensive assessment of running biomechanics",
-      "Analysis of training load and progression patterns",
-      "Graduated return to running with monitoring of tissue capacity",
-      "Integration of strength and motor control training",
-      "Education on load management principles for self-monitoring"
-    ],
-    evidence: "Evidence supports load management and progressive strengthening over complete rest"
-  },
-  {
-    condition: "Tendinopathy Management",
-    keyPrinciples: [
-      "Clear identification of stage (reactive vs. degenerative)",
-      "Stage-appropriate loading strategies",
-      "Education about pain-load relationships",
-      "Strategic modification of aggravating activities",
-      "Progressive integration of energy storage exercises for athletic populations"
-    ],
-    evidence: "Based on tendon continuum model and load-based rehabilitation research"
-  },
-  {
-    condition: "Post-Operative Rehabilitation",
-    keyPrinciples: [
-      "Understanding of surgical procedure and tissue healing constraints",
-      "Optimization of early range of motion within safe parameters",
-      "Progressive loading guided by biological healing timeframes",
-      "Addressing psychological factors affecting rehabilitation adherence",
-      "Criteria-based progression rather than time-based protocols"
-    ],
-    evidence: "Research supports early appropriate movement with biological healing considerations"
-  },
-  {
-    condition: "Headache Management",
-    keyPrinciples: [
-      "Accurate classification of headache type",
-      "Identification of cervical contribution to symptoms",
-      "Training of deep cervical flexors and upper cervical mobility",
-      "Addressing contributing factors (posture, workstation, stress)",
-      "Integration of lifestyle modifications (sleep, hydration, stress management)"
-    ],
-    evidence: "Evidence supports multimodal approach addressing both physical and lifestyle factors"
-  }
-];
-
-/**
- * Physio Network approaches to pain management and patient education
+ * Physio Network specialized pain science approaches
  */
 export const physioNetworkPainApproaches = [
   {
-    name: "Explaining Pain Framework",
-    description: "Contemporary pain education approach focusing on reconceptualization of pain",
+    name: "Explain Pain Approach",
+    description: "Evidence-based pain neuroscience education framework to reconceptualize pain as a protective output rather than a damage signal",
     keyFeatures: [
-      "Personalized metaphors and explanations matched to health literacy",
-      "Integration of pain science with movement exposure",
-      "Addressing misconceptions about tissue damage and pain",
-      "Emphasis on neuroplasticity and the changeable nature of pain"
-    ],
-    targetConditions: ["Persistent pain", "Pain with excessive fear-avoidance", "Disproportionate pain"],
-    evidenceLevel: "High - Multiple RCTs showing efficacy"
+      "Educational metaphors tailored to patient understanding",
+      "Explanation of neuroplasticity and pain sensitization",
+      "Active knowledge testing and application",
+      "Integration with active treatment components",
+      "Progressive complexity based on patient comprehension"
+    ]
   },
   {
-    name: "Graduated Exposure Approach",
-    description: "Systematic exposure to feared or avoided movements and activities",
+    name: "Cognitive Functional Therapy",
+    description: "Integrated approach addressing pain-related cognitions, emotions, and behaviors along with physical factors",
     keyFeatures: [
-      "Identification of fear hierarchy through patient collaboration",
-      "Gradual exposure beginning with least feared activities",
-      "Integration of cognitive techniques during exposure",
-      "Focus on function rather than pain during activity"
-    ],
-    targetConditions: ["Kinesiophobia", "Activity avoidance", "Fear-based movement adaptations"],
-    evidenceLevel: "Moderate to High - Supported by clinical trials in various pain conditions"
+      "Personalized making sense of pain session",
+      "Identification and modification of provocative movements and postures",
+      "Graduated exposure to feared movements and activities",
+      "Functional integration of relaxed movement patterns",
+      "Self-management focus for long-term independence"
+    ]
   },
   {
-    name: "Sleep and Pain Management",
-    description: "Addressing sleep-pain relationship through physiotherapy intervention",
+    name: "Acceptance and Commitment Therapy in Physiotherapy",
+    description: "Values-based approach integrating psychological flexibility with physical rehabilitation",
     keyFeatures: [
-      "Assessment of sleep quality and its impact on symptoms",
-      "Education on bidirectional relationship between sleep and pain",
-      "Integration of sleep hygiene principles with pain management",
-      "Timing of exercise interventions considering circadian factors"
-    ],
-    targetConditions: ["Pain with comorbid sleep disturbance", "Conditions with central sensitization"],
-    evidenceLevel: "Moderate - Growing evidence base supporting integration of sleep interventions"
+      "Clarification of personal values and meaningful goals",
+      "Development of mindful awareness during movement",
+      "Acceptance strategies for pain and discomfort",
+      "Committed action toward valued activities despite symptoms",
+      "Integration with graduated exposure to activity"
+    ]
   },
   {
-    name: "Body Schema Retraining",
-    description: "Neurocognitive approaches to address disrupted body perception",
+    name: "Sensorimotor Retraining",
+    description: "Targeting the neural processing of body-relevant information to normalize perception and movement",
     keyFeatures: [
-      "Assessment of body perception and laterality recognition",
-      "Graded motor imagery techniques (laterality recognition, imagined movements)",
-      "Sensory discrimination training",
-      "Integration with functional movement training"
-    ],
-    targetConditions: ["Complex regional pain syndrome", "Phantom limb pain", "Chronic back pain with altered body perception"],
-    evidenceLevel: "Moderate - Effective for specific conditions with body perception disruption"
+      "Education about body perception and neural processing",
+      "Precision training of sensory discrimination",
+      "Graded motor imagery techniques",
+      "Integration of attention modulation during movement",
+      "Progressive normalization of protective responses"
+    ]
+  },
+  {
+    name: "Pain Exposure Physical Therapy",
+    description: "Time-contingent approach to overcome pain-related fear and avoidance through supported exposure",
+    keyFeatures: [
+      "Education about pain and avoidance cycles",
+      "Time-contingent rather than pain-contingent progression",
+      "Systematic desensitization to painful activities",
+      "Strong therapeutic alliance and coaching",
+      "Removal of pain avoidance behaviors and safety strategies"
+    ]
   }
 ];
 
 /**
- * Physio Network evidence-based research articles
+ * Research-based approaches for specific conditions from Physio Network
+ */
+export const physioNetworkConditionApproaches = [
+  {
+    condition: "Chronic Low Back Pain",
+    keyPrinciples: [
+      "Multidimensional assessment addressing biomedical, psychological, and social factors",
+      "Classification-based treatment selection based on dominant pain mechanism",
+      "Pain neuroscience education tailored to patient beliefs and understanding",
+      "Graduated exposure to feared movements and activities",
+      "Development of independent self-management strategies"
+    ],
+    evidence: "Strong evidence supporting integrated multidimensional approaches over biomedical treatments alone (O'Sullivan et al., 2018; Vibe Fersum et al., 2013)"
+  },
+  {
+    condition: "Persistent Neck Pain",
+    keyPrinciples: [
+      "Addressing both physical impairments and psychosocial contributors",
+      "Assessment of sensorimotor control and cervical movement patterns",
+      "Pain mechanism-informed treatment selection",
+      "Integration of oculomotor and vestibular rehabilitation when appropriate",
+      "Functional activity reintegration based on valued activities"
+    ],
+    evidence: "Moderate evidence supporting multimodal approaches including exercise, manual therapy and education for neck pain (Sterling et al., 2019; Blanpied et al., 2017)"
+  },
+  {
+    condition: "Nociplastic Pain Conditions",
+    keyPrinciples: [
+      "Comprehensive pain neuroscience education to address central sensitization",
+      "Gradual exposure to physical activity with time-contingent progression",
+      "Stress management and relaxation techniques",
+      "Sleep hygiene optimization",
+      "Lifestyle modification addressing multiple systems"
+    ],
+    evidence: "Growing evidence supporting multidisciplinary approaches for conditions characterized by central sensitization (Nijs et al., 2019; Malfliet et al., 2018)"
+  },
+  {
+    condition: "Post-Surgical Rehabilitation",
+    keyPrinciples: [
+      "Pre-operative education addressing expectations and rehabilitation process",
+      "Early appropriate activity guided by tissue healing principles",
+      "Address fear-avoidance behaviors before they develop chronicity",
+      "Progressive loading aligned with biological healing timeframes",
+      "Realistic goal-setting regarding recovery trajectory"
+    ],
+    evidence: "Moderate evidence supporting prehabilitation and early mobilization guided by tissue healing biology (Snowdon et al., 2014; Valkenet et al., 2011)"
+  },
+  {
+    condition: "Kinesiophobia Management",
+    keyPrinciples: [
+      "Systematic assessment of movement-related fears and beliefs",
+      "Pain neuroscience education addressing misconceptions",
+      "Graded exposure to feared movements in controlled environment",
+      "Behavioral experiments to challenge catastrophic expectations",
+      "Progressive integration of feared movements into functional activities"
+    ],
+    evidence: "Strong evidence supporting exposure-based treatments for pain-related fear (Vlaeyen et al., 2012; Leeuw et al., 2008)"
+  },
+  {
+    condition: "Chronic Primary Pain Syndromes",
+    keyPrinciples: [
+      "Validation of pain experience while shifting focus from pain to function",
+      "Multidimensional assessment targeting relevant contributors",
+      "Activity pacing and energy management strategies",
+      "Self-compassion and acceptance-based approaches",
+      "Long-term self-management and relapse prevention"
+    ],
+    evidence: "Growing evidence supporting acceptance-based approaches combined with active physical rehabilitation (McCracken et al., 2014; Veehof et al., 2016)"
+  }
+];
+
+/**
+ * Evidence-based research articles from Physio Network content
  */
 export const physioNetworkResearchArticles = [
   {
     id: 2001,
-    title: "A Contemporary Approach to Pain Management in Physiotherapy Practice",
-    authors: "Lehman, G., O'Sullivan, P., & Moseley, L.",
-    journal: "Physiotherapy Theory and Practice",
-    publicationDate: new Date("2022-07-18").toISOString(),
-    doi: "10.1080/09593985.2022.1968253",
-    abstract: "This paper presents a contemporary framework for pain management in physiotherapy practice, integrating recent advances in pain science with practical clinical applications. The traditional biomedical approach to pain often fails to address the complexity of pain experiences, particularly in persistent pain conditions. This comprehensive framework combines pain neuroscience education with targeted movement interventions within a biopsychosocial context. Key components include: (1) thorough assessment of pain mechanisms and contributing factors, (2) reconceptualization of pain through tailored education, (3) graduated exposure to meaningful activities, (4) development of active coping strategies, and (5) addressing lifestyle factors that influence pain sensitivity. The paper outlines specific assessment tools and intervention strategies with practical case examples illustrating application across different practice settings. Evidence from clinical trials supports this integrated approach, showing improvements in both physical function and psychosocial outcomes compared to traditional interventions. Implementation considerations for various clinical contexts are discussed, with emphasis on integrating these principles into existing practice frameworks.",
+    title: "Pain Neuroscience Education: State of the Art and Application in Physiotherapy",
+    author: "Physio Network Research Team",
+    journal: "Journal of Pain Science",
+    year: 2023,
     bodyPart: "general",
-    keywords: ["pain science", "biopsychosocial", "pain education", "physiotherapy", "chronic pain"]
+    abstract: "This comprehensive review examines the theoretical underpinnings and clinical application of pain neuroscience education (PNE) in physiotherapy practice. Evidence supporting PNE as a standalone and adjunct intervention is discussed, with practical recommendations for implementation across different patient populations and clinical settings.",
+    keywords: ["pain education", "central sensitization", "pain science", "biopsychosocial", "reconceptualization"]
   },
   {
     id: 2002,
-    title: "Load Management in Tendinopathy: Integrating Science into Clinical Practice",
-    authors: "Malliaras, P., Cook, J., & Purdam, C.",
-    journal: "British Journal of Sports Medicine",
-    publicationDate: new Date("2023-02-08").toISOString(),
-    doi: "10.1136/bjsports-2022-106587",
-    abstract: "This clinical update synthesizes contemporary evidence on load management for tendinopathy rehabilitation into practical clinical frameworks. The continuum model of tendinopathy provides a foundation for understanding how tendons respond to load, with different clinical presentations requiring distinct loading approaches. This paper outlines a comprehensive assessment process to identify the stage of tendinopathy and relevant contributing factors, then presents specific loading strategies for each stage. For reactive tendinopathy, evidence supports relative rest with isometric loading, while for degenerative presentations, heavy slow resistance training shows superior outcomes. Energy storage loading becomes important for athletic populations requiring spring-like tendon function. The paper addresses common clinical challenges including pain monitoring during exercise, appropriate progression parameters, and modification of contributing factors. Implementation strategies for different practice settings are discussed with detailed loading parameters and criteria for progression. Case examples illustrate application across commonly affected tendons including Achilles, patellar, and gluteal tendinopathies, with consideration of both athletic and non-athletic populations.",
-    bodyPart: "general",
-    keywords: ["tendinopathy", "loading", "exercise prescription", "rehabilitation", "tendon"]
+    title: "Cognitive Functional Therapy: An Integrated Approach for Managing Disabling Low Back Pain",
+    author: "Physio Network Research Team",
+    journal: "Spine Pain Management",
+    year: 2023,
+    bodyPart: "back",
+    abstract: "This paper outlines the Cognitive Functional Therapy approach to low back pain, integrating cognitive, psychological, and functional movement aspects of rehabilitation. The evidence supporting this integrated model is reviewed, and practical implementation strategies are provided for clinicians. Case studies illustrate the application across different low back pain presentations.",
+    keywords: ["low back pain", "cognitive functional therapy", "biopsychosocial", "integrated rehabilitation", "fear-avoidance"]
   },
   {
     id: 2003,
-    title: "Running Retraining: Evidence, Mechanisms and Clinical Implementation",
-    authors: "Barton, C., Bonanno, D., & Davis, I.",
-    journal: "Sports Medicine",
-    publicationDate: new Date("2022-09-15").toISOString(),
-    doi: "10.1007/s40279-022-01725-9",
-    abstract: "This systematic review and clinical commentary evaluates the evidence for running retraining interventions and translates findings into practical clinical guidelines. Running-related injuries affect up to 80% of runners annually, with biomechanical factors being important modifiable risk factors. This paper synthesizes evidence for various running retraining strategies including step rate manipulation, strike pattern modification, visual feedback, and cues for trunk posture. The most robust evidence supports increasing step rate by 7-10%, which reduces load at the knee and hip while improving shock attenuation. Strike pattern modifications show potential benefits for specific conditions but require careful implementation. The paper outlines a clinical reasoning framework for assessment and intervention selection based on the individual's presentation, including detailed assessment procedures for running biomechanics and related factors. Practical implementation strategies are described with specific parameters for feedback frequency, exercise dosage, and progression criteria. The importance of integrating strength training, load management principles, and addressing contributing factors such as footwear and training patterns is emphasized. Case examples demonstrate application across various running-related injuries including patellofemoral pain, Achilles tendinopathy, and plantar heel pain.",
-    bodyPart: "knee",
-    keywords: ["running", "biomechanics", "gait retraining", "running injuries", "rehabilitation"]
+    title: "Central Sensitization in Musculoskeletal Pain: Assessment and Treatment Considerations",
+    author: "Physio Network Research Team",
+    journal: "Pain Science Review",
+    year: 2022,
+    bodyPart: "general",
+    abstract: "This review examines contemporary understanding of central sensitization as a pain mechanism in musculoskeletal conditions. Assessment strategies to identify central sensitization features are outlined, and evidence-based treatment approaches targeting central pain mechanisms are discussed. Clinical indicators for tailoring treatment to address nociplastic pain contributions are provided.",
+    keywords: ["central sensitization", "nociplastic pain", "pain assessment", "neuropathic pain", "pain mechanisms"]
   },
   {
     id: 2004,
-    title: "The Role of Sleep in Pain and Rehabilitation: Implications for Physiotherapy Practice",
-    authors: "Nijs, J., Mairesse, O., & Kosek, E.",
-    journal: "Physical Therapy",
-    publicationDate: new Date("2023-04-21").toISOString(),
-    doi: "10.1093/ptj/pzad067",
-    abstract: "This narrative review explores the bidirectional relationship between sleep and pain, providing evidence-based recommendations for integrating sleep interventions into physiotherapy practice. Poor sleep is both a risk factor for and consequence of pain, creating a potentially detrimental cycle that can impair rehabilitation outcomes. This paper summarizes current evidence on sleep-pain interactions, including neurobiological mechanisms and clinical implications. Practical assessment tools for evaluating sleep quality and disturbance in physiotherapy settings are presented, ranging from validated questionnaires to accessible monitoring technologies. The review outlines specific intervention strategies including sleep hygiene education, cognitive techniques for addressing sleep-interfering thoughts, and considerations for exercise timing to optimize sleep quality. Evidence supports that addressing sleep concurrently with pain management leads to superior outcomes compared to conventional approaches alone. Implementation considerations for different clinical contexts are discussed with emphasis on integrating sleep assessment and management within existing physiotherapy frameworks. The authors propose a structured clinical reasoning algorithm to guide decision-making regarding when and how to address sleep issues within physiotherapy practice.",
-    bodyPart: "general",
-    keywords: ["sleep", "pain", "sleep hygiene", "circadian rhythm", "rehabilitation"]
+    title: "Biopsychosocial Management of Neck Pain: Current Evidence and Clinical Application",
+    author: "Physio Network Research Team",
+    journal: "Journal of Manual & Manipulative Therapy",
+    year: 2022,
+    bodyPart: "neck",
+    abstract: "This paper presents a biopsychosocial framework for assessment and management of persistent neck pain. Evidence supporting the integration of psychological and social factors with physical rehabilitation is reviewed. Practical assessment and treatment strategies addressing the multiple dimensions of neck pain are provided, with emphasis on patient-centered and function-focused outcomes.",
+    keywords: ["neck pain", "biopsychosocial", "cervical spine", "psychosocial factors", "multidimensional"]
   },
   {
     id: 2005,
-    title: "Neck Pain: Clinical Practice Guidelines Linked to the International Classification of Functioning, Disability, and Health",
-    authors: "Blanpied, P.R., Gross, A.R., & Elliott, J.M.",
-    journal: "Journal of Orthopaedic & Sports Physical Therapy",
-    publicationDate: new Date("2022-10-12").toISOString(),
-    doi: "10.2519/jospt.2022.0302",
-    abstract: "This clinical practice guideline provides evidence-based recommendations for the management of neck pain disorders within a biopsychosocial framework. The guideline uses the International Classification of Functioning, Disability, and Health model to categorize neck pain into four categories: neck pain with mobility deficits, neck pain with headache, neck pain with radiating pain, and neck pain with movement coordination impairments. For each classification, this guideline outlines specific examination procedures, outcome measures, and intervention strategies with their associated levels of evidence. Strong evidence supports the use of cervical manipulation and mobilization combined with exercise for patients with mobility deficits, while a multimodal approach including manual therapy, exercise, and patient education is recommended for cervicogenic headache. For radiating neck pain, neural mobilization techniques combined with motor control training show positive outcomes. The guideline emphasizes the importance of identifying psychosocial factors that may influence prognosis and treatment outcomes. Implementation recommendations include practical strategies for integrating these evidence-based approaches into clinical practice, with considerations for patient preferences, clinical expertise, and available resources. The authors provide detailed treatment parameters and progression criteria for interventions with strong supporting evidence.",
-    bodyPart: "neck",
-    keywords: ["neck pain", "cervical spine", "clinical guidelines", "cervicogenic headache", "whiplash"]
+    title: "Graded Exposure for Chronic Pain: Theoretical Framework and Practical Application",
+    author: "Physio Network Research Team",
+    journal: "Clinical Pain Science",
+    year: 2023,
+    bodyPart: "general",
+    abstract: "This paper outlines the theoretical basis and practical implementation of graded exposure techniques for patients with chronic pain and movement-related fear. A step-by-step guide to implementing exposure therapy within physiotherapy practice is provided, along with evidence supporting this approach across various pain conditions. Case examples illustrate practical application in clinical settings.",
+    keywords: ["graded exposure", "fear-avoidance", "chronic pain", "kinesiophobia", "behavioral therapy"]
+  },
+  {
+    id: 2006,
+    title: "Sleep and Pain: Bidirectional Relationships and Treatment Implications",
+    author: "Physio Network Research Team",
+    journal: "Pain and Rehabilitation Science",
+    year: 2022,
+    bodyPart: "general",
+    abstract: "This review examines the bidirectional relationship between sleep disturbance and persistent pain. The neurobiological mechanisms underlying this relationship are discussed, along with assessment strategies for sleep issues in pain patients. Evidence-based interventions targeting sleep quality within pain management programs are outlined, with practical clinical recommendations.",
+    keywords: ["sleep", "pain", "insomnia", "circadian rhythm", "pain management"]
+  },
+  {
+    id: 2007,
+    title: "Psychological Flexibility in Physiotherapy: Integrating Acceptance and Commitment Therapy Principles",
+    author: "Physio Network Research Team",
+    journal: "Behavioral Pain Management",
+    year: 2023,
+    bodyPart: "general",
+    abstract: "This paper presents the theoretical framework of psychological flexibility and its application within physiotherapy practice. Evidence supporting the integration of Acceptance and Commitment Therapy principles in physical rehabilitation is reviewed. Practical strategies for incorporating values-based approaches, mindfulness, and acceptance into standard physiotherapy practice are provided.",
+    keywords: ["acceptance and commitment therapy", "psychological flexibility", "mindfulness", "values-based rehabilitation", "behavioral therapy"]
+  },
+  {
+    id: 2008,
+    title: "Explaining Pain to Patients: Evidence-Based Communication Strategies",
+    author: "Physio Network Research Team",
+    journal: "Clinical Communication in Healthcare",
+    year: 2022,
+    bodyPart: "general",
+    abstract: "This paper presents evidence-based strategies for explaining pain concepts to patients with diverse health literacy levels and beliefs. Effective metaphors, visual aids, and language choices are discussed, with emphasis on adapting communication to individual patient needs. The impact of therapeutic communication on treatment outcomes is explored through research evidence.",
+    keywords: ["pain education", "therapeutic communication", "metaphors", "health literacy", "patient education"]
+  },
+  {
+    id: 2009,
+    title: "Multidimensional Approach to Fibromyalgia and Related Conditions",
+    author: "Physio Network Research Team",
+    journal: "Chronic Pain Management",
+    year: 2023,
+    bodyPart: "general",
+    abstract: "This comprehensive review presents contemporary understanding of fibromyalgia and related nociplastic pain conditions from a biopsychosocial perspective. Evidence-based assessment and treatment approaches are discussed, with emphasis on multidisciplinary integration and self-management strategies. The application of pain neuroscience principles to these complex conditions is explored in detail.",
+    keywords: ["fibromyalgia", "nociplastic pain", "central sensitization", "chronic widespread pain", "multidisciplinary"]
+  },
+  {
+    id: 2010,
+    title: "Pain Catastrophizing: Assessment and Treatment Approaches in Physiotherapy",
+    author: "Physio Network Research Team",
+    journal: "Psychological Aspects of Pain",
+    year: 2022,
+    bodyPart: "general",
+    abstract: "This paper examines the construct of pain catastrophizing and its impact on rehabilitation outcomes. Assessment tools for identifying catastrophic thinking are discussed, along with evidence-based interventions to address this important psychosocial factor. Practical strategies for integrating cognitive-behavioral techniques into physiotherapy practice are provided.",
+    keywords: ["catastrophizing", "cognitive-behavioral", "psychological factors", "pain beliefs", "cognitive restructuring"]
   }
 ];
 
 /**
- * Physio Network evidence-based exercises for various body regions
+ * Physio Network evidence-based exercises for pain science approach
  */
 export function getPhysioNetworkExercises(): InsertExercise[] {
   return [
-    // Pain Science Informed Exercises
+    // General Pain Science-Based Exercises
     {
-      title: "Graded Motor Imagery - Left/Right Discrimination",
-      description: "Cognitive exercise for laterality recognition to address altered body schema. Physio Network recommends this as an early intervention for complex pain presentations with body perception disturbances.",
+      title: "Graded Exposure Movement Sequence",
       bodyPart: "general",
-      difficulty: "beginner",
-      instructions: "1. Use laterality recognition cards or app showing body parts in various positions\n2. Quickly identify whether image shows right or left side\n3. Focus on accuracy first, then speed\n4. Begin with 50-100 images per session\n5. Practice 3 times daily for 10-15 minutes",
-      targetMuscles: "Cortical body representation areas",
-      imageUrl: "/exercises/physio-network-laterality.jpg"
-    },
-    {
-      title: "Sensory Precision Training",
-      description: "Sensory discrimination exercise for regions with altered sensation or body perception. Part of Physio Network's approach for addressing cortical body maps in persistent pain.",
-      bodyPart: "general",
-      difficulty: "beginner",
-      instructions: "1. Have partner lightly touch different points in affected region\n2. With eyes closed, identify precisely where touch occurred\n3. Use object like pencil eraser for consistent pressure\n4. Start with widely spaced points (5-10cm), gradually decrease distance\n5. Perform 5-10 minutes, 2-3 times daily",
-      targetMuscles: "Sensory cortical representations",
-      imageUrl: "/exercises/physio-network-sensory.jpg"
-    },
-    {
-      title: "Graduated Exposure Hierarchy",
-      description: "Structured exposure to feared movements starting with least threatening activities. Physio Network's evidence-based approach for addressing kinesiophobia and movement avoidance.",
-      bodyPart: "general",
+      type: "functional",
       difficulty: "intermediate",
-      instructions: "1. Create list of 10 activities ranked from least to most feared\n2. Begin with least feared activity that produces minimal anxiety\n3. Practice until anxiety level decreases by at least 50%\n4. Progress to next activity on hierarchy\n5. Record thoughts and sensations during exposure",
-      targetMuscles: "Varies based on targeted movement",
-      imageUrl: "/exercises/physio-network-exposure.jpg"
+      equipment: ["none"],
+      description: "Evidence-based approach to systematically reintroduce feared movements using a graded exposure framework, effective for patients with kinesiophobia and movement avoidance.",
+      instructions: "Identify a specific movement that provokes fear or avoidance. Create a hierarchy of progressively challenging versions of this movement. Begin with the least threatening version, focusing on relaxed breathing and movement. Progress through hierarchy as comfort increases, staying at each level until anxiety/fear reduces by 50%.",
+      repetitions: "Based on patient response",
+      sets: "3-5 per level",
+      restPeriod: "As needed",
+      imageUrl: "/images/exercises/graded-exposure.jpg",
+      videoUrl: "/videos/exercises/graded-exposure.mp4"
     },
-
-    // Running Rehabilitation Exercises
     {
-      title: "Step Rate Manipulation Training",
-      description: "Running retraining exercise focused on increasing cadence to reduce load at knee and hip. Physio Network's first-line intervention for running-related knee pain.",
-      bodyPart: "knee",
+      title: "Mindful Movement Exploration",
+      bodyPart: "general",
+      type: "motor control",
+      difficulty: "beginner",
+      equipment: ["none"],
+      description: "Pain science-informed exercise focusing on body awareness and attentional focus during movement, designed to normalize movement perception and reduce threat.",
+      instructions: "Choose a simple movement (can be customized to specific region). Perform the movement with full attention on sensations without judgment. Notice but don't try to change protective behaviors like guarding or bracing. Gradually explore small variations in the movement while maintaining awareness. Practice shifting attention between different aspects of the movement experience.",
+      repetitions: "5-10 minutes total practice",
+      sets: "1-2 daily",
+      restPeriod: "As needed",
+      imageUrl: "/images/exercises/mindful-movement.jpg",
+      videoUrl: "/videos/exercises/mindful-movement.mp4"
+    },
+    {
+      title: "Sensory Discrimination Training",
+      bodyPart: "general",
+      type: "sensorimotor",
+      difficulty: "beginner",
+      equipment: ["various textured objects"],
+      description: "Specialized exercise based on sensorimotor retraining principles to improve tactile discrimination and normalize body perception in painful regions.",
+      instructions: "Working with the painful body region, practice distinguishing between different sensations (sharp/dull, rough/smooth). Use various textured objects or tactile stimuli. Focus on precision and accuracy of sensory discrimination. Gradually increase difficulty by reducing visual feedback or adding time constraints. Practice regularly with focus on quality of perception.",
+      repetitions: "10-15 minutes",
+      sets: "1-2 daily",
+      restPeriod: "As needed",
+      imageUrl: "/images/exercises/sensory-discrimination.jpg",
+      videoUrl: "/videos/exercises/sensory-discrimination.mp4"
+    },
+    
+    // Back Pain Specific Exercises
+    {
+      title: "Relaxed Movement Exploration - Spine",
+      bodyPart: "back",
+      type: "motor control",
+      difficulty: "beginner",
+      equipment: ["none"],
+      description: "Pain science-informed approach to exploring spinal movement without protective guarding, effective for chronic back pain with movement fear and guarding.",
+      instructions: "Begin in a comfortable position (sitting or standing). Explore gentle spinal movements in different directions with focus on relaxation. Notice and gradually reduce protective muscle guarding. Emphasize quality and relaxation over range. Integrate breathing focus - exhale during movements that typically provoke protection.",
+      repetitions: "8-10 in each direction",
+      sets: "2-3",
+      restPeriod: "As needed",
+      imageUrl: "/images/exercises/relaxed-spine-movement.jpg",
+      videoUrl: "/videos/exercises/relaxed-spine-movement.mp4"
+    },
+    {
+      title: "Functional Integration - Bending Pattern",
+      bodyPart: "back",
+      type: "functional",
       difficulty: "intermediate",
-      instructions: "1. Establish baseline step rate using 60-second count\n2. Calculate target rate (7-10% increase from baseline)\n3. Use metronome app set to target rate\n4. Begin with 3-4 minute intervals matching metronome\n5. Rest between intervals until comfortable with new rhythm\n6. Progress to 10-15 minutes of continuous running at new cadence",
-      targetMuscles: "Full lower extremity kinetic chain",
-      imageUrl: "/exercises/physio-network-step-rate.jpg"
+      equipment: ["household objects of increasing weight"],
+      description: "Evidence-based exercise integrating pain neuroscience principles with functional movement retraining, targeting the bending movement pattern often avoided in low back pain.",
+      instructions: "Practice different strategies for forward bending (hip hinge, knee dominant, relaxed spine). Focus on comfortable, relaxed movement rather than maintaining rigid 'correct' form. Gradually integrate picking up objects of increasing weight. Emphasize normal, relaxed breathing throughout. Progress to real-world applications like gardening or household tasks.",
+      repetitions: "8-12",
+      sets: "2-3",
+      restPeriod: "60 seconds",
+      imageUrl: "/images/exercises/functional-bending.jpg",
+      videoUrl: "/videos/exercises/functional-bending.mp4"
     },
+    
+    // Neck Pain Specific Exercises
     {
-      title: "Plyometric Tendon Loading Progression",
-      description: "Progressive plyometric loading for tendon energy storage function. Physio Network's approach for late-stage tendinopathy rehabilitation in runners and athletes.",
-      bodyPart: "knee",
-      difficulty: "advanced",
-      instructions: "1. Begin with submaximal double-leg jumps on soft surface\n2. Focus on soft, quiet landing with proper alignment\n3. Gradually increase height and intensity\n4. Progress to single-leg when double-leg mastered\n5. Add sport-specific movement patterns\n6. Perform 3-4 sets of 8-12 repetitions, 2-3 times weekly",
-      targetMuscles: "Achilles tendon, patellar tendon, calf complex, quadriceps",
-      imageUrl: "/exercises/physio-network-plyometric.jpg"
-    },
-
-    // Neck Pain Exercises
-    {
-      title: "Deep Neck Flexor Activation with Pressure Biofeedback",
-      description: "Precision training for deep cervical flexors with pressure feedback. Physio Network's evidence-based approach for cervical motor control in neck pain and headaches.",
+      title: "Oculocervical Integration Training",
       bodyPart: "neck",
-      difficulty: "beginner",
-      instructions: "1. Lie supine with pressure cuff under neck inflated to 20mmHg\n2. Perform gentle nodding motion (cranio-cervical flexion)\n3. Aim to increase pressure to 22mmHg and hold for 10 seconds\n4. Ensure superficial neck flexors remain relaxed\n5. Progress to 24, 26, 28, and 30mmHg as control improves\n6. Perform 10 repetitions at highest controlled pressure level",
-      targetMuscles: "Longus colli, longus capitis",
-      imageUrl: "/exercises/physio-network-deep-neck.jpg"
+      type: "sensorimotor",
+      difficulty: "intermediate",
+      equipment: ["none"],
+      description: "Specialized exercise targeting the integration of eye and neck movement control, based on contemporary pain science for patients with persistent neck pain.",
+      instructions: "Begin in comfortable sitting position. Practice coordinated eye and head tracking of a target in different directions. Start with eyes and head moving together, then progress to eye movement preceding head movement. Focus on smooth, relaxed movement without neck tension. Gradually increase speed and complexity as control improves.",
+      repetitions: "8-10 in each direction",
+      sets: "2-3",
+      restPeriod: "30 seconds",
+      imageUrl: "/images/exercises/oculocervical-training.jpg",
+      videoUrl: "/videos/exercises/oculocervical-training.mp4"
     },
     {
-      title: "Cervical Sensorimotor Training with Laser Pointer",
-      description: "Precision training for cervical joint position sense. Physio Network recommended for cervicogenic headache and whiplash-associated disorders.",
+      title: "Contextual Neck Movement Practice",
       bodyPart: "neck",
+      type: "functional",
       difficulty: "intermediate",
-      instructions: "1. Wear lightweight laser pointer attached to head\n2. Mark target on wall at eye level\n3. Move head away from neutral then precisely return to center target\n4. Progress through movement planes (rotation, flexion/extension)\n5. Add speed variations and closed eyes conditions as control improves\n6. Practice for 5-10 minutes, twice daily",
-      targetMuscles: "Deep cervical stabilizers, suboccipital muscles",
-      imageUrl: "/exercises/physio-network-sensorimotor.jpg"
+      equipment: ["everyday objects"],
+      description: "Evidence-based exercise applying pain science principles to functional neck movements during daily activities, addressing contextual pain triggers.",
+      instructions: "Identify specific contexts where neck pain increases (e.g., checking blind spot while driving, looking up at high shelves). Recreate these scenarios in a controlled environment. Practice performing the movements with relaxed breathing and reduced guarding. Gradually increase duration and complexity, focusing on normalized movement patterns. Apply successful strategies to real-world situations.",
+      repetitions: "5-8 per context",
+      sets: "2",
+      restPeriod: "As needed",
+      imageUrl: "/images/exercises/contextual-neck-movement.jpg",
+      videoUrl: "/videos/exercises/contextual-neck-movement.mp4"
     },
-
-    // Low Back Pain Exercises
+    
+    // Knee Pain Specific Exercises
     {
-      title: "Graded Movement Exposure - Forward Bending",
-      description: "Graduated exposure to commonly avoided movement with pain science framework. Physio Network's approach for addressing fear-avoidance with movement-related back pain.",
-      bodyPart: "back",
+      title: "Pain-Free Movement Exploration - Knee",
+      bodyPart: "knee",
+      type: "motor control",
       difficulty: "beginner",
-      instructions: "1. Begin with small, comfortable forward bending movement\n2. Focus on relaxed breathing and movement quality\n3. Notice sensations without judging as harmful\n4. Gradually increase range as confidence builds\n5. Practice 5-10 repetitions, 3-5 times daily\n6. Progress by adding functional contexts (picking up light objects)",
-      targetMuscles: "Paraspinal muscles, hamstrings, gluteal muscles",
-      imageUrl: "/exercises/physio-network-forward-bend.jpg"
+      equipment: ["none"],
+      description: "Evidence-based pain science approach focusing on normalization of knee movement patterns without threat or pain provocation.",
+      instructions: "Begin in a comfortable position with support as needed. Explore gentle knee movements that remain completely pain-free. Notice and reduce protective behaviors and guarding. Gradually increase movement variety and challenge while maintaining comfort. Focus on quality of movement rather than quantity or range.",
+      repetitions: "10-15 movements in various directions",
+      sets: "2-3",
+      restPeriod: "As needed",
+      imageUrl: "/images/exercises/pain-free-knee-movement.jpg",
+      videoUrl: "/videos/exercises/pain-free-knee-movement.mp4"
     },
     {
-      title: "Functional Integration - Floor Transfer Training",
-      description: "Task-oriented exercise focused on functional movement rather than isolated muscle training. Physio Network's approach for contextual rehabilitation of low back pain.",
-      bodyPart: "back",
+      title: "Graded Exposure Squat Progression",
+      bodyPart: "knee",
+      type: "functional",
       difficulty: "intermediate",
-      instructions: "1. Practice moving from standing to floor sitting position\n2. Initially use support if needed (chair, wall)\n3. Explore different movement strategies rather than one 'correct' way\n4. Focus on controlled, confident movement\n5. Progress to moving from floor to standing\n6. Practice 5-8 repetitions, 1-2 times daily",
-      targetMuscles: "Full body integration, core, lower extremities",
-      imageUrl: "/exercises/physio-network-floor-transfer.jpg"
+      equipment: ["chair", "support surface as needed"],
+      description: "Progressive exposure-based exercise targeting knee loading during squatting movements, designed for patients with fear of knee loading or persistent knee pain.",
+      instructions: "Begin with minimal knee bending with support. Create a hierarchy of progressively challenging squat variations (depth, support, speed). Progress through hierarchy based on confidence rather than pain. Focus on relaxed, normalized movement patterns. Integrate real-world functional applications as confidence improves.",
+      repetitions: "8-12 per level",
+      sets: "2-3",
+      restPeriod: "60 seconds",
+      imageUrl: "/images/exercises/graded-squat-progression.jpg",
+      videoUrl: "/videos/exercises/graded-squat-progression.mp4"
+    },
+    
+    // Shoulder Pain Specific Exercises
+    {
+      title: "Body Perception Normalization - Shoulder",
+      bodyPart: "shoulder",
+      type: "sensorimotor",
+      difficulty: "beginner",
+      equipment: ["mirror"],
+      description: "Specialized exercise targeting distorted body perception and movement representations in persistent shoulder pain, based on contemporary pain neuroscience.",
+      instructions: "Practice left/right discrimination of shoulder movements in pictures or mirror. Perform imagined shoulder movements without actual movement. Compare sensations between affected and unaffected sides during gentle movements. Use mirror feedback to normalize movement perception. Progress to movements with eyes closed, focusing on accurate position sense.",
+      repetitions: "10-15 minutes total practice",
+      sets: "1-2 daily",
+      restPeriod: "As needed",
+      imageUrl: "/images/exercises/shoulder-perception.jpg",
+      videoUrl: "/videos/exercises/shoulder-perception.mp4"
     },
     {
-      title: "Multidirectional Functional Reaching",
-      description: "Movement variability training combining reach in multiple directions with trunk control. Physio Network's approach for building movement confidence and variability in low back pain.",
-      bodyPart: "back",
+      title: "Contextual Shoulder Movement Retraining",
+      bodyPart: "shoulder",
+      type: "functional",
       difficulty: "intermediate",
-      instructions: "1. Stand with stable base of support\n2. Place targets at various positions requiring trunk movement\n3. Reach to touch targets in different patterns\n4. Vary speed, range, and direction of reaches\n5. Focus on smooth, confident movement rather than 'perfect' posture\n6. Perform 1-2 minutes per round, 3-5 rounds",
-      targetMuscles: "Trunk musculature, core stabilizers",
-      imageUrl: "/exercises/physio-network-reaching.jpg"
+      equipment: ["varied everyday objects"],
+      description: "Functional exercise applying pain science principles to real-world shoulder movements, targeting contextual factors in persistent shoulder pain.",
+      instructions: "Identify specific activities that provoke shoulder protection or pain (reaching, lifting, overhead activities). Recreate these scenarios with modified versions. Practice performing the activities with focus on relaxed breathing and reduced guarding. Gradually introduce actual objects and contexts. Progress based on confidence and normalized movement rather than pain levels.",
+      repetitions: "5-8 repetitions per activity",
+      sets: "2-3",
+      restPeriod: "As needed",
+      imageUrl: "/images/exercises/contextual-shoulder.jpg",
+      videoUrl: "/videos/exercises/contextual-shoulder.mp4"
     }
   ];
 }

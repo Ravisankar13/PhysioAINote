@@ -1500,6 +1500,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const { analyzePatientClinicalEdge } = require('./virtualPatientClinicalEdge');
         const { analyzePatientPhysioNetwork } = require('./virtualPatientPhysioNetwork');
         const { analyzePatientSportsMap } = require('./virtualPatientSportsMap');
+        const { analyzePatientGrimaldi } = require('./virtualPatientGrimaldi');
+        const { analyzePatientBisset } = require('./virtualPatientBisset');
         
         // Check which specialized approach is most appropriate for this patient
         

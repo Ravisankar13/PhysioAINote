@@ -377,16 +377,7 @@ export default function VirtualPatientDetail({
                   </div>
                 )}
 
-                {patient.assessment && (
-                  <div>
-                    <h3 className="text-md font-semibold mb-1">
-                      Assessment Information
-                    </h3>
-                    <p className="text-sm leading-relaxed">
-                      {patient.assessment}
-                    </p>
-                  </div>
-                )}
+                {/* Assessment field has been removed since it's not in our database */}
               </div>
 
               {/* Objective Findings Section */}

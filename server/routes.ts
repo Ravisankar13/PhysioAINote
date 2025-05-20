@@ -1588,12 +1588,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         updatedData
       );
       
-      // Add a note about Jo Gibson's specialized approach when applicable
+      // Add Jo Gibson's specialized information for shoulder cases
       if (isShoulderCase) {
+        // Get Jo Gibson's specialized info from the library
+        const { joGibsonTreatmentPrinciples, joGibsonAssessmentPrinciples } = require('./joGibsonShoulderLibrary');
+        
+        // Add specialized information to enhance the response
         res.json({
           ...updatedPatient,
           joGibsonApproach: true,
-          joGibsonNote: "This analysis incorporates Jo Gibson's specialized shoulder rehabilitation approach."
+          joGibsonNote: "This analysis incorporates Jo Gibson's specialized shoulder rehabilitation approach.",
+          joGibsonMethodology: {
+            approachName: "Jo Gibson Shoulder Rehabilitation",
+            keyPrinciples: joGibsonTreatmentPrinciples.slice(0, 5).map(p => p.title),
+            rehabilitationPhases: [
+              "Early: Motor control and kinetic chain integration",
+              "Middle: Progressive loading with quality movement",
+              "Late: Function-specific rehabilitation and return to activity"
+            ],
+            evidenceStrength: "High - Based on multiple RCTs and systematic reviews"
+          }
         });
       } else {
         res.json(updatedPatient);

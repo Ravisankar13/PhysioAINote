@@ -277,7 +277,7 @@ export default function VirtualPatientDetail({
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <CardTitle>{patient.patientName}</CardTitle>
+            <CardTitle>{patient.name}</CardTitle>
           </div>
           <div className="flex items-center space-x-2">
             {onEditPatient && (

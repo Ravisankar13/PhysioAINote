@@ -587,101 +587,112 @@ function NotesClinical(): React.ReactElement {
     const currentDate = new Date();
     console.log("Inside UploadAudio API call", currentDate);
     if (!audioBlob) return;
-
+    
+    setUploadingAudio(true);
+    
     try {
-      if (!jwtToken) {
-        throw new Error("No JWT token found in localStorage");
+      // First, create a session if we don't have one
+      if (!sessionId) {
+        await createNewSession();
       }
-
-      const fileName = `audio_${crypto.randomUUID()}.mp3`;
-
-      // Step 1: Get pre-signed URL and session ID from backend.
-      const getPresignedUrlRes = await fetch(
-        `https://hqy44mb8l7.execute-api.us-east-2.amazonaws.com/dev/get-upload-link?filename=${encodeURIComponent(
-          fileName
-        )}&contentType=${encodeURIComponent("audio/mpeg")}`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${jwtToken}`,
-          },
-        }
-      );
-
-      if (!getPresignedUrlRes.ok) {
-        throw new Error(
-          `Error getting pre-signed URL: ${getPresignedUrlRes.statusText}`
-        );
+      
+      if (!sessionId) {
+        throw new Error("No session ID available for audio upload");
       }
-
-      const { url: presignedUrl, session_id: sessionId } =
-        await getPresignedUrlRes.json();
-
-      // Set sessionId state immediately
-      setSessionId(sessionId);
-
-      // Step 2: Upload audio directly to AWS S3 using the pre-signed URL.
-      const s3UploadRes = await fetch(presignedUrl, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "audio/mpeg",
-        },
-        body: audioBlob,
+      
+      // Create form data for audio upload
+      const formData = new FormData();
+      formData.append('audio', audioBlob, `audio_${Date.now()}.mp3`);
+      formData.append('duration', recordTime.toString());
+      
+      // Upload audio file to our local API
+      const uploadResponse = await fetch(`/api/sessions/${sessionId}/audio`, {
+        method: 'POST',
+        body: formData
       });
-
-      if (!s3UploadRes.ok) {
-        setUploadingAudio(false);
-        throw new Error(`S3 upload failed: ${s3UploadRes.statusText}`);
+      
+      if (!uploadResponse.ok) {
+        throw new Error(`Audio upload failed: ${uploadResponse.statusText}`);
       }
-
+      
+      // Successfully uploaded audio - now show transcript UI
       setUploadingAudio(false);
       setShowTranscript(true);
       setTranscriptLoading(true);
-
-      //  'https://k6hemfjxttb3goes46y2af2ocm0vmmgm.lambda-url.us-east-2.on.aws/gen-transcript
-      // Step 3: After successful upload, request transcript generation, sending just session_id.
-      const transcriptRes = await fetch(
-        "https://k6hemfjxttb3goes46y2af2ocm0vmmgm.lambda-url.us-east-2.on.aws/gen-transcript",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${jwtToken}`,
-          },
-          body: JSON.stringify({ session_id: sessionId, user_id: userId }),
+      
+      // Request transcription from our session
+      const transcribeResponse = await fetch(`/api/sessions/${sessionId}/transcribe`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
         }
-      );
-
-      if (!transcriptRes.ok) {
-        throw new Error(
-          `Transcript generation request failed: ${transcriptRes.statusText}`
-        );
+      });
+      
+      if (!transcribeResponse.ok) {
+        throw new Error(`Transcription request failed: ${transcribeResponse.statusText}`);
       }
-
-      const transcriptData = await transcriptRes.json();
-
-      // Step 4: Set received transcript data into react states.
-      setTranscript(transcriptData.transcript_s3_uri);
-      setTranscriptPreSIgnedURL(transcriptData.presigned_url);
+      
+      const transcribeData = await transcribeResponse.json();
+      
+      // Set transcript data
+      if (transcribeData.transcript) {
+        setTranscript(transcribeData.transcript);
+      }
+      
+      if (transcribeData.session && transcribeData.session.transcriptUrl) {
+        setTranscriptPreSIgnedURL(transcribeData.session.transcriptUrl);
+      }
+      
       setTranscriptLoading(false);
-
-      // Optionally upload demographic data
-      uploadDemographicData();
-
-      // Update sessions and current selection
-      const newSessionName =
-        transcriptData.session_name || `Session ${new Date().toLocaleString()}`;
-      const newSession: Session = {
-        id: sessionId,
-        name: newSessionName,
-        user_id: userId,
-      };
-
-      setSessions((prevSessions) => [newSession, ...prevSessions]);
-      setSelectedSession(sessionId);
+      
+      // Refresh sessions list
+      fetchSessions();
+      
     } catch (error) {
       console.error("Error uploading audio:", error);
+      setUploadingAudio(false);
       setTranscriptLoading(false);
+    }
+  };
+  
+  // Helper function to create a new session if we don't have one
+  const createNewSession = async (): Promise<void> => {
+    // Create a default session name with patient info or timestamp
+    const sessionName = patientData.firstname && patientData.lastname 
+      ? `${patientData.firstname} ${patientData.lastname}` 
+      : `Session ${new Date().toLocaleString()}`;
+    
+    try {
+      const response = await fetch('/api/sessions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          sessionName,
+          firstName: patientData.firstname || '',
+          middleName: patientData.middlename || '',
+          lastName: patientData.lastname || '',
+          gender: patientData.gender || '',
+          dob: patientData.dob || '',
+          weight: patientData.weight || '',
+          heightFeet: patientData.height_feet || '',
+          heightInch: patientData.height_inch || '',
+          pastMedicalHistory: patientData.pastMedicalHistory || '',
+          pastSurgicalHistory: patientData.pastSurgicalHistory || ''
+        })
+      });
+      
+      if (response.ok) {
+        const session = await response.json();
+        setSessionId(session.id.toString());
+        setSelectedSession(session.id.toString());
+      } else {
+        throw new Error(`Failed to create session: ${response.statusText}`);
+      }
+    } catch (error) {
+      console.error("Error creating session:", error);
+      throw error;
     }
   };
 

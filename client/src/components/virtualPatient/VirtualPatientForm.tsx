@@ -51,21 +51,17 @@ const bodyPartOptions = [
 
 // Form schema based on the InsertVirtualPatient type
 const formSchema = z.object({
-  patientName: z.string().min(2, { message: "Patient name must be at least 2 characters." }),
-  age: z.string().min(1, { message: "Age is required." }),
+  name: z.string().min(2, { message: "Patient name must be at least 2 characters." }),
+  age: z.coerce.number().min(1, { message: "Age is required." }),
   gender: z.string().min(1, { message: "Gender is required." }),
   chiefComplaint: z.string().min(5, { message: "Chief complaint must be at least 5 characters." }),
-  symptomsDescription: z.string().min(20, { message: "Please provide a detailed symptoms description." }),
+  symptoms: z.string().min(20, { message: "Please provide a detailed symptoms description." }),
   bodyPart: z.enum(bodyPartEnum.enumValues, {
     required_error: "Body part is required.",
     invalid_type_error: "Body part must be valid."
   }),
-  pastMedicalHistory: z.string().optional(),
-  pastSurgicalHistory: z.string().optional(),
-  socialHistory: z.string().optional(),
-  familyHistory: z.string().optional(),
-  medications: z.string().optional(),
-  allergies: z.string().optional(),
+  medicalHistory: z.string().optional(),
+  assessment: z.string().optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -83,31 +79,23 @@ export default function VirtualPatientForm({ onPatientCreated, onCancel, existin
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: existingPatient ? {
-      patientName: existingPatient.patientName,
-      age: existingPatient.age,
-      gender: existingPatient.gender,
-      chiefComplaint: existingPatient.chiefComplaint,
-      symptomsDescription: existingPatient.symptomsDescription,
-      bodyPart: existingPatient.bodyPart,
-      pastMedicalHistory: existingPatient.pastMedicalHistory || "",
-      pastSurgicalHistory: existingPatient.pastSurgicalHistory || "",
-      socialHistory: existingPatient.socialHistory || "",
-      familyHistory: existingPatient.familyHistory || "",
-      medications: existingPatient.medications || "",
-      allergies: existingPatient.allergies || "",
+      name: existingPatient.name || "",
+      age: existingPatient.age || 30,
+      gender: existingPatient.gender || "",
+      chiefComplaint: existingPatient.chiefComplaint || "",
+      symptoms: existingPatient.symptoms || "",
+      bodyPart: existingPatient.bodyPart || "other",
+      medicalHistory: existingPatient.medicalHistory || "",
+      assessment: existingPatient.assessment || "",
     } : {
-      patientName: "",
-      age: "",
+      name: "",
+      age: 30,
       gender: "",
       chiefComplaint: "",
-      symptomsDescription: "",
+      symptoms: "",
       bodyPart: "other",
-      pastMedicalHistory: "",
-      pastSurgicalHistory: "",
-      socialHistory: "",
-      familyHistory: "",
-      medications: "",
-      allergies: "",
+      medicalHistory: "",
+      assessment: "",
     },
   });
 
@@ -190,7 +178,7 @@ export default function VirtualPatientForm({ onPatientCreated, onCancel, existin
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField
                 control={form.control}
-                name="patientName"
+                name="name"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Patient Name</FormLabel>
@@ -292,7 +280,7 @@ export default function VirtualPatientForm({ onPatientCreated, onCancel, existin
 
             <FormField
               control={form.control}
-              name="symptomsDescription"
+              name="symptoms"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Detailed Symptoms Description</FormLabel>
@@ -314,13 +302,13 @@ export default function VirtualPatientForm({ onPatientCreated, onCancel, existin
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField
                 control={form.control}
-                name="pastMedicalHistory"
+                name="medicalHistory"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Past Medical History</FormLabel>
+                    <FormLabel>Medical History</FormLabel>
                     <FormControl>
                       <Textarea 
-                        placeholder="Hypertension, diabetes, etc."
+                        placeholder="Hypertension, diabetes, prior injuries, surgeries, medications, allergies, etc."
                         className="min-h-[80px]"
                         {...field}
                       />
@@ -329,88 +317,16 @@ export default function VirtualPatientForm({ onPatientCreated, onCancel, existin
                   </FormItem>
                 )}
               />
-
+                
               <FormField
                 control={form.control}
-                name="pastSurgicalHistory"
+                name="assessment"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Past Surgical History</FormLabel>
+                    <FormLabel>Assessment Details</FormLabel>
                     <FormControl>
                       <Textarea 
-                        placeholder="Appendectomy (2010), etc."
-                        className="min-h-[80px]"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="socialHistory"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Social History</FormLabel>
-                    <FormControl>
-                      <Textarea 
-                        placeholder="Occupation, exercise habits, smoking, etc."
-                        className="min-h-[80px]"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="familyHistory"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Family History</FormLabel>
-                    <FormControl>
-                      <Textarea 
-                        placeholder="Family history of relevant conditions"
-                        className="min-h-[80px]"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="medications"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Current Medications</FormLabel>
-                    <FormControl>
-                      <Textarea 
-                        placeholder="List all current medications and dosages"
-                        className="min-h-[80px]"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="allergies"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Allergies</FormLabel>
-                    <FormControl>
-                      <Textarea 
-                        placeholder="Medication or other allergies"
+                        placeholder="Initial assessment information, examination findings, test results, etc."
                         className="min-h-[80px]"
                         {...field}
                       />

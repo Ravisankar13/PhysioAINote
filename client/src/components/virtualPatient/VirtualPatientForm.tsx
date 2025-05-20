@@ -51,17 +51,16 @@ const bodyPartOptions = [
 
 // Form schema based on the InsertVirtualPatient type
 const formSchema = z.object({
-  name: z.string().min(2, { message: "Patient name must be at least 2 characters." }),
+  patient_name: z.string().min(2, { message: "Patient name must be at least 2 characters." }),
   age: z.coerce.number().min(1, { message: "Age is required." }),
   gender: z.string().min(1, { message: "Gender is required." }),
-  chiefComplaint: z.string().min(5, { message: "Chief complaint must be at least 5 characters." }),
-  symptoms: z.string().min(20, { message: "Please provide a detailed symptoms description." }),
-  bodyPart: z.enum(bodyPartEnum.enumValues, {
+  chief_complaint: z.string().min(5, { message: "Chief complaint must be at least 5 characters." }),
+  symptoms_description: z.string().min(20, { message: "Please provide a detailed symptoms description." }),
+  body_part: z.enum(bodyPartEnum.enumValues, {
     required_error: "Body part is required.",
     invalid_type_error: "Body part must be valid."
   }),
-  medicalHistory: z.string().optional(),
-  assessment: z.string().optional(),
+  past_medical_history: z.string().optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -79,23 +78,21 @@ export default function VirtualPatientForm({ onPatientCreated, onCancel, existin
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: existingPatient ? {
-      name: existingPatient.name || "",
+      patient_name: existingPatient.patient_name || "",
       age: existingPatient.age || 30,
       gender: existingPatient.gender || "",
-      chiefComplaint: existingPatient.chiefComplaint || "",
-      symptoms: existingPatient.symptoms || "",
-      bodyPart: existingPatient.bodyPart || "other",
-      medicalHistory: existingPatient.medicalHistory || "",
-      assessment: existingPatient.assessment || "",
+      chief_complaint: existingPatient.chief_complaint || "",
+      symptoms_description: existingPatient.symptoms_description || "",
+      body_part: existingPatient.body_part || "other",
+      past_medical_history: existingPatient.past_medical_history || "",
     } : {
-      name: "",
+      patient_name: "",
       age: 30,
       gender: "",
-      chiefComplaint: "",
-      symptoms: "",
-      bodyPart: "other",
-      medicalHistory: "",
-      assessment: "",
+      chief_complaint: "",
+      symptoms_description: "",
+      body_part: "other",
+      past_medical_history: "",
     },
   });
 
@@ -178,7 +175,7 @@ export default function VirtualPatientForm({ onPatientCreated, onCancel, existin
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField
                 control={form.control}
-                name="name"
+                name="patient_name"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Patient Name</FormLabel>
@@ -234,7 +231,7 @@ export default function VirtualPatientForm({ onPatientCreated, onCancel, existin
 
               <FormField
                 control={form.control}
-                name="bodyPart"
+                name="body_part"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Affected Body Part</FormLabel>
@@ -263,7 +260,7 @@ export default function VirtualPatientForm({ onPatientCreated, onCancel, existin
 
             <FormField
               control={form.control}
-              name="chiefComplaint"
+              name="chief_complaint"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Chief Complaint</FormLabel>
@@ -280,7 +277,7 @@ export default function VirtualPatientForm({ onPatientCreated, onCancel, existin
 
             <FormField
               control={form.control}
-              name="symptoms"
+              name="symptoms_description"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Detailed Symptoms Description</FormLabel>
@@ -302,7 +299,7 @@ export default function VirtualPatientForm({ onPatientCreated, onCancel, existin
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField
                 control={form.control}
-                name="medicalHistory"
+                name="past_medical_history"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Medical History</FormLabel>
@@ -318,23 +315,7 @@ export default function VirtualPatientForm({ onPatientCreated, onCancel, existin
                 )}
               />
                 
-              <FormField
-                control={form.control}
-                name="assessment"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Assessment Details</FormLabel>
-                    <FormControl>
-                      <Textarea 
-                        placeholder="Initial assessment information, examination findings, test results, etc."
-                        className="min-h-[80px]"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {/* Removing the assessment field since it doesn't exist in our database schema */}
             </div>
 
             <div className="flex justify-end space-x-4">

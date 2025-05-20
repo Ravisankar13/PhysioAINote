@@ -146,7 +146,7 @@ export default function VirtualPatientList({ onPatientSelect, onCreateNew }: Vir
             <Card key={patient.id}>
               <CardHeader className="pb-2">
                 <CardTitle className="text-lg flex items-center">
-                  <span className="truncate">{patient.name}</span>
+                  <span className="truncate">{patient.patient_name}</span>
                 </CardTitle>
                 <div className="flex items-center space-x-2 text-sm text-gray-500">
                   <span>Age: {patient.age}</span>

@@ -246,26 +246,21 @@ export function getJoGibsonShoulderExercises(): InsertExercise[] {
     },
     {
       title: "Rhythmic Stabilization in Athletic Position",
-      description: "Advanced version with arm in athletic position while partner provides multi-directional resistance.",
+      description: "Advanced version with arm in athletic position while partner provides multi-directional resistance. Ensure proper baseline stabilization before attempting this exercise. Duration: 30-60 seconds per interval.",
       bodyPart: "shoulder",
       difficulty: "advanced",
       instructions: "1. Position arm in functional position relevant to sport/activity\n2. Partner provides unpredictable, multi-directional forces\n3. Maintain position while resisting these forces\n4. Progress force based on control\n5. Perform for 30-60 second intervals",
       targetMuscles: "Rotator cuff, deltoid, scapular stabilizers, core",
-      imageUrl: "/exercises/jo-gibson-advanced-rhythmic-stabilization.jpg",
-      precautions: "Ensure proper baseline stabilization before attempting this exercise",
-      duration: "30-60 seconds per interval"
+      imageUrl: "/exercises/jo-gibson-advanced-rhythmic-stabilization.jpg"
     },
     {
       title: "Prone Shoulder Integrator",
-      description: "Complex movement pattern combining multiple shoulder motions in prone position.",
+      description: "Complex movement pattern combining multiple shoulder motions in prone position. Ensure proper scapular control before attempting; avoid if painful. Perform 8-10 repetitions for 2-3 sets.",
       bodyPart: "shoulder",
       difficulty: "advanced",
       instructions: "1. Lie prone on table with arm hanging off edge\n2. Begin with thumb pointing upward\n3. Raise arm to horizontal while maintaining scapular control\n4. Rotate thumb upward (external rotation) at top position\n5. Lower with control, perform 8-10 repetitions for 2-3 sets",
       targetMuscles: "Posterior deltoid, rotator cuff, mid/lower trapezius",
-      imageUrl: "/exercises/jo-gibson-prone-integrator.jpg",
-      precautions: "Ensure proper scapular control before attempting; avoid if painful",
-      repetitions: "8-10",
-      sets: "2-3"
+      imageUrl: "/exercises/jo-gibson-prone-integrator.jpg"
     },
 
     // Sport and Function-Specific Exercises

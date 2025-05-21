@@ -291,6 +291,25 @@ export default function VirtualPatientDetail({
                 Edit Patient
               </Button>
             )}
+            <Button
+              variant="default"
+              size="sm"
+              className="mr-2"
+              onClick={() => analyzePatientMutation.mutate()}
+              disabled={analyzePatientMutation.isPending}
+            >
+              {analyzePatientMutation.isPending ? (
+                <>
+                  <Activity className="h-4 w-4 mr-1 animate-pulse" />
+                  Analyzing...
+                </>
+              ) : (
+                <>
+                  <Activity className="h-4 w-4 mr-1" />
+                  Reanalyze
+                </>
+              )}
+            </Button>
             <Badge variant="outline">{patient.age} years</Badge>
             <Badge variant="outline">{patient.gender}</Badge>
             <Badge>{patient.body_part}</Badge>

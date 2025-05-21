@@ -1847,11 +1847,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
           };
         } else {
           // Use standard analysis for cases without a specialized approach
-          analysisResult = await analyzeVirtualPatientCase(virtualPatient);
+          // Convert DB patient model to input format expected by analyzer
+          const patientInput = {
+            patientName: virtualPatient.patient_name || "",
+            age: virtualPatient.age || "",
+            gender: virtualPatient.gender || "",
+            chiefComplaint: virtualPatient.chief_complaint || "",
+            symptomsDescription: virtualPatient.symptoms_description || "",
+            bodyPart: virtualPatient.body_part,
+            pastMedicalHistory: virtualPatient.past_medical_history || "",
+            pastSurgicalHistory: virtualPatient.past_surgical_history || "",
+            socialHistory: virtualPatient.social_history || "",
+            familyHistory: virtualPatient.family_history || "",
+            medications: virtualPatient.medications || "",
+            allergies: virtualPatient.allergies || "",
+            objectiveFindings: virtualPatient.objective_findings || ""
+          };
+          
+          console.log("Using standard analysis with properly formatted input");
+          analysisResult = await analyzeVirtualPatientCase(patientInput);
         }
       } catch (error) {
         console.error("Error in specialized analysis, falling back to standard analysis:", error);
-        analysisResult = await analyzeVirtualPatientCase(virtualPatient);
+        try {
+          // Import the default analyzer function
+          const { analyzeVirtualPatientCase } = require('./virtualPatientOpenai');
+          if (typeof analyzeVirtualPatientCase === 'function') {
+            console.log("Using fallback standard analysis for virtual patient");
+            // Convert DB patient model to input format expected by analyzer
+            const patientInput = {
+              patientName: virtualPatient.patient_name || "",
+              age: String(virtualPatient.age || ""),
+              gender: virtualPatient.gender || "",
+              chiefComplaint: virtualPatient.chief_complaint || "",
+              symptomsDescription: virtualPatient.symptoms_description || "",
+              bodyPart: virtualPatient.body_part,
+              pastMedicalHistory: virtualPatient.past_medical_history || "",
+              // Handle potential missing fields with empty strings
+              pastSurgicalHistory: typeof virtualPatient.past_surgical_history === 'string' ? virtualPatient.past_surgical_history : "", 
+              socialHistory: typeof virtualPatient.social_history === 'string' ? virtualPatient.social_history : "",
+              familyHistory: typeof virtualPatient.family_history === 'string' ? virtualPatient.family_history : "",
+              medications: typeof virtualPatient.medications === 'string' ? virtualPatient.medications : "",
+              allergies: typeof virtualPatient.allergies === 'string' ? virtualPatient.allergies : "",
+              objectiveFindings: typeof virtualPatient.objective_findings === 'string' ? virtualPatient.objective_findings : ""
+            };
+            
+            console.log("Using fallback standard analysis with properly formatted input");
+            analysisResult = await analyzeVirtualPatientCase(patientInput);
+          } else {
+            throw new Error("Standard analysis function not available");
+          }
+        } catch (fallbackError) {
+          console.error("Error in fallback analysis:", fallbackError);
+          // Create a basic fallback result when all else fails
+          analysisResult = {
+            primaryDiagnosis: {
+              name: "Analysis could not be completed",
+              description: "There was an issue generating the analysis. Please try again or contact support."
+            },
+            differentialDiagnoses: [],
+            treatmentOptions: [
+              "Please consult with a healthcare professional for proper diagnosis and treatment."
+            ],
+            assessmentTests: [],
+            recommendedKeywords: [],
+            relatedArticleIds: []
+          };
+        }
       }
       
       // Get empty arrays if properties are missing to prevent "cannot read properties of undefined" errors

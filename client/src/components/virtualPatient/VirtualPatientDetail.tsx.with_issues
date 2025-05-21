@@ -485,26 +485,36 @@ export default function VirtualPatientDetail({
                       </div>
                     ))
                   ) : (
-                    <div className="text-center p-6 border border-dashed rounded-md">
-                      <p className="text-muted-foreground text-sm">
-                        No objective findings recorded yet. Click "Add Finding"
-                        to record physical examination results or clinical
-                        measurements.
-                      </p>
-                    </div>
+                    <p className="text-sm text-muted-foreground italic">
+                      No objective findings recorded. Click "Add Finding" to add
+                      observations.
+                    </p>
                   )}
                 </div>
+              </div>
 
-                {!hasDiagnosis && objectiveFindings.length > 0 && (
-                  <div className="mt-6 text-center">
-                    <p className="text-sm text-muted-foreground mb-4">
-                      Ready to generate a differential diagnosis and treatment
-                      plan based on the patient's information and your objective
-                      findings?
-                    </p>
-                    {renderAnalyzeButton()}
-                  </div>
-                )}
+              {/* Always show the analyze button */}
+              <div className="flex justify-center mt-8">
+                <Button
+                  onClick={() => analyzePatientMutation.mutate()}
+                  disabled={analyzePatientMutation.isPending}
+                  size="lg"
+                  className="w-full md:w-auto"
+                >
+                  {analyzePatientMutation.isPending ? (
+                    <>
+                      <Activity className="mr-2 h-4 w-4 animate-pulse" />
+                      Analyzing Patient Data...
+                    </>
+                  ) : (
+                    <>
+                      <Activity className="mr-2 h-4 w-4" />
+                      {hasDiagnosis
+                        ? "Reanalyze Patient Data"
+                        : "Analyze Patient Data"}
+                    </>
+                  )}
+                </Button>
               </div>
             </div>
           </TabsContent>
@@ -513,194 +523,229 @@ export default function VirtualPatientDetail({
           <TabsContent value="diagnosis" className="p-6">
             {!hasDiagnosis ? (
               renderEmptyState(
-                <Brain className="h-12 w-12 text-gray-400 mx-auto mb-4" />,
+                <Activity className="h-12 w-12 text-gray-400 mx-auto mb-4" />,
                 "No diagnosis available",
-                "Analyze the patient data to generate a detailed diagnosis and differential."
+                "Analyze the patient data to generate a diagnosis and treatment recommendations."
               )
             ) : (
               <div className="space-y-6">
-                <div>
+                <div className="bg-primary/5 p-4 rounded-lg">
                   <h3 className="text-lg font-semibold mb-2 flex items-center">
                     <Brain className="h-5 w-5 mr-2 text-primary" />
                     Primary Diagnosis
                   </h3>
-                  <div className="bg-primary/10 p-4 rounded-md">
-                    <p className="font-medium text-lg">{patient.diagnosis}</p>
-                    {patient.diagnosisExplanation && (
-                      <p className="mt-2 text-sm">
-                        {patient.diagnosisExplanation}
+                  <h4 className="text-md font-medium mb-1">
+                    {patient.diagnosis}
+                  </h4>
+                  {patient.differentialDiagnosis &&
+                    patient.differentialDiagnosis[0]?.description && (
+                      <p className="text-sm leading-relaxed">
+                        {patient.differentialDiagnosis[0].description}
                       </p>
                     )}
-                  </div>
                 </div>
 
-                {patient.differentialDiagnoses &&
-                  patient.differentialDiagnoses.length > 0 && (
-                    <div>
-                      <h3 className="text-lg font-semibold mb-2">
-                        Differential Diagnoses
-                      </h3>
-                      <div className="space-y-3">
-                        {patient.differentialDiagnoses.map(
-                          (diff: any, idx: number) => (
-                            <div
-                              key={idx}
-                              className="p-3 border rounded-md bg-card"
-                            >
-                              <div className="flex justify-between items-start">
-                                <h4 className="font-medium text-base">
-                                  {diff.diagnosis}
-                                </h4>
-                                <Badge
-                                  variant={
-                                    diff.likelihood === "High"
-                                      ? "default"
-                                      : diff.likelihood === "Medium"
-                                      ? "secondary"
-                                      : "outline"
-                                  }
-                                >
-                                  {diff.likelihood} likelihood
-                                </Badge>
-                              </div>
-                              {diff.explanation && (
-                                <p className="mt-1 text-sm text-muted-foreground">
-                                  {diff.explanation}
-                                </p>
-                              )}
+                <div>
+                  <h3 className="text-lg font-semibold mb-3 flex items-center">
+                    <AlertCircle className="h-5 w-5 mr-2 text-amber-500" />
+                    Differential Diagnoses
+                  </h3>
+                  <div className="space-y-3">
+                    {patient.differentialDiagnosis &&
+                      patient.differentialDiagnosis
+                        .slice(1)
+                        .map((diff: any, idx: number) => (
+                          <div key={idx} className="border rounded-lg p-3">
+                            <div className="flex justify-between items-start mb-1">
+                              <h4 className="text-md font-medium">
+                                {diff.name}
+                              </h4>
+                              <Badge
+                                variant={
+                                  diff.likelihood === "high"
+                                    ? "destructive"
+                                    : diff.likelihood === "medium"
+                                    ? "secondary"
+                                    : "outline"
+                                }
+                              >
+                                {diff.likelihood} likelihood
+                              </Badge>
                             </div>
-                          )
+                            <p className="text-sm">{diff.reasoning}</p>
+                          </div>
+                        ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </TabsContent>
+
+          {/* ASSESSMENT TESTS TAB - Enhanced with clinical tests */}
+          <TabsContent value="assessment" className="p-6">
+            {!hasDiagnosis ? (
+              renderEmptyState(
+                <Clipboard className="h-12 w-12 text-gray-400 mx-auto mb-4" />,
+                "No assessment data available",
+                "Analyze the patient data to view relevant assessment tests."
+              )
+            ) : (
+              <div className="space-y-6">
+                <div className="bg-primary/5 p-4 rounded-lg">
+                  <h3 className="text-lg font-semibold mb-2 flex items-center">
+                    <Clipboard className="h-5 w-5 mr-2 text-primary" />
+                    Relevant Clinical Tests
+                  </h3>
+                  <p className="text-sm mb-4">
+                    These diagnostic tests are recommended to confirm the
+                    primary diagnosis.
+                  </p>
+                </div>
+
+                {Array.isArray(patient.assessmentTests) &&
+                patient.assessmentTests.length > 0 ? (
+                  <div className="space-y-4">
+                    {patient.assessmentTests.map((test: any, idx: number) => (
+                      <div key={idx} className="border rounded-lg p-4">
+                        <div className="flex justify-between items-start mb-2">
+                          <h4 className="text-md font-semibold">
+                            {test.name || "Unnamed Test"}
+                          </h4>
+                          <Badge
+                            variant={
+                              test.relevance === "primary"
+                                ? "default"
+                                : test.relevance === "secondary"
+                                ? "secondary"
+                                : "outline"
+                            }
+                          >
+                            {test.relevance === "primary"
+                              ? "Primary"
+                              : test.relevance === "secondary"
+                              ? "Secondary"
+                              : "Supportive"}{" "}
+                            Test
+                          </Badge>
+                        </div>
+                        <p className="text-sm mb-2">
+                          {test.purpose ||
+                            test.description ||
+                            "No description provided"}
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+                          <div>
+                            <h5 className="text-sm font-medium mb-1">
+                              How to Perform
+                            </h5>
+                            <p className="text-sm">
+                              {test.procedure ||
+                                "No procedure details available"}
+                            </p>
+                          </div>
+                          <div>
+                            <h5 className="text-sm font-medium mb-1">
+                              Positive Findings
+                            </h5>
+                            <p className="text-sm">
+                              {test.positiveFindings ||
+                                "No details on positive findings"}
+                            </p>
+                          </div>
+                        </div>
+                        {test.supportingResearch && (
+                          <div className="mt-3">
+                            <h5 className="text-sm font-medium">
+                              Research Support
+                            </h5>
+                            <p className="text-sm">{test.supportingResearch}</p>
+                          </div>
+                        )}
+                        {test.sensitivity && (
+                          <div className="flex space-x-2 mt-2">
+                            <Badge variant="outline">
+                              Sensitivity: {test.sensitivity}
+                            </Badge>
+                            {test.specificity && (
+                              <Badge variant="outline">
+                                Specificity: {test.specificity}
+                              </Badge>
+                            )}
+                          </div>
                         )}
                       </div>
-                    </div>
-                  )}
-
-                {patient.clinicalReasoning && (
-                  <div>
-                    <h3 className="text-lg font-semibold mb-2 flex items-center">
-                      <Lightbulb className="h-5 w-5 mr-2 text-amber-500" />
-                      Clinical Reasoning
-                    </h3>
-                    <div className="bg-card p-4 rounded-md border">
-                      <p className="text-sm whitespace-pre-line">
-                        {patient.clinicalReasoning}
-                      </p>
-                    </div>
+                    ))}
                   </div>
-                )}
-
-                {patient.redFlags && patient.redFlags.length > 0 && (
-                  <div>
-                    <h3 className="text-lg font-semibold mb-2 flex items-center">
-                      <AlertCircle className="h-5 w-5 mr-2 text-red-500" />
-                      Red Flags
-                    </h3>
-                    <div className="bg-red-50 p-4 rounded-md border border-red-200">
-                      <ul className="space-y-1">
-                        {patient.redFlags.map((flag: string, idx: number) => (
-                          <li
-                            key={idx}
-                            className="text-sm flex items-start text-red-700"
-                          >
-                            <span className="mr-2">•</span>
-                            {flag}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
+                ) : (
+                  <div className="bg-muted/20 rounded-lg p-4 text-center">
+                    <p className="text-sm text-muted-foreground">
+                      No assessment tests available for this patient. Try
+                      reanalyzing the patient data.
+                    </p>
                   </div>
                 )}
               </div>
             )}
           </TabsContent>
 
-          {/* ASSESSMENT TESTS TAB */}
-          <TabsContent value="assessment" className="p-6">
+          {/* OBJECTIVE FINDINGS TAB */}
+          <TabsContent value="findings" className="p-6">
             {!hasDiagnosis ? (
               renderEmptyState(
-                <Clipboard className="h-12 w-12 text-gray-400 mx-auto mb-4" />,
-                "No assessment tests available",
-                "Analyze the patient data to get recommended assessment tests."
+                <ClipboardCheck className="h-12 w-12 text-gray-400 mx-auto mb-4" />,
+                "No objective findings available",
+                "Analyze the patient data to view objective findings."
               )
             ) : (
               <div className="space-y-6">
-                <div>
-                  <h3 className="text-lg font-semibold mb-3 flex items-center">
-                    <Clipboard className="h-5 w-5 mr-2 text-blue-500" />
-                    Recommended Assessment Tests
-                  </h3>
-                  <div className="space-y-4">
-                    {patient.assessmentTests &&
-                      patient.assessmentTests.map(
-                        (test: any, idx: number) => (
-                          <div
-                            key={idx}
-                            className="border rounded-lg p-4 bg-card"
-                          >
-                            <div className="flex justify-between items-start mb-2">
-                              <h4 className="text-md font-semibold">
-                                {test.name}
-                              </h4>
-                              <div className="flex space-x-2">
-                                <Badge variant="outline">
-                                  {test.category || "Physical"}
-                                </Badge>
-                                {test.specificity && (
-                                  <Badge
-                                    variant={
-                                      test.specificity >= 0.8
-                                        ? "default"
-                                        : "secondary"
-                                    }
-                                  >
-                                    {Math.round(test.specificity * 100)}%
-                                    specificity
-                                  </Badge>
-                                )}
-                              </div>
-                            </div>
+                {patient.objectiveFindings &&
+                  patient.objectiveFindings.map((finding: any, idx: number) => (
+                    <div key={idx} className="border rounded-lg p-4">
+                      <h4 className="text-md font-semibold mb-3 bg-primary/10 p-2 rounded">
+                        {finding.category}
+                      </h4>
+                      {finding.observations &&
+                        finding.observations.map(
+                          (observation: any, obsIdx: number) => (
+                            <div key={obsIdx} className="mb-4">
+                              <h5 className="text-sm font-medium mb-1">
+                                {observation.title}
+                              </h5>
+                              <p className="text-sm mb-2">
+                                {observation.details}
+                              </p>
 
-                            <p className="text-sm mb-3">{test.description}</p>
-
-                            <div className="space-y-2">
-                              {test.procedure && (
-                                <div>
-                                  <h5 className="text-sm font-medium">
-                                    Procedure:
-                                  </h5>
-                                  <p className="text-sm text-muted-foreground">
-                                    {test.procedure}
-                                  </p>
+                              {observation.measurements && (
+                                <div className="grid grid-cols-2 gap-2 text-sm ml-3 mt-2">
+                                  {Object.entries(observation.measurements).map(
+                                    (
+                                      [key, value]: [string, any],
+                                      i: number
+                                    ) => (
+                                      <div
+                                        key={i}
+                                        className="flex justify-between"
+                                      >
+                                        <span className="font-medium">
+                                          {key}:
+                                        </span>
+                                        <span>{value}</span>
+                                      </div>
+                                    )
+                                  )}
                                 </div>
                               )}
 
-                              {test.interpretation && (
-                                <div>
-                                  <h5 className="text-sm font-medium">
-                                    Interpretation:
-                                  </h5>
-                                  <p className="text-sm text-muted-foreground">
-                                    {test.interpretation}
-                                  </p>
-                                </div>
-                              )}
-
-                              {test.evidence && (
-                                <div>
-                                  <h5 className="text-sm font-medium">
-                                    Evidence:
-                                  </h5>
-                                  <p className="text-sm text-muted-foreground">
-                                    {test.evidence}
-                                  </p>
-                                </div>
+                              {observation.notes && (
+                                <p className="text-sm italic mt-2">
+                                  {observation.notes}
+                                </p>
                               )}
                             </div>
-                          </div>
-                        )
-                      )}
-                  </div>
-                </div>
+                          )
+                        )}
+                    </div>
+                  ))}
               </div>
             )}
           </TabsContent>
@@ -824,6 +869,98 @@ export default function VirtualPatientDetail({
                       )}
                     </div>
                   )}
+                                            }
+                                          </p>
+                                        </div>
+
+                                        <p className="text-sm mb-2">
+                                          <strong>Research Support:</strong>{" "}
+                                          {exercise.researchSupport}
+                                        </p>
+
+                                        {exercise.modificationOptions &&
+                                          exercise.modificationOptions.length >
+                                            0 && (
+                                            <div className="mt-2">
+                                              <p className="text-sm font-medium">
+                                                Modification Options:
+                                              </p>
+                                              <ul className="list-disc list-inside text-sm ml-2">
+                                                {exercise.modificationOptions.map(
+                                                  (
+                                                    modification: string,
+                                                    i: number
+                                                  ) => (
+                                                    <li key={i}>
+                                                      {modification}
+                                                    </li>
+                                                  )
+                                                )}
+                                              </ul>
+                                            </div>
+                                          )}
+                                      </div>
+                                    )
+                                  )}
+                                </div>
+                              )}
+
+                            {/* Patient Education */}
+                            {treatmentCategory.recommendations &&
+                              treatmentCategory.recommendations.length > 0 && (
+                                <div className="space-y-3">
+                                  {treatmentCategory.recommendations.map(
+                                    (rec: any, eduIdx: number) => (
+                                      <div
+                                        key={eduIdx}
+                                        className="border border-gray-200 rounded-md p-3"
+                                      >
+                                        <div className="flex justify-between items-start mb-2">
+                                          <h5 className="text-md font-medium">
+                                            {rec.topic}
+                                          </h5>
+                                          <Badge
+                                            variant={
+                                              rec.importance === "high"
+                                                ? "default"
+                                                : rec.importance === "medium"
+                                                ? "secondary"
+                                                : "outline"
+                                            }
+                                          >
+                                            {rec.importance} importance
+                                          </Badge>
+                                        </div>
+                                        <p className="text-sm mb-2">
+                                          {rec.details}
+                                        </p>
+                                        {rec.resources &&
+                                          rec.resources.length > 0 && (
+                                            <div className="mt-2">
+                                              <p className="text-sm font-medium">
+                                                Resources:
+                                              </p>
+                                              <ul className="list-disc list-inside text-sm ml-2">
+                                                {rec.resources.map(
+                                                  (
+                                                    resource: string,
+                                                    i: number
+                                                  ) => (
+                                                    <li key={i}>{resource}</li>
+                                                  )
+                                                )}
+                                              </ul>
+                                            </div>
+                                          )}
+                                      </div>
+                                    )
+                                  )}
+                                </div>
+                              )}
+                          </div>
+                        )
+                      )}
+                  </div>
                 </div>
               </div>
             )}
@@ -839,9 +976,7 @@ export default function VirtualPatientDetail({
               )
             ) : (
               <PatientProgressTracker
-                patientId={patientId}
-                patientName={patient.patient_name}
-                diagnosis={patient.diagnosis}
+                patientId={patient.id}
                 bodyPart={patient.body_part || "general"}
               />
             )}
@@ -850,10 +985,17 @@ export default function VirtualPatientDetail({
           {/* INTERACTIVE ANATOMY TAB */}
           <TabsContent value="anatomy" className="p-6">
             <BodyPartZoom
-              bodyPart={patient.body_part}
-              patientId={patientId}
-              userId={patient.user_id}
+              bodyPart={patient.body_part || "general"}
+              imageUrl={
+                placeholderImages[patient.body_part?.toLowerCase() || "general"]
+              }
             />
+            {/* Add fallback message in case image doesn't load */}
+            <div className="text-xs text-center text-muted-foreground mt-2">
+              Note: Interactive model displays anatomy regions for{" "}
+              {patient.body_part || "general"} body part. Click on highlighted
+              points to explore techniques.
+            </div>
           </TabsContent>
 
           {/* RESEARCH TAB */}
@@ -861,112 +1003,119 @@ export default function VirtualPatientDetail({
             {!hasDiagnosis ? (
               renderEmptyState(
                 <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />,
-                "No Research References Available",
-                "Analyze the patient data to view relevant research articles."
+                "No research available",
+                "Analyze the patient data to view relevant research."
               )
             ) : (
               <div className="space-y-6">
-                <div>
-                  <h3 className="text-lg font-semibold mb-3 flex items-center">
-                    <BookOpen className="h-5 w-5 mr-2 text-indigo-500" />
-                    Related Research Articles
+                <div className="bg-primary/5 p-4 rounded-lg">
+                  <h3 className="text-lg font-semibold mb-2 flex items-center">
+                    <BookOpen className="h-5 w-5 mr-2 text-primary" />
+                    Related Research
                   </h3>
-
-                  {patient.relatedArticles && patient.relatedArticles.length > 0 ? (
-                    <div className="space-y-4">
-                      {patient.relatedArticles.map((article: any, idx: number) => (
-                        <div key={idx} className="border rounded-lg p-4">
-                          <div className="flex justify-between">
-                            <h4 className="text-md font-semibold mb-1">
-                              {article.title}
-                            </h4>
-                            <Badge>
-                              {article.evidence_level || "Level 1"} Evidence
-                            </Badge>
-                          </div>
-                          <p className="text-xs text-muted-foreground mb-2">
-                            {article.authors} - {article.journal},{" "}
-                            {article.publication_year}
-                          </p>
-                          <p className="text-sm mb-2">{article.abstract}</p>
-                          <div className="flex flex-wrap gap-2 mt-2">
-                            {article.keywords &&
-                              article.keywords.map(
-                                (keyword: string, kIdx: number) => (
-                                  <Badge
-                                    key={kIdx}
-                                    variant="outline"
-                                    className="text-xs"
-                                  >
-                                    {keyword}
-                                  </Badge>
-                                )
-                              )}
-                          </div>
-                          <div className="mt-3 flex justify-between items-center">
-                            <p className="text-xs text-muted-foreground">
-                              DOI: {article.doi || "N/A"}
-                            </p>
-                            {article.url && (
-                              <Button variant="outline" size="sm" asChild>
-                                <Link
-                                  href={article.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                >
-                                  View Full Article{" "}
-                                  <ArrowRight className="ml-1 h-3 w-3" />
-                                </Link>
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center p-6 border rounded-md border-dashed">
-                      <p className="text-muted-foreground">
-                        No research articles available for this patient case.
-                      </p>
-                    </div>
-                  )}
+                  <p className="text-sm">
+                    Evidence-based research relevant to this case.
+                  </p>
                 </div>
 
-                {patient.expertSources && patient.expertSources.length > 0 && (
-                  <div>
-                    <h3 className="text-lg font-semibold mb-3">
-                      Expert Clinical Approaches
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {patient.expertSources.map((source: any, idx: number) => (
-                        <div
-                          key={idx}
-                          className="border rounded-lg p-4 bg-muted/30"
-                        >
-                          <h4 className="text-md font-semibold mb-2 flex items-center">
-                            <ThumbsUp className="h-4 w-4 mr-1 text-green-500" />
-                            {source.name}
-                          </h4>
-                          <p className="text-sm mb-2">{source.description}</p>
-                          {source.recommendations && (
-                            <div>
-                              <h5 className="text-sm font-medium mb-1">
-                                Key Recommendations:
-                              </h5>
-                              <ul className="list-disc pl-5 space-y-1">
-                                {source.recommendations.map(
-                                  (rec: string, recIdx: number) => (
-                                    <li key={recIdx} className="text-sm">
-                                      {rec}
-                                    </li>
-                                  )
-                                )}
-                              </ul>
-                            </div>
+                {console.log("Related research data:", patient.relatedResearch)}
+                {Array.isArray(patient.relatedResearch) &&
+                patient.relatedResearch.length > 0 ? (
+                  patient.relatedResearch.map((research: any, idx: number) => (
+                    <div key={idx} className="border rounded-lg p-4 shadow-sm">
+                      <div className="flex justify-between items-start">
+                        <h4 className="text-md font-medium mb-1">
+                          {research.title}
+                        </h4>
+                        <Badge variant="outline">
+                          {research.publicationYear || research.year || "N/A"}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-gray-500 mb-2">
+                        {Array.isArray(research.authors)
+                          ? research.authors.join(", ")
+                          : research.author}
+                      </p>
+                      <p className="text-sm mb-3">{research.abstract}</p>
+
+                      <div className="flex flex-wrap gap-2 mb-2">
+                        {Array.isArray(research.keywords) &&
+                          research.keywords.map(
+                            (keyword: string, kidx: number) => (
+                              <Badge
+                                key={kidx}
+                                variant="secondary"
+                                className="text-xs"
+                              >
+                                {keyword}
+                              </Badge>
+                            )
                           )}
+                      </div>
+
+                      <div className="text-sm">
+                        <p>
+                          <strong>Journal:</strong>{" "}
+                          {research.journal || "Not specified"}
+                        </p>
+                        {research.doi && (
+                          <p>
+                            <strong>DOI:</strong> {research.doi}
+                          </p>
+                        )}
+                      </div>
+
+                      {research.keyFindings && (
+                        <div className="mt-3">
+                          <h5 className="text-sm font-medium mb-1">
+                            Key Findings
+                          </h5>
+                          <ul className="list-disc list-inside text-sm ml-2">
+                            {Array.isArray(research.keyFindings) ? (
+                              research.keyFindings.map(
+                                (finding: string, fidx: number) => (
+                                  <li key={fidx}>{finding}</li>
+                                )
+                              )
+                            ) : (
+                              <li>{String(research.keyFindings)}</li>
+                            )}
+                          </ul>
                         </div>
-                      ))}
+                      )}
+
+                      {research.clinicalImplications && (
+                        <div className="mt-3">
+                          <h5 className="text-sm font-medium mb-1">
+                            Clinical Implications
+                          </h5>
+                          <p className="text-sm">
+                            {research.clinicalImplications}
+                          </p>
+                        </div>
+                      )}
+
+                      {research.link && (
+                        <div className="mt-3">
+                          <Button
+                            variant="link"
+                            size="sm"
+                            className="p-0 h-auto"
+                            asChild
+                          >
+                            <Link to={research.link} target="_blank">
+                              View full article
+                            </Link>
+                          </Button>
+                        </div>
+                      )}
                     </div>
+                  ))
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-gray-500">
+                      No related research articles available for this patient.
+                    </p>
                   </div>
                 )}
               </div>
@@ -974,19 +1123,6 @@ export default function VirtualPatientDetail({
           </TabsContent>
         </Tabs>
       </CardContent>
-      <CardFooter className="flex justify-between pt-6">
-        <Button variant="outline" onClick={onBackToList} size="sm">
-          <ChevronLeft className="mr-1 h-4 w-4" /> Back to Patient List
-        </Button>
-        {!hasDiagnosis && (
-          <div className="flex items-center space-x-2">
-            <p className="text-sm text-muted-foreground">
-              Ready to analyze this patient?
-            </p>
-            {renderAnalyzeButton()}
-          </div>
-        )}
-      </CardFooter>
     </Card>
   );
 }

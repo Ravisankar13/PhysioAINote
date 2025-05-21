@@ -11,6 +11,11 @@ import { analyzePatientBisset } from "./virtualPatientBisset";
 import { analyzePatientClinicalEdge } from "./virtualPatientClinicalEdge";
 import { analyzePatientPhysioNetwork } from "./virtualPatientPhysioNetwork";
 import { analyzePatientSportsMap } from "./virtualPatientSportsMap";
+import { clinicalEdgeRegionalApproaches, clinicalEdgeTreatmentPrinciples } from "./clinicalEdgeLibrary";
+import { physioNetworkPainApproaches, physioNetworkTreatmentPrinciples } from "./physioNetworkLibrary";
+import { sportsMapSportSpecificApproaches, sportsMapTreatmentPrinciples } from "./sportsMapLibrary";
+import { grimaldiHipApproaches, grimaldiTreatmentPrinciples } from "./grimaldi-hip-library";
+import { bissetElbowApproaches, bissetTreatmentPrinciples } from "./bisset-elbow-library";
 import { generateAICaseStudy, generateDiagnosticFeedback } from "./aiCaseStudyGenerator";
 import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, discussionUpvotes, exercises } from "@shared/schema";
 import { ZodError, z } from "zod";
@@ -1606,65 +1611,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Determine which specialized approach to use based on patient characteristics
       let analysisResult;
       try {
-        // Import specialized analysis modules with proper error handling
-        let analyzeShoulderPatientJoGibson, isShoulderPatient, 
-            analyzePatientClinicalEdge, analyzePatientPhysioNetwork, 
-            analyzePatientSportsMap, analyzePatientGrimaldi, analyzePatientBisset;
+        // All specialized analysis modules are already imported at the top of the file
+        // No need to import them again, we can use them directly
+        console.log("Using pre-imported analysis module functions");
         
-        // Import Jo Gibson shoulder module
-        try {
-          const joGibsonModule = require('./virtualPatientJoGibson');
-          analyzeShoulderPatientJoGibson = joGibsonModule.analyzeShoulderPatientJoGibson;
-          isShoulderPatient = joGibsonModule.isShoulderPatient;
-          console.log("Jo Gibson shoulder module loaded successfully");
-        } catch (joGibsonError) {
-          console.error("Error loading Jo Gibson shoulder module:", joGibsonError);
-          isShoulderPatient = () => false; // Fallback function
-        }
+        // Confirm that we have the imported functions available
+        console.log("Analysis functions available:", 
+          "Jo Gibson:", typeof analyzeShoulderPatientJoGibson, typeof isShoulderPatient,
+          "Clinical Edge:", typeof analyzePatientClinicalEdge,
+          "Physio Network:", typeof analyzePatientPhysioNetwork,
+          "Sports Map:", typeof analyzePatientSportsMap,
+          "Grimaldi:", typeof analyzePatientGrimaldi,
+          "Bisset:", typeof analyzePatientBisset
+        );
         
-        // Import Clinical Edge module
-        try {
-          const clinicalEdgeModule = require('./virtualPatientClinicalEdge');
-          analyzePatientClinicalEdge = clinicalEdgeModule.analyzePatientClinicalEdge;
-          console.log("Clinical Edge module loaded successfully");
-        } catch (clinicalEdgeError) {
-          console.error("Error loading Clinical Edge module:", clinicalEdgeError);
-        }
-        
-        // Import Physio Network module
-        try {
-          const physioNetworkModule = require('./virtualPatientPhysioNetwork');
-          analyzePatientPhysioNetwork = physioNetworkModule.analyzePatientPhysioNetwork;
-          console.log("Physio Network module loaded successfully");
-        } catch (physioNetworkError) {
-          console.error("Error loading Physio Network module:", physioNetworkError);
-        }
-        
-        // Import Sports Map module
-        try {
-          const sportsMapModule = require('./virtualPatientSportsMap');
-          analyzePatientSportsMap = sportsMapModule.analyzePatientSportsMap;
-          console.log("Sports Map module loaded successfully");
-        } catch (sportsMapError) {
-          console.error("Error loading Sports Map module:", sportsMapError);
-        }
-        
-        // Import Grimaldi hip module
-        try {
-          const grimaldiModule = require('./virtualPatientGrimaldi');
-          analyzePatientGrimaldi = grimaldiModule.analyzePatientGrimaldi;
-          console.log("Grimaldi hip module loaded successfully");
-        } catch (grimaldiError) {
-          console.error("Error loading Grimaldi hip module:", grimaldiError);
-        }
-        
-        // Import Bisset elbow module
-        try {
-          const bissetModule = require('./virtualPatientBisset');
-          analyzePatientBisset = bissetModule.analyzePatientBisset;
-          console.log("Bisset elbow module loaded successfully");
-        } catch (bissetError) {
-          console.error("Error loading Bisset elbow module:", bissetError);
+        // Set fallbacks just in case
+        if (typeof isShoulderPatient !== 'function') {
+          console.error("isShoulderPatient function not available, using fallback");
+          isShoulderPatient = (patient) => patient.body_part === "shoulder";
         }
         
         // Check which specialized approach is most appropriate for this patient

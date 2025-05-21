@@ -8,6 +8,9 @@ import { analyzeVirtualPatientCase, findRelevantResearchArticles } from "./virtu
 import { analyzeShoulderPatientJoGibson, isShoulderPatient } from "./virtualPatientJoGibson";
 import { analyzePatientGrimaldi } from "./virtualPatientGrimaldi";
 import { analyzePatientBisset } from "./virtualPatientBisset";
+import { analyzePatientClinicalEdge } from "./virtualPatientClinicalEdge";
+import { analyzePatientPhysioNetwork } from "./virtualPatientPhysioNetwork";
+import { analyzePatientSportsMap } from "./virtualPatientSportsMap";
 import { generateAICaseStudy, generateDiagnosticFeedback } from "./aiCaseStudyGenerator";
 import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, discussionUpvotes, exercises } from "@shared/schema";
 import { ZodError, z } from "zod";

@@ -35,7 +35,7 @@ export async function analyzePatientGrimaldi(patient: VirtualPatient) {
       messages: [
         {
           role: "system",
-          content: "You are an expert physiotherapist specializing in hip rehabilitation using Alison Grimaldi's evidence-based approach. Analyze the patient case and provide a detailed assessment, diagnosis, and treatment plan following Grimaldi's principles for hip conditions."
+          content: "You are an expert physiotherapist specializing in hip rehabilitation using Alison Grimaldi's evidence-based approach. You have extensive training in Grimaldi's specific diagnostic frameworks for hip pathology, including her gluteal tendinopathy classification, lateral hip pain assessment methodology, and proprietary rehabilitation protocols. Your analysis should precisely follow Grimaldi's pathoanatomical approach, motor control assessment frameworks, and progressive loading principles as published in her research and clinical practice guidelines. Provide a comprehensive assessment, precise diagnosis using Grimaldi's terminology, and detailed treatment plan adhering strictly to her evidence-based principles and latest research on hip rehabilitation."
         },
         {
           role: "user",
@@ -95,6 +95,26 @@ export async function analyzePatientGrimaldi(patient: VirtualPatient) {
  * @returns Formatted prompt with Grimaldi-specific hip rehabilitation context
  */
 function constructGrimaldiPrompt(patient: VirtualPatient): string {
+  // Prepare objective findings as a formatted string if they exist
+  let objectiveFindings = "None reported";
+  if (patient.objective_findings) {
+    try {
+      const findings = typeof patient.objective_findings === "string" 
+        ? JSON.parse(patient.objective_findings) 
+        : patient.objective_findings;
+      
+      if (Array.isArray(findings)) {
+        objectiveFindings = findings.map(f => `• ${f.finding}`).join('\n');
+      } else {
+        objectiveFindings = patient.objective_findings.toString();
+      }
+    } catch (e) {
+      if (typeof patient.objective_findings === "string") {
+        objectiveFindings = patient.objective_findings;
+      }
+    }
+  }
+  
   // Format patient data for the prompt
   const patientInfo = `
 PATIENT INFORMATION:
@@ -105,6 +125,8 @@ PATIENT INFORMATION:
 - Symptoms Description: ${patient.symptoms_description}
 - Medical History: ${patient.past_medical_history || "None reported"}
 - Body Part: ${patient.body_part || "hip"}
+- Objective Findings:
+${objectiveFindings}
 `;
 
   // Include Grimaldi's key assessment principles
@@ -138,8 +160,36 @@ PATIENT INFORMATION:
   return `
 ${patientInfo}
 
+SPECIALIZED GRIMALDI HIP DIAGNOSTIC FRAMEWORKS:
+
+1. GRIMALDI'S GLUTEAL TENDINOPATHY CLASSIFICATION:
+   - Reactive gluteal tendinopathy: Early pathology with inflammatory markers
+   - Tendon dysrepair: Failed healing with beginning structural changes
+   - Degenerative tendinopathy: Significant structural and matrix disruption
+   - Mixed presentations with specific load tolerance thresholds
+
+2. GRIMALDI'S LATERAL HIP PAIN ASSESSMENT FRAMEWORK:
+   - Greater trochanteric pain syndrome subclassification
+   - Gluteal tendon-fascial interface assessment
+   - Hip joint contribution assessment protocol
+   - Deep gluteal region sensitivity testing
+   - Bursal involvement assessment
+
+3. GRIMALDI'S HIP LOAD MANAGEMENT PRINCIPLES:
+   - Specific compressive vs tensile load evaluation
+   - Hip abductor capacity testing protocol
+   - Stance phase load tolerance assessment
+   - Functional pelvic control evaluation
+
+4. GRIMALDI'S HIP REHABILITATION STAGES:
+   - Acute load management (0-2 weeks)
+   - Isometric strengthening (1-3 weeks)
+   - Dynamic control development (3-6 weeks)
+   - Function-specific retraining (6+ weeks)
+   - Return to activity/sport progression
+
 TASK:
-Analyze this patient case from Alison Grimaldi's hip rehabilitation perspective. Provide a detailed assessment, most likely diagnosis, differential diagnoses, and treatment plan. Your analysis should incorporate Grimaldi's evidence-based approach to hip conditions.
+Analyze this patient case using Alison Grimaldi's specialized hip rehabilitation frameworks. Provide a highly specific diagnostic assessment, precise diagnosis classification, detailed differential diagnoses, and comprehensive evidence-based treatment plan following Grimaldi's exact protocols.
 
 GRIMALDI'S KEY ASSESSMENT PRINCIPLES:
 ${assessmentPrinciples}

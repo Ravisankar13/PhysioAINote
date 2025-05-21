@@ -1695,22 +1695,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Try to use the Jo Gibson approach for shoulder cases
           console.log("Using Jo Gibson shoulder approach for patient analysis");
           
-          const joGibsonResult = await analyzeShoulderPatientJoGibson(virtualPatient);
-          
-          // Convert the Jo Gibson specialized format to our standard format
-          analysisResult = {
-            primaryDiagnosis: { name: joGibsonResult.diagnosis, description: "Based on Jo Gibson's shoulder approach" },
-            differentialDiagnoses: joGibsonResult.differentialDiagnosis.map(d => ({ 
-              name: d.condition, 
-              description: d.rationale,
-              likelihood: d.likelihood
-            })),
-            treatmentOptions: joGibsonResult.treatmentOptions,
-            assessmentTests: joGibsonResult.assessmentTests,
-            recommendedKeywords: ["Jo Gibson", "shoulder rehabilitation", "evidence-based physiotherapy"],
-            joGibsonSpecificApproach: true,
-            relatedArticleIds: joGibsonResult.relatedArticleIds || []
-          };
+          try {
+            if (typeof analyzeShoulderPatientJoGibson === 'function') {
+              const joGibsonResult = await analyzeShoulderPatientJoGibson(virtualPatient);
+              
+              // Convert the Jo Gibson specialized format to our standard format
+              analysisResult = {
+                primaryDiagnosis: { 
+                  name: joGibsonResult.diagnosis || "Shoulder condition requiring further assessment", 
+                  description: "Based on Jo Gibson's shoulder approach" 
+                },
+                differentialDiagnoses: joGibsonResult.differentialDiagnosis?.map(d => ({ 
+                  name: d.condition || "Alternative diagnosis", 
+                  description: d.rationale || "Based on clinical presentation",
+                  likelihood: d.likelihood || "Possible"
+                })) || [],
+                treatmentOptions: joGibsonResult.treatmentOptions || [],
+                assessmentTests: joGibsonResult.assessmentTests || [],
+                recommendedKeywords: ["Jo Gibson", "shoulder rehabilitation", "evidence-based physiotherapy"],
+                joGibsonSpecificApproach: true,
+                relatedArticleIds: joGibsonResult.relatedArticleIds || []
+              };
+              console.log("Jo Gibson shoulder analysis completed successfully");
+            } else {
+              throw new Error("Jo Gibson shoulder analysis function not available");
+            }
+          } catch (joGibsonAnalysisError) {
+            console.error("Error in Jo Gibson shoulder analysis:", joGibsonAnalysisError);
+            // Fall back to default analysis
+            throw joGibsonAnalysisError;
+          }
         } 
         // Use Clinical Edge approach for knee cases
         else if (isKneeCase) {
@@ -1780,22 +1794,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
         else if (isHipCase) {
           console.log("Using Alison Grimaldi approach for hip patient analysis");
           
-          const grimaldiResult = await analyzePatientGrimaldi(virtualPatient);
-          
-          // Convert the Grimaldi specialized format to our standard format
-          analysisResult = {
-            primaryDiagnosis: { name: grimaldiResult.diagnosis, description: "Based on Alison Grimaldi's hip approach" },
-            differentialDiagnoses: grimaldiResult.differentialDiagnosis?.map(d => ({ 
-              name: d.condition, 
-              description: d.rationale,
-              likelihood: d.likelihood
-            })) || [],
-            treatmentOptions: grimaldiResult.treatmentOptions,
-            assessmentTests: grimaldiResult.assessmentTests,
-            recommendedKeywords: ["Alison Grimaldi", "hip rehabilitation", "gluteal function"],
-            grimaldiSpecificApproach: true,
-            relatedArticleIds: grimaldiResult.relatedArticleIds || []
-          };
+          try {
+            if (analyzePatientGrimaldi && typeof analyzePatientGrimaldi === 'function') {
+              const grimaldiResult = await analyzePatientGrimaldi(virtualPatient);
+              
+              // Convert the Grimaldi specialized format to our standard format
+              analysisResult = {
+                primaryDiagnosis: { 
+                  name: grimaldiResult.diagnosis || "Hip condition requiring assessment", 
+                  description: "Based on Alison Grimaldi's hip approach" 
+                },
+                differentialDiagnoses: grimaldiResult.differentialDiagnosis?.map(d => ({ 
+                  name: d.condition || "Alternative diagnosis", 
+                  description: d.rationale || "Based on clinical presentation",
+                  likelihood: d.likelihood || "Possible"
+                })) || [],
+                treatmentOptions: grimaldiResult.treatmentOptions || [],
+                assessmentTests: grimaldiResult.assessmentTests || [],
+                recommendedKeywords: ["Alison Grimaldi", "hip rehabilitation", "gluteal function"],
+                grimaldiSpecificApproach: true,
+                relatedArticleIds: grimaldiResult.relatedArticleIds || []
+              };
+              console.log("Grimaldi hip analysis completed successfully");
+            } else {
+              throw new Error("Grimaldi hip analysis function not available");
+            }
+          } catch (grimaldiAnalysisError) {
+            console.error("Error in Grimaldi hip analysis:", grimaldiAnalysisError);
+            // Fall back to default analysis later in the code
+            throw grimaldiAnalysisError;
+          }
         }
         // Use Bisset approach for elbow cases
         else if (isElbowCase) {

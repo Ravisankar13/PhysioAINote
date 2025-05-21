@@ -1601,18 +1601,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Determine which specialized approach to use based on patient characteristics
       let analysisResult;
       try {
-        // Import all specialized analysis modules
-        const { analyzeShoulderPatientJoGibson, isShoulderPatient } = require('./virtualPatientJoGibson');
-        const { analyzePatientClinicalEdge } = require('./virtualPatientClinicalEdge');
-        const { analyzePatientPhysioNetwork } = require('./virtualPatientPhysioNetwork');
-        const { analyzePatientSportsMap } = require('./virtualPatientSportsMap');
-        const { analyzePatientGrimaldi } = require('./virtualPatientGrimaldi');
-        const { analyzePatientBisset } = require('./virtualPatientBisset');
+        // Import specialized analysis modules with proper error handling
+        let analyzeShoulderPatientJoGibson, isShoulderPatient, 
+            analyzePatientClinicalEdge, analyzePatientPhysioNetwork, 
+            analyzePatientSportsMap, analyzePatientGrimaldi, analyzePatientBisset;
+        
+        // Import Jo Gibson shoulder module
+        try {
+          const joGibsonModule = require('./virtualPatientJoGibson');
+          analyzeShoulderPatientJoGibson = joGibsonModule.analyzeShoulderPatientJoGibson;
+          isShoulderPatient = joGibsonModule.isShoulderPatient;
+          console.log("Jo Gibson shoulder module loaded successfully");
+        } catch (joGibsonError) {
+          console.error("Error loading Jo Gibson shoulder module:", joGibsonError);
+          isShoulderPatient = () => false; // Fallback function
+        }
+        
+        // Import Clinical Edge module
+        try {
+          const clinicalEdgeModule = require('./virtualPatientClinicalEdge');
+          analyzePatientClinicalEdge = clinicalEdgeModule.analyzePatientClinicalEdge;
+          console.log("Clinical Edge module loaded successfully");
+        } catch (clinicalEdgeError) {
+          console.error("Error loading Clinical Edge module:", clinicalEdgeError);
+        }
+        
+        // Import Physio Network module
+        try {
+          const physioNetworkModule = require('./virtualPatientPhysioNetwork');
+          analyzePatientPhysioNetwork = physioNetworkModule.analyzePatientPhysioNetwork;
+          console.log("Physio Network module loaded successfully");
+        } catch (physioNetworkError) {
+          console.error("Error loading Physio Network module:", physioNetworkError);
+        }
+        
+        // Import Sports Map module
+        try {
+          const sportsMapModule = require('./virtualPatientSportsMap');
+          analyzePatientSportsMap = sportsMapModule.analyzePatientSportsMap;
+          console.log("Sports Map module loaded successfully");
+        } catch (sportsMapError) {
+          console.error("Error loading Sports Map module:", sportsMapError);
+        }
+        
+        // Import Grimaldi hip module
+        try {
+          const grimaldiModule = require('./virtualPatientGrimaldi');
+          analyzePatientGrimaldi = grimaldiModule.analyzePatientGrimaldi;
+          console.log("Grimaldi hip module loaded successfully");
+        } catch (grimaldiError) {
+          console.error("Error loading Grimaldi hip module:", grimaldiError);
+        }
+        
+        // Import Bisset elbow module
+        try {
+          const bissetModule = require('./virtualPatientBisset');
+          analyzePatientBisset = bissetModule.analyzePatientBisset;
+          console.log("Bisset elbow module loaded successfully");
+        } catch (bissetError) {
+          console.error("Error loading Bisset elbow module:", bissetError);
+        }
         
         // Check which specialized approach is most appropriate for this patient
         
         // 1. Check for shoulder-related issues - Jo Gibson approach
-        const isShoulderRelated = isShoulderPatient(virtualPatient);
+        const isShoulderRelated = isShoulderPatient && typeof isShoulderPatient === 'function' ? isShoulderPatient(virtualPatient) : false;
         
         // 2. Check for knee-related issues - Clinical Edge approach
         const isKneeCase = virtualPatient.body_part === "knee";

@@ -311,31 +311,47 @@ async function performAnalysis(
      - Functional movement patterns and compensations typically seen in this condition
      - Pain behaviors and symptom reproduction patterns distinctive to this diagnosis
   
-  5. Evidence-based treatment options organized by phases of rehabilitation, citing specific research and expert protocols:
+  5. Comprehensive evidence-based treatment options organized by phases of rehabilitation, citing specific research and expert protocols:
   
-     a. Manual Therapy techniques (3-4 specific techniques) including:
-        - Precise technique names from the relevant expert's methodology
-        - Exact hand placement, direction, amplitude, and dosage parameters
-        - Target tissue specificity with anatomical precision
-        - Treatment parameters with exact dosage (duration, repetitions, frequency)
-        - Progression criteria based on tissue response
-        - Clinical prediction rules for which patients respond best to each technique
-        - Recent research evidence with effect sizes and number needed to treat
+     a. Manual Therapy techniques (at least 5-6 specific techniques) including:
+        - Precise technique names from the relevant expert's methodology (e.g., "Mulligan's MWM for lateral glide of C5/6" rather than just "mobilization")
+        - Exact hand placement with anatomical landmarks, direction vectors, amplitude ranges, and force parameters
+        - Target tissue specificity with detailed anatomical precision and tissue-specific effects
+        - Treatment parameters with exact dosage (duration in seconds/minutes, sets of 8-10 repetitions, frequency of 2-3 times weekly)
+        - Progression criteria based on specific tissue response indicators and reassessment findings
+        - Clinical prediction rules for which patients respond best to each technique with research references
+        - Recent research evidence with effect sizes (d=X.XX or r=X.XX), number needed to treat (NNT), and confidence intervals
+        - Contraindications and precautions specific to this technique and condition
      
-     b. Progressive Loading Exercises (4-5 specific exercises) detailing:
-        - Exercise names from the specific expert's protocol for this condition
-        - Precise starting positions and movement parameters
-        - Specific loading parameters by rehabilitation phase (sets, reps, tempo, rest periods)
-        - Objective progression criteria based on the expert's research
-        - Monitoring parameters to ensure tissue tolerance
-        - Motor control elements to emphasize based on expert recommendations
-        - Functional integration parameters
+     b. Progressive Loading Exercises (at least 8-10 specific exercises) detailing:
+        - Specific exercise names as published in the expert's protocol (e.g., "Grimaldi's targeted hip abductor progression sequence")
+        - Precise starting positions with joint angles and body alignments
+        - Detailed movement descriptions with range, speed, and quality parameters
+        - Specific loading parameters for each rehabilitation phase:
+          * Phase 1 (Acute/Protection): Exact parameters (isometric holds of X seconds, X repetitions, X% MVC intensity)
+          * Phase 2 (Moderate Load): Exact parameters (concentric/eccentric emphasis, X sets of X reps, X tempo, X rest periods)
+          * Phase 3 (Advanced/Functional): Exact parameters (plyometric/sport-specific parameters, progressive overload schedule)
+        - Objective progression criteria with measurable thresholds (e.g., "Progress when patient can perform 3 sets of 15 reps with minimal fatigue and proper form")
+        - Monitoring parameters including pain response scale, fatigue indicators, and form assessment criteria
+        - Motor control elements to emphasize based on published protocols (e.g., "Maintain neutral lumbar position while emphasizing posterior pelvic tilt during all hip exercises")
+        - Functional integration parameters with specific activity simulations and return-to-sport/work progressions
+        - Home exercise program variations with detailed instructions
      
-     c. Education recommendations (3-4 key points) incorporating:
-        - Pain science education points specific to this condition (Moseley/Butler approach)
-        - Self-management strategies with efficacy data
-        - Activity modification guidelines with evidence-based parameters
-        - Return to function timelines based on clinical prediction rules
+     c. Education recommendations (5-7 key points) incorporating:
+        - Pain science education points specific to this condition using the Explain Pain framework (Moseley/Butler approach)
+        - Self-management strategies with efficacy data from clinical trials (success rates, adherence factors)
+        - Activity modification guidelines with specific parameters (e.g., "Reduce running volume by 50% for 2 weeks while maintaining fitness with aquatic training")
+        - Return to function timelines based on clinical prediction rules and tissue healing timeframes from research
+        - Lifestyle modifications with specific impact on pathophysiology and healing (sleep quality, nutrition, stress management)
+        - Psychosocial factor management specific to this condition with cognitive-behavioral approaches
+        - Long-term self-monitoring strategies and recurrence prevention protocols
+     
+     d. Research-Based Support including:
+        - 5-7 specific research studies directly relevant to this case with author names, publication years, and key findings
+        - Clinical pearls from expert physiotherapists specializing in this condition
+        - Evidence levels for each intervention (Level 1-5 evidence with explanations)
+        - Effect sizes and Number Needed to Treat (NNT) values when available
+        - Comparative efficacy data between different treatment approaches for this specific condition
   
   6. Red flags specific to this condition that would necessitate medical referral
   
@@ -431,13 +447,17 @@ async function performAnalysis(
         "category": "Manual Therapy",
         "techniques": [
           {
-            "name": "specific technique name",
-            "description": "detailed technique description including hand placement, direction, and dosage",
-            "targetTissue": "specific anatomical structure being targeted",
-            "evidenceLevel": "high/moderate/low/expert opinion",
-            "recommendationStrength": "highly recommended/recommended/optional",
-            "researchSupport": "brief summary of research evidence supporting this technique",
-            "contraindications": ["contraindication1", "contraindication2"]
+            "name": "specific named technique from expert methodology (e.g., 'Mulligan's MWM for lateral epicondylalgia')",
+            "description": "comprehensive technique description including precise hand placement, direction vectors, amplitude, and dosage with detailed patient positioning and therapist body mechanics",
+            "targetTissue": "precise anatomical structures (e.g., 'common extensor tendon origin at lateral epicondyle with emphasis on extensor carpi radialis brevis')",
+            "expertOrigin": "the specific expert or approach that developed this technique (e.g., 'Developed by Brian Mulligan as part of his mobilization with movement concept')",
+            "application": "detailed step-by-step application instructions with specific anatomical landmarks and force parameters",
+            "dosage": "exact treatment parameters (e.g., '3 sets of 10 glides with 30-second rest between sets, performed 2-3 times daily for the first week')",
+            "evidenceLevel": "high/moderate/low/expert opinion with specific citation",
+            "recommendationStrength": "highly recommended/recommended/optional with rationale",
+            "researchSupport": "specific research evidence with author names, years, and key findings (e.g., 'Bisset et al., 2015 found 78% improvement in pain-free grip strength')",
+            "contraindications": ["detailed contraindications with specific precautions"],
+            "progressionGuidelines": "explicit criteria for technique progression based on clinical response"
           },
           ...
         ]
@@ -446,20 +466,32 @@ async function performAnalysis(
         "category": "Progressive Loading Exercises",
         "exercises": [
           {
-            "name": "specific exercise name",
-            "description": "detailed exercise description including positioning and movement pattern",
-            "targetMuscleGroup": "specific muscles being targeted",
+            "name": "specific exercise name from expert protocols (e.g., 'Grimaldi's Hip Abduction with Pelvic Control')",
+            "description": "comprehensive exercise description including exact positioning, movement execution, and clinical reasoning for selection",
+            "targetMuscleGroup": "precise primary and secondary muscles (e.g., 'Primary: gluteus medius, minimus; Secondary: tensor fasciae latae, quadratus lumborum')",
+            "expertOrigin": "the specific expert who developed or popularized this exercise with clinical rationale",
+            "startingPosition": "detailed starting position with precise joint angles and body alignment",
+            "executionTechnique": "step-by-step execution guidelines including movement quality, common errors to avoid, and specific cues",
             "loadingParameters": {
-              "sets": "recommended sets (range)",
-              "reps": "recommended repetitions (range)",
-              "frequency": "recommended frequency",
-              "intensity": "recommended intensity/load guidelines",
-              "progressionCriteria": "when and how to progress the exercise"
+              "sets": "specific number of sets with physiological rationale (e.g., '3-4 sets to achieve adequate fatigue stimulus')",
+              "reps": "specific number of repetitions with physiological rationale (e.g., '12-15 reps for endurance focus in this phase')",
+              "frequency": "exact training frequency schedule (e.g., '3x/week on non-consecutive days to allow 48 hours tissue recovery')",
+              "intensity": "precise intensity guidelines with objective measures (e.g., '7/10 RPE, moderate fatigue by final repetitions')",
+              "tempo": "specific timing parameters (e.g., '2-second concentric, 3-second eccentric phase with 1-second hold')",
+              "restPeriods": "exact rest recommendations (e.g., '60-90 seconds between sets to allow partial recovery')",
+              "progressionCriteria": "objective criteria for progression (e.g., 'Progress when patient can complete 3 sets of 15 with proper form and minimal fatigue (RPE <6/10)')"
             },
-            "evidenceLevel": "high/moderate/low/expert opinion",
-            "recommendationStrength": "highly recommended/recommended/optional",
-            "researchSupport": "brief summary of research evidence supporting this exercise",
-            "modificationOptions": ["option1", "option2"]
+            "phaseSpecificParameters": {
+              "acute": "modified parameters for acute/early phase (e.g., 'Isometric holds only, 5x30sec at 70% max, pain <3/10')",
+              "subacute": "parameters for subacute/moderate phase as tissue tolerance improves",
+              "advanced": "parameters for advanced/functional phase with sport-specific considerations"
+            },
+            "evidenceLevel": "high/moderate/low/expert opinion with specific research classification",
+            "recommendationStrength": "highly recommended/recommended/optional with specific rationale",
+            "researchSupport": "specific research studies with author names, years, and key findings related to this exercise",
+            "expertEndorsement": "quotes or references from experts specifically endorsing this exercise for this condition",
+            "modificationOptions": ["detailed modifications for specific patient limitations or pain responses"],
+            "homeExerciseAdaptation": "specific guidelines for performing as a home exercise including equipment substitutions"
           },
           ...
         ]
@@ -468,10 +500,19 @@ async function performAnalysis(
         "category": "Patient Education",
         "recommendations": [
           {
-            "topic": "specific education topic",
-            "keyPoints": ["point1", "point2"],
-            "evidenceLevel": "high/moderate/low/expert opinion",
-            "recommendationStrength": "highly recommended/recommended/optional"
+            "topic": "specific education topic with clinical rationale",
+            "keyPoints": [
+              "detailed education point with specific patient-friendly language to use",
+              "precise activity guidelines with exact parameters (e.g., 'Gradually increase walking from 10 to 30 minutes over 3 weeks')",
+              "evidence-based explanation with research citation",
+              "specific analogies or visual aids to use with patients",
+              "expected outcomes and timeframes based on clinical research"
+            ],
+            "expertReference": "expert physiotherapist who developed this approach (e.g., 'Based on Lorimer Moseley's Explain Pain framework')",
+            "clinicalPearls": "practical implementation tips from expert practitioners",
+            "evidenceLevel": "high/moderate/low/expert opinion with research classification",
+            "recommendationStrength": "highly recommended/recommended/optional with specific rationale",
+            "researchSupport": "specific studies supporting this educational approach with outcomes data"
           },
           ...
         ]

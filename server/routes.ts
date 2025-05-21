@@ -1571,8 +1571,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Set hasBeenEdited to false since we're now analyzing/reanalyzing
+      // Also explicitly mark this as a fresh analysis to ensure we get updated diagnostic terminology
       await storage.updateVirtualPatient(patientId, {
-        hasBeenEdited: false
+        hasBeenEdited: false,
+        diagnosis: null, // Clear previous diagnosis to ensure we get a fresh analysis
+        differentialDiagnosis: [], // Clear previous differentials
+        status: 'reanalyzing' // Explicitly mark as reanalyzing
       });
       
       // Special case for username "fateofjustice" - should get premium features for free

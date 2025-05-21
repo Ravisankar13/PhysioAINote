@@ -11,6 +11,7 @@ import { analyzePatientBisset } from "./virtualPatientBisset";
 import { analyzePatientClinicalEdge } from "./virtualPatientClinicalEdge";
 import { analyzePatientPhysioNetwork } from "./virtualPatientPhysioNetwork";
 import { analyzePatientSportsMap } from "./virtualPatientSportsMap";
+import { joGibsonTreatmentPrinciples, joGibsonAssessmentPrinciples } from "./joGibsonShoulderLibrary";
 import { clinicalEdgeRegionalApproaches, clinicalEdgeTreatmentPrinciples } from "./clinicalEdgeLibrary";
 import { physioNetworkPainApproaches, physioNetworkTreatmentPrinciples } from "./physioNetworkLibrary";
 import { sportsMapSportSpecificApproaches, sportsMapTreatmentPrinciples } from "./sportsMapLibrary";
@@ -2003,7 +2004,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Determine appropriate specialized approach based on body part and patient characteristics
       if (isShoulderCase) {
         // Get Jo Gibson's specialized info from the library
-        const { joGibsonTreatmentPrinciples, joGibsonAssessmentPrinciples } = require('./joGibsonShoulderLibrary');
+        // Use already imported modules
         
         // Add specialized information to enhance the response
         res.json({
@@ -2025,7 +2026,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check for knee conditions to apply Clinical Edge approach
       else if (updatedPatient.body_part === "knee") {
         // Get Clinical Edge specialized info from the library
-        const { clinicalEdgeRegionalApproaches, clinicalEdgeTreatmentPrinciples } = require('./clinicalEdgeLibrary');
+        // Using already imported modules from top of file
         
         // Find knee-specific approaches
         const kneeApproaches = clinicalEdgeRegionalApproaches.find(a => a.bodyPart === "knee");
@@ -2045,7 +2046,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check for back/neck conditions to apply Physio Network approach
       else if (updatedPatient.body_part === "back" || updatedPatient.body_part === "neck") {
         // Get Physio Network specialized info from the library
-        const { physioNetworkPainApproaches, physioNetworkTreatmentPrinciples } = require('./physioNetworkLibrary');
+        // Using already imported modules from top of file
         
         res.json({
           ...updatedPatient,
@@ -2065,7 +2066,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                updatedPatient.chief_complaint?.toLowerCase().includes("running") ||
                updatedPatient.chief_complaint?.toLowerCase().includes("training")) {
         // Get Sports Map specialized info from the library
-        const { sportsMapSportSpecificApproaches, sportsMapTreatmentPrinciples } = require('./sportsMapLibrary');
+        // Using already imported modules from top of file
         
         res.json({
           ...updatedPatient,
@@ -2082,7 +2083,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check for hip conditions to apply Alison Grimaldi's approach
       else if (updatedPatient.body_part === "hip") {
         // Get Grimaldi's specialized info from the library
-        const { grimaldiHipApproaches, grimaldiTreatmentPrinciples } = require('./grimaldi-hip-library');
+        // Using already imported modules from top of file
         
         res.json({
           ...updatedPatient,
@@ -2108,7 +2109,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check for elbow conditions to apply Leanne Bisset's approach
       else if (updatedPatient.body_part === "elbow") {
         // Get Bisset's specialized info from the library
-        const { bissetElbowApproaches, bissetTreatmentPrinciples } = require('./bisset-elbow-library');
+        // Using already imported modules from top of file
         
         res.json({
           ...updatedPatient,

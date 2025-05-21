@@ -98,6 +98,21 @@ export function SimpleRecorder({ onRecordingComplete }: SimpleRecorderProps) {
     setIsProcessing(true);
     setProcessingStatus('Starting processing...');
     
+    // Create a fallback response we can use if anything fails
+    const fallbackData = {
+      transcription: "Your recording was received but couldn't be automatically transcribed. You can continue with manual entry.",
+      insights: {
+        transcription: "Audio recording received.",
+        clinicalInsights: "Please add your clinical notes manually."
+      },
+      soapNote: {
+        subjective: "Recording received, manual entry required.",
+        objective: "",
+        assessment: "",
+        plan: ""
+      }
+    };
+    
     try {
       if (audioChunksRef.current.length === 0) {
         throw new Error('No audio recorded');
@@ -121,11 +136,9 @@ export function SimpleRecorder({ onRecordingComplete }: SimpleRecorderProps) {
       setProcessingStatus('Sending audio to AI for transcription...');
       
       // Look for the sessionId in several places
-      // 1. First check URL parameters
       const urlParams = new URLSearchParams(window.location.search);
       let sessionId = urlParams.get('sessionId');
       
-      // 2. If not in URL, check if we're in a path with session ID
       if (!sessionId) {
         const pathMatch = window.location.pathname.match(/\/sessions\/(\d+)/);
         if (pathMatch && pathMatch[1]) {
@@ -133,7 +146,6 @@ export function SimpleRecorder({ onRecordingComplete }: SimpleRecorderProps) {
         }
       }
       
-      // 3. For compatibility with NotesClinical component, also look for hidden sessionId input
       if (!sessionId) {
         const sessionIdInput = document.getElementById('hidden-session-id') as HTMLInputElement;
         if (sessionIdInput && sessionIdInput.value) {
@@ -143,31 +155,93 @@ export function SimpleRecorder({ onRecordingComplete }: SimpleRecorderProps) {
       
       console.log('Using session ID for transcription:', sessionId);
       
-      // Send to server for transcription
-      const response = await fetch(sessionId ? `/api/sessions/${sessionId}/transcribe` : '/api/transcribe', {
-        method: 'POST',
-        body: formData,
-        // Add credentials to ensure auth cookies are sent
-        credentials: 'same-origin'
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        throw new Error(errorData?.message || `Server error: ${response.status}`);
+      let data;
+      try {
+        // Set a timeout for the fetch request
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+        
+        // Send to server for transcription
+        const response = await fetch(
+          sessionId ? `/api/sessions/${sessionId}/transcribe` : '/api/transcribe', 
+          {
+            method: 'POST',
+            body: formData,
+            credentials: 'same-origin',
+            signal: controller.signal
+          }
+        );
+        
+        clearTimeout(timeoutId);
+        
+        try {
+          data = await response.json();
+          
+          if (!response.ok && data.error) {
+            console.warn('Server returned error:', data.error);
+            
+            // Use the error message but keep the fallback structure
+            fallbackData.transcription = data.error || fallbackData.transcription;
+            
+            toast({
+              title: "Transcription notice",
+              description: data.error || "The recording was received but couldn't be fully processed.",
+              variant: "default"
+            });
+            
+            data = fallbackData;
+          }
+        } catch (jsonError) {
+          console.error('Error parsing response:', jsonError);
+          data = fallbackData;
+          
+          toast({
+            title: "Processing issue",
+            description: "Your recording was received but couldn't be processed properly.",
+            variant: "destructive"
+          });
+        }
+      } catch (fetchError: any) {
+        console.error('Fetch error:', fetchError);
+        
+        // Handle timeout or network errors gracefully
+        if (fetchError.name === 'AbortError') {
+          fallbackData.transcription = "The transcription request timed out. Your recording was saved.";
+        } else {
+          fallbackData.transcription = "Network error while uploading your recording.";
+        }
+        
+        data = fallbackData;
+        
+        toast({
+          title: fetchError.name === 'AbortError' ? "Request timed out" : "Network error",
+          description: "We've saved your recording, but couldn't process it automatically.",
+          variant: "destructive"
+        });
       }
       
-      setProcessingStatus('AI is analyzing your clinical notes...');
+      // If we have a response but no transcription, use fallback
+      if (!data || !data.transcription) {
+        console.warn('No transcription data in response, using fallback');
+        data = fallbackData;
+        
+        toast({
+          title: "Processing incomplete",
+          description: "Your recording was received but manual entry is required.",
+          variant: "default"
+        });
+      } else {
+        // We have some kind of data with transcription
+        setProcessingStatus('Applying AI analysis to your clinical notes...');
+        
+        toast({
+          title: "Recording processed",
+          description: "Your recording has been processed and is ready for editing.",
+          variant: "default"
+        });
+      }
       
-      const data = await response.json();
-      
-      setProcessingStatus('Generating structured SOAP format...');
-      
-      toast({
-        title: "Transcription successful",
-        description: "Your recording has been transcribed and analyzed.",
-      });
-      
-      // Send result to parent component
+      // Send whatever data we have to the parent component
       onRecordingComplete(audioBlob, data);
     } catch (err: any) {
       console.error('Error processing recording:', err);
@@ -179,10 +253,10 @@ export function SimpleRecorder({ onRecordingComplete }: SimpleRecorderProps) {
         variant: "destructive",
       });
       
-      // Still provide the result to parent, but with error
+      // Still provide some data to parent even with an error
       if (audioChunksRef.current.length > 0) {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        onRecordingComplete(audioBlob, { error: err.message });
+        onRecordingComplete(audioBlob, fallbackData);
       }
     } finally {
       setIsProcessing(false);

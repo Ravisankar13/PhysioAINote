@@ -28,7 +28,7 @@ export async function analyzeShoulderPatientJoGibson(patient: VirtualPatient) {
       messages: [
         {
           role: "system",
-          content: "You are an expert physiotherapist specializing in shoulder rehabilitation using Jo Gibson's evidence-based approach. Analyze the patient case and provide a detailed assessment, diagnosis, and treatment plan following Jo Gibson's principles."
+          content: "You are an expert physiotherapist specializing in shoulder rehabilitation using Jo Gibson's evidence-based approach. You have extensive training in Jo Gibson's specific diagnostic frameworks, assessment procedures, and rehabilitation protocols. Your analysis should precisely follow Gibson's shoulder pathology continuum, load management framework, and rehabilitation phasing that she has published in her research and clinical practice guidelines. Provide a comprehensive assessment, precise diagnosis using Gibson's terminology, and detailed treatment plan adhering strictly to Jo Gibson's evidence-based principles and latest research."
         },
         {
           role: "user",
@@ -125,6 +125,24 @@ export async function analyzeShoulderPatientJoGibson(patient: VirtualPatient) {
  * @returns Formatted prompt with Jo Gibson-specific context
  */
 function constructJoGibsonShoulderPrompt(patient: VirtualPatient): string {
+  // Prepare objective findings as a formatted string if they exist
+  let objectiveFindings = "None reported";
+  if (patient.objective_findings) {
+    try {
+      const findings = typeof patient.objective_findings === "string" 
+        ? JSON.parse(patient.objective_findings) 
+        : patient.objective_findings;
+      
+      if (Array.isArray(findings)) {
+        objectiveFindings = findings.map(f => `• ${f.finding}`).join('\n');
+      } else {
+        objectiveFindings = patient.objective_findings.toString();
+      }
+    } catch (e) {
+      objectiveFindings = patient.objective_findings.toString();
+    }
+  }
+  
   // Format patient data for the prompt
   const patientInfo = `
 PATIENT INFORMATION:
@@ -135,6 +153,8 @@ PATIENT INFORMATION:
 - Symptoms Description: ${patient.symptoms_description}
 - Medical History: ${patient.past_medical_history || "None reported"}
 - Body Part: ${patient.body_part || "shoulder"}
+- Objective Findings:
+${objectiveFindings}
 `;
 
   // Include Jo Gibson's key assessment principles

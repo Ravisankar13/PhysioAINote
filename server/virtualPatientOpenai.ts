@@ -296,46 +296,54 @@ async function performAnalysis(
      - Reliability and validity metrics from research for each test
      - How the combination of tests increases diagnostic accuracy according to likelihood ratios
   
-  4. Expected objective findings for this case (what the physiotherapist would likely find during examination):
-     - Range of motion findings relevant to the condition
-     - Strength assessment findings
-     - Neurological signs (if applicable)
-     - Palpation findings
-     - Functional test results
-     - Any additional relevant observations
+  4. Detailed expected objective findings with high specificity:
+     - Precise range of motion measurements expected (in degrees) at each affected joint
+     - Specific strength deficits by muscle groups with expected MMT scores
+     - Detailed palpation findings with anatomical precision
+     - Neurological findings including specific nerve tension tests and reflex changes
+     - Functional movement patterns and compensations typically seen in this condition
+     - Pain behaviors and symptom reproduction patterns distinctive to this diagnosis
   
-  5. Evidence-based treatment options for the primary diagnosis, organized by category and citing specific experts' research and methodologies:
+  5. Evidence-based treatment options organized by phases of rehabilitation, citing specific research and expert protocols:
   
-     a. Manual Therapy techniques (2-3 specific techniques)
-        - Specific technique name (e.g., Mulligan's Mobilization with Movement, McKenzie's extension exercises, etc.)
-        - Detailed description including hand placement, direction, and dosage as outlined by the expert who developed or refined the technique
-        - Target anatomical structure
-        - Evidence level (high/moderate/low/expert opinion)
-        - Recommendation strength (highly recommended/recommended/optional)
-        - Research support summary citing specific studies by these experts
-        - Typical treatment parameters (duration, frequency) recommended by the expert
+     a. Manual Therapy techniques (3-4 specific techniques) including:
+        - Precise technique names from the relevant expert's methodology
+        - Exact hand placement, direction, amplitude, and dosage parameters
+        - Target tissue specificity with anatomical precision
+        - Treatment parameters with exact dosage (duration, repetitions, frequency)
+        - Progression criteria based on tissue response
+        - Clinical prediction rules for which patients respond best to each technique
+        - Recent research evidence with effect sizes and number needed to treat
      
-     b. Progressive Loading Exercises (3-4 specific exercises)
-        - Specific exercise name (e.g., exercises from Grimaldi's gluteal rehabilitation protocol, Gibson's shoulder rehabilitation approach, Cook's tendon loading program, etc.)
-        - Detailed description including positioning, movement pattern as described by the expert
-        - Target muscle group
-        - Loading parameters (sets, reps, frequency, intensity) according to expert recommendations
-        - Progression criteria based on expert protocols
-        - Evidence level (high/moderate/low/expert opinion)
-        - Recommendation strength (highly recommended/recommended/optional)
-        - Research support summary citing specific studies or clinical guidelines by these experts
-        - Specific monitoring parameters recommended by the expert
+     b. Progressive Loading Exercises (4-5 specific exercises) detailing:
+        - Exercise names from the specific expert's protocol for this condition
+        - Precise starting positions and movement parameters
+        - Specific loading parameters by rehabilitation phase (sets, reps, tempo, rest periods)
+        - Objective progression criteria based on the expert's research
+        - Monitoring parameters to ensure tissue tolerance
+        - Motor control elements to emphasize based on expert recommendations
+        - Functional integration parameters
      
-     c. Patient Education recommendations (2-3 topics)
-        - Specific education topics emphasized by relevant experts for this condition
-        - Key points for patient understanding based on expert teaching and communication approaches
-        - Evidence level (high/moderate/low/expert opinion)
-        - Recommendation strength (highly recommended/recommended/optional)
-        - Expert sources supporting this education approach
+     c. Education recommendations (3-4 key points) incorporating:
+        - Pain science education points specific to this condition (Moseley/Butler approach)
+        - Self-management strategies with efficacy data
+        - Activity modification guidelines with evidence-based parameters
+        - Return to function timelines based on clinical prediction rules
   
-  6. 5-10 keywords that would be useful for searching research related to this case, including names of key experts for this specific condition
+  6. Red flags specific to this condition that would necessitate medical referral
   
-  Your analysis should be physiotherapy-focused but consider relevant medical conditions. Every recommendation should cite a specific expert or their research when applicable.
+  7. 6-8 specific research keywords that would retrieve the most relevant recent research on this specific diagnosis
+
+  8. Detailed clinical reasoning applying the specialized diagnostic framework most appropriate for this body region, demonstrating how you systematically ruled in the primary diagnosis and ruled out each differential.
+
+  IMPORTANT ANALYSIS RULES:
+  - Prioritize specificity over generality in all diagnostic elements
+  - Consider the impact of any objective findings provided in the case
+  - Apply the exact diagnostic algorithms published by the relevant experts for this body region
+  - Incorporate recent systematic review evidence (2020-2025) when available
+  - Highlight where diagnostic certainty is high vs. where further assessment would be beneficial
+  - Use clinical prediction rules and likelihood ratios when discussing diagnostic confidence
+  - For complex cases, apply models that integrate tissue pathology with neurophysiological and psychosocial factors
   
   Format your response as JSON with the following structure:
   

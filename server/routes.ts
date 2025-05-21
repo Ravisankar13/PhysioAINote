@@ -1850,18 +1850,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Convert DB patient model to input format expected by analyzer
           const patientInput = {
             patientName: virtualPatient.patient_name || "",
-            age: virtualPatient.age || "",
+            age: String(virtualPatient.age || ""),
             gender: virtualPatient.gender || "",
             chiefComplaint: virtualPatient.chief_complaint || "",
             symptomsDescription: virtualPatient.symptoms_description || "",
             bodyPart: virtualPatient.body_part,
             pastMedicalHistory: virtualPatient.past_medical_history || "",
-            pastSurgicalHistory: virtualPatient.past_surgical_history || "",
-            socialHistory: virtualPatient.social_history || "",
-            familyHistory: virtualPatient.family_history || "",
-            medications: virtualPatient.medications || "",
-            allergies: virtualPatient.allergies || "",
-            objectiveFindings: virtualPatient.objective_findings || ""
+            // Use empty strings for potentially missing fields
+            pastSurgicalHistory: "",
+            socialHistory: "",
+            familyHistory: "",
+            medications: "",
+            allergies: "",
+            objectiveFindings: typeof virtualPatient.objective_findings === 'string' ? virtualPatient.objective_findings : ""
           };
           
           console.log("Using standard analysis with properly formatted input");
@@ -1883,13 +1884,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
               symptomsDescription: virtualPatient.symptoms_description || "",
               bodyPart: virtualPatient.body_part,
               pastMedicalHistory: virtualPatient.past_medical_history || "",
-              // Handle potential missing fields with empty strings
-              pastSurgicalHistory: typeof virtualPatient.past_surgical_history === 'string' ? virtualPatient.past_surgical_history : "", 
-              socialHistory: typeof virtualPatient.social_history === 'string' ? virtualPatient.social_history : "",
-              familyHistory: typeof virtualPatient.family_history === 'string' ? virtualPatient.family_history : "",
-              medications: typeof virtualPatient.medications === 'string' ? virtualPatient.medications : "",
-              allergies: typeof virtualPatient.allergies === 'string' ? virtualPatient.allergies : "",
-              objectiveFindings: typeof virtualPatient.objective_findings === 'string' ? virtualPatient.objective_findings : ""
+              // Use empty strings for potentially missing fields
+              pastSurgicalHistory: "",
+              socialHistory: "",
+              familyHistory: "", 
+              medications: "",
+              allergies: "",
+              objectiveFindings: ""
             };
             
             console.log("Using fallback standard analysis with properly formatted input");

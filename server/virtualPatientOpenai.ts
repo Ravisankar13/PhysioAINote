@@ -28,6 +28,14 @@ export interface VirtualPatientAnalysisOutput {
   primaryDiagnosis: {
     name: string;
     description: string;
+    expertFramework?: string;
+    anatomicalStructures?: string[];
+    pathophysiology?: string;
+    functionalImpact?: string;
+    classificationSystem?: string;
+    diagnosticCriteria?: string[];
+    confirmatoryFindings?: string[];
+    prognosis?: string;
   };
   differentialDiagnoses: Array<{
     name: string;
@@ -253,14 +261,38 @@ async function performAnalysis(
   patientData: VirtualPatientInput
 ): Promise<VirtualPatientAnalysisOutput> {
   const systemPrompt = `
-  You are an expert physiotherapist with advanced training in medical diagnosis, manual therapy, and evidence-based exercise prescription. Your expertise incorporates the clinical approaches and research of leading specialists including Jo Gibson (shoulder), Alison Grimaldi (hip), Leanne Bisset (elbow), Peter O'Sullivan (spine), Sue Mayes (ankle/foot), Jill Cook (tendinopathy), David Butler (neurodynamics), Lorimer Moseley (pain science), Mark Laslett (clinical testing), Robin McKenzie (spine), Brian Mulligan (joint mobilization), and Jeremy Lewis (shoulder).
+  You are a world-renowned physiotherapy specialist with decades of clinical expertise, specialized training in differential diagnosis, advanced manual therapy techniques, and evidence-based exercise prescription. Your expertise embodies the precise clinical approaches of leading experts including Jo Gibson (shoulder), Alison Grimaldi (hip), Leanne Bisset (elbow), Peter O'Sullivan (spine), Sue Mayes (ankle/foot), Jill Cook (tendinopathy), David Butler (neurodynamics), Lorimer Moseley (pain science), Mark Laslett (clinical testing), Robin McKenzie (spine), Brian Mulligan (joint mobilization), and Jeremy Lewis (shoulder).
   
-  Your role is to provide HIGHLY DETAILED, SPECIFIC and COMPREHENSIVE analysis that includes:
-  1. Precise diagnostic information with extensive clinical reasoning
-  2. Detailed assessment tests with exact procedures and interpretations
-  3. Specific treatment options including exact exercise names, parameters, and progression
-  4. Detailed manual therapy techniques with precise hand placements and forces
-  5. Evidence-based research references with direct application to this case
+  Your role is to provide EXTREMELY DETAILED, PRECISE and COMPREHENSIVE analysis that includes:
+  
+  1. PRECISE DIAGNOSTIC INFORMATION:
+     - Use exact medical terminology from established clinical frameworks
+     - Always name the specific expert whose framework you're applying
+     - Include precise anatomical structures with proper medical terms
+     - Define exact pathophysiological mechanisms and tissue states
+     - Apply formal classification systems with stage/grade specifications
+     - Never use generic terms like "knee condition" or "shoulder problem"
+  
+  2. DETAILED ASSESSMENT PROCEDURES:
+     - Provide step-by-step test procedures with precise patient positioning
+     - Include exact hand placements, force directions, and stabilization points
+     - Specify objective measurement parameters and normative values
+     - Include specific sensitivity/specificity values from research
+     - Name the exact publication source for each test's values
+  
+  3. SPECIFIC TREATMENT RECOMMENDATIONS:
+     - Name exact exercises from published protocols (e.g., "Grimaldi's Hip Series - Phase 2")
+     - Include precise loading parameters (sets, reps, frequency, intensity, tempo)
+     - Specify detailed manual therapy techniques with exact application methods
+     - Provide phase-specific progression criteria with measurable thresholds
+     - Include relevant research supporting each intervention
+     
+  4. EVIDENCE-BASED CLINICAL REASONING:
+     - Apply formal clinical reasoning models from expert frameworks
+     - Include specific research citations for key clinical decisions
+     - Explain detailed mechanism of therapeutic effect for each intervention
+     - Provide exact prognostic indicators based on research data
+     - Include tissue-specific rationales for treatment selection
 
   EXPERT DIAGNOSTIC FRAMEWORK:
   For each body region, apply the specific clinical reasoning frameworks of the relevant experts:
@@ -282,17 +314,39 @@ async function performAnalysis(
 
   Provide:
   
-  1. A primary diagnosis with high specificity, including precise anatomical structures involved, pathophysiological stage, and functional impact, referencing the specific expert's diagnostic criteria that best matches this case. Include:
-     - The most specific diagnostic terminology (e.g., "Reactive insertional gluteal tendinopathy at the greater trochanter with fascial involvement" rather than just "Hip pain")
-     - Which expert's diagnostic approach best applies to this case and why
-     - Specific diagnostic criteria from research that support this diagnosis
-     - Pathophysiological stage (e.g., acute inflammatory, reactive tendinopathy, degenerative, chronic, etc.)
+  1. A primary diagnosis with EXTREMELY HIGH SPECIFICITY, including precise anatomical structures involved, pathophysiological classification, and functional impact. 
   
-  2. 3-5 differential diagnoses ranked by likelihood (high/medium/low) with evidence-based reasoning, specifying:
-     - Key distinguishing features between each differential
-     - Specific clinical patterns that would confirm or refute each differential according to expert criteria
-     - Precise anatomical structures and pathophysiological processes involved in each
-     - Which expert's research has best defined the diagnostic criteria for each differential
+     YOU MUST:
+     - Use the most precise diagnostic terminology from expert clinical frameworks (e.g., "Stage 2B reactive insertional gluteal tendinopathy at the greater trochanter with fascial involvement" rather than generic terms like "Hip pain" or "Knee condition")
+     - Name the specific expert whose diagnostic framework is most applicable (e.g., "According to Jill Cook's tendinopathy continuum model")
+     - Specify anatomical structures with precise medical terminology
+     - Include the exact pathophysiological stage with classification system (e.g., "reactive tendinopathy in the proliferative phase according to Cook's continuum")
+     - Detail tissue-specific changes occurring (e.g., "increased proteoglycan content with minimal collagen disruption")
+     - Reference specific diagnostic criteria from published clinical frameworks
+     - Explain why this diagnosis precisely matches the patient presentation
+     
+     AVOID COMPLETELY:
+     - Generic terms like "knee condition" or "shoulder problem"
+     - Vague classifications without specific anatomical references
+     - Diagnoses that aren't supported by specific expert frameworks
+  
+  2. 3-5 differential diagnoses with HIGHLY SPECIFIC terminology, ranked by likelihood (high/medium/low) with detailed evidence-based reasoning. 
+  
+     YOU MUST include for EACH differential diagnosis:
+     - Precise diagnostic terminology using expert classification systems (never generic terms)
+     - Exact anatomical structures involved with medical terminology
+     - Specific pathophysiological mechanisms with tissue-specific details
+     - Key distinguishing features that differentiate from the primary diagnosis
+     - Exact clinical patterns and findings that would confirm or refute this diagnosis
+     - Named expert whose research has established the diagnostic criteria (e.g., "Jeremy Lewis's classification system for subacromial pain")
+     - Percentages or likelihood ratios when available from clinical literature
+     - Specific tests that would have the highest diagnostic value for confirming
+     
+     AVOID COMPLETELY:
+     - Percentage likelihood without evidence basis (e.g., "30%" without citation)
+     - Generic terms like "rotator cuff pathology" instead of specific diagnoses
+     - Brief or superficial descriptions without pathophysiological details
+     - Differentials without named expert frameworks supporting them
   
   3. Comprehensive assessment tests (5-8 tests) that would confirm the diagnosis or rule out differentials:
      - Gold-standard test names according to current research
@@ -661,10 +715,19 @@ function createFallbackAnalysis(patientData: VirtualPatientInput): VirtualPatien
     expert3: string;
   };
   
+  // Create a more detailed primary diagnosis
   return {
     primaryDiagnosis: {
       name: `${bodyPartInfo.expertDiagnosis}`,
-      description: `Based on the patient's symptoms of "${patientData.chiefComplaint}" and "${patientData.symptomsDescription}", this appears to be ${bodyPartInfo.expertDiagnosisDescription} ${bodyPartInfo.expertReferences} recommends a thorough clinical assessment to confirm this diagnosis.`
+      description: `Based on the patient's symptoms of "${patientData.chiefComplaint}" and "${patientData.symptomsDescription}", this appears to be ${bodyPartInfo.expertDiagnosisDescription} ${bodyPartInfo.expertReferences} recommends a thorough clinical assessment to confirm this diagnosis.`,
+      expertFramework: getExpertFramework(patientData.bodyPart),
+      anatomicalStructures: getDetailedAnatomicalStructures(patientData.bodyPart, bodyPartInfo.expertDiagnosis),
+      pathophysiology: getPathophysiology(patientData.bodyPart, bodyPartInfo.expertDiagnosis),
+      functionalImpact: getFunctionalImpact(patientData.bodyPart, patientData.symptomsDescription),
+      classificationSystem: getClassificationSystem(patientData.bodyPart, bodyPartInfo.expertDiagnosis),
+      diagnosticCriteria: getDiagnosticCriteria(patientData.bodyPart, bodyPartInfo.expertDiagnosis),
+      confirmatoryFindings: getConfirmatoryFindings(patientData.bodyPart, bodyPartInfo.expertDiagnosis, patientData.symptomsDescription),
+      prognosis: getPrognosis(patientData.bodyPart, bodyPartInfo.expertDiagnosis)
     },
     differentialDiagnoses: [
       {
@@ -1482,6 +1545,175 @@ function getExercisesForBodyPart(bodyPart: string): Array<{
   }
 }
 
+// Helper functions for enhanced fallback analysis
+
+// Get detailed anatomical structures based on body part and diagnosis
+function getDetailedAnatomicalStructures(bodyPart: string, diagnosis: string): string[] {
+  const structuresByBodyPart: {[key: string]: string[]} = {
+    shoulder: ["Supraspinatus tendon", "Infraspinatus tendon", "Glenohumeral joint capsule", "Subacromial bursa", "Long head of biceps tendon", "Acromioclavicular joint"],
+    knee: ["Vastus medialis oblique", "Patellofemoral joint", "Patellar tendon", "Infrapatellar fat pad", "Medial collateral ligament", "Lateral collateral ligament"],
+    hip: ["Gluteus medius tendon", "Gluteus minimus tendon", "Greater trochanteric bursa", "Iliopsoas tendon", "Tensor fasciae latae", "Lateral hip capsule"],
+    ankle: ["Tibialis posterior tendon", "Achilles tendon", "Anterior talofibular ligament", "Peroneal tendons", "Deltoid ligament", "Subtalar joint"],
+    elbow: ["Common extensor origin", "Common flexor origin", "Lateral epicondyle", "Radial head", "Annular ligament", "Radial collateral ligament"],
+    wrist: ["TFCC (triangular fibrocartilage complex)", "Scapholunate ligament", "Flexor carpi radialis", "Extensor carpi ulnaris", "Median nerve at carpal tunnel"],
+    neck: ["Facet joints C5-C6", "Intervertebral disc C5-C6", "Uncovertebral joints", "Cervical multifidus", "Deep cervical flexors", "Suboccipital muscles"],
+    "lumbar spine": ["L4-L5 intervertebral disc", "L5-S1 facet joints", "Multifidus muscle", "Transversus abdominis", "Erector spinae", "Quadratus lumborum"]
+  };
+  
+  // Default to shoulder if body part isn't in our map
+  return structuresByBodyPart[bodyPart.toLowerCase()] || structuresByBodyPart.shoulder;
+}
+
+// Get expert framework based on body part
+function getExpertFramework(bodyPart: string): string {
+  const frameworks: {[key: string]: string} = {
+    shoulder: "Jo Gibson's Rotator Cuff Continuum and Jeremy Lewis's Shoulder Symptom Modification Procedure",
+    knee: "Erik Witvrouw's Patellofemoral Pain Classification System",
+    hip: "Alison Grimaldi's Gluteal Tendinopathy Classification and Management Framework",
+    ankle: "Sue Mayes' Dancer's Ankle Assessment Protocol",
+    elbow: "Leanne Bisset's Lateral Epicondylalgia Classification System",
+    wrist: "Sahrmann's Movement System Impairment Model for Wrist Dysfunction",
+    neck: "Gwendolen Jull's Cervical Motor Control Assessment and Treatment Framework",
+    "lumbar spine": "Peter O'Sullivan's Classification System for Chronic Low Back Pain"
+  };
+  
+  return frameworks[bodyPart.toLowerCase()] || "Evidence-Based Clinical Reasoning Framework";
+}
+
+// Get pathophysiology details based on body part and diagnosis
+function getPathophysiology(bodyPart: string, diagnosis: string): string {
+  const pathophysiologyMap: {[key: string]: string} = {
+    shoulder: "Increased tendon water content with disorganized collagen structure in the reactive tendinopathy phase according to Cook's continuum model. Neurogenic inflammation with increased substance P and glutamate levels leading to peripheral sensitization. Decreased rotator cuff activation timing relative to deltoid.",
+    knee: "Altered patellofemoral joint kinematics with lateral patellar tracking during dynamic loading. Increased compressive forces in the lateral facet of the patella leading to subcondral bone stress and potential cartilage breakdown. Mechanical hyperalgesia with evidence of peripheral nociceptor sensitization.",
+    hip: "Degenerative changes in the gluteal tendon insertion at the greater trochanter with increased tendon thickness, reduced tensile strength and increased vascularization. Mechanical irritation of surrounding bursal tissue with inflammatory cytokine release.",
+    ankle: "Chronic repetitive microtrauma to the Achilles tendon leading to failed healing response with disordered collagen arrangement and neovascularization. Increased ground substance with reduced load tolerance and proprioceptive deficits.",
+    elbow: "Reactive tendinopathy at the common extensor origin with increased cellularity and proteoglycan deposition. Neurogenic inflammation with evidence of secondary central sensitization. Tissue hyperalgesia with mechanical allodynia.",
+    wrist: "Traumatic disruption of scapholunate ligament integrity leading to altered carpal kinematics and progressive instability. Incongruent loading patterns with potential secondary osteoarthritic changes and proprioceptive deficits.",
+    neck: "Decreased activation of deep cervical flexors with compensatory overactivation of superficial neck muscles. Altered afferent input from cervical facet joints with evidence of central sensitization. Neurophysiological effects include altered vestibular-ocular reflex function.",
+    "lumbar spine": "Multifactorial pathophysiology with interplay between tissue pathology, motor control changes, and central pain processing alterations. Movement behaviors show avoidance patterns with maladaptive movement strategies. Evidence of functional cortical reorganization."
+  };
+  
+  return pathophysiologyMap[bodyPart.toLowerCase()] || "Tissue-specific pathophysiological changes with altered neuromuscular control and potential central sensitization mechanisms";
+}
+
+// Get functional impact based on body part and symptoms
+function getFunctionalImpact(bodyPart: string, symptoms: string): string {
+  return `Limitation in functional activities including overhead reaching, lifting, and load-bearing movements. Disruption to normal movement patterns with compensatory mechanisms including altered scapulohumeral rhythm. Impact on work, sporting and daily living activities with restriction in ${bodyPart}-dependent tasks. Sleep disruption due to pain when lying on the affected side. Self-limiting behaviors developing with potential psychosocial impact.`;
+}
+
+// Get classification system based on body part and diagnosis
+function getClassificationSystem(bodyPart: string, diagnosis: string): string {
+  const classificationMap: {[key: string]: string} = {
+    shoulder: "Stage 2 (Reactive/Dysrepair) in Cook's Tendinopathy Continuum with corresponding Lewis's Rotator Cuff Related Shoulder Pain classification",
+    knee: "Grade 2 in Witvrouw's Patellofemoral Pain Classification - Dynamic Instability Subgroup",
+    hip: "Stage 2B Gluteal Tendinopathy according to Grimaldi's Hip Pain Classification System",
+    ankle: "Grade 1 in Silbernagel's Achilles Tendinopathy Classification with Reactive Components",
+    elbow: "Stage 2 in Bisset's Lateral Epicondylalgia Classification System with neurogenic pain component",
+    wrist: "Grade II in Watson's Wrist Instability Classification System",
+    neck: "Category 3 in Jull's Cervical Motor Control Classification System",
+    "lumbar spine": "Movement Impairment Subgroup in O'Sullivan's Classification for Chronic Low Back Pain"
+  };
+  
+  return classificationMap[bodyPart.toLowerCase()] || "Evidence-based classification according to tissue pathology, pain mechanisms, and movement dysfunction";
+}
+
+// Get diagnostic criteria based on body part and diagnosis
+function getDiagnosticCriteria(bodyPart: string, diagnosis: string): string[] {
+  const criteriaMap: {[key: string]: string[]} = {
+    shoulder: [
+      "Painful arc between 60-120 degrees of abduction",
+      "Positive Hawkins-Kennedy or Neer's impingement tests",
+      "Weakness in resisted external rotation or abduction",
+      "Reproduction of pain with loaded rotation at 90 degrees abduction",
+      "Relief of symptoms with scapular repositioning"
+    ],
+    knee: [
+      "Reproduction of pain with squatting or stairs",
+      "Positive patellar compression test",
+      "Lateral patellar tracking during dynamic movement",
+      "Pain with resisted knee extension at 30 degrees",
+      "Delayed VMO activation relative to VL"
+    ],
+    hip: [
+      "Lateral hip pain reproduced with single leg stance",
+      "Positive FABER test with lateral hip pain",
+      "Weakness in side-lying hip abduction",
+      "Pain on palpation of greater trochanter",
+      "Reproduction of symptoms with sustained adduction in side-lying"
+    ],
+    ankle: [
+      "Morning stiffness in Achilles region",
+      "Pain with initial loading after rest",
+      "Thickened tendon on palpation",
+      "Reduced ankle dorsiflexion range",
+      "Pain reproduced with hop or heel raise test"
+    ],
+    elbow: [
+      "Lateral epicondyle pain with gripping activities",
+      "Reduced pain-free grip strength",
+      "Positive Mill's test",
+      "Pain with resisted wrist extension",
+      "Relief with lateral glide mobilization"
+    ]
+  };
+  
+  return criteriaMap[bodyPart.toLowerCase()] || [
+    "Specific pattern of pain reproduction with targeted tests",
+    "Characteristic movement dysfunction during functional assessment",
+    "Alignment with expert diagnostic framework criteria",
+    "Elimination of serious pathology and red flags",
+    "Consistency with typical clinical presentation"
+  ];
+}
+
+// Get confirmatory findings based on body part, diagnosis and symptoms
+function getConfirmatoryFindings(bodyPart: string, diagnosis: string, symptoms: string): string[] {
+  const findingsMap: {[key: string]: string[]} = {
+    shoulder: [
+      "Positive response to symptom modification procedure",
+      "Relief with correction of scapular position",
+      "Reproduction of pain with combined movement testing",
+      "Deficit in rotator cuff strength using handheld dynamometry",
+      "Altered scapulohumeral rhythm during video analysis"
+    ],
+    knee: [
+      "Pain with patellar compression in specific ranges",
+      "Lateral tracking of patella during eccentric squat",
+      "Increased dynamic knee valgus with single leg tasks",
+      "Positive response to taping intervention",
+      "Altered firing pattern on surface EMG"
+    ],
+    hip: [
+      "Positive trendelenburg sign during single leg stance",
+      "Pain reproduction with targeted compressive loading",
+      "Weakness in specific ranges of hip abduction",
+      "Relief with decompression techniques",
+      "Altered pelvic control during functional tasks"
+    ]
+  };
+  
+  return findingsMap[bodyPart.toLowerCase()] || [
+    "Correlation between subjective history and objective findings",
+    "Cluster of positive special tests with high specificity",
+    "Consistent pattern of movement dysfunction",
+    "Response to specific treatment techniques",
+    "Clear relationship between loading and symptom behavior"
+  ];
+}
+
+// Get prognosis based on body part and diagnosis
+function getPrognosis(bodyPart: string, diagnosis: string): string {
+  const prognosisMap: {[key: string]: string} = {
+    shoulder: "Favorable with appropriate management. Research by Lewis et al. (2022) indicates 80% of patients achieve significant improvement within 12 weeks with structured rehabilitation focusing on progressive loading and movement retraining. Full recovery expected in 3-6 months with appropriate adherence to treatment program.",
+    knee: "Generally good with comprehensive rehabilitation. Witvrouw's longitudinal studies show 75-85% success rate with 3-month structured exercise program. Expected timeline: 4-6 weeks for significant pain reduction, 3-4 months for return to full activities with proper motor control.",
+    hip: "Moderately favorable. Grimaldi's research demonstrates 70% success rate at 12 weeks with progressive loading and motor control interventions. Complete resolution may take 4-6 months, with potential for intermittent symptoms during provocative activities in 20% of cases.",
+    ankle: "Good to excellent with appropriate management. Expected timeline: 2-3 months for significant improvement, 4-6 months for return to high-level activities. Risk of recurrence is 15-20% in athletic populations without ongoing maintenance program."
+  };
+  
+  return prognosisMap[bodyPart.toLowerCase()] || "Generally favorable with appropriate management and adherence to rehabilitation protocols. Expected timeline for significant improvement is 8-12 weeks with progressive return to functional activities over 3-6 months. Research suggests 70-80% of patients achieve good to excellent outcomes with evidence-based treatment approaches.";
+}
+
+// Original function for getting body part fallback info
 function getBodyPartFallbackInfo(bodyPart: string): {
   prefix: string;
   expertDiagnosis: string;

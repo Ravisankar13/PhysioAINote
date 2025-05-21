@@ -6,6 +6,8 @@ import { db } from "./db";
 import { generateSoapNote } from "./openai";
 import { analyzeVirtualPatientCase, findRelevantResearchArticles } from "./virtualPatientOpenai";
 import { analyzeShoulderPatientJoGibson, isShoulderPatient } from "./virtualPatientJoGibson";
+import { analyzePatientGrimaldi } from "./virtualPatientGrimaldi";
+import { analyzePatientBisset } from "./virtualPatientBisset";
 import { generateAICaseStudy, generateDiagnosticFeedback } from "./aiCaseStudyGenerator";
 import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, discussionUpvotes, exercises } from "@shared/schema";
 import { ZodError, z } from "zod";
@@ -1871,33 +1873,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error) {
         console.error("Error in specialized analysis, falling back to standard analysis:", error);
         try {
-          // Import the default analyzer function
-          const { analyzeVirtualPatientCase } = require('./virtualPatientOpenai');
-          if (typeof analyzeVirtualPatientCase === 'function') {
-            console.log("Using fallback standard analysis for virtual patient");
-            // Convert DB patient model to input format expected by analyzer
-            const patientInput = {
-              patientName: virtualPatient.patient_name || "",
-              age: String(virtualPatient.age || ""),
-              gender: virtualPatient.gender || "",
-              chiefComplaint: virtualPatient.chief_complaint || "",
-              symptomsDescription: virtualPatient.symptoms_description || "",
-              bodyPart: virtualPatient.body_part,
-              pastMedicalHistory: virtualPatient.past_medical_history || "",
-              // Use empty strings for potentially missing fields
-              pastSurgicalHistory: "",
-              socialHistory: "",
-              familyHistory: "", 
-              medications: "",
-              allergies: "",
-              objectiveFindings: ""
-            };
-            
-            console.log("Using fallback standard analysis with properly formatted input");
-            analysisResult = await analyzeVirtualPatientCase(patientInput);
-          } else {
-            throw new Error("Standard analysis function not available");
-          }
+          // Use the already imported analyzeVirtualPatientCase function at the top of the file
+          console.log("Using fallback standard analysis for virtual patient");
+          // Convert DB patient model to input format expected by analyzer
+          const patientInput = {
+            patientName: virtualPatient.patient_name || "",
+            age: String(virtualPatient.age || ""),
+            gender: virtualPatient.gender || "",
+            chiefComplaint: virtualPatient.chief_complaint || "",
+            symptomsDescription: virtualPatient.symptoms_description || "",
+            bodyPart: virtualPatient.body_part,
+            pastMedicalHistory: virtualPatient.past_medical_history || "",
+            // Use empty strings for potentially missing fields
+            pastSurgicalHistory: "",
+            socialHistory: "",
+            familyHistory: "", 
+            medications: "",
+            allergies: "",
+            objectiveFindings: virtualPatient.objective_findings ? 
+              (typeof virtualPatient.objective_findings === 'string' ? 
+                virtualPatient.objective_findings : 
+                JSON.stringify(virtualPatient.objective_findings)) : 
+              ""
+          };
+          
+          console.log("Using fallback standard analysis with properly formatted input");
+          analysisResult = await analyzeVirtualPatientCase(patientInput);
         } catch (fallbackError) {
           console.error("Error in fallback analysis:", fallbackError);
           // Create a basic fallback result when all else fails

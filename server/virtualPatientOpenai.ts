@@ -372,47 +372,73 @@ async function performAnalysis(
   
   {
     "primaryDiagnosis": {
-      "name": "diagnosis name",
-      "description": "detailed explanation"
+      "name": "precise diagnostic terminology with anatomical specificity",
+      "description": "comprehensive explanation with detailed pathophysiology and clinical reasoning",
+      "expertFramework": "specific diagnostic framework used by expert physiotherapist (e.g., 'Cook's tendinopathy continuum, reactive phase')",
+      "anatomicalStructures": ["specific anatomical structures involved with precise terminology"],
+      "pathophysiology": "detailed pathophysiological mechanism explaining tissue state and healing phase",
+      "functionalImpact": "specific functional limitations resulting from this condition",
+      "classificationSystem": "formal classification used (e.g., 'Stage 2 according to the XYZ classification')",
+      "diagnosticCriteria": ["specific criteria used to confirm this diagnosis"],
+      "confirmatoryFindings": ["key objective and subjective findings that confirm this diagnosis"],
+      "prognosis": "evidence-based prognosis with expected timeline and outcomes"
     },
     "differentialDiagnoses": [
       {
-        "name": "differential diagnosis 1",
+        "name": "precise differential diagnosis with specific terminology",
         "likelihood": "high/medium/low",
-        "reasoning": "brief reasoning"
+        "reasoning": "comprehensive evidence-based reasoning with specific clinical patterns",
+        "distinguishingFeatures": ["key clinical features that distinguish this from the primary diagnosis"],
+        "anatomicalConsiderations": "specific anatomical structures involved in this differential",
+        "confirmatoryTests": ["specific tests that would confirm this differential diagnosis"],
+        "exclusionCriteria": ["findings that would rule out this diagnosis"],
+        "expertPerspective": "named expert's approach to identifying this condition",
+        "researchEvidence": "specific research supporting this as a differential diagnosis"
       },
       ...
     ],
     "assessmentTests": [
       {
-        "name": "test name",
-        "purpose": "what the test helps determine",
-        "procedure": "how to perform the test",
-        "positiveFindings": "what constitutes a positive test",
-        "negativeFindings": "what constitutes a negative test",
-        "sensitivity": "test sensitivity if known",
-        "specificity": "test specificity if known",
-        "relevance": "primary/secondary/supportive",
-        "supportingResearch": "research backing the test",
-        "expertRecommendation": "which experts recommend this test and why"
+        "name": "precise test name as documented in clinical literature",
+        "purpose": "detailed explanation of what this test evaluates with physiological rationale",
+        "procedure": "step-by-step procedure with exact patient positioning, stabilization, force application, and therapist hand placement",
+        "positiveFindings": "detailed description of positive findings with specific criteria and measurements",
+        "negativeFindings": "detailed description of negative findings with clinical implications",
+        "sensitivity": "statistical sensitivity with research citation (e.g., '0.82 according to Smith et al., 2022')",
+        "specificity": "statistical specificity with research citation (e.g., '0.89 according to Jones et al., 2021')",
+        "relevance": "primary/secondary/supportive with explanation of its importance in this case",
+        "supportingResearch": "specific research studies supporting this test with authors, years and findings",
+        "expertRecommendation": "named experts who endorse this test with their specific clinical context",
+        "clinicalPearls": "practical implementation tips from expert practitioners",
+        "clusterRecommendation": "explanation of how this test works in combination with others"
       },
       ...
     ],
     "objectiveFindings": {
       "rangeOfMotion": [
         {
-          "movement": "specific movement",
-          "finding": "expected finding",
-          "significance": "clinical significance"
+          "movement": "specific anatomical movement with direction (e.g., 'Right shoulder external rotation')",
+          "finding": "precise measurement with units and reference values (e.g., '45 degrees, normal is 90 degrees')",
+          "painResponse": "description of pain response during movement (e.g., 'Sharp pain at end-range rated 6/10')",
+          "quality": "description of movement quality (e.g., 'Decreased scapular upward rotation with compensatory hiking')",
+          "endFeel": "specific end-feel classification (e.g., 'Empty end-feel consistent with pain limitation')",
+          "comparison": "comparison to contralateral side with specific measurements",
+          "significance": "detailed clinical significance with pathoanatomical correlation",
+          "implication": "specific implication for treatment approach"
         },
         ...
       ],
       "strength": [
         {
-          "muscleGroup": "specific muscle group",
-          "finding": "expected finding",
-          "gradingScale": "scale used e.g. Oxford 0-5",
-          "significance": "clinical significance"
+          "muscleGroup": "specific muscle or muscle group with precise anatomical naming",
+          "finding": "detailed strength finding with exact measurement (e.g., 'Grade 4-/5 on MMT scale')",
+          "painResponse": "description of any pain during testing (e.g., 'Pain at end-range contraction rated 5/10')",
+          "gradingScale": "specific grading scale used with complete definition (e.g., 'Manual Muscle Testing (MMT) scale: 0-5 where 4- represents 70% of normal strength')",
+          "objectiveMeasurement": "quantitative measurement if used (e.g., '15kg on handheld dynamometer compared to 25kg on uninvolved side')",
+          "qualityOfContraction": "description of contraction quality (e.g., 'Delayed recruitment with substitution patterns')",
+          "comparison": "comparison to normative data and contralateral side",
+          "significance": "detailed clinical significance with relation to functional activities",
+          "implication": "specific implications for rehabilitation approach"
         },
         ...
       ],
@@ -518,7 +544,39 @@ async function performAnalysis(
         ]
       }
     ],
-    "recommendedKeywords": ["keyword1", "keyword2", ...]
+    "recommendedKeywords": ["keyword1", "keyword2", ...],
+    "researchSection": {
+      "keyStudies": [
+        {
+          "title": "Complete study title with all authors",
+          "authors": "Full author list",
+          "year": "Publication year",
+          "journal": "Journal name and details",
+          "findings": "Detailed findings directly relevant to this case",
+          "clinicalImplications": "Specific implications for this patient's management",
+          "evidenceLevel": "Level of evidence classification with explanation"
+        }
+      ],
+      "clinicalGuidelines": [
+        {
+          "organization": "Professional organization that published the guideline",
+          "title": "Specific guideline title",
+          "year": "Publication year",
+          "recommendations": "Specific recommendations relevant to this case",
+          "strengthOfRecommendation": "Grade of recommendation with explanation"
+        }
+      ],
+      "expertOpinion": [
+        {
+          "expert": "Named expert physiotherapist",
+          "specialization": "Area of specialization",
+          "approach": "Their specific approach to this condition",
+          "clinicalPearls": "Unique insights applicable to this case",
+          "publicationReferences": "Key publications by this expert"
+        }
+      ],
+      "emergingResearch": "Recent research directions and findings that may influence future management of this condition"
+    }
   }
   `;
 

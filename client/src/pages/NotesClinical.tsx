@@ -8,7 +8,6 @@ import { FaBars, FaEdit, FaCheck, FaTimes } from "react-icons/fa";
 import TranscriptionTable from "../components/notes-clinical/Transcription";
 import PatientDataForm from "../components/notes-clinical/PatientDataForm";
 import SoapNote from "../components/notes-clinical/SoapSection";
-import { SimpleRecorder } from "../components/notes/SimpleRecorder";
 
 // Define TypeScript interfaces
 interface PatientData {
@@ -97,67 +96,70 @@ function NotesClinical(): React.ReactElement {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Check if the user is logged in
-    const checkUserAuth = async () => {
+    const handleLogin = async () => {
       try {
-        // USE A HARDCODED TOKEN APPROACH FOR DEMO PURPOSES
-        // This is to ensure the clinical notes recording always works
-        const demoToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjEiLCJlbWFpbCI6InBoeXNpb2FpQGV4YW1wbGUuY29tIiwiaWF0IjoxNjg3MTIzNDU2LCJleHAiOjE3MTg2NTk0NTZ9._e4RtHCQ-Qj9cXZuhW9jCm9RKQjV7Ej_dzCffQb9uuM";
-        
-        // Set the JWT token for API calls
-        setJwtToken(demoToken);
-        localStorage.setItem("jwt", demoToken);
-        
-        // Set a default user ID for the demo
-        setUserId("1");
-        setIsLoading(false);
-        
-        console.log("Demo user authenticated");
-        return;
+        const response = await fetch(
+          "https://hqy44mb8l7.execute-api.us-east-2.amazonaws.com/dev/get-auth-token",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ username: "anup", password: "anup123" }),
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error("Login failed");
+        }
+
+        const data = await response.json();
+        const token = data.token;
+        const userId = data.user_id;
+        if (token) {
+          setJwtToken(token);
+          setUserId(userId);
+          setIsLoading(false);
+        } else {
+          console.error("Token not found in response");
+        }
       } catch (error) {
-        console.error("Error checking authentication:", error);
-        navigate('/auth');
+        console.error("Error during login:", error);
       }
     };
-    
-    checkUserAuth();
-  }, [navigate]);
+    handleLogin();
+  }, []);
 
-  const fetchSessions = async () => {
-    if (!userId || !jwtToken) return;
-    
+  const fetchSessions = async (lastKey?: string) => {
     try {
-      console.log("Fetching sessions for user ID:", userId);
-      
-      // Use the original API endpoint that works with audio recording
-      const response = await fetch(
-        "https://hqy44mb8l7.execute-api.us-east-2.amazonaws.com/dev/get-sessions",
-        {
-          headers: {
-            Authorization: `Bearer ${jwtToken}`,
-          },
-        }
-      );
+      let url = `https://hqy44mb8l7.execute-api.us-east-2.amazonaws.com/dev/session/get-all`;
+      // if (lastKey)
+      //   url = `https://hqy44mb8l7.execute-api.us-east-2.amazonaws.com/dev/session/get-all?limit=${limit}&last_key=${lastKey}`
+
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${jwtToken}`,
+          "Content-Type": "application/json",
+        },
+      });
 
       if (response.ok) {
         const data = await response.json();
-        
-        if (data && Array.isArray(data)) {
-          // Format sessions and filter by current user
-          const formattedSessions = data
-            .filter((session: any) => session.user_id === userId)
-            .map((session: any) => ({
-              id: session.session_id,
-              name: session.session_name,
-              user_id: session.user_id,
-            }));
-            
-          console.log("Fetched and filtered sessions:", formattedSessions.length);
-          setSessions(formattedSessions);
-        } else {
-          console.error("Unexpected sessions data format:", data);
-          setSessions([]);
-        }
+
+        const sessions_list = data.sessions;
+        // Assuming data is a list of session objects
+        const formattedSessions = sessions_list.map(
+          (session: any, index: number) => ({
+            id: session.session_id ? session.session_id : session.pk,
+            name: session.session_name,
+            user_id: session.user_id,
+          })
+        );
+
+        setLastKey(data.last_key);
+
+        setSessions(formattedSessions);
       } else {
         console.error("Failed to fetch sessions:", response.statusText);
       }
@@ -167,7 +169,7 @@ function NotesClinical(): React.ReactElement {
   };
 
   useEffect(() => {
-    if (userId) {
+    if (jwtToken) {
       fetchSessions();
 
       // Reset the editingSessionSaved state if it was true
@@ -175,7 +177,7 @@ function NotesClinical(): React.ReactElement {
         setEditingSessionSaved(false);
       }
     }
-  }, [userId, editingSessionSaved]);
+  }, [jwtToken, editingSessionSaved]);
 
   const toggleSidebar = (): void => {
     setIsCollapsed((prev) => !prev);
@@ -201,15 +203,16 @@ function NotesClinical(): React.ReactElement {
         newSessionName = editedSessionName;
       }
 
-      // Use our local API endpoint for updating sessions
-      await fetch(`/api/sessions/${sessionId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ sessionName: newSessionName })
-      });
-      
+      await axios.put(
+        `https://hqy44mb8l7.execute-api.us-east-2.amazonaws.com/dev/session/update?id=${sessionId}`,
+        { session_name: newSessionName },
+        {
+          headers: {
+            Authorization: `Bearer ${jwtToken}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
       // Update the local state or trigger a refetch of sessions
       setEditingSessionId(null);
       setEditingSessionSaved(true);
@@ -219,67 +222,53 @@ function NotesClinical(): React.ReactElement {
   };
 
   const handleSessionClick = async (sessionId: string): Promise<void> => {
-    setSelectedSession(sessionId); // Set the selected session
+    setSelectedSession(sessionId); // Optionally, set the selected session
     setShowNewSession(true);
-    setSessionId(sessionId); // Make sure session ID is set for audio recording
 
     try {
-      // Use the original AWS Lambda API that works
       const response = await fetch(
-        `https://hqy44mb8l7.execute-api.us-east-2.amazonaws.com/dev/get-session-details?session_id=${sessionId}`,
+        `https://hqy44mb8l7.execute-api.us-east-2.amazonaws.com/dev/session/get?id=${sessionId}`,
         {
+          method: "GET",
           headers: {
             Authorization: `Bearer ${jwtToken}`,
+            "Content-Type": "application/json",
           },
         }
       );
 
       if (response.ok) {
         const data = await response.json();
-        console.log("Session details:", data);
 
         // Map response data to patientData structure
         setPatientData({
-          firstname: data.first_name || "",
-          middlename: data.middle_name || "",
-          lastname: data.last_name || "",
+          firstname: data.firstname || "",
+          middlename: data.middlename || "",
+          lastname: data.lastname || "",
           gender: data.gender || "",
           dob: data.dob || "",
           weight: data.weight || "",
           height_feet: data.height_feet || "",
           height_inch: data.height_inch || "",
-          pastMedicalHistory: data.past_medical_history || "",
-          pastSurgicalHistory: data.past_surgical_history || "",
+          pastMedicalHistory: data.pastMedicalHistory || "",
+          pastSurgicalHistory: data.pastSurgicalHistory || "",
         });
 
-        // Set transcript URL if available
-        if (data.transcript_presigned_url) {
-          setTranscriptPreSIgnedURL(data.transcript_presigned_url);
-          setShowTranscript(true);
-        }
-
-        // Process SOAP note if available
+        setTranscriptPreSIgnedURL(data.transcript_presigned_url);
         let soapNoteResponse: SoapNoteData | false = false;
-        if (data.soap_note) {
-          if (typeof data.soap_note === 'string') {
-            try {
-              soapNoteResponse = JSON.parse(data.soap_note) as SoapNoteData;
-            } catch (e) {
-              console.error("Error parsing SOAP note:", e);
-              soapNoteResponse = false;
-            }
-          } else {
-            soapNoteResponse = data.soap_note as SoapNoteData;
-          }
-
-          if (soapNoteResponse) {
-            setSoapNote(soapNoteResponse);
-            setShowCopyButton(true);
-          }
+        if (data?.soap_note?.subjective) {
+          soapNoteResponse = data.soap_note as SoapNoteData;
+        } else {
+          let parsedNote = data?.soap_note;
+          parsedNote = parsedNote ? JSON.parse(parsedNote) : false;
+          soapNoteResponse = parsedNote;
         }
-        
-        // Make sure session ID is set for audio recording
-        // No need to update sessionId here, already set earlier
+        setSoapNote(soapNoteResponse);
+        if (soapNoteResponse) {
+          setShowCopyButton(true);
+        }
+        setShowTranscript(true);
+        setSessionId(data.session_id ? data.session_id : data.pk);
       } else {
         console.error("Failed to fetch session data:", response.statusText);
       }
@@ -310,14 +299,12 @@ function NotesClinical(): React.ReactElement {
   };
 
   const uploadDemographicData = async (): Promise<void> => {
-    if (!jwtToken || !userId || !sessionId) {
-      console.error("JWT token, user ID, or session ID not found");
+    if (!jwtToken || !userId) {
+      console.error("JWT token or user ID not found");
       return;
     }
 
     try {
-      console.log("Uploading demographic data for session:", sessionId);
-      
       await axios.post(
         "https://hqy44mb8l7.execute-api.us-east-2.amazonaws.com/dev/save-demographic-data",
         {
@@ -332,10 +319,8 @@ function NotesClinical(): React.ReactElement {
           },
         }
       );
-      
-      console.log("Demographic data uploaded successfully");
     } catch (error) {
-      console.error("Error saving demographic data:", error);
+      console.error("Error saving demogrphic data:", error);
     }
   };
 
@@ -552,53 +537,26 @@ function NotesClinical(): React.ReactElement {
   };
 
   const convertToMp3 = (): void => {
-    try {
-      console.log("Starting MP3 conversion with", recordingChunksRef.current.length, "chunks");
-      
-      // Check if we have any audio data
-      if (!recordingChunksRef.current || recordingChunksRef.current.length === 0) {
-        console.error("No audio data to convert");
-        setUploadingAudio(false);
-        return;
-      }
-      
-      const mp3Encoder = new lame.Mp3Encoder(1, 44100, 192);
-      const samples = flattenBuffers(recordingChunksRef.current);
-      console.log("Flattened", samples.length, "samples");
-      
-      const mp3Data: Uint8Array[] = [];
-      const maxSamples = 1152;
+    const mp3Encoder = new lame.Mp3Encoder(1, 44100, 192);
+    const samples = flattenBuffers(recordingChunksRef.current);
+    const mp3Data: Uint8Array[] = [];
+    const maxSamples = 1152;
 
-      for (let i = 0; i < samples.length; i += maxSamples) {
-        const sampleChunk = samples.subarray(i, i + maxSamples);
-        const mp3buf = mp3Encoder.encodeBuffer(sampleChunk);
-        if (mp3buf.length > 0) {
-          mp3Data.push(mp3buf);
-        }
-      }
-
-      const mp3buf = mp3Encoder.flush();
+    for (let i = 0; i < samples.length; i += maxSamples) {
+      const sampleChunk = samples.subarray(i, i + maxSamples);
+      const mp3buf = mp3Encoder.encodeBuffer(sampleChunk);
       if (mp3buf.length > 0) {
         mp3Data.push(mp3buf);
       }
-      
-      console.log("Created MP3 data with", mp3Data.length, "chunks");
-
-      // Create Blob and set it
-      const blob = new Blob(mp3Data, { type: "audio/mpeg" });
-      console.log("Created MP3 blob of size", blob.size, "bytes");
-      
-      // For testing, create an audio element to check the recording
-      const audioUrl = URL.createObjectURL(blob);
-      const audio = new Audio(audioUrl);
-      console.log("Audio URL created:", audioUrl);
-      
-      setAudioBlob(blob);
-      console.log("Audio blob set successfully");
-    } catch (error) {
-      console.error("Error in MP3 conversion:", error);
-      setUploadingAudio(false);
     }
+
+    const mp3buf = mp3Encoder.flush();
+    if (mp3buf.length > 0) {
+      mp3Data.push(mp3buf);
+    }
+
+    const blob = new Blob(mp3Data, { type: "audio/mpeg" });
+    setAudioBlob(blob);
   };
 
   const flattenBuffers = (buffers: Float32Array[]): Int16Array => {
@@ -640,12 +598,9 @@ function NotesClinical(): React.ReactElement {
     if (!audioBlob) return;
 
     try {
-      // Get JWT token from local storage (original behavior)
-      const jwtToken = localStorage.getItem("jwt");
       if (!jwtToken) {
         throw new Error("No JWT token found in localStorage");
       }
-      setJwtToken(jwtToken);
 
       const fileName = `audio_${crypto.randomUUID()}.mp3`;
 
@@ -668,11 +623,11 @@ function NotesClinical(): React.ReactElement {
         );
       }
 
-      const { url: presignedUrl, session_id: uploadSessionId } =
+      const { url: presignedUrl, session_id: sessionId } =
         await getPresignedUrlRes.json();
 
       // Set sessionId state immediately
-      setSessionId(uploadSessionId);
+      setSessionId(sessionId);
 
       // Step 2: Upload audio directly to AWS S3 using the pre-signed URL.
       const s3UploadRes = await fetch(presignedUrl, {
@@ -692,6 +647,7 @@ function NotesClinical(): React.ReactElement {
       setShowTranscript(true);
       setTranscriptLoading(true);
 
+      //  'https://k6hemfjxttb3goes46y2af2ocm0vmmgm.lambda-url.us-east-2.on.aws/gen-transcript
       // Step 3: After successful upload, request transcript generation, sending just session_id.
       const transcriptRes = await fetch(
         "https://k6hemfjxttb3goes46y2af2ocm0vmmgm.lambda-url.us-east-2.on.aws/gen-transcript",
@@ -701,7 +657,7 @@ function NotesClinical(): React.ReactElement {
             "Content-Type": "application/json",
             Authorization: `Bearer ${jwtToken}`,
           },
-          body: JSON.stringify({ session_id: uploadSessionId, user_id: userId }),
+          body: JSON.stringify({ session_id: sessionId, user_id: userId }),
         }
       );
 
@@ -721,23 +677,19 @@ function NotesClinical(): React.ReactElement {
       // Optionally upload demographic data
       uploadDemographicData();
 
-      // Update sessions list - but use our privacy-enhanced fetch method
-      setTimeout(fetchSessions, 1000);
-
       // Update sessions and current selection
       const newSessionName =
         transcriptData.session_name || `Session ${new Date().toLocaleString()}`;
       const newSession: Session = {
-        id: uploadSessionId,
+        id: sessionId,
         name: newSessionName,
         user_id: userId,
       };
 
       setSessions((prevSessions) => [newSession, ...prevSessions]);
-      setSelectedSession(uploadSessionId);
+      setSelectedSession(sessionId);
     } catch (error) {
       console.error("Error uploading audio:", error);
-      setUploadingAudio(false);
       setTranscriptLoading(false);
     }
   };
@@ -852,52 +804,53 @@ function NotesClinical(): React.ReactElement {
 
               <div className="audio-card">
                 <h2>Record Audio Note</h2>
-                
-                {/* Store the current session ID for the recorder */}
-                <input 
-                  type="hidden" 
-                  id="hidden-session-id" 
-                  value={selectedSession || ''} 
-                />
-                
-                {/* Using the recording component with fix for session association */}
-                <div className="recorder-container">
-                  <SimpleRecorder onRecordingComplete={(audioBlob, result) => {
-                    setUploadingAudio(false);
-                    console.log("Recording complete!", result);
-                    
-                    // Handle transcription results
-                    if (result && result.transcription) {
-                      // Add the new transcription to the transcript display
-                      const newTranscript = {
-                        timestamp: new Date().toISOString(),
-                        content: result.transcription
-                      };
-                      
-                      // Update the transcript display
-                      setTranscription(result.transcription);
-                      
-                      // Update SOAP form with AI-generated content if available
-                      if (result.soapNote) {
-                        // Update the main SOAP fields
-                        setSubjective(result.soapNote.subjective || "");
-                        setObjective(result.soapNote.objective || "");
-                        setAssessment(result.soapNote.assessment || "");
-                        setPlan(result.soapNote.plan || "");
-                      }
-                    }
-                  }} />
-                </div>
-                
-                {/* Legacy UI elements kept for design consistency */}
-                <div className="recording-status">
-                  {uploadingAudio && (
+                <div className="record-button" onClick={handleRecordToggle}>
+                  {isRecording ? (
+                    isPaused ? (
+                      "Resume"
+                    ) : (
+                      "Pause"
+                    )
+                  ) : (
                     <>
-                      <p style={{ color: "black" }}>Processing Audio</p>
-                      <div className="loader" />
+                      <svg className="mic-icon" viewBox="0 0 24 24">
+                        <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
+                        <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+                      </svg>
                     </>
                   )}
                 </div>
+                {/* <span>Start</span> */}
+                {isRecording && (
+                  <div className="stop-button" onClick={stopRecording}>
+                    Stop
+                  </div>
+                )}
+                <div className="recording-status">
+                  {isRecording ? (
+                    isPaused ? (
+                      "Paused"
+                    ) : (
+                      "Recording..."
+                    )
+                  ) : uploadingAudio ? (
+                    <>
+                      <p style={{ color: "black" }}>Uploading Audio</p>
+                      <div className="loader" />
+                    </>
+                  ) : (
+                    "Click to start recording"
+                  )}
+                </div>
+                {recordTime ? (
+                  <div className="record-time">
+                    Recording Time: {Math.floor(recordTime / 60)}:
+                    {recordTime % 60 < 10 ? "0" : ""}
+                    {recordTime % 60}
+                  </div>
+                ) : (
+                  ""
+                )}
                 {/* {audioBlob && (
                   <div>
                     <audio src={URL.createObjectURL(audioBlob)} controls />

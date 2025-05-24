@@ -1799,21 +1799,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         else if (isElbowCase) {
           console.log("Using Leanne Bisset approach for elbow patient analysis");
 
-          const bis setResult = await analyzePatientBisset(virtualPatient);
+          const bissetResult = await analyzePatientBisset(virtualPatient);
 
           // Convert the Bisset specialized format to our standard format
           analysisResult = {
-            primaryDiagnosis: { name: bis setResult.diagnosis, description: "Based on Leanne Bisset's elbow approach" },
-            differentialDiagnoses: bis setResult.differentialDiagnosis?.map(d => ({ 
+            primaryDiagnosis: { name: bissetResult.diagnosis, description: "Based on Leanne Bisset's elbow approach" },
+            differentialDiagnoses: bissetResult.differentialDiagnosis?.map(d => ({ 
               name: d.condition, 
               description: d.rationale,
               likelihood: d.likelihood
             })) || [],
-            treatmentOptions: bis setResult.treatmentOptions,
-            assessmentTests: bis setResult.assessmentTests,
+            treatmentOptions: bissetResult.treatmentOptions,
+            assessmentTests: bissetResult.assessmentTests,
             recommendedKeywords: ["Leanne Bisset", "elbow rehabilitation", "tennis elbow", "lateral epicondylalgia"],
             bissetSpecificApproach: true,
-            relatedArticleIds: bis setResult.relatedArticleIds || []
+            relatedArticleIds: bissetResult.relatedArticleIds || []
           };
         } else {
           // Use standard analysis for cases without a specialized approach

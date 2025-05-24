@@ -5,7 +5,7 @@ import { storage } from "./storage";
 import { db } from "./db";
 import { generateSoapNote } from "./openai";
 import { analyzeVirtualPatientCase, findRelevantResearchArticles } from "./virtualPatientOpenai";
-import { analyzeShoulderPatientJoGibson, isShoulderPatient } from "./virtualPatientJoGibson";
+import { analyzeShoulderPatientJoGibson } from "./virtualPatientJoGibson";
 import { analyzePatientGrimaldi } from "./virtualPatientGrimaldi";
 import { analyzePatientBisset } from "./virtualPatientBisset";
 import { analyzePatientClinicalEdge } from "./virtualPatientClinicalEdge";
@@ -18,7 +18,7 @@ import { sportsMapSportSpecificApproaches, sportsMapTreatmentPrinciples } from "
 import { grimaldiHipApproaches, grimaldiTreatmentPrinciples } from "./grimaldi-hip-library";
 import { bissetElbowApproaches, bissetTreatmentPrinciples } from "./bisset-elbow-library";
 import { generateAICaseStudy, generateDiagnosticFeedback } from "./aiCaseStudyGenerator";
-import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, discussionUpvotes, exercises } from "@shared/schema";
+import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, exercises } from "@shared/schema";
 import { ZodError, z } from "zod";
 import { fromZodError } from "zod-validation-error";
 import multer from "multer";
@@ -86,25 +86,25 @@ function generateSoapSectionsFromInsights(transcript: string, insights: string):
     // If we couldn't parse the insights properly, try to extract content from the transcript
     if (!soapNote.subjective && !soapNote.objective && !soapNote.assessment && !soapNote.plan) {
       const transcriptLower = transcript.toLowerCase();
-      
+
       // Simple fallback extraction
       if (transcriptLower.includes('complain') || transcriptLower.includes('report') || transcriptLower.includes('history')) {
         soapNote.subjective = 'Patient reports symptoms based on transcript. Detailed subjective information needs review.';
       }
-      
+
       if (transcriptLower.includes('exam') || transcriptLower.includes('test') || transcriptLower.includes('observation')) {
         soapNote.objective = 'Physical examination performed. Detailed objective findings need review.';
       }
-      
+
       if (transcriptLower.includes('diagnos') || transcriptLower.includes('impression') || transcriptLower.includes('condition')) {
         soapNote.assessment = 'Clinical assessment based on available information. Detailed assessment needs review.';
       }
-      
+
       if (transcriptLower.includes('treat') || transcriptLower.includes('recommend') || transcriptLower.includes('exercise')) {
         soapNote.plan = 'Treatment plan discussed. Detailed plan needs review.';
       }
     }
-  
+
     return soapNote;
   } catch (error) {
     console.error('Error parsing SOAP note from insights:', error);
@@ -124,23 +124,23 @@ function extractMedicalTerms(text: string): string[] {
     "hyper", "hypo", "osteo", "arthro", "myelo", "neuro", "tendin", "fasci", 
     "myo", "chondro", "spondylo", "radicu", "syndrome", "pathology", "dysfunction"
   ];
-  
+
   // Common medical suffixes
   const medicalSuffixes = [
     "itis", "algia", "opathy", "osis", "sclerosis", "stenosis", "pathy", 
     "lysis", "graphy", "ectomy", "plasty"
   ];
-  
+
   // Look for terms matching medical patterns
   const words = text.toLowerCase().split(/\s+/);
   const medicalTerms = new Set<string>();
-  
+
   // Extract terms with medical prefixes/suffixes
   words.forEach(word => {
     // Clean the word of punctuation
     const cleanWord = word.replace(/[.,;:!?()]/g, '');
     if (cleanWord.length < 4) return;
-    
+
     // Check for medical prefixes
     for (const prefix of medicalPrefixes) {
       if (cleanWord.startsWith(prefix)) {
@@ -148,7 +148,7 @@ function extractMedicalTerms(text: string): string[] {
         break;
       }
     }
-    
+
     // Check for medical suffixes
     for (const suffix of medicalSuffixes) {
       if (cleanWord.endsWith(suffix)) {
@@ -157,7 +157,7 @@ function extractMedicalTerms(text: string): string[] {
       }
     }
   });
-  
+
   // Add common condition and diagnostic terms that might appear in notes
   const diagnosticPhrases = text?.toLowerCase()?.match(/(?:diagnosis|impression|assessment)[^a-z]+([\w\s,-]+)/g);
   if (diagnosticPhrases) {
@@ -168,14 +168,14 @@ function extractMedicalTerms(text: string): string[] {
       }
     });
   }
-  
+
   return Array.from(medicalTerms);
 }
 
 // Extract physiotherapy assessment terminology
 function extractPhysiotherapyAssessmentTerms(text: string): string[] {
   const assessmentTerms = new Set<string>();
-  
+
   // Common assessment tests and measures in physiotherapy
   const assessmentPatterns = [
     "rom", "range of motion", "strength", "manual muscle test", "mmt", "special test",
@@ -187,16 +187,16 @@ function extractPhysiotherapyAssessmentTerms(text: string): string[] {
     "peripheralization", "directional preference", "joint position", "passive intervertebral",
     "paivm", "ppivms", "positive", "negative", "degrees", "impingement", "apprehension"
   ];
-  
+
   // Look for assessment terms in the text
   const lowerText = text.toLowerCase();
-  
+
   assessmentPatterns.forEach(term => {
     if (lowerText.includes(term)) {
       assessmentTerms.add(term);
     }
   });
-  
+
   // Find measurement patterns (e.g., "5/5 strength", "ROM 0-120 degrees")
   const measurementPatterns = lowerText.match(/\d+\/\d+|\d+\s*-\s*\d+\s*degrees|\d+\s*degrees/g);
   if (measurementPatterns) {
@@ -204,14 +204,14 @@ function extractPhysiotherapyAssessmentTerms(text: string): string[] {
       assessmentTerms.add(match);
     });
   }
-  
+
   return Array.from(assessmentTerms);
 }
 
 // Extract treatment and intervention terms
 function extractTreatmentTerms(text: string): string[] {
   const treatmentTerms = new Set<string>();
-  
+
   // Common physiotherapy treatments and interventions
   const treatmentPatterns = [
     "exercise", "strengthening", "stretching", "mobilization", "manipulation", 
@@ -225,16 +225,16 @@ function extractTreatmentTerms(text: string): string[] {
     "home exercise program", "hep", "cognitive functional therapy", "cft",
     "pain neuroscience education", "pne", "specific exercise", "general exercise"
   ];
-  
+
   // Look for treatment terms in the text
   const lowerText = text.toLowerCase();
-  
+
   treatmentPatterns.forEach(term => {
     if (lowerText.includes(term)) {
       treatmentTerms.add(term);
     }
   });
-  
+
   return Array.from(treatmentTerms);
 }
 
@@ -278,7 +278,7 @@ const upload = multer({
 export async function registerRoutes(app: Express): Promise<Server> {
   // Use auth setup from auth.ts
   setupAuth(app);
-  
+
   // Register session routes
   app.use(sessionRoutes);
 
@@ -326,11 +326,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       console.log('Processing audio file for transcription:', req.file.path);
-      
+
       // Get file stats for debugging
       const stats = fs.statSync(req.file.path);
       console.log(`Audio file size: ${stats.size} bytes`);
-      
+
       // Use a fallback response by default (this will be returned even if we fail completely)
       const fallbackResponse = {
         transcription: "Your recording was received. We're currently experiencing connection issues with our transcription service. You can still create clinical notes manually.",
@@ -345,7 +345,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           plan: ""
         }
       };
-      
+
       // Try transcribing with a short timeout to handle connection issues gracefully
       let transcription;
       try {
@@ -353,7 +353,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const timeoutPromise = new Promise((_, reject) => {
           setTimeout(() => reject(new Error("Transcription timeout")), 5000);
         });
-        
+
         // Race the transcription against the timeout
         transcription = await Promise.race([
           transcribeAudio(req.file.path),
@@ -364,7 +364,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Return the fallback response immediately rather than continuing to try other steps
         return res.json(fallbackResponse);
       }
-      
+
       // If we got here, transcription worked, so try insights
       let insights;
       try {
@@ -376,7 +376,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           clinicalInsights: "Clinical recording transcribed successfully."
         };
       }
-      
+
       // Generate SOAP structure even with fallback insights
       let soapNote;
       try {
@@ -415,31 +415,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
   });
-  
+
   // Session-specific transcription endpoint
   app.post('/api/sessions/:id/transcribe', ensureAuthenticated, upload.single('audio'), async (req: Request, res: Response) => {
     try {
       if (!req.file) {
         return res.status(400).json({ error: 'No audio file uploaded' });
       }
-      
+
       const sessionId = parseInt(req.params.id);
       console.log(`Processing session-specific audio for session ID ${sessionId}`);
-      
+
       // Verify session exists and belongs to user
       const session = await storage.getPatientSession(sessionId);
       if (!session) {
         return res.status(404).json({ error: 'Session not found' });
       }
-      
+
       if (session.userId !== req.user!.id) {
         return res.status(403).json({ error: 'Not authorized to access this session' });
       }
-      
+
       // 1. Save the audio file
       const audioS3Uri = `s3://mock-bucket/${req.file.filename}`;
       const audioUrl = `/api/audio/${req.file.filename}`;
-      
+
       // Create audio recording record
       await storage.createAudioRecording({
         sessionId,
@@ -447,7 +447,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         audioS3Uri,
         duration: parseInt(req.body.duration || '0') 
       });
-      
+
       // 2. Transcribe the audio
       console.log('Transcribing audio file:', req.file.path);
       let transcription;
@@ -457,11 +457,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error('Transcription error:', transcriptionError);
         transcription = "Your recording was received but couldn't be automatically transcribed at this moment. You can still create notes manually.";
       }
-      
+
       // 3. Save the transcript
       const transcriptS3Uri = `s3://my-bucket/transcript-${sessionId}-${Date.now()}.csv`;
       const transcriptUrl = `/api/transcript/${sessionId}`;
-      
+
       // Write transcript to file for demo purposes
       try {
         const transcriptFilePath = path.join(process.cwd(), 'test-uploads', `transcript-${sessionId}.csv`);
@@ -469,7 +469,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (fileError) {
         console.error('Error writing transcript to file:', fileError);
       }
-      
+
       // Update session with transcript
       try {
         await storage.updatePatientSessionTranscript(
@@ -480,7 +480,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (updateError) {
         console.error('Error updating session transcript:', updateError);
       }
-      
+
       // 4. Generate insights and SOAP note
       let insights;
       try {
@@ -492,7 +492,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           clinicalInsights: "Unable to generate clinical insights automatically. You can still create notes manually based on the recording."
         };
       }
-      
+
       let soapNote;
       try {
         soapNote = generateSoapSectionsFromInsights(transcription, insights);
@@ -505,10 +505,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           plan: ""
         };
       }
-      
+
       // 5. Save SOAP note to session
       await storage.updatePatientSessionSoapNote(sessionId, soapNote);
-      
+
       // 6. Return all data
       res.json({
         sessionId,
@@ -518,7 +518,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         audioUrl,
         transcriptUrl
       });
-      
+
     } catch (error: any) {
       console.error('Error in session transcription:', error);
       res.status(500).json({ error: error.message || 'Failed to process audio for session' });
@@ -549,13 +549,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const data = insertClinicalNoteSchema.parse({ ...req.body, userId });
-      
+
       // Create a de-identified version of the clinical note
       const deIdentifiedData = deIdentifyNote(data);
-      
+
       // Use the de-identified data for the note creation
       const note = await storage.createClinicalNote(deIdentifiedData);
-      
+
       res.status(201).json(note);
     } catch (error) {
       if (error instanceof ZodError) {
@@ -588,7 +588,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!userId) {
         return res.status(401).json({ error: 'User not authenticated' });
       }
-      
+
       const notes = await storage.getUserNotes(userId);
       res.json(notes);
     } catch (error) {
@@ -606,14 +606,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (isNaN(noteId)) {
         return res.status(400).json({ error: 'Invalid note ID' });
       }
-      
+
       const currentUserId = req.user?.id;
       const note = await storage.getClinicalNote(noteId, currentUserId);
-      
+
       if (!note) {
         return res.status(404).json({ error: 'Note not found' });
       }
-      
+
       res.json(note);
     } catch (error) {
       if (error instanceof Error) {
@@ -637,22 +637,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const data = updateNoteVisibilitySchema.parse(req.body);
-      
+
       // Ensure the user is the owner of the note
       const note = await storage.getClinicalNote(noteId);
       if (!note) {
         return res.status(404).json({ error: 'Note not found' });
       }
-      
+
       if (note.userId !== userId) {
         return res.status(403).json({ error: 'You do not have permission to update this note' });
       }
-      
+
       const updatedNote = await storage.updateNoteVisibility(noteId, {
         visibility: data.visibility,
         userId
       });
-      
+
       res.json(updatedNote);
     } catch (error) {
       if (error instanceof ZodError) {
@@ -688,7 +688,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         noteId,
         userId
       });
-      
+
       const comment = await storage.createComment(data);
       res.status(201).json(comment);
     } catch (error) {
@@ -708,15 +708,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (isNaN(noteId)) {
         return res.status(400).json({ error: 'Invalid note ID' });
       }
-      
+
       const currentUserId = req.user?.id;
-      
+
       // Ensure the note exists and is either public or belongs to the user
       const note = await storage.getClinicalNote(noteId, currentUserId);
       if (!note) {
         return res.status(404).json({ error: 'Note not found or you do not have permission to view it' });
       }
-      
+
       const comments = await storage.getNoteComments(noteId);
       res.json(comments);
     } catch (error) {
@@ -734,48 +734,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (isNaN(noteId)) {
         return res.status(400).json({ error: 'Invalid note ID' });
       }
-      
+
       const currentUserId = req.user?.id;
-      
+
       // Retrieve the note
       const note = await storage.getClinicalNote(noteId, currentUserId);
       if (!note) {
         return res.status(404).json({ error: 'Note not found or you do not have permission to view it' });
       }
-      
+
       // Extract condition and body part from the note
       const condition = extractCondition(note);
       const bodyPart = note.bodyPart;
-      
+
       // Get all articles, potentially filtered by body part
       const { articles: allArticles } = await storage.getResearchArticles(bodyPart);
-      
+
       // If no condition was extracted, return all articles for the body part
       if (!condition) {
         return res.json(allArticles.slice(0, 10)); // Limit to 10 articles
       }
-      
+
       // Score articles based on relevance to the note
       const noteText = `${note.subjective} ${note.objective} ${note.assessment} ${note.plan}`;
-      
+
       // Extract important terms from the note
       const medicalTerms = extractMedicalTerms(noteText);
       const assessmentTerms = extractPhysiotherapyAssessmentTerms(noteText);
       const treatmentTerms = extractTreatmentTerms(noteText);
-      
+
       let scoredArticles = allArticles.map((article: ResearchArticle) => {
         // Base score starts at 0
         let score = 0;
-        
+
         // Check if condition appears in title or abstract
         if (article.title.toLowerCase().includes(condition.toLowerCase())) {
           score += 5;
         }
-        
+
         if (article.abstract.toLowerCase().includes(condition.toLowerCase())) {
           score += 3;
         }
-        
+
         // Score based on medical terminology matches
         for (const term of medicalTerms) {
           if (article.title.toLowerCase().includes(term.toLowerCase()) || 
@@ -783,7 +783,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             score += 2;
           }
         }
-        
+
         // Score based on assessment terminology matches
         for (const term of assessmentTerms) {
           if (article.title.toLowerCase().includes(term.toLowerCase()) || 
@@ -791,7 +791,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             score += 1.5;
           }
         }
-        
+
         // Score based on treatment terminology matches
         for (const term of treatmentTerms) {
           if (article.title.toLowerCase().includes(term.toLowerCase()) || 
@@ -799,21 +799,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
             score += 1.5;
           }
         }
-        
+
         // Add bonus for newer articles (published within last 5 years)
         const publicationYear = new Date(article.publicationDate).getFullYear();
         const currentYear = new Date().getFullYear();
         if (currentYear - publicationYear <= 5) {
           score += 1;
         }
-        
+
         // Add bonus for methodology - RCTs and systematic reviews
         if (article.methodology && 
             (article.methodology.toLowerCase().includes('randomized') || 
              article.methodology.toLowerCase().includes('systematic review'))) {
           score += 2;
         }
-        
+
         return {
           article,
           score
@@ -822,7 +822,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       .sort((a, b) => b.score - a.score) // Sort by score in descending order
       .slice(0, 10) // Take top 10 articles
       .map((item: { article: ResearchArticle }) => item.article);
-      
+
       res.json(scoredArticles);
     } catch (error) {
       if (error instanceof Error) {
@@ -851,9 +851,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const page = parseInt(req.query.page as string || '1');
       const pageSize = parseInt(req.query.pageSize as string || '10');
       const all = req.query.all === 'true';
-      
+
       const result = await storage.getResearchArticles(bodyPart, page, pageSize, all);
-      
+
       // Format the response to match what the frontend expects
       const response = {
         data: result.articles,
@@ -864,7 +864,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           totalPages: Math.ceil(result.total / pageSize)
         }
       };
-      
+
       res.json(response);
     } catch (error) {
       if (error instanceof Error) {
@@ -881,12 +881,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (isNaN(articleId)) {
         return res.status(400).json({ error: 'Invalid article ID' });
       }
-      
+
       const article = await storage.getResearchArticle(articleId);
       if (!article) {
         return res.status(404).json({ error: 'Article not found' });
       }
-      
+
       res.json(article);
     } catch (error) {
       if (error instanceof Error) {
@@ -908,7 +908,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...req.body,
         submittedBy: userId
       });
-      
+
       const article = await storage.createResearchArticle(data);
       res.status(201).json(article);
     } catch (error) {
@@ -941,19 +941,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!userId) {
         return res.status(401).json({ error: 'User not authenticated' });
       }
-      
+
       const user = await storage.getUser(userId);
       if (!user) {
         return res.status(404).json({ error: 'User not found' });
       }
-      
+
       // Retrieve subscription details from the user object
       const subscriptionInfo = {
         tier: user.membershipTier,
         expiryDate: user.membershipExpiry,
         subscriptionId: user.stripeSubscriptionId || null
       };
-      
+
       res.json(subscriptionInfo);
     } catch (error) {
       if (error instanceof Error) {
@@ -970,17 +970,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!userId) {
         return res.status(401).json({ error: 'User not authenticated' });
       }
-      
+
       const user = await storage.getUser(userId);
       if (!user) {
         return res.status(404).json({ error: 'User not found' });
       }
-      
+
       // Check if user has an active membership
       if (user.membershipTier === 'none') {
         return res.status(400).json({ error: 'No active subscription to cancel' });
       }
-      
+
       // If user has a Stripe subscription, cancel it
       if (user.stripeSubscriptionId) {
         try {
@@ -990,10 +990,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Continue with membership cancellation even if Stripe API fails
         }
       }
-      
+
       // Update the user's membership tier to 'none'
       await storage.updateUserMembership(userId, 'none', new Date());
-      
+
       res.json({ message: 'Subscription successfully cancelled' });
     } catch (error) {
       if (error instanceof Error) {
@@ -1010,7 +1010,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!userId) {
         return res.status(401).json({ error: 'User not authenticated' });
       }
-      
+
       const payments = await storage.getUserPayments(userId);
       res.json(payments);
     } catch (error) {
@@ -1033,18 +1033,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...req.body,
         userId
       });
-      
+
       const payment = await storage.createPaymentRecord(data);
-      
+
       // If the payment is completed, update the user's membership status based on the plan
       if (data.status === 'completed') {
         // Get the subscription plan from the planId in the payment data
         const subscriptionPlan = await storage.getSubscriptionPlan(data.planId);
-        
+
         if (!subscriptionPlan) {
           throw new Error(`Subscription plan with ID ${data.planId} not found`);
         }
-        
+
         // Calculate membership expiry date - default to 30 days if not specified
         const expiryDate = new Date();
         // Calculate based on interval (weekly, monthly, yearly)
@@ -1058,11 +1058,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Default to 30 days
           expiryDate.setDate(expiryDate.getDate() + 30);
         }
-        
+
         // Update user membership with the tier from the subscription plan
         await storage.updateUserMembership(userId, subscriptionPlan.tier, expiryDate);
       }
-      
+
       res.status(201).json(payment);
     } catch (error) {
       if (error instanceof ZodError) {
@@ -1081,23 +1081,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!userId) {
         return res.status(401).json({ error: 'User not authenticated' });
       }
-      
+
       const { amount, planId } = req.body;
-      
+
       if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
         return res.status(400).json({ error: 'Invalid amount' });
       }
-      
+
       if (!planId) {
         return res.status(400).json({ error: 'Plan ID is required' });
       }
-      
+
       // Validate that the subscription plan exists
       const subscriptionPlan = await storage.getSubscriptionPlan(planId);
       if (!subscriptionPlan) {
         return res.status(400).json({ error: `Invalid subscription plan ID: ${planId}` });
       }
-      
+
       // Create a payment intent with Stripe
       const paymentIntent = await stripe.paymentIntents.create({
         amount: Math.round(parseFloat(amount) * 100), // Convert to cents
@@ -1109,7 +1109,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           integrationCheck: 'physiotherapy_platform'
         }
       });
-      
+
       res.json({
         clientSecret: paymentIntent.client_secret
       });
@@ -1128,7 +1128,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // Use the storage interface to search for reformer exercises
       const searchResults = await storage.getExercisesBySearchTerm("Reformer");
-      
+
       if (searchResults.length < 5) {
         console.log("Adding Reformer Pilates exercises to the database...");
         const { addReformerPilatesExercises } = await import('./routes/addReformerPilatesExercises');
@@ -1143,36 +1143,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // Ensure Reformer Pilates exercises are added
       await ensureReformerExercisesAdded();
-      
+
       const bodyPart = req.query.bodyPart as string | undefined;
       const difficulty = req.query.difficulty as string | undefined;
       const searchTerm = req.query.search as string | undefined;
       const getAll = req.query.all === 'true';
-      
+
       // If search term is provided, use it for filtering exercises
       if (searchTerm && searchTerm.trim() !== '') {
         const searchResults = await storage.getExercisesBySearchTerm(searchTerm);
-        
+
         // Further filter by body part and difficulty if needed
         let filteredResults = searchResults;
-        
+
         if (bodyPart && bodyPartEnum.enumValues.includes(bodyPart as any)) {
           filteredResults = filteredResults.filter(ex => ex.bodyPart === bodyPart);
         }
-        
+
         if (difficulty && difficultyEnum.enumValues.includes(difficulty as any)) {
           filteredResults = filteredResults.filter(ex => ex.difficulty === difficulty);
         }
-        
+
         return res.json(filteredResults);
       }
-      
+
       // If "all" parameter is true, retrieve all exercises
       if (getAll) {
         const allExercises = await storage.getExercises(undefined, undefined, true);
         return res.json(allExercises);
       }
-      
+
       // Use the normal storage method if no search term
       const exerciseResults = await storage.getExercises(bodyPart, difficulty);
       res.json(exerciseResults);
@@ -1191,12 +1191,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (isNaN(exerciseId)) {
         return res.status(400).json({ error: 'Invalid exercise ID' });
       }
-      
+
       const exercise = await storage.getExercise(exerciseId);
       if (!exercise) {
         return res.status(404).json({ error: 'Exercise not found' });
       }
-      
+
       res.json(exercise);
     } catch (error) {
       if (error instanceof Error) {
@@ -1213,25 +1213,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!userId) {
         return res.status(401).json({ error: 'User not authenticated' });
       }
-      
+
       const { bodyPart, difficulty, count } = req.body;
-      
+
       if (!bodyPart || !difficulty || !count) {
         return res.status(400).json({ error: 'Body part, difficulty, and count are required' });
       }
-      
+
       const generationRequest: ExerciseGenerationRequest = {
         bodyPart,
         difficulty,
         count: parseInt(count)
       };
-      
+
       try {
         const exercises = await generateExercises(generationRequest);
         res.json(exercises);
       } catch (error) {
         console.error('Error generating exercises with AI:', error);
-        
+
         // Fall back to predefined exercises if AI generation fails
         const fallbackExercises = generateFallbackExercises(generationRequest);
         res.json({ 
@@ -1259,7 +1259,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...req.body,
         createdBy: userId
       });
-      
+
       const exercise = await storage.createExercise(data);
       res.status(201).json(exercise);
     } catch (error) {
@@ -1276,7 +1276,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/manual-therapy", async (req: Request, res: Response) => {
     try {
       const bodyPart = req.query.bodyPart as string | undefined;
-      
+
       const techniques = await storage.getManualTherapyTechniques(bodyPart);
       res.json(techniques);
     } catch (error) {
@@ -1294,12 +1294,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (isNaN(techniqueId)) {
         return res.status(400).json({ error: 'Invalid technique ID' });
       }
-      
+
       const technique = await storage.getManualTherapyTechnique(techniqueId);
       if (!technique) {
         return res.status(404).json({ error: 'Technique not found' });
       }
-      
+
       res.json(technique);
     } catch (error) {
       if (error instanceof Error) {
@@ -1321,7 +1321,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...req.body,
         createdBy: userId
       });
-      
+
       const technique = await storage.createManualTherapyTechnique(data);
       res.status(201).json(technique);
     } catch (error) {
@@ -1339,16 +1339,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // Get techniques for all body parts to count them
       const allTechniques = await storage.getManualTherapyTechniques();
-      
+
       // Count techniques by body part
       const counts: Record<string, number> = {};
-      
+
       bodyPartEnum.options.forEach(bodyPart => {
         counts[bodyPart] = allTechniques.filter(
           technique => technique.bodyPart === bodyPart
         ).length;
       });
-      
+
       res.json(counts);
     } catch (error) {
       if (error instanceof Error) {
@@ -1365,7 +1365,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!userId) {
         return res.status(401).json({ error: 'User not authenticated' });
       }
-      
+
       const virtualPatients = await storage.getUserVirtualPatients(userId);
       res.json(virtualPatients);
     } catch (error) {
@@ -1383,32 +1383,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (isNaN(patientId)) {
         return res.status(400).json({ error: 'Invalid patient ID' });
       }
-      
+
       const userId = req.user?.id;
       if (!userId) {
         return res.status(401).json({ error: 'User not authenticated' });
       }
-      
+
       const virtualPatient = await storage.getVirtualPatient(patientId);
       if (!virtualPatient) {
         return res.status(404).json({ error: 'Virtual patient not found' });
       }
-      
+
       // Ensure the virtual patient belongs to the authenticated user
       if (virtualPatient.userId !== userId) {
         return res.status(403).json({ error: 'You do not have permission to access this virtual patient' });
       }
-      
+
       // Fetch related research articles if there are any related article IDs
       let relatedResearch: any[] = [];
-      
+
       // For debugging - log the field value
       console.log("Patient related_article_ids:", virtualPatient.related_article_ids);
       console.log("Patient relatedArticleIds:", virtualPatient.relatedArticleIds);
-      
+
       // Try both possible field names for backward compatibility
       const articleIdsField = virtualPatient.related_article_ids || virtualPatient.relatedArticleIds;
-      
+
       if (articleIdsField && (Array.isArray(articleIdsField) || typeof articleIdsField === 'string')) {
         try {
           // Try to parse the IDs if they're in string format
@@ -1423,14 +1423,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           } else {
             articleIds = articleIdsField;
           }
-            
+
           if (Array.isArray(articleIds) && articleIds.length > 0) {
             console.log("Fetching research articles with IDs:", articleIds);
-            
+
             // If no articles found through IDs, get some default ones for this body part
             relatedResearch = await storage.getResearchArticlesByIds(articleIds);
             console.log(`Found ${relatedResearch.length} related research articles`);
-            
+
             // If no related articles found by IDs, get some default ones
             if (relatedResearch.length === 0) {
               console.log("No articles found by IDs, getting default articles for body part:", virtualPatient.body_part);
@@ -1467,7 +1467,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error('Error fetching default articles:', err);
         }
       }
-      
+
       // Return the virtual patient with related research articles included
       res.json({
         ...virtualPatient,
@@ -1496,7 +1496,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         createdAt: new Date(),
         updatedAt: new Date()
       });
-      
+
       const virtualPatient = await storage.createVirtualPatient(data);
       res.status(201).json(virtualPatient);
     } catch (error) {
@@ -1516,27 +1516,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (isNaN(patientId)) {
         return res.status(400).json({ error: 'Invalid patient ID' });
       }
-      
+
       const userId = req.user?.id;
       if (!userId) {
         return res.status(401).json({ error: 'User not authenticated' });
       }
-      
+
       const virtualPatient = await storage.getVirtualPatient(patientId);
       if (!virtualPatient) {
         return res.status(404).json({ error: 'Virtual patient not found' });
       }
-      
+
       // Ensure the virtual patient belongs to the authenticated user
       if (virtualPatient.userId !== userId) {
         return res.status(403).json({ error: 'You do not have permission to update this virtual patient' });
       }
-      
+
       const updateData = {
         ...req.body,
         updatedAt: new Date()
       };
-      
+
       const updatedPatient = await storage.updateVirtualPatient(patientId, updateData);
       res.json(updatedPatient);
     } catch (error) {
@@ -1554,22 +1554,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (isNaN(patientId)) {
         return res.status(400).json({ error: 'Invalid patient ID' });
       }
-      
+
       const userId = req.user?.id;
       if (!userId) {
         return res.status(401).json({ error: 'User not authenticated' });
       }
-      
+
       const virtualPatient = await storage.getVirtualPatient(patientId);
       if (!virtualPatient) {
         return res.status(404).json({ error: 'Virtual patient not found' });
       }
-      
+
       // Ensure the virtual patient belongs to the authenticated user
       if (virtualPatient.userId !== userId) {
         return res.status(403).json({ error: 'You do not have permission to analyze this virtual patient' });
       }
-      
+
       // Set hasBeenEdited to false since we're now analyzing/reanalyzing
       // Also explicitly mark this as a fresh analysis to ensure we get updated diagnostic terminology
       await storage.updateVirtualPatient(patientId, {
@@ -1578,15 +1578,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         differentialDiagnosis: [], // Clear previous differentials
         status: 'reanalyzing' // Explicitly mark as reanalyzing
       });
-      
+
       // Special case for username "fateofjustice" - should get premium features for free
       const user = await storage.getUser(userId);
       if (!user) {
         return res.status(404).json({ error: 'User not found' });
       }
-      
+
       let hasPremiumAccess = user.username === 'fateofjustice';
-      
+
       // If not special user, check if they have appropriate membership
       if (!hasPremiumAccess) {
         if (!user.membershipTier || user.membershipTier === 'free') {
@@ -1595,7 +1595,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             code: 'membership_required'
           });
         }
-        
+
         // Check if membership has expired
         if (user.membershipExpiry && new Date(user.membershipExpiry) < new Date()) {
           return res.status(403).json({ 
@@ -1604,49 +1604,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
       }
-      
+
       // If we get here, user has appropriate access
-      
+
       // Update status to 'analyzing'
       await storage.updateVirtualPatient(patientId, {
         status: 'analyzing',
         updatedAt: new Date()
       });
-      
+
       // Determine which specialized approach to use based on patient characteristics
       let analysisResult;
       try {
         // All specialized analysis modules are already imported at the top of the file
         // No need to import them again, we can use them directly
         console.log("Using pre-imported analysis module functions");
-        
+
         // Confirm that we have the imported functions available
         console.log("Analysis functions available:", 
-          "Jo Gibson:", typeof analyzeShoulderPatientJoGibson, typeof isShoulderPatient,
+          "Jo Gibson:", typeof analyzeShoulderPatientJoGibson,
           "Clinical Edge:", typeof analyzePatientClinicalEdge,
           "Physio Network:", typeof analyzePatientPhysioNetwork,
           "Sports Map:", typeof analyzePatientSportsMap,
           "Grimaldi:", typeof analyzePatientGrimaldi,
           "Bisset:", typeof analyzePatientBisset
         );
-        
-        // Set fallbacks just in case
-        if (typeof isShoulderPatient !== 'function') {
-          console.error("isShoulderPatient function not available, using fallback");
-          isShoulderPatient = (patient) => patient.body_part === "shoulder";
-        }
-        
+
         // Check which specialized approach is most appropriate for this patient
-        
+
         // 1. Check for shoulder-related issues - Jo Gibson approach
-        const isShoulderRelated = isShoulderPatient && typeof isShoulderPatient === 'function' ? isShoulderPatient(virtualPatient) : false;
-        
+        // Use the specialized detection function for accurate identification
+        const checkIfShoulderPatient = (patient) => patient.body_part === "shoulder";
+        const isShoulderCase = checkIfShoulderPatient(virtualPatient);
+
         // 2. Check for knee-related issues - Clinical Edge approach
         const isKneeCase = virtualPatient.body_part === "knee";
-        
+
         // 3. Check for spine-related issues - Physio Network approach
         const isSpineCase = virtualPatient.body_part === "back" || virtualPatient.body_part === "neck";
-        
+
         // 4. Check for sports/athletic issues - Sports Map approach
         const isSportsCase = 
           virtualPatient.chief_complaint?.toLowerCase().includes("sport") || 
@@ -1656,23 +1652,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
           (virtualPatient.past_medical_history && 
            (virtualPatient.past_medical_history.toLowerCase().includes("sport") ||
             virtualPatient.past_medical_history.toLowerCase().includes("athlete")));
-            
+
         // 5. Check for hip-related issues - Alison Grimaldi approach
         const isHipCase = virtualPatient.body_part === "hip";
-        
+
         // 6. Check for elbow-related issues - Leanne Bisset approach
         const isElbowCase = virtualPatient.body_part === "elbow";
-            
-        console.log(`Patient characteristics - Shoulder: ${isShoulderRelated}, Knee: ${isKneeCase}, Spine: ${isSpineCase}, Sports: ${isSportsCase}, Hip: ${isHipCase}, Elbow: ${isElbowCase}`);
-          
-        if (isShoulderRelated) {
+
+        console.log(`Patient characteristics - Shoulder: ${isShoulderCase}, Knee: ${isKneeCase}, Spine: ${isSpineCase}, Sports: ${isSportsCase}, Hip: ${isHipCase}, Elbow: ${isElbowCase}`);
+
+        if (isShoulderCase) {
           // Try to use the Jo Gibson approach for shoulder cases
           console.log("Using Jo Gibson shoulder approach for patient analysis");
-          
+
           try {
             if (typeof analyzeShoulderPatientJoGibson === 'function') {
               const joGibsonResult = await analyzeShoulderPatientJoGibson(virtualPatient);
-              
+
               // Convert the Jo Gibson specialized format to our standard format
               analysisResult = {
                 primaryDiagnosis: { 
@@ -1703,9 +1699,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Use Clinical Edge approach for knee cases
         else if (isKneeCase) {
           console.log("Using Clinical Edge approach for knee patient analysis");
-          
+
           const clinicalEdgeResult = await analyzePatientClinicalEdge(virtualPatient);
-          
+
           // Convert the Clinical Edge specialized format to our standard format
           analysisResult = {
             primaryDiagnosis: { name: clinicalEdgeResult.diagnosis, description: "Based on Clinical Edge's evidence-based approach" },
@@ -1724,9 +1720,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Use Physio Network approach for spine cases
         else if (isSpineCase) {
           console.log("Using Physio Network approach for spine patient analysis");
-          
+
           const physioNetworkResult = await analyzePatientPhysioNetwork(virtualPatient);
-          
+
           // Convert the Physio Network specialized format to our standard format
           analysisResult = {
             primaryDiagnosis: { name: physioNetworkResult.diagnosis, description: "Based on Physio Network's pain science approach" },
@@ -1746,9 +1742,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Use Sports Map approach for sports/athletic cases
         else if (isSportsCase) {
           console.log("Using Sports Map approach for athletic patient analysis");
-          
+
           const sportsMapResult = await analyzePatientSportsMap(virtualPatient);
-          
+
           // Convert the Sports Map specialized format to our standard format
           analysisResult = {
             primaryDiagnosis: { name: sportsMapResult.diagnosis, description: "Based on Sports Map's athletic performance approach" },
@@ -1767,11 +1763,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Use Grimaldi approach for hip cases
         else if (isHipCase) {
           console.log("Using Alison Grimaldi approach for hip patient analysis");
-          
+
           try {
             if (analyzePatientGrimaldi && typeof analyzePatientGrimaldi === 'function') {
               const grimaldiResult = await analyzePatientGrimaldi(virtualPatient);
-              
+
               // Convert the Grimaldi specialized format to our standard format
               analysisResult = {
                 primaryDiagnosis: { 
@@ -1802,22 +1798,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Use Bisset approach for elbow cases
         else if (isElbowCase) {
           console.log("Using Leanne Bisset approach for elbow patient analysis");
-          
-          const bissetResult = await analyzePatientBisset(virtualPatient);
-          
+
+          const bis setResult = await analyzePatientBisset(virtualPatient);
+
           // Convert the Bisset specialized format to our standard format
           analysisResult = {
-            primaryDiagnosis: { name: bissetResult.diagnosis, description: "Based on Leanne Bisset's elbow approach" },
-            differentialDiagnoses: bissetResult.differentialDiagnosis?.map(d => ({ 
+            primaryDiagnosis: { name: bis setResult.diagnosis, description: "Based on Leanne Bisset's elbow approach" },
+            differentialDiagnoses: bis setResult.differentialDiagnosis?.map(d => ({ 
               name: d.condition, 
               description: d.rationale,
               likelihood: d.likelihood
             })) || [],
-            treatmentOptions: bissetResult.treatmentOptions,
-            assessmentTests: bissetResult.assessmentTests,
+            treatmentOptions: bis setResult.treatmentOptions,
+            assessmentTests: bis setResult.assessmentTests,
             recommendedKeywords: ["Leanne Bisset", "elbow rehabilitation", "tennis elbow", "lateral epicondylalgia"],
             bissetSpecificApproach: true,
-            relatedArticleIds: bissetResult.relatedArticleIds || []
+            relatedArticleIds: bis setResult.relatedArticleIds || []
           };
         } else {
           // Use standard analysis for cases without a specialized approach
@@ -1838,7 +1834,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             allergies: "",
             objectiveFindings: typeof virtualPatient.objective_findings === 'string' ? virtualPatient.objective_findings : ""
           };
-          
+
           console.log("Using standard analysis with properly formatted input");
           analysisResult = await analyzeVirtualPatientCase(patientInput);
         }
@@ -1868,14 +1864,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 JSON.stringify(virtualPatient.objective_findings)) : 
               ""
           };
-          
+
           console.log("Using fallback standard analysis with properly formatted input");
           analysisResult = await analyzeVirtualPatientCase(patientInput);
         } catch (fallbackError) {
           console.error("Error in fallback analysis:", fallbackError);
           // Create a detailed fallback diagnosis based on the body part
           const bodyPart = patientInput.bodyPart.toLowerCase();
-          
+
           if (bodyPart === 'shoulder') {
             analysisResult = {
               primaryDiagnosis: {
@@ -2168,27 +2164,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
       }
-      
+
       // Get empty arrays if properties are missing to prevent "cannot read properties of undefined" errors
       const differentialDiagnoses = analysisResult.differentialDiagnoses?.map(d => d.name) || [];
       const keywords = analysisResult.recommendedKeywords || [];
-      
+
       // Find relevant research articles based on the diagnosis and related article IDs
-      
+
       // Determine if this is a shoulder case that could benefit from Jo Gibson's approach
-      // Use the specialized detection function for accurate identification
-      const isShoulderCase = isShoulderPatient(virtualPatient);
-      
+      const checkIfShoulderPatient = (patient) => patient.body_part === "shoulder";
+          const isShoulderCase = checkIfShoulderPatient(virtualPatient);
+
       // Get specialized analysis for shoulder cases using Jo Gibson's approach
       let joGibsonSpecificArticles = [];
       let grimaldiSpecificArticles = [];
       let bissetSpecificArticles = [];
-      
+
       // Handle shoulder cases with Jo Gibson's approach
       if (isShoulderCase) {
         try {
           const joGibsonAnalysis = await analyzeShoulderPatientJoGibson(virtualPatient);
-          
+
           // Extract the relatedArticleIds from Jo Gibson's specialized analysis
           if (joGibsonAnalysis && joGibsonAnalysis.relatedArticleIds) {
             joGibsonSpecificArticles = joGibsonAnalysis.relatedArticleIds;
@@ -2197,12 +2193,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error("Error getting Jo Gibson shoulder analysis:", error);
         }
       }
-      
+
       // Handle hip cases with Alison Grimaldi's approach
       if (virtualPatient.body_part === "hip") {
         try {
           const grimaldiAnalysis = await analyzePatientGrimaldi(virtualPatient);
-          
+
           // Extract the relatedArticleIds from Grimaldi's specialized analysis
           if (grimaldiAnalysis && grimaldiAnalysis.relatedArticleIds) {
             grimaldiSpecificArticles = grimaldiAnalysis.relatedArticleIds;
@@ -2211,12 +2207,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error("Error getting Grimaldi hip analysis:", error);
         }
       }
-      
+
       // Handle elbow cases with Leanne Bisset's approach
       if (virtualPatient.body_part === "elbow") {
         try {
           const bissetAnalysis = await analyzePatientBisset(virtualPatient);
-          
+
           // Extract the relatedArticleIds from Bisset's specialized analysis
           if (bissetAnalysis && bissetAnalysis.relatedArticleIds) {
             bissetSpecificArticles = bissetAnalysis.relatedArticleIds;
@@ -2225,14 +2221,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error("Error getting Bisset elbow analysis:", error);
         }
       }
-      
+
       // Combine all specialized article IDs
       const specializedArticleIds = [
         ...joGibsonSpecificArticles,
         ...grimaldiSpecificArticles,
         ...bissetSpecificArticles
       ];
-      
+
       const searchResults = await findRelevantResearchArticles(
         analysisResult.primaryDiagnosis?.name || "undefined diagnosis",
         differentialDiagnoses,
@@ -2240,14 +2236,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         keywords,
         specializedArticleIds
       );
-      
+
       // Get relevant article IDs from the search terms
       const relevantArticleIds = searchResults?.searchTerms || [];
-      
+
       // Include Jo Gibson's specialized shoulder articles if available
       const joGibsonArticles = isShoulderCase && searchResults?.joGibsonSpecificArticles ? 
         searchResults.joGibsonSpecificArticles : [];
-        
+
       // Include Alison Grimaldi's specialized hip articles if available
       let grimaldiArticles = [];
       if (virtualPatient.body_part === "hip") {
@@ -2256,7 +2252,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           a.title.includes("hip") || a.title.includes("gluteal") || 
           a.abstract.includes("Grimaldi") || a.authors.includes("Grimaldi"));
       }
-        
+
       // Include Leanne Bisset's specialized elbow articles if available
       let bissetArticles = [];
       if (virtualPatient.body_part === "elbow") {
@@ -2265,7 +2261,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           a.title.includes("elbow") || a.title.includes("lateral epicondyl") || 
           a.abstract.includes("Bisset") || a.authors.includes("Bisset"));
       }
-      
+
       // Include assessment tests in the patient data
       // First, modify the virtual patient schema to include assessment tests
       const updatedData = {
@@ -2277,18 +2273,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // since we don't have a dedicated field in the database
         assessmentTests: analysisResult.assessmentTests || []
       };
-      
+
       // Update the virtual patient with the analysis results
       const updatedPatient = await storage.updateVirtualPatient(
         patientId,
         updatedData
       );
-      
+
       // Determine appropriate specialized approach based on body part and patient characteristics
       if (isShoulderCase) {
         // Get Jo Gibson's specialized info from the library
         // Use already imported modules
-        
+
         // Add specialized information to enhance the response
         res.json({
           ...updatedPatient,
@@ -2310,10 +2306,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       else if (updatedPatient.body_part === "knee") {
         // Get Clinical Edge specialized info from the library
         // Using already imported modules from top of file
-        
+
         // Find knee-specific approaches
         const kneeApproaches = clinicalEdgeRegionalApproaches.find(a => a.bodyPart === "knee");
-        
+
         res.json({
           ...updatedPatient,
           specializedApproach: "Clinical Edge Knee Rehabilitation",
@@ -2330,7 +2326,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       else if (updatedPatient.body_part === "back" || updatedPatient.body_part === "neck") {
         // Get Physio Network specialized info from the library
         // Using already imported modules from top of file
-        
+
         res.json({
           ...updatedPatient,
           specializedApproach: "Physio Network Pain Science Approach",
@@ -2350,7 +2346,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                updatedPatient.chief_complaint?.toLowerCase().includes("training")) {
         // Get Sports Map specialized info from the library
         // Using already imported modules from top of file
-        
+
         res.json({
           ...updatedPatient,
           specializedApproach: "Sports Map Performance Rehabilitation",
@@ -2367,7 +2363,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       else if (updatedPatient.body_part === "hip") {
         // Get Grimaldi's specialized info from the library
         // Using already imported modules from top of file
-        
+
         res.json({
           ...updatedPatient,
           specializedApproach: "Alison Grimaldi Hip Rehabilitation",
@@ -2393,7 +2389,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       else if (updatedPatient.body_part === "elbow") {
         // Get Bisset's specialized info from the library
         // Using already imported modules from top of file
-        
+
         res.json({
           ...updatedPatient,
           specializedApproach: "Leanne Bisset Elbow Rehabilitation",
@@ -2436,7 +2432,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const searchTerm = req.query.search as string | undefined;
       const page = req.query.page ? parseInt(req.query.page as string) : 1;
       const pageSize = req.query.pageSize ? parseInt(req.query.pageSize as string) : 10;
-      
+
       const result = await storage.getSharedCases(
         bodyPart,
         expertiseLevel,
@@ -2445,46 +2441,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
         page,
         pageSize
       );
-      
+
       res.json(result);
     } catch (error) {
       console.error("Error fetching shared cases:", error);
       res.status(500).json({ error: "Failed to fetch shared cases" });
     }
   });
-  
+
   app.get("/api/shared-cases/:id", async (req: Request, res: Response) => {
     try {
       const id = parseInt(req.params.id);
-      
+
       if (isNaN(id)) {
         return res.status(400).json({ error: "Invalid case ID" });
       }
-      
+
       const sharedCase = await storage.getSharedCase(id);
-      
+
       if (!sharedCase) {
         return res.status(404).json({ error: "Case not found" });
       }
-      
+
       // Increment the view count
       await storage.incrementCaseViews(id);
-      
+
       res.json(sharedCase);
     } catch (error) {
       console.error("Error fetching shared case:", error);
       res.status(500).json({ error: "Failed to fetch shared case" });
     }
   });
-  
+
   app.get("/api/users/:userId/shared-cases", async (req: Request, res: Response) => {
     try {
       const userId = parseInt(req.params.userId);
-      
+
       if (isNaN(userId)) {
         return res.status(400).json({ error: "Invalid user ID" });
-      }
-      
+            }
+
       const cases = await storage.getUserSharedCases(userId);
       res.json(cases);
     } catch (error) {
@@ -2492,7 +2488,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to fetch user's shared cases" });
     }
   });
-  
+
   app.get("/api/my-shared-cases", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const cases = await storage.getUserSharedCases(req.user!.id);
@@ -2502,7 +2498,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to fetch your shared cases" });
     }
   });
-  
+
   app.post("/api/shared-cases", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       // Set the user ID from the authenticated user
@@ -2511,59 +2507,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId: req.user!.id,
         isApproved: req.user!.membershipTier !== "none" // Auto-approve for paid users
       };
-      
+
       const newCase = await storage.createSharedCase(sharedCase);
-      
+
       // Add tags if provided
       if (req.body.tagIds && Array.isArray(req.body.tagIds)) {
         for (const tagId of req.body.tagIds) {
           await storage.addCaseTag(newCase.id, tagId);
         }
       }
-      
+
       res.status(201).json(newCase);
     } catch (error) {
       console.error("Error creating shared case:", error);
       res.status(500).json({ error: "Failed to create shared case" });
     }
   });
-  
+
   app.put("/api/shared-cases/:id", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const id = parseInt(req.params.id);
-      
+
       if (isNaN(id)) {
         return res.status(400).json({ error: "Invalid case ID" });
       }
-      
+
       // Get the case to check ownership
       const existingCase = await storage.getSharedCase(id);
-      
+
       if (!existingCase) {
         return res.status(404).json({ error: "Case not found" });
       }
-      
+
       // Check if the user owns the case
       if (existingCase.userId !== req.user!.id) {
         return res.status(403).json({ error: "You do not have permission to update this case" });
       }
-      
+
       const updatedCase = await storage.updateSharedCase(id, req.body);
-      
+
       // Update tags if provided
       if (req.body.tagIds && Array.isArray(req.body.tagIds)) {
         // Get existing tag mappings
         const existingTagMappings = await db.select()
           .from(caseTagsMapping)
           .where(eq(caseTagsMapping.caseId, id));
-          
+
         // Remove tags that are no longer in the list
         for (const mapping of existingTagMappings) {
           if (!req.body.tagIds.includes(mapping.tagId)) {
             await storage.removeCaseTag(id, mapping.tagId);
           }
         }
-        
+
         // Add new tags
         for (const tagId of req.body.tagIds) {
           const exists = existingTagMappings.some(m => m.tagId === tagId);
@@ -2572,52 +2568,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
       }
-      
+
       res.json(updatedCase);
     } catch (error) {
       console.error("Error updating shared case:", error);
       res.status(500).json({ error: "Failed to update shared case" });
     }
   });
-  
+
   app.delete("/api/shared-cases/:id", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const id = parseInt(req.params.id);
-      
+
       if (isNaN(id)) {
         return res.status(400).json({ error: "Invalid case ID" });
       }
-      
+
       // Get the case to check ownership
       const existingCase = await storage.getSharedCase(id);
-      
+
       if (!existingCase) {
         return res.status(404).json({ error: "Case not found" });
       }
-      
+
       // Check if the user owns the case or is an admin
       if (existingCase.userId !== req.user!.id && req.user!.membershipTier !== "premium") {
         return res.status(403).json({ error: "You do not have permission to delete this case" });
       }
-      
+
       // Delete the case (this will cascade to delete related data)
       await db.delete(sharedCases).where(eq(sharedCases.id, id));
-      
+
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting shared case:", error);
       res.status(500).json({ error: "Failed to delete shared case" });
     }
   });
-  
+
   app.post("/api/shared-cases/:id/upvote", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const caseId = parseInt(req.params.id);
-      
+
       if (isNaN(caseId)) {
         return res.status(400).json({ error: "Invalid case ID" });
       }
-      
+
       const result = await storage.upvoteCase(caseId, req.user!.id);
       res.json(result);
     } catch (error) {
@@ -2625,15 +2621,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to upvote case" });
     }
   });
-  
+
   app.delete("/api/shared-cases/:id/upvote", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const caseId = parseInt(req.params.id);
-      
+
       if (isNaN(caseId)) {
         return res.status(400).json({ error: "Invalid case ID" });
       }
-      
+
       const result = await storage.removeUpvoteCase(caseId, req.user!.id);
       res.json(result);
     } catch (error) {
@@ -2641,16 +2637,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to remove case upvote" });
     }
   });
-  
+
   // Peer Knowledge Exchange - Case Discussions Operations
   app.get("/api/shared-cases/:caseId/discussions", async (req: Request, res: Response) => {
     try {
       const caseId = parseInt(req.params.caseId);
-      
+
       if (isNaN(caseId)) {
         return res.status(400).json({ error: "Invalid case ID" });
       }
-      
+
       const discussions = await storage.getCaseDiscussions(caseId);
       res.json(discussions);
     } catch (error) {
@@ -2658,15 +2654,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to fetch case discussions" });
     }
   });
-  
+
   app.get("/api/case-discussions/:discussionId/replies", async (req: Request, res: Response) => {
     try {
       const discussionId = parseInt(req.params.discussionId);
-      
+
       if (isNaN(discussionId)) {
         return res.status(400).json({ error: "Invalid discussion ID" });
       }
-      
+
       const replies = await storage.getDiscussionReplies(discussionId);
       res.json(replies);
     } catch (error) {
@@ -2674,29 +2670,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to fetch discussion replies" });
     }
   });
-  
+
   app.post("/api/shared-cases/:caseId/discussions", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const caseId = parseInt(req.params.caseId);
-      
+
       if (isNaN(caseId)) {
         return res.status(400).json({ error: "Invalid case ID" });
       }
-      
+
       // Make sure the case exists
       const sharedCase = await storage.getSharedCase(caseId);
-      
+
       if (!sharedCase) {
         return res.status(404).json({ error: "Case not found" });
       }
-      
+
       // Create the discussion
       const discussion = {
         ...req.body,
         caseId,
         userId: req.user!.id
       };
-      
+
       const newDiscussion = await storage.createCaseDiscussion(discussion);
       res.status(201).json(newDiscussion);
     } catch (error) {
@@ -2704,27 +2700,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to create case discussion" });
     }
   });
-  
+
   app.put("/api/case-discussions/:id", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const id = parseInt(req.params.id);
-      
+
       if (isNaN(id)) {
         return res.status(400).json({ error: "Invalid discussion ID" });
       }
-      
+
       // Get the discussion to check ownership
       const existingDiscussion = await storage.getCaseDiscussion(id);
-      
+
       if (!existingDiscussion) {
         return res.status(404).json({ error: "Discussion not found" });
       }
-      
+
       // Check if the user owns the discussion
       if (existingDiscussion.userId !== req.user!.id) {
         return res.status(403).json({ error: "You do not have permission to update this discussion" });
       }
-      
+
       const updatedDiscussion = await storage.updateCaseDiscussion(id, req.body.content);
       res.json(updatedDiscussion);
     } catch (error) {
@@ -2732,15 +2728,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to update case discussion" });
     }
   });
-  
+
   app.post("/api/case-discussions/:id/upvote", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const discussionId = parseInt(req.params.id);
-      
+
       if (isNaN(discussionId)) {
         return res.status(400).json({ error: "Invalid discussion ID" });
       }
-      
+
       const result = await storage.upvoteDiscussion(discussionId, req.user!.id);
       res.json(result);
     } catch (error) {
@@ -2748,15 +2744,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to upvote discussion" });
     }
   });
-  
+
   app.delete("/api/case-discussions/:id/upvote", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const discussionId = parseInt(req.params.id);
-      
+
       if (isNaN(discussionId)) {
         return res.status(400).json({ error: "Invalid discussion ID" });
       }
-      
+
       const result = await storage.removeUpvoteDiscussion(discussionId, req.user!.id);
       res.json(result);
     } catch (error) {
@@ -2764,26 +2760,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to remove discussion upvote" });
     }
   });
-  
+
   // Peer Knowledge Exchange - Tags Operations
   app.get("/api/case-tags", async (req: Request, res: Response) => {
     try {
       const category = req.query.category as string | undefined;
-      
+
       let tags;
       if (category) {
         tags = await storage.getCaseTagsByCategory(category);
       } else {
         tags = await storage.getCaseTags();
       }
-      
+
       res.json(tags);
     } catch (error) {
       console.error("Error fetching case tags:", error);
       res.status(500).json({ error: "Failed to fetch case tags" });
     }
   });
-  
+
   // File Upload API for Peer Knowledge Exchange attachments
   app.post("/api/peer-exchange/upload", ensureAuthenticated, uploadToS3.array("files", 5), async (req: Request, res: Response) => {
     try {
@@ -2798,7 +2794,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         type: getFileType(file.mimetype),
         size: file.size
       }));
-      
+
       res.status(200).json(fileDetails);
     } catch (error) {
       console.error("File upload error:", error);
@@ -2809,20 +2805,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     }
   });
-  
+
   app.post("/api/case-tags", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       // Check if the user has permission to create tags (premium members only)
       if (req.user!.membershipTier !== "premium") {
         return res.status(403).json({ error: "Only premium members can create new tags" });
       }
-      
+
       const { name, category, color } = req.body;
-      
+
       if (!name || !category || !color) {
         return res.status(400).json({ error: "Name, category, and color are required" });
       }
-      
+
       const newTag = await storage.createCaseTag(name, category, color);
       res.status(201).json(newTag);
     } catch (error) {
@@ -2838,11 +2834,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!req.user || !['fateofjustice', 'Fateofjustice'].includes(req.user.username)) {
         return res.status(403).json({ error: "Unauthorized access" });
       }
-      
+
       // Get all users
       const users = await storage.getAllUsers();
       const totalUsers = await storage.getUserCount();
-      
+
       // Count membership tiers
       const byMembership = {
         basic: 0,
@@ -2850,12 +2846,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         premium: 0,
         none: 0
       };
-      
+
       users.forEach(user => {
         const tier = user.membershipTier || 'none';
         byMembership[tier] += 1;
       });
-      
+
       res.json({
         totalUsers,
         users: users.map(user => ({
@@ -2881,7 +2877,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { bodyPart, complexity } = req.query;
       const page = parseInt(req.query.page as string) || 1;
       const pageSize = parseInt(req.query.pageSize as string) || 10;
-      
+
       // Get existing case studies
       const result = await storage.getAICaseStudies(
         bodyPart as string, 
@@ -2889,7 +2885,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         page,
         pageSize
       );
-      
+
       // Check if we need to load sample case studies (if none exist)
       if (result.total === 0 || result.caseStudies.length === 0) {
         console.log("No case studies found, loading sample case studies...");
@@ -2897,11 +2893,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Import and add sample case studies
           const { addSampleCaseStudies } = await import('./sampleCaseStudies');
           await addSampleCaseStudies(storage);
-          
+
           // Add additional case studies (5 per body part)
           const { addAdditionalCaseStudies } = await import('./additionalCaseStudies');
           await addAdditionalCaseStudies(storage);
-          
+
           // Try to fetch again after adding samples
           const updatedResult = await storage.getAICaseStudies(
             bodyPart as string,
@@ -2909,14 +2905,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             page,
             pageSize
           );
-          
+
           return res.json(updatedResult);
         } catch (sampleError) {
           console.error("Error loading sample case studies:", sampleError);
           // Continue with original empty result if sample loading fails
         }
       }
-      
+
       res.json(result);
     } catch (error) {
       console.error("Error fetching case studies:", error);
@@ -2928,11 +2924,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const caseId = parseInt(req.params.id);
       const caseStudy = await storage.getAICaseStudy(caseId);
-      
+
       if (!caseStudy) {
         return res.status(404).json({ error: "Case study not found" });
       }
-      
+
       res.json(caseStudy);
     } catch (error) {
       console.error("Error fetching case study:", error);
@@ -2950,23 +2946,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
           code: "membership_required" 
         });
       }
-      
+
       const { bodyPart, complexity, includeResearch } = req.body;
-      
+
       // Validate input
       if (!bodyPart || !complexity) {
         return res.status(400).json({ error: "Body part and complexity are required" });
       }
-      
+
       // Generate the AI case study
       const caseStudy = await generateAICaseStudy(
         { bodyPart, complexity, includeResearch: includeResearch ?? true },
         req.user.id
       );
-      
+
       // Save to database
       const savedCaseStudy = await storage.createAICaseStudy(caseStudy);
-      
+
       res.status(201).json(savedCaseStudy);
     } catch (error) {
       console.error("Error creating case study:", error);
@@ -2978,9 +2974,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const caseId = parseInt(req.params.id);
       const userId = req.user.id;
-      
+
       const attempts = await storage.getUserAttemptsForCase(userId, caseId);
-      
+
       res.json(attempts);
     } catch (error) {
       console.error("Error fetching case study attempts:", error);
@@ -2992,13 +2988,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const caseId = parseInt(req.params.id);
       const userId = req.user.id;
-      
+
       // Get the case study
       const caseStudy = await storage.getAICaseStudy(caseId);
       if (!caseStudy) {
         return res.status(404).json({ error: "Case study not found" });
       }
-      
+
       // Create the attempt record
       const attemptData = {
         caseStudyId: caseId,
@@ -3009,9 +3005,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         proposedTreatment: req.body.proposedTreatment,
         completed: false
       };
-      
+
       const attempt = await storage.createCaseStudyAttempt(attemptData);
-      
+
       // Generate feedback
       const feedback = await generateDiagnosticFeedback({
         caseStudyId: caseId,
@@ -3020,14 +3016,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         assessmentTests: req.body.assessmentTests,
         proposedTreatment: req.body.proposedTreatment
       }, caseStudy);
-      
+
       // Update the attempt with feedback
       const updatedAttempt = await storage.updateCaseStudyAttemptFeedback(
         attempt.id,
         feedback,
         feedback.overallAccuracy
       );
-      
+
       res.status(201).json(updatedAttempt);
     } catch (error) {
       console.error("Error submitting case study attempt:", error);
@@ -3039,7 +3035,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.id;
       const caseStudies = await storage.getUserAICaseStudies(userId);
-      
+
       res.json(caseStudies);
     } catch (error) {
       console.error("Error fetching user case studies:", error);

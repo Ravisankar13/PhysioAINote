@@ -833,6 +833,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get('/api/openai-quota', ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      
+      // Make a minimal request to check quota
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [{ role: "user", content: "Hello" }],
+        max_tokens: 1
+      });
+      
+      res.json({
+        status: "active",
+        model: "gpt-4o",
+        usage: response.usage,
+        message: "API is working normally"
+      });
+    } catch (error: any) {
+      if (error.status === 429) {
+        res.json({
+          status: "quota_exceeded",
+          error: "Rate limit or quota exceeded",
+          message: "You have exceeded your OpenAI API quota or rate limit",
+          details: error.message
+        });
+      } else if (error.status === 401) {
+        res.json({
+          status: "invalid_key",
+          error: "Invalid API key",
+          message: "OpenAI API key is invalid or expired"
+        });
+      } else {
+        res.json({
+          status: "error",
+          error: error.message || "Unknown error",
+          message: "Error checking OpenAI API status"
+        });
+      }
+    }
+  });
+
   app.get("/api/sample-notes", (req: Request, res: Response) => {
     res.json(sampleNotes);
   });

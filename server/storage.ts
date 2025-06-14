@@ -111,6 +111,14 @@ export interface IStorage {
     articles: ResearchArticle[];
     total: number;
   }>;
+  getResearchArticlesByBodyPart(
+    bodyPart: string,
+    page?: number,
+    pageSize?: number
+  ): Promise<{
+    articles: ResearchArticle[];
+    total: number;
+  }>;
   createResearchArticle(
     article: InsertResearchArticle
   ): Promise<ResearchArticle>;
@@ -615,6 +623,15 @@ export class DatabaseStorage implements IStorage {
       .offset(offset);
 
     return { articles, total };
+  }
+
+  async getResearchArticlesByBodyPart(
+    bodyPart: string,
+    page: number = 1,
+    pageSize: number = 10
+  ): Promise<{ articles: ResearchArticle[]; total: number }> {
+    // This is essentially the same as getResearchArticles but with bodyPart required
+    return this.getResearchArticles(bodyPart, page, pageSize);
   }
 
   async createResearchArticle(

@@ -2118,6 +2118,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             };
           } else {
             // Basic fallback for other body parts not specifically covered
+            function capitalize(str: string): string {
+              return str.charAt(0).toUpperCase() + str.slice(1);
+            }
+            
             analysisResult = {
               primaryDiagnosis: {
                 name: `Specific ${capitalize(bodyPart)} pathology with biomechanical and tissue-specific implications`,

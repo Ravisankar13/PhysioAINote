@@ -41,6 +41,7 @@ import BodyPartZoom from "./BodyPartZoom";
 import { getPlaceholderImage, placeholderImages } from "./bodyPartImages";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import SkeletonViewer from "@/components/3d/SkeletonViewer";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Link } from "wouter";
 import { Textarea } from "@/components/ui/textarea";
@@ -321,7 +322,7 @@ export default function VirtualPatientDetail({
       </CardHeader>
       <CardContent className="p-0">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-7">
+          <TabsList className="grid w-full grid-cols-8">
             <TabsTrigger value="info" className="flex items-center">
               <User className="h-4 w-4 mr-2" />
               Patient Info
@@ -361,6 +362,10 @@ export default function VirtualPatientDetail({
             <TabsTrigger value="anatomy" className="flex items-center">
               <ZoomIn className="h-4 w-4 mr-2" />
               Interactive Anatomy
+            </TabsTrigger>
+            <TabsTrigger value="3d-model" className="flex items-center">
+              <Target className="h-4 w-4 mr-2" />
+              3D Skeleton
             </TabsTrigger>
             <TabsTrigger
               value="additional-info"

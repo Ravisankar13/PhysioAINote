@@ -363,6 +363,14 @@ export default function VirtualPatientDetail({
               Interactive Anatomy
             </TabsTrigger>
             <TabsTrigger
+              value="additional-info"
+              disabled={!hasDiagnosis}
+              className="flex items-center"
+            >
+              <ClipboardCheck className="h-4 w-4 mr-2" />
+              Additional Info Needed
+            </TabsTrigger>
+            <TabsTrigger
               value="research"
               disabled={!hasDiagnosis}
               className="flex items-center"
@@ -986,6 +994,168 @@ export default function VirtualPatientDetail({
                         </div>
                       ))}
                     </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* ADDITIONAL INFORMATION NEEDED TAB */}
+          <TabsContent value="additional-info" className="p-6">
+            {!hasDiagnosis ? (
+              renderEmptyState(
+                <ClipboardCheck className="h-12 w-12 text-gray-400 mx-auto mb-4" />,
+                "No Additional Information Guidelines Available",
+                "Analyze the patient data to view suggested follow-up questions and assessments."
+              )
+            ) : (
+              <div className="space-y-6">
+                {patient.additionalInformationNeeded && (
+                  <>
+                    {/* History Questions Section */}
+                    {patient.additionalInformationNeeded.historyQuestions && 
+                     patient.additionalInformationNeeded.historyQuestions.length > 0 && (
+                      <div>
+                        <h3 className="text-lg font-semibold mb-3 flex items-center">
+                          <User className="h-5 w-5 mr-2 text-blue-500" />
+                          Additional History Questions
+                        </h3>
+                        <div className="space-y-4">
+                          {patient.additionalInformationNeeded.historyQuestions.map((category: any, idx: number) => (
+                            <div key={idx} className="border rounded-lg p-4">
+                              <h4 className="font-semibold text-md mb-2 text-blue-600">
+                                {category.category}
+                              </h4>
+                              <p className="text-sm text-muted-foreground mb-3">
+                                {category.purpose}
+                              </p>
+                              <ul className="space-y-2">
+                                {category.questions.map((question: string, qIdx: number) => (
+                                  <li key={qIdx} className="flex items-start">
+                                    <span className="text-blue-500 mr-2 mt-1">•</span>
+                                    <span className="text-sm">{question}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Objective Assessments Section */}
+                    {patient.additionalInformationNeeded.objectiveAssessments && 
+                     patient.additionalInformationNeeded.objectiveAssessments.length > 0 && (
+                      <div>
+                        <h3 className="text-lg font-semibold mb-3 flex items-center">
+                          <Clipboard className="h-5 w-5 mr-2 text-green-500" />
+                          Recommended Objective Assessments
+                        </h3>
+                        <div className="space-y-4">
+                          {patient.additionalInformationNeeded.objectiveAssessments.map((assessment: any, idx: number) => (
+                            <div key={idx} className="border rounded-lg p-4">
+                              <div className="flex justify-between items-start mb-2">
+                                <h4 className="font-semibold text-md text-green-600">
+                                  {assessment.test}
+                                </h4>
+                                <Badge variant={
+                                  assessment.priority === "high" ? "destructive" : 
+                                  assessment.priority === "medium" ? "secondary" : 
+                                  "outline"
+                                }>
+                                  {assessment.priority} priority
+                                </Badge>
+                              </div>
+                              <p className="text-sm text-muted-foreground mb-2">
+                                <strong>Rationale:</strong> {assessment.rationale}
+                              </p>
+                              {assessment.expectedFindings && (
+                                <p className="text-sm text-muted-foreground mb-2">
+                                  <strong>Expected Findings:</strong> {assessment.expectedFindings}
+                                </p>
+                              )}
+                              {assessment.technique && (
+                                <p className="text-sm">
+                                  <strong>Technique:</strong> {assessment.technique}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Imaging Considerations Section */}
+                    {patient.additionalInformationNeeded.imagingConsiderations && 
+                     patient.additionalInformationNeeded.imagingConsiderations.length > 0 && (
+                      <div>
+                        <h3 className="text-lg font-semibold mb-3 flex items-center">
+                          <Activity className="h-5 w-5 mr-2 text-purple-500" />
+                          Imaging Considerations
+                        </h3>
+                        <div className="space-y-4">
+                          {patient.additionalInformationNeeded.imagingConsiderations.map((imaging: any, idx: number) => (
+                            <div key={idx} className="border rounded-lg p-4">
+                              <h4 className="font-semibold text-md mb-2 text-purple-600">
+                                {imaging.modality}
+                              </h4>
+                              <div className="space-y-2 text-sm">
+                                <p><strong>Indication:</strong> {imaging.indication}</p>
+                                <p><strong>Expected Findings:</strong> {imaging.expectedFindings}</p>
+                                {imaging.differentialFindings && (
+                                  <p><strong>Differential Findings:</strong> {imaging.differentialFindings}</p>
+                                )}
+                                {imaging.costBenefit && (
+                                  <p className="text-muted-foreground">
+                                    <strong>Cost-Benefit Analysis:</strong> {imaging.costBenefit}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Specialized Tests Section */}
+                    {patient.additionalInformationNeeded.specializedTests && 
+                     patient.additionalInformationNeeded.specializedTests.length > 0 && (
+                      <div>
+                        <h3 className="text-lg font-semibold mb-3 flex items-center">
+                          <Brain className="h-5 w-5 mr-2 text-orange-500" />
+                          Specialized Clinical Tests
+                        </h3>
+                        <div className="space-y-4">
+                          {patient.additionalInformationNeeded.specializedTests.map((test: any, idx: number) => (
+                            <div key={idx} className="border rounded-lg p-4">
+                              <h4 className="font-semibold text-md mb-2 text-orange-600">
+                                {test.test}
+                              </h4>
+                              <div className="space-y-2 text-sm">
+                                <p><strong>Purpose:</strong> {test.purpose}</p>
+                                <p><strong>Technique:</strong> {test.technique}</p>
+                                <p><strong>Interpretation:</strong> {test.interpretation}</p>
+                                {test.timing && (
+                                  <p className="text-muted-foreground">
+                                    <strong>Optimal Timing:</strong> {test.timing}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* No additional information available */}
+                {!patient.additionalInformationNeeded && (
+                  <div className="text-center p-6 border rounded-md border-dashed">
+                    <ClipboardCheck className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-muted-foreground">
+                      No additional information gathering guidelines available for this analysis.
+                    </p>
                   </div>
                 )}
               </div>

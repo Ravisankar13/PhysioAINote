@@ -118,6 +118,29 @@ export interface VirtualPatientAnalysisOutput {
     }>;
   }>;
   recommendedKeywords: string[];
+  additionalInformationNeeded: {
+    historyQuestions: Array<{
+      category: string;
+      questions: string[];
+      purpose: string;
+    }>;
+    objectiveAssessments: Array<{
+      test: string;
+      rationale: string;
+      priority: "high" | "medium" | "low";
+    }>;
+    imagingConsiderations: Array<{
+      modality: string;
+      indication: string;
+      expectedFindings: string;
+    }>;
+    specializedTests: Array<{
+      test: string;
+      purpose: string;
+      technique: string;
+      interpretation: string;
+    }>;
+  };
 }
 
 // Attempts to analyze virtual patient case with graceful fallback for API issues
@@ -635,6 +658,42 @@ async function performAnalysis(
       }
     ],
     "recommendedKeywords": ["keyword1", "keyword2", ...],
+    "additionalInformationNeeded": {
+      "historyQuestions": [
+        {
+          "category": "specific category of questioning (e.g., 'Symptom Behavior', 'Aggravating Factors', 'Previous Treatments')",
+          "questions": ["specific question 1", "specific question 2", "specific question 3"],
+          "purpose": "detailed explanation of why these questions are critical for refining the diagnosis or ruling out differentials"
+        }
+      ],
+      "objectiveAssessments": [
+        {
+          "test": "specific assessment test or measurement",
+          "rationale": "detailed explanation of what this test would reveal and how it impacts diagnosis",
+          "priority": "high/medium/low with explanation of urgency",
+          "expectedFindings": "what findings would support the primary diagnosis vs differentials",
+          "technique": "precise technique description with patient positioning and measurement parameters"
+        }
+      ],
+      "imagingConsiderations": [
+        {
+          "modality": "specific imaging type (e.g., 'MRI with contrast', 'Dynamic ultrasound', 'X-ray series')",
+          "indication": "specific clinical indication and timing for when imaging is warranted",
+          "expectedFindings": "detailed description of expected findings that would confirm diagnosis",
+          "differentialFindings": "findings that would support alternative diagnoses",
+          "costBenefit": "analysis of when imaging adds diagnostic value vs when it's unnecessary"
+        }
+      ],
+      "specializedTests": [
+        {
+          "test": "specific specialized test name with complete procedure",
+          "purpose": "detailed explanation of what this test evaluates and diagnostic value",
+          "technique": "step-by-step technique with precise patient positioning and measurement criteria",
+          "interpretation": "detailed interpretation guidelines with normative values and clinical significance",
+          "timing": "optimal timing in the assessment process and contraindications"
+        }
+      ]
+    },
     "researchSection": {
       "keyStudies": [
         {
@@ -925,7 +984,96 @@ function createFallbackAnalysis(patientData: VirtualPatientInput): VirtualPatien
       bodyPartInfo.expert3,
       "evidence-based practice",
       "clinical reasoning"
-    ]
+    ],
+    additionalInformationNeeded: {
+      historyQuestions: [
+        {
+          category: "Symptom Behavior",
+          questions: [
+            "How do your symptoms change throughout the day?",
+            "What specific activities make your symptoms worse?",
+            "What positions or activities provide relief?",
+            "Have you noticed any pattern to when symptoms are better or worse?"
+          ],
+          purpose: "Understanding symptom behavior patterns is crucial for refining the diagnosis and identifying specific aggravating factors that will guide treatment approach."
+        },
+        {
+          category: "Previous Treatments",
+          questions: [
+            "What treatments have you tried for this condition?",
+            "Which treatments helped, and which didn't?",
+            "Have you had imaging studies done? If so, what did they show?",
+            "Are you currently taking any medications for this condition?"
+          ],
+          purpose: "Previous treatment responses provide valuable diagnostic information and help avoid repeating ineffective interventions while building on successful approaches."
+        },
+        {
+          category: "Functional Impact",
+          questions: [
+            "What activities of daily living are most affected?",
+            "How has this condition impacted your work or sport?",
+            "What are your main functional goals for treatment?",
+            "How would you rate your current function compared to before this problem started?"
+          ],
+          purpose: "Understanding functional limitations helps prioritize treatment goals and measure treatment effectiveness while ensuring patient-centered care."
+        }
+      ],
+      objectiveAssessments: [
+        {
+          test: `Specific ${patientData.bodyPart} range of motion assessment`,
+          rationale: `Precise measurement of active and passive ROM in all planes will help distinguish between different tissue restrictions and guide treatment selection`,
+          priority: "high",
+          expectedFindings: `Limited ROM in specific directions consistent with ${bodyPartInfo.expertDiagnosis}`,
+          technique: `Goniometric measurement with patient in standardized positions, comparing to normative values and contralateral side`
+        },
+        {
+          test: `Strength testing of key ${patientData.bodyPart} muscle groups`,
+          rationale: `Manual muscle testing or dynamometry will identify specific weakness patterns that can guide exercise prescription and monitor progress`,
+          priority: "high",
+          expectedFindings: `Weakness in muscles commonly affected by ${bodyPartInfo.expertDiagnosis}`,
+          technique: `Manual muscle testing using standardized positions and techniques, rating on 0-5 scale with attention to pain response`
+        },
+        {
+          test: `Palpation of relevant anatomical structures`,
+          rationale: `Direct palpation can identify areas of tenderness, swelling, or tissue texture changes that support the diagnostic hypothesis`,
+          priority: "medium",
+          expectedFindings: `Tenderness over structures involved in ${bodyPartInfo.expertDiagnosis}`,
+          technique: `Systematic palpation using consistent pressure and comparing bilateral structures where applicable`
+        }
+      ],
+      imagingConsiderations: [
+        {
+          modality: `MRI of ${patientData.bodyPart}`,
+          indication: `If conservative management fails after 6-8 weeks or if structural pathology is suspected based on clinical findings`,
+          expectedFindings: `Tissue changes consistent with ${bodyPartInfo.expertDiagnosis}, such as signal intensity changes or structural abnormalities`,
+          differentialFindings: `Alternative findings that might support differential diagnoses such as ${bodyPartInfo.diagnosis1} or ${bodyPartInfo.diagnosis2}`,
+          costBenefit: `MRI provides detailed soft tissue visualization but should be used judiciously after conservative treatment trial unless red flags are present`
+        },
+        {
+          modality: `Ultrasound imaging`,
+          indication: `Dynamic assessment of tissue movement and real-time evaluation during functional movements`,
+          expectedFindings: `Tissue texture changes, movement patterns, or vascular changes consistent with the suspected diagnosis`,
+          differentialFindings: `Different movement patterns or tissue appearances that might suggest alternative diagnoses`,
+          costBenefit: `Cost-effective and allows dynamic assessment, but operator-dependent and may have limited availability`
+        }
+      ],
+      specializedTests: [
+        {
+          test: `${bodyPartInfo.expert1}'s specialized clinical test for ${patientData.bodyPart}`,
+          purpose: `This test specifically evaluates the structures involved in ${bodyPartInfo.expertDiagnosis} and has been validated by ${bodyPartInfo.expert1}`,
+          technique: `Patient positioning and test procedure as described in ${bodyPartInfo.expert1}'s published protocols, with attention to standardized force application and patient instruction`,
+          interpretation: `Positive test indicates high likelihood of ${bodyPartInfo.expertDiagnosis}, while negative test helps rule out this condition and supports consideration of differential diagnoses`,
+          timing: `Should be performed early in the assessment process as it can guide subsequent testing and treatment decisions`
+        },
+        {
+          test: `Functional movement screen for ${patientData.bodyPart}`,
+          purpose: `Assesses movement quality and identifies compensatory patterns that may contribute to symptoms or affect treatment response`,
+          technique: `Standardized movement tasks performed while observing for quality, symmetry, and symptom reproduction with attention to kinetic chain contributions`,
+          interpretation: `Movement dysfunctions can indicate specific impairments to address in treatment and help predict treatment response`,
+          timing: `Should be performed after pain and ROM assessment but before fatigue from other testing affects movement quality`
+        }
+      ]
+    }
   };
 }
 

@@ -1444,11 +1444,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let relatedResearch: any[] = [];
 
       // For debugging - log the field value
-      console.log("Patient related_article_ids:", virtualPatient.related_article_ids);
       console.log("Patient relatedArticleIds:", virtualPatient.relatedArticleIds);
 
-      // Try both possible field names for backward compatibility
-      const articleIdsField = virtualPatient.related_article_ids || virtualPatient.relatedArticleIds;
+      // Use the correct field name from the database schema
+      const articleIdsField = virtualPatient.relatedArticleIds;
 
       if (articleIdsField && (Array.isArray(articleIdsField) || typeof articleIdsField === 'string')) {
         try {
@@ -1490,7 +1489,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error('Error fetching related research articles:', err, articleIdsField);
           // Fallback to default articles for this body part
           try {
-            const { articles } = await storage.getResearchArticles(virtualPatient.bodyPart, 1, 5);
+            const { articles } = await storage.getResearchArticles(virtualPatient.body_part, 1, 5);
             relatedResearch = articles;
             console.log(`Using ${relatedResearch.length} fallback articles for this body part`);
           } catch (fallbackErr) {
@@ -1500,8 +1499,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else {
         // If no article IDs field found, get some default ones for this body part
         try {
-          console.log("No article IDs field found, getting default articles for body part:", virtualPatient.bodyPart);
-          const { articles } = await storage.getResearchArticles(virtualPatient.bodyPart, 1, 5);
+          console.log("No article IDs field found, getting default articles for body part:", virtualPatient.body_part);
+          const { articles } = await storage.getResearchArticles(virtualPatient.body_part, 1, 5);
           relatedResearch = articles;
           console.log(`Using ${relatedResearch.length} default articles for this body part`);
         } catch (err) {
@@ -1512,7 +1511,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Return the virtual patient with related research articles included
       res.json({
         ...virtualPatient,
-        relatedResearch
+        relatedArticles: relatedResearch
       });
     } catch (error) {
       if (error instanceof Error) {

@@ -749,34 +749,203 @@ export default function VirtualPatientDetail({
                   </h3>
                   {patient.treatmentOptions && typeof patient.treatmentOptions === 'object' && (
                     <div className="space-y-6">
-                      {/* Recommended Exercises Section */}
-                      {patient.treatmentOptions.recommendedExercises && patient.treatmentOptions.recommendedExercises.length > 0 && (
-                        <div className="border rounded-lg p-4">
-                          <h4 className="text-md font-semibold mb-3 bg-primary/10 p-2 rounded">
-                            Recommended Exercises
-                          </h4>
-                          <div className="space-y-3">
-                            {patient.treatmentOptions.recommendedExercises.map((exercise: any, idx: number) => (
-                              <div key={idx} className="border border-gray-200 rounded-md p-3">
-                                <div className="flex justify-between items-start mb-2">
-                                  <h5 className="text-md font-medium">{exercise.name}</h5>
-                                  <Badge variant="outline">Exercise</Badge>
-                                </div>
-                                {exercise.purpose && (
-                                  <p className="text-sm text-gray-600 mt-1">
-                                    <span className="font-medium">Purpose: </span>
-                                    {exercise.purpose}
-                                  </p>
-                                )}
-                                {exercise.technique && (
-                                  <p className="text-sm text-gray-600 mt-1">
-                                    <span className="font-medium">Technique: </span>
-                                    {exercise.technique}
-                                  </p>
-                                )}
+                      {/* Progressive Loading Exercises Section */}
+                      {patient.treatmentOptions && (
+                        <div className="space-y-6">
+                          {/* Manual Therapy Techniques */}
+                          {Array.isArray(patient.treatmentOptions) && patient.treatmentOptions.find((category: any) => category.category === "Manual Therapy") && (
+                            <div className="border rounded-lg p-4">
+                              <h4 className="text-md font-semibold mb-3 bg-blue-50 p-2 rounded flex items-center">
+                                <Activity className="h-4 w-4 mr-2 text-blue-600" />
+                                Manual Therapy Techniques
+                              </h4>
+                              <div className="space-y-4">
+                                {patient.treatmentOptions.find((category: any) => category.category === "Manual Therapy")?.techniques?.map((technique: any, idx: number) => (
+                                  <div key={idx} className="border border-blue-200 rounded-md p-4 bg-blue-50/30">
+                                    <div className="flex justify-between items-start mb-2">
+                                      <h5 className="text-md font-semibold text-blue-800">{technique.name}</h5>
+                                      <Badge variant={
+                                        technique.recommendationStrength === "highly recommended" ? "default" : 
+                                        technique.recommendationStrength === "recommended" ? "secondary" : 
+                                        "outline"
+                                      }>
+                                        {technique.recommendationStrength}
+                                      </Badge>
+                                    </div>
+                                    <p className="text-sm text-gray-700 mb-2">{technique.description}</p>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                                      <div>
+                                        <span className="font-medium text-blue-700">Target: </span>
+                                        {technique.targetTissue}
+                                      </div>
+                                      <div>
+                                        <span className="font-medium text-blue-700">Evidence: </span>
+                                        <Badge variant="outline" className="ml-1">{technique.evidenceLevel}</Badge>
+                                      </div>
+                                    </div>
+                                    {technique.researchSupport && (
+                                      <p className="text-xs text-gray-600 mt-2 italic">
+                                        Research: {technique.researchSupport}
+                                      </p>
+                                    )}
+                                    {technique.contraindications && technique.contraindications.length > 0 && (
+                                      <div className="mt-2">
+                                        <span className="font-medium text-red-700 text-xs">Contraindications: </span>
+                                        <span className="text-xs text-red-600">{technique.contraindications.join(", ")}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
                               </div>
-                            ))}
-                          </div>
+                            </div>
+                          )}
+
+                          {/* Progressive Loading Exercises */}
+                          {Array.isArray(patient.treatmentOptions) && patient.treatmentOptions.find((category: any) => category.category === "Progressive Loading Exercises") && (
+                            <div className="border rounded-lg p-4">
+                              <h4 className="text-md font-semibold mb-3 bg-green-50 p-2 rounded flex items-center">
+                                <Activity className="h-4 w-4 mr-2 text-green-600" />
+                                Progressive Loading Exercises
+                              </h4>
+                              <div className="space-y-4">
+                                {patient.treatmentOptions.find((category: any) => category.category === "Progressive Loading Exercises")?.exercises?.map((exercise: any, idx: number) => (
+                                  <div key={idx} className="border border-green-200 rounded-md p-4 bg-green-50/30">
+                                    <div className="flex justify-between items-start mb-3">
+                                      <h5 className="text-md font-semibold text-green-800">{exercise.name}</h5>
+                                      <Badge variant={
+                                        exercise.recommendationStrength === "highly recommended" ? "default" : 
+                                        exercise.recommendationStrength === "recommended" ? "secondary" : 
+                                        "outline"
+                                      }>
+                                        {exercise.recommendationStrength}
+                                      </Badge>
+                                    </div>
+                                    <p className="text-sm text-gray-700 mb-3">{exercise.description}</p>
+                                    
+                                    {exercise.loadingParameters && (
+                                      <div className="bg-white border rounded-md p-3 mb-3">
+                                        <h6 className="font-semibold text-green-700 mb-2 flex items-center">
+                                          <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                                          Exercise Prescription
+                                        </h6>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                                          <div>
+                                            <span className="font-medium text-green-700">Sets: </span>
+                                            {exercise.loadingParameters.sets}
+                                          </div>
+                                          <div>
+                                            <span className="font-medium text-green-700">Repetitions: </span>
+                                            {exercise.loadingParameters.reps}
+                                          </div>
+                                          <div>
+                                            <span className="font-medium text-green-700">Frequency: </span>
+                                            {exercise.loadingParameters.frequency}
+                                          </div>
+                                          <div>
+                                            <span className="font-medium text-green-700">Intensity: </span>
+                                            {exercise.loadingParameters.intensity}
+                                          </div>
+                                        </div>
+                                        {exercise.loadingParameters.progressionCriteria && (
+                                          <div className="mt-2">
+                                            <span className="font-medium text-green-700">Progression: </span>
+                                            <span className="text-sm text-gray-700">{exercise.loadingParameters.progressionCriteria}</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                                      <div>
+                                        <span className="font-medium text-green-700">Target: </span>
+                                        {exercise.targetMuscleGroup}
+                                      </div>
+                                      <div>
+                                        <span className="font-medium text-green-700">Evidence: </span>
+                                        <Badge variant="outline" className="ml-1">{exercise.evidenceLevel}</Badge>
+                                      </div>
+                                    </div>
+
+                                    {exercise.researchSupport && (
+                                      <p className="text-xs text-gray-600 mt-2 italic">
+                                        Research: {exercise.researchSupport}
+                                      </p>
+                                    )}
+
+                                    {exercise.modificationOptions && exercise.modificationOptions.length > 0 && (
+                                      <div className="mt-2">
+                                        <span className="font-medium text-green-700 text-sm">Modifications: </span>
+                                        <ul className="text-xs text-gray-600 list-disc list-inside">
+                                          {exercise.modificationOptions.map((mod: string, modIdx: number) => (
+                                            <li key={modIdx}>{mod}</li>
+                                          ))}
+                                        </ul>
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Patient Education */}
+                          {Array.isArray(patient.treatmentOptions) && patient.treatmentOptions.find((category: any) => category.category === "Patient Education") && (
+                            <div className="border rounded-lg p-4">
+                              <h4 className="text-md font-semibold mb-3 bg-purple-50 p-2 rounded flex items-center">
+                                <BookOpen className="h-4 w-4 mr-2 text-purple-600" />
+                                Patient Education
+                              </h4>
+                              <div className="space-y-3">
+                                {patient.treatmentOptions.find((category: any) => category.category === "Patient Education")?.recommendations?.map((rec: any, idx: number) => (
+                                  <div key={idx} className="border border-purple-200 rounded-md p-3 bg-purple-50/30">
+                                    <div className="flex justify-between items-start mb-2">
+                                      <h5 className="text-md font-medium text-purple-800">{rec.topic}</h5>
+                                      <Badge variant="outline">{rec.evidenceLevel}</Badge>
+                                    </div>
+                                    <ul className="text-sm text-gray-700 space-y-1">
+                                      {rec.keyPoints?.map((point: string, pointIdx: number) => (
+                                        <li key={pointIdx} className="flex items-start">
+                                          <span className="text-purple-500 mr-2 mt-1">•</span>
+                                          {point}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Fallback for old format or other exercises */}
+                          {patient.treatmentOptions.recommendedExercises && patient.treatmentOptions.recommendedExercises.length > 0 && (
+                            <div className="border rounded-lg p-4">
+                              <h4 className="text-md font-semibold mb-3 bg-gray-50 p-2 rounded">
+                                Additional Exercises
+                              </h4>
+                              <div className="space-y-3">
+                                {patient.treatmentOptions.recommendedExercises.map((exercise: any, idx: number) => (
+                                  <div key={idx} className="border border-gray-200 rounded-md p-3">
+                                    <div className="flex justify-between items-start mb-2">
+                                      <h5 className="text-md font-medium">{exercise.name}</h5>
+                                      <Badge variant="outline">Exercise</Badge>
+                                    </div>
+                                    {exercise.purpose && (
+                                      <p className="text-sm text-gray-600 mt-1">
+                                        <span className="font-medium">Purpose: </span>
+                                        {exercise.purpose}
+                                      </p>
+                                    )}
+                                    {exercise.technique && (
+                                      <p className="text-sm text-gray-600 mt-1">
+                                        <span className="font-medium">Technique: </span>
+                                        {exercise.technique}
+                                      </p>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                       

@@ -35,13 +35,14 @@ import {
   LineChart,
   BarChart3,
   ZoomIn,
+  Target,
 } from "lucide-react";
 import PatientProgressTracker from "./PatientProgressTracker";
 import BodyPartZoom from "./BodyPartZoom";
 import { getPlaceholderImage, placeholderImages } from "./bodyPartImages";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import SkeletonViewer from "@/components/3d/SkeletonViewer";
+import Simple3DSkeleton from "@/components/3d/Simple3DSkeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Link } from "wouter";
 import { Textarea } from "@/components/ui/textarea";
@@ -1334,6 +1335,61 @@ export default function VirtualPatientDetail({
                 )}
               </div>
             )}
+          </TabsContent>
+
+          {/* 3D SKELETON MODEL TAB */}
+          <TabsContent value="3d-model" className="p-6">
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-lg font-semibold mb-3 flex items-center">
+                  <Target className="h-5 w-5 mr-2 text-purple-500" />
+                  3D Patient Skeleton Model
+                </h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Interactive 3D skeleton model showing patient-specific anatomical features, joint restrictions, and pain areas.
+                </p>
+              </div>
+              
+              <Simple3DSkeleton
+                patientData={{
+                  anthropometrics: {
+                    height: parseInt(patient.patient_data?.height) || 170,
+                    weight: parseInt(patient.patient_data?.weight) || 70,
+                    limbLengths: {
+                      upperArm: 30,
+                      forearm: 25,
+                      thigh: 40,
+                      shin: 35,
+                    },
+                  },
+                  jointRestrictions: {
+                    shoulder: {
+                      flexion: patient.patient_data?.shoulderFlexion || 180,
+                      extension: patient.patient_data?.shoulderExtension || 60,
+                      abduction: patient.patient_data?.shoulderAbduction || 180,
+                      adduction: patient.patient_data?.shoulderAdduction || 30,
+                    },
+                    elbow: {
+                      flexion: patient.patient_data?.elbowFlexion || 145,
+                      extension: patient.patient_data?.elbowExtension || 0,
+                    },
+                    hip: {
+                      flexion: patient.patient_data?.hipFlexion || 120,
+                      extension: patient.patient_data?.hipExtension || 30,
+                      abduction: patient.patient_data?.hipAbduction || 45,
+                      adduction: patient.patient_data?.hipAdduction || 30,
+                    },
+                    knee: {
+                      flexion: patient.patient_data?.kneeFlexion || 140,
+                      extension: patient.patient_data?.kneeExtension || 0,
+                    },
+                  },
+                  painAreas: patient.pain_areas || [patient.body_part].filter(Boolean),
+                  movementPatterns: patient.movement_patterns,
+                }}
+                className="h-[700px]"
+              />
+            </div>
           </TabsContent>
         </Tabs>
       </CardContent>

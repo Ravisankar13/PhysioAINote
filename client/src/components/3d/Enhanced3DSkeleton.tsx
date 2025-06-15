@@ -67,7 +67,8 @@ function SkeletonModel({
   painAreas = [],
   showJointLimits,
   selectedJoint,
-  animationSpeed
+  animationSpeed,
+  limbLengths
 }: {
   anthropometrics?: PatientAnthropometrics;
   jointRestrictions?: JointRestrictions;
@@ -75,6 +76,14 @@ function SkeletonModel({
   showJointLimits: boolean;
   selectedJoint?: string;
   animationSpeed: number;
+  limbLengths?: {
+    upperArm: number;
+    forearm: number;
+    thigh: number;
+    shin: number;
+    spine: number;
+    neck: number;
+  };
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const skeletonRef = useRef<THREE.Group>(null);
@@ -97,10 +106,27 @@ function SkeletonModel({
       skeletonModel.position.sub(center);
       skeletonModel.position.y = -0.5; // Better vertical positioning for closer view
       
-      // Apply material modifications for pain areas
+      // Apply material modifications for pain areas and limb scaling
       skeletonModel.traverse((child: any) => {
         if (child instanceof THREE.Mesh) {
           const boneName = child.name.toLowerCase();
+          
+          // Apply limb length scaling
+          if (limbLengths) {
+            if (boneName.includes('upper') && boneName.includes('arm')) {
+              child.scale.y = limbLengths.upperArm;
+            } else if (boneName.includes('forearm') || boneName.includes('lower') && boneName.includes('arm')) {
+              child.scale.y = limbLengths.forearm;
+            } else if (boneName.includes('thigh') || boneName.includes('upper') && boneName.includes('leg')) {
+              child.scale.y = limbLengths.thigh;
+            } else if (boneName.includes('shin') || boneName.includes('lower') && boneName.includes('leg')) {
+              child.scale.y = limbLengths.shin;
+            } else if (boneName.includes('spine') || boneName.includes('vertebra')) {
+              child.scale.y = limbLengths.spine;
+            } else if (boneName.includes('neck')) {
+              child.scale.y = limbLengths.neck;
+            }
+          }
           
           // Check if this bone is in a pain area
           const isPainArea = painAreas.some(area => 
@@ -132,7 +158,7 @@ function SkeletonModel({
         }
       });
     }
-  }, [skeletonModel, anthropometrics, painAreas]);
+  }, [skeletonModel, anthropometrics, painAreas, limbLengths]);
 
   // Animation frame
   useFrame((state) => {
@@ -208,6 +234,14 @@ export default function Enhanced3DSkeleton({ patientData, className }: Enhanced3
   const [showJointLimits, setShowJointLimits] = useState(true);
   const [animationSpeed, setAnimationSpeed] = useState(1);
   const [isAnimating, setIsAnimating] = useState(true);
+  const [limbLengths, setLimbLengths] = useState({
+    upperArm: 1.0,
+    forearm: 1.0,
+    thigh: 1.0,
+    shin: 1.0,
+    spine: 1.0,
+    neck: 1.0
+  });
 
   return (
     <div className={`w-full ${className}`}>
@@ -243,6 +277,7 @@ export default function Enhanced3DSkeleton({ patientData, className }: Enhanced3
                 showJointLimits={showJointLimits}
                 selectedJoint={selectedJoint}
                 animationSpeed={isAnimating ? animationSpeed : 0}
+                limbLengths={limbLengths}
               />
               
               <OrbitControls 

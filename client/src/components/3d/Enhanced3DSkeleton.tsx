@@ -178,7 +178,7 @@ function SkeletonModel({
   const [exerciseProgress, setExerciseProgress] = useState(0);
   
   // Load the GLB skeleton model
-  const gltf = useGLTF('/Skeleton Raw Rigging 004_1750007377355.glb');
+  const gltf = useGLTF('/skeleton.glb');
   
   // Create animation functions for different exercises
   const createExerciseAnimation = (exerciseId: string, skeleton: THREE.Group) => {

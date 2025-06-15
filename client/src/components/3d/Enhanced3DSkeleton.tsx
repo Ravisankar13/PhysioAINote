@@ -13,10 +13,8 @@ import {
   Settings,
   Eye,
   EyeOff,
-  Loader2,
-  Hand
+  Loader2
 } from 'lucide-react';
-import HapticSkeletonViewer from '@/components/haptic/HapticSkeletonViewer';
 
 interface PatientAnthropometrics {
   height: number;
@@ -69,8 +67,7 @@ function SkeletonModel({
   painAreas = [],
   showJointLimits,
   selectedJoint,
-  animationSpeed,
-  limbLengths
+  animationSpeed
 }: {
   anthropometrics?: PatientAnthropometrics;
   jointRestrictions?: JointRestrictions;
@@ -78,14 +75,6 @@ function SkeletonModel({
   showJointLimits: boolean;
   selectedJoint?: string;
   animationSpeed: number;
-  limbLengths?: {
-    upperArm: number;
-    forearm: number;
-    thigh: number;
-    shin: number;
-    spine: number;
-    neck: number;
-  };
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const skeletonRef = useRef<THREE.Group>(null);
@@ -108,27 +97,10 @@ function SkeletonModel({
       skeletonModel.position.sub(center);
       skeletonModel.position.y = -0.5; // Better vertical positioning for closer view
       
-      // Apply material modifications for pain areas and limb scaling
+      // Apply material modifications for pain areas
       skeletonModel.traverse((child: any) => {
         if (child instanceof THREE.Mesh) {
           const boneName = child.name.toLowerCase();
-          
-          // Apply limb length scaling
-          if (limbLengths) {
-            if (boneName.includes('upper') && boneName.includes('arm')) {
-              child.scale.y = limbLengths.upperArm;
-            } else if (boneName.includes('forearm') || boneName.includes('lower') && boneName.includes('arm')) {
-              child.scale.y = limbLengths.forearm;
-            } else if (boneName.includes('thigh') || boneName.includes('upper') && boneName.includes('leg')) {
-              child.scale.y = limbLengths.thigh;
-            } else if (boneName.includes('shin') || boneName.includes('lower') && boneName.includes('leg')) {
-              child.scale.y = limbLengths.shin;
-            } else if (boneName.includes('spine') || boneName.includes('vertebra')) {
-              child.scale.y = limbLengths.spine;
-            } else if (boneName.includes('neck')) {
-              child.scale.y = limbLengths.neck;
-            }
-          }
           
           // Check if this bone is in a pain area
           const isPainArea = painAreas.some(area => 
@@ -160,7 +132,7 @@ function SkeletonModel({
         }
       });
     }
-  }, [skeletonModel, anthropometrics, painAreas, limbLengths]);
+  }, [skeletonModel, anthropometrics, painAreas]);
 
   // Animation frame
   useFrame((state) => {
@@ -236,20 +208,6 @@ export default function Enhanced3DSkeleton({ patientData, className }: Enhanced3
   const [showJointLimits, setShowJointLimits] = useState(true);
   const [animationSpeed, setAnimationSpeed] = useState(1);
   const [isAnimating, setIsAnimating] = useState(true);
-  const [limbLengths, setLimbLengths] = useState({
-    upperArm: 1.0,
-    forearm: 1.0,
-    thigh: 1.0,
-    shin: 1.0,
-    spine: 1.0,
-    neck: 1.0
-  });
-  const [hapticMode, setHapticMode] = useState(false);
-
-  // Switch to haptic mode if enabled
-  if (hapticMode) {
-    return <HapticSkeletonViewer patientData={patientData} className={className} />;
-  }
 
   return (
     <div className={`w-full ${className}`}>
@@ -285,7 +243,6 @@ export default function Enhanced3DSkeleton({ patientData, className }: Enhanced3
                 showJointLimits={showJointLimits}
                 selectedJoint={selectedJoint}
                 animationSpeed={isAnimating ? animationSpeed : 0}
-                limbLengths={limbLengths}
               />
               
               <OrbitControls 
@@ -347,17 +304,6 @@ export default function Enhanced3DSkeleton({ patientData, className }: Enhanced3
                 </Button>
               </div>
               
-              <div className="flex items-center justify-between">
-                <span className="text-xs">Haptic Training</span>
-                <Button
-                  variant={hapticMode ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setHapticMode(!hapticMode)}
-                >
-                  <Hand className="h-3 w-3" />
-                </Button>
-              </div>
-              
               <div className="space-y-2">
                 <span className="text-xs">Animation Speed</span>
                 <Slider
@@ -369,119 +315,6 @@ export default function Enhanced3DSkeleton({ patientData, className }: Enhanced3
                   className="w-full"
                 />
               </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">Limb Length Adjustments</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs">Upper Arms</span>
-                  <span className="text-xs text-muted-foreground">{limbLengths.upperArm.toFixed(1)}x</span>
-                </div>
-                <Slider
-                  value={[limbLengths.upperArm]}
-                  onValueChange={(value) => setLimbLengths(prev => ({ ...prev, upperArm: value[0] }))}
-                  max={2.0}
-                  min={0.5}
-                  step={0.1}
-                  className="w-full"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs">Forearms</span>
-                  <span className="text-xs text-muted-foreground">{limbLengths.forearm.toFixed(1)}x</span>
-                </div>
-                <Slider
-                  value={[limbLengths.forearm]}
-                  onValueChange={(value) => setLimbLengths(prev => ({ ...prev, forearm: value[0] }))}
-                  max={2.0}
-                  min={0.5}
-                  step={0.1}
-                  className="w-full"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs">Thighs</span>
-                  <span className="text-xs text-muted-foreground">{limbLengths.thigh.toFixed(1)}x</span>
-                </div>
-                <Slider
-                  value={[limbLengths.thigh]}
-                  onValueChange={(value) => setLimbLengths(prev => ({ ...prev, thigh: value[0] }))}
-                  max={2.0}
-                  min={0.5}
-                  step={0.1}
-                  className="w-full"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs">Shins</span>
-                  <span className="text-xs text-muted-foreground">{limbLengths.shin.toFixed(1)}x</span>
-                </div>
-                <Slider
-                  value={[limbLengths.shin]}
-                  onValueChange={(value) => setLimbLengths(prev => ({ ...prev, shin: value[0] }))}
-                  max={2.0}
-                  min={0.5}
-                  step={0.1}
-                  className="w-full"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs">Spine</span>
-                  <span className="text-xs text-muted-foreground">{limbLengths.spine.toFixed(1)}x</span>
-                </div>
-                <Slider
-                  value={[limbLengths.spine]}
-                  onValueChange={(value) => setLimbLengths(prev => ({ ...prev, spine: value[0] }))}
-                  max={2.0}
-                  min={0.5}
-                  step={0.1}
-                  className="w-full"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs">Neck</span>
-                  <span className="text-xs text-muted-foreground">{limbLengths.neck.toFixed(1)}x</span>
-                </div>
-                <Slider
-                  value={[limbLengths.neck]}
-                  onValueChange={(value) => setLimbLengths(prev => ({ ...prev, neck: value[0] }))}
-                  max={2.0}
-                  min={0.5}
-                  step={0.1}
-                  className="w-full"
-                />
-              </div>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setLimbLengths({
-                  upperArm: 1.0,
-                  forearm: 1.0,
-                  thigh: 1.0,
-                  shin: 1.0,
-                  spine: 1.0,
-                  neck: 1.0
-                })}
-                className="w-full mt-2"
-              >
-                Reset to Default
-              </Button>
             </CardContent>
           </Card>
 

@@ -1,14 +1,33 @@
 import { Helmet } from "react-helmet";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import SimpleSkeletonViewer from "@/components/skeleton/SimpleSkeletonViewer";
-import Basic3DSkeletonViewer from "@/components/skeleton/Basic3DSkeletonViewer";
+import Enhanced3DSkeleton from "@/components/3d/Enhanced3DSkeleton";
 import { useAuth } from "@/hooks/use-auth";
 
 export default function Skeleton3DTool() {
   const [isSaved, setIsSaved] = useState(false);
-  const [useAdvancedViewer, setUseAdvancedViewer] = useState(true);
   const { user } = useAuth();
+  
+  // Sample patient data for demonstration (can be customized)
+  const samplePatientData = {
+    anthropometrics: {
+      height: 175,
+      weight: 70,
+      limbLengths: {
+        upperArm: 35,
+        forearm: 28,
+        thigh: 45,
+        shin: 38
+      }
+    },
+    jointRestrictions: {
+      shoulder: { flexion: 180, extension: 60, abduction: 180, adduction: 30 },
+      elbow: { flexion: 145, extension: 0 },
+      hip: { flexion: 120, extension: 30, abduction: 45, adduction: 30 },
+      knee: { flexion: 135, extension: 0 }
+    },
+    painAreas: ['shoulder', 'elbow'] // Sample pain areas for demonstration
+  };
 
   const handleSaveModel = () => {
     if (!user) {
@@ -23,10 +42,6 @@ export default function Skeleton3DTool() {
     // In a production app, we would implement actual export functionality
     alert("Export functionality will be available in the next update");
   };
-  
-  const toggleViewerType = () => {
-    setUseAdvancedViewer(!useAdvancedViewer);
-  };
 
   return (
     <div className="container max-w-6xl py-8 mx-auto">
@@ -39,7 +54,7 @@ export default function Skeleton3DTool() {
         <div className="text-center">
           <h1 className="text-3xl font-bold">3D Skeletal Tool</h1>
           <p className="text-muted-foreground mt-2">
-            Visualize and customize a 3D skeletal model for diagnosis and treatment
+            Interactive 3D skeleton with functional movements for physiotherapy analysis
           </p>
         </div>
         
@@ -52,52 +67,49 @@ export default function Skeleton3DTool() {
             {isSaved ? "Model Saved!" : "Save Model"}
           </Button>
           <Button variant="outline" onClick={handleExportImage}>Export Image</Button>
-          
-          <Button 
-            variant="outline" 
-            onClick={toggleViewerType}
-            className="ml-2"
-          >
-            {useAdvancedViewer ? "Switch to Simple View" : "Switch to Advanced View"}
-          </Button>
         </div>
           
-        <div className="bg-white rounded-lg p-6 shadow-sm">
-          <h2 className="text-xl font-bold mb-4">Professional 3D Skeletal Model</h2>
-          <p className="text-muted-foreground mb-4">
-            This high-fidelity 3D model provides detailed visualization of anatomical structures, 
-            featuring a professionally rigged skeletal system with accurate proportions and joint positions.
-            Use the controls to rotate, zoom, and examine the model from any angle. Select from different 
-            model types to explore various anatomical perspectives.
-          </p>
-          
-          {useAdvancedViewer ? <Basic3DSkeletonViewer /> : <SimpleSkeletonViewer />}
+        {/* Enhanced 3D Skeleton with Functional Movements */}
+        <div className="bg-white rounded-lg shadow-sm h-[800px]">
+          <Enhanced3DSkeleton 
+            patientData={samplePatientData}
+            className="h-full"
+          />
         </div>
         
         <div className="bg-white rounded-lg p-6 shadow-sm">
-          <h2 className="text-xl font-bold mb-4 text-center">How to Use This Tool</h2>
-          <p className="mb-4">This interactive 3D model viewer allows you to:</p>
+          <h2 className="text-xl font-bold mb-4 text-center">Functional Movement Capabilities</h2>
+          <p className="mb-4">This advanced 3D skeleton model provides:</p>
           <ul className="list-disc pl-6 space-y-2 mb-6">
-            <li>Explore professionally rendered 3D skeletal models</li>
-            <li>Switch between different model types to view various anatomical structures</li>
-            <li>Rotate, zoom, and pan the model for examining from multiple angles</li>
-            <li>Control rotation speed through the adjustment controls</li>
-            <li>Use the models to understand spatial relationships and anatomical structures</li>
+            <li>High-quality 3D skeleton with accurate anatomical proportions</li>
+            <li>Functional movement demonstrations (squats, walking, arm exercises)</li>
+            <li>Pain area visualization with red highlighting</li>
+            <li>Interactive controls for exercise selection and animation</li>
+            <li>Patient-specific scaling based on anthropometric data</li>
+            <li>Real-time 3D navigation (rotate, zoom, pan)</li>
           </ul>
           
           <div className="border-t pt-4">
-            <h3 className="font-medium mb-2">Upcoming Features:</h3>
-            <p className="text-sm text-muted-foreground mb-3">
-              In upcoming updates, this tool will support even more detailed skeletal models with 
-              adjustable bone lengths and proportions, allowing you to customize the model to match 
-              individual patient anatomy for more personalized education and visualization.
-            </p>
-            <h3 className="font-medium mb-2">Professional Applications:</h3>
+            <h3 className="font-medium mb-2">Exercise Categories:</h3>
+            <div className="grid grid-cols-2 gap-4 text-sm text-muted-foreground mb-3">
+              <div>
+                <strong>Lower Body:</strong> Squats, step-ups, step-downs
+              </div>
+              <div>
+                <strong>Upper Body:</strong> Elbow flexion/extension, shoulder flexion
+              </div>
+              <div>
+                <strong>Gait Patterns:</strong> Forward/backward walking
+              </div>
+              <div>
+                <strong>Balance:</strong> Single leg stance with stability challenges
+              </div>
+            </div>
+            <h3 className="font-medium mb-2">Clinical Applications:</h3>
             <p className="text-sm text-muted-foreground">
-              Physiotherapists can use 3D models to enhance patient education, explain 
-              injury mechanisms, demonstrate movement patterns, and help patients visualize 
-              their treatment goals. This 3D visualization tool serves as a powerful 
-              supplement to hands-on clinical assessments and interventions.
+              Use this tool for movement analysis, patient education, exercise demonstration, 
+              and treatment planning. The functional movements help visualize proper biomechanics 
+              and assist in explaining rehabilitation exercises to patients.
             </p>
           </div>
         </div>

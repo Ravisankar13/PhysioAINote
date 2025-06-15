@@ -189,18 +189,14 @@ function SkeletonModel({
         const flexionAngle = Math.max(0, phase) * Math.PI / 3; // 0 to 60 degrees
         
         skeleton.traverse((child: any) => {
-          if (child.isBone) {
-            const boneName = child.name?.toLowerCase() || '';
-            // More comprehensive bone matching for squat movement
-            if (boneName.includes('hip') || boneName.includes('pelvis') || boneName.includes('spine')) {
-              child.rotation.x = -flexionAngle * 0.3;
-            }
-            if (boneName.includes('thigh') || boneName.includes('femur') || boneName.includes('upper_leg')) {
-              child.rotation.x = flexionAngle;
-            }
-            if (boneName.includes('calf') || boneName.includes('shin') || boneName.includes('lower_leg')) {
-              child.rotation.x = flexionAngle * 0.8;
-            }
+          if (child.name?.toLowerCase().includes('hip') || child.name?.toLowerCase().includes('pelvis')) {
+            child.rotation.x = -flexionAngle * 0.3;
+          }
+          if (child.name?.toLowerCase().includes('knee') || child.name?.toLowerCase().includes('thigh')) {
+            child.rotation.x = flexionAngle;
+          }
+          if (child.name?.toLowerCase().includes('ankle')) {
+            child.rotation.x = -flexionAngle * 0.5;
           }
         });
       },
@@ -212,35 +208,11 @@ function SkeletonModel({
         const kneeFlexion = liftPhase * Math.PI / 3; // 60 degrees max
         
         skeleton.traverse((child: any) => {
-          if (child.isBone) {
-            const boneName = child.name?.toLowerCase() || '';
-            // Right leg step-up
-            if (boneName.includes('thigh') && (boneName.includes('r') || boneName.includes('right'))) {
-              child.rotation.x = hipFlexion;
-            }
-            if (boneName.includes('calf') && (boneName.includes('r') || boneName.includes('right'))) {
-              child.rotation.x = kneeFlexion;
-            }
+          if (child.name?.toLowerCase().includes('hip_r') || child.name?.toLowerCase().includes('right_hip')) {
+            child.rotation.x = hipFlexion;
           }
-        });
-      },
-      
-      step_down: (progress) => {
-        // Simulate step-down movement (controlled descent)
-        const descendPhase = Math.max(0, -Math.sin(progress * Math.PI));
-        const hipFlexion = descendPhase * Math.PI / 6; // 30 degrees max
-        const kneeFlexion = descendPhase * Math.PI / 4; // 45 degrees max
-        
-        skeleton.traverse((child: any) => {
-          if (child.isBone) {
-            const boneName = child.name?.toLowerCase() || '';
-            // Left leg step-down
-            if (boneName.includes('thigh') && (boneName.includes('l') || boneName.includes('left'))) {
-              child.rotation.x = hipFlexion;
-            }
-            if (boneName.includes('calf') && (boneName.includes('l') || boneName.includes('left'))) {
-              child.rotation.x = kneeFlexion;
-            }
+          if (child.name?.toLowerCase().includes('knee_r') || child.name?.toLowerCase().includes('right_knee')) {
+            child.rotation.x = kneeFlexion;
           }
         });
       },
@@ -251,16 +223,11 @@ function SkeletonModel({
         const rightLegPhase = Math.sin((progress * Math.PI * 4) + Math.PI);
         
         skeleton.traverse((child: any) => {
-          if (child.isBone) {
-            const boneName = child.name?.toLowerCase() || '';
-            // Left leg movement
-            if (boneName.includes('thigh') && (boneName.includes('l') || boneName.includes('left'))) {
-              child.rotation.x = leftLegPhase * Math.PI / 6; // 30 degrees swing
-            }
-            // Right leg movement
-            if (boneName.includes('thigh') && (boneName.includes('r') || boneName.includes('right'))) {
-              child.rotation.x = rightLegPhase * Math.PI / 6;
-            }
+          if (child.name?.toLowerCase().includes('hip_l') || child.name?.toLowerCase().includes('left_hip')) {
+            child.rotation.x = leftLegPhase * Math.PI / 6; // 30 degrees swing
+          }
+          if (child.name?.toLowerCase().includes('hip_r') || child.name?.toLowerCase().includes('right_hip')) {
+            child.rotation.x = rightLegPhase * Math.PI / 6;
           }
         });
         
@@ -270,55 +237,13 @@ function SkeletonModel({
         }
       },
       
-      walk_backward: (progress) => {
-        // Simulate backward walking
-        const leftLegPhase = -Math.sin(progress * Math.PI * 4);
-        const rightLegPhase = -Math.sin((progress * Math.PI * 4) + Math.PI);
-        
-        skeleton.traverse((child: any) => {
-          if (child.isBone) {
-            const boneName = child.name?.toLowerCase() || '';
-            if (boneName.includes('thigh') && (boneName.includes('l') || boneName.includes('left'))) {
-              child.rotation.x = leftLegPhase * Math.PI / 8;
-            }
-            if (boneName.includes('thigh') && (boneName.includes('r') || boneName.includes('right'))) {
-              child.rotation.x = rightLegPhase * Math.PI / 8;
-            }
-          }
-        });
-        
-        // Move skeleton backward
-        if (groupRef.current) {
-          groupRef.current.position.z = -progress * 2 + 1;
-        }
-      },
-      
       elbow_flexion: (progress) => {
         // Simulate bicep curl
         const flexionAngle = Math.sin(progress * Math.PI * 2) * Math.PI / 2; // 0 to 90 degrees
         
         skeleton.traverse((child: any) => {
-          if (child.isBone) {
-            const boneName = child.name?.toLowerCase() || '';
-            // Target forearm bones for elbow flexion
-            if (boneName.includes('forearm') || boneName.includes('lower_arm') || 
-                boneName.includes('ulna') || boneName.includes('radius')) {
-              child.rotation.z = Math.max(0, flexionAngle);
-            }
-          }
-        });
-      },
-      
-      elbow_extension: (progress) => {
-        // Simulate tricep extension
-        const extensionAngle = Math.sin(progress * Math.PI * 2) * Math.PI / 3; // 0 to 60 degrees
-        
-        skeleton.traverse((child: any) => {
-          if (child.isBone) {
-            const boneName = child.name?.toLowerCase() || '';
-            if (boneName.includes('forearm') || boneName.includes('lower_arm')) {
-              child.rotation.z = -Math.max(0, extensionAngle);
-            }
+          if (child.name?.toLowerCase().includes('elbow') || child.name?.toLowerCase().includes('forearm')) {
+            child.rotation.z = Math.max(0, flexionAngle);
           }
         });
       },
@@ -328,13 +253,8 @@ function SkeletonModel({
         const flexionAngle = Math.sin(progress * Math.PI * 2) * Math.PI / 2; // 0 to 90 degrees
         
         skeleton.traverse((child: any) => {
-          if (child.isBone) {
-            const boneName = child.name?.toLowerCase() || '';
-            // Target upper arm bones for shoulder flexion
-            if (boneName.includes('upper_arm') || boneName.includes('humerus') || 
-                boneName.includes('arm') && !boneName.includes('fore')) {
-              child.rotation.x = Math.max(0, flexionAngle);
-            }
+          if (child.name?.toLowerCase().includes('shoulder') || child.name?.toLowerCase().includes('humerus')) {
+            child.rotation.x = Math.max(0, flexionAngle);
           }
         });
       },
@@ -344,17 +264,16 @@ function SkeletonModel({
         const sway = Math.sin(progress * Math.PI * 6) * 0.1; // Subtle movement
         
         skeleton.traverse((child: any) => {
-          if (child.isBone) {
-            const boneName = child.name?.toLowerCase() || '';
-            // Add subtle sway to spine/torso
-            if (boneName.includes('spine') || boneName.includes('torso') || boneName.includes('chest')) {
-              child.rotation.x = sway;
-              child.rotation.z = sway * 0.5;
-            }
-            // Lift left leg slightly
-            if (boneName.includes('thigh') && (boneName.includes('l') || boneName.includes('left'))) {
-              child.rotation.x = Math.PI / 12; // 15 degrees hip flexion
-            }
+          if (child.name?.toLowerCase().includes('spine') || child.name?.toLowerCase().includes('torso')) {
+            child.rotation.x = sway;
+            child.rotation.z = sway * 0.5;
+          }
+        });
+        
+        // Lift one leg slightly
+        skeleton.traverse((child: any) => {
+          if (child.name?.toLowerCase().includes('hip_l') || child.name?.toLowerCase().includes('left_hip')) {
+            child.rotation.x = Math.PI / 12; // 15 degrees hip flexion
           }
         });
       }
@@ -378,20 +297,15 @@ function SkeletonModel({
       skeletonModel.position.sub(center);
       skeletonModel.position.y = -0.5; // Better vertical positioning for closer view
       
-      // Debug: Log all bone names and bone structure to help with animation mapping
-      console.log("=== Skeleton Model Structure ===");
+      // Debug: Log all bone names to help with pain area mapping
+      console.log("=== Skeleton Model Bone Structure ===");
       const boneNames: string[] = [];
-      const meshNames: string[] = [];
       skeletonModel.traverse((child: any) => {
-        if (child.isBone) {
-          boneNames.push(child.name);
-        }
         if (child instanceof THREE.Mesh && child.name) {
-          meshNames.push(child.name);
+          boneNames.push(child.name);
         }
       });
       console.log("Available bone names:", boneNames);
-      console.log("Available mesh names:", meshNames);
       console.log("Pain areas to highlight:", painAreas);
       
       // Apply material modifications for pain areas
@@ -444,20 +358,6 @@ function SkeletonModel({
     }
   }, [skeletonModel, anthropometrics, painAreas]);
 
-  // Function to reset all bone rotations to default state
-  const resetBoneRotations = (skeleton: THREE.Group) => {
-    skeleton.traverse((child: any) => {
-      if (child.isBone) {
-        child.rotation.set(0, 0, 0);
-      }
-    });
-    
-    // Reset group position for walking exercises
-    if (groupRef.current) {
-      groupRef.current.position.set(0, 0, 0);
-    }
-  };
-
   // Animation frame
   useFrame((state, delta) => {
     if (groupRef.current && !isPerformingExercise) {
@@ -468,9 +368,6 @@ function SkeletonModel({
     if (isPerformingExercise && currentExercise && skeletonModel) {
       const exercise = FUNCTIONAL_EXERCISES.find(ex => ex.id === currentExercise);
       if (exercise) {
-        // Reset bone rotations before applying new animation
-        resetBoneRotations(skeletonModel);
-        
         const newProgress = (exerciseProgress + delta / exercise.duration) % 1;
         setExerciseProgress(newProgress);
         
@@ -479,9 +376,6 @@ function SkeletonModel({
           animationFn(newProgress);
         }
       }
-    } else if (skeletonModel) {
-      // Reset to default pose when not exercising
-      resetBoneRotations(skeletonModel);
     }
   });
 

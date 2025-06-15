@@ -77,10 +77,10 @@ function SkeletonModel({
   animationSpeed: number;
 }) {
   const groupRef = useRef<THREE.Group>(null);
-  const skeletonRef = useRef<THREE.Object3D>(null);
+  const skeletonRef = useRef<THREE.Group>(null);
   
   // Load the FBX skeleton model
-  const fbx = useLoader(FBXLoader, '/skeleton.fbx');
+  const fbx = useFBX('/skeleton.fbx');
   
   // Clone the model to avoid affecting the original
   const skeletonModel = fbx.clone();
@@ -97,7 +97,7 @@ function SkeletonModel({
       skeletonModel.position.sub(center);
       
       // Apply material modifications for pain areas
-      skeletonModel.traverse((child) => {
+      skeletonModel.traverse((child: any) => {
         if (child instanceof THREE.Mesh) {
           const boneName = child.name.toLowerCase();
           
@@ -137,7 +137,7 @@ function SkeletonModel({
   return (
     <group ref={groupRef}>
       <group ref={skeletonRef}>
-        <primitive object={skeletonModel} />
+        <primitive object={skeletonModel} position={[0, 0, 0]} />
         
         {/* Joint indicators for restrictions */}
         {showJointLimits && jointRestrictions && (

@@ -42,7 +42,7 @@ import BodyPartZoom from "./BodyPartZoom";
 import { getPlaceholderImage, placeholderImages } from "./bodyPartImages";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import Simple3DSkeleton from "@/components/3d/Simple3DSkeleton";
+import Enhanced3DSkeleton from "@/components/3d/Enhanced3DSkeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Link } from "wouter";
 import { Textarea } from "@/components/ui/textarea";
@@ -1350,7 +1350,7 @@ export default function VirtualPatientDetail({
                 </p>
               </div>
               
-              <Simple3DSkeleton
+              <Enhanced3DSkeleton
                 patientData={{
                   anthropometrics: {
                     height: parseInt(patient.patient_data?.height) || 170,

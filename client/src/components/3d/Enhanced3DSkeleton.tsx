@@ -1,11 +1,12 @@
 import React, { useRef, useState, useEffect, Suspense } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, Text, useGLTF } from '@react-three/drei';
+import { OrbitControls, Text, useGLTF, useAnimations } from '@react-three/drei';
 import * as THREE from 'three';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   RotateCcw, 
   Play, 
@@ -13,7 +14,14 @@ import {
   Settings,
   Eye,
   EyeOff,
-  Loader2
+  Loader2,
+  Activity,
+  Dumbbell,
+  TrendingUp,
+  ArrowUp,
+  ArrowDown,
+  ChevronRight,
+  ChevronLeft
 } from 'lucide-react';
 
 interface PatientAnthropometrics {
@@ -50,6 +58,90 @@ interface JointRestrictions {
   };
 }
 
+interface FunctionalExercise {
+  id: string;
+  name: string;
+  category: 'lower_body' | 'upper_body' | 'gait' | 'balance';
+  description: string;
+  duration: number; // seconds
+  icon: string;
+}
+
+const FUNCTIONAL_EXERCISES: FunctionalExercise[] = [
+  {
+    id: 'squat',
+    name: 'Squat',
+    category: 'lower_body',
+    description: 'Hip and knee flexion/extension movement',
+    duration: 4,
+    icon: 'ArrowDown'
+  },
+  {
+    id: 'step_up',
+    name: 'Step Up',
+    category: 'lower_body',
+    description: 'Unilateral lower extremity strengthening',
+    duration: 3,
+    icon: 'ArrowUp'
+  },
+  {
+    id: 'step_down',
+    name: 'Step Down',
+    category: 'lower_body',
+    description: 'Controlled eccentric movement',
+    duration: 3,
+    icon: 'ArrowDown'
+  },
+  {
+    id: 'walk_forward',
+    name: 'Walk Forward',
+    category: 'gait',
+    description: 'Forward gait pattern',
+    duration: 6,
+    icon: 'ChevronRight'
+  },
+  {
+    id: 'walk_backward',
+    name: 'Walk Backward',
+    category: 'gait',
+    description: 'Backward gait pattern',
+    duration: 6,
+    icon: 'ChevronLeft'
+  },
+  {
+    id: 'elbow_flexion',
+    name: 'Elbow Flexion',
+    category: 'upper_body',
+    description: 'Bicep curl movement',
+    duration: 3,
+    icon: 'Dumbbell'
+  },
+  {
+    id: 'elbow_extension',
+    name: 'Elbow Extension',
+    category: 'upper_body',
+    description: 'Tricep extension movement',
+    duration: 3,
+    icon: 'Dumbbell'
+  },
+  {
+    id: 'shoulder_flexion',
+    name: 'Shoulder Flexion',
+    category: 'upper_body',
+    description: 'Forward arm raise',
+    duration: 4,
+    icon: 'TrendingUp'
+  },
+  {
+    id: 'single_leg_stance',
+    name: 'Single Leg Stance',
+    category: 'balance',
+    description: 'Static balance challenge',
+    duration: 5,
+    icon: 'Activity'
+  }
+];
+
 interface Enhanced3DSkeletonProps {
   patientData?: {
     anthropometrics?: PatientAnthropometrics;
@@ -78,9 +170,115 @@ function SkeletonModel({
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const skeletonRef = useRef<THREE.Group>(null);
+  const mixerRef = useRef<THREE.AnimationMixer | null>(null);
+  const [currentExercise, setCurrentExercise] = useState<string | null>(null);
+  const [exerciseProgress, setExerciseProgress] = useState(0);
+  const [isPerformingExercise, setIsPerformingExercise] = useState(false);
   
   // Load the GLB skeleton model
   const gltf = useGLTF('/skeleton.glb');
+  
+  // Create animation functions for different exercises
+  const createExerciseAnimation = (exerciseId: string, skeleton: THREE.Group) => {
+    const animations: { [key: string]: (progress: number) => void } = {
+      squat: (progress) => {
+        // Simulate squat movement - hip and knee flexion
+        const phase = Math.sin(progress * Math.PI * 2);
+        const flexionAngle = Math.max(0, phase) * Math.PI / 3; // 0 to 60 degrees
+        
+        skeleton.traverse((child: any) => {
+          if (child.name?.toLowerCase().includes('hip') || child.name?.toLowerCase().includes('pelvis')) {
+            child.rotation.x = -flexionAngle * 0.3;
+          }
+          if (child.name?.toLowerCase().includes('knee') || child.name?.toLowerCase().includes('thigh')) {
+            child.rotation.x = flexionAngle;
+          }
+          if (child.name?.toLowerCase().includes('ankle')) {
+            child.rotation.x = -flexionAngle * 0.5;
+          }
+        });
+      },
+      
+      step_up: (progress) => {
+        // Simulate step-up movement
+        const liftPhase = Math.max(0, Math.sin(progress * Math.PI));
+        const hipFlexion = liftPhase * Math.PI / 4; // 45 degrees max
+        const kneeFlexion = liftPhase * Math.PI / 3; // 60 degrees max
+        
+        skeleton.traverse((child: any) => {
+          if (child.name?.toLowerCase().includes('hip_r') || child.name?.toLowerCase().includes('right_hip')) {
+            child.rotation.x = hipFlexion;
+          }
+          if (child.name?.toLowerCase().includes('knee_r') || child.name?.toLowerCase().includes('right_knee')) {
+            child.rotation.x = kneeFlexion;
+          }
+        });
+      },
+      
+      walk_forward: (progress) => {
+        // Simulate walking gait pattern
+        const leftLegPhase = Math.sin(progress * Math.PI * 4);
+        const rightLegPhase = Math.sin((progress * Math.PI * 4) + Math.PI);
+        
+        skeleton.traverse((child: any) => {
+          if (child.name?.toLowerCase().includes('hip_l') || child.name?.toLowerCase().includes('left_hip')) {
+            child.rotation.x = leftLegPhase * Math.PI / 6; // 30 degrees swing
+          }
+          if (child.name?.toLowerCase().includes('hip_r') || child.name?.toLowerCase().includes('right_hip')) {
+            child.rotation.x = rightLegPhase * Math.PI / 6;
+          }
+        });
+        
+        // Move skeleton forward
+        if (groupRef.current) {
+          groupRef.current.position.z = progress * 2 - 1;
+        }
+      },
+      
+      elbow_flexion: (progress) => {
+        // Simulate bicep curl
+        const flexionAngle = Math.sin(progress * Math.PI * 2) * Math.PI / 2; // 0 to 90 degrees
+        
+        skeleton.traverse((child: any) => {
+          if (child.name?.toLowerCase().includes('elbow') || child.name?.toLowerCase().includes('forearm')) {
+            child.rotation.z = Math.max(0, flexionAngle);
+          }
+        });
+      },
+      
+      shoulder_flexion: (progress) => {
+        // Simulate shoulder forward raise
+        const flexionAngle = Math.sin(progress * Math.PI * 2) * Math.PI / 2; // 0 to 90 degrees
+        
+        skeleton.traverse((child: any) => {
+          if (child.name?.toLowerCase().includes('shoulder') || child.name?.toLowerCase().includes('humerus')) {
+            child.rotation.x = Math.max(0, flexionAngle);
+          }
+        });
+      },
+      
+      single_leg_stance: (progress) => {
+        // Simulate balance challenge with subtle sway
+        const sway = Math.sin(progress * Math.PI * 6) * 0.1; // Subtle movement
+        
+        skeleton.traverse((child: any) => {
+          if (child.name?.toLowerCase().includes('spine') || child.name?.toLowerCase().includes('torso')) {
+            child.rotation.x = sway;
+            child.rotation.z = sway * 0.5;
+          }
+        });
+        
+        // Lift one leg slightly
+        skeleton.traverse((child: any) => {
+          if (child.name?.toLowerCase().includes('hip_l') || child.name?.toLowerCase().includes('left_hip')) {
+            child.rotation.x = Math.PI / 12; // 15 degrees hip flexion
+          }
+        });
+      }
+    };
+    
+    return animations[exerciseId];
+  };
   
   // Clone the model to avoid affecting the original
   const skeletonModel = gltf.scene.clone();
@@ -135,9 +333,23 @@ function SkeletonModel({
   }, [skeletonModel, anthropometrics, painAreas]);
 
   // Animation frame
-  useFrame((state) => {
-    if (groupRef.current) {
+  useFrame((state, delta) => {
+    if (groupRef.current && !isPerformingExercise) {
       groupRef.current.rotation.y += 0.005 * animationSpeed;
+    }
+    
+    // Handle exercise animations
+    if (isPerformingExercise && currentExercise && skeletonModel) {
+      const exercise = FUNCTIONAL_EXERCISES.find(ex => ex.id === currentExercise);
+      if (exercise) {
+        const newProgress = (exerciseProgress + delta / exercise.duration) % 1;
+        setExerciseProgress(newProgress);
+        
+        const animationFn = createExerciseAnimation(currentExercise, skeletonModel);
+        if (animationFn) {
+          animationFn(newProgress);
+        }
+      }
     }
   });
 

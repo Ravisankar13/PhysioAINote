@@ -353,6 +353,119 @@ export default function Enhanced3DSkeleton({ patientData, className }: Enhanced3
             </CardContent>
           </Card>
 
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm">Limb Length Adjustments</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs">Upper Arms</span>
+                  <span className="text-xs text-muted-foreground">{limbLengths.upperArm.toFixed(1)}x</span>
+                </div>
+                <Slider
+                  value={[limbLengths.upperArm]}
+                  onValueChange={(value) => setLimbLengths(prev => ({ ...prev, upperArm: value[0] }))}
+                  max={2.0}
+                  min={0.5}
+                  step={0.1}
+                  className="w-full"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs">Forearms</span>
+                  <span className="text-xs text-muted-foreground">{limbLengths.forearm.toFixed(1)}x</span>
+                </div>
+                <Slider
+                  value={[limbLengths.forearm]}
+                  onValueChange={(value) => setLimbLengths(prev => ({ ...prev, forearm: value[0] }))}
+                  max={2.0}
+                  min={0.5}
+                  step={0.1}
+                  className="w-full"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs">Thighs</span>
+                  <span className="text-xs text-muted-foreground">{limbLengths.thigh.toFixed(1)}x</span>
+                </div>
+                <Slider
+                  value={[limbLengths.thigh]}
+                  onValueChange={(value) => setLimbLengths(prev => ({ ...prev, thigh: value[0] }))}
+                  max={2.0}
+                  min={0.5}
+                  step={0.1}
+                  className="w-full"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs">Shins</span>
+                  <span className="text-xs text-muted-foreground">{limbLengths.shin.toFixed(1)}x</span>
+                </div>
+                <Slider
+                  value={[limbLengths.shin]}
+                  onValueChange={(value) => setLimbLengths(prev => ({ ...prev, shin: value[0] }))}
+                  max={2.0}
+                  min={0.5}
+                  step={0.1}
+                  className="w-full"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs">Spine</span>
+                  <span className="text-xs text-muted-foreground">{limbLengths.spine.toFixed(1)}x</span>
+                </div>
+                <Slider
+                  value={[limbLengths.spine]}
+                  onValueChange={(value) => setLimbLengths(prev => ({ ...prev, spine: value[0] }))}
+                  max={2.0}
+                  min={0.5}
+                  step={0.1}
+                  className="w-full"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs">Neck</span>
+                  <span className="text-xs text-muted-foreground">{limbLengths.neck.toFixed(1)}x</span>
+                </div>
+                <Slider
+                  value={[limbLengths.neck]}
+                  onValueChange={(value) => setLimbLengths(prev => ({ ...prev, neck: value[0] }))}
+                  max={2.0}
+                  min={0.5}
+                  step={0.1}
+                  className="w-full"
+                />
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setLimbLengths({
+                  upperArm: 1.0,
+                  forearm: 1.0,
+                  thigh: 1.0,
+                  shin: 1.0,
+                  spine: 1.0,
+                  neck: 1.0
+                })}
+                className="w-full mt-2"
+              >
+                Reset to Default
+              </Button>
+            </CardContent>
+          </Card>
+
           {patientData?.painAreas && patientData.painAreas.length > 0 && (
             <Card>
               <CardHeader>

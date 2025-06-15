@@ -71,10 +71,12 @@ export default function Skeleton3DTool() {
           
         {/* Enhanced 3D Skeleton with Functional Movements */}
         <div className="bg-white rounded-lg shadow-sm h-[800px]">
-          <Enhanced3DSkeleton 
-            patientData={samplePatientData}
-            className="h-full"
-          />
+          <div className="h-full p-4">
+            <Enhanced3DSkeleton 
+              patientData={samplePatientData}
+              className="h-full"
+            />
+          </div>
         </div>
         
         <div className="bg-white rounded-lg p-6 shadow-sm">

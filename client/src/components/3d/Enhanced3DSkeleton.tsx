@@ -16,6 +16,7 @@ import {
   Loader2,
   Hand
 } from 'lucide-react';
+import HapticSkeletonViewer from '@/components/haptic/HapticSkeletonViewer';
 
 interface PatientAnthropometrics {
   height: number;
@@ -243,6 +244,12 @@ export default function Enhanced3DSkeleton({ patientData, className }: Enhanced3
     spine: 1.0,
     neck: 1.0
   });
+  const [hapticMode, setHapticMode] = useState(false);
+
+  // Switch to haptic mode if enabled
+  if (hapticMode) {
+    return <HapticSkeletonViewer patientData={patientData} className={className} />;
+  }
 
   return (
     <div className={`w-full ${className}`}>
@@ -337,6 +344,17 @@ export default function Enhanced3DSkeleton({ patientData, className }: Enhanced3
                   onClick={() => setShowJointLimits(!showJointLimits)}
                 >
                   {showJointLimits ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+                </Button>
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <span className="text-xs">Haptic Training</span>
+                <Button
+                  variant={hapticMode ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setHapticMode(!hapticMode)}
+                >
+                  <Hand className="h-3 w-3" />
                 </Button>
               </div>
               

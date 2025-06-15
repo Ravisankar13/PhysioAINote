@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect, Suspense } from 'react';
-import { Canvas, useFrame, useLoader } from '@react-three/fiber';
-import { OrbitControls, Text, useFBX } from '@react-three/drei';
+import { Canvas, useFrame } from '@react-three/fiber';
+import { OrbitControls, Text, useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -79,22 +79,23 @@ function SkeletonModel({
   const groupRef = useRef<THREE.Group>(null);
   const skeletonRef = useRef<THREE.Group>(null);
   
-  // Load the FBX skeleton model
-  const fbx = useFBX('/skeleton.fbx');
+  // Load the GLB skeleton model
+  const gltf = useGLTF('/skeleton.glb');
   
   // Clone the model to avoid affecting the original
-  const skeletonModel = fbx.clone();
+  const skeletonModel = gltf.scene.clone();
   
   useEffect(() => {
     if (skeletonModel && skeletonRef.current) {
       // Scale the model based on patient anthropometrics
       const heightScale = anthropometrics ? anthropometrics.height / 170 : 1;
-      skeletonModel.scale.setScalar(heightScale);
+      skeletonModel.scale.setScalar(heightScale * 0.01); // Adjust scale for proper sizing
       
       // Center the model
       const box = new THREE.Box3().setFromObject(skeletonModel);
       const center = box.getCenter(new THREE.Vector3());
       skeletonModel.position.sub(center);
+      skeletonModel.position.y = -1; // Adjust vertical positioning
       
       // Apply material modifications for pain areas
       skeletonModel.traverse((child: any) => {
@@ -109,19 +110,25 @@ function SkeletonModel({
           
           if (isPainArea) {
             // Create red material for pain areas
-            child.material = new THREE.MeshStandardMaterial({
-              color: '#ff4444',
-              transparent: true,
-              opacity: 0.8
-            });
+            const material = child.material.clone();
+            material.color = new THREE.Color('#ff4444');
+            material.transparent = true;
+            material.opacity = 0.9;
+            child.material = material;
           } else {
-            // Default bone material
-            child.material = new THREE.MeshStandardMaterial({
-              color: '#f0f0f0',
-              transparent: true,
-              opacity: 0.9
-            });
+            // Enhance default material
+            if (child.material) {
+              const material = child.material.clone();
+              material.color = new THREE.Color('#f8f8f8');
+              material.transparent = true;
+              material.opacity = 0.95;
+              child.material = material;
+            }
           }
+          
+          // Enable shadows
+          child.castShadow = true;
+          child.receiveShadow = true;
         }
       });
     }
@@ -208,11 +215,26 @@ export default function Enhanced3DSkeleton({ patientData, className }: Enhanced3
         {/* 3D Viewer */}
         <div className="lg:col-span-3 bg-gray-900 rounded-lg overflow-hidden">
           <Suspense fallback={<LoadingFallback />}>
-            <Canvas camera={{ position: [3, 3, 5], fov: 50 }}>
-              <ambientLight intensity={0.4} />
-              <directionalLight position={[10, 10, 5]} intensity={1} />
-              <directionalLight position={[-10, -10, -5]} intensity={0.5} />
-              <spotLight position={[0, 10, 0]} intensity={0.3} />
+            <Canvas 
+              camera={{ position: [4, 2, 4], fov: 45 }}
+              shadows
+            >
+              <ambientLight intensity={0.6} />
+              <directionalLight 
+                position={[10, 10, 5]} 
+                intensity={1.2} 
+                castShadow
+                shadow-mapSize-width={2048}
+                shadow-mapSize-height={2048}
+              />
+              <directionalLight position={[-5, 5, -5]} intensity={0.4} />
+              <pointLight position={[0, 3, 0]} intensity={0.3} />
+              
+              {/* Ground plane for shadows */}
+              <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -2, 0]} receiveShadow>
+                <planeGeometry args={[10, 10]} />
+                <shadowMaterial opacity={0.3} />
+              </mesh>
               
               <SkeletonModel
                 anthropometrics={patientData?.anthropometrics}

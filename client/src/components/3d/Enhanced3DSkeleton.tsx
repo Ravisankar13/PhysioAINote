@@ -13,7 +13,8 @@ import {
   Settings,
   Eye,
   EyeOff,
-  Loader2
+  Loader2,
+  Hand
 } from 'lucide-react';
 
 interface PatientAnthropometrics {

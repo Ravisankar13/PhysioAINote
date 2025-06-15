@@ -77,48 +77,51 @@ export default function VirtualPatientDetail({
   } = useQuery<any>({
     queryKey: [`/api/virtual-patients/${patientId}`],
     queryFn: async () => {
-      const response = await fetch(`/api/virtual-patients/${patientId}`);
-      if (!response.ok) {
+      try {
+        const response = await apiRequest("GET", `/api/virtual-patients/${patientId}`);
+        const data = await response.json();
+        console.log("Virtual patient data with research:", data);
+
+        // Process assessment tests if they exist
+        if (data.assessmentTests) {
+          // Ensure assessmentTests is properly parsed if it's a string
+          if (typeof data.assessmentTests === "string") {
+            try {
+              data.assessmentTests = JSON.parse(data.assessmentTests);
+            } catch (err) {
+              console.error("Error parsing assessment tests:", err);
+              // If parsing fails, set a default empty array
+              data.assessmentTests = [];
+            }
+          }
+        } else {
+          // Initialize with empty array if missing
+          data.assessmentTests = [];
+        }
+
+        // If patient has objective findings stored, parse and set them
+        if (data.objectiveFindings) {
+          try {
+            const findings =
+              typeof data.objectiveFindings === "string"
+                ? JSON.parse(data.objectiveFindings)
+                : data.objectiveFindings;
+
+            if (Array.isArray(findings)) {
+              setObjectiveFindings(findings);
+            }
+          } catch (err) {
+            console.error("Error parsing objective findings:", err);
+          }
+        }
+
+        return data;
+      } catch (error) {
+        console.error("Error fetching virtual patient:", error);
         throw new Error("Failed to fetch patient details");
       }
-      const data = await response.json();
-      console.log("Virtual patient data with research:", data);
-
-      // Process assessment tests if they exist
-      if (data.assessmentTests) {
-        // Ensure assessmentTests is properly parsed if it's a string
-        if (typeof data.assessmentTests === "string") {
-          try {
-            data.assessmentTests = JSON.parse(data.assessmentTests);
-          } catch (err) {
-            console.error("Error parsing assessment tests:", err);
-            // If parsing fails, set a default empty array
-            data.assessmentTests = [];
-          }
-        }
-      } else {
-        // Initialize with empty array if missing
-        data.assessmentTests = [];
-      }
-
-      // If patient has objective findings stored, parse and set them
-      if (data.objectiveFindings) {
-        try {
-          const findings =
-            typeof data.objectiveFindings === "string"
-              ? JSON.parse(data.objectiveFindings)
-              : data.objectiveFindings;
-
-          if (Array.isArray(findings)) {
-            setObjectiveFindings(findings);
-          }
-        } catch (err) {
-          console.error("Error parsing objective findings:", err);
-        }
-      }
-
-      return data;
     },
+    enabled: !!patientId,
   });
 
   // Mutation to save objective findings

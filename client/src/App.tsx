@@ -11,7 +11,7 @@ import Contact from "@/pages/Contact";
 import AuthPage from "@/pages/auth-page";
 import SharedNotes from "@/pages/SharedNotes";
 import MyNotes from "@/pages/MyNotes";
-import SkeletonTool from "@/pages/SkeletonTool";
+
 import Skeleton3DTool from "@/pages/Skeleton3DTool";
 import Research from "@/pages/Research";
 import Membership from "@/pages/Membership";
@@ -58,7 +58,6 @@ function Router() {
           />
           <Route path="/exercises" element={<ExercisePage />} />
           <Route path="/manual-therapy" element={<ManualTherapyPage />} />
-          <Route path="/skeleton-tool" element={<SkeletonTool />} />
           <Route path="/skeleton-3d-tool" element={<Skeleton3DTool />} />
           <Route
             path="/virtual-patients"

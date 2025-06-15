@@ -161,14 +161,7 @@ const Header = () => {
                       </div>
                     </Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem className="flex items-center" asChild>
-                    <Link to="/skeleton-tool">
-                      <div className="flex items-center cursor-pointer w-full">
-                        <Bone className="mr-2 h-4 w-4" />
-                        <span>2D Skeleton Tool</span>
-                      </div>
-                    </Link>
-                  </DropdownMenuItem>
+
                   <DropdownMenuItem className="flex items-center" asChild>
                     <Link to="/skeleton-3d-tool">
                       <div className="flex items-center cursor-pointer w-full">
@@ -311,14 +304,7 @@ const Header = () => {
                             Patient Sessions
                           </span>
                         </Link>
-                        <Link to="/skeleton-tool">
-                          <span
-                            className="px-2 py-2 text-base block cursor-pointer text-muted-foreground hover:text-foreground"
-                            onClick={() => setOpen(false)}
-                          >
-                            2D Skeleton Tool
-                          </span>
-                        </Link>
+
                         <Link to="/skeleton-3d-tool">
                           <span
                             className="px-2 py-2 text-base block cursor-pointer text-muted-foreground hover:text-foreground"

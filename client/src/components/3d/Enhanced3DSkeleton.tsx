@@ -159,7 +159,9 @@ function SkeletonModel({
   painAreas = [],
   showJointLimits,
   selectedJoint,
-  animationSpeed
+  animationSpeed,
+  currentExercise,
+  isPerformingExercise
 }: {
   anthropometrics?: PatientAnthropometrics;
   jointRestrictions?: JointRestrictions;
@@ -167,13 +169,13 @@ function SkeletonModel({
   showJointLimits: boolean;
   selectedJoint?: string;
   animationSpeed: number;
+  currentExercise?: string | null;
+  isPerformingExercise?: boolean;
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const skeletonRef = useRef<THREE.Group>(null);
   const mixerRef = useRef<THREE.AnimationMixer | null>(null);
-  const [currentExercise, setCurrentExercise] = useState<string | null>(null);
   const [exerciseProgress, setExerciseProgress] = useState(0);
-  const [isPerformingExercise, setIsPerformingExercise] = useState(false);
   
   // Load the GLB skeleton model
   const gltf = useGLTF('/skeleton.glb');
@@ -295,33 +297,57 @@ function SkeletonModel({
       skeletonModel.position.sub(center);
       skeletonModel.position.y = -0.5; // Better vertical positioning for closer view
       
+      // Debug: Log all bone names to help with pain area mapping
+      console.log("=== Skeleton Model Bone Structure ===");
+      const boneNames: string[] = [];
+      skeletonModel.traverse((child: any) => {
+        if (child instanceof THREE.Mesh && child.name) {
+          boneNames.push(child.name);
+        }
+      });
+      console.log("Available bone names:", boneNames);
+      console.log("Pain areas to highlight:", painAreas);
+      
       // Apply material modifications for pain areas
       skeletonModel.traverse((child: any) => {
         if (child instanceof THREE.Mesh) {
           const boneName = child.name.toLowerCase();
           
-          // Check if this bone is in a pain area
-          const isPainArea = painAreas.some(area => 
-            boneName.includes(area.toLowerCase()) || 
-            area.toLowerCase().includes(boneName)
-          );
+          // Enhanced pain area detection with more comprehensive matching
+          const isPainArea = painAreas.some(area => {
+            const areaLower = area.toLowerCase();
+            // Check direct matches and common anatomical terms
+            return boneName.includes(areaLower) || 
+                   areaLower.includes(boneName) ||
+                   // Check for common bone/area mappings
+                   (areaLower.includes('shoulder') && (boneName.includes('humerus') || boneName.includes('scapula') || boneName.includes('clavicle'))) ||
+                   (areaLower.includes('elbow') && (boneName.includes('radius') || boneName.includes('ulna') || boneName.includes('humerus'))) ||
+                   (areaLower.includes('hip') && (boneName.includes('femur') || boneName.includes('pelvis'))) ||
+                   (areaLower.includes('knee') && (boneName.includes('tibia') || boneName.includes('fibula') || boneName.includes('femur'))) ||
+                   (areaLower.includes('spine') && (boneName.includes('vertebra') || boneName.includes('spine'))) ||
+                   (areaLower.includes('wrist') && (boneName.includes('radius') || boneName.includes('ulna') || boneName.includes('carpal'))) ||
+                   (areaLower.includes('ankle') && (boneName.includes('tibia') || boneName.includes('fibula') || boneName.includes('talus')));
+          });
           
+          // Create new material instead of cloning to ensure it applies
           if (isPainArea) {
-            // Create red material for pain areas
-            const material = child.material.clone();
-            material.color = new THREE.Color('#ff4444');
-            material.transparent = true;
-            material.opacity = 0.9;
-            child.material = material;
+            console.log(`Applying red material to pain area: ${boneName}`);
+            child.material = new THREE.MeshStandardMaterial({
+              color: new THREE.Color('#ff2222'),
+              transparent: true,
+              opacity: 0.95,
+              metalness: 0.1,
+              roughness: 0.8
+            });
           } else {
-            // Enhance default material
-            if (child.material) {
-              const material = child.material.clone();
-              material.color = new THREE.Color('#f8f8f8');
-              material.transparent = true;
-              material.opacity = 0.95;
-              child.material = material;
-            }
+            // Default bone material
+            child.material = new THREE.MeshStandardMaterial({
+              color: new THREE.Color('#f5f5f5'),
+              transparent: true,
+              opacity: 0.92,
+              metalness: 0.1,
+              roughness: 0.9
+            });
           }
           
           // Enable shadows
@@ -420,6 +446,25 @@ export default function Enhanced3DSkeleton({ patientData, className }: Enhanced3
   const [showJointLimits, setShowJointLimits] = useState(true);
   const [animationSpeed, setAnimationSpeed] = useState(1);
   const [isAnimating, setIsAnimating] = useState(true);
+  const [selectedExercise, setSelectedExercise] = useState<string>('');
+  const [exerciseCategory, setExerciseCategory] = useState<string>('all');
+  const [isPerformingExercise, setIsPerformingExercise] = useState(false);
+
+  const filteredExercises = exerciseCategory === 'all' 
+    ? FUNCTIONAL_EXERCISES 
+    : FUNCTIONAL_EXERCISES.filter(ex => ex.category === exerciseCategory);
+
+  const handleStartExercise = (exerciseId: string) => {
+    setSelectedExercise(exerciseId);
+    setIsPerformingExercise(true);
+    setIsAnimating(false); // Stop regular rotation
+  };
+
+  const handleStopExercise = () => {
+    setIsPerformingExercise(false);
+    setSelectedExercise('');
+    setIsAnimating(true); // Resume regular rotation
+  };
 
   return (
     <div className={`w-full ${className}`}>
@@ -455,6 +500,8 @@ export default function Enhanced3DSkeleton({ patientData, className }: Enhanced3
                 showJointLimits={showJointLimits}
                 selectedJoint={selectedJoint}
                 animationSpeed={isAnimating ? animationSpeed : 0}
+                currentExercise={isPerformingExercise ? selectedExercise : null}
+                isPerformingExercise={isPerformingExercise}
               />
               
               <OrbitControls 
@@ -527,6 +574,78 @@ export default function Enhanced3DSkeleton({ patientData, className }: Enhanced3
                   className="w-full"
                 />
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Functional Movement Controls */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Activity className="h-4 w-4" />
+                Functional Movements
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="space-y-2">
+                <span className="text-xs">Exercise Category</span>
+                <Select value={exerciseCategory} onValueChange={setExerciseCategory}>
+                  <SelectTrigger className="h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Exercises</SelectItem>
+                    <SelectItem value="lower_body">Lower Body</SelectItem>
+                    <SelectItem value="upper_body">Upper Body</SelectItem>
+                    <SelectItem value="gait">Gait Patterns</SelectItem>
+                    <SelectItem value="balance">Balance</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <span className="text-xs">Available Exercises</span>
+                <div className="grid gap-1 max-h-32 overflow-y-auto">
+                  {filteredExercises.map((exercise) => (
+                    <Button
+                      key={exercise.id}
+                      variant={selectedExercise === exercise.id ? "default" : "outline"}
+                      size="sm"
+                      className="h-8 text-xs justify-start"
+                      onClick={() => 
+                        selectedExercise === exercise.id && isPerformingExercise 
+                          ? handleStopExercise() 
+                          : handleStartExercise(exercise.id)
+                      }
+                    >
+                      {exercise.icon === 'ArrowDown' && <ArrowDown className="h-3 w-3 mr-1" />}
+                      {exercise.icon === 'ArrowUp' && <ArrowUp className="h-3 w-3 mr-1" />}
+                      {exercise.icon === 'ChevronRight' && <ChevronRight className="h-3 w-3 mr-1" />}
+                      {exercise.icon === 'ChevronLeft' && <ChevronLeft className="h-3 w-3 mr-1" />}
+                      {exercise.icon === 'Dumbbell' && <Dumbbell className="h-3 w-3 mr-1" />}
+                      {exercise.icon === 'TrendingUp' && <TrendingUp className="h-3 w-3 mr-1" />}
+                      {exercise.icon === 'Activity' && <Activity className="h-3 w-3 mr-1" />}
+                      {exercise.name}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              {isPerformingExercise && selectedExercise && (
+                <div className="space-y-2 p-2 bg-blue-50 rounded">
+                  <div className="text-xs font-medium">Now Performing:</div>
+                  <div className="text-xs text-blue-700">
+                    {FUNCTIONAL_EXERCISES.find(ex => ex.id === selectedExercise)?.name}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full h-8"
+                    onClick={handleStopExercise}
+                  >
+                    Stop Exercise
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
 

@@ -89,13 +89,13 @@ function SkeletonModel({
     if (skeletonModel && skeletonRef.current) {
       // Scale the model based on patient anthropometrics
       const heightScale = anthropometrics ? anthropometrics.height / 170 : 1;
-      skeletonModel.scale.setScalar(heightScale * 0.01); // Adjust scale for proper sizing
+      skeletonModel.scale.setScalar(heightScale * 0.05); // Increased scale for better visibility
       
       // Center the model
       const box = new THREE.Box3().setFromObject(skeletonModel);
       const center = box.getCenter(new THREE.Vector3());
       skeletonModel.position.sub(center);
-      skeletonModel.position.y = -1; // Adjust vertical positioning
+      skeletonModel.position.y = -0.5; // Better vertical positioning for closer view
       
       // Apply material modifications for pain areas
       skeletonModel.traverse((child: any) => {
@@ -216,7 +216,7 @@ export default function Enhanced3DSkeleton({ patientData, className }: Enhanced3
         <div className="lg:col-span-3 bg-gray-900 rounded-lg overflow-hidden">
           <Suspense fallback={<LoadingFallback />}>
             <Canvas 
-              camera={{ position: [4, 2, 4], fov: 45 }}
+              camera={{ position: [1.5, 1, 1.5], fov: 60 }}
               shadows
             >
               <ambientLight intensity={0.6} />
@@ -245,7 +245,14 @@ export default function Enhanced3DSkeleton({ patientData, className }: Enhanced3
                 animationSpeed={isAnimating ? animationSpeed : 0}
               />
               
-              <OrbitControls enablePan={true} enableZoom={true} enableRotate={true} />
+              <OrbitControls 
+                enablePan={true} 
+                enableZoom={true} 
+                enableRotate={true}
+                minDistance={0.5}
+                maxDistance={5}
+                target={[0, 0, 0]}
+              />
             </Canvas>
           </Suspense>
         </div>

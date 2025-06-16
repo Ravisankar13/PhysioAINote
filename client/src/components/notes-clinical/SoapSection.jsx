@@ -28,23 +28,25 @@ const SoapSection = ({
             value={content || ""}
             onChange={(e) => onContentChange(e.target.value)}
           />
-          <button
-            className="soap-save-btn"
-            onClick={() => {
-              onSave();
-              setIsEditing(false);
-            }}
-            disabled={isSaving}
-          >
-            {isSaving ? "Saving..." : "✅ Save"}
-          </button>
-          <button
-            className="soap-cancel-btn"
-            onClick={() => setIsEditing(false)}
-            disabled={isSaving}
-          >
-            Cancel
-          </button>
+          <div className="flex justify-end items-center gap-2 mt-2">
+            <button
+              className="soap-save-btn"
+              onClick={() => {
+                onSave();
+                setIsEditing(false);
+              }}
+              disabled={isSaving}
+            >
+              {isSaving ? "Saving..." : "✅ Save"}
+            </button>
+            <button
+              className="soap-save-btn"
+              onClick={() => setIsEditing(false)}
+              disabled={isSaving}
+            >
+              Cancel
+            </button>
+          </div>
         </>
       ) : (
         <>
@@ -148,7 +150,7 @@ const SoapNote = ({
         <button
           onClick={generateSoapNote}
           disabled={isGeneratingSoapNote}
-          className="generate-soap-btn"
+          className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isGeneratingSoapNote ? "Generating..." : "Generate Clinical Note"}
         </button>

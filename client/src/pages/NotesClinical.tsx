@@ -729,7 +729,7 @@ function NotesClinical(): React.ReactElement {
             >
               + Create New Session
             </button>
-            <ul>
+            {/* <ul>
               {sessions.map((session) => (
                 <li key={session.id}>
                   <button
@@ -781,7 +781,7 @@ function NotesClinical(): React.ReactElement {
               ))}
             </ul>
 
-            {/* <div className="pagination-controls">
+            <div className="pagination-controls">
             <button onClick={handlePreviousPage} disabled={page === 1}>
               Previous
             </button>

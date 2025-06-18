@@ -29,6 +29,8 @@ const bodyRegions: BodyRegion[] = [
   { name: 'elbow_right', displayName: 'Right Elbow', position: [0.4, 1.0, 0], color: '#06b6d4' },
   { name: 'wrist_left', displayName: 'Left Wrist & Hand', position: [-0.5, 0.7, 0], color: '#3b82f6' },
   { name: 'wrist_right', displayName: 'Right Wrist & Hand', position: [0.5, 0.7, 0], color: '#3b82f6' },
+  { name: 'sij_left', displayName: 'Left SIJ', position: [-0.12, 0.6, -0.05], color: '#a855f7' },
+  { name: 'sij_right', displayName: 'Right SIJ', position: [0.12, 0.6, -0.05], color: '#a855f7' },
   { name: 'hip_left', displayName: 'Left Hip', position: [-0.15, 0.4, 0], color: '#8b5cf6' },
   { name: 'hip_right', displayName: 'Right Hip', position: [0.15, 0.4, 0], color: '#8b5cf6' },
   { name: 'knee_left', displayName: 'Left Knee', position: [-0.15, -0.2, 0], color: '#ec4899' },

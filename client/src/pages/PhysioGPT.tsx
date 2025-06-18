@@ -325,14 +325,14 @@ export default function PhysioGPT() {
                     </div>
                   ) : (
                     <div className="space-y-6 p-4">
-                      {conversationData?.messages.map((msg, index) => (
+                      {conversationData?.messages?.map((msg, index) => (
                         <div
-                          key={msg.id}
+                          key={msg?.id || index}
                           className={`flex gap-3 ${
-                            msg.role === "user" ? "justify-end" : "justify-start"
+                            msg?.role === "user" ? "justify-end" : "justify-start"
                           }`}
                         >
-                          {msg.role === "assistant" && (
+                          {msg?.role === "assistant" && (
                             <Avatar className="w-8 h-8">
                               <AvatarFallback className="bg-blue-600 text-white">
                                 <Bot className="h-4 w-4" />
@@ -342,20 +342,20 @@ export default function PhysioGPT() {
                           
                           <div
                             className={`max-w-[80%] ${
-                              msg.role === "user"
+                              msg?.role === "user"
                                 ? "bg-blue-600 text-white"
                                 : "bg-gray-100 text-gray-900"
                             } rounded-lg p-3`}
                           >
                             <div className="whitespace-pre-wrap text-sm leading-relaxed">
-                              {msg.content}
+                              {msg?.content || ""}
                             </div>
                             <div className="text-xs opacity-70 mt-2">
-                              {new Date(msg.createdAt).toLocaleTimeString()}
+                              {msg?.createdAt ? new Date(msg.createdAt).toLocaleTimeString() : ""}
                             </div>
                           </div>
 
-                          {msg.role === "user" && (
+                          {msg?.role === "user" && (
                             <Avatar className="w-8 h-8">
                               <AvatarFallback className="bg-gray-600 text-white">
                                 <User className="h-4 w-4" />
@@ -363,7 +363,7 @@ export default function PhysioGPT() {
                             </Avatar>
                           )}
                         </div>
-                      ))}
+                      )) || []}
                       <div ref={messagesEndRef} />
                     </div>
                   )}

@@ -72,12 +72,7 @@ export class PhysioGptStorage {
   async addMessage(data: InsertPhysioGptMessage): Promise<PhysioGptMessage> {
     const [message] = await db
       .insert(physioGptMessages)
-      .values({
-        conversationId: data.conversationId,
-        role: data.role,
-        content: data.content,
-        patientContext: data.patientContext || null
-      })
+      .values(data as any)
       .returning();
 
     // Update conversation timestamp

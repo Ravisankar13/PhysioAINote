@@ -18,6 +18,7 @@ import { sportsMapSportSpecificApproaches, sportsMapTreatmentPrinciples } from "
 import { grimaldiHipApproaches, grimaldiTreatmentPrinciples } from "./grimaldi-hip-library";
 import { bissetElbowApproaches, bissetTreatmentPrinciples } from "./bisset-elbow-library";
 import { generateAICaseStudy, generateDiagnosticFeedback } from "./aiCaseStudyGenerator";
+import { physioGptService } from "./physioGptService";
 import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, exercises } from "@shared/schema";
 import { ZodError, z } from "zod";
 import { fromZodError } from "zod-validation-error";
@@ -3084,6 +3085,77 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching user case studies:", error);
       res.status(500).json({ error: "Error fetching user case studies" });
+    }
+  });
+
+  // PhysioGPT API Routes
+  app.post("/api/physiogpt/chat", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { message, conversationId, patientContext } = req.body;
+      
+      if (!message || typeof message !== 'string') {
+        return res.status(400).json({ error: "Message is required" });
+      }
+
+      const result = await physioGptService.processMessage({
+        message,
+        conversationId,
+        patientContext,
+        userId: req.user!.id
+      });
+
+      res.json(result);
+    } catch (error) {
+      console.error("PhysioGPT chat error:", error);
+      res.status(500).json({ error: "Unable to process your request at this time" });
+    }
+  });
+
+  app.get("/api/physiogpt/conversations", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const conversations = await physioGptService.getUserConversations(req.user!.id);
+      res.json(conversations);
+    } catch (error) {
+      console.error("Error fetching conversations:", error);
+      res.status(500).json({ error: "Unable to fetch conversations" });
+    }
+  });
+
+  app.get("/api/physiogpt/conversations/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const conversationId = parseInt(req.params.id);
+      if (isNaN(conversationId)) {
+        return res.status(400).json({ error: "Invalid conversation ID" });
+      }
+
+      const conversation = await physioGptService.getConversationHistory(
+        conversationId, 
+        req.user!.id
+      );
+
+      if (!conversation) {
+        return res.status(404).json({ error: "Conversation not found" });
+      }
+
+      res.json(conversation);
+    } catch (error) {
+      console.error("Error fetching conversation:", error);
+      res.status(500).json({ error: "Unable to fetch conversation" });
+    }
+  });
+
+  app.delete("/api/physiogpt/conversations/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const conversationId = parseInt(req.params.id);
+      if (isNaN(conversationId)) {
+        return res.status(400).json({ error: "Invalid conversation ID" });
+      }
+
+      await physioGptService.deleteConversation(conversationId, req.user!.id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting conversation:", error);
+      res.status(500).json({ error: "Unable to delete conversation" });
     }
   });
 

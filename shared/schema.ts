@@ -890,3 +890,70 @@ export const caseStudyAttemptRelations = relations(
     }),
   })
 );
+
+// PhysioGPT Chat Conversations Schema
+export const physioGptConversations = pgTable("physiogpt_conversations", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertPhysioGptConversationSchema = createInsertSchema(physioGptConversations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertPhysioGptConversation = z.infer<typeof insertPhysioGptConversationSchema>;
+export type PhysioGptConversation = typeof physioGptConversations.$inferSelect;
+
+// PhysioGPT Chat Messages Schema
+export const physioGptMessages = pgTable("physiogpt_messages", {
+  id: serial("id").primaryKey(),
+  conversationId: integer("conversation_id")
+    .notNull()
+    .references(() => physioGptConversations.id, { onDelete: "cascade" }),
+  role: text("role").notNull(), // 'user' or 'assistant'
+  content: text("content").notNull(),
+  patientContext: json("patient_context").$type<{
+    patientId?: number;
+    sessionId?: number;
+    caseStudyId?: number;
+    relevantData?: any;
+  }>(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertPhysioGptMessageSchema = createInsertSchema(physioGptMessages).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertPhysioGptMessage = z.infer<typeof insertPhysioGptMessageSchema>;
+export type PhysioGptMessage = typeof physioGptMessages.$inferSelect;
+
+// Relations for PhysioGPT
+export const physioGptConversationRelations = relations(
+  physioGptConversations,
+  ({ one, many }) => ({
+    user: one(users, {
+      fields: [physioGptConversations.userId],
+      references: [users.id],
+    }),
+    messages: many(physioGptMessages),
+  })
+);
+
+export const physioGptMessageRelations = relations(
+  physioGptMessages,
+  ({ one }) => ({
+    conversation: one(physioGptConversations, {
+      fields: [physioGptMessages.conversationId],
+      references: [physioGptConversations.id],
+    }),
+  })
+);

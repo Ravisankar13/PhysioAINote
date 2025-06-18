@@ -17,7 +17,8 @@ import {
   Trash2, 
   Clock,
   Brain,
-  Lightbulb
+  Lightbulb,
+  Loader2
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -337,9 +338,13 @@ export default function PhysioGPT() {
                         </div>
                       ))}
                     </div>
-                  ) : (
+                  ) : loadingMessages ? (
+                    <div className="flex items-center justify-center h-full">
+                      <Loader2 className="h-8 w-8 animate-spin text-border" />
+                    </div>
+                  ) : conversationData && conversationData.messages ? (
                     <div className="space-y-6 p-4">
-                      {conversationData?.messages?.map((msg, index) => (
+                      {conversationData.messages.map((msg, index) => (
                         <div
                           key={msg?.id || index}
                           className={`flex gap-3 ${
@@ -377,8 +382,14 @@ export default function PhysioGPT() {
                             </Avatar>
                           )}
                         </div>
-                      )) || []}
+                      ))}
                       <div ref={messagesEndRef} />
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-center text-muted-foreground">
+                        <p>No messages in this conversation yet.</p>
+                      </div>
                     </div>
                   )}
                 </ScrollArea>

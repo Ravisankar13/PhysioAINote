@@ -68,29 +68,38 @@ export default function PhysioGPT() {
     enabled: !!user,
   });
 
-  // Fetch conversation data
-  const { data: conversationData, isLoading: loadingMessages } = useQuery({
+  // Fetch current conversation messages
+  const { data: conversationData, isLoading: loadingMessages } = useQuery<{
+    conversation: PhysioGptConversation;
+    messages: ChatMessage[];
+  }>({
     queryKey: ["/api/physiogpt/conversations", selectedConversationId],
+    queryFn: async () => {
+      if (!selectedConversationId) return null;
+      const response = await apiRequest("GET", `/api/physiogpt/conversations/${selectedConversationId}`);
+      const data = await response.json();
+      console.log("Conversation data received:", data);
+      return data;
+    },
     enabled: !!selectedConversationId,
   });
 
   // Send message mutation
   const sendMessageMutation = useMutation({
-    mutationFn: async (messageContent: string) => {
-      const response = await apiRequest("POST", "/api/physiogpt/message", {
-        message: messageContent,
-        conversationId: selectedConversationId,
-        patientContext: selectedBodyRegion ? {
-          bodyRegion: selectedBodyRegion,
-          regionName: selectedBodyRegionName
-        } : undefined
-      });
-      return await response.json();
+    mutationFn: async (data: { message: string; conversationId?: number }) => {
+      const response = await apiRequest("POST", "/api/physiogpt/chat", data);
+      return await response.json() as PhysioGptResponse;
     },
-    onSuccess: (data: PhysioGptResponse) => {
-      setSelectedConversationId(data.conversationId);
-      setSuggestions(data.suggestions || []);
+    onSuccess: (data) => {
       setMessage("");
+      setSuggestions(data.suggestions || []);
+      
+      // Set the conversation if it's a new one
+      if (!selectedConversationId) {
+        setSelectedConversationId(data.conversationId);
+      }
+      
+      // Invalidate queries to refresh data
       queryClient.invalidateQueries({ queryKey: ["/api/physiogpt/conversations"] });
       queryClient.invalidateQueries({ queryKey: ["/api/physiogpt/conversations", data.conversationId] });
     },
@@ -109,9 +118,13 @@ export default function PhysioGPT() {
       await apiRequest("DELETE", `/api/physiogpt/conversations/${conversationId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/physiogpt/conversations"] });
       setSelectedConversationId(null);
       setSuggestions([]);
+      queryClient.invalidateQueries({ queryKey: ["/api/physiogpt/conversations"] });
+      toast({
+        title: "Success",
+        description: "Conversation deleted successfully",
+      });
     },
     onError: (error: any) => {
       toast({
@@ -122,11 +135,20 @@ export default function PhysioGPT() {
     },
   });
 
-  const handleSendMessage = (messageContent?: string) => {
-    const content = messageContent || message.trim();
-    if (!content) return;
+  const handleSendMessage = (messageText?: string) => {
+    const textToSend = messageText || message;
+    if (!textToSend.trim()) return;
 
-    sendMessageMutation.mutate(content);
+    // Add anatomical context if a body region is selected
+    let contextualMessage = textToSend;
+    if (selectedBodyRegionName) {
+      contextualMessage = `[Context: ${selectedBodyRegionName}] ${textToSend}`;
+    }
+
+    sendMessageMutation.mutate({
+      message: contextualMessage,
+      conversationId: selectedConversationId || undefined,
+    });
   };
 
   const handleNewConversation = () => {
@@ -174,13 +196,6 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
     setMessage(suggestion);
   };
 
-  // Auto-scroll to bottom when new messages arrive
-  useEffect(() => {
-    if (shouldAutoScroll && messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [conversationData, shouldAutoScroll]);
-
   // Auto-select latest conversation when conversations load
   useEffect(() => {
     if (conversations.length > 0 && !selectedConversationId) {
@@ -188,24 +203,50 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
     }
   }, [conversations, selectedConversationId]);
 
+  // Check if user is near bottom of scroll area
   const checkScrollPosition = () => {
     if (scrollAreaRef.current) {
       const { scrollTop, scrollHeight, clientHeight } = scrollAreaRef.current;
-      const isAtBottom = scrollTop + clientHeight >= scrollHeight - 50;
-      setShouldAutoScroll(isAtBottom);
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 50;
+      setShouldAutoScroll(isNearBottom);
     }
   };
 
+  // Only auto-scroll to bottom for new messages when user is already at the bottom
+  useEffect(() => {
+    // Only scroll if user was already at bottom and a new message was added
+    if (shouldAutoScroll && messagesEndRef.current && conversationData?.messages?.length) {
+      const lastMessage = conversationData.messages[conversationData.messages.length - 1];
+      // Only auto-scroll for new assistant messages or when sending user messages
+      if (lastMessage?.role === 'assistant') {
+        setTimeout(() => {
+          messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        }, 100);
+      }
+    }
+  }, [conversationData?.messages?.length, shouldAutoScroll]);
+
+  // Reset auto-scroll when switching conversations
+  useEffect(() => {
+    setShouldAutoScroll(true);
+    // Auto-scroll to bottom when switching conversations
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, 100);
+  }, [selectedConversationId]);
+
   if (!user) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-        <Card className="w-96">
-          <CardContent className="p-6 text-center">
-            <Brain className="h-12 w-12 text-blue-600 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold mb-2">PhysioGPT</h2>
-            <p className="text-muted-foreground mb-4">
-              Please log in to access your AI physiotherapy assistant.
-            </p>
+      <div className="min-h-screen flex items-center justify-center">
+        <Card className="w-full max-w-md">
+          <CardContent className="pt-6">
+            <div className="text-center space-y-4">
+              <Bot className="mx-auto h-12 w-12 text-blue-600" />
+              <h2 className="text-2xl font-bold">PhysioGPT</h2>
+              <p className="text-muted-foreground">
+                Please sign in to access your AI physiotherapy assistant.
+              </p>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -213,13 +254,29 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      <div className="container mx-auto p-6">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-[calc(100vh-6rem)]">
-          {/* Sidebar - Conversations */}
+    <div className="min-h-screen bg-gray-50">
+      <div className="container mx-auto px-4 py-8">
+        <div className="mb-8">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 bg-blue-600 rounded-lg">
+              <Brain className="h-6 w-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold">PhysioGPT</h1>
+              <p className="text-muted-foreground">
+                Your AI assistant for physiotherapy clinical guidance
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className={`grid gap-6 h-[calc(100vh-200px)] transition-all duration-300 ${
+          show3DPanel ? 'grid-cols-1 lg:grid-cols-5' : 'grid-cols-1 lg:grid-cols-4'
+        }`}>
+          {/* Conversations Sidebar */}
           <div className="lg:col-span-1">
             <Card className="h-full flex flex-col">
-              <CardHeader className="flex-shrink-0">
+              <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg">Conversations</CardTitle>
                   <Button
@@ -231,15 +288,12 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent className="flex-1 p-4 overflow-hidden">
-                <ScrollArea className="h-full">
+              <CardContent className="flex-1 p-0">
+                <ScrollArea className="h-full px-6 pb-6">
                   {loadingConversations ? (
-                    <div className="space-y-3">
+                    <div className="space-y-2">
                       {[1, 2, 3].map((i) => (
-                        <div key={i} className="p-3 rounded-lg border animate-pulse">
-                          <div className="h-4 bg-gray-200 rounded mb-2" />
-                          <div className="h-3 bg-gray-200 rounded w-2/3" />
-                        </div>
+                        <div key={i} className="h-16 bg-gray-100 rounded-lg animate-pulse" />
                       ))}
                     </div>
                   ) : conversations.length === 0 ? (
@@ -294,48 +348,49 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
             </Card>
           </div>
 
-          {/* Main Interface with Tabs */}
-          <div className={`${show3DPanel ? 'lg:col-span-2' : 'lg:col-span-3'} transition-all`}>
-            <Card className="h-full flex flex-col">
-              <CardHeader className="flex-shrink-0">
+          {/* Chat Area */}
+          <div className={show3DPanel ? "lg:col-span-3" : "lg:col-span-3"}>
+            <Card className="h-[80vh] flex flex-col">
+              <CardHeader className="pb-3 flex-shrink-0">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 bg-blue-100 rounded-lg">
-                      <Brain className="h-5 w-5 text-blue-600" />
-                    </div>
+                    <Avatar>
+                      <AvatarFallback className="bg-blue-600 text-white">
+                        <Bot className="h-4 w-4" />
+                      </AvatarFallback>
+                    </Avatar>
                     <div>
-                      <CardTitle className="flex items-center gap-2">
-                        PhysioGPT
-                        <Badge variant="secondary" className="text-xs">
-                          Clinical AI Assistant
-                        </Badge>
+                      <CardTitle className="text-lg">
+                        {selectedConversationId && conversationData?.conversation
+                          ? conversationData.conversation.title
+                          : "New Conversation"}
                       </CardTitle>
                       <p className="text-sm text-muted-foreground">
-                        Evidence-based physiotherapy guidance and clinical assessments
+                        Ask questions about your patients and clinical practice
                       </p>
                     </div>
                   </div>
                   
                   <div className="flex items-center gap-2">
                     {selectedBodyRegionName && (
-                      <Badge variant="outline" className="text-xs">
-                        Context: {selectedBodyRegionName}
+                      <Badge variant="secondary" className="text-xs">
+                        {selectedBodyRegionName}
                       </Badge>
                     )}
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => setShow3DPanel(!show3DPanel)}
-                      className="flex items-center gap-2"
+                      className="h-8"
                     >
-                      <Activity className="h-4 w-4" />
-                      {show3DPanel ? 'Hide' : 'Show'} 3D Model
+                      <Activity className="h-4 w-4 mr-1" />
+                      {show3DPanel ? "Hide" : "Show"} 3D
                     </Button>
                   </div>
                 </div>
               </CardHeader>
 
-              {/* Tabs */}
+              {/* Tabs Navigation */}
               <div className="px-6 pt-2 pb-0 border-b">
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                   <TabsList className="grid w-full grid-cols-3">
@@ -355,139 +410,147 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
                 </Tabs>
               </div>
 
+              {/* Tab Content */}
               <CardContent className="flex-1 flex flex-col p-0 min-h-0">
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-                  {/* Chat Tab */}
                   <TabsContent value="chat" className="flex-1 flex flex-col p-0 min-h-0">
                     <div 
                       ref={scrollAreaRef}
                       className="flex-1 overflow-y-auto px-6"
                       onScroll={checkScrollPosition}
                     >
-                      {!selectedConversationId || (!conversationData && !loadingMessages) ? (
-                        <div className="flex items-center justify-center h-full">
-                          <div className="text-center space-y-4 max-w-md">
-                            <div className="p-4 bg-blue-50 rounded-full mx-auto w-fit">
-                              <Brain className="h-8 w-8 text-blue-600" />
-                            </div>
-                            <div>
-                              <h3 className="text-lg font-semibold mb-2">
-                                Welcome to PhysioGPT
-                              </h3>
-                              <p className="text-muted-foreground text-sm leading-relaxed">
-                                Ask me anything about physiotherapy, patient assessment, 
-                                treatment planning, or clinical reasoning. I'm here to help 
-                                with evidence-based guidance for your practice.
-                              </p>
-                            </div>
-                            
-                            <div className="space-y-2 pt-4">
-                              <p className="text-sm font-medium text-gray-700">Try asking:</p>
-                              <div className="space-y-2">
-                                {[
-                                  "How should I assess a patient with shoulder impingement?",
-                                  "What exercises work best for chronic low back pain?",
-                                  "How do I differentiate between different types of headaches?"
-                                ].map((suggestion, index) => (
-                                  <button
-                                    key={index}
-                                    onClick={() => handleSuggestionClick(suggestion)}
-                                    className="block w-full text-left p-2 text-sm bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                                  >
-                                    {suggestion}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
+                    {!selectedConversationId || (!conversationData && !loadingMessages) ? (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-center space-y-4 max-w-md">
+                        <div className="p-4 bg-blue-50 rounded-full mx-auto w-fit">
+                          <Brain className="h-8 w-8 text-blue-600" />
                         </div>
-                      ) : loadingMessages ? (
-                        <div className="space-y-4 p-4">
-                          {[1, 2].map((i) => (
-                            <div key={i} className="flex gap-3">
-                              <div className="w-8 h-8 bg-gray-200 rounded-full animate-pulse" />
-                              <div className="flex-1 space-y-2">
-                                <div className="h-4 bg-gray-200 rounded animate-pulse" />
-                                <div className="h-4 bg-gray-200 rounded w-3/4 animate-pulse" />
-                              </div>
-                            </div>
-                          ))}
+                        <div>
+                          <h3 className="text-lg font-semibold mb-2">
+                            Welcome to PhysioGPT
+                          </h3>
+                          <p className="text-muted-foreground text-sm leading-relaxed">
+                            Ask me anything about physiotherapy, patient assessment, 
+                            treatment planning, or clinical reasoning. I'm here to help 
+                            with evidence-based guidance for your practice.
+                          </p>
                         </div>
-                      ) : conversationData && conversationData.messages ? (
-                        <div className="space-y-6 p-4">
-                          {conversationData.messages.map((msg: any, index: number) => (
-                            <div
-                              key={msg?.id || index}
-                              className={`flex gap-3 ${
-                                msg?.role === "user" ? "justify-end" : "justify-start"
-                              }`}
-                            >
-                              {msg?.role === "assistant" && (
-                                <Avatar className="w-8 h-8">
-                                  <AvatarFallback className="bg-blue-600 text-white">
-                                    <Bot className="h-4 w-4" />
-                                  </AvatarFallback>
-                                </Avatar>
-                              )}
-                              
-                              <div
-                                className={`max-w-[80%] ${
-                                  msg?.role === "user"
-                                    ? "bg-blue-600 text-white"
-                                    : "bg-gray-100 text-gray-900"
-                                } rounded-lg p-3`}
+                        
+                        {/* Sample suggestions for new users */}
+                        <div className="space-y-2 pt-4">
+                          <p className="text-sm font-medium text-gray-700">Try asking:</p>
+                          <div className="space-y-2">
+                            {[
+                              "How should I assess a patient with shoulder impingement?",
+                              "What exercises work best for chronic low back pain?",
+                              "How do I differentiate between different types of headaches?"
+                            ].map((suggestion, index) => (
+                              <button
+                                key={index}
+                                onClick={() => handleSuggestionClick(suggestion)}
+                                className="block w-full text-left p-2 text-sm bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
                               >
-                                <div className="whitespace-pre-wrap text-sm leading-relaxed">
-                                  {msg?.content || ""}
-                                </div>
-                                <div className="text-xs opacity-70 mt-2">
-                                  {msg?.createdAt ? new Date(msg.createdAt).toLocaleTimeString() : ""}
-                                </div>
-                              </div>
-
-                              {msg?.role === "user" && (
-                                <Avatar className="w-8 h-8">
-                                  <AvatarFallback className="bg-gray-600 text-white">
-                                    <User className="h-4 w-4" />
-                                  </AvatarFallback>
-                                </Avatar>
-                              )}
-                            </div>
-                          ))}
-                          <div ref={messagesEndRef} />
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-center h-full">
-                          <div className="text-center text-muted-foreground">
-                            <p>No messages in this conversation yet.</p>
+                                {suggestion}
+                              </button>
+                            ))}
                           </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Suggestions */}
-                    {suggestions.length > 0 && (
-                      <div className="px-6 py-3 border-t bg-gray-50 flex-shrink-0">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Lightbulb className="h-4 w-4 text-amber-600" />
-                          <span className="text-sm font-medium text-gray-700">
-                            Suggested follow-ups:
-                          </span>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {suggestions.map((suggestion, index) => (
-                            <Badge
-                              key={index}
-                              variant="secondary"
-                              className="cursor-pointer hover:bg-blue-100 transition-colors"
-                              onClick={() => handleSuggestionClick(suggestion)}
-                            >
-                              {suggestion}
-                            </Badge>
-                          ))}
                         </div>
                       </div>
-                    )}
+                    </div>
+                  ) : loadingMessages ? (
+                    <div className="space-y-4 p-4">
+                      {[1, 2].map((i) => (
+                        <div key={i} className="flex gap-3">
+                          <div className="w-8 h-8 bg-gray-200 rounded-full animate-pulse" />
+                          <div className="flex-1 space-y-2">
+                            <div className="h-4 bg-gray-200 rounded animate-pulse" />
+                            <div className="h-4 bg-gray-200 rounded w-3/4 animate-pulse" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : loadingMessages ? (
+                    <div className="flex items-center justify-center h-full">
+                      <Loader2 className="h-8 w-8 animate-spin text-border" />
+                    </div>
+                  ) : conversationData && conversationData.messages ? (
+                    <div className="space-y-6 p-4">
+                      {conversationData.messages.map((msg, index) => (
+                        <div
+                          key={msg?.id || index}
+                          className={`flex gap-3 ${
+                            msg?.role === "user" ? "justify-end" : "justify-start"
+                          }`}
+                        >
+                          {msg?.role === "assistant" && (
+                            <Avatar className="w-8 h-8">
+                              <AvatarFallback className="bg-blue-600 text-white">
+                                <Bot className="h-4 w-4" />
+                              </AvatarFallback>
+                            </Avatar>
+                          )}
+                          
+                          <div
+                            className={`max-w-[80%] ${
+                              msg?.role === "user"
+                                ? "bg-blue-600 text-white"
+                                : "bg-gray-100 text-gray-900"
+                            } rounded-lg p-3`}
+                          >
+                            <div className="whitespace-pre-wrap text-sm leading-relaxed">
+                              {msg?.content || ""}
+                            </div>
+                            <div className="text-xs opacity-70 mt-2">
+                              {msg?.createdAt ? new Date(msg.createdAt).toLocaleTimeString() : ""}
+                            </div>
+                          </div>
+
+                          {msg?.role === "user" && (
+                            <Avatar className="w-8 h-8">
+                              <AvatarFallback className="bg-gray-600 text-white">
+                                <User className="h-4 w-4" />
+                              </AvatarFallback>
+                            </Avatar>
+                          )}
+                        </div>
+                      ))}
+                      <div ref={messagesEndRef} />
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-center text-muted-foreground">
+                        <p>No messages in this conversation yet.</p>
+                      </div>
+                    </div>
+                  )}
+                  <div ref={messagesEndRef} />
+                </div>
+
+                <Separator />
+
+                {/* Suggestions */}
+                {suggestions.length > 0 && (
+                  <div className="px-6 py-3 border-t bg-gray-50 flex-shrink-0">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Lightbulb className="h-4 w-4 text-amber-600" />
+                      <span className="text-sm font-medium text-gray-700">
+                        Suggested follow-ups:
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {suggestions.map((suggestion, index) => (
+                        <Badge
+                          key={index}
+                          variant="secondary"
+                          className="cursor-pointer hover:bg-blue-100 transition-colors"
+                          onClick={() => handleSuggestionClick(suggestion)}
+                        >
+                          {suggestion}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                     {/* Message Input */}
                     <div className="p-6 border-t flex-shrink-0">
@@ -519,7 +582,6 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
                     </div>
                   </TabsContent>
 
-                  {/* Assessments Tab */}
                   <TabsContent value="assessments" className="flex-1 overflow-hidden p-6">
                     {selectedAssessmentTemplate ? (
                       <AssessmentForm
@@ -535,7 +597,6 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
                     )}
                   </TabsContent>
 
-                  {/* Protocols Tab */}
                   <TabsContent value="protocols" className="flex-1 overflow-hidden p-6">
                     <EvidenceBasedProtocols
                       selectedBodyPart={selectedBodyRegion || undefined}

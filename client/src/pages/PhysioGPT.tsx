@@ -175,21 +175,32 @@ export default function PhysioGPT() {
   const checkScrollPosition = () => {
     if (scrollAreaRef.current) {
       const { scrollTop, scrollHeight, clientHeight } = scrollAreaRef.current;
-      const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 50;
       setShouldAutoScroll(isNearBottom);
     }
   };
 
-  // Auto-scroll to bottom only when user is near bottom or on new messages
+  // Only auto-scroll to bottom for new messages when user is already at the bottom
   useEffect(() => {
-    if (shouldAutoScroll && messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    // Only scroll if user was already at bottom and a new message was added
+    if (shouldAutoScroll && messagesEndRef.current && conversationData?.messages?.length) {
+      const lastMessage = conversationData.messages[conversationData.messages.length - 1];
+      // Only auto-scroll for new assistant messages or when sending user messages
+      if (lastMessage?.role === 'assistant') {
+        setTimeout(() => {
+          messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        }, 100);
+      }
     }
-  }, [conversationData?.messages, shouldAutoScroll]);
+  }, [conversationData?.messages?.length, shouldAutoScroll]);
 
   // Reset auto-scroll when switching conversations
   useEffect(() => {
     setShouldAutoScroll(true);
+    // Auto-scroll to bottom when switching conversations
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, 100);
   }, [selectedConversationId]);
 
   if (!user) {
@@ -349,8 +360,11 @@ export default function PhysioGPT() {
 
               {/* Messages */}
               <CardContent className="flex-1 flex flex-col p-0">
-                <ScrollArea className="flex-1 px-6" onScrollCapture={checkScrollPosition}>
-                  <div ref={scrollAreaRef}>
+                <div 
+                  ref={scrollAreaRef}
+                  className="flex-1 overflow-y-auto px-6 max-h-[60vh]"
+                  onScroll={checkScrollPosition}
+                >
                     {!selectedConversationId || (!conversationData && !loadingMessages) ? (
                     <div className="flex items-center justify-center h-full">
                       <div className="text-center space-y-4 max-w-md">
@@ -455,10 +469,11 @@ export default function PhysioGPT() {
                       </div>
                     </div>
                   )}
-                  </div>
-                </ScrollArea>
+                  <div ref={messagesEndRef} />
+                </div>
+              </CardContent>
 
-                <Separator />
+              <Separator />
 
                 {/* Suggestions */}
                 {suggestions.length > 0 && (

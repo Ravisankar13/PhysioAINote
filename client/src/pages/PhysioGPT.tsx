@@ -318,8 +318,8 @@ export default function PhysioGPT() {
 
           {/* Chat Area */}
           <div className={show3DPanel ? "lg:col-span-3" : "lg:col-span-3"}>
-            <Card className="h-full flex flex-col">
-              <CardHeader className="pb-3">
+            <Card className="h-[80vh] flex flex-col">
+              <CardHeader className="pb-3 flex-shrink-0">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <Avatar>
@@ -359,10 +359,10 @@ export default function PhysioGPT() {
               </CardHeader>
 
               {/* Messages */}
-              <CardContent className="flex-1 flex flex-col p-0">
+              <CardContent className="flex-1 flex flex-col p-0 min-h-0">
                 <div 
                   ref={scrollAreaRef}
-                  className="flex-1 overflow-y-auto px-6 max-h-[60vh]"
+                  className="flex-1 overflow-y-auto px-6"
                   onScroll={checkScrollPosition}
                 >
                     {!selectedConversationId || (!conversationData && !loadingMessages) ? (
@@ -471,13 +471,12 @@ export default function PhysioGPT() {
                   )}
                   <div ref={messagesEndRef} />
                 </div>
-              </CardContent>
 
-              <Separator />
+                <Separator />
 
                 {/* Suggestions */}
                 {suggestions.length > 0 && (
-                  <div className="px-6 py-3 border-t bg-gray-50">
+                  <div className="px-6 py-3 border-t bg-gray-50 flex-shrink-0">
                     <div className="flex items-center gap-2 mb-2">
                       <Lightbulb className="h-4 w-4 text-amber-600" />
                       <span className="text-sm font-medium text-gray-700">
@@ -500,7 +499,7 @@ export default function PhysioGPT() {
                 )}
 
                 {/* Message Input */}
-                <div className="p-6 border-t">
+                <div className="p-6 border-t flex-shrink-0">
                   <div className="flex gap-3">
                     <Input
                       value={message}

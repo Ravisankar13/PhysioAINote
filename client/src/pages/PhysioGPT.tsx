@@ -455,7 +455,6 @@ export default function PhysioGPT() {
                       </div>
                     </div>
                   )}
-                    <div ref={messagesEndRef} />
                   </div>
                 </ScrollArea>
 

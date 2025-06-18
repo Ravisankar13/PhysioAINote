@@ -259,7 +259,7 @@ export default function PhysioGPT() {
                   </Avatar>
                   <div>
                     <CardTitle className="text-lg">
-                      {selectedConversationId && conversationData
+                      {selectedConversationId && conversationData?.conversation
                         ? conversationData.conversation.title
                         : "New Conversation"}
                     </CardTitle>

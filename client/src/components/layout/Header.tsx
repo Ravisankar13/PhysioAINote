@@ -23,6 +23,7 @@ import {
   Activity,
   Users,
   BarChart3,
+  Brain,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Link, useLocation } from "react-router-dom";
@@ -95,6 +96,12 @@ const Header = () => {
 
           {/* Action buttons (right) */}
           <div className="flex items-center space-x-4">
+            <Link to="/physiogpt">
+              <Button className="bg-green-600 hover:bg-green-700 text-white font-semibold shadow-sm flex items-center gap-2">
+                <Brain className="h-4 w-4" />
+                <span>PhysioGPT</span>
+              </Button>
+            </Link>
             <Link to="/clinical-notes">
               <Button className="bg-primary hover:bg-primary/90 text-white font-semibold shadow-sm flex items-center gap-2">
                 <MessageSquareText className="h-4 w-4" />

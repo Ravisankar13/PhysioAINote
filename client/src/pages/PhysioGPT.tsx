@@ -18,11 +18,15 @@ import {
   Clock,
   Brain,
   Lightbulb,
-  Loader2
+  Loader2,
+  ChevronLeft,
+  ChevronRight,
+  Activity
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import type { PhysioGptConversation, PhysioGptMessage } from "@shared/schema";
+import InteractiveSkeleton from "@/components/3d/InteractiveSkeleton";
 
 interface ChatMessage extends PhysioGptMessage {
   suggestions?: string[];
@@ -41,6 +45,9 @@ export default function PhysioGPT() {
   const [selectedConversationId, setSelectedConversationId] = useState<number | null>(null);
   const [message, setMessage] = useState("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [selectedBodyRegion, setSelectedBodyRegion] = useState<string | null>(null);
+  const [selectedBodyRegionName, setSelectedBodyRegionName] = useState<string | null>(null);
+  const [show3DPanel, setShow3DPanel] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Fetch user conversations
@@ -120,8 +127,14 @@ export default function PhysioGPT() {
     const textToSend = messageText || message;
     if (!textToSend.trim()) return;
 
+    // Add anatomical context if a body region is selected
+    let contextualMessage = textToSend;
+    if (selectedBodyRegionName) {
+      contextualMessage = `[Context: ${selectedBodyRegionName}] ${textToSend}`;
+    }
+
     sendMessageMutation.mutate({
-      message: textToSend,
+      message: contextualMessage,
       conversationId: selectedConversationId || undefined,
     });
   };
@@ -137,6 +150,16 @@ export default function PhysioGPT() {
 
   const handleSuggestionClick = (suggestion: string) => {
     setMessage(suggestion);
+  };
+
+  const handleBodyRegionSelect = (regionKey: string, regionName: string) => {
+    setSelectedBodyRegion(regionKey);
+    setSelectedBodyRegionName(regionName);
+    
+    // Optionally add a contextual message starter
+    if (!message.trim()) {
+      setMessage(`I have a question about ${regionName.toLowerCase()}... `);
+    }
   };
 
   // Auto-select latest conversation when conversations load
@@ -186,7 +209,9 @@ export default function PhysioGPT() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-[calc(100vh-200px)]">
+        <div className={`grid gap-6 h-[calc(100vh-200px)] transition-all duration-300 ${
+          show3DPanel ? 'grid-cols-1 lg:grid-cols-5' : 'grid-cols-1 lg:grid-cols-4'
+        }`}>
           {/* Conversations Sidebar */}
           <div className="lg:col-span-1">
             <Card className="h-full flex flex-col">
@@ -263,7 +288,7 @@ export default function PhysioGPT() {
           </div>
 
           {/* Chat Area */}
-          <div className="lg:col-span-3">
+          <div className={show3DPanel ? "lg:col-span-3" : "lg:col-span-3"}>
             <Card className="h-full flex flex-col">
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-3">

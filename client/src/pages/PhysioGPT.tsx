@@ -291,21 +291,40 @@ export default function PhysioGPT() {
           <div className={show3DPanel ? "lg:col-span-3" : "lg:col-span-3"}>
             <Card className="h-full flex flex-col">
               <CardHeader className="pb-3">
-                <div className="flex items-center gap-3">
-                  <Avatar>
-                    <AvatarFallback className="bg-blue-600 text-white">
-                      <Bot className="h-4 w-4" />
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <CardTitle className="text-lg">
-                      {selectedConversationId && conversationData?.conversation
-                        ? conversationData.conversation.title
-                        : "New Conversation"}
-                    </CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                      Ask questions about your patients and clinical practice
-                    </p>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Avatar>
+                      <AvatarFallback className="bg-blue-600 text-white">
+                        <Bot className="h-4 w-4" />
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <CardTitle className="text-lg">
+                        {selectedConversationId && conversationData?.conversation
+                          ? conversationData.conversation.title
+                          : "New Conversation"}
+                      </CardTitle>
+                      <p className="text-sm text-muted-foreground">
+                        Ask questions about your patients and clinical practice
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    {selectedBodyRegionName && (
+                      <Badge variant="secondary" className="text-xs">
+                        {selectedBodyRegionName}
+                      </Badge>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShow3DPanel(!show3DPanel)}
+                      className="h-8"
+                    >
+                      <Activity className="h-4 w-4 mr-1" />
+                      {show3DPanel ? "Hide" : "Show"} 3D
+                    </Button>
                   </div>
                 </div>
               </CardHeader>
@@ -476,6 +495,16 @@ export default function PhysioGPT() {
               </CardContent>
             </Card>
           </div>
+
+          {/* 3D Skeleton Panel */}
+          {show3DPanel && (
+            <div className="lg:col-span-1">
+              <InteractiveSkeleton
+                onRegionSelect={handleBodyRegionSelect}
+                selectedRegion={selectedBodyRegion}
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>

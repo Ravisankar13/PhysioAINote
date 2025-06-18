@@ -54,6 +54,13 @@ export default function PhysioGPT() {
     messages: ChatMessage[];
   }>({
     queryKey: ["/api/physiogpt/conversations", selectedConversationId],
+    queryFn: async () => {
+      if (!selectedConversationId) return null;
+      const response = await apiRequest("GET", `/api/physiogpt/conversations/${selectedConversationId}`);
+      const data = await response.json();
+      console.log("Conversation data received:", data);
+      return data;
+    },
     enabled: !!selectedConversationId,
   });
 
@@ -130,6 +137,13 @@ export default function PhysioGPT() {
   const handleSuggestionClick = (suggestion: string) => {
     setMessage(suggestion);
   };
+
+  // Auto-select latest conversation when conversations load
+  useEffect(() => {
+    if (conversations.length > 0 && !selectedConversationId) {
+      setSelectedConversationId(conversations[0].id);
+    }
+  }, [conversations, selectedConversationId]);
 
   // Auto-scroll to bottom of messages
   useEffect(() => {
@@ -273,7 +287,7 @@ export default function PhysioGPT() {
               {/* Messages */}
               <CardContent className="flex-1 flex flex-col p-0">
                 <ScrollArea className="flex-1 px-6">
-                  {!selectedConversationId ? (
+                  {!selectedConversationId || (!conversationData && !loadingMessages) ? (
                     <div className="flex items-center justify-center h-full">
                       <div className="text-center space-y-4 max-w-md">
                         <div className="p-4 bg-blue-50 rounded-full mx-auto w-fit">

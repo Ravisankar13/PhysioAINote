@@ -40,6 +40,7 @@ const Header = () => {
     { to: "/", label: "Home" },
     { to: "/clinical-notes", label: "Clinical Notes" },
     { to: "/notes", label: "Patient Sessions" },
+    { to: "/physiogpt", label: "PhysioGPT" },
     { to: "/skeleton-3d-tool", label: "3D Skeleton Tool" },
     { to: "/case-studies", label: "AI Case Studies" },
     { to: "/shared-cases", label: "Peer Exchange" },

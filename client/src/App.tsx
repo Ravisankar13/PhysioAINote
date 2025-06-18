@@ -27,6 +27,7 @@ import SharedCaseDetailPage from "@/pages/SharedCaseDetailPage";
 import SharedCaseFormPage from "@/pages/SharedCaseFormPage";
 import CaseStudyPage from "@/pages/CaseStudyPage";
 import AdminDashboard from "@/pages/admin-dashboard";
+import PhysioGPT from "@/pages/PhysioGPT";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { ThemeProvider } from "next-themes";
@@ -80,6 +81,10 @@ function Router() {
           <Route
             path="/case-studies"
             element={<ProtectedRoute component={CaseStudyPage} />}
+          />
+          <Route
+            path="/physiogpt"
+            element={<ProtectedRoute component={PhysioGPT} />}
           />
           <Route path="/membership" element={<Membership />} />
           <Route path="/about" element={<About />} />

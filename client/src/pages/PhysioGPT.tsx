@@ -48,7 +48,9 @@ export default function PhysioGPT() {
   const [selectedBodyRegion, setSelectedBodyRegion] = useState<string | null>(null);
   const [selectedBodyRegionName, setSelectedBodyRegionName] = useState<string | null>(null);
   const [show3DPanel, setShow3DPanel] = useState(false);
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   // Fetch user conversations
   const { data: conversations = [], isLoading: loadingConversations } = useQuery<PhysioGptConversation[]>({
@@ -169,10 +171,26 @@ export default function PhysioGPT() {
     }
   }, [conversations, selectedConversationId]);
 
-  // Auto-scroll to bottom of messages
+  // Check if user is near bottom of scroll area
+  const checkScrollPosition = () => {
+    if (scrollAreaRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = scrollAreaRef.current;
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+      setShouldAutoScroll(isNearBottom);
+    }
+  };
+
+  // Auto-scroll to bottom only when user is near bottom or on new messages
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [conversationData?.messages]);
+    if (shouldAutoScroll && messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [conversationData?.messages, shouldAutoScroll]);
+
+  // Reset auto-scroll when switching conversations
+  useEffect(() => {
+    setShouldAutoScroll(true);
+  }, [selectedConversationId]);
 
   if (!user) {
     return (
@@ -331,8 +349,9 @@ export default function PhysioGPT() {
 
               {/* Messages */}
               <CardContent className="flex-1 flex flex-col p-0">
-                <ScrollArea className="flex-1 px-6">
-                  {!selectedConversationId || (!conversationData && !loadingMessages) ? (
+                <ScrollArea className="flex-1 px-6" onScrollCapture={checkScrollPosition}>
+                  <div ref={scrollAreaRef}>
+                    {!selectedConversationId || (!conversationData && !loadingMessages) ? (
                     <div className="flex items-center justify-center h-full">
                       <div className="text-center space-y-4 max-w-md">
                         <div className="p-4 bg-blue-50 rounded-full mx-auto w-fit">
@@ -436,6 +455,8 @@ export default function PhysioGPT() {
                       </div>
                     </div>
                   )}
+                    <div ref={messagesEndRef} />
+                  </div>
                 </ScrollArea>
 
                 <Separator />
@@ -501,7 +522,7 @@ export default function PhysioGPT() {
             <div className="lg:col-span-1">
               <InteractiveSkeleton
                 onRegionSelect={handleBodyRegionSelect}
-                selectedRegion={selectedBodyRegion}
+                selectedRegion={selectedBodyRegion || undefined}
               />
             </div>
           )}

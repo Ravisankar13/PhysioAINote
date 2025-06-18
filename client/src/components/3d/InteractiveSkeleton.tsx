@@ -83,36 +83,54 @@ function SkeletonModel({ onRegionSelect, selectedRegion }: InteractiveSkeletonPr
       })}
 
       {/* Basic skeleton lines connecting major joints */}
-      <lineSegments>
-        <bufferGeometry>
-          <bufferAttribute
-            attach="attributes-position"
-            count={24}
-            array={new Float32Array([
-              // Spine
-              0, 1.6, 0, 0, 0.4, 0,
-              // Left arm
-              0, 1.4, 0, -0.3, 1.4, 0,
-              -0.3, 1.4, 0, -0.4, 1.0, 0,
-              -0.4, 1.0, 0, -0.5, 0.7, 0,
-              // Right arm
-              0, 1.4, 0, 0.3, 1.4, 0,
-              0.3, 1.4, 0, 0.4, 1.0, 0,
-              0.4, 1.0, 0, 0.5, 0.7, 0,
-              // Left leg
-              0, 0.4, 0, -0.15, 0.4, 0,
-              -0.15, 0.4, 0, -0.15, -0.2, 0,
-              -0.15, -0.2, 0, -0.15, -0.8, 0,
-              // Right leg
-              0, 0.4, 0, 0.15, 0.4, 0,
-              0.15, 0.4, 0, 0.15, -0.2, 0,
-              0.15, -0.2, 0, 0.15, -0.8, 0,
-            ])}
-            itemSize={3}
-          />
-        </bufferGeometry>
-        <lineBasicMaterial color="#94a3b8" linewidth={2} />
-      </lineSegments>
+      <group>
+        {/* Simplified skeleton representation using cylinders */}
+        {/* Spine */}
+        <mesh position={[0, 1, 0]} rotation={[0, 0, 0]}>
+          <cylinderGeometry args={[0.02, 0.02, 1.2]} />
+          <meshStandardMaterial color="#94a3b8" />
+        </mesh>
+        
+        {/* Left arm */}
+        <mesh position={[-0.35, 1.2, 0]} rotation={[0, 0, Math.PI / 6]}>
+          <cylinderGeometry args={[0.015, 0.015, 0.4]} />
+          <meshStandardMaterial color="#94a3b8" />
+        </mesh>
+        <mesh position={[-0.45, 0.85, 0]} rotation={[0, 0, 0]}>
+          <cylinderGeometry args={[0.015, 0.015, 0.3]} />
+          <meshStandardMaterial color="#94a3b8" />
+        </mesh>
+        
+        {/* Right arm */}
+        <mesh position={[0.35, 1.2, 0]} rotation={[0, 0, -Math.PI / 6]}>
+          <cylinderGeometry args={[0.015, 0.015, 0.4]} />
+          <meshStandardMaterial color="#94a3b8" />
+        </mesh>
+        <mesh position={[0.45, 0.85, 0]} rotation={[0, 0, 0]}>
+          <cylinderGeometry args={[0.015, 0.015, 0.3]} />
+          <meshStandardMaterial color="#94a3b8" />
+        </mesh>
+        
+        {/* Left leg */}
+        <mesh position={[-0.15, 0.1, 0]} rotation={[0, 0, 0]}>
+          <cylinderGeometry args={[0.02, 0.02, 0.6]} />
+          <meshStandardMaterial color="#94a3b8" />
+        </mesh>
+        <mesh position={[-0.15, -0.5, 0]} rotation={[0, 0, 0]}>
+          <cylinderGeometry args={[0.015, 0.015, 0.6]} />
+          <meshStandardMaterial color="#94a3b8" />
+        </mesh>
+        
+        {/* Right leg */}
+        <mesh position={[0.15, 0.1, 0]} rotation={[0, 0, 0]}>
+          <cylinderGeometry args={[0.02, 0.02, 0.6]} />
+          <meshStandardMaterial color="#94a3b8" />
+        </mesh>
+        <mesh position={[0.15, -0.5, 0]} rotation={[0, 0, 0]}>
+          <cylinderGeometry args={[0.015, 0.015, 0.6]} />
+          <meshStandardMaterial color="#94a3b8" />
+        </mesh>
+      </group>
 
       {/* Hovering labels */}
       {hoveredRegion && (

@@ -7,6 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { 
   MessageCircle, 
@@ -21,12 +22,18 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
-  Activity
+  Activity,
+  FileText,
+  BookOpen,
+  Stethoscope
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import type { PhysioGptConversation, PhysioGptMessage } from "@shared/schema";
 import InteractiveSkeleton from "@/components/3d/InteractiveSkeleton";
+import AssessmentTemplates, { type AssessmentTemplate } from "@/components/clinical/AssessmentTemplates";
+import AssessmentForm, { type AssessmentResults } from "@/components/clinical/AssessmentForm";
+import EvidenceBasedProtocols from "@/components/clinical/EvidenceBasedProtocols";
 
 interface ChatMessage extends PhysioGptMessage {
   suggestions?: string[];
@@ -49,6 +56,9 @@ export default function PhysioGPT() {
   const [selectedBodyRegionName, setSelectedBodyRegionName] = useState<string | null>(null);
   const [show3DPanel, setShow3DPanel] = useState(false);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
+  const [activeTab, setActiveTab] = useState("chat");
+  const [selectedAssessmentTemplate, setSelectedAssessmentTemplate] = useState<AssessmentTemplate | null>(null);
+  const [assessmentResults, setAssessmentResults] = useState<AssessmentResults | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
@@ -150,18 +160,40 @@ export default function PhysioGPT() {
     deleteConversationMutation.mutate(conversationId);
   };
 
-  const handleSuggestionClick = (suggestion: string) => {
-    setMessage(suggestion);
+  const handleAssessmentComplete = (results: AssessmentResults) => {
+    setAssessmentResults(results);
+    setSelectedAssessmentTemplate(null);
+    
+    // Create a message with assessment results to share with PhysioGPT
+    const assessmentSummary = `Assessment completed: ${results.templateName}
+Score: ${results.score || 'N/A'}
+Interpretation: ${results.interpretation || 'See detailed responses'}
+Key findings: ${Object.entries(results.responses).map(([q, a]) => `${q}: ${a}`).join(', ')}
+Recommendations: ${results.recommendations?.join('; ') || 'Standard care protocol'}`;
+    
+    // Switch to chat tab and send assessment results
+    setActiveTab("chat");
+    handleSendMessage(`Based on this clinical assessment: ${assessmentSummary}. Please provide evidence-based treatment recommendations and next steps.`);
   };
 
-  const handleBodyRegionSelect = (regionKey: string, regionName: string) => {
-    setSelectedBodyRegion(regionKey);
-    setSelectedBodyRegionName(regionName);
+  const handleBodyRegionSelect = (region: string, displayName: string) => {
+    setSelectedBodyRegion(region);
+    setSelectedBodyRegionName(displayName);
+    setShow3DPanel(false);
     
-    // Optionally add a contextual message starter
-    if (!message.trim()) {
-      setMessage(`I have a question about ${regionName.toLowerCase()}... `);
-    }
+    // Add anatomical context suggestion
+    const contextMessage = `I have a question about ${displayName}`;
+    setMessage(contextMessage);
+    setSuggestions([
+      `What are common conditions affecting the ${displayName}?`,
+      `Assessment techniques for ${displayName} injuries`,
+      `Evidence-based treatment protocols for ${displayName}`,
+      `Red flags to screen for in ${displayName} pain`
+    ]);
+  };
+
+  const handleSuggestionClick = (suggestion: string) => {
+    setMessage(suggestion);
   };
 
   // Auto-select latest conversation when conversations load

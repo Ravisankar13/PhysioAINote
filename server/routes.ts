@@ -3108,6 +3108,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       console.log("PhysioGPT response generated successfully");
+      console.log("Result object:", JSON.stringify(result, null, 2));
+      console.log("Sending response to client...");
       res.json(result);
     } catch (error: any) {
       console.error("PhysioGPT chat error:", error);

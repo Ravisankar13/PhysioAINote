@@ -233,12 +233,17 @@ Keep responses concise, practical, and directly applicable to clinical practice.
       });
       
       console.log("=== PhysioGPT Processing Complete ===");
+      console.log("Final aiResponse:", aiResponse);
+      console.log("Final conversationId:", conversationId);
       
-      return {
+      const result = {
         response: aiResponse,
         conversationId,
         suggestions: this.generateSuggestions(aiResponse)
       };
+      
+      console.log("Returning result:", JSON.stringify(result));
+      return result;
 
     } catch (error: any) {
       console.error("PhysioGPT processing error:", error);

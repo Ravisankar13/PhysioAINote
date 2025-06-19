@@ -83,6 +83,9 @@ export default function PhysioGPT() {
     console.log("selectedConversationId changed:", selectedConversationId);
     console.log("Query enabled:", !!selectedConversationId);
     console.log("loadingMessages:", loadingMessages);
+    if (selectedConversationId) {
+      console.log("Should be querying:", `/api/physiogpt/conversations/${selectedConversationId}`);
+    }
   }, [selectedConversationId, loadingMessages]);
 
   // Log conversation data when it changes

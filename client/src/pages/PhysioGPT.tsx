@@ -83,6 +83,10 @@ export default function PhysioGPT() {
   console.log("Debug - conversationData:", conversationData);
   console.log("Debug - loadingMessages:", loadingMessages);
   console.log("Debug - messages count:", conversationData?.messages?.length);
+  
+  // Check if conversationData is an array (likely the messages themselves)
+  const messages = Array.isArray(conversationData) ? conversationData : conversationData?.messages;
+  console.log("Debug - processed messages:", messages?.length);
 
   // Send message mutation
   const sendMessageMutation = useMutation({
@@ -432,9 +436,9 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
                             </div>
                           ))}
                         </div>
-                      ) : conversationData?.messages && conversationData.messages.length > 0 ? (
+                      ) : messages && messages.length > 0 ? (
                         <div className="space-y-6 p-4">
-                          {conversationData.messages.map((msg: any, index: number) => (
+                          {messages.map((msg: any, index: number) => (
                             <div
                               key={msg?.id || index}
                               className={`flex gap-3 ${

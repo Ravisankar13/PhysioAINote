@@ -98,11 +98,23 @@ export default function PhysioGPT() {
       return result;
     },
     onSuccess: (data: PhysioGptResponse) => {
+      console.log("Message sent successfully, conversation ID:", data.conversationId);
       setSelectedConversationId(data.conversationId);
       setSuggestions(data.suggestions || []);
       setMessage("");
+      
+      // Invalidate all conversation-related queries
       queryClient.invalidateQueries({ queryKey: ["/api/physiogpt/conversations"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/physiogpt/conversations", data.conversationId] });
+      
+      // Force refetch of the current conversation messages
+      queryClient.invalidateQueries({ 
+        queryKey: ["/api/physiogpt/conversations", data.conversationId] 
+      });
+      
+      // Also refetch immediately to ensure UI updates
+      queryClient.refetchQueries({ 
+        queryKey: ["/api/physiogpt/conversations", data.conversationId] 
+      });
     },
     onError: (error: any) => {
       console.error("Send message error:", error);

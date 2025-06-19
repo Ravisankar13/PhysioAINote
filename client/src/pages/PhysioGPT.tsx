@@ -76,15 +76,26 @@ export default function PhysioGPT() {
   }>({
     queryKey: ["/api/physiogpt/conversations", selectedConversationId],
     enabled: !!selectedConversationId,
-    onSuccess: (data) => {
-      console.log("Conversation data fetched:", data);
-      console.log("Messages in conversation:", data?.messages?.length || 0);
-      if (data?.messages?.length > 0) {
-        console.log("First message:", data.messages[0]);
-        console.log("Last message:", data.messages[data.messages.length - 1]);
+  });
+
+  // Debug logging for state tracking
+  useEffect(() => {
+    console.log("selectedConversationId changed:", selectedConversationId);
+    console.log("Query enabled:", !!selectedConversationId);
+    console.log("loadingMessages:", loadingMessages);
+  }, [selectedConversationId, loadingMessages]);
+
+  // Log conversation data when it changes
+  useEffect(() => {
+    if (conversationData) {
+      console.log("Conversation data fetched:", conversationData);
+      console.log("Messages in conversation:", conversationData?.messages?.length || 0);
+      if (conversationData?.messages?.length > 0) {
+        console.log("First message:", conversationData.messages[0]);
+        console.log("Last message:", conversationData.messages[conversationData.messages.length - 1]);
       }
     }
-  });
+  }, [conversationData]);
 
   // Extract messages from conversation data
   const messages = conversationData?.messages || [];
@@ -107,22 +118,30 @@ export default function PhysioGPT() {
     },
     onSuccess: (data: PhysioGptResponse) => {
       console.log("Message sent successfully, conversation ID:", data.conversationId);
+      console.log("Setting selectedConversationId to:", data.conversationId);
+      
+      // Set conversation ID first
       setSelectedConversationId(data.conversationId);
       setSuggestions(data.suggestions || []);
       setMessage("");
       
-      // Invalidate all conversation-related queries
-      queryClient.invalidateQueries({ queryKey: ["/api/physiogpt/conversations"] });
-      
-      // Force refetch of the current conversation messages
-      queryClient.invalidateQueries({ 
-        queryKey: ["/api/physiogpt/conversations", data.conversationId] 
-      });
-      
-      // Also refetch immediately to ensure UI updates
-      queryClient.refetchQueries({ 
-        queryKey: ["/api/physiogpt/conversations", data.conversationId] 
-      });
+      // Small delay to ensure state is updated before queries
+      setTimeout(() => {
+        console.log("Invalidating conversation queries for ID:", data.conversationId);
+        
+        // Invalidate conversations list
+        queryClient.invalidateQueries({ queryKey: ["/api/physiogpt/conversations"] });
+        
+        // Force invalidate and refetch the specific conversation
+        queryClient.invalidateQueries({ 
+          queryKey: ["/api/physiogpt/conversations", data.conversationId] 
+        });
+        
+        // Force refetch
+        queryClient.refetchQueries({ 
+          queryKey: ["/api/physiogpt/conversations", data.conversationId] 
+        });
+      }, 100);
     },
     onError: (error: any) => {
       console.error("Send message error:", error);

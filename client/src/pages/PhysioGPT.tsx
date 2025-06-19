@@ -81,7 +81,7 @@ export default function PhysioGPT() {
   // Send message mutation
   const sendMessageMutation = useMutation({
     mutationFn: async (messageContent: string) => {
-      const response = await apiRequest("POST", "/api/physiogpt/message", {
+      const response = await apiRequest("POST", "/api/physiogpt/chat", {
         message: messageContent,
         conversationId: selectedConversationId,
         patientContext: selectedBodyRegion ? {

@@ -102,6 +102,7 @@ export default function PhysioGPT() {
       queryClient.invalidateQueries({ queryKey: ["/api/physiogpt/conversations", data.conversationId] });
     },
     onError: (error: any) => {
+      console.error("Send message error:", error);
       toast({
         title: "Error",
         description: error.message || "Failed to send message",

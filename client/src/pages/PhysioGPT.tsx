@@ -74,7 +74,7 @@ export default function PhysioGPT() {
     conversation: PhysioGptConversation;
     messages: PhysioGptMessage[];
   }>({
-    queryKey: ["/api/physiogpt/conversations", selectedConversationId],
+    queryKey: [`/api/physiogpt/conversations/${selectedConversationId}`],
     enabled: !!selectedConversationId,
   });
 
@@ -134,12 +134,12 @@ export default function PhysioGPT() {
         
         // Force invalidate and refetch the specific conversation
         queryClient.invalidateQueries({ 
-          queryKey: ["/api/physiogpt/conversations", data.conversationId] 
+          queryKey: [`/api/physiogpt/conversations/${data.conversationId}`] 
         });
         
         // Force refetch
         queryClient.refetchQueries({ 
-          queryKey: ["/api/physiogpt/conversations", data.conversationId] 
+          queryKey: [`/api/physiogpt/conversations/${data.conversationId}`] 
         });
       }, 100);
     },

@@ -30,24 +30,19 @@ export interface PhysioGptResponse {
 
 export class PhysioGptService {
   private buildSystemPrompt(): string {
-    return `You are PhysioGPT, an expert AI assistant specialized in physiotherapy and rehabilitation medicine. You provide evidence-based guidance to licensed physiotherapists about their patients and clinical practice.
+    return `You are PhysioGPT, an expert physiotherapy AI assistant. Provide evidence-based guidance to physiotherapists.
 
-EXPERTISE AREAS:
-- Musculoskeletal assessment and treatment
-- Movement analysis and biomechanics
-- Exercise prescription and progression
-- Manual therapy techniques
-- Pain science and management
-- Clinical reasoning and differential diagnosis
-- Evidence-based practice guidelines
+FOCUS AREAS:
+- Assessment and treatment advice
+- Exercise prescription
+- Clinical reasoning
+- Patient safety
 
-RESPONSE GUIDELINES:
-- Provide specific, actionable clinical advice
-- Reference current evidence and best practices
-- Consider patient safety and contraindications
-- Suggest appropriate assessment techniques
-- Recommend treatment progressions
-- Include relevant anatomy and physiology
+RESPONSE STYLE:
+- Concise, actionable advice
+- Evidence-based recommendations
+- Safety considerations
+- Treatment progressions
 - Maintain professional clinical terminology
 - Always emphasize the importance of clinical judgment
 
@@ -63,46 +58,27 @@ Keep responses concise, practical, and directly applicable to clinical practice.
   private async getPatientContextData(patientContext?: PhysioGptRequest['patientContext']): Promise<string> {
     if (!patientContext) return "";
 
-    let contextData = "\n\nPATIENT CONTEXT:\n";
+    // Simplified context to reduce token count
+    let contextData = "";
 
-    // Get patient session data
+    // Get minimal patient session data
     if (patientContext.sessionId) {
       try {
         const session = await patientSessionStorage.getPatientSession(patientContext.sessionId);
         if (session) {
-          contextData += `Patient: ${session.firstName} ${session.lastName}\n`;
-          contextData += `Age: ${session.dob ? this.calculateAge(session.dob) : 'Not specified'}\n`;
-          contextData += `Gender: ${session.gender || 'Not specified'}\n`;
-          contextData += `Height: ${session.heightFeet}'${session.heightInch}" Weight: ${session.weight}\n`;
-          
-          if (session.pastMedicalHistory) {
-            contextData += `Medical History: ${session.pastMedicalHistory}\n`;
-          }
-          
-          if (session.pastSurgicalHistory) {
-            contextData += `Surgical History: ${session.pastSurgicalHistory}\n`;
-          }
-
-          if (session.soapNote) {
-            contextData += `\nRecent SOAP Note:\n${JSON.stringify(session.soapNote, null, 2)}\n`;
-          }
+          contextData += `\nPatient: ${session.firstName} ${session.lastName}, Age: ${session.dob ? this.calculateAge(session.dob) : 'N/A'}`;
         }
       } catch (error) {
         console.error("Error fetching patient session:", error);
       }
     }
 
-    // Get case study data
+    // Get minimal case study data
     if (patientContext.caseStudyId) {
       try {
         const caseStudy = await storage.getAICaseStudy(patientContext.caseStudyId);
         if (caseStudy) {
-          contextData += `\nCase Study Context:\n`;
-          contextData += `Title: ${caseStudy.title}\n`;
-          contextData += `Body Part: ${caseStudy.bodyPart}\n`;
-          contextData += `Complexity: ${caseStudy.complexity}\n`;
-          contextData += `Patient Description: ${caseStudy.patientDescription}\n`;
-          contextData += `Presenting Symptoms: ${caseStudy.presentingSymptoms}\n`;
+          contextData += `\nCase: ${caseStudy.bodyPart} condition`;
         }
       } catch (error) {
         console.error("Error fetching case study:", error);
@@ -243,7 +219,7 @@ Keep responses concise, practical, and directly applicable to clinical practice.
         completion = await openai.chat.completions.create({
           model: "gpt-4o", // Using latest OpenAI model
           messages: openaiMessages as any,
-          max_tokens: 1000,
+          max_tokens: 500,
           temperature: 0.7,
         });
         console.log("OpenAI API call successful");

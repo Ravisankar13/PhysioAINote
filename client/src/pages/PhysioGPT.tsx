@@ -81,6 +81,7 @@ export default function PhysioGPT() {
   // Send message mutation
   const sendMessageMutation = useMutation({
     mutationFn: async (messageContent: string) => {
+      console.log("Sending message:", messageContent);
       const response = await apiRequest("POST", "/api/physiogpt/chat", {
         message: messageContent,
         conversationId: selectedConversationId,
@@ -89,7 +90,9 @@ export default function PhysioGPT() {
           regionName: selectedBodyRegionName
         } : undefined
       });
-      return await response.json();
+      const result = await response.json();
+      console.log("Response received:", result);
+      return result;
     },
     onSuccess: (data: PhysioGptResponse) => {
       setSelectedConversationId(data.conversationId);
@@ -128,8 +131,13 @@ export default function PhysioGPT() {
 
   const handleSendMessage = (messageContent?: string) => {
     const content = messageContent || message.trim();
-    if (!content) return;
+    console.log("handleSendMessage called with:", content);
+    if (!content) {
+      console.log("No content, returning early");
+      return;
+    }
 
+    console.log("Calling sendMessageMutation.mutate");
     sendMessageMutation.mutate(content);
   };
 

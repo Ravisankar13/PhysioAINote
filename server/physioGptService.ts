@@ -165,6 +165,7 @@ Keep responses concise, practical, and directly applicable to clinical practice.
 
   async processMessage(request: PhysioGptRequest): Promise<PhysioGptResponse> {
     try {
+      console.log("PhysioGPT processing message:", request.message);
       let conversationId = request.conversationId;
       let messages: any[] = [];
 
@@ -211,6 +212,7 @@ Keep responses concise, practical, and directly applicable to clinical practice.
       ];
 
       // Get AI response
+      console.log("Sending request to OpenAI with", openaiMessages.length, "messages");
       const completion = await openai.chat.completions.create({
         model: "gpt-4o", // Using latest OpenAI model
         messages: openaiMessages as any,
@@ -220,6 +222,8 @@ Keep responses concise, practical, and directly applicable to clinical practice.
 
       const aiResponse = completion.choices[0]?.message?.content || 
         "I apologize, but I'm unable to provide a response at the moment. Please try again.";
+      
+      console.log("OpenAI response received:", aiResponse.substring(0, 100) + "...");
 
       // Save AI response to conversation
       await physioGptStorage.addMessage({

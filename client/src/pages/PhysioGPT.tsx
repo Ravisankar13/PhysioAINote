@@ -78,15 +78,8 @@ export default function PhysioGPT() {
     enabled: !!selectedConversationId,
   });
 
-  // Debug logging
-  console.log("Debug - selectedConversationId:", selectedConversationId);
-  console.log("Debug - conversationData:", conversationData);
-  console.log("Debug - loadingMessages:", loadingMessages);
-  console.log("Debug - messages count:", conversationData?.messages?.length);
-  
-  // Check if conversationData is an array (likely the messages themselves)
-  const messages = Array.isArray(conversationData) ? conversationData : conversationData?.messages;
-  console.log("Debug - processed messages:", messages?.length);
+  // Extract messages from conversation data
+  const messages = conversationData?.messages || [];
 
   // Send message mutation
   const sendMessageMutation = useMutation({
@@ -461,7 +454,7 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
                                 } rounded-lg p-3`}
                               >
                                 <div className="whitespace-pre-wrap text-sm leading-relaxed">
-                                  {msg?.content || ""}
+                                  {msg?.content || "No content available"}
                                 </div>
                                 <div className="text-xs opacity-70 mt-2">
                                   {msg?.createdAt ? new Date(msg.createdAt).toLocaleTimeString() : ""}

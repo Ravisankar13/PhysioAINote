@@ -145,10 +145,8 @@ Keep responses concise, practical, and directly applicable to clinical practice.
       console.log("Message:", request.message);
       console.log("User ID:", request.userId);
       
-      // Return a simple test response to verify the pipeline works
-      const testResponse = `Thank you for your physiotherapy question: "${request.message}". As PhysioGPT, I can help with assessment techniques, treatment protocols, and evidence-based recommendations. This is a test response while we resolve the AI integration.`;
-      
       let conversationId = request.conversationId;
+      let previousMessages: any[] = [];
       
       // Create conversation if needed
       if (!conversationId) {
@@ -159,6 +157,26 @@ Keep responses concise, practical, and directly applicable to clinical practice.
         });
         conversationId = conversation.id;
         console.log("Created conversation:", conversationId);
+      } else {
+        // Load previous messages for context (limit to last 5 to control token count)
+        try {
+          const conversationData = await physioGptStorage.getConversationWithMessages(
+            conversationId, 
+            request.userId
+          );
+          
+          if (conversationData && conversationData.messages) {
+            previousMessages = conversationData.messages
+              .slice(-5) // Only last 5 messages to control tokens
+              .map(msg => ({
+                role: msg.role,
+                content: msg.content
+              }));
+            console.log("Loaded", previousMessages.length, "previous messages");
+          }
+        } catch (error) {
+          console.error("Error loading conversation history:", error);
+        }
       }
       
       // Save user message
@@ -168,19 +186,58 @@ Keep responses concise, practical, and directly applicable to clinical practice.
         content: request.message
       });
       
-      // Save test response
+      // Prepare messages for OpenAI - keep it minimal
+      const systemPrompt = this.buildSystemPrompt();
+      const openaiMessages = [
+        { role: 'system', content: systemPrompt },
+        ...previousMessages,
+        { role: 'user', content: request.message }
+      ];
+      
+      console.log("Sending to OpenAI:", openaiMessages.length, "messages");
+      console.log("System prompt length:", systemPrompt.length);
+      console.log("User message length:", request.message.length);
+      
+      // Call OpenAI API with reduced token limits
+      let aiResponse;
+      try {
+        const completion = await openai.chat.completions.create({
+          model: "gpt-4o",
+          messages: openaiMessages as any,
+          max_tokens: 400, // Reduced from 500
+          temperature: 0.7,
+        });
+        
+        aiResponse = completion.choices[0]?.message?.content || 
+          "I apologize, but I'm unable to provide a response at the moment. Please try again.";
+          
+        console.log("OpenAI response received successfully");
+      } catch (apiError: any) {
+        console.error("OpenAI API error:", apiError);
+        
+        // Provide specific error handling
+        if (apiError?.status === 429) {
+          aiResponse = "I'm currently experiencing high demand. Please try again in a moment.";
+        } else if (apiError?.status === 401) {
+          aiResponse = "There's an authentication issue. Please contact support.";
+        } else {
+          aiResponse = `As PhysioGPT, I can help with your question about "${request.message}". For immediate assistance, please consider: assessment techniques, treatment protocols, exercise progressions, and evidence-based recommendations specific to your clinical needs.`;
+        }
+      }
+      
+      // Save AI response
       await physioGptStorage.addMessage({
         conversationId,
         role: 'assistant', 
-        content: testResponse
+        content: aiResponse
       });
       
       console.log("=== PhysioGPT Processing Complete ===");
       
       return {
-        response: testResponse,
+        response: aiResponse,
         conversationId,
-        suggestions: this.generateSuggestions(testResponse)
+        suggestions: this.generateSuggestions(aiResponse)
       };
 
     } catch (error: any) {

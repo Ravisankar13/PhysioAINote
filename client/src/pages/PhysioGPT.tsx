@@ -93,12 +93,15 @@ export default function PhysioGPT() {
     if (conversationData) {
       console.log("Conversation data fetched:", conversationData);
       console.log("Messages in conversation:", conversationData?.messages?.length || 0);
+      console.log("loadingMessages state:", loadingMessages);
+      console.log("selectedConversationId:", selectedConversationId);
+      console.log("messages array length:", messages.length);
       if (conversationData?.messages?.length > 0) {
         console.log("First message:", conversationData.messages[0]);
         console.log("Last message:", conversationData.messages[conversationData.messages.length - 1]);
       }
     }
-  }, [conversationData]);
+  }, [conversationData, loadingMessages, messages]);
 
   // Extract messages from conversation data
   const messages = conversationData?.messages || [];

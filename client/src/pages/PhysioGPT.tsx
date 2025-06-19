@@ -520,26 +520,30 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
                   </TabsContent>
 
                   {/* Assessments Tab */}
-                  <TabsContent value="assessments" className="flex-1 overflow-hidden p-6">
-                    {selectedAssessmentTemplate ? (
-                      <AssessmentForm
-                        template={selectedAssessmentTemplate}
-                        onComplete={handleAssessmentComplete}
-                        onBack={() => setSelectedAssessmentTemplate(null)}
-                      />
-                    ) : (
-                      <AssessmentTemplates
-                        onSelectTemplate={setSelectedAssessmentTemplate}
-                        selectedBodyPart={selectedBodyRegion || undefined}
-                      />
-                    )}
+                  <TabsContent value="assessments" className="flex-1 flex flex-col p-0 min-h-0">
+                    <div className="flex-1 overflow-y-auto p-6">
+                      {selectedAssessmentTemplate ? (
+                        <AssessmentForm
+                          template={selectedAssessmentTemplate}
+                          onComplete={handleAssessmentComplete}
+                          onBack={() => setSelectedAssessmentTemplate(null)}
+                        />
+                      ) : (
+                        <AssessmentTemplates
+                          onSelectTemplate={setSelectedAssessmentTemplate}
+                          selectedBodyPart={selectedBodyRegion || undefined}
+                        />
+                      )}
+                    </div>
                   </TabsContent>
 
                   {/* Protocols Tab */}
-                  <TabsContent value="protocols" className="flex-1 overflow-hidden p-6">
-                    <EvidenceBasedProtocols
-                      selectedBodyPart={selectedBodyRegion || undefined}
-                    />
+                  <TabsContent value="protocols" className="flex-1 flex flex-col p-0 min-h-0">
+                    <div className="flex-1 overflow-y-auto p-6">
+                      <EvidenceBasedProtocols
+                        selectedBodyPart={selectedBodyRegion || undefined}
+                      />
+                    </div>
                   </TabsContent>
                 </Tabs>
               </CardContent>

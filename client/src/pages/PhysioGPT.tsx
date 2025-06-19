@@ -377,7 +377,7 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
                       className="flex-1 overflow-y-auto px-6"
                       onScroll={checkScrollPosition}
                     >
-                      {!selectedConversationId || (!conversationData && !loadingMessages) ? (
+                      {!selectedConversationId ? (
                         <div className="flex items-center justify-center h-full">
                           <div className="text-center space-y-4 max-w-md">
                             <div className="p-4 bg-blue-50 rounded-full mx-auto w-fit">

@@ -78,6 +78,12 @@ export default function PhysioGPT() {
     enabled: !!selectedConversationId,
   });
 
+  // Debug logging
+  console.log("Debug - selectedConversationId:", selectedConversationId);
+  console.log("Debug - conversationData:", conversationData);
+  console.log("Debug - loadingMessages:", loadingMessages);
+  console.log("Debug - messages count:", conversationData?.messages?.length);
+
   // Send message mutation
   const sendMessageMutation = useMutation({
     mutationFn: async (messageContent: string) => {
@@ -426,7 +432,7 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
                             </div>
                           ))}
                         </div>
-                      ) : conversationData?.messages ? (
+                      ) : conversationData?.messages && conversationData.messages.length > 0 ? (
                         <div className="space-y-6 p-4">
                           {conversationData.messages.map((msg: any, index: number) => (
                             <div

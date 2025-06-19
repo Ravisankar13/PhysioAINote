@@ -238,8 +238,10 @@ Keep responses concise, practical, and directly applicable to clinical practice.
         suggestions: this.generateSuggestions(aiResponse)
       };
 
-    } catch (error) {
+    } catch (error: any) {
       console.error("PhysioGPT processing error:", error);
+      console.error("Error details:", error?.message);
+      console.error("Error stack:", error?.stack);
       throw new Error("Unable to process your request. Please try again later.");
     }
   }

@@ -3091,12 +3091,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // PhysioGPT API Routes
   app.post("/api/physiogpt/chat", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
+      console.log("PhysioGPT chat request received:", req.body);
       const { message, conversationId, patientContext } = req.body;
       
       if (!message || typeof message !== 'string') {
+        console.log("Invalid message:", message);
         return res.status(400).json({ error: "Message is required" });
       }
 
+      console.log("Processing message for user:", req.user!.id);
       const result = await physioGptService.processMessage({
         message,
         conversationId,
@@ -3104,9 +3107,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId: req.user!.id
       });
 
+      console.log("PhysioGPT response generated successfully");
       res.json(result);
-    } catch (error) {
+    } catch (error: any) {
       console.error("PhysioGPT chat error:", error);
+      console.error("Error message:", error?.message);
+      console.error("Error stack:", error?.stack);
       res.status(500).json({ error: "Unable to process your request at this time" });
     }
   });

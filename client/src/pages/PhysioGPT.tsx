@@ -416,7 +416,7 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
                   <TabsContent value="chat" className="flex-1 flex flex-col p-0 min-h-0">
                     <div 
                       ref={scrollAreaRef}
-                      className="flex-1 overflow-y-auto px-6 max-h-[50vh]"
+                      className="flex-1 overflow-y-auto px-6 max-h-[75vh]"
                       onScroll={checkScrollPosition}
                     >
                       {!selectedConversationId ? (

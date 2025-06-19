@@ -78,6 +78,9 @@ export default function PhysioGPT() {
     enabled: !!selectedConversationId,
   });
 
+  // Extract messages from conversation data
+  const messages = conversationData?.messages || [];
+
   // Debug logging for state tracking
   useEffect(() => {
     console.log("selectedConversationId changed:", selectedConversationId);
@@ -101,10 +104,7 @@ export default function PhysioGPT() {
         console.log("Last message:", conversationData.messages[conversationData.messages.length - 1]);
       }
     }
-  }, [conversationData, loadingMessages, messages]);
-
-  // Extract messages from conversation data
-  const messages = conversationData?.messages || [];
+  }, [conversationData, loadingMessages]);
 
   // Send message mutation
   const sendMessageMutation = useMutation({

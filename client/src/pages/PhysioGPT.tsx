@@ -76,6 +76,14 @@ export default function PhysioGPT() {
   }>({
     queryKey: ["/api/physiogpt/conversations", selectedConversationId],
     enabled: !!selectedConversationId,
+    onSuccess: (data) => {
+      console.log("Conversation data fetched:", data);
+      console.log("Messages in conversation:", data?.messages?.length || 0);
+      if (data?.messages?.length > 0) {
+        console.log("First message:", data.messages[0]);
+        console.log("Last message:", data.messages[data.messages.length - 1]);
+      }
+    }
   });
 
   // Extract messages from conversation data

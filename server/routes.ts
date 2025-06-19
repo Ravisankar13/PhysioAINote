@@ -3145,6 +3145,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Conversation not found" });
       }
 
+      console.log("Fetching conversation messages for ID:", conversationId);
+      console.log("Conversation data:", JSON.stringify(conversation, null, 2));
+      console.log("Messages count:", conversation.messages?.length || 0);
+
       res.json(conversation);
     } catch (error) {
       console.error("Error fetching conversation:", error);

@@ -166,43 +166,66 @@ Keep responses concise, practical, and directly applicable to clinical practice.
   async processMessage(request: PhysioGptRequest): Promise<PhysioGptResponse> {
     try {
       console.log("PhysioGPT processing message:", request.message);
+      console.log("Request details:", JSON.stringify(request, null, 2));
+      
       let conversationId = request.conversationId;
       let messages: any[] = [];
 
-      // Get conversation history if continuing existing chat
-      if (conversationId) {
-        const conversationData = await physioGptStorage.getConversationWithMessages(
-          conversationId, 
-          request.userId
-        );
-        
-        if (conversationData) {
-          messages = conversationData.messages.map(msg => ({
-            role: msg.role,
-            content: msg.content
-          }));
+      // Handle conversation creation/retrieval
+      if (!conversationId) {
+        console.log("Creating new conversation");
+        const title = this.generateConversationTitle(request.message);
+        try {
+          const conversation = await physioGptStorage.createConversation({
+            userId: request.userId,
+            title
+          });
+          conversationId = conversation.id;
+          console.log("New conversation created with ID:", conversationId);
+        } catch (error) {
+          console.error("Error creating conversation:", error);
+          throw error;
         }
       } else {
-        // Create new conversation
-        const title = this.generateConversationTitle(request.message);
-        const conversation = await physioGptStorage.createConversation({
-          userId: request.userId,
-          title
-        });
-        conversationId = conversation.id;
+        console.log("Using existing conversation:", conversationId);
+        try {
+          const conversationData = await physioGptStorage.getConversationWithMessages(
+            conversationId, 
+            request.userId
+          );
+          
+          if (conversationData) {
+            messages = conversationData.messages.map(msg => ({
+              role: msg.role,
+              content: msg.content
+            }));
+            console.log("Loaded", messages.length, "previous messages");
+          }
+        } catch (error) {
+          console.error("Error loading conversation history:", error);
+        }
       }
 
       // Add patient context to the user message
+      console.log("Getting patient context data...");
       const patientContextData = await this.getPatientContextData(request.patientContext);
       const enhancedMessage = request.message + patientContextData;
+      console.log("Enhanced message length:", enhancedMessage.length);
 
       // Add user message to conversation
-      await physioGptStorage.addMessage({
-        conversationId,
-        role: 'user',
-        content: enhancedMessage,
-        patientContext: request.patientContext
-      });
+      console.log("Adding user message to conversation...");
+      try {
+        await physioGptStorage.addMessage({
+          conversationId,
+          role: 'user',
+          content: enhancedMessage,
+          patientContext: request.patientContext
+        });
+        console.log("User message added successfully");
+      } catch (error) {
+        console.error("Error adding user message:", error);
+        throw error;
+      }
 
       // Prepare messages for OpenAI
       const openaiMessages = [
@@ -213,24 +236,40 @@ Keep responses concise, practical, and directly applicable to clinical practice.
 
       // Get AI response
       console.log("Sending request to OpenAI with", openaiMessages.length, "messages");
-      const completion = await openai.chat.completions.create({
-        model: "gpt-4o", // Using latest OpenAI model
-        messages: openaiMessages as any,
-        max_tokens: 1000,
-        temperature: 0.7,
-      });
+      console.log("OpenAI API Key exists:", !!process.env.OPENAI_API_KEY);
+      
+      let completion;
+      try {
+        completion = await openai.chat.completions.create({
+          model: "gpt-4o", // Using latest OpenAI model
+          messages: openaiMessages as any,
+          max_tokens: 1000,
+          temperature: 0.7,
+        });
+        console.log("OpenAI API call successful");
+      } catch (apiError) {
+        console.error("OpenAI API error:", apiError);
+        throw apiError;
+      }
 
-      const aiResponse = completion.choices[0]?.message?.content || 
+      const aiResponse = completion?.choices[0]?.message?.content || 
         "I apologize, but I'm unable to provide a response at the moment. Please try again.";
       
       console.log("OpenAI response received:", aiResponse.substring(0, 100) + "...");
 
       // Save AI response to conversation
-      await physioGptStorage.addMessage({
-        conversationId,
-        role: 'assistant',
-        content: aiResponse
-      });
+      console.log("Saving AI response to conversation...");
+      try {
+        await physioGptStorage.addMessage({
+          conversationId,
+          role: 'assistant',
+          content: aiResponse
+        });
+        console.log("AI response saved successfully");
+      } catch (error) {
+        console.error("Error saving AI response:", error);
+        throw error;
+      }
 
       return {
         response: aiResponse,

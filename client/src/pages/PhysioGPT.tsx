@@ -319,7 +319,7 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
 
           {/* Main Interface with Tabs */}
           <div className={`${show3DPanel ? 'lg:col-span-2' : 'lg:col-span-3'} transition-all`}>
-            <Card className="h-full flex flex-col">
+            <Card className="h-full flex flex-col min-h-[900px]">
               <CardHeader className="flex-shrink-0">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -384,7 +384,7 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
                   <TabsContent value="chat" className="flex-1 flex flex-col p-0 min-h-0">
                     <div 
                       ref={scrollAreaRef}
-                      className="flex-1 overflow-y-auto px-6"
+                      className="flex-1 overflow-y-auto px-6 min-h-[700px]"
                       onScroll={checkScrollPosition}
                     >
                       {!selectedConversationId ? (

@@ -290,6 +290,15 @@ export interface IStorage {
   getCaseTagsByCategory(
     category: string
   ): Promise<(typeof caseTags.$inferSelect)[]>;
+
+  // Trial Management Operations
+  startFreeTrial(userId: number): Promise<User>;
+  getUserTrialStatus(userId: number): Promise<{
+    hasUsedTrial: boolean;
+    isOnTrial: boolean;
+    trialDaysRemaining: number;
+    trialEndDate: Date | null;
+  }>;
 }
 
 export class DatabaseStorage implements IStorage {

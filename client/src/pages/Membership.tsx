@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/dialog";
 import { Loader2, CreditCard, AlertCircle } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import TrialBanner from "@/components/TrialBanner";
 
 type SubscriptionPlan = {
   id: number;
@@ -305,6 +306,11 @@ export default function Membership() {
             </Button>
           )}
         </div>
+      </div>
+
+      {/* Free Trial Banner */}
+      <div className="max-w-5xl mx-auto">
+        <TrialBanner />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">

@@ -3171,6 +3171,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Free Trial Management Routes
+  app.post("/api/trial/start", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user!.id;
+      
+      // Check if user has already used their trial
+      const trialStatus = await storage.getUserTrialStatus(userId);
+      if (trialStatus.hasUsedTrial) {
+        return res.status(400).json({ 
+          error: "You have already used your free trial. Please upgrade to a paid membership for continued access." 
+        });
+      }
+
+      // Start the free trial
+      const updatedUser = await storage.startFreeTrial(userId);
+      res.json({ 
+        message: "14-day free trial activated successfully!",
+        trialEndDate: updatedUser.trialEndDate,
+        membershipTier: updatedUser.membershipTier
+      });
+    } catch (error) {
+      console.error("Error starting free trial:", error);
+      res.status(500).json({ error: "Unable to start free trial" });
+    }
+  });
+
+  app.get("/api/trial/status", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user!.id;
+      const trialStatus = await storage.getUserTrialStatus(userId);
+      res.json(trialStatus);
+    } catch (error) {
+      console.error("Error getting trial status:", error);
+      res.status(500).json({ error: "Unable to get trial status" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

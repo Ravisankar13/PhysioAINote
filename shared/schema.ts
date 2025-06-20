@@ -65,6 +65,9 @@ export const users = pgTable("users", {
     .default("none")
     .notNull(),
   membershipExpiry: timestamp("membership_expiry"),
+  trialStartDate: timestamp("trial_start_date"),
+  trialEndDate: timestamp("trial_end_date"),
+  hasUsedTrial: boolean("has_used_trial").default(false).notNull(),
   paypalSubscriptionId: text("paypal_subscription_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),
   stripeCustomerId: text("stripe_customer_id"),

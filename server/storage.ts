@@ -83,6 +83,15 @@ export interface IStorage {
     data: { customerId: string; subscriptionId: string }
   ): Promise<User>;
 
+  // Trial Management Operations
+  startFreeTrial(userId: number): Promise<User>;
+  getUserTrialStatus(userId: number): Promise<{
+    hasUsedTrial: boolean;
+    isOnTrial: boolean;
+    trialDaysRemaining: number;
+    trialEndDate: Date | null;
+  }>;
+
   // Clinical Notes Operations
   getClinicalNote(
     id: number,
@@ -702,6 +711,60 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.id, userId))
       .returning();
     return result[0];
+  }
+
+  // Trial Management Methods
+  async startFreeTrial(userId: number): Promise<User> {
+    const trialStartDate = new Date();
+    const trialEndDate = new Date();
+    trialEndDate.setDate(trialStartDate.getDate() + 14); // 14 days from now
+
+    const result = await db
+      .update(users)
+      .set({
+        trialStartDate,
+        trialEndDate,
+        hasUsedTrial: true,
+        membershipTier: "premium", // Grant premium access during trial
+        membershipExpiry: trialEndDate,
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    return result[0];
+  }
+
+  async getUserTrialStatus(userId: number): Promise<{
+    hasUsedTrial: boolean;
+    isOnTrial: boolean;
+    trialDaysRemaining: number;
+    trialEndDate: Date | null;
+  }> {
+    const user = await this.getUser(userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    const now = new Date();
+    const hasUsedTrial = user.hasUsedTrial || false;
+    const trialEndDate = user.trialEndDate;
+    
+    let isOnTrial = false;
+    let trialDaysRemaining = 0;
+
+    if (trialEndDate && hasUsedTrial) {
+      isOnTrial = now < trialEndDate;
+      if (isOnTrial) {
+        const timeDiff = trialEndDate.getTime() - now.getTime();
+        trialDaysRemaining = Math.ceil(timeDiff / (1000 * 3600 * 24));
+      }
+    }
+
+    return {
+      hasUsedTrial,
+      isOnTrial,
+      trialDaysRemaining,
+      trialEndDate,
+    };
   }
 
   // Subscription Plan Methods

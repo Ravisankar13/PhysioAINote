@@ -551,7 +551,7 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
                     )}
 
                     {/* Message Input */}
-                    <div className="p-6 border-t flex-shrink-0">
+                    <div className="p-6 border-t flex-shrink-0 bg-white relative z-10">
                       <div className="flex gap-3">
                         <Input
                           value={message}
@@ -564,11 +564,13 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
                             }
                           }}
                           disabled={sendMessageMutation.isPending}
+                          className="flex-1"
                         />
                         <Button
                           onClick={() => handleSendMessage()}
                           disabled={!message.trim() || sendMessageMutation.isPending}
                           size="sm"
+                          className="flex-shrink-0"
                         >
                           {sendMessageMutation.isPending ? (
                             <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />

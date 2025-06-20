@@ -3,6 +3,7 @@ import HeroSection from "@/components/sections/HeroSection";
 import FeaturesSection from "@/components/sections/FeaturesSection";
 import BenefitsSection from "@/components/sections/BenefitsSection";
 import CTASection from "@/components/sections/CTASection";
+import TrialBanner from "@/components/TrialBanner";
 
 const Home = () => {
   return (
@@ -22,6 +23,9 @@ const Home = () => {
       </Helmet>
       
       <HeroSection />
+      <div className="container mx-auto px-4">
+        <TrialBanner />
+      </div>
       <FeaturesSection />
       <BenefitsSection />
       <CTASection />

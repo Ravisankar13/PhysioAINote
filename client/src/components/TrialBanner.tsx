@@ -73,17 +73,18 @@ export default function TrialBanner() {
     startTrialMutation.mutate();
   };
 
-  if (isLoading || !trialStatus) {
+  // Show for non-authenticated users or when trial status is loading for authenticated users
+  if (user && (isLoading || !trialStatus)) {
     return null;
   }
 
   // Don't show if user already has premium membership (not trial)
-  if (user?.membershipTier === "premium" && !trialStatus.isOnTrial) {
+  if (user?.membershipTier === "premium" && trialStatus && !trialStatus.isOnTrial) {
     return null;
   }
 
   // Show trial status if user is currently on trial
-  if (trialStatus.isOnTrial) {
+  if (user && trialStatus && trialStatus.isOnTrial) {
     return (
       <Card className="mb-6 border-green-200 bg-gradient-to-r from-green-50 to-emerald-50">
         <CardHeader className="pb-3">
@@ -140,8 +141,8 @@ export default function TrialBanner() {
     );
   }
 
-  // Don't show if trial has been used
-  if (trialStatus.hasUsedTrial) {
+  // Don't show if user has used trial (only applies to authenticated users)
+  if (user && trialStatus && trialStatus.hasUsedTrial) {
     return null;
   }
 

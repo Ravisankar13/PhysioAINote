@@ -198,25 +198,14 @@ Keep responses concise, practical, and directly applicable to clinical practice.
       console.log("System prompt length:", systemPrompt.length);
       console.log("User message length:", request.message.length);
       
-      // Temporary direct response for testing
-      let aiResponse = `For shoulder impingement, I recommend:
+      let aiResponse: string;
 
-1. **Pain Management**: Avoid overhead activities that aggravate symptoms
-2. **Mobility**: Focus on posterior capsule stretching and thoracic spine mobility  
-3. **Strengthening**: Progressive strengthening of rotator cuff and scapular stabilizers
-4. **Posture**: Address forward head posture and rounded shoulders
-5. **Activity Modification**: Gradual return to overhead activities
-
-Would you like specific exercises for any of these areas?`;
-
-      console.log("Using direct response for testing");
-
-      // Call OpenAI API with reduced token limits (temporarily disabled)
-      /*try {
+      // Call OpenAI API 
+      try {
         const completion = await openai.chat.completions.create({
           model: "gpt-4o",
           messages: openaiMessages as any,
-          max_tokens: 400, // Reduced from 500
+          max_tokens: 500,
           temperature: 0.7,
         });
         
@@ -235,9 +224,7 @@ Would you like specific exercises for any of these areas?`;
         } else {
           aiResponse = `As PhysioGPT, I can help with your question about "${request.message}". For immediate assistance, please consider: assessment techniques, treatment protocols, exercise progressions, and evidence-based recommendations specific to your clinical needs.`;
         }
-      }*/
-      
-      // End of commented OpenAI section
+      }
       
       // Save AI response
       await physioGptStorage.addMessage({

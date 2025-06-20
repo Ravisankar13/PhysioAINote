@@ -58,6 +58,11 @@ export default function PhysioGPT() {
   const [show3DPanel, setShow3DPanel] = useState(false);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const [activeTab, setActiveTab] = useState("chat");
+  const [patientContext, setPatientContext] = useState<{
+    patientId?: number;
+    patientName?: string;
+    bodyPart?: string;
+  } | null>(null);
   const [selectedAssessmentTemplate, setSelectedAssessmentTemplate] = useState<any | null>(null);
   const [assessmentResults, setAssessmentResults] = useState<any | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);

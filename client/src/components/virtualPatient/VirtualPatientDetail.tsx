@@ -36,6 +36,7 @@ import {
   BarChart3,
   ZoomIn,
   Target,
+  MessageSquare,
 } from "lucide-react";
 import PatientProgressTracker from "./PatientProgressTracker";
 import BodyPartZoom from "./BodyPartZoom";
@@ -44,7 +45,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import Enhanced3DSkeleton from "@/components/3d/Enhanced3DSkeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -315,6 +316,16 @@ export default function VirtualPatientDetail({
                 </>
               )}
             </Button>
+            <Link href={`/physiogpt?patient=${patientId}`}>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mr-2"
+              >
+                <MessageSquare className="h-4 w-4 mr-1" />
+                Discuss with PhysioGPT
+              </Button>
+            </Link>
             <Badge variant="outline">{patient.age} years</Badge>
             <Badge variant="outline">{patient.gender}</Badge>
             <Badge>{patient.body_part}</Badge>

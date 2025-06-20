@@ -1,14 +1,14 @@
 /* NotesClinical.css */
 :root {
-  /* --primary-color: #8a42ee; */
-  --primary-color: #410397;
-  --secondary-color: #03dac6;
-  --background-color: #f5f5f5;
-  --card-background: #ffffff;
-  --text-color: #333333;
-  --input-background: rgb(252, 253, 253);
-  --session-background: #e6e6fa;
-  --session-active-background: #b0e0e6;
+  /* Updated to match app's consistent cyan-blue theme */
+  --primary-color: hsl(196 100% 47%); /* Bright cyan blue */
+  --secondary-color: hsl(172 66% 50%); /* Teal accent */
+  --background-color: hsl(0 0% 100%); /* White */
+  --card-background: hsl(0 0% 100%); /* White */
+  --text-color: hsl(222 47% 11%); /* Dark blue-gray */
+  --input-background: hsl(214 32% 91%); /* Light gray */
+  --session-background: hsl(210 40% 96.1%); /* Muted background */
+  --session-active-background: hsl(196 100% 85%); /* Light cyan */
 }
 
 body {
@@ -30,7 +30,7 @@ body {
 .loading-container .loader {
   width: 50px;
   height: 50px;
-  border: 5px solid rgba(65, 3, 151, 0.2);
+  border: 5px solid hsl(196 100% 47% / 0.2);
   border-radius: 50%;
   border-top-color: var(--primary-color);
   animation: spin 1s ease-in-out infinite;
@@ -60,15 +60,9 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background-color: #a796e6;
+  background-color: hsl(196 100% 85%);
   color: var(--primary-color);
   padding: 10px 20px;
-
-  /* box-shadow: 
-  0 4px 8px rgba(123, 31, 162, 0.4),   
-  0 6px 20px rgba(63, 81, 181, 0.3);   
-
-  transition: box-shadow 0.3s ease;  */
 }
 
 /* .sessions-card:hover {
@@ -102,7 +96,7 @@ body {
 }
 
 .logout-button:hover {
-  background-color: #732dbf; /* slightly darker shade of your primary color */
+  background-color: hsl(196 100% 42%); /* slightly darker shade of primary color */
   transform: translateY(-2px);
 }
 
@@ -119,7 +113,7 @@ body {
 }
 
 .pagination-controls button {
-  background-color: #8a42ee;
+  background-color: var(--primary-color);
   color: white;
   border: none;
   /* padding: 8px 12px; */
@@ -160,15 +154,15 @@ body {
   padding: 20px;
   overflow-y: auto;
 
-  box-shadow: 0 4px 8px rgba(123, 31, 162, 0.4),
-    0 6px 20px rgba(63, 81, 181, 0.3);
+  box-shadow: 0 4px 8px hsl(196 100% 47% / 0.4),
+    0 6px 20px hsl(172 66% 50% / 0.3);
 
   transition: box-shadow 0.3s ease;
 }
 
 .sessions-card:hover {
-  box-shadow: 0 6px 12px rgba(123, 31, 162, 0.5),
-    0 8px 24px rgba(63, 81, 181, 0.4);
+  box-shadow: 0 6px 12px hsl(196 100% 47% / 0.5),
+    0 8px 24px hsl(172 66% 50% / 0.4);
 }
 
 /* .sessions-card {
@@ -195,12 +189,10 @@ body {
   text-align: left;
   padding: 10px;
   margin-bottom: 10px;
-  /* background-color: var(--session-background); */
-  background-color: #a796e6;
+  background-color: var(--primary-color);
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  /* color: var(--primary-color); */
   color: white;
 
   display: flex;
@@ -209,7 +201,7 @@ body {
 }
 
 .sessions-card li button.active {
-  background-color: var(--primary-color);
+  background-color: var(--secondary-color);
 }
 
 .edit-icon {
@@ -228,7 +220,7 @@ body {
 .edit-session-input {
   width: 90%;
   padding: 10px;
-  background-color: #492ba3;
+  background-color: hsl(196 100% 35%);
   border: none;
   border-radius: 4px;
   color: white;
@@ -289,8 +281,8 @@ body {
   border-radius: 8px;
   padding: 20px;
   margin-bottom: 20px;
-  box-shadow: 0 4px 8px rgba(123, 31, 162, 0.4),
-    /* Purple shadow (inner layer) */ 0 6px 20px rgba(63, 81, 181, 0.3); /* Blue shadow (outer layer) */
+  box-shadow: 0 4px 8px hsl(196 100% 47% / 0.4),
+    /* Cyan shadow (inner layer) */ 0 6px 20px hsl(172 66% 50% / 0.3); /* Teal shadow (outer layer) */
 
   transition: box-shadow 0.3s ease;
 }
@@ -360,17 +352,17 @@ body {
   flex-direction: column;
   align-items: center;
 
-  /* Purple-blue shadow effect */
-  box-shadow: 0 4px 8px rgba(123, 31, 162, 0.4),
-    /* Purple shadow (inner layer) */ 0 6px 20px rgba(63, 81, 181, 0.3); /* Blue shadow (outer layer) */
+  /* Cyan-teal shadow effect */
+  box-shadow: 0 4px 8px hsl(196 100% 47% / 0.4),
+    /* Cyan shadow (inner layer) */ 0 6px 20px hsl(172 66% 50% / 0.3); /* Teal shadow (outer layer) */
 
   transition: box-shadow 0.3s ease; /* Smooth shadow transition when hovering */
 }
 
 /* Optional hover enhancement: intensifying the shadow on hover */
 .audio-card:hover {
-  box-shadow: 0 6px 12px rgba(123, 31, 162, 0.5),
-    0 8px 24px rgba(63, 81, 181, 0.4);
+  box-shadow: 0 6px 12px hsl(196 100% 47% / 0.5),
+    0 8px 24px hsl(172 66% 50% / 0.4);
 }
 
 .record-button {
@@ -429,15 +421,15 @@ body {
   scrollbar-width: none; /* Firefox */
   -ms-overflow-style: none; /* Internet Explorer 10+ */
 
-  box-shadow: 0 4px 8px rgba(123, 31, 162, 0.4),
-    /* Purple shadow (inner layer) */ 0 6px 20px rgba(63, 81, 181, 0.3); /* Blue shadow (outer layer) */
+  box-shadow: 0 4px 8px hsl(196 100% 47% / 0.4),
+    /* Cyan shadow (inner layer) */ 0 6px 20px hsl(172 66% 50% / 0.3); /* Teal shadow (outer layer) */
 
   transition: box-shadow 0.3s ease;
 }
 
 .transcript-card:hover {
-  box-shadow: 0 6px 12px rgba(123, 31, 162, 0.5),
-    0 8px 24px rgba(63, 81, 181, 0.4);
+  box-shadow: 0 6px 12px hsl(196 100% 47% / 0.5),
+    0 8px 24px hsl(172 66% 50% / 0.4);
 }
 
 .transcript-card::-webkit-scrollbar {
@@ -480,15 +472,15 @@ body {
   scrollbar-width: none; /* Firefox */
   -ms-overflow-style: none; /* Internet Explorer 10+ */
 
-  box-shadow: 0 4px 8px rgba(123, 31, 162, 0.4),
-    /* Purple shadow (inner layer) */ 0 6px 20px rgba(63, 81, 181, 0.3); /* Blue shadow (outer layer) */
+  box-shadow: 0 4px 8px hsl(196 100% 47% / 0.4),
+    /* Cyan shadow (inner layer) */ 0 6px 20px hsl(172 66% 50% / 0.3); /* Teal shadow (outer layer) */
 
   transition: box-shadow 0.3s ease;
 }
 
 .soap-note-card:hover {
-  box-shadow: 0 6px 12px rgba(123, 31, 162, 0.5),
-    0 8px 24px rgba(63, 81, 181, 0.4);
+  box-shadow: 0 6px 12px hsl(196 100% 47% / 0.5),
+    0 8px 24px hsl(172 66% 50% / 0.4);
 }
 
 .soap-note-card::-webkit-scrollbar {
@@ -502,7 +494,7 @@ body {
   margin-top: 5px;
   padding: 10px;
   border-radius: 4px;
-  border: 1px solid #9c27b0;
+  border: 1px solid var(--primary-color);
   background-color: white;
   color: black;
   font-family: "Arial";
@@ -513,7 +505,7 @@ body {
   margin-right: 8px;
   padding: 6px 10px;
   cursor: pointer;
-  background-color: #6200ea;
+  background-color: var(--primary-color);
   color: #fff;
   border: none;
   border-radius: 4px;
@@ -525,7 +517,7 @@ body {
   margin-left: 8px;
   padding: 6px 10px;
   cursor: pointer;
-  background-color: #6200ea;
+  background-color: var(--primary-color);
   color: #fff;
   border: none;
   border-radius: 4px;
@@ -533,11 +525,11 @@ body {
 }
 
 .soap-save-btn {
-  background-color: #6f62e2;
+  background-color: var(--secondary-color);
 }
 
 .soap-cancel-btn {
-  background-color: #6f62e2;
+  background-color: hsl(0 84.2% 60.2%);
 }
 
 .soap-edit-btn:hover,
@@ -639,8 +631,184 @@ body {
 }
 
 .hamburger-btn:hover {
-  background-color: #732dbf;
+  background-color: hsl(196 100% 42%);
   transform: scale(1.1);
+}
+
+/* SoapSection component styles */
+.soap-note-container {
+  background-color: var(--session-background);
+  border-radius: 8px;
+  padding: 20px;
+  margin-top: 20px;
+  box-shadow: 0 4px 8px hsl(196 100% 47% / 0.4),
+    0 6px 20px hsl(172 66% 50% / 0.3);
+  transition: box-shadow 0.3s ease;
+}
+
+.soap-note-container:hover {
+  box-shadow: 0 6px 12px hsl(196 100% 47% / 0.5),
+    0 8px 24px hsl(172 66% 50% / 0.4);
+}
+
+.soap-note-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.soap-note-header h3 {
+  color: var(--primary-color);
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.generate-button,
+.copy-button {
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.generate-button:hover,
+.copy-button:hover {
+  background-color: hsl(196 100% 42%);
+  transform: translateY(-1px);
+}
+
+.generate-button:disabled {
+  background-color: hsl(196 100% 47% / 0.6);
+  cursor: not-allowed;
+  transform: none;
+}
+
+.copy-button.success {
+  background-color: var(--secondary-color);
+}
+
+.polling-message {
+  color: var(--primary-color);
+  font-style: italic;
+  font-size: 14px;
+}
+
+.soap-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.soap-section {
+  background-color: var(--card-background);
+  border: 1px solid hsl(214 32% 91%);
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 2px 4px hsl(196 100% 47% / 0.1);
+  transition: all 0.2s ease;
+}
+
+.soap-section:hover {
+  box-shadow: 0 4px 8px hsl(196 100% 47% / 0.2);
+}
+
+.soap-section h4 {
+  color: var(--primary-color);
+  margin: 0 0 12px 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.soap-content {
+  background-color: var(--background-color);
+  border: 1px solid hsl(214 32% 91%);
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 12px;
+  min-height: 60px;
+  color: var(--text-color);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.soap-content.markdown-content {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.soap-content.markdown-content h1,
+.soap-content.markdown-content h2,
+.soap-content.markdown-content h3,
+.soap-content.markdown-content h4,
+.soap-content.markdown-content h5,
+.soap-content.markdown-content h6 {
+  color: var(--primary-color);
+  margin: 16px 0 8px 0;
+}
+
+.soap-content.markdown-content ul,
+.soap-content.markdown-content ol {
+  padding-left: 20px;
+}
+
+.soap-content.markdown-content p {
+  margin: 8px 0;
+}
+
+.empty-content {
+  color: hsl(215 16% 47%);
+  font-style: italic;
+}
+
+.button-group {
+  display: flex;
+  gap: 8px;
+}
+
+.edit-button,
+.save-button,
+.cancel-button {
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.save-button {
+  background-color: var(--secondary-color);
+}
+
+.cancel-button {
+  background-color: hsl(0 84.2% 60.2%);
+}
+
+.edit-button:hover,
+.save-button:hover,
+.cancel-button:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.save-button:disabled,
+.cancel-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
 }
 
 /* sessions card state */
@@ -725,7 +893,7 @@ body {
 }
 
 .transcription-table tr:nth-child(even) {
-  background-color: #c7b9e7;
+  background-color: hsl(196 100% 85%);
 }
 
 .transcription-table .transcript-cell {
@@ -766,7 +934,7 @@ body {
 }
 
 .login-box h2 {
-  color: #8a42ee;
+  color: var(--primary-color);
   text-align: center;
   margin-bottom: 10px;
   font-size: 24px;
@@ -802,7 +970,7 @@ button {
   width: 100%;
   max-width: 200px;
   padding: 10px;
-  background-color: #8a42ee;
+  background-color: var(--primary-color);
   color: white;
   border: none;
   border-radius: 4px;
@@ -813,7 +981,7 @@ button {
 }
 
 button:hover {
-  background-color: #5a3ea8;
+  background-color: hsl(196 100% 42%);
 }
 
 .error-message {

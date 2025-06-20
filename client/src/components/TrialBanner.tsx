@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,12 +21,24 @@ export default function TrialBanner() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   // Fetch trial status
   const { data: trialStatus, isLoading } = useQuery<TrialStatus>({
     queryKey: ["/api/trial/status"],
     enabled: !!user,
   });
+
+  // Auto-start trial after registration if user came from trial redirect
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (user && params.get('autoStartTrial') === 'true' && trialStatus && !trialStatus.hasUsedTrial) {
+      startTrialMutation.mutate();
+      // Clean up URL
+      navigate(location.pathname, { replace: true });
+    }
+  }, [user, trialStatus, location]);
 
   // Start trial mutation
   const startTrialMutation = useMutation({
@@ -49,6 +62,16 @@ export default function TrialBanner() {
       });
     },
   });
+
+  // Handle trial button click
+  const handleStartTrial = () => {
+    if (!user) {
+      // Redirect to auth page with trial intent
+      navigate('/auth?autoStartTrial=true&returnTo=' + encodeURIComponent(location.pathname));
+      return;
+    }
+    startTrialMutation.mutate();
+  };
 
   if (isLoading || !trialStatus) {
     return null;
@@ -155,7 +178,7 @@ export default function TrialBanner() {
         <div className="flex justify-center">
           <Button
             size="lg"
-            onClick={() => startTrialMutation.mutate()}
+            onClick={handleStartTrial}
             disabled={startTrialMutation.isPending}
             className="bg-blue-600 hover:bg-blue-700 text-white px-8"
           >
@@ -167,7 +190,7 @@ export default function TrialBanner() {
             ) : (
               <>
                 <Star className="h-4 w-4 mr-2" />
-                Start Free Trial Now
+                {user ? "Start Free Trial Now" : "Sign Up for Free Trial"}
               </>
             )}
           </Button>

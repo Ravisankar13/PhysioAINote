@@ -65,6 +65,17 @@ const AuthPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, loginMutation, registerMutation } = useAuth();
+  
+  // Check if user is coming from trial banner
+  const params = new URLSearchParams(location.search);
+  const isTrialFlow = params.get('autoStartTrial') === 'true';
+  
+  // Set default tab to register if coming from trial flow
+  useEffect(() => {
+    if (isTrialFlow) {
+      setActiveTab("register");
+    }
+  }, [isTrialFlow]);
 
   // Create the login form
   const loginForm = useForm<LoginFormValues>({
@@ -113,9 +124,18 @@ const AuthPage = () => {
 
   // Handle registration form submission
   function onRegisterSubmit(data: RegisterFormValues) {
+    const params = new URLSearchParams(location.search);
+    const autoStartTrial = params.get('autoStartTrial') === 'true';
+    const returnTo = params.get('returnTo') || '/';
+
     registerMutation.mutate(data, {
       onSuccess: () => {
-        navigate("/");
+        if (autoStartTrial) {
+          // Redirect to return page with trial activation parameter
+          navigate(`${returnTo}?autoStartTrial=true`);
+        } else {
+          navigate("/");
+        }
       },
     });
   }
@@ -152,11 +172,26 @@ const AuthPage = () => {
               <div className="inline-block rounded-full bg-primary/10 p-2 text-primary">
                 <LockKeyhole className="h-6 w-6" />
               </div>
-              <h1 className="text-3xl font-bold">Welcome to PhysioAI</h1>
+              <h1 className="text-3xl font-bold">
+                {isTrialFlow ? "Start Your 14-Day Free Trial" : "Welcome to PhysioAI"}
+              </h1>
               <p className="text-muted-foreground">
-                Sign in to your account or create a new one to access the
-                AI-powered clinical note generation
+                {isTrialFlow 
+                  ? "Create your account to activate 14 days of premium access - no payment required"
+                  : "Sign in to your account or create a new one to access the AI-powered clinical note generation"
+                }
               </p>
+              {isTrialFlow && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
+                  <div className="font-medium mb-1">Your 14-day trial includes:</div>
+                  <ul className="text-xs space-y-0.5">
+                    <li>• AI-powered PhysioGPT assistant</li>
+                    <li>• Virtual patient case studies</li>
+                    <li>• Advanced 3D anatomy tools</li>
+                    <li>• Research library access</li>
+                  </ul>
+                </div>
+              )}
             </div>
 
             <Tabs
@@ -267,9 +302,14 @@ const AuthPage = () => {
               <TabsContent value="register" className="mt-4">
                 <Card>
                   <CardHeader>
-                    <CardTitle>Create an Account</CardTitle>
+                    <CardTitle>
+                      {isTrialFlow ? "Start Your 14-Day Free Trial" : "Create an Account"}
+                    </CardTitle>
                     <CardDescription>
-                      Register to access AI-powered clinical note generation
+                      {isTrialFlow 
+                        ? "Complete registration to instantly access all premium features for 14 days"
+                        : "Register to access AI-powered clinical note generation"
+                      }
                     </CardDescription>
                   </CardHeader>
                   <CardContent>

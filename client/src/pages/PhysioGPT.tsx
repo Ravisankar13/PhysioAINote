@@ -330,47 +330,47 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      <div className="container mx-auto p-6">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-[calc(100vh-6rem)]">
+      <div className="container mx-auto p-2 sm:p-4 lg:p-6">
+        <div className="flex flex-col lg:grid lg:grid-cols-4 gap-2 sm:gap-4 lg:gap-6 h-[calc(100vh-2rem)] sm:h-[calc(100vh-4rem)] lg:h-[calc(100vh-6rem)]">
           {/* Sidebar - Conversations */}
-          <div className="lg:col-span-1">
+          <div className="lg:col-span-1 h-48 lg:h-full">
             <Card className="h-full flex flex-col">
-              <CardHeader className="flex-shrink-0">
+              <CardHeader className="flex-shrink-0 p-3 sm:p-6">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg">Conversations</CardTitle>
+                  <CardTitle className="text-sm sm:text-lg">Conversations</CardTitle>
                   <Button
                     onClick={handleNewConversation}
                     size="sm"
-                    className="h-8 w-8 p-0"
+                    className="h-7 w-7 sm:h-8 sm:w-8 p-0"
                   >
-                    <Plus className="h-4 w-4" />
+                    <Plus className="h-3 w-3 sm:h-4 sm:w-4" />
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent className="flex-1 p-4 overflow-hidden">
+              <CardContent className="flex-1 p-2 sm:p-4 overflow-hidden">
                 <ScrollArea className="h-full">
                   {loadingConversations ? (
-                    <div className="space-y-3">
+                    <div className="space-y-2 sm:space-y-3">
                       {[1, 2, 3].map((i) => (
-                        <div key={i} className="p-3 rounded-lg border animate-pulse">
-                          <div className="h-4 bg-gray-200 rounded mb-2" />
-                          <div className="h-3 bg-gray-200 rounded w-2/3" />
+                        <div key={i} className="p-2 sm:p-3 rounded-lg border animate-pulse">
+                          <div className="h-3 sm:h-4 bg-gray-200 rounded mb-1 sm:mb-2" />
+                          <div className="h-2 sm:h-3 bg-gray-200 rounded w-2/3" />
                         </div>
                       ))}
                     </div>
                   ) : conversations.length === 0 ? (
-                    <div className="text-center py-8">
-                      <MessageCircle className="mx-auto h-8 w-8 text-gray-400 mb-2" />
-                      <p className="text-sm text-muted-foreground">
+                    <div className="text-center py-4 sm:py-8">
+                      <MessageCircle className="mx-auto h-6 w-6 sm:h-8 sm:w-8 text-gray-400 mb-2" />
+                      <p className="text-xs sm:text-sm text-muted-foreground">
                         No conversations yet
                       </p>
                     </div>
                   ) : (
-                    <div className="space-y-2">
+                    <div className="space-y-1 sm:space-y-2">
                       {conversations.map((conversation) => (
                         <div
                           key={conversation.id}
-                          className={`group p-3 rounded-lg cursor-pointer transition-colors ${
+                          className={`group p-2 sm:p-3 rounded-lg cursor-pointer transition-colors ${
                             selectedConversationId === conversation.id
                               ? "bg-blue-50 border-blue-200"
                               : "hover:bg-gray-50"
@@ -379,11 +379,11 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
                         >
                           <div className="flex items-start justify-between">
                             <div className="flex-1 min-w-0">
-                              <p className="font-medium text-sm truncate">
+                              <p className="font-medium text-xs sm:text-sm truncate">
                                 {conversation.title}
                               </p>
-                              <div className="flex items-center gap-1 mt-1">
-                                <Clock className="h-3 w-3 text-gray-400" />
+                              <div className="flex items-center gap-1 mt-0.5 sm:mt-1">
+                                <Clock className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-gray-400" />
                                 <span className="text-xs text-muted-foreground">
                                   {new Date(conversation.updatedAt).toLocaleDateString()}
                                 </span>
@@ -392,13 +392,13 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100"
+                              className="h-5 w-5 sm:h-6 sm:w-6 p-0 opacity-0 group-hover:opacity-100 lg:opacity-100"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleDeleteConversation(conversation.id);
                               }}
                             >
-                              <Trash2 className="h-3 w-3" />
+                              <Trash2 className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
                             </Button>
                           </div>
                         </div>
@@ -411,35 +411,35 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
           </div>
 
           {/* Main Interface with Tabs */}
-          <div className={`${show3DPanel ? 'lg:col-span-2' : 'lg:col-span-3'} transition-all`}>
-            <Card className="h-full flex flex-col max-h-[85vh]">
-              <CardHeader className="flex-shrink-0">
+          <div className={`${show3DPanel ? 'lg:col-span-2' : 'lg:col-span-3'} transition-all flex-1 lg:flex-initial`}>
+            <Card className="h-full flex flex-col">
+              <CardHeader className="flex-shrink-0 p-3 sm:p-6">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-blue-100 rounded-lg">
-                      <Brain className="h-5 w-5 text-blue-600" />
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <div className="p-1.5 sm:p-2 bg-blue-100 rounded-lg">
+                      <Brain className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
                     </div>
-                    <div>
-                      <CardTitle className="flex items-center gap-2">
+                    <div className="min-w-0">
+                      <CardTitle className="flex items-center gap-1 sm:gap-2 text-sm sm:text-base">
                         PhysioGPT
-                        <Badge variant="secondary" className="text-xs">
+                        <Badge variant="secondary" className="text-xs hidden sm:inline-flex">
                           Clinical AI Assistant
                         </Badge>
                       </CardTitle>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-xs sm:text-sm text-muted-foreground hidden sm:block">
                         Evidence-based physiotherapy guidance and clinical assessments
                       </p>
                     </div>
                   </div>
                   
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1 sm:gap-2">
                     {patientContext && (
-                      <Badge variant="default" className="text-xs bg-green-600">
+                      <Badge variant="default" className="text-xs bg-green-600 hidden sm:inline-flex">
                         Patient: {patientContext.patientName} ({patientContext.bodyPart})
                       </Badge>
                     )}
                     {selectedBodyRegionName && !patientContext && (
-                      <Badge variant="outline" className="text-xs">
+                      <Badge variant="outline" className="text-xs hidden sm:inline-flex">
                         Context: {selectedBodyRegionName}
                       </Badge>
                     )}
@@ -447,30 +447,33 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
                       variant="outline"
                       size="sm"
                       onClick={() => setShow3DPanel(!show3DPanel)}
-                      className="flex items-center gap-2"
+                      className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm h-7 sm:h-8"
                     >
-                      <Activity className="h-4 w-4" />
-                      {show3DPanel ? 'Hide' : 'Show'} 3D Model
+                      <Activity className="h-3 w-3 sm:h-4 sm:w-4" />
+                      <span className="hidden sm:inline">{show3DPanel ? 'Hide' : 'Show'} 3D Model</span>
+                      <span className="sm:hidden">3D</span>
                     </Button>
                   </div>
                 </div>
               </CardHeader>
 
               {/* Tabs */}
-              <div className="px-6 pt-2 pb-0 border-b">
+              <div className="px-3 sm:px-6 pt-2 pb-0 border-b">
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                  <TabsList className="grid w-full grid-cols-3">
-                    <TabsTrigger value="chat" className="flex items-center gap-2">
-                      <MessageCircle className="h-4 w-4" />
-                      Chat
+                  <TabsList className="grid w-full grid-cols-3 h-8 sm:h-10">
+                    <TabsTrigger value="chat" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm px-2 sm:px-3">
+                      <MessageCircle className="h-3 w-3 sm:h-4 sm:w-4" />
+                      <span className="hidden sm:inline">Chat</span>
                     </TabsTrigger>
-                    <TabsTrigger value="assessments" className="flex items-center gap-2">
-                      <Stethoscope className="h-4 w-4" />
-                      Assessments
+                    <TabsTrigger value="assessments" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm px-2 sm:px-3">
+                      <Stethoscope className="h-3 w-3 sm:h-4 sm:w-4" />
+                      <span className="hidden sm:inline">Assessments</span>
+                      <span className="sm:hidden">Assess</span>
                     </TabsTrigger>
-                    <TabsTrigger value="protocols" className="flex items-center gap-2">
-                      <BookOpen className="h-4 w-4" />
-                      Protocols
+                    <TabsTrigger value="protocols" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm px-2 sm:px-3">
+                      <BookOpen className="h-3 w-3 sm:h-4 sm:w-4" />
+                      <span className="hidden sm:inline">Protocols</span>
+                      <span className="sm:hidden">Proto</span>
                     </TabsTrigger>
                   </TabsList>
                 </Tabs>
@@ -482,29 +485,29 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
                   <TabsContent value="chat" className="flex-1 flex flex-col p-0 min-h-0">
                     <div 
                       ref={scrollAreaRef}
-                      className="flex-1 overflow-y-auto px-6 min-h-[60vh] max-h-[calc(90vh-150px)]"
+                      className="flex-1 overflow-y-auto px-3 sm:px-6 min-h-[50vh] sm:min-h-[60vh] max-h-[calc(100vh-300px)] sm:max-h-[calc(90vh-150px)]"
                       onScroll={checkScrollPosition}
                     >
                       {!selectedConversationId ? (
-                        <div className="flex items-center justify-center h-full">
-                          <div className="text-center space-y-4 max-w-md">
-                            <div className="p-4 bg-blue-50 rounded-full mx-auto w-fit">
-                              <Brain className="h-8 w-8 text-blue-600" />
+                        <div className="flex items-center justify-center h-full py-4">
+                          <div className="text-center space-y-3 sm:space-y-4 max-w-md px-4">
+                            <div className="p-3 sm:p-4 bg-blue-50 rounded-full mx-auto w-fit">
+                              <Brain className="h-6 w-6 sm:h-8 sm:w-8 text-blue-600" />
                             </div>
                             <div>
-                              <h3 className="text-lg font-semibold mb-2">
+                              <h3 className="text-base sm:text-lg font-semibold mb-1 sm:mb-2">
                                 Welcome to PhysioGPT
                               </h3>
-                              <p className="text-muted-foreground text-sm leading-relaxed">
+                              <p className="text-muted-foreground text-xs sm:text-sm leading-relaxed">
                                 Ask me anything about physiotherapy, patient assessment, 
                                 treatment planning, or clinical reasoning. I'm here to help 
                                 with evidence-based guidance for your practice.
                               </p>
                             </div>
                             
-                            <div className="space-y-2 pt-4">
-                              <p className="text-sm font-medium text-gray-700">Try asking:</p>
-                              <div className="space-y-2">
+                            <div className="space-y-2 pt-2 sm:pt-4">
+                              <p className="text-xs sm:text-sm font-medium text-gray-700">Try asking:</p>
+                              <div className="space-y-1.5 sm:space-y-2">
                                 {[
                                   "How should I assess a patient with shoulder impingement?",
                                   "What exercises work best for chronic low back pain?",
@@ -513,7 +516,7 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
                                   <button
                                     key={index}
                                     onClick={() => handleSuggestionClick(suggestion)}
-                                    className="block w-full text-left p-2 text-sm bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                                    className="block w-full text-left p-2 sm:p-3 text-xs sm:text-sm bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
                                   >
                                     {suggestion}
                                   </button>

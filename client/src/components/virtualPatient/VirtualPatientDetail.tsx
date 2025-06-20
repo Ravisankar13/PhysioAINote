@@ -45,7 +45,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import Enhanced3DSkeleton from "@/components/3d/Enhanced3DSkeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Link, useLocation } from "wouter";
+import { Link } from "react-router-dom";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -316,7 +316,7 @@ export default function VirtualPatientDetail({
                 </>
               )}
             </Button>
-            <Link href={`/physiogpt?patient=${patientId}`}>
+            <Link to={`/physiogpt?patient=${patientId}`}>
               <Button
                 variant="outline"
                 size="sm"
@@ -1125,14 +1125,14 @@ export default function VirtualPatientDetail({
                             </p>
                             {article.url && (
                               <Button variant="outline" size="sm" asChild>
-                                <Link
+                                <a
                                   href={article.url}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                 >
                                   View Full Article{" "}
                                   <ArrowRight className="ml-1 h-3 w-3" />
-                                </Link>
+                                </a>
                               </Button>
                             )}
                           </div>

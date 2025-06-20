@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -50,6 +51,7 @@ export default function PhysioGPT() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
   const [selectedConversationId, setSelectedConversationId] = useState<number | null>(null);
   const [message, setMessage] = useState("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -113,8 +115,7 @@ export default function PhysioGPT() {
 
   // Load patient context from URL parameters
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const patientId = urlParams.get('patient');
+    const patientId = searchParams.get('patient');
     
     if (patientId) {
       const fetchPatientData = async () => {
@@ -156,7 +157,7 @@ export default function PhysioGPT() {
       
       fetchPatientData();
     }
-  }, [toast]);
+  }, [searchParams, toast]);
 
   // Send message mutation
   const sendMessageMutation = useMutation({

@@ -402,7 +402,7 @@ const AuthPage = () => {
                         />
                         <Button
                           type="submit"
-                          className="w-full"
+                          className={`w-full ${isTrialFlow ? 'bg-blue-600 hover:bg-blue-700' : ''}`}
                           disabled={registerMutation.isPending}
                         >
                           {registerMutation.isPending ? (
@@ -410,8 +410,13 @@ const AuthPage = () => {
                           ) : (
                             <ArrowRight className="mr-2 h-4 w-4" />
                           )}
-                          Create Account
+                          {isTrialFlow ? "Start 14-Day Free Trial" : "Create Account"}
                         </Button>
+                        {isTrialFlow && (
+                          <p className="text-xs text-center text-muted-foreground mt-2">
+                            No payment information required • Cancel anytime
+                          </p>
+                        )}
                       </form>
                     </Form>
                   </CardContent>

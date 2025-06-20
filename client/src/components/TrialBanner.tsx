@@ -85,19 +85,58 @@ export default function TrialBanner() {
   // Show trial status if user is currently on trial
   if (trialStatus.isOnTrial) {
     return (
-      <Alert className="mb-6 border-green-200 bg-green-50">
-        <CheckCircle className="h-4 w-4 text-green-600" />
-        <AlertDescription className="text-green-800">
+      <Card className="mb-6 border-green-200 bg-gradient-to-r from-green-50 to-emerald-50">
+        <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <span>
-              <strong>Free Trial Active!</strong> You have {trialStatus.trialDaysRemaining} days remaining of premium access.
-            </span>
-            <Badge variant="secondary" className="bg-green-100 text-green-800">
-              {trialStatus.trialDaysRemaining} days left
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-green-100 rounded-lg">
+                <CheckCircle className="h-5 w-5 text-green-600" />
+              </div>
+              <div>
+                <CardTitle className="text-lg text-green-900">
+                  🎉 Your 14-Day Free Trial is Active!
+                </CardTitle>
+                <CardDescription className="text-green-700">
+                  You have full premium access to all features
+                </CardDescription>
+              </div>
+            </div>
+            <Badge className="bg-green-100 text-green-800 border-green-300">
+              {trialStatus.trialDaysRemaining} days remaining
             </Badge>
           </div>
-        </AlertDescription>
-      </Alert>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div className="flex items-center gap-2 text-green-800">
+              <CheckCircle className="h-3 w-3 text-green-600" />
+              <span>PhysioGPT AI</span>
+            </div>
+            <div className="flex items-center gap-2 text-green-800">
+              <CheckCircle className="h-3 w-3 text-green-600" />
+              <span>Virtual Patients</span>
+            </div>
+            <div className="flex items-center gap-2 text-green-800">
+              <CheckCircle className="h-3 w-3 text-green-600" />
+              <span>3D Anatomy Tools</span>
+            </div>
+            <div className="flex items-center gap-2 text-green-800">
+              <CheckCircle className="h-3 w-3 text-green-600" />
+              <span>Research Library</span>
+            </div>
+          </div>
+          <div className="mt-3 p-3 bg-white/50 rounded-lg border border-green-200">
+            <p className="text-xs text-green-700 text-center">
+              <strong>Trial expires:</strong> {new Date(trialStatus.trialEndDate!).toLocaleDateString('en-US', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+              })}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
     );
   }
 

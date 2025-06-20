@@ -538,41 +538,41 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
                           ))}
                         </div>
                       ) : messages && messages.length > 0 ? (
-                        <div className="space-y-6 p-4">
+                        <div className="space-y-3 sm:space-y-6 p-2 sm:p-4">
                           {messages.map((msg: any, index: number) => (
                             <div
                               key={msg?.id || index}
-                              className={`flex gap-3 ${
+                              className={`flex gap-2 sm:gap-3 ${
                                 msg?.role === "user" ? "justify-end" : "justify-start"
                               }`}
                             >
                               {msg?.role === "assistant" && (
-                                <Avatar className="w-8 h-8">
+                                <Avatar className="w-6 h-6 sm:w-8 sm:h-8 flex-shrink-0">
                                   <AvatarFallback className="bg-blue-600 text-white">
-                                    <Bot className="h-4 w-4" />
+                                    <Bot className="h-3 w-3 sm:h-4 sm:w-4" />
                                   </AvatarFallback>
                                 </Avatar>
                               )}
                               
                               <div
-                                className={`max-w-[80%] ${
+                                className={`max-w-[85%] sm:max-w-[80%] ${
                                   msg?.role === "user"
                                     ? "bg-blue-600 text-white"
                                     : "bg-gray-100 text-gray-900"
-                                } rounded-lg p-3`}
+                                } rounded-lg p-2 sm:p-3`}
                               >
-                                <div className="whitespace-pre-wrap text-sm leading-relaxed">
+                                <div className="whitespace-pre-wrap text-xs sm:text-sm leading-relaxed">
                                   {msg?.content || "No content available"}
                                 </div>
-                                <div className="text-xs opacity-70 mt-2">
+                                <div className="text-xs opacity-70 mt-1 sm:mt-2">
                                   {msg?.createdAt ? new Date(msg.createdAt).toLocaleTimeString() : ""}
                                 </div>
                               </div>
 
                               {msg?.role === "user" && (
-                                <Avatar className="w-8 h-8">
+                                <Avatar className="w-6 h-6 sm:w-8 sm:h-8 flex-shrink-0">
                                   <AvatarFallback className="bg-gray-600 text-white">
-                                    <User className="h-4 w-4" />
+                                    <User className="h-3 w-3 sm:h-4 sm:w-4" />
                                   </AvatarFallback>
                                 </Avatar>
                               )}
@@ -591,19 +591,19 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
 
                     {/* Suggestions */}
                     {suggestions.length > 0 && (
-                      <div className="px-6 py-3 border-t bg-gray-50 flex-shrink-0">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Lightbulb className="h-4 w-4 text-amber-600" />
-                          <span className="text-sm font-medium text-gray-700">
+                      <div className="px-3 sm:px-6 py-2 sm:py-3 border-t bg-gray-50 flex-shrink-0">
+                        <div className="flex items-center gap-1 sm:gap-2 mb-1 sm:mb-2">
+                          <Lightbulb className="h-3 w-3 sm:h-4 sm:w-4 text-amber-600" />
+                          <span className="text-xs sm:text-sm font-medium text-gray-700">
                             Suggested follow-ups:
                           </span>
                         </div>
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-wrap gap-1 sm:gap-2">
                           {suggestions.map((suggestion, index) => (
                             <Badge
                               key={index}
                               variant="secondary"
-                              className="cursor-pointer hover:bg-blue-100 transition-colors"
+                              className="cursor-pointer hover:bg-blue-100 transition-colors text-xs sm:text-sm px-2 py-1"
                               onClick={() => handleSuggestionClick(suggestion)}
                             >
                               {suggestion}
@@ -614,8 +614,8 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
                     )}
 
                     {/* Message Input */}
-                    <div className="p-6 border-t flex-shrink-0 bg-white relative z-10">
-                      <div className="flex gap-3">
+                    <div className="p-3 sm:p-6 border-t flex-shrink-0 bg-white relative z-10">
+                      <div className="flex gap-2 sm:gap-3">
                         <Input
                           value={message}
                           onChange={(e) => setMessage(e.target.value)}
@@ -627,18 +627,18 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
                             }
                           }}
                           disabled={sendMessageMutation.isPending}
-                          className="flex-1"
+                          className="flex-1 text-sm sm:text-base h-9 sm:h-10"
                         />
                         <Button
                           onClick={() => handleSendMessage()}
                           disabled={!message.trim() || sendMessageMutation.isPending}
                           size="sm"
-                          className="flex-shrink-0"
+                          className="flex-shrink-0 h-9 w-9 sm:h-10 sm:w-10 p-0"
                         >
                           {sendMessageMutation.isPending ? (
-                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                            <div className="h-3 w-3 sm:h-4 sm:w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
                           ) : (
-                            <Send className="h-4 w-4" />
+                            <Send className="h-3 w-3 sm:h-4 sm:w-4" />
                           )}
                         </Button>
                       </div>
@@ -647,10 +647,10 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
 
                   {/* Assessments Tab */}
                   <TabsContent value="assessments" className="flex-1 flex flex-col p-0 min-h-0">
-                    <div className="flex-1 overflow-y-auto p-6">
+                    <div className="flex-1 overflow-y-auto p-3 sm:p-6">
                       <div className="text-center">
-                        <h3 className="text-lg font-semibold mb-4">Clinical Assessments</h3>
-                        <p className="text-muted-foreground">
+                        <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4">Clinical Assessments</h3>
+                        <p className="text-muted-foreground text-sm sm:text-base">
                           Assessment tools are being loaded. Please check back shortly.
                         </p>
                       </div>
@@ -659,10 +659,10 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
 
                   {/* Protocols Tab */}
                   <TabsContent value="protocols" className="flex-1 flex flex-col p-0 min-h-0">
-                    <div className="flex-1 overflow-y-auto p-6">
+                    <div className="flex-1 overflow-y-auto p-3 sm:p-6">
                       <div className="text-center">
-                        <h3 className="text-lg font-semibold mb-4">Evidence-Based Protocols</h3>
-                        <p className="text-muted-foreground">
+                        <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4">Evidence-Based Protocols</h3>
+                        <p className="text-muted-foreground text-sm sm:text-base">
                           Treatment protocols are being loaded. Please check back shortly.
                         </p>
                       </div>
@@ -675,7 +675,7 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
 
           {/* 3D Skeleton Panel */}
           {show3DPanel && (
-            <div className="lg:col-span-1">
+            <div className="lg:col-span-1 h-64 sm:h-80 lg:h-full">
               <InteractiveSkeleton
                 onRegionSelect={handleBodyRegionSelect}
                 selectedRegion={selectedBodyRegion || undefined}

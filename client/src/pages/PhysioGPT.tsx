@@ -111,6 +111,53 @@ export default function PhysioGPT() {
     }
   }, [conversationData, loadingMessages]);
 
+  // Load patient context from URL parameters
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const patientId = urlParams.get('patient');
+    
+    if (patientId) {
+      const fetchPatientData = async () => {
+        try {
+          const response = await apiRequest("GET", `/api/virtual-patients/${patientId}`);
+          const patientData = await response.json();
+          
+          setPatientContext({
+            patientId: parseInt(patientId),
+            patientName: patientData.patient_name,
+            bodyPart: patientData.body_part,
+          });
+          
+          // Set initial message with patient context
+          const contextMessage = `I would like to discuss patient: ${patientData.patient_name}, a ${patientData.age}-year-old ${patientData.gender} with ${patientData.chief_complaint} affecting the ${patientData.body_part}.`;
+          setMessage(contextMessage);
+          
+          // Set relevant suggestions
+          setSuggestions([
+            `What assessment tests would you recommend for this ${patientData.body_part} condition?`,
+            `What are the potential differential diagnoses?`,
+            `What treatment approaches would be most effective?`,
+            `What red flags should I screen for?`
+          ]);
+          
+          toast({
+            title: "Patient Context Loaded",
+            description: `Now discussing ${patientData.patient_name}'s case`,
+          });
+        } catch (error) {
+          console.error("Error loading patient context:", error);
+          toast({
+            title: "Error",
+            description: "Failed to load patient context",
+            variant: "destructive",
+          });
+        }
+      };
+      
+      fetchPatientData();
+    }
+  }, [toast]);
+
   // Send message mutation
   const sendMessageMutation = useMutation({
     mutationFn: async (messageContent: string) => {
@@ -118,7 +165,9 @@ export default function PhysioGPT() {
       const response = await apiRequest("POST", "/api/physiogpt/chat", {
         message: messageContent,
         conversationId: selectedConversationId,
-        patientContext: selectedBodyRegion ? {
+        patientContext: patientContext ? {
+          patientId: patientContext.patientId
+        } : selectedBodyRegion ? {
           bodyRegion: selectedBodyRegion,
           regionName: selectedBodyRegionName
         } : undefined
@@ -383,7 +432,12 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
                   </div>
                   
                   <div className="flex items-center gap-2">
-                    {selectedBodyRegionName && (
+                    {patientContext && (
+                      <Badge variant="default" className="text-xs bg-green-600">
+                        Patient: {patientContext.patientName} ({patientContext.bodyPart})
+                      </Badge>
+                    )}
+                    {selectedBodyRegionName && !patientContext && (
                       <Badge variant="outline" className="text-xs">
                         Context: {selectedBodyRegionName}
                       </Badge>

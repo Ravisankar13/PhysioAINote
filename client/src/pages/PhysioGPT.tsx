@@ -663,8 +663,8 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
                   </TabsContent>
 
                   {/* Protocols Tab */}
-                  <TabsContent value="protocols" className="flex-1 flex flex-col p-0 m-0 min-h-0">
-                    <div className="flex-1 overflow-y-auto p-3 sm:p-4">
+                  <TabsContent value="protocols" className="flex-1 flex flex-col p-0 m-0 min-h-0 data-[state=active]:mt-0">
+                    <div className="flex-1 overflow-y-auto p-2 sm:p-3">
                       <EvidenceBasedProtocols
                         selectedBodyPart={selectedBodyRegion || undefined}
                       />

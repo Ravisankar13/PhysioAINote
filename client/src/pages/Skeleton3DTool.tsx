@@ -10,6 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import Enhanced3DSkeleton from "@/components/3d/Enhanced3DSkeleton";
+import MotionCapture from "@/components/MotionCapture";
+import MotionProcessor from "@/components/MotionProcessor";
 import { useAuth } from "@/hooks/use-auth";
 import { 
   User, 
@@ -25,7 +27,9 @@ import {
   Settings,
   Eye,
   Move3D,
-  Zap
+  Zap,
+  Camera,
+  Users
 } from "lucide-react";
 
 export default function Skeleton3DTool() {

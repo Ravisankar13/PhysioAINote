@@ -53,7 +53,7 @@ import {
   type InsertCaseStudyAttempt,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, or, isNull, sql } from "drizzle-orm";
+import { eq, desc, and, or, isNull, sql, ilike } from "drizzle-orm";
 import {
   calculateAgeRange,
   deIdentifyNote,
@@ -115,7 +115,10 @@ export interface IStorage {
   getResearchArticles(
     bodyPart?: string,
     page?: number,
-    pageSize?: number
+    pageSize?: number,
+    all?: boolean,
+    search?: string,
+    qualityFilter?: string
   ): Promise<{
     articles: ResearchArticle[];
     total: number;
@@ -130,6 +133,10 @@ export interface IStorage {
   }>;
   createResearchArticle(
     article: InsertResearchArticle
+  ): Promise<ResearchArticle>;
+  updateResearchArticleAnalysis(
+    id: number,
+    analysisData: any
   ): Promise<ResearchArticle>;
 
   // AI Case Study Operations
@@ -598,29 +605,57 @@ export class DatabaseStorage implements IStorage {
     bodyPart?: string,
     page: number = 1,
     pageSize: number = 10,
-    getAll: boolean = false
+    getAll: boolean = false,
+    search?: string,
+    qualityFilter?: string
   ): Promise<{ articles: ResearchArticle[]; total: number }> {
     // Build base query
     let query = db.select().from(researchArticles);
+    let conditions = [];
 
     // If bodyPart is provided and valid, filter by it
-    if (
-      bodyPart &&
-      Object.values(researchArticles.bodyPart.enumValues).includes(
-        bodyPart as any
-      )
-    ) {
-      query = query.where(eq(researchArticles.bodyPart, bodyPart as any));
+    if (bodyPart && bodyPart !== 'all') {
+      conditions.push(eq(researchArticles.bodyPart, bodyPart as any));
+    }
+
+    // Add search filter
+    if (search && search.trim()) {
+      conditions.push(
+        or(
+          ilike(researchArticles.title, `%${search.trim()}%`),
+          ilike(researchArticles.abstract, `%${search.trim()}%`),
+          ilike(researchArticles.authors, `%${search.trim()}%`),
+          ilike(researchArticles.journal, `%${search.trim()}%`)
+        )
+      );
+    }
+
+    // Add quality filter based on AI analysis scores
+    if (qualityFilter && qualityFilter !== 'all') {
+      if (qualityFilter === 'high') {
+        conditions.push(sql`quality_score >= 80`);
+      } else if (qualityFilter === 'moderate') {
+        conditions.push(sql`quality_score >= 60 AND quality_score < 80`);
+      } else if (qualityFilter === 'low') {
+        conditions.push(sql`quality_score < 60`);
+      }
+    }
+
+    // Apply conditions
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions));
     }
 
     // First get total count for pagination metadata
-    const countResult = await db
+    const countQuery = db
       .select({ count: sql<number>`count(*)` })
-      .from(researchArticles)
-      .where(
-        bodyPart ? eq(researchArticles.bodyPart, bodyPart as any) : undefined
-      );
+      .from(researchArticles);
+    
+    if (conditions.length > 0) {
+      countQuery.where(and(...conditions));
+    }
 
+    const countResult = await countQuery;
     const total = countResult[0]?.count || 0;
 
     // If getAll is true, return all articles without pagination
@@ -658,6 +693,26 @@ export class DatabaseStorage implements IStorage {
     const result = await db
       .insert(researchArticles)
       .values(article)
+      .returning();
+    return result[0];
+  }
+
+  async updateResearchArticleAnalysis(
+    id: number,
+    analysisData: any
+  ): Promise<ResearchArticle> {
+    const result = await db
+      .update(researchArticles)
+      .set({
+        aiAnalysisStatus: analysisData.aiAnalysisStatus || 'completed',
+        qualityScore: analysisData.qualityScore,
+        identifiedGaps: analysisData.identifiedGaps,
+        generatedQuestions: analysisData.generatedQuestions,
+        biasAssessment: analysisData.biasAssessment,
+        methodologyAssessment: analysisData.methodologyAssessment,
+        aiAnalyzedAt: new Date()
+      })
+      .where(eq(researchArticles.id, id))
       .returning();
     return result[0];
   }

@@ -298,7 +298,7 @@ export type InsertResearchArticle = z.infer<typeof insertResearchArticleSchema>;
 export type ResearchArticle = typeof researchArticles.$inferSelect;
 
 // Research Discussions Schema
-export const researchDiscussions = pgTable("research_discussions", {
+export const researchDiscussions: any = pgTable("research_discussions", {
   id: serial("id").primaryKey(),
   articleId: integer("article_id")
     .notNull()

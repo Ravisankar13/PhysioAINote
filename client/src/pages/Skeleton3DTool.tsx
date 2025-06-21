@@ -119,7 +119,7 @@ export default function Skeleton3DTool() {
     setJointROM(prev => ({
       ...prev,
       [joint]: {
-        ...prev[joint],
+        ...(prev as any)[joint],
         [movement]: value
       }
     }));
@@ -484,7 +484,7 @@ export default function Skeleton3DTool() {
                         <Checkbox
                           id="showJointLimits"
                           checked={movementData.showJointLimits}
-                          onCheckedChange={(checked) => setMovementData(prev => ({...prev, showJointLimits: checked}))}
+                          onCheckedChange={(checked) => setMovementData(prev => ({...prev, showJointLimits: !!checked}))}
                         />
                         <Label htmlFor="showJointLimits" className="text-xs">Show Joint Limits</Label>
                       </div>
@@ -493,7 +493,7 @@ export default function Skeleton3DTool() {
                         <Checkbox
                           id="showPainAreas"
                           checked={movementData.showPainAreas}
-                          onCheckedChange={(checked) => setMovementData(prev => ({...prev, showPainAreas: checked}))}
+                          onCheckedChange={(checked) => setMovementData(prev => ({...prev, showPainAreas: !!checked}))}
                         />
                         <Label htmlFor="showPainAreas" className="text-xs">Highlight Pain Areas</Label>
                       </div>

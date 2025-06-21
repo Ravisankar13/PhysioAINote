@@ -177,8 +177,124 @@ function SkeletonModel({
   const mixerRef = useRef<THREE.AnimationMixer | null>(null);
   const [exerciseProgress, setExerciseProgress] = useState(0);
   
-  // Load the GLB skeleton model
-  const gltf = useGLTF('/skeleton.glb');
+  // Create procedural skeleton using Three.js primitives
+  const createProceduralSkeleton = () => {
+    const skeleton = new THREE.Group();
+    
+    // Materials
+    const boneMaterial = new THREE.MeshStandardMaterial({ 
+      color: '#f5f5f5', 
+      metalness: 0.1, 
+      roughness: 0.9 
+    });
+    const jointMaterial = new THREE.MeshStandardMaterial({ 
+      color: '#e0e0e0', 
+      metalness: 0.2, 
+      roughness: 0.8 
+    });
+    
+    // Torso (spine)
+    const torso = new THREE.CylinderGeometry(0.08, 0.1, 0.6, 8);
+    const torsoMesh = new THREE.Mesh(torso, boneMaterial);
+    torsoMesh.position.y = 0.3;
+    torsoMesh.name = 'torso';
+    skeleton.add(torsoMesh);
+    
+    // Head
+    const head = new THREE.SphereGeometry(0.12, 8, 8);
+    const headMesh = new THREE.Mesh(head, boneMaterial);
+    headMesh.position.y = 0.75;
+    headMesh.name = 'head';
+    skeleton.add(headMesh);
+    
+    // Arms
+    const createArm = (side: 'left' | 'right') => {
+      const x = side === 'left' ? -0.15 : 0.15;
+      
+      // Upper arm
+      const upperArm = new THREE.CylinderGeometry(0.04, 0.05, 0.3, 8);
+      const upperArmMesh = new THREE.Mesh(upperArm, boneMaterial);
+      upperArmMesh.position.set(x, 0.45, 0);
+      upperArmMesh.rotation.z = side === 'left' ? Math.PI / 6 : -Math.PI / 6;
+      upperArmMesh.name = `${side}_upper_arm`;
+      skeleton.add(upperArmMesh);
+      
+      // Elbow joint
+      const elbow = new THREE.SphereGeometry(0.03, 6, 6);
+      const elbowMesh = new THREE.Mesh(elbow, jointMaterial);
+      elbowMesh.position.set(x * 1.8, 0.15, 0);
+      elbowMesh.name = `${side}_elbow`;
+      skeleton.add(elbowMesh);
+      
+      // Forearm
+      const foreArm = new THREE.CylinderGeometry(0.03, 0.04, 0.25, 8);
+      const foreArmMesh = new THREE.Mesh(foreArm, boneMaterial);
+      foreArmMesh.position.set(x * 2.2, -0.05, 0);
+      foreArmMesh.name = `${side}_forearm`;
+      skeleton.add(foreArmMesh);
+      
+      // Hand
+      const hand = new THREE.BoxGeometry(0.08, 0.12, 0.03);
+      const handMesh = new THREE.Mesh(hand, boneMaterial);
+      handMesh.position.set(x * 2.2, -0.22, 0);
+      handMesh.name = `${side}_hand`;
+      skeleton.add(handMesh);
+    };
+    
+    // Legs
+    const createLeg = (side: 'left' | 'right') => {
+      const x = side === 'left' ? -0.08 : 0.08;
+      
+      // Hip joint
+      const hip = new THREE.SphereGeometry(0.04, 6, 6);
+      const hipMesh = new THREE.Mesh(hip, jointMaterial);
+      hipMesh.position.set(x, 0, 0);
+      hipMesh.name = `${side}_hip`;
+      skeleton.add(hipMesh);
+      
+      // Thigh
+      const thigh = new THREE.CylinderGeometry(0.05, 0.06, 0.4, 8);
+      const thighMesh = new THREE.Mesh(thigh, boneMaterial);
+      thighMesh.position.set(x, -0.2, 0);
+      thighMesh.name = `${side}_thigh`;
+      skeleton.add(thighMesh);
+      
+      // Knee joint
+      const knee = new THREE.SphereGeometry(0.035, 6, 6);
+      const kneeMesh = new THREE.Mesh(knee, jointMaterial);
+      kneeMesh.position.set(x, -0.4, 0);
+      kneeMesh.name = `${side}_knee`;
+      skeleton.add(kneeMesh);
+      
+      // Shin
+      const shin = new THREE.CylinderGeometry(0.03, 0.04, 0.35, 8);
+      const shinMesh = new THREE.Mesh(shin, boneMaterial);
+      shinMesh.position.set(x, -0.575, 0);
+      shinMesh.name = `${side}_shin`;
+      skeleton.add(shinMesh);
+      
+      // Ankle
+      const ankle = new THREE.SphereGeometry(0.03, 6, 6);
+      const ankleMesh = new THREE.Mesh(ankle, jointMaterial);
+      ankleMesh.position.set(x, -0.75, 0);
+      ankleMesh.name = `${side}_ankle`;
+      skeleton.add(ankleMesh);
+      
+      // Foot
+      const foot = new THREE.BoxGeometry(0.06, 0.03, 0.15);
+      const footMesh = new THREE.Mesh(foot, boneMaterial);
+      footMesh.position.set(x, -0.785, 0.05);
+      footMesh.name = `${side}_foot`;
+      skeleton.add(footMesh);
+    };
+    
+    createArm('left');
+    createArm('right');
+    createLeg('left');
+    createLeg('right');
+    
+    return skeleton;
+  };
   
   // Create animation functions for different exercises
   const createExerciseAnimation = (exerciseId: string, skeleton: THREE.Group) => {
@@ -282,81 +398,55 @@ function SkeletonModel({
     return animations[exerciseId];
   };
   
-  // Clone the model to avoid affecting the original
-  const skeletonModel = gltf.scene.clone();
+  // Create the procedural skeleton model
+  const [skeletonModel, setSkeletonModel] = useState<THREE.Group | null>(null);
   
   useEffect(() => {
-    if (skeletonModel && skeletonRef.current) {
-      // Scale the model based on patient anthropometrics
-      const heightScale = anthropometrics ? anthropometrics.height / 170 : 1;
-      skeletonModel.scale.setScalar(heightScale * 0.05); // Increased scale for better visibility
-      
-      // Center the model
-      const box = new THREE.Box3().setFromObject(skeletonModel);
-      const center = box.getCenter(new THREE.Vector3());
-      skeletonModel.position.sub(center);
-      skeletonModel.position.y = -0.5; // Better vertical positioning for closer view
-      
-      // Debug: Log all bone names to help with pain area mapping
-      console.log("=== Skeleton Model Bone Structure ===");
-      const boneNames: string[] = [];
-      skeletonModel.traverse((child: any) => {
-        if (child instanceof THREE.Mesh && child.name) {
-          boneNames.push(child.name);
-        }
-      });
-      console.log("Available bone names:", boneNames);
-      console.log("Pain areas to highlight:", painAreas);
-      
-      // Apply material modifications for pain areas
-      skeletonModel.traverse((child: any) => {
-        if (child instanceof THREE.Mesh) {
-          const boneName = child.name.toLowerCase();
-          
-          // Enhanced pain area detection with more comprehensive matching
-          const isPainArea = painAreas.some(area => {
-            const areaLower = area.toLowerCase();
-            // Check direct matches and common anatomical terms
-            return boneName.includes(areaLower) || 
-                   areaLower.includes(boneName) ||
-                   // Check for common bone/area mappings
-                   (areaLower.includes('shoulder') && (boneName.includes('humerus') || boneName.includes('scapula') || boneName.includes('clavicle'))) ||
-                   (areaLower.includes('elbow') && (boneName.includes('radius') || boneName.includes('ulna') || boneName.includes('humerus'))) ||
-                   (areaLower.includes('hip') && (boneName.includes('femur') || boneName.includes('pelvis'))) ||
-                   (areaLower.includes('knee') && (boneName.includes('tibia') || boneName.includes('fibula') || boneName.includes('femur'))) ||
-                   (areaLower.includes('spine') && (boneName.includes('vertebra') || boneName.includes('spine'))) ||
-                   (areaLower.includes('wrist') && (boneName.includes('radius') || boneName.includes('ulna') || boneName.includes('carpal'))) ||
-                   (areaLower.includes('ankle') && (boneName.includes('tibia') || boneName.includes('fibula') || boneName.includes('talus')));
+    const newSkeleton = createProceduralSkeleton();
+    
+    // Scale the model based on patient anthropometrics
+    const heightScale = anthropometrics ? anthropometrics.height / 170 : 1;
+    newSkeleton.scale.setScalar(heightScale);
+    
+    // Apply pain area highlighting
+    newSkeleton.traverse((child: any) => {
+      if (child instanceof THREE.Mesh) {
+        const boneName = child.name.toLowerCase();
+        
+        // Enhanced pain area detection
+        const isPainArea = painAreas.some(area => {
+          const areaLower = area.toLowerCase().replace('_', ' ');
+          return boneName.includes(areaLower) || 
+                 areaLower.includes(boneName) ||
+                 // Mapping common pain areas to bone names
+                 (areaLower.includes('shoulder') && boneName.includes('upper_arm')) ||
+                 (areaLower.includes('lower back') && boneName.includes('torso')) ||
+                 (areaLower.includes('upper back') && boneName.includes('torso')) ||
+                 (areaLower.includes('back') && boneName.includes('torso')) ||
+                 (areaLower.includes('upper arm') && boneName.includes('upper_arm')) ||
+                 (areaLower.includes('forearm') && boneName.includes('forearm')) ||
+                 (areaLower.includes('thigh') && boneName.includes('thigh')) ||
+                 (areaLower.includes('shin') && boneName.includes('shin'));
+        });
+        
+        if (isPainArea) {
+          child.material = new THREE.MeshStandardMaterial({
+            color: new THREE.Color('#ff4444'),
+            transparent: true,
+            opacity: 0.9,
+            metalness: 0.2,
+            roughness: 0.7
           });
-          
-          // Create new material instead of cloning to ensure it applies
-          if (isPainArea) {
-            console.log(`Applying red material to pain area: ${boneName}`);
-            child.material = new THREE.MeshStandardMaterial({
-              color: new THREE.Color('#ff2222'),
-              transparent: true,
-              opacity: 0.95,
-              metalness: 0.1,
-              roughness: 0.8
-            });
-          } else {
-            // Default bone material
-            child.material = new THREE.MeshStandardMaterial({
-              color: new THREE.Color('#f5f5f5'),
-              transparent: true,
-              opacity: 0.92,
-              metalness: 0.1,
-              roughness: 0.9
-            });
-          }
-          
-          // Enable shadows
-          child.castShadow = true;
-          child.receiveShadow = true;
         }
-      });
-    }
-  }, [skeletonModel, anthropometrics, painAreas]);
+        
+        // Enable shadows
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
+    });
+    
+    setSkeletonModel(newSkeleton);
+  }, [anthropometrics, painAreas]);
 
   // Animation frame
   useFrame((state, delta) => {
@@ -382,13 +472,30 @@ function SkeletonModel({
   return (
     <group ref={groupRef}>
       <group ref={skeletonRef}>
-        <primitive object={skeletonModel} position={[0, 0, 0]} />
+{skeletonModel && <primitive object={skeletonModel} position={[0, 0, 0]} />}
         
         {/* Joint indicators for restrictions */}
         {showJointLimits && jointRestrictions && (
           <>
-            {/* Add joint range visualization spheres at key locations */}
-            {/* These would be positioned based on the actual bone hierarchy */}
+            {/* Shoulder ROM indicators */}
+            <mesh position={[-0.3, 0.45, 0]}>
+              <sphereGeometry args={[0.02, 8, 8]} />
+              <meshStandardMaterial color="#ffaa00" transparent opacity={0.7} />
+            </mesh>
+            <mesh position={[0.3, 0.45, 0]}>
+              <sphereGeometry args={[0.02, 8, 8]} />
+              <meshStandardMaterial color="#ffaa00" transparent opacity={0.7} />
+            </mesh>
+            
+            {/* Hip ROM indicators */}
+            <mesh position={[-0.08, 0, 0]}>
+              <sphereGeometry args={[0.025, 8, 8]} />
+              <meshStandardMaterial color="#00aaff" transparent opacity={0.7} />
+            </mesh>
+            <mesh position={[0.08, 0, 0]}>
+              <sphereGeometry args={[0.025, 8, 8]} />
+              <meshStandardMaterial color="#00aaff" transparent opacity={0.7} />
+            </mesh>
           </>
         )}
       </group>
@@ -397,8 +504,8 @@ function SkeletonModel({
       {showJointLimits && (
         <>
           <Text
-            position={[0, 1.5, 0]}
-            fontSize={0.1}
+            position={[0, 0.8, 0]}
+            fontSize={0.06}
             color="#333333"
             anchorX="center"
             anchorY="middle"
@@ -406,8 +513,8 @@ function SkeletonModel({
             Spine
           </Text>
           <Text
-            position={[-0.5, 1.2, 0]}
-            fontSize={0.08}
+            position={[-0.4, 0.5, 0]}
+            fontSize={0.05}
             color="#333333"
             anchorX="center"
             anchorY="middle"
@@ -415,8 +522,8 @@ function SkeletonModel({
             L Shoulder
           </Text>
           <Text
-            position={[0.5, 1.2, 0]}
-            fontSize={0.08}
+            position={[0.4, 0.5, 0]}
+            fontSize={0.05}
             color="#333333"
             anchorX="center"
             anchorY="middle"

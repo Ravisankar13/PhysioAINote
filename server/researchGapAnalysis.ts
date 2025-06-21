@@ -284,6 +284,7 @@ Include brief rationale explaining why each question is important.
           generatedQuestions: analysis.generatedQuestions,
           biasAssessment: analysis.biasAssessment,
           methodologyAssessment: analysis.methodologyAssessment,
+          followUpQuestions: analysis.followUpQuestions,
           aiAnalyzedAt: new Date(),
         })
         .where(eq(researchArticles.id, articleId));

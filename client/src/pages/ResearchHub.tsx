@@ -40,6 +40,7 @@ import {
   Download
 } from "lucide-react";
 import MembershipRequired from "@/components/MembershipRequired";
+import { FollowUpQuestions } from "@/components/research/FollowUpQuestions";
 import { apiRequest } from "@/lib/queryClient";
 
 interface ResearchArticle {
@@ -82,6 +83,13 @@ interface ResearchArticle {
     outcomeValidation: { score: number; notes: string };
     followUpDuration: { score: number; notes: string };
     statisticalMethods: { score: number; notes: string };
+  };
+  followUpQuestions?: {
+    methodological: Array<{ question: string; priority: number; feasibilityScore: number; rationale: string }>;
+    population: Array<{ question: string; priority: number; feasibilityScore: number; rationale: string }>;
+    intervention: Array<{ question: string; priority: number; feasibilityScore: number; rationale: string }>;
+    outcomes: Array<{ question: string; priority: number; feasibilityScore: number; rationale: string }>;
+    mechanisms: Array<{ question: string; priority: number; feasibilityScore: number; rationale: string }>;
   };
   aiAnalyzedAt?: string;
   createdAt: string;
@@ -268,9 +276,10 @@ function GapAnalysisPanel({ article }: { article: ResearchArticle }) {
       </CardHeader>
       <CardContent className="space-y-4">
         <Tabs defaultValue="gaps" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="gaps">Identified Gaps</TabsTrigger>
             <TabsTrigger value="questions">Questions</TabsTrigger>
+            <TabsTrigger value="followup">Follow-up Research</TabsTrigger>
             <TabsTrigger value="bias">Bias Assessment</TabsTrigger>
             <TabsTrigger value="methodology">Methodology</TabsTrigger>
           </TabsList>

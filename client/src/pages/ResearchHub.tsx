@@ -158,7 +158,18 @@ function GapAnalysisPanel({ article }: { article: ResearchArticle }) {
     },
     onSuccess: () => {
       toast({ title: "AI analysis started - processing in background" });
-      queryClient.invalidateQueries({ queryKey: ["/api/research"] });
+      
+      // Set up automatic refresh after a delay
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ["/api/research"] });
+        toast({ title: "Checking for analysis completion..." });
+      }, 8000);
+      
+      // Additional refresh after longer delay
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ["/api/research"] });
+        toast({ title: "Analysis should be completed - refreshing results" });
+      }, 20000);
     },
     onError: () => {
       toast({ title: "Analysis initiated - refresh page in a few moments", variant: "default" });
@@ -182,24 +193,33 @@ function GapAnalysisPanel({ article }: { article: ResearchArticle }) {
                 <Clock className="h-4 w-4" />
                 Analysis pending
               </div>
-              <Button 
-                onClick={() => analyzeArticleMutation.mutate()}
-                disabled={analyzeArticleMutation.isPending}
-                size="sm"
-                className="w-full"
-              >
-                {analyzeArticleMutation.isPending ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Analyzing...
-                  </>
-                ) : (
-                  <>
-                    <Zap className="h-4 w-4 mr-2" />
-                    Start AI Analysis
-                  </>
-                )}
-              </Button>
+              <div className="flex gap-2">
+                <Button 
+                  onClick={() => analyzeArticleMutation.mutate()}
+                  disabled={analyzeArticleMutation.isPending}
+                  size="sm"
+                  className="flex-1"
+                >
+                  {analyzeArticleMutation.isPending ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Analyzing...
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="h-4 w-4 mr-2" />
+                      Start AI Analysis
+                    </>
+                  )}
+                </Button>
+                <Button 
+                  onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/research"] })}
+                  size="sm"
+                  variant="outline"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           )}
           {article.aiAnalysisStatus === 'analyzing' && (

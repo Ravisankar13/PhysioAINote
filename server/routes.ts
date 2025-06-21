@@ -19,6 +19,7 @@ import { grimaldiHipApproaches, grimaldiTreatmentPrinciples } from "./grimaldi-h
 import { bissetElbowApproaches, bissetTreatmentPrinciples } from "./bisset-elbow-library";
 import { generateAICaseStudy, generateDiagnosticFeedback } from "./aiCaseStudyGenerator";
 import { physioGptService } from "./physioGptService";
+import { researchGapAnalysisService } from "./researchGapAnalysis";
 import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, exercises } from "@shared/schema";
 import { ZodError, z } from "zod";
 import { fromZodError } from "zod-validation-error";
@@ -893,8 +894,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const page = parseInt(req.query.page as string || '1');
       const pageSize = parseInt(req.query.pageSize as string || '10');
       const all = req.query.all === 'true';
+      const search = req.query.search as string | undefined;
+      const qualityFilter = req.query.qualityFilter as string | undefined;
 
-      const result = await storage.getResearchArticles(bodyPart, page, pageSize, all);
+      const result = await storage.getResearchArticles(bodyPart, page, pageSize, all, search, qualityFilter);
 
       // Format the response to match what the frontend expects
       const response = {
@@ -914,6 +917,167 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else {
         res.status(500).json({ error: 'An unknown error occurred' });
       }
+    }
+  });
+
+  // Trigger AI analysis for pending research articles
+  app.post("/api/research/trigger-analysis", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      await researchGapAnalysisService.batchAnalyzeArticles(5);
+      res.json({ message: "AI analysis started for pending articles" });
+    } catch (error) {
+      console.error("Error triggering research analysis:", error);
+      res.status(500).json({ error: "Failed to start AI analysis" });
+    }
+  });
+
+  // Get research article discussions
+  app.get("/api/research/:articleId/discussions", async (req: Request, res: Response) => {
+    try {
+      const articleId = parseInt(req.params.articleId);
+      if (isNaN(articleId)) {
+        return res.status(400).json({ error: "Invalid article ID" });
+      }
+
+      const discussions = await db
+        .select({
+          id: researchDiscussions.id,
+          articleId: researchDiscussions.articleId,
+          userId: researchDiscussions.userId,
+          parentId: researchDiscussions.parentId,
+          content: researchDiscussions.content,
+          questionType: researchDiscussions.questionType,
+          isExpertVerified: researchDiscussions.isExpertVerified,
+          upvotes: researchDiscussions.upvotes,
+          downvotes: researchDiscussions.downvotes,
+          createdAt: researchDiscussions.createdAt,
+          updatedAt: researchDiscussions.updatedAt,
+          user: {
+            username: users.username
+          }
+        })
+        .from(researchDiscussions)
+        .leftJoin(users, eq(researchDiscussions.userId, users.id))
+        .where(eq(researchDiscussions.articleId, articleId))
+        .orderBy(researchDiscussions.createdAt);
+
+      // Group discussions into threads
+      const topLevelDiscussions = discussions.filter(d => !d.parentId);
+      const replies = discussions.filter(d => d.parentId);
+
+      const threaded = topLevelDiscussions.map(discussion => ({
+        ...discussion,
+        replies: replies.filter(reply => reply.parentId === discussion.id)
+      }));
+
+      res.json(threaded);
+    } catch (error) {
+      console.error("Error fetching discussions:", error);
+      res.status(500).json({ error: "Failed to fetch discussions" });
+    }
+  });
+
+  // Add research article discussion
+  app.post("/api/research/:articleId/discussions", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const articleId = parseInt(req.params.articleId);
+      if (isNaN(articleId)) {
+        return res.status(400).json({ error: "Invalid article ID" });
+      }
+
+      const { content, parentId } = req.body;
+      if (!content || !content.trim()) {
+        return res.status(400).json({ error: "Content is required" });
+      }
+
+      const [discussion] = await db
+        .insert(researchDiscussions)
+        .values({
+          articleId,
+          userId: req.user!.id,
+          content: content.trim(),
+          parentId: parentId || null
+        })
+        .returning();
+
+      res.json(discussion);
+    } catch (error) {
+      console.error("Error adding discussion:", error);
+      res.status(500).json({ error: "Failed to add discussion" });
+    }
+  });
+
+  // Vote on research discussion
+  app.post("/api/research/discussions/:discussionId/vote", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const discussionId = parseInt(req.params.discussionId);
+      if (isNaN(discussionId)) {
+        return res.status(400).json({ error: "Invalid discussion ID" });
+      }
+
+      const { voteType } = req.body;
+      if (!voteType || !['up', 'down'].includes(voteType)) {
+        return res.status(400).json({ error: "Invalid vote type" });
+      }
+
+      // Check if user already voted
+      const existingVote = await db
+        .select()
+        .from(researchDiscussionVotes)
+        .where(
+          eq(researchDiscussionVotes.discussionId, discussionId) &&
+          eq(researchDiscussionVotes.userId, req.user!.id)
+        );
+
+      if (existingVote.length > 0) {
+        // Update existing vote
+        await db
+          .update(researchDiscussionVotes)
+          .set({ voteType })
+          .where(
+            eq(researchDiscussionVotes.discussionId, discussionId) &&
+            eq(researchDiscussionVotes.userId, req.user!.id)
+          );
+      } else {
+        // Create new vote
+        await db
+          .insert(researchDiscussionVotes)
+          .values({
+            discussionId,
+            userId: req.user!.id,
+            voteType
+          });
+      }
+
+      // Update vote counts on discussion
+      const upvoteCount = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(researchDiscussionVotes)
+        .where(
+          eq(researchDiscussionVotes.discussionId, discussionId) &&
+          eq(researchDiscussionVotes.voteType, 'up')
+        );
+
+      const downvoteCount = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(researchDiscussionVotes)
+        .where(
+          eq(researchDiscussionVotes.discussionId, discussionId) &&
+          eq(researchDiscussionVotes.voteType, 'down')
+        );
+
+      await db
+        .update(researchDiscussions)
+        .set({
+          upvotes: Number(upvoteCount[0]?.count || 0),
+          downvotes: Number(downvoteCount[0]?.count || 0)
+        })
+        .where(eq(researchDiscussions.id, discussionId));
+
+      res.json({ message: "Vote recorded successfully" });
+    } catch (error) {
+      console.error("Error recording vote:", error);
+      res.status(500).json({ error: "Failed to record vote" });
     }
   });
 

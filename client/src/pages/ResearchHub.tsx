@@ -708,7 +708,7 @@ export default function ResearchHub() {
                       <option value="all">All Quality Levels</option>
                       <option value="high">High Quality (80+)</option>
                       <option value="moderate">Moderate Quality (60-79)</option>
-                      <option value="low">Needs Review (<60)</option>
+                      <option value="low">Needs Review (below 60)</option>
                     </select>
                   </div>
                 </CardHeader>

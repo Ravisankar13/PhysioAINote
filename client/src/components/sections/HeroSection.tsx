@@ -6,6 +6,7 @@ import {
   BookOpen,
   Activity,
   Users,
+  MessageCircle,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -30,11 +31,11 @@ const HeroSection = () => {
             </h1>
             <p className="mt-6 text-xl text-white/80 max-w-2xl">
               Elevate your practice with AI-powered clinical notes, virtual
-              patients, peer exchange, comprehensive exercise libraries, and
+              patients, PhysioGPT assistant, peer exchange, comprehensive exercise libraries, and
               evidence-based research - all in one professional platform
               designed for physiotherapists.
             </p>
-            <div className="mt-6 grid grid-cols-2 md:grid-cols-5 gap-4 max-w-2xl">
+            <div className="mt-6 grid grid-cols-2 md:grid-cols-6 gap-4 max-w-3xl">
               <div className="flex items-center gap-2 text-white/90">
                 <Sparkles className="h-5 w-5 text-white" />
                 <span className="text-sm md:text-base">AI Notes</span>
@@ -42,6 +43,10 @@ const HeroSection = () => {
               <div className="flex items-center gap-2 text-white/90">
                 <Activity className="h-5 w-5 text-white" />
                 <span className="text-sm md:text-base">Virtual Patients</span>
+              </div>
+              <div className="flex items-center gap-2 text-white/90">
+                <MessageCircle className="h-5 w-5 text-white" />
+                <span className="text-sm md:text-base">PhysioGPT</span>
               </div>
               <div className="flex items-center gap-2 text-white/90">
                 <Users className="h-5 w-5 text-white" />

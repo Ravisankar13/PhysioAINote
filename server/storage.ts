@@ -142,6 +142,37 @@ export interface IStorage {
     analysisData: any
   ): Promise<ResearchArticle>;
 
+  // Research Papers with AI Analysis Operations
+  getResearchPaper(id: number): Promise<ResearchPaper | undefined>;
+  getResearchPapers(
+    bodyPart?: string,
+    studyDesign?: string,
+    evidenceLevel?: string,
+    page?: number,
+    pageSize?: number,
+    search?: string
+  ): Promise<{
+    papers: ResearchPaper[];
+    total: number;
+  }>;
+  getResearchPapersByBodyPart(
+    bodyPart: string,
+    page?: number,
+    pageSize?: number
+  ): Promise<{
+    papers: ResearchPaper[];
+    total: number;
+  }>;
+  createResearchPaper(paper: InsertResearchPaper): Promise<ResearchPaper>;
+  bulkCreateResearchPapers(papers: InsertResearchPaper[]): Promise<ResearchPaper[]>;
+  updateResearchPaper(id: number, updateData: Partial<InsertResearchPaper>): Promise<ResearchPaper>;
+  deleteResearchPaper(id: number): Promise<void>;
+  searchResearchPapers(query: string, filters?: {
+    bodyPart?: string;
+    evidenceLevel?: string;
+    year?: number;
+  }): Promise<ResearchPaper[]>;
+
   // AI Case Study Operations
   getAICaseStudy(id: number): Promise<AICaseStudy | undefined>;
   getUserAICaseStudies(userId: number): Promise<AICaseStudy[]>;
@@ -838,6 +869,142 @@ export class DatabaseStorage implements IStorage {
       trialDaysRemaining,
       trialEndDate,
     };
+  }
+
+  // Research Papers with AI Analysis Methods
+  async getResearchPaper(id: number): Promise<ResearchPaper | undefined> {
+    const results = await db
+      .select()
+      .from(researchPapers)
+      .where(eq(researchPapers.id, id));
+    return results.length > 0 ? results[0] : undefined;
+  }
+
+  async getResearchPapers(
+    bodyPart?: string,
+    studyDesign?: string,
+    evidenceLevel?: string,
+    page: number = 1,
+    pageSize: number = 20,
+    search?: string
+  ): Promise<{ papers: ResearchPaper[]; total: number }> {
+    let query = db.select().from(researchPapers);
+    let countQuery = db.select({ count: sql<number>`count(*)` }).from(researchPapers);
+
+    const conditions = [];
+
+    if (bodyPart) {
+      conditions.push(eq(researchPapers.bodyPart, bodyPart as any));
+    }
+    if (studyDesign) {
+      conditions.push(eq(researchPapers.studyDesign, studyDesign as any));
+    }
+    if (evidenceLevel) {
+      conditions.push(eq(researchPapers.evidenceLevel, evidenceLevel as any));
+    }
+    if (search) {
+      conditions.push(
+        or(
+          ilike(researchPapers.title, `%${search}%`),
+          ilike(researchPapers.authors, `%${search}%`),
+          ilike(researchPapers.abstract, `%${search}%`)
+        )
+      );
+    }
+
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions));
+      countQuery = countQuery.where(and(...conditions));
+    }
+
+    const offset = (page - 1) * pageSize;
+    query = query
+      .orderBy(desc(researchPapers.year), desc(researchPapers.strengthOfEvidence))
+      .limit(pageSize)
+      .offset(offset);
+
+    const [papers, totalResult] = await Promise.all([
+      query,
+      countQuery
+    ]);
+
+    return {
+      papers,
+      total: totalResult[0].count
+    };
+  }
+
+  async getResearchPapersByBodyPart(
+    bodyPart: string,
+    page: number = 1,
+    pageSize: number = 20
+  ): Promise<{ papers: ResearchPaper[]; total: number }> {
+    return this.getResearchPapers(bodyPart, undefined, undefined, page, pageSize);
+  }
+
+  async createResearchPaper(paper: InsertResearchPaper): Promise<ResearchPaper> {
+    const result = await db
+      .insert(researchPapers)
+      .values(paper)
+      .returning();
+    return result[0];
+  }
+
+  async bulkCreateResearchPapers(papers: InsertResearchPaper[]): Promise<ResearchPaper[]> {
+    if (papers.length === 0) return [];
+    
+    const result = await db
+      .insert(researchPapers)
+      .values(papers)
+      .returning();
+    return result;
+  }
+
+  async updateResearchPaper(id: number, updateData: Partial<InsertResearchPaper>): Promise<ResearchPaper> {
+    const result = await db
+      .update(researchPapers)
+      .set(updateData)
+      .where(eq(researchPapers.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteResearchPaper(id: number): Promise<void> {
+    await db
+      .delete(researchPapers)
+      .where(eq(researchPapers.id, id));
+  }
+
+  async searchResearchPapers(query: string, filters?: {
+    bodyPart?: string;
+    evidenceLevel?: string;
+    year?: number;
+  }): Promise<ResearchPaper[]> {
+    let searchQuery = db
+      .select()
+      .from(researchPapers)
+      .where(
+        or(
+          ilike(researchPapers.title, `%${query}%`),
+          ilike(researchPapers.authors, `%${query}%`),
+          ilike(researchPapers.abstract, `%${query}%`),
+          ilike(researchPapers.aiSummary, `%${query}%`)
+        )
+      );
+
+    if (filters?.bodyPart) {
+      searchQuery = searchQuery.where(eq(researchPapers.bodyPart, filters.bodyPart as any));
+    }
+    if (filters?.evidenceLevel) {
+      searchQuery = searchQuery.where(eq(researchPapers.evidenceLevel, filters.evidenceLevel as any));
+    }
+    if (filters?.year) {
+      searchQuery = searchQuery.where(eq(researchPapers.year, filters.year));
+    }
+
+    return searchQuery
+      .orderBy(desc(researchPapers.strengthOfEvidence), desc(researchPapers.year))
+      .limit(50);
   }
 
   // Subscription Plan Methods

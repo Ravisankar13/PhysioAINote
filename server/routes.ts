@@ -32,6 +32,7 @@ import { uploadToS3, getFileType } from "./s3Uploader";
 import { setupAuth } from "./auth";
 import { calculateAgeRange, deIdentifyNote, extractCondition } from "./utilities/deIdentify";
 import { sampleNotes } from "./routes/sampleNotes";
+import { sampleResearchArticles } from "./sampleResearchArticles";
 import { createPaypalOrder, capturePaypalOrder, loadPaypalDefault } from "./paypal";
 import Stripe from "stripe";
 import OpenAI from "openai";
@@ -1078,6 +1079,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error recording vote:", error);
       res.status(500).json({ error: "Failed to record vote" });
+    }
+  });
+
+  // Populate database with sample research articles (development only)
+  app.post("/api/research/populate-samples", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      // Check if articles already exist to avoid duplicates
+      const existingArticles = await db.select().from(researchArticles).limit(1);
+      
+      if (existingArticles.length > 0) {
+        return res.json({ message: "Sample articles already exist", count: existingArticles.length });
+      }
+
+      // Insert sample articles
+      const insertedArticles = await db
+        .insert(researchArticles)
+        .values(sampleResearchArticles)
+        .returning();
+
+      res.json({ 
+        message: "Sample research articles added successfully", 
+        count: insertedArticles.length,
+        articles: insertedArticles.map(a => ({ id: a.id, title: a.title, bodyPart: a.bodyPart }))
+      });
+    } catch (error) {
+      console.error("Error populating sample articles:", error);
+      res.status(500).json({ error: "Failed to populate sample articles" });
     }
   });
 

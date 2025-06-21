@@ -43,6 +43,29 @@ export const membershipTierEnum = pgEnum("membership_tier", [
   "premium",
 ]);
 
+// Evidence level enum for research papers
+export const evidenceLevelEnum = pgEnum("evidence_level", [
+  "level_1", // Systematic reviews and meta-analyses
+  "level_2", // Randomized controlled trials
+  "level_3", // Controlled trials without randomization
+  "level_4", // Case-control or cohort studies
+  "level_5", // Case series, case reports
+]);
+
+// Study design enum
+export const studyDesignEnum = pgEnum("study_design", [
+  "systematic_review",
+  "meta_analysis",
+  "randomized_controlled_trial",
+  "controlled_trial",
+  "cohort_study",
+  "case_control_study",
+  "cross_sectional_study",
+  "case_series",
+  "case_report",
+  "expert_opinion",
+]);
+
 // Session status enum for tracking recording and processing states
 export const sessionStatusEnum = pgEnum("session_status", [
   "draft",
@@ -475,6 +498,70 @@ export const soapNoteInputSchema = z.object({
 });
 
 export type SoapNoteInput = z.infer<typeof soapNoteInputSchema>;
+
+// Research Papers with AI Analysis
+export const researchPapers = pgTable("research_papers", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  authors: text("authors").notNull(),
+  journal: text("journal").notNull(),
+  year: integer("year").notNull(),
+  doi: text("doi"),
+  pubmedId: text("pubmed_id"),
+  bodyPart: bodyPartEnum("body_part").notNull(),
+  studyDesign: studyDesignEnum("study_design").notNull(),
+  evidenceLevel: evidenceLevelEnum("evidence_level").notNull(),
+  sampleSize: integer("sample_size"),
+  abstract: text("abstract").notNull(),
+  
+  // AI Analysis Fields
+  aiSummary: text("ai_summary").notNull(),
+  clinicalRelevance: text("clinical_relevance").notNull(),
+  keyFindings: json("key_findings").$type<string[]>().notNull(),
+  limitations: json("limitations").$type<string[]>().notNull(),
+  practicalApplications: json("practical_applications").$type<string[]>().notNull(),
+  strengthOfEvidence: integer("strength_of_evidence").notNull(), // 1-10 scale
+  
+  // Clinical Application Analysis
+  treatmentProtocols: json("treatment_protocols").$type<{
+    intervention: string;
+    dosage: string;
+    frequency: string;
+    duration: string;
+    outcome: string;
+  }[]>().notNull(),
+  
+  contraindications: json("contraindications").$type<string[]>().notNull(),
+  patientPopulation: text("patient_population").notNull(),
+  outcomesMeasured: json("outcomes_measured").$type<string[]>().notNull(),
+  
+  // Evidence Quality Metrics
+  riskOfBias: text("risk_of_bias").notNull(),
+  confidenceInterval: text("confidence_interval"),
+  statisticalSignificance: text("statistical_significance"),
+  clinicalSignificance: text("clinical_significance"),
+  
+  // Research Context
+  researchGaps: json("research_gaps").$type<string[]>().notNull(),
+  futureResearchDirections: json("future_research_directions").$type<string[]>().notNull(),
+  relatedStudies: json("related_studies").$type<string[]>().notNull(),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertResearchPaperSchema = createInsertSchema(researchPapers).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertResearchPaper = z.infer<typeof insertResearchPaperSchema>;
+export type ResearchPaper = typeof researchPapers.$inferSelect;
+
+export const researchPaperRelations = relations(researchPapers, ({ many }) => ({
+  discussions: many(researchDiscussions),
+}));
 
 // Exercise difficulty enum
 export const difficultyEnum = pgEnum("difficulty", [

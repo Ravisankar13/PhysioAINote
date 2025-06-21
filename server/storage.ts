@@ -661,6 +661,8 @@ export class DatabaseStorage implements IStorage {
     // If getAll is true, return all articles without pagination
     if (getAll) {
       const articles = await query.orderBy(
+        sql`CASE WHEN ai_analysis_status = 'completed' THEN 0 ELSE 1 END`,
+        desc(researchArticles.aiAnalyzedAt),
         desc(researchArticles.publicationDate)
       );
       return { articles, total };
@@ -669,9 +671,13 @@ export class DatabaseStorage implements IStorage {
     // Otherwise calculate offset based on page and pageSize
     const offset = (page - 1) * pageSize;
 
-    // Then get the paginated results
+    // Then get the paginated results - prioritize completed AI analyses
     const articles = await query
-      .orderBy(desc(researchArticles.publicationDate))
+      .orderBy(
+        sql`CASE WHEN ai_analysis_status = 'completed' THEN 0 ELSE 1 END`,
+        desc(researchArticles.aiAnalyzedAt),
+        desc(researchArticles.publicationDate)
+      )
       .limit(pageSize)
       .offset(offset);
 

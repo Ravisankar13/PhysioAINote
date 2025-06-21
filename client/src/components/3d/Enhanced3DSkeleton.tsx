@@ -177,113 +177,165 @@ function SkeletonModel({
   const mixerRef = useRef<THREE.AnimationMixer | null>(null);
   const [exerciseProgress, setExerciseProgress] = useState(0);
   
-  // Create procedural skeleton using Three.js primitives
+  // Create procedural skeleton using Three.js primitives with anthropometric scaling
   const createProceduralSkeleton = () => {
     const skeleton = new THREE.Group();
     
-    // Materials
-    const boneMaterial = new THREE.MeshStandardMaterial({ 
-      color: '#f5f5f5', 
-      metalness: 0.1, 
-      roughness: 0.9 
+    // Get scaling factors from anthropometrics
+    const heightScale = anthropometrics ? anthropometrics.height / 170 : 1;
+    const weightScale = anthropometrics ? Math.sqrt(anthropometrics.weight / 70) : 1;
+    const upperArmScale = anthropometrics ? anthropometrics.limbLengths.upperArm / 30 : 1;
+    const forearmScale = anthropometrics ? anthropometrics.limbLengths.forearm / 25 : 1;
+    const thighScale = anthropometrics ? anthropometrics.limbLengths.thigh / 40 : 1;
+    const shinScale = anthropometrics ? anthropometrics.limbLengths.shin / 35 : 1;
+    
+    // Improved materials with better lighting
+    const boneMaterial = new THREE.MeshPhongMaterial({ 
+      color: '#faf8f5', 
+      shininess: 10,
+      transparent: true,
+      opacity: 0.95
     });
-    const jointMaterial = new THREE.MeshStandardMaterial({ 
-      color: '#e0e0e0', 
-      metalness: 0.2, 
-      roughness: 0.8 
+    const jointMaterial = new THREE.MeshPhongMaterial({ 
+      color: '#e8e4e0', 
+      shininess: 20,
+      transparent: true,
+      opacity: 0.9
     });
     
-    // Torso (spine)
-    const torso = new THREE.CylinderGeometry(0.08, 0.1, 0.6, 8);
+    // Torso (spine) - scales with height
+    const torsoHeight = 0.6 * heightScale;
+    const torsoRadius = 0.08 * weightScale;
+    const torso = new THREE.CylinderGeometry(torsoRadius, torsoRadius * 1.2, torsoHeight, 12);
     const torsoMesh = new THREE.Mesh(torso, boneMaterial);
-    torsoMesh.position.y = 0.3;
+    torsoMesh.position.y = torsoHeight / 2;
     torsoMesh.name = 'torso';
     skeleton.add(torsoMesh);
     
-    // Head
-    const head = new THREE.SphereGeometry(0.12, 8, 8);
+    // Head - scales with overall proportions
+    const headRadius = 0.12 * heightScale * 0.8;
+    const head = new THREE.SphereGeometry(headRadius, 16, 16);
     const headMesh = new THREE.Mesh(head, boneMaterial);
-    headMesh.position.y = 0.75;
+    headMesh.position.y = torsoHeight + headRadius * 0.8;
     headMesh.name = 'head';
     skeleton.add(headMesh);
     
-    // Arms
+    // Shoulder base
+    const shoulderWidth = 0.3 * heightScale * weightScale;
+    const shoulder = new THREE.CylinderGeometry(0.02, 0.02, shoulderWidth, 8);
+    const shoulderMesh = new THREE.Mesh(shoulder, jointMaterial);
+    shoulderMesh.rotation.z = Math.PI / 2;
+    shoulderMesh.position.y = torsoHeight * 0.85;
+    shoulderMesh.name = 'shoulders';
+    skeleton.add(shoulderMesh);
+    
+    // Arms with limb-specific scaling
     const createArm = (side: 'left' | 'right') => {
-      const x = side === 'left' ? -0.15 : 0.15;
+      const x = side === 'left' ? -shoulderWidth / 2 : shoulderWidth / 2;
+      const shoulderY = torsoHeight * 0.85;
       
-      // Upper arm
-      const upperArm = new THREE.CylinderGeometry(0.04, 0.05, 0.3, 8);
+      // Shoulder joint
+      const shoulderJoint = new THREE.SphereGeometry(0.035 * weightScale, 12, 12);
+      const shoulderJointMesh = new THREE.Mesh(shoulderJoint, jointMaterial);
+      shoulderJointMesh.position.set(x, shoulderY, 0);
+      shoulderJointMesh.name = `${side}_shoulder`;
+      skeleton.add(shoulderJointMesh);
+      
+      // Upper arm - uses specific limb length
+      const upperArmLength = 0.3 * upperArmScale;
+      const upperArmRadius = 0.04 * weightScale;
+      const upperArm = new THREE.CylinderGeometry(upperArmRadius * 0.8, upperArmRadius, upperArmLength, 12);
       const upperArmMesh = new THREE.Mesh(upperArm, boneMaterial);
-      upperArmMesh.position.set(x, 0.45, 0);
-      upperArmMesh.rotation.z = side === 'left' ? Math.PI / 6 : -Math.PI / 6;
+      upperArmMesh.position.set(x, shoulderY - upperArmLength / 2, 0);
       upperArmMesh.name = `${side}_upper_arm`;
       skeleton.add(upperArmMesh);
       
       // Elbow joint
-      const elbow = new THREE.SphereGeometry(0.03, 6, 6);
+      const elbowY = shoulderY - upperArmLength;
+      const elbow = new THREE.SphereGeometry(0.03 * weightScale, 10, 10);
       const elbowMesh = new THREE.Mesh(elbow, jointMaterial);
-      elbowMesh.position.set(x * 1.8, 0.15, 0);
+      elbowMesh.position.set(x, elbowY, 0);
       elbowMesh.name = `${side}_elbow`;
       skeleton.add(elbowMesh);
       
-      // Forearm
-      const foreArm = new THREE.CylinderGeometry(0.03, 0.04, 0.25, 8);
+      // Forearm - uses specific limb length
+      const forearmLength = 0.25 * forearmScale;
+      const forearmRadius = 0.03 * weightScale;
+      const foreArm = new THREE.CylinderGeometry(forearmRadius * 0.7, forearmRadius, forearmLength, 12);
       const foreArmMesh = new THREE.Mesh(foreArm, boneMaterial);
-      foreArmMesh.position.set(x * 2.2, -0.05, 0);
+      foreArmMesh.position.set(x, elbowY - forearmLength / 2, 0);
       foreArmMesh.name = `${side}_forearm`;
       skeleton.add(foreArmMesh);
       
+      // Wrist
+      const wristY = elbowY - forearmLength;
+      const wrist = new THREE.SphereGeometry(0.025 * weightScale, 8, 8);
+      const wristMesh = new THREE.Mesh(wrist, jointMaterial);
+      wristMesh.position.set(x, wristY, 0);
+      wristMesh.name = `${side}_wrist`;
+      skeleton.add(wristMesh);
+      
       // Hand
-      const hand = new THREE.BoxGeometry(0.08, 0.12, 0.03);
+      const handSize = 0.08 * heightScale;
+      const hand = new THREE.BoxGeometry(handSize, handSize * 1.5, handSize * 0.4);
       const handMesh = new THREE.Mesh(hand, boneMaterial);
-      handMesh.position.set(x * 2.2, -0.22, 0);
+      handMesh.position.set(x, wristY - handSize * 0.8, 0);
       handMesh.name = `${side}_hand`;
       skeleton.add(handMesh);
     };
     
-    // Legs
+    // Legs with limb-specific scaling
     const createLeg = (side: 'left' | 'right') => {
-      const x = side === 'left' ? -0.08 : 0.08;
+      const hipWidth = 0.16 * heightScale * weightScale;
+      const x = side === 'left' ? -hipWidth / 2 : hipWidth / 2;
       
       // Hip joint
-      const hip = new THREE.SphereGeometry(0.04, 6, 6);
+      const hip = new THREE.SphereGeometry(0.04 * weightScale, 12, 12);
       const hipMesh = new THREE.Mesh(hip, jointMaterial);
       hipMesh.position.set(x, 0, 0);
       hipMesh.name = `${side}_hip`;
       skeleton.add(hipMesh);
       
-      // Thigh
-      const thigh = new THREE.CylinderGeometry(0.05, 0.06, 0.4, 8);
+      // Thigh - uses specific limb length
+      const thighLength = 0.4 * thighScale;
+      const thighRadius = 0.05 * weightScale;
+      const thigh = new THREE.CylinderGeometry(thighRadius * 0.8, thighRadius, thighLength, 12);
       const thighMesh = new THREE.Mesh(thigh, boneMaterial);
-      thighMesh.position.set(x, -0.2, 0);
+      thighMesh.position.set(x, -thighLength / 2, 0);
       thighMesh.name = `${side}_thigh`;
       skeleton.add(thighMesh);
       
       // Knee joint
-      const knee = new THREE.SphereGeometry(0.035, 6, 6);
+      const kneeY = -thighLength;
+      const knee = new THREE.SphereGeometry(0.035 * weightScale, 10, 10);
       const kneeMesh = new THREE.Mesh(knee, jointMaterial);
-      kneeMesh.position.set(x, -0.4, 0);
+      kneeMesh.position.set(x, kneeY, 0);
       kneeMesh.name = `${side}_knee`;
       skeleton.add(kneeMesh);
       
-      // Shin
-      const shin = new THREE.CylinderGeometry(0.03, 0.04, 0.35, 8);
+      // Shin - uses specific limb length
+      const shinLength = 0.35 * shinScale;
+      const shinRadius = 0.03 * weightScale;
+      const shin = new THREE.CylinderGeometry(shinRadius * 0.7, shinRadius, shinLength, 12);
       const shinMesh = new THREE.Mesh(shin, boneMaterial);
-      shinMesh.position.set(x, -0.575, 0);
+      shinMesh.position.set(x, kneeY - shinLength / 2, 0);
       shinMesh.name = `${side}_shin`;
       skeleton.add(shinMesh);
       
       // Ankle
-      const ankle = new THREE.SphereGeometry(0.03, 6, 6);
+      const ankleY = kneeY - shinLength;
+      const ankle = new THREE.SphereGeometry(0.03 * weightScale, 8, 8);
       const ankleMesh = new THREE.Mesh(ankle, jointMaterial);
-      ankleMesh.position.set(x, -0.75, 0);
+      ankleMesh.position.set(x, ankleY, 0);
       ankleMesh.name = `${side}_ankle`;
       skeleton.add(ankleMesh);
       
       // Foot
-      const foot = new THREE.BoxGeometry(0.06, 0.03, 0.15);
+      const footLength = 0.15 * heightScale;
+      const footWidth = 0.06 * heightScale;
+      const foot = new THREE.BoxGeometry(footWidth, 0.03, footLength);
       const footMesh = new THREE.Mesh(foot, boneMaterial);
-      footMesh.position.set(x, -0.785, 0.05);
+      footMesh.position.set(x, ankleY - 0.02, footLength * 0.3);
       footMesh.name = `${side}_foot`;
       skeleton.add(footMesh);
     };
@@ -580,25 +632,37 @@ export default function Enhanced3DSkeleton({ patientData, className }: Enhanced3
         <div className="lg:col-span-3 bg-gray-900 rounded-lg overflow-hidden">
           <Suspense fallback={<LoadingFallback />}>
             <Canvas 
-              camera={{ position: [1.5, 1, 1.5], fov: 60 }}
+              camera={{ position: [1.2, 0.8, 2], fov: 50 }}
               shadows
+              gl={{ antialias: true, alpha: true }}
             >
-              <ambientLight intensity={0.6} />
+              <ambientLight intensity={0.7} color="#f8f8ff" />
               <directionalLight 
-                position={[10, 10, 5]} 
-                intensity={1.2} 
+                position={[5, 8, 3]} 
+                intensity={1.5} 
+                color="#ffffff"
                 castShadow
-                shadow-mapSize-width={2048}
-                shadow-mapSize-height={2048}
+                shadow-mapSize-width={4096}
+                shadow-mapSize-height={4096}
+                shadow-camera-near={0.1}
+                shadow-camera-far={30}
+                shadow-camera-left={-5}
+                shadow-camera-right={5}
+                shadow-camera-top={5}
+                shadow-camera-bottom={-5}
               />
-              <directionalLight position={[-5, 5, -5]} intensity={0.4} />
-              <pointLight position={[0, 3, 0]} intensity={0.3} />
+              <directionalLight position={[-3, 4, -1]} intensity={0.6} color="#fff8dc" />
+              <pointLight position={[2, 2, 2]} intensity={0.4} color="#ffffff" />
+              <pointLight position={[-1, 1, -1]} intensity={0.3} color="#f0f8ff" />
               
               {/* Ground plane for shadows */}
-              <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -2, 0]} receiveShadow>
-                <planeGeometry args={[10, 10]} />
-                <shadowMaterial opacity={0.3} />
+              <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1.5, 0]} receiveShadow>
+                <planeGeometry args={[6, 6]} />
+                <meshLambertMaterial color="#f8f8f8" transparent opacity={0.4} />
               </mesh>
+              
+              {/* Grid for scale reference */}
+              <gridHelper args={[3, 15, "#dddddd", "#eeeeee"]} position={[0, -1.49, 0]} />
               
               <SkeletonModel
                 anthropometrics={patientData?.anthropometrics}
@@ -615,9 +679,11 @@ export default function Enhanced3DSkeleton({ patientData, className }: Enhanced3
                 enablePan={true} 
                 enableZoom={true} 
                 enableRotate={true}
-                minDistance={0.5}
-                maxDistance={5}
-                target={[0, 0, 0]}
+                minDistance={1}
+                maxDistance={6}
+                target={[0, 0.2, 0]}
+                enableDamping={true}
+                dampingFactor={0.05}
               />
             </Canvas>
           </Suspense>

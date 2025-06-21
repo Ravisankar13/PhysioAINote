@@ -325,6 +325,16 @@ function GapAnalysisPanel({ article }: { article: ResearchArticle }) {
             ))}
           </TabsContent>
           
+          <TabsContent value="followup" className="space-y-3">
+            {article.followUpQuestions ? (
+              <FollowUpQuestions followUpQuestions={article.followUpQuestions} />
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <p>No follow-up research questions generated yet.</p>
+              </div>
+            )}
+          </TabsContent>
+          
           <TabsContent value="bias" className="space-y-3">
             {article.biasAssessment && Object.entries(article.biasAssessment).map(([biasType, assessment]) => (
               <div key={biasType} className="border rounded-lg p-3">

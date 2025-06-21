@@ -38,8 +38,6 @@ const Header = () => {
   const isAdmin = user && adminUsernames.includes(user.username);
 
   const navItems = [
-    { to: "/physiogpt", label: "PhysioGPT" },
-    { to: "/clinical-notes", label: "AI Notes" },
     { to: "/", label: "Home" },
     { to: "/skeleton-3d-tool", label: "3D Skeleton Tool" },
     { to: "/case-studies", label: "AI Case Studies" },

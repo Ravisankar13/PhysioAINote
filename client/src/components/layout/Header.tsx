@@ -43,7 +43,6 @@ const Header = () => {
     { to: "/skeleton-3d-tool", label: "3D Skeleton Tool" },
     { to: "/case-studies", label: "AI Case Studies" },
     { to: "/shared-cases", label: "Forum" },
-    { to: "/research", label: "Research" },
     { to: "/exercises", label: "Exercise Library" },
     { to: "/manual-therapy", label: "Manual Therapy" },
     { to: "/virtual-patients", label: "Virtual Patients" },

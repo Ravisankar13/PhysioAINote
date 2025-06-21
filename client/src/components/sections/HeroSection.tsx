@@ -61,7 +61,7 @@ const HeroSection = () => {
                 <span className="text-sm md:text-base">Research</span>
               </div>
             </div>
-            <div className="mt-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="mt-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
               <Link to="/clinical-notes">
                 <Button
                   size="lg"
@@ -78,6 +78,15 @@ const HeroSection = () => {
                 >
                   <Activity className="h-5 w-5" />
                   <span className="font-semibold">Virtual Patients</span>
+                </Button>
+              </Link>
+              <Link to="/physio-gpt">
+                <Button
+                  size="lg"
+                  className="w-full bg-green-500 text-white hover:bg-green-600 shadow-md flex items-center justify-center gap-2"
+                >
+                  <MessageCircle className="h-5 w-5" />
+                  <span className="font-semibold">PhysioGPT</span>
                 </Button>
               </Link>
               <Link to="/shared-cases">

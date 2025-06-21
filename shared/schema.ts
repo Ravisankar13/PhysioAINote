@@ -281,6 +281,13 @@ export const researchArticles = pgTable("research_articles", {
     followUpDuration: { score: number; notes: string };
     statisticalMethods: { score: number; notes: string };
   }>(),
+  followUpQuestions: json("follow_up_questions").$type<{
+    methodological: Array<{ question: string; priority: number; feasibilityScore: number; rationale: string }>;
+    population: Array<{ question: string; priority: number; feasibilityScore: number; rationale: string }>;
+    intervention: Array<{ question: string; priority: number; feasibilityScore: number; rationale: string }>;
+    outcomes: Array<{ question: string; priority: number; feasibilityScore: number; rationale: string }>;
+    mechanisms: Array<{ question: string; priority: number; feasibilityScore: number; rationale: string }>;
+  }>(),
   aiAnalyzedAt: timestamp("ai_analyzed_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

@@ -47,6 +47,13 @@ interface GapAnalysisResult {
     followUpDuration: { score: number; notes: string };
     statisticalMethods: { score: number; notes: string };
   };
+  followUpQuestions: {
+    methodological: Array<{ question: string; priority: number; feasibilityScore: number; rationale: string }>;
+    population: Array<{ question: string; priority: number; feasibilityScore: number; rationale: string }>;
+    intervention: Array<{ question: string; priority: number; feasibilityScore: number; rationale: string }>;
+    outcomes: Array<{ question: string; priority: number; feasibilityScore: number; rationale: string }>;
+    mechanisms: Array<{ question: string; priority: number; feasibilityScore: number; rationale: string }>;
+  };
 }
 
 export class ResearchGapAnalysisService {
@@ -130,6 +137,13 @@ ${input.methodology ? `Methodology: ${input.methodology}` : ''}
     "outcomeValidation": {"score": 0-10, "notes": "assessment notes"},
     "followUpDuration": {"score": 0-10, "notes": "assessment notes"},
     "statisticalMethods": {"score": 0-10, "notes": "assessment notes"}
+  },
+  "followUpQuestions": {
+    "methodological": [{"question": "specific research question", "priority": 1-10, "feasibilityScore": 1-10, "rationale": "explanation"}],
+    "population": [{"question": "population-focused question", "priority": 1-10, "feasibilityScore": 1-10, "rationale": "explanation"}],
+    "intervention": [{"question": "intervention modification question", "priority": 1-10, "feasibilityScore": 1-10, "rationale": "explanation"}],
+    "outcomes": [{"question": "outcome measurement question", "priority": 1-10, "feasibilityScore": 1-10, "rationale": "explanation"}],
+    "mechanisms": [{"question": "mechanism exploration question", "priority": 1-10, "feasibilityScore": 1-10, "rationale": "explanation"}]
   }
 }
 
@@ -141,6 +155,19 @@ Focus on:
 5. Missing data handling
 6. Generalizability of findings
 7. Clinical significance vs statistical significance
+
+**Follow-up Research Questions Guidelines:**
+Generate 2-3 questions per category that build upon this research:
+
+- **Methodological**: Questions about improving study design, sample size, duration, or measurement approaches
+- **Population**: Questions about testing in different demographics, age groups, or severity levels
+- **Intervention**: Questions about modifying protocols, dosage, frequency, or combining treatments
+- **Outcomes**: Questions about different outcome measures, longer follow-up, or patient-reported measures
+- **Mechanisms**: Questions exploring underlying physiological or biomechanical mechanisms
+
+Priority Scale: 1 (low) to 10 (high research priority)
+Feasibility Scale: 1 (very difficult) to 10 (very feasible)
+Include brief rationale explaining why each question is important.
 8. Long-term follow-up adequacy
 9. Potential confounding variables
 10. Risk of bias assessment per Cochrane guidelines
@@ -185,6 +212,28 @@ Focus on:
         outcomeValidation: { score: 6, notes: "Validated measures used but reliability not reported" },
         followUpDuration: { score: 5, notes: "Follow-up may be too short for intervention type" },
         statisticalMethods: { score: 6, notes: "Appropriate tests used but some concerns with multiple comparisons" }
+      },
+      followUpQuestions: {
+        methodological: [
+          { question: "Would a longer follow-up period better capture treatment effects?", priority: 8, feasibilityScore: 7, rationale: "Current follow-up may be insufficient to assess long-term outcomes" },
+          { question: "Could a larger sample size improve statistical power?", priority: 7, feasibilityScore: 6, rationale: "Power calculation unclear, larger study would strengthen findings" }
+        ],
+        population: [
+          { question: "How would results differ in older adult populations?", priority: 6, feasibilityScore: 8, rationale: "Age-related factors may influence treatment response" },
+          { question: "Would findings generalize to patients with comorbidities?", priority: 7, feasibilityScore: 7, rationale: "Real-world patients often have multiple conditions" }
+        ],
+        intervention: [
+          { question: "What is the optimal treatment dosage and frequency?", priority: 8, feasibilityScore: 7, rationale: "Dose-response relationship not established" },
+          { question: "Would combining with other therapies enhance outcomes?", priority: 6, feasibilityScore: 6, rationale: "Multimodal approaches may be more effective" }
+        ],
+        outcomes: [
+          { question: "How do patient-reported outcomes compare to clinical measures?", priority: 7, feasibilityScore: 8, rationale: "Patient perspective is crucial for treatment evaluation" },
+          { question: "What are the cost-effectiveness implications?", priority: 6, feasibilityScore: 7, rationale: "Economic evaluation important for healthcare decisions" }
+        ],
+        mechanisms: [
+          { question: "What physiological mechanisms drive the observed improvements?", priority: 5, feasibilityScore: 5, rationale: "Understanding mechanisms could optimize treatment" },
+          { question: "How do biomechanical changes relate to functional outcomes?", priority: 6, feasibilityScore: 6, rationale: "Mechanism understanding could guide treatment progression" }
+        ]
       }
     };
   }

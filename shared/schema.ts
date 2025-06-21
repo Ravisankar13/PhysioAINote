@@ -253,6 +253,35 @@ export const researchArticles = pgTable("research_articles", {
   keyFindings: text("key_findings"), // Summary of key findings
   clinicalRelevance: text("clinical_relevance"), // How this relates to clinical practice
   methodology: text("methodology"), // Study design and methodology
+  // AI Gap Analysis fields
+  aiAnalysisStatus: text("ai_analysis_status").default("pending"), // pending, analyzing, completed, failed
+  qualityScore: integer("quality_score"), // 0-100 overall quality score
+  identifiedGaps: json("identified_gaps").$type<{
+    methodology: string[];
+    statistical: string[];
+    clinical: string[];
+    bias: string[];
+  }>(),
+  generatedQuestions: json("generated_questions").$type<{
+    critical: string[];
+    moderate: string[];
+    minor: string[];
+  }>(),
+  biasAssessment: json("bias_assessment").$type<{
+    selectionBias: { score: number; notes: string };
+    performanceBias: { score: number; notes: string };
+    detectionBias: { score: number; notes: string };
+    attritionBias: { score: number; notes: string };
+    reportingBias: { score: number; notes: string };
+  }>(),
+  methodologyAssessment: json("methodology_assessment").$type<{
+    sampleSizeAdequacy: { score: number; notes: string };
+    studyDesign: { score: number; notes: string };
+    outcomeValidation: { score: number; notes: string };
+    followUpDuration: { score: number; notes: string };
+    statisticalMethods: { score: number; notes: string };
+  }>(),
+  aiAnalyzedAt: timestamp("ai_analyzed_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -268,11 +297,92 @@ export const insertResearchArticleSchema = createInsertSchema(
 export type InsertResearchArticle = z.infer<typeof insertResearchArticleSchema>;
 export type ResearchArticle = typeof researchArticles.$inferSelect;
 
+// Research Discussions Schema
+export const researchDiscussions = pgTable("research_discussions", {
+  id: serial("id").primaryKey(),
+  articleId: integer("article_id")
+    .notNull()
+    .references(() => researchArticles.id, { onDelete: "cascade" }),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  parentId: integer("parent_id").references(() => researchDiscussions.id, { onDelete: "cascade" }), // For threaded discussions
+  content: text("content").notNull(),
+  questionType: text("question_type"), // critical, moderate, minor, general
+  isExpertVerified: boolean("is_expert_verified").default(false),
+  upvotes: integer("upvotes").default(0),
+  downvotes: integer("downvotes").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertResearchDiscussionSchema = createInsertSchema(researchDiscussions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  upvotes: true,
+  downvotes: true,
+});
+
+export type InsertResearchDiscussion = z.infer<typeof insertResearchDiscussionSchema>;
+export type ResearchDiscussion = typeof researchDiscussions.$inferSelect;
+
+// Research Discussion Votes Schema
+export const researchDiscussionVotes = pgTable("research_discussion_votes", {
+  id: serial("id").primaryKey(),
+  discussionId: integer("discussion_id")
+    .notNull()
+    .references(() => researchDiscussions.id, { onDelete: "cascade" }),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  voteType: text("vote_type").notNull(), // 'up' or 'down'
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type ResearchDiscussionVote = typeof researchDiscussionVotes.$inferSelect;
+
+// User Research Bookmarks Schema
+export const userResearchBookmarks = pgTable("user_research_bookmarks", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  articleId: integer("article_id")
+    .notNull()
+    .references(() => researchArticles.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type UserResearchBookmark = typeof userResearchBookmarks.$inferSelect;
+
 // Define research article relations
 export const researchArticleRelations = relations(
   researchArticles,
   ({ many }) => ({
     tags: many(tags),
+    discussions: many(researchDiscussions),
+    bookmarks: many(userResearchBookmarks),
+  })
+);
+
+export const researchDiscussionRelations = relations(
+  researchDiscussions,
+  ({ one, many }) => ({
+    article: one(researchArticles, {
+      fields: [researchDiscussions.articleId],
+      references: [researchArticles.id],
+    }),
+    user: one(users, {
+      fields: [researchDiscussions.userId],
+      references: [users.id],
+    }),
+    parent: one(researchDiscussions, {
+      fields: [researchDiscussions.parentId],
+      references: [researchDiscussions.id],
+    }),
+    replies: many(researchDiscussions),
+    votes: many(researchDiscussionVotes),
   })
 );
 

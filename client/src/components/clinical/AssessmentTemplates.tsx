@@ -256,7 +256,7 @@ export default function AssessmentTemplates({ onSelectTemplate, selectedBodyPart
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       {/* Red Flag Screening */}
       <Card className="border-red-200">
         <CardHeader>

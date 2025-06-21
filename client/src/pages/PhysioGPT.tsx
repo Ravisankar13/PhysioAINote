@@ -479,7 +479,7 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
               </div>
 
               <CardContent className="flex-1 flex flex-col p-0 min-h-0">
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col h-full">
                   {/* Chat Tab */}
                   <TabsContent value="chat" className="flex-1 flex flex-col p-0 min-h-0">
                     <div 
@@ -645,8 +645,8 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
                   </TabsContent>
 
                   {/* Assessments Tab */}
-                  <TabsContent value="assessments" className="flex-1 flex flex-col p-0 min-h-0">
-                    <div className="flex-1 overflow-y-auto p-3 sm:p-6">
+                  <TabsContent value="assessments" className="flex-1 flex flex-col p-0 m-0 min-h-0 data-[state=active]:mt-0">
+                    <div className="flex-1 overflow-y-auto p-2 sm:p-3">
                       {selectedAssessmentTemplate ? (
                         <AssessmentForm
                           template={selectedAssessmentTemplate}
@@ -663,8 +663,8 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
                   </TabsContent>
 
                   {/* Protocols Tab */}
-                  <TabsContent value="protocols" className="flex-1 flex flex-col p-0 min-h-0">
-                    <div className="flex-1 overflow-y-auto p-3 sm:p-6">
+                  <TabsContent value="protocols" className="flex-1 flex flex-col p-0 m-0 min-h-0">
+                    <div className="flex-1 overflow-y-auto p-3 sm:p-4">
                       <EvidenceBasedProtocols
                         selectedBodyPart={selectedBodyRegion || undefined}
                       />

@@ -932,6 +932,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Test endpoint for AI analysis (no auth required for testing)
+  app.post("/api/research/test-analysis", async (req: Request, res: Response) => {
+    try {
+      console.log("Starting test AI analysis...");
+      await researchGapAnalysisService.batchAnalyzeArticles(3);
+      res.json({ message: "Test AI analysis completed for pending articles" });
+    } catch (error) {
+      console.error("Error in test analysis:", error);
+      res.status(500).json({ error: "Failed to complete test analysis", details: error.message });
+    }
+  });
+
   // Get research article discussions
   app.get("/api/research/:articleId/discussions", async (req: Request, res: Response) => {
     try {

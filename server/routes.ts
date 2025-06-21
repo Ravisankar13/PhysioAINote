@@ -944,6 +944,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Analyze individual research article
+  app.post("/api/research/:articleId/analyze", async (req: Request, res: Response) => {
+    try {
+      const articleId = parseInt(req.params.articleId);
+      if (isNaN(articleId)) {
+        return res.status(400).json({ error: "Invalid article ID" });
+      }
+
+      console.log(`Starting AI analysis for article ${articleId}`);
+      await researchGapAnalysisService.analyzeExistingPaper(articleId);
+      res.json({ message: "AI analysis started for article", articleId });
+    } catch (error) {
+      console.error(`Error analyzing article ${req.params.articleId}:`, error);
+      res.status(500).json({ error: "Failed to start analysis", details: error.message });
+    }
+  });
+
   // Get research article discussions
   app.get("/api/research/:articleId/discussions", async (req: Request, res: Response) => {
     try {

@@ -28,6 +28,8 @@ import {
   AlertTriangle,
   CheckCircle,
   Clock,
+  Zap,
+  RefreshCw,
   Bookmark,
   BookmarkCheck,
   Lightbulb,
@@ -145,6 +147,24 @@ function QualityScoreBadge({ score }: { score?: number }) {
 }
 
 function GapAnalysisPanel({ article }: { article: ResearchArticle }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  // Individual article analysis trigger
+  const analyzeArticleMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", `/api/research/${article.id}/analyze`);
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "AI analysis started for this article" });
+      queryClient.invalidateQueries({ queryKey: ["/api/research"] });
+    },
+    onError: () => {
+      toast({ title: "Failed to start analysis", variant: "destructive" });
+    },
+  });
+
   if (article.aiAnalysisStatus !== 'completed' || !article.identifiedGaps) {
     return (
       <Card className="mt-4">
@@ -156,9 +176,29 @@ function GapAnalysisPanel({ article }: { article: ResearchArticle }) {
         </CardHeader>
         <CardContent>
           {article.aiAnalysisStatus === 'pending' && (
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Clock className="h-4 w-4" />
-              Analysis pending
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Clock className="h-4 w-4" />
+                Analysis pending
+              </div>
+              <Button 
+                onClick={() => analyzeArticleMutation.mutate()}
+                disabled={analyzeArticleMutation.isPending}
+                size="sm"
+                className="w-full"
+              >
+                {analyzeArticleMutation.isPending ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Analyzing...
+                  </>
+                ) : (
+                  <>
+                    <Zap className="h-4 w-4 mr-2" />
+                    Start AI Analysis
+                  </>
+                )}
+              </Button>
             </div>
           )}
           {article.aiAnalysisStatus === 'analyzing' && (
@@ -168,9 +208,21 @@ function GapAnalysisPanel({ article }: { article: ResearchArticle }) {
             </div>
           )}
           {article.aiAnalysisStatus === 'failed' && (
-            <div className="flex items-center gap-2 text-red-600">
-              <AlertTriangle className="h-4 w-4" />
-              Analysis failed
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-red-600">
+                <AlertTriangle className="h-4 w-4" />
+                Analysis failed
+              </div>
+              <Button 
+                onClick={() => analyzeArticleMutation.mutate()}
+                disabled={analyzeArticleMutation.isPending}
+                size="sm"
+                variant="outline"
+                className="w-full"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Retry Analysis
+              </Button>
             </div>
           )}
         </CardContent>

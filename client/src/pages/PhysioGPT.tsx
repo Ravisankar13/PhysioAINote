@@ -32,10 +32,9 @@ import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import type { PhysioGptConversation, PhysioGptMessage } from "@shared/schema";
 import InteractiveSkeleton from "@/components/3d/InteractiveSkeleton";
-// Temporarily comment out to isolate the error
-// import AssessmentTemplates, { type AssessmentTemplate } from "@/components/clinical/AssessmentTemplates";
-// import AssessmentForm, { type AssessmentResults } from "@/components/clinical/AssessmentForm";
-// import EvidenceBasedProtocols from "@/components/clinical/EvidenceBasedProtocols";
+import AssessmentTemplates, { type AssessmentTemplate } from "@/components/clinical/AssessmentTemplates";
+import AssessmentForm, { type AssessmentResults } from "@/components/clinical/AssessmentForm";
+import EvidenceBasedProtocols from "@/components/clinical/EvidenceBasedProtocols";
 
 interface ChatMessage extends PhysioGptMessage {
   suggestions?: string[];
@@ -648,24 +647,27 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
                   {/* Assessments Tab */}
                   <TabsContent value="assessments" className="flex-1 flex flex-col p-0 min-h-0">
                     <div className="flex-1 overflow-y-auto p-3 sm:p-6">
-                      <div className="text-center">
-                        <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4">Clinical Assessments</h3>
-                        <p className="text-muted-foreground text-sm sm:text-base">
-                          Assessment tools are being loaded. Please check back shortly.
-                        </p>
-                      </div>
+                      {selectedAssessmentTemplate ? (
+                        <AssessmentForm
+                          template={selectedAssessmentTemplate}
+                          onComplete={setAssessmentResults}
+                          onBack={() => setSelectedAssessmentTemplate(null)}
+                        />
+                      ) : (
+                        <AssessmentTemplates
+                          onSelectTemplate={setSelectedAssessmentTemplate}
+                          selectedBodyPart={selectedBodyRegion || undefined}
+                        />
+                      )}
                     </div>
                   </TabsContent>
 
                   {/* Protocols Tab */}
                   <TabsContent value="protocols" className="flex-1 flex flex-col p-0 min-h-0">
                     <div className="flex-1 overflow-y-auto p-3 sm:p-6">
-                      <div className="text-center">
-                        <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4">Evidence-Based Protocols</h3>
-                        <p className="text-muted-foreground text-sm sm:text-base">
-                          Treatment protocols are being loaded. Please check back shortly.
-                        </p>
-                      </div>
+                      <EvidenceBasedProtocols
+                        selectedBodyPart={selectedBodyRegion || undefined}
+                      />
                     </div>
                   </TabsContent>
                 </Tabs>

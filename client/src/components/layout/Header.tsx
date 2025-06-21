@@ -24,6 +24,7 @@ import {
   Users,
   BarChart3,
   Brain,
+  BookOpen,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Link, useLocation } from "react-router-dom";
@@ -103,6 +104,12 @@ const Header = () => {
               <Button className="bg-primary hover:bg-primary/90 text-white font-semibold shadow-sm flex items-center gap-2">
                 <MessageSquareText className="h-4 w-4" />
                 <span>AI Notes</span>
+              </Button>
+            </Link>
+            <Link to="/research">
+              <Button className="bg-secondary hover:bg-secondary/90 text-white font-semibold shadow-sm flex items-center gap-2">
+                <BookOpen className="h-4 w-4" />
+                <span>Research</span>
               </Button>
             </Link>
 

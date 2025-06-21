@@ -13,6 +13,7 @@ import SharedNotes from "@/pages/SharedNotes";
 import MyNotes from "@/pages/MyNotes";
 
 import Skeleton3DTool from "@/pages/Skeleton3DTool";
+import MotionCapturePage from "@/pages/MotionCapturePage";
 import ResearchHub from "@/pages/ResearchHub";
 import Membership from "@/pages/Membership";
 import ExercisePage from "@/pages/ExercisePage";
@@ -60,6 +61,7 @@ function Router() {
           <Route path="/exercises" element={<ExercisePage />} />
           <Route path="/manual-therapy" element={<ManualTherapyPage />} />
           <Route path="/skeleton-3d-tool" element={<Skeleton3DTool />} />
+          <Route path="/motion-capture" element={<MotionCapturePage />} />
           <Route
             path="/virtual-patients"
             element={<ProtectedRoute component={VirtualPatientPage} />}

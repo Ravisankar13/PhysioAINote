@@ -37,6 +37,11 @@ export default function Skeleton3DTool() {
   const [isPlaying, setIsPlaying] = useState(false);
   const { user } = useAuth();
   
+  // Motion capture state
+  const [motionData, setMotionData] = useState<any[]>([]);
+  const [isVirtualPatientActive, setIsVirtualPatientActive] = useState(false);
+  const [capturedAnthropometrics, setCapturedAnthropometrics] = useState<any>(null);
+
   // Anthropometric State Management
   const [anthropometrics, setAnthropometrics] = useState({
     height: 175,
@@ -127,6 +132,23 @@ export default function Skeleton3DTool() {
         [movement]: value
       }
     }));
+  };
+
+  // Motion capture handlers
+  const handleMotionDataCapture = (data: any[]) => {
+    setMotionData(data);
+    setIsVirtualPatientActive(true);
+  };
+
+  const handleSkeletonUpdate = (jointAngles: any, estimatedMeasurements: any) => {
+    if (estimatedMeasurements && !capturedAnthropometrics) {
+      setCapturedAnthropometrics(estimatedMeasurements);
+      // Update anthropometrics with captured data
+      setAnthropometrics(prev => ({
+        ...prev,
+        ...estimatedMeasurements
+      }));
+    }
   };
 
   // Toggle pain areas
@@ -229,6 +251,12 @@ export default function Skeleton3DTool() {
               <RotateCcw className="h-4 w-4 mr-2" />
               Reset
             </Button>
+            <a href="/motion-capture">
+              <Button className="bg-blue-600 hover:bg-blue-700">
+                <Camera className="h-4 w-4 mr-2" />
+                Motion Capture
+              </Button>
+            </a>
           </div>
           
           <div className="flex items-center gap-4">

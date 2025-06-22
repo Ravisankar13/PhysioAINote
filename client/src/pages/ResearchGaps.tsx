@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -47,6 +48,7 @@ interface GapStatistics {
 export default function ResearchGaps() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
 
   // Research project creation mutation
   const createProjectMutation = useMutation({
@@ -74,6 +76,8 @@ export default function ResearchGaps() {
         description: `Successfully created research project: ${project.title}`,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/research/projects"] });
+      // Navigate to the research hub to view the created project
+      setLocation("/research");
     },
     onError: (error: Error) => {
       toast({

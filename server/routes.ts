@@ -1139,6 +1139,105 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Research Gaps Routes (must come before parameterized routes)
+  app.get("/api/research/gaps", async (req: Request, res: Response) => {
+    try {
+      // Mock research gaps data for demonstration
+      const mockGaps = [
+        {
+          id: 1,
+          title: "Long-term Outcome Tracking in Chronic Pain Management",
+          description: "Limited research on long-term effectiveness of physiotherapy interventions for chronic pain conditions beyond 12 months follow-up.",
+          bodyPart: "general",
+          gapType: "outcome",
+          priority: "high",
+          evidenceLevel: "Low - most studies <6 months follow-up",
+          potentialImpact: "High - would inform sustainable treatment approaches and healthcare resource allocation",
+          suggestedMethodology: "Longitudinal cohort study with virtual patient data tracking treatment responses over 2+ years",
+          aiGenerated: true,
+          verifiedByExpert: false,
+          createdAt: new Date().toISOString()
+        },
+        {
+          id: 2,
+          title: "Personalized Treatment Algorithm Development",
+          description: "Lack of evidence-based algorithms for matching specific patient characteristics to optimal treatment approaches.",
+          bodyPart: "general",
+          gapType: "methodology",
+          priority: "critical",
+          evidenceLevel: "Very Low - mostly expert opinion",
+          potentialImpact: "Critical - could revolutionize clinical decision making and improve outcomes",
+          suggestedMethodology: "Machine learning analysis of virtual patient treatment response patterns",
+          aiGenerated: true,
+          verifiedByExpert: false,
+          createdAt: new Date().toISOString()
+        },
+        {
+          id: 3,
+          title: "Technology-Assisted Rehabilitation Effectiveness",
+          description: "Insufficient comparative research on technology-enhanced physiotherapy vs traditional approaches.",
+          bodyPart: "general",
+          gapType: "treatment",
+          priority: "high",
+          evidenceLevel: "Low - limited RCTs available",
+          potentialImpact: "High - could guide technology adoption and improve accessibility",
+          suggestedMethodology: "Multi-arm RCT comparing traditional, app-assisted, and VR-enhanced rehabilitation",
+          aiGenerated: true,
+          verifiedByExpert: false,
+          createdAt: new Date().toISOString()
+        }
+      ];
+      
+      const { bodyPart, priority, gapType } = req.query;
+      let filteredGaps = [...mockGaps];
+      
+      if (bodyPart && bodyPart !== "all") {
+        filteredGaps = filteredGaps.filter(gap => gap.bodyPart === bodyPart);
+      }
+      
+      if (priority && priority !== "all") {
+        filteredGaps = filteredGaps.filter(gap => gap.priority === priority);
+      }
+      
+      if (gapType && gapType !== "all") {
+        filteredGaps = filteredGaps.filter(gap => gap.gapType === gapType);
+      }
+      
+      res.json(filteredGaps);
+    } catch (error) {
+      console.error("Error fetching research gaps:", error);
+      res.status(500).json({ error: "Unable to fetch research gaps" });
+    }
+  });
+
+  app.post("/api/research/gaps/analyze", async (req: Request, res: Response) => {
+    try {
+      const { bodyPart, timeframeYears } = req.body;
+      
+      // Use AI to analyze research gaps
+      const gaps = await researchGapAnalysisService.analyzeResearchGaps({
+        bodyPart,
+        timeframeYears,
+        includeAllBodyParts: !bodyPart || bodyPart === "all"
+      });
+      
+      res.json(gaps);
+    } catch (error) {
+      console.error("Error analyzing research gaps:", error);
+      res.status(500).json({ error: "Unable to analyze research gaps" });
+    }
+  });
+
+  app.get("/api/research/gaps/statistics", async (req: Request, res: Response) => {
+    try {
+      const stats = await researchGapAnalysisService.getGapStatistics();
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching gap statistics:", error);
+      res.status(500).json({ error: "Unable to fetch statistics" });
+    }
+  });
+
   app.get("/api/research/:id", async (req: Request, res: Response) => {
     try {
       const articleId = parseInt(req.params.id);
@@ -3431,105 +3530,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Research Platform API Routes
-  
-  // Research Gap Analysis
-  app.get("/api/research/gaps", async (req: Request, res: Response) => {
-    try {
-      // Return mock data for now until database schema is fully deployed
-      const mockGaps = [
-        {
-          id: 1,
-          title: "Long-term Outcome Tracking in Chronic Pain Management",
-          description: "Limited research on long-term effectiveness of physiotherapy interventions for chronic pain conditions beyond 12 months follow-up.",
-          bodyPart: "general",
-          gapType: "outcome",
-          priority: "high",
-          evidenceLevel: "Low - most studies <6 months follow-up",
-          potentialImpact: "High - would inform sustainable treatment approaches and healthcare resource allocation",
-          suggestedMethodology: "Longitudinal cohort study with virtual patient data tracking treatment responses over 2+ years",
-          aiGenerated: true,
-          verifiedByExpert: false,
-          createdAt: new Date().toISOString()
-        },
-        {
-          id: 2,
-          title: "Personalized Treatment Algorithm Development",
-          description: "Lack of evidence-based algorithms for matching specific patient characteristics to optimal treatment approaches.",
-          bodyPart: "general",
-          gapType: "methodology",
-          priority: "critical",
-          evidenceLevel: "Very Low - mostly expert opinion",
-          potentialImpact: "Critical - could revolutionize clinical decision making and improve outcomes",
-          suggestedMethodology: "Machine learning analysis of virtual patient treatment response patterns",
-          aiGenerated: true,
-          verifiedByExpert: false,
-          createdAt: new Date().toISOString()
-        },
-        {
-          id: 3,
-          title: "Technology-Assisted Rehabilitation Effectiveness",
-          description: "Insufficient comparative research on technology-enhanced physiotherapy vs traditional approaches.",
-          bodyPart: "general",
-          gapType: "treatment",
-          priority: "high",
-          evidenceLevel: "Low - limited RCTs available",
-          potentialImpact: "High - could guide technology adoption and improve accessibility",
-          suggestedMethodology: "Multi-arm RCT comparing traditional, app-assisted, and VR-enhanced rehabilitation",
-          aiGenerated: true,
-          verifiedByExpert: false,
-          createdAt: new Date().toISOString()
-        }
-      ];
-      
-      const { bodyPart, priority, gapType } = req.query;
-      let filteredGaps = [...mockGaps];
-      
-      if (bodyPart && bodyPart !== "all") {
-        filteredGaps = filteredGaps.filter(gap => gap.bodyPart === bodyPart);
-      }
-      
-      if (priority && priority !== "all") {
-        filteredGaps = filteredGaps.filter(gap => gap.priority === priority);
-      }
-      
-      if (gapType && gapType !== "all") {
-        filteredGaps = filteredGaps.filter(gap => gap.gapType === gapType);
-      }
-      
-      res.json(filteredGaps);
-    } catch (error) {
-      console.error("Error fetching research gaps:", error);
-      res.status(500).json({ error: "Unable to fetch research gaps" });
-    }
-  });
-
-  app.post("/api/research/gaps/analyze", async (req: Request, res: Response) => {
-    try {
-      const { bodyPart, timeframeYears } = req.body;
-      
-      // Use AI to analyze research gaps
-      const gaps = await researchGapAnalysisService.analyzeResearchGaps({
-        bodyPart,
-        timeframeYears,
-        includeAllBodyParts: !bodyPart || bodyPart === "all"
-      });
-      
-      res.json(gaps);
-    } catch (error) {
-      console.error("Error analyzing research gaps:", error);
-      res.status(500).json({ error: "Unable to analyze research gaps" });
-    }
-  });
-
-  app.get("/api/research/gaps/statistics", async (req: Request, res: Response) => {
-    try {
-      const stats = await researchGapAnalysisService.getGapStatistics();
-      res.json(stats);
-    } catch (error) {
-      console.error("Error fetching gap statistics:", error);
-      res.status(500).json({ error: "Unable to fetch statistics" });
-    }
-  });
 
   // Research Projects
   app.get("/api/research/projects", ensureAuthenticated, async (req: Request, res: Response) => {

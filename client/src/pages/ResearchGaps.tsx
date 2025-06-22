@@ -47,6 +47,42 @@ interface GapStatistics {
 export default function ResearchGaps() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Research project creation mutation
+  const createProjectMutation = useMutation({
+    mutationFn: async (gapData: ResearchGap) => {
+      const projectData = {
+        title: `Research Project: ${gapData.title}`,
+        description: `Research project to address the identified gap: ${gapData.description}`,
+        researchQuestion: `What are the optimal approaches for addressing: ${gapData.title}?`,
+        methodology: gapData.suggestedMethodology,
+        targetPopulation: "Physiotherapy patients",
+        expectedDuration: "12-24 months",
+        status: "planning",
+        isPublic: false,
+        ethicsApprovalRequired: true,
+        tags: [gapData.bodyPart, gapData.gapType, gapData.priority],
+        researchGapId: gapData.id
+      };
+      
+      const response = await apiRequest("POST", "/api/research/projects", projectData);
+      return response.json();
+    },
+    onSuccess: (project) => {
+      toast({
+        title: "Research Project Created",
+        description: `Successfully created research project: ${project.title}`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/research/projects"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Project Creation Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
   
   const [selectedBodyPart, setSelectedBodyPart] = useState<string>("all");
   const [selectedPriority, setSelectedPriority] = useState<string>("all");
@@ -354,8 +390,20 @@ export default function ResearchGaps() {
                           </Badge>
                         )}
                       </div>
-                      <Button variant="outline" size="sm">
-                        Start Research Project
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => createProjectMutation.mutate(gap)}
+                        disabled={createProjectMutation.isPending}
+                      >
+                        {createProjectMutation.isPending ? (
+                          <>
+                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-current mr-2" />
+                            Creating...
+                          </>
+                        ) : (
+                          "Start Research Project"
+                        )}
                       </Button>
                     </div>
                   </CardContent>

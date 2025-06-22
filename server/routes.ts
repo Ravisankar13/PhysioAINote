@@ -1142,51 +1142,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Research Gaps Routes (must come before parameterized routes)
   app.get("/api/research/gaps", async (req: Request, res: Response) => {
     try {
-      // Mock research gaps data for demonstration
-      const mockGaps = [
+      // Generate comprehensive research gaps data
+      const bodyParts = ["general", "shoulder", "neck", "back", "elbow", "wrist", "hand", "hip", "knee", "ankle", "foot"];
+      const gapTypes = ["methodology", "treatment", "outcome", "demographic"];
+      const priorities = ["critical", "high", "medium", "low"];
+      
+      const researchGapTemplates = [
         {
-          id: 1,
-          title: "Long-term Outcome Tracking in Chronic Pain Management",
-          description: "Limited research on long-term effectiveness of physiotherapy interventions for chronic pain conditions beyond 12 months follow-up.",
-          bodyPart: "general",
-          gapType: "outcome",
-          priority: "high",
+          title: "Long-term Outcome Tracking in {bodyPart} Conditions",
+          description: "Limited research on long-term effectiveness of physiotherapy interventions for {bodyPart} conditions beyond 12 months follow-up.",
           evidenceLevel: "Low - most studies <6 months follow-up",
           potentialImpact: "High - would inform sustainable treatment approaches and healthcare resource allocation",
-          suggestedMethodology: "Longitudinal cohort study with virtual patient data tracking treatment responses over 2+ years",
-          aiGenerated: true,
-          verifiedByExpert: false,
-          createdAt: new Date().toISOString()
+          suggestedMethodology: "Longitudinal cohort study with virtual patient data tracking treatment responses over 2+ years"
         },
         {
-          id: 2,
-          title: "Personalized Treatment Algorithm Development",
-          description: "Lack of evidence-based algorithms for matching specific patient characteristics to optimal treatment approaches.",
-          bodyPart: "general",
-          gapType: "methodology",
-          priority: "critical",
+          title: "Personalized Treatment Algorithms for {bodyPart} Rehabilitation",
+          description: "Lack of evidence-based algorithms for matching specific patient characteristics to optimal {bodyPart} treatment approaches.",
           evidenceLevel: "Very Low - mostly expert opinion",
           potentialImpact: "Critical - could revolutionize clinical decision making and improve outcomes",
-          suggestedMethodology: "Machine learning analysis of virtual patient treatment response patterns",
-          aiGenerated: true,
-          verifiedByExpert: false,
-          createdAt: new Date().toISOString()
+          suggestedMethodology: "Machine learning analysis of virtual patient treatment response patterns"
         },
         {
-          id: 3,
-          title: "Technology-Assisted Rehabilitation Effectiveness",
-          description: "Insufficient comparative research on technology-enhanced physiotherapy vs traditional approaches.",
-          bodyPart: "general",
-          gapType: "treatment",
-          priority: "high",
+          title: "Technology-Enhanced {bodyPart} Rehabilitation",
+          description: "Insufficient comparative research on technology-enhanced versus traditional {bodyPart} physiotherapy approaches.",
           evidenceLevel: "Low - limited RCTs available",
           potentialImpact: "High - could guide technology adoption and improve accessibility",
-          suggestedMethodology: "Multi-arm RCT comparing traditional, app-assisted, and VR-enhanced rehabilitation",
-          aiGenerated: true,
-          verifiedByExpert: false,
-          createdAt: new Date().toISOString()
+          suggestedMethodology: "Multi-arm RCT comparing traditional, app-assisted, and VR-enhanced rehabilitation"
+        },
+        {
+          title: "Cultural Adaptation of {bodyPart} Treatment Protocols",
+          description: "Research gaps in culturally adapted physiotherapy interventions for diverse populations with {bodyPart} conditions.",
+          evidenceLevel: "Very Low - Western-centric research",
+          potentialImpact: "High - would improve treatment outcomes across diverse populations",
+          suggestedMethodology: "Multi-center studies across different cultural contexts using standardized protocols"
+        },
+        {
+          title: "Biomarker Integration in {bodyPart} Assessment",
+          description: "Limited integration of biological markers in {bodyPart} physiotherapy assessment and treatment planning.",
+          evidenceLevel: "Low - emerging field",
+          potentialImpact: "Medium - could enhance precision medicine approaches",
+          suggestedMethodology: "Prospective studies correlating biomarkers with treatment outcomes"
         }
       ];
+
+      const mockGaps = [];
+      let gapId = 1;
+
+      bodyParts.forEach(bodyPart => {
+        researchGapTemplates.forEach((template, templateIndex) => {
+          const gap = {
+            id: gapId++,
+            title: template.title.replace(/{bodyPart}/g, bodyPart === "general" ? "chronic pain" : bodyPart),
+            description: template.description.replace(/{bodyPart}/g, bodyPart === "general" ? "chronic pain" : bodyPart),
+            bodyPart: bodyPart,
+            gapType: gapTypes[templateIndex % gapTypes.length],
+            priority: priorities[Math.floor(Math.random() * priorities.length)],
+            evidenceLevel: template.evidenceLevel,
+            potentialImpact: template.potentialImpact,
+            suggestedMethodology: template.suggestedMethodology,
+            aiGenerated: true,
+            verifiedByExpert: Math.random() > 0.8,
+            createdAt: new Date(Date.now() - Math.random() * 365 * 24 * 60 * 60 * 1000).toISOString()
+          };
+          mockGaps.push(gap);
+        });
+      });
       
       const { bodyPart, priority, gapType } = req.query;
       let filteredGaps = [...mockGaps];

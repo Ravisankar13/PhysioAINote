@@ -50,6 +50,7 @@ export default function ResearchGaps() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
+  const { user } = useAuth();
 
   // Research project creation mutation
   const createProjectMutation = useMutation({
@@ -407,7 +408,18 @@ export default function ResearchGaps() {
                       <Button 
                         variant="outline" 
                         size="sm"
-                        onClick={() => createProjectMutation.mutate(gap)}
+                        onClick={() => {
+                          if (!user) {
+                            toast({
+                              title: "Login Required",
+                              description: "Please log in to create research projects",
+                              variant: "destructive",
+                            });
+                            setLocation("/auth");
+                            return;
+                          }
+                          createProjectMutation.mutate(gap);
+                        }}
                         disabled={createProjectMutation.isPending}
                       >
                         {createProjectMutation.isPending ? (

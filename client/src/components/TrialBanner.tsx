@@ -164,7 +164,7 @@ export default function TrialBanner() {
               </CardDescription>
             </div>
           </div>
-          <Badge className="bg-yellow-400 text-yellow-900 font-semibold px-3 py-1 animate-pulse">
+          <Badge className="bg-yellow-400 text-yellow-900 font-semibold px-3 py-1">
             FREE ACCESS
           </Badge>
         </div>
@@ -220,7 +220,7 @@ export default function TrialBanner() {
             size="lg"
             onClick={handleStartTrial}
             disabled={startTrialMutation.isPending}
-            className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-10 py-4 text-lg font-bold shadow-lg transform hover:scale-105 transition-all duration-200 animate-pulse"
+            className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-10 py-4 text-lg font-bold shadow-lg transform hover:scale-105 transition-all duration-200"
           >
             {startTrialMutation.isPending ? (
               <>

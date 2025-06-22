@@ -35,6 +35,7 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
   useEffect(() => {
     const initializePose = async () => {
       if (!poseRef.current) {
+        console.log('Initializing MediaPipe Pose...');
         const pose = new Pose({
           locateFile: (file) => {
             return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
@@ -51,11 +52,17 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
         });
 
         pose.onResults(onPoseResults);
+        
+        // Wait for pose to initialize
+        await pose.initialize();
         poseRef.current = pose;
+        console.log('MediaPipe Pose initialized successfully');
       }
     };
 
-    initializePose();
+    initializePose().catch(error => {
+      console.error('Failed to initialize MediaPipe Pose:', error);
+    });
   }, []);
 
   // Cleanup on component unmount
@@ -111,6 +118,8 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
     
     setIsInitializing(true);
     try {
+      console.log('Starting camera initialization...');
+      
       // First check if we have camera permissions
       const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { 
@@ -120,21 +129,41 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
         } 
       });
       
+      console.log('Camera stream obtained:', stream);
+      
       if (videoRef.current && poseRef.current) {
         // Set the video source to the camera stream
         videoRef.current.srcObject = stream;
         
         // Wait for the video to be ready
-        await new Promise((resolve) => {
+        await new Promise((resolve, reject) => {
           if (videoRef.current) {
+            const timeout = setTimeout(() => {
+              reject(new Error('Video loading timeout'));
+            }, 10000); // 10 second timeout
+            
             videoRef.current.onloadedmetadata = () => {
-              videoRef.current?.play();
-              resolve(true);
+              clearTimeout(timeout);
+              console.log('Video metadata loaded');
+              videoRef.current?.play().then(() => {
+                console.log('Video playing');
+                resolve(true);
+              }).catch(reject);
+            };
+            
+            videoRef.current.onerror = (error) => {
+              clearTimeout(timeout);
+              reject(error);
             };
           }
         });
 
+        console.log('Video is ready, setting pose detection active');
+        // Set pose detection active first since we have the video stream
+        setIsPoseDetectionActive(true);
+
         // Initialize MediaPipe Camera
+        console.log('Initializing MediaPipe Camera...');
         const camera = new Camera(videoRef.current, {
           onFrame: async () => {
             if (poseRef.current && videoRef.current) {
@@ -147,15 +176,21 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
         
         await camera.start();
         cameraRef.current = camera;
-        setIsPoseDetectionActive(true);
+        console.log('Camera started successfully');
+      } else {
+        throw new Error('Video element or pose detector not available');
       }
     } catch (error) {
       console.error('Error starting camera:', error);
+      setIsPoseDetectionActive(false); // Reset state on error
+      
       const errorObj = error as Error & { name?: string };
       if (errorObj.name === 'NotAllowedError') {
         alert('Camera access denied. Please allow camera permissions and try again.');
       } else if (errorObj.name === 'NotFoundError') {
         alert('No camera found. Please connect a camera and try again.');
+      } else if (errorObj.message?.includes('timeout')) {
+        alert('Camera loading timed out. Please try again.');
       } else {
         alert('Could not access camera. Error: ' + (errorObj.message || 'Unknown error'));
       }

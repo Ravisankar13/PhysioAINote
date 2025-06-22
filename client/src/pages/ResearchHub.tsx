@@ -748,6 +748,14 @@ export default function ResearchHub() {
             <p className="text-muted-foreground mt-1">
               Collaborative research platform with AI-powered gap analysis and peer discussions
             </p>
+            <div className="flex justify-center gap-4 mt-4">
+              <Button variant="outline" asChild>
+                <a href="/research/gaps" className="flex items-center gap-2">
+                  <Search className="h-4 w-4" />
+                  Research Gap Analysis
+                </a>
+              </Button>
+            </div>
           </div>
 
           {/* Research Hub Tabs */}

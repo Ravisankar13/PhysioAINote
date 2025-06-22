@@ -29,6 +29,7 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
   const [recordedFrames, setRecordedFrames] = useState<PoseFrame[]>([]);
   const [recordingStartTime, setRecordingStartTime] = useState<number>(0);
   const [currentPose, setCurrentPose] = useState<Results | null>(null);
+  const [isInitializing, setIsInitializing] = useState(false);
 
   // Initialize MediaPipe Pose
   useEffect(() => {
@@ -55,6 +56,13 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
     };
 
     initializePose();
+  }, []);
+
+  // Cleanup on component unmount
+  useEffect(() => {
+    return () => {
+      stopCamera();
+    };
   }, []);
 
   // Handle pose detection results
@@ -99,8 +107,34 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
 
   // Start camera and pose detection
   const startCamera = async () => {
+    if (isInitializing) return;
+    
+    setIsInitializing(true);
     try {
+      // First check if we have camera permissions
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { 
+          width: 640, 
+          height: 480,
+          facingMode: 'user'
+        } 
+      });
+      
       if (videoRef.current && poseRef.current) {
+        // Set the video source to the camera stream
+        videoRef.current.srcObject = stream;
+        
+        // Wait for the video to be ready
+        await new Promise((resolve) => {
+          if (videoRef.current) {
+            videoRef.current.onloadedmetadata = () => {
+              videoRef.current?.play();
+              resolve(true);
+            };
+          }
+        });
+
+        // Initialize MediaPipe Camera
         const camera = new Camera(videoRef.current, {
           onFrame: async () => {
             if (poseRef.current && videoRef.current) {
@@ -117,18 +151,44 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
       }
     } catch (error) {
       console.error('Error starting camera:', error);
-      alert('Could not access camera. Please ensure camera permissions are granted.');
+      const errorObj = error as Error & { name?: string };
+      if (errorObj.name === 'NotAllowedError') {
+        alert('Camera access denied. Please allow camera permissions and try again.');
+      } else if (errorObj.name === 'NotFoundError') {
+        alert('No camera found. Please connect a camera and try again.');
+      } else {
+        alert('Could not access camera. Error: ' + (errorObj.message || 'Unknown error'));
+      }
+    } finally {
+      setIsInitializing(false);
     }
   };
 
   // Stop camera and pose detection
   const stopCamera = () => {
+    // Stop MediaPipe camera
     if (cameraRef.current) {
       cameraRef.current.stop();
       cameraRef.current = null;
     }
+    
+    // Stop video stream
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach(track => track.stop());
+      videoRef.current.srcObject = null;
+    }
+    
     setIsPoseDetectionActive(false);
     setCurrentPose(null);
+    
+    // Clear canvas
+    if (canvasRef.current) {
+      const ctx = canvasRef.current.getContext('2d');
+      if (ctx) {
+        ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+      }
+    }
   };
 
   // Start recording motion data
@@ -268,9 +328,22 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
           {/* Control Buttons */}
           <div className="flex flex-wrap gap-2">
             {!isPoseDetectionActive ? (
-              <Button onClick={startCamera} className="flex items-center gap-2">
-                <CameraIcon className="h-4 w-4" />
-                Start Camera
+              <Button 
+                onClick={startCamera} 
+                disabled={isInitializing}
+                className="flex items-center gap-2"
+              >
+                {isInitializing ? (
+                  <>
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    Initializing...
+                  </>
+                ) : (
+                  <>
+                    <CameraIcon className="h-4 w-4" />
+                    Start Camera
+                  </>
+                )}
               </Button>
             ) : (
               <Button onClick={stopCamera} variant="outline" className="flex items-center gap-2">

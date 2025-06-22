@@ -3429,6 +3429,237 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Research Platform API Routes
+  
+  // Research Gap Analysis
+  app.get("/api/research/gaps", async (req: Request, res: Response) => {
+    try {
+      const { bodyPart, priority, gapType, limit } = req.query;
+      const gaps = await researchStorage.getResearchGaps({
+        bodyPart: bodyPart as string,
+        priority: priority as string,
+        gapType: gapType as string,
+        limit: limit ? parseInt(limit as string) : undefined
+      });
+      res.json(gaps);
+    } catch (error) {
+      console.error("Error fetching research gaps:", error);
+      res.status(500).json({ error: "Unable to fetch research gaps" });
+    }
+  });
+
+  app.post("/api/research/gaps/analyze", async (req: Request, res: Response) => {
+    try {
+      const { bodyPart, timeframeYears, includeAllBodyParts } = req.body;
+      const gaps = await researchGapAnalysisService.analyzeResearchGaps({
+        bodyPart,
+        timeframeYears,
+        includeAllBodyParts
+      });
+      
+      // Store identified gaps in database
+      const savedGaps = [];
+      for (const gap of gaps) {
+        try {
+          const savedGap = await researchStorage.createResearchGap({
+            title: gap.title,
+            description: gap.description,
+            bodyPart: gap.bodyPart as any,
+            gapType: gap.gapType,
+            priority: gap.priority,
+            evidenceLevel: gap.evidenceLevel,
+            potentialImpact: gap.potentialImpact,
+            suggestedMethodology: gap.suggestedMethodology,
+            aiGenerated: true,
+            verifiedByExpert: false
+          });
+          savedGaps.push(savedGap);
+        } catch (error) {
+          console.error("Error saving gap:", error);
+        }
+      }
+      
+      res.json(savedGaps);
+    } catch (error) {
+      console.error("Error analyzing research gaps:", error);
+      res.status(500).json({ error: "Unable to analyze research gaps" });
+    }
+  });
+
+  app.get("/api/research/gaps/statistics", async (req: Request, res: Response) => {
+    try {
+      const stats = await researchGapAnalysisService.getGapStatistics();
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching gap statistics:", error);
+      res.status(500).json({ error: "Unable to fetch statistics" });
+    }
+  });
+
+  // Research Projects
+  app.get("/api/research/projects", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { status, isPublic, limit } = req.query;
+      const projects = await researchStorage.getResearchProjects({
+        userId: req.user!.id,
+        status: status as string,
+        isPublic: isPublic === 'true',
+        limit: limit ? parseInt(limit as string) : undefined
+      });
+      res.json(projects);
+    } catch (error) {
+      console.error("Error fetching research projects:", error);
+      res.status(500).json({ error: "Unable to fetch research projects" });
+    }
+  });
+
+  app.post("/api/research/projects", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const projectData = {
+        ...req.body,
+        principalInvestigatorId: req.user!.id
+      };
+      const project = await researchStorage.createResearchProject(projectData);
+      res.status(201).json(project);
+    } catch (error) {
+      console.error("Error creating research project:", error);
+      res.status(500).json({ error: "Unable to create research project" });
+    }
+  });
+
+  app.get("/api/research/projects/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const projectId = parseInt(req.params.id);
+      const project = await researchStorage.getResearchProject(projectId, req.user!.id);
+      if (!project) {
+        return res.status(404).json({ error: "Project not found or access denied" });
+      }
+      res.json(project);
+    } catch (error) {
+      console.error("Error fetching research project:", error);
+      res.status(500).json({ error: "Unable to fetch research project" });
+    }
+  });
+
+  app.put("/api/research/projects/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const projectId = parseInt(req.params.id);
+      const project = await researchStorage.updateResearchProject(projectId, req.body);
+      res.json(project);
+    } catch (error) {
+      console.error("Error updating research project:", error);
+      res.status(500).json({ error: "Unable to update research project" });
+    }
+  });
+
+  // Research Collaborators
+  app.get("/api/research/projects/:id/collaborators", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const projectId = parseInt(req.params.id);
+      const collaborators = await researchStorage.getProjectCollaborators(projectId);
+      res.json(collaborators);
+    } catch (error) {
+      console.error("Error fetching collaborators:", error);
+      res.status(500).json({ error: "Unable to fetch collaborators" });
+    }
+  });
+
+  app.post("/api/research/projects/:id/collaborators", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const projectId = parseInt(req.params.id);
+      const collaborator = await researchStorage.addCollaborator({
+        projectId,
+        ...req.body
+      });
+      res.status(201).json(collaborator);
+    } catch (error) {
+      console.error("Error adding collaborator:", error);
+      res.status(500).json({ error: "Unable to add collaborator" });
+    }
+  });
+
+  // Virtual Patient Research Data
+  app.get("/api/research/virtual-patients", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { bodyPart, minAge, maxAge, gender } = req.query;
+      const criteria = {
+        bodyPart: bodyPart as string,
+        ageRange: minAge && maxAge ? { 
+          min: parseInt(minAge as string), 
+          max: parseInt(maxAge as string) 
+        } : undefined,
+        gender: gender as string,
+        excludeUserIds: [req.user!.id] // Don't include user's own patients
+      };
+      
+      const patients = await researchStorage.getResearchEligibleVirtualPatients(criteria);
+      res.json(patients);
+    } catch (error) {
+      console.error("Error fetching virtual patient data:", error);
+      res.status(500).json({ error: "Unable to fetch virtual patient data" });
+    }
+  });
+
+  app.post("/api/research/virtual-patients/:id/consent", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const virtualPatientId = parseInt(req.params.id);
+      const { consentedForResearch, dataUsageTerms } = req.body;
+      
+      const consent = await researchStorage.setVirtualPatientConsent({
+        virtualPatientId,
+        userId: req.user!.id,
+        consentedForResearch,
+        dataUsageTerms,
+        consentVersion: "1.0"
+      });
+      
+      res.json(consent);
+    } catch (error) {
+      console.error("Error setting research consent:", error);
+      res.status(500).json({ error: "Unable to set research consent" });
+    }
+  });
+
+  // Research Data Requests
+  app.post("/api/research/data-requests", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const request = await researchStorage.createDataRequest({
+        ...req.body,
+        requestedById: req.user!.id
+      });
+      res.status(201).json(request);
+    } catch (error) {
+      console.error("Error creating data request:", error);
+      res.status(500).json({ error: "Unable to create data request" });
+    }
+  });
+
+  app.get("/api/research/data-requests", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { projectId, approvalStatus } = req.query;
+      const requests = await researchStorage.getDataRequests({
+        projectId: projectId ? parseInt(projectId as string) : undefined,
+        requestedById: req.user!.id,
+        approvalStatus: approvalStatus as string
+      });
+      res.json(requests);
+    } catch (error) {
+      console.error("Error fetching data requests:", error);
+      res.status(500).json({ error: "Unable to fetch data requests" });
+    }
+  });
+
+  // Research Statistics
+  app.get("/api/research/statistics", async (req: Request, res: Response) => {
+    try {
+      const stats = await researchStorage.getResearchStatistics();
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching research statistics:", error);
+      res.status(500).json({ error: "Unable to fetch research statistics" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

@@ -499,6 +499,204 @@ export const soapNoteInputSchema = z.object({
 
 export type SoapNoteInput = z.infer<typeof soapNoteInputSchema>;
 
+// Research Platform Schema
+
+// Research Gap Analysis
+export const researchGaps = pgTable("research_gaps", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  bodyPart: bodyPartEnum("body_part").default("general").notNull(),
+  gapType: text("gap_type").notNull(), // "demographic", "treatment", "outcome", "methodology"
+  priority: text("priority").notNull(), // "low", "medium", "high", "critical"
+  evidenceLevel: text("evidence_level"), // Current evidence quality
+  potentialImpact: text("potential_impact").notNull(),
+  suggestedMethodology: text("suggested_methodology"),
+  aiGenerated: boolean("ai_generated").default(true).notNull(),
+  verifiedByExpert: boolean("verified_by_expert").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertResearchGapSchema = createInsertSchema(researchGaps).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertResearchGap = z.infer<typeof insertResearchGapSchema>;
+export type ResearchGap = typeof researchGaps.$inferSelect;
+
+// Research Projects
+export const researchProjects = pgTable("research_projects", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  principalInvestigatorId: integer("principal_investigator_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  researchGapId: integer("research_gap_id")
+    .references(() => researchGaps.id, { onDelete: "set null" }),
+  hypothesis: text("hypothesis").notNull(),
+  methodology: text("methodology").notNull(),
+  status: text("status").notNull(), // "proposal", "approved", "active", "completed", "published"
+  ethicsApprovalStatus: text("ethics_approval_status").default("pending").notNull(),
+  ethicsApprovalDate: timestamp("ethics_approval_date"),
+  startDate: timestamp("start_date"),
+  expectedEndDate: timestamp("expected_end_date"),
+  actualEndDate: timestamp("actual_end_date"),
+  participantCount: integer("participant_count").default(0),
+  targetParticipantCount: integer("target_participant_count"),
+  virtualPatientCohortCriteria: json("virtual_patient_cohort_criteria"),
+  preliminaryResults: text("preliminary_results"),
+  publications: json("publications"),
+  collaboratingInstitutions: json("collaborating_institutions"),
+  fundingSource: text("funding_source"),
+  isPublic: boolean("is_public").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertResearchProjectSchema = createInsertSchema(researchProjects).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertResearchProject = z.infer<typeof insertResearchProjectSchema>;
+export type ResearchProject = typeof researchProjects.$inferSelect;
+
+// Research Project Collaborators
+export const researchCollaborators = pgTable("research_collaborators", {
+  id: serial("id").primaryKey(),
+  projectId: integer("project_id")
+    .notNull()
+    .references(() => researchProjects.id, { onDelete: "cascade" }),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  role: text("role").notNull(), // "investigator", "analyst", "advisor", "reviewer"
+  permissions: json("permissions"), // Data access permissions
+  addedAt: timestamp("added_at").defaultNow().notNull(),
+});
+
+export const insertResearchCollaboratorSchema = createInsertSchema(researchCollaborators).omit({
+  id: true,
+  addedAt: true,
+});
+
+export type InsertResearchCollaborator = z.infer<typeof insertResearchCollaboratorSchema>;
+export type ResearchCollaborator = typeof researchCollaborators.$inferSelect;
+
+// Virtual Patient Research Consent
+export const virtualPatientResearchConsent = pgTable("virtual_patient_research_consent", {
+  id: serial("id").primaryKey(),
+  virtualPatientId: integer("virtual_patient_id")
+    .notNull()
+    .references(() => virtualPatients.id, { onDelete: "cascade" }),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  consentedForResearch: boolean("consented_for_research").default(false).notNull(),
+  consentDate: timestamp("consent_date").defaultNow().notNull(),
+  consentVersion: text("consent_version").default("1.0").notNull(),
+  dataUsageTerms: json("data_usage_terms"),
+  withdrawnAt: timestamp("withdrawn_at"),
+});
+
+export const insertVirtualPatientResearchConsentSchema = createInsertSchema(virtualPatientResearchConsent).omit({
+  id: true,
+  consentDate: true,
+});
+
+export type InsertVirtualPatientResearchConsent = z.infer<typeof insertVirtualPatientResearchConsentSchema>;
+export type VirtualPatientResearchConsent = typeof virtualPatientResearchConsent.$inferSelect;
+
+// Research Data Requests
+export const researchDataRequests = pgTable("research_data_requests", {
+  id: serial("id").primaryKey(),
+  projectId: integer("project_id")
+    .notNull()
+    .references(() => researchProjects.id, { onDelete: "cascade" }),
+  requestedById: integer("requested_by_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  datasetCriteria: json("dataset_criteria").notNull(),
+  justification: text("justification").notNull(),
+  approvalStatus: text("approval_status").default("pending").notNull(), // "pending", "approved", "denied"
+  approvedById: integer("approved_by_id")
+    .references(() => users.id, { onDelete: "set null" }),
+  approvalDate: timestamp("approval_date"),
+  dataAccessExpiryDate: timestamp("data_access_expiry_date"),
+  usageRestrictions: json("usage_restrictions"),
+  downloadCount: integer("download_count").default(0),
+  lastAccessedAt: timestamp("last_accessed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertResearchDataRequestSchema = createInsertSchema(researchDataRequests).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertResearchDataRequest = z.infer<typeof insertResearchDataRequestSchema>;
+export type ResearchDataRequest = typeof researchDataRequests.$inferSelect;
+
+// Research Relations
+export const researchGapRelations = relations(researchGaps, ({ many }) => ({
+  projects: many(researchProjects),
+}));
+
+export const researchProjectRelations = relations(researchProjects, ({ one, many }) => ({
+  principalInvestigator: one(users, {
+    fields: [researchProjects.principalInvestigatorId],
+    references: [users.id],
+  }),
+  researchGap: one(researchGaps, {
+    fields: [researchProjects.researchGapId],
+    references: [researchGaps.id],
+  }),
+  collaborators: many(researchCollaborators),
+  dataRequests: many(researchDataRequests),
+}));
+
+export const researchCollaboratorRelations = relations(researchCollaborators, ({ one }) => ({
+  project: one(researchProjects, {
+    fields: [researchCollaborators.projectId],
+    references: [researchProjects.id],
+  }),
+  user: one(users, {
+    fields: [researchCollaborators.userId],
+    references: [users.id],
+  }),
+}));
+
+export const virtualPatientResearchConsentRelations = relations(virtualPatientResearchConsent, ({ one }) => ({
+  virtualPatient: one(virtualPatients, {
+    fields: [virtualPatientResearchConsent.virtualPatientId],
+    references: [virtualPatients.id],
+  }),
+  user: one(users, {
+    fields: [virtualPatientResearchConsent.userId],
+    references: [users.id],
+  }),
+}));
+
+export const researchDataRequestRelations = relations(researchDataRequests, ({ one }) => ({
+  project: one(researchProjects, {
+    fields: [researchDataRequests.projectId],
+    references: [researchProjects.id],
+  }),
+  requestedBy: one(users, {
+    fields: [researchDataRequests.requestedById],
+    references: [users.id],
+  }),
+  approvedBy: one(users, {
+    fields: [researchDataRequests.approvedById],
+    references: [users.id],
+  }),
+}));
+
 // Research Papers with AI Analysis
 export const researchPapers = pgTable("research_papers", {
   id: serial("id").primaryKey(),

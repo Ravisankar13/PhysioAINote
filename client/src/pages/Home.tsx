@@ -22,10 +22,10 @@ const Home = () => {
         <meta property="og:type" content="website" />
       </Helmet>
       
-      <HeroSection />
-      <div className="container mx-auto px-4">
+      <div className="container mx-auto px-4 py-4">
         <TrialBanner />
       </div>
+      <HeroSection />
       <FeaturesSection />
       <BenefitsSection />
       <CTASection />

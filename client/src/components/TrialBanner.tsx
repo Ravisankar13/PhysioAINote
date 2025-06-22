@@ -148,24 +148,24 @@ export default function TrialBanner() {
 
   // Show trial offer for users who haven't used it
   return (
-    <Card className="mb-6 border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50">
-      <CardHeader className="pb-4">
+    <Card className="mb-6 border-2 border-blue-300 bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 shadow-lg">
+      <CardHeader className="pb-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-t-lg">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <Star className="h-5 w-5 text-blue-600" />
+            <div className="p-3 bg-white/20 rounded-lg backdrop-blur-sm">
+              <Star className="h-6 w-6 text-yellow-300" />
             </div>
             <div>
-              <CardTitle className="text-lg text-blue-900">
-                Start Your 14-Day Free Trial
+              <CardTitle className="text-xl text-white font-bold">
+                🎉 Start Your 14-Day FREE Trial Now!
               </CardTitle>
-              <CardDescription className="text-blue-700">
-                Get full access to all premium features - no credit card required
+              <CardDescription className="text-blue-100 text-base">
+                Full premium access - no credit card required, cancel anytime
               </CardDescription>
             </div>
           </div>
-          <Badge variant="secondary" className="bg-blue-100 text-blue-800">
-            Limited Time
+          <Badge className="bg-yellow-400 text-yellow-900 font-semibold px-3 py-1 animate-pulse">
+            FREE ACCESS
           </Badge>
         </div>
       </CardHeader>
@@ -220,17 +220,17 @@ export default function TrialBanner() {
             size="lg"
             onClick={handleStartTrial}
             disabled={startTrialMutation.isPending}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-8"
+            className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-10 py-4 text-lg font-bold shadow-lg transform hover:scale-105 transition-all duration-200 animate-pulse"
           >
             {startTrialMutation.isPending ? (
               <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3" />
                 Activating Trial...
               </>
             ) : (
               <>
-                <Star className="h-4 w-4 mr-2" />
-                {user ? "Start Free Trial Now" : "Sign Up for Free Trial"}
+                <Star className="h-5 w-5 mr-3 text-yellow-300" />
+                {user ? "🚀 START FREE TRIAL NOW" : "🚀 SIGN UP & START FREE TRIAL"}
               </>
             )}
           </Button>

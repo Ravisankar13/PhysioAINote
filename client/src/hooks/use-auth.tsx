@@ -134,15 +134,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Invalidate any queries that depend on authentication
       queryClient.invalidateQueries();
       
-      // Show trial success message and redirect to trial welcome
+      // Show trial success message and redirect to home with trial visible
       if (user.trialInfo?.isInTrial) {
         toast({
           title: "Welcome to PhysioAI!",
           description: "Your 14-day free trial has started",
         });
-        // Redirect to trial welcome page
+        // Redirect to home page where trial banner is now prominently displayed at top
         setTimeout(() => {
-          window.location.href = "/trial-welcome";
+          window.location.href = "/?trial=active";
         }, 1000);
       } else {
         toast({

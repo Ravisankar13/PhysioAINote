@@ -53,51 +53,31 @@ export default function ResearchGaps() {
   const { user } = useAuth();
 
   // Research project creation mutation
-  const createProjectMutation = useMutation({
-    mutationFn: async (gapData: ResearchGap) => {
-      const projectData = {
-        title: `Research Project: ${gapData.title}`,
-        description: `Research project to address the identified gap: ${gapData.description}`,
-        researchQuestion: `What are the optimal approaches for addressing: ${gapData.title}?`,
-        methodology: gapData.suggestedMethodology,
-        targetPopulation: "Physiotherapy patients",
-        expectedDuration: "12-24 months",
-        status: "planning",
-        isPublic: false,
-        ethicsApprovalRequired: true,
-        tags: [gapData.bodyPart, gapData.gapType, gapData.priority],
-        researchGapId: gapData.id
-      };
-      
-      const response = await apiRequest("POST", "/api/research/projects", projectData);
-      return response.json();
-    },
-    onSuccess: (project) => {
+  // Handle project creation navigation
+  const handleCreateProject = (gap: ResearchGap) => {
+    if (!user) {
       toast({
-        title: "Research Project Created",
-        description: `Successfully created research project: ${project.title}`,
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/research/projects"] });
-      // Navigate to the research hub to view the created project
-      navigate("/research");
-    },
-    onError: (error: Error) => {
-      console.error("Project creation error:", error);
-      const isAuthError = error.message?.includes("Not authenticated") || error.message?.includes("401");
-      toast({
-        title: "Project Creation Failed",
-        description: isAuthError 
-          ? "Please log in to create research projects"
-          : error.message || "Unable to create research project",
+        title: "Login Required",
+        description: "Please log in to create research projects",
         variant: "destructive",
       });
-      
-      // If authentication error, redirect to login
-      if (isAuthError) {
-        navigate("/auth");
-      }
-    },
-  });
+      navigate("/auth");
+      return;
+    }
+    
+    // Navigate to project creation page with gap data
+    const params = new URLSearchParams({
+      gapId: gap.id.toString(),
+      title: gap.title,
+      description: gap.description,
+      bodyPart: gap.bodyPart,
+      gapType: gap.gapType,
+      priority: gap.priority,
+      methodology: gap.suggestedMethodology
+    });
+    
+    navigate(`/research/projects/create?${params.toString()}`);
+  };
   
   const [selectedBodyPart, setSelectedBodyPart] = useState<string>("all");
   const [selectedPriority, setSelectedPriority] = useState<string>("all");
@@ -408,28 +388,9 @@ export default function ResearchGaps() {
                       <Button 
                         variant="outline" 
                         size="sm"
-                        onClick={() => {
-                          if (!user) {
-                            toast({
-                              title: "Login Required",
-                              description: "Please log in to create research projects",
-                              variant: "destructive",
-                            });
-                            navigate("/auth");
-                            return;
-                          }
-                          createProjectMutation.mutate(gap);
-                        }}
-                        disabled={createProjectMutation.isPending}
+                        onClick={() => handleCreateProject(gap)}
                       >
-                        {createProjectMutation.isPending ? (
-                          <>
-                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-current mr-2" />
-                            Creating...
-                          </>
-                        ) : (
-                          "Start Research Project"
-                        )}
+                        Start Research Project
                       </Button>
                     </div>
                   </CardContent>

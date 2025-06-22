@@ -481,7 +481,7 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
               <CardContent className="flex-1 flex flex-col p-0 min-h-0">
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col h-full">
                   {/* Chat Tab */}
-                  <TabsContent value="chat" className="flex-1 flex flex-col p-0 min-h-0">
+                  <TabsContent value="chat" className="flex-1 flex flex-col p-0 m-0 min-h-0 data-[state=active]:mt-0">
                     <div 
                       ref={scrollAreaRef}
                       className="flex-1 overflow-y-auto px-3 sm:px-6 min-h-[50vh] sm:min-h-[60vh] max-h-[calc(100vh-300px)] sm:max-h-[calc(90vh-150px)]"

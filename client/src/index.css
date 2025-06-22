@@ -49,6 +49,16 @@
   --radius: 0.5rem;
 }
 
+/* Fix TabsContent spacing in PhysioGPT */
+[data-radix-tabs-content] {
+  margin-top: 0 !important;
+}
+
+[data-radix-tabs-content][data-state="active"] {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+}
+
 @layer base {
   * {
     @apply border-border;

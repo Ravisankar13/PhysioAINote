@@ -133,6 +133,22 @@ const FUNCTIONAL_EXERCISES: FunctionalExercise[] = [
     icon: 'TrendingUp'
   },
   {
+    id: 'shoulder_abduction',
+    name: 'Shoulder Abduction',
+    category: 'upper_body',
+    description: 'Lateral arm raise',
+    duration: 4,
+    icon: 'TrendingUp'
+  },
+  {
+    id: 'lunges',
+    name: 'Lunges',
+    category: 'lower_body',
+    description: 'Forward and backward lunge pattern',
+    duration: 5,
+    icon: 'ArrowDown'
+  },
+  {
     id: 'single_leg_stance',
     name: 'Single Leg Stance',
     category: 'balance',
@@ -357,45 +373,120 @@ function SkeletonModel({
         const flexionAngle = Math.max(0, phase) * Math.PI / 3; // 0 to 60 degrees
         
         skeleton.traverse((child: any) => {
-          if (child.name?.toLowerCase().includes('hip') || child.name?.toLowerCase().includes('pelvis')) {
-            child.rotation.x = -flexionAngle * 0.3;
+          // Hip joints bend backward during squat
+          if (child.name === 'left_hip' || child.name === 'right_hip') {
+            child.rotation.x = -flexionAngle * 0.5;
           }
-          if (child.name?.toLowerCase().includes('knee') || child.name?.toLowerCase().includes('thigh')) {
+          // Thighs rotate to create hip flexion
+          if (child.name === 'left_thigh' || child.name === 'right_thigh') {
+            child.rotation.x = flexionAngle * 0.8;
+          }
+          // Knees bend during squat
+          if (child.name === 'left_knee' || child.name === 'right_knee') {
             child.rotation.x = flexionAngle;
           }
-          if (child.name?.toLowerCase().includes('ankle')) {
-            child.rotation.x = -flexionAngle * 0.5;
+          // Shins angle to maintain balance
+          if (child.name === 'left_shin' || child.name === 'right_shin') {
+            child.rotation.x = -flexionAngle * 0.3;
+          }
+          // Torso leans slightly forward
+          if (child.name === 'torso') {
+            child.rotation.x = flexionAngle * 0.2;
           }
         });
       },
       
       step_up: (progress) => {
-        // Simulate step-up movement
+        // Simulate step-up movement - right leg leads
         const liftPhase = Math.max(0, Math.sin(progress * Math.PI));
         const hipFlexion = liftPhase * Math.PI / 4; // 45 degrees max
         const kneeFlexion = liftPhase * Math.PI / 3; // 60 degrees max
         
         skeleton.traverse((child: any) => {
-          if (child.name?.toLowerCase().includes('hip_r') || child.name?.toLowerCase().includes('right_hip')) {
+          // Right leg lifts up
+          if (child.name === 'right_hip') {
             child.rotation.x = hipFlexion;
           }
-          if (child.name?.toLowerCase().includes('knee_r') || child.name?.toLowerCase().includes('right_knee')) {
+          if (child.name === 'right_thigh') {
+            child.rotation.x = -hipFlexion * 0.8;
+          }
+          if (child.name === 'right_knee') {
             child.rotation.x = kneeFlexion;
           }
+          if (child.name === 'right_shin') {
+            child.rotation.x = -kneeFlexion * 0.5;
+          }
+          // Left leg supports
+          if (child.name === 'left_knee') {
+            child.rotation.x = liftPhase * Math.PI / 8; // Slight bend for support
+          }
         });
+        
+        // Lift the entire skeleton slightly
+        if (groupRef.current) {
+          groupRef.current.position.y = liftPhase * 0.3;
+        }
+      },
+
+      step_down: (progress) => {
+        // Simulate step-down movement - controlled descent
+        const descendPhase = Math.max(0, Math.sin(progress * Math.PI));
+        const kneeFlexion = descendPhase * Math.PI / 4; // 45 degrees max
+        
+        skeleton.traverse((child: any) => {
+          // Left leg controls descent
+          if (child.name === 'left_knee') {
+            child.rotation.x = kneeFlexion;
+          }
+          if (child.name === 'left_hip') {
+            child.rotation.x = -kneeFlexion * 0.5;
+          }
+          // Right leg extends down
+          if (child.name === 'right_hip') {
+            child.rotation.x = -descendPhase * Math.PI / 6;
+          }
+        });
+        
+        // Lower the skeleton
+        if (groupRef.current) {
+          groupRef.current.position.y = -descendPhase * 0.2;
+        }
       },
       
       walk_forward: (progress) => {
         // Simulate walking gait pattern
-        const leftLegPhase = Math.sin(progress * Math.PI * 4);
-        const rightLegPhase = Math.sin((progress * Math.PI * 4) + Math.PI);
+        const leftPhase = Math.sin(progress * Math.PI * 4);
+        const rightPhase = Math.sin((progress * Math.PI * 4) + Math.PI);
         
         skeleton.traverse((child: any) => {
-          if (child.name?.toLowerCase().includes('hip_l') || child.name?.toLowerCase().includes('left_hip')) {
-            child.rotation.x = leftLegPhase * Math.PI / 6; // 30 degrees swing
+          // Left leg swing
+          if (child.name === 'left_hip') {
+            child.rotation.x = leftPhase * Math.PI / 8;
           }
-          if (child.name?.toLowerCase().includes('hip_r') || child.name?.toLowerCase().includes('right_hip')) {
-            child.rotation.x = rightLegPhase * Math.PI / 6;
+          if (child.name === 'left_thigh') {
+            child.rotation.x = -leftPhase * Math.PI / 12;
+          }
+          if (child.name === 'left_knee') {
+            child.rotation.x = Math.max(0, leftPhase) * Math.PI / 6;
+          }
+          
+          // Right leg swing
+          if (child.name === 'right_hip') {
+            child.rotation.x = rightPhase * Math.PI / 8;
+          }
+          if (child.name === 'right_thigh') {
+            child.rotation.x = -rightPhase * Math.PI / 12;
+          }
+          if (child.name === 'right_knee') {
+            child.rotation.x = Math.max(0, rightPhase) * Math.PI / 6;
+          }
+          
+          // Arm swing
+          if (child.name === 'left_upper_arm') {
+            child.rotation.x = -leftPhase * Math.PI / 12;
+          }
+          if (child.name === 'right_upper_arm') {
+            child.rotation.x = -rightPhase * Math.PI / 12;
           }
         });
         
@@ -404,14 +495,43 @@ function SkeletonModel({
           groupRef.current.position.z = progress * 2 - 1;
         }
       },
+
+      walk_backward: (progress) => {
+        // Simulate backward walking
+        const leftPhase = -Math.sin(progress * Math.PI * 4);
+        const rightPhase = -Math.sin((progress * Math.PI * 4) + Math.PI);
+        
+        skeleton.traverse((child: any) => {
+          if (child.name === 'left_hip') {
+            child.rotation.x = leftPhase * Math.PI / 10;
+          }
+          if (child.name === 'right_hip') {
+            child.rotation.x = rightPhase * Math.PI / 10;
+          }
+          if (child.name === 'left_knee') {
+            child.rotation.x = Math.max(0, -leftPhase) * Math.PI / 8;
+          }
+          if (child.name === 'right_knee') {
+            child.rotation.x = Math.max(0, -rightPhase) * Math.PI / 8;
+          }
+        });
+        
+        // Move skeleton backward
+        if (groupRef.current) {
+          groupRef.current.position.z = -progress * 2 + 1;
+        }
+      },
       
       elbow_flexion: (progress) => {
         // Simulate bicep curl
         const flexionAngle = Math.sin(progress * Math.PI * 2) * Math.PI / 2; // 0 to 90 degrees
         
         skeleton.traverse((child: any) => {
-          if (child.name?.toLowerCase().includes('elbow') || child.name?.toLowerCase().includes('forearm')) {
+          if (child.name === 'left_elbow' || child.name === 'right_elbow') {
             child.rotation.z = Math.max(0, flexionAngle);
+          }
+          if (child.name === 'left_forearm' || child.name === 'right_forearm') {
+            child.rotation.z = Math.max(0, flexionAngle) * 0.8;
           }
         });
       },
@@ -421,27 +541,89 @@ function SkeletonModel({
         const flexionAngle = Math.sin(progress * Math.PI * 2) * Math.PI / 2; // 0 to 90 degrees
         
         skeleton.traverse((child: any) => {
-          if (child.name?.toLowerCase().includes('shoulder') || child.name?.toLowerCase().includes('humerus')) {
+          if (child.name === 'left_shoulder' || child.name === 'right_shoulder') {
             child.rotation.x = Math.max(0, flexionAngle);
+          }
+          if (child.name === 'left_upper_arm' || child.name === 'right_upper_arm') {
+            child.rotation.x = Math.max(0, flexionAngle) * 0.9;
+          }
+        });
+      },
+
+      shoulder_abduction: (progress) => {
+        // Simulate lateral arm raise
+        const abductionAngle = Math.sin(progress * Math.PI * 2) * Math.PI / 3; // 0 to 60 degrees
+        
+        skeleton.traverse((child: any) => {
+          if (child.name === 'left_shoulder') {
+            child.rotation.z = Math.max(0, abductionAngle);
+          }
+          if (child.name === 'right_shoulder') {
+            child.rotation.z = -Math.max(0, abductionAngle);
+          }
+          if (child.name === 'left_upper_arm') {
+            child.rotation.z = Math.max(0, abductionAngle) * 0.9;
+          }
+          if (child.name === 'right_upper_arm') {
+            child.rotation.z = -Math.max(0, abductionAngle) * 0.9;
           }
         });
       },
       
       single_leg_stance: (progress) => {
         // Simulate balance challenge with subtle sway
-        const sway = Math.sin(progress * Math.PI * 6) * 0.1; // Subtle movement
+        const sway = Math.sin(progress * Math.PI * 6) * 0.08; // Subtle movement
         
         skeleton.traverse((child: any) => {
-          if (child.name?.toLowerCase().includes('spine') || child.name?.toLowerCase().includes('torso')) {
+          if (child.name === 'torso') {
             child.rotation.x = sway;
             child.rotation.z = sway * 0.5;
           }
         });
         
-        // Lift one leg slightly
+        // Lift left leg slightly
         skeleton.traverse((child: any) => {
-          if (child.name?.toLowerCase().includes('hip_l') || child.name?.toLowerCase().includes('left_hip')) {
+          if (child.name === 'left_hip') {
             child.rotation.x = Math.PI / 12; // 15 degrees hip flexion
+          }
+          if (child.name === 'left_thigh') {
+            child.rotation.x = -Math.PI / 16;
+          }
+          if (child.name === 'left_knee') {
+            child.rotation.x = Math.PI / 8; // Slight knee bend
+          }
+        });
+      },
+
+      lunges: (progress) => {
+        // Simulate forward lunge
+        const lungePhase = Math.sin(progress * Math.PI * 2);
+        const isForward = lungePhase > 0;
+        const lungeDepth = Math.abs(lungePhase) * Math.PI / 3;
+        
+        skeleton.traverse((child: any) => {
+          if (isForward) {
+            // Right leg forward lunge
+            if (child.name === 'right_hip') {
+              child.rotation.x = lungeDepth * 0.5;
+            }
+            if (child.name === 'right_knee') {
+              child.rotation.x = lungeDepth;
+            }
+            if (child.name === 'left_knee') {
+              child.rotation.x = lungeDepth * 0.8;
+            }
+          } else {
+            // Left leg forward lunge
+            if (child.name === 'left_hip') {
+              child.rotation.x = lungeDepth * 0.5;
+            }
+            if (child.name === 'left_knee') {
+              child.rotation.x = lungeDepth;
+            }
+            if (child.name === 'right_knee') {
+              child.rotation.x = lungeDepth * 0.8;
+            }
           }
         });
       }
@@ -515,6 +697,19 @@ function SkeletonModel({
         
         const animationFn = createExerciseAnimation(currentExercise, skeletonModel);
         if (animationFn) {
+          // Reset skeleton positions before applying animation
+          skeletonModel.traverse((child: any) => {
+            if (child.rotation) {
+              child.rotation.x = 0;
+              child.rotation.y = 0;
+              child.rotation.z = 0;
+            }
+          });
+          if (groupRef.current) {
+            groupRef.current.position.y = 0;
+            groupRef.current.position.z = 0;
+          }
+          
           animationFn(newProgress);
         }
       }

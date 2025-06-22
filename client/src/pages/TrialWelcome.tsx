@@ -18,7 +18,9 @@ export default function TrialWelcome() {
   }, [user, navigate]);
 
   if (!user?.trialInfo?.isInTrial) {
-    return null;
+    return <div className="min-h-screen flex items-center justify-center">
+      <div>Redirecting...</div>
+    </div>;
   }
 
   const handleGetStarted = () => {

@@ -36,7 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     data: user,
     error,
     isLoading,
-  } = useQuery<SelectUser | null, Error>({
+  } = useQuery<UserWithTrialInfo | null, Error>({
     queryKey: ["/api/user"],
     queryFn: getQueryFn({ on401: "returnNull" }),
   });
@@ -78,7 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw error;
       }
     },
-    onSuccess: (user: SelectUser) => {
+    onSuccess: (user: UserWithTrialInfo) => {
       console.log("Setting user data in query cache");
       queryClient.setQueryData(["/api/user"], user);
       // Invalidate any queries that depend on authentication
@@ -128,15 +128,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw error;
       }
     },
-    onSuccess: (user: SelectUser) => {
+    onSuccess: (user: UserWithTrialInfo) => {
       console.log("Setting user data in query cache after registration");
       queryClient.setQueryData(["/api/user"], user);
       // Invalidate any queries that depend on authentication
       queryClient.invalidateQueries();
-      toast({
-        title: "Registration successful",
-        description: "Your account has been created",
-      });
+      
+      // Show trial success message and redirect to trial welcome
+      if (user.trialInfo?.isInTrial) {
+        toast({
+          title: "Welcome to PhysioAI!",
+          description: "Your 14-day free trial has started",
+        });
+        // Redirect to trial welcome page
+        setTimeout(() => {
+          window.location.href = "/trial-welcome";
+        }, 1000);
+      } else {
+        toast({
+          title: "Registration successful",
+          description: "Your account has been created",
+        });
+      }
     },
     onError: (error: Error) => {
       console.error("Registration mutation error:", error);

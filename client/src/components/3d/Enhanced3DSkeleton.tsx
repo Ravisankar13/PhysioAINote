@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect, Suspense } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, Text, useGLTF, useAnimations } from '@react-three/drei';
+import { OrbitControls, Text } from '@react-three/drei';
 import * as THREE from 'three';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -168,7 +168,7 @@ interface Enhanced3DSkeletonProps {
   className?: string;
 }
 
-// Skeleton model component that loads the FBX file
+// Simple skeleton model component
 function SkeletonModel({ 
   anthropometrics, 
   jointRestrictions, 
@@ -189,8 +189,6 @@ function SkeletonModel({
   isPerformingExercise?: boolean;
 }) {
   const groupRef = useRef<THREE.Group>(null);
-  const skeletonRef = useRef<THREE.Group>(null);
-  const mixerRef = useRef<THREE.AnimationMixer | null>(null);
   const [exerciseProgress, setExerciseProgress] = useState(0);
   
   // Create procedural skeleton using Three.js primitives with anthropometric scaling
@@ -684,7 +682,9 @@ function SkeletonModel({
 
   // Animation frame
   useFrame((state, delta) => {
-    if (groupRef.current && !isPerformingExercise) {
+    if (!groupRef.current) return;
+    
+    if (!isPerformingExercise) {
       groupRef.current.rotation.y += 0.005 * animationSpeed;
     }
     
@@ -697,19 +697,6 @@ function SkeletonModel({
         
         const animationFn = createExerciseAnimation(currentExercise, skeletonModel);
         if (animationFn) {
-          // Reset skeleton positions before applying animation
-          skeletonModel.traverse((child: any) => {
-            if (child.rotation) {
-              child.rotation.x = 0;
-              child.rotation.y = 0;
-              child.rotation.z = 0;
-            }
-          });
-          if (groupRef.current) {
-            groupRef.current.position.y = 0;
-            groupRef.current.position.z = 0;
-          }
-          
           animationFn(newProgress);
         }
       }
@@ -786,13 +773,40 @@ function SkeletonModel({
 // Loading fallback component
 function LoadingFallback() {
   return (
-    <div className="flex items-center justify-center h-full">
+    <div className="flex items-center justify-center h-full bg-gray-100">
       <div className="text-center">
         <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
         <p className="text-sm text-muted-foreground">Loading 3D skeleton model...</p>
       </div>
     </div>
   );
+}
+
+// Error boundary for 3D components
+class Canvas3DErrorBoundary extends React.Component<
+  { children: React.ReactNode; fallback: React.ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, errorInfo: any) {
+    console.log('3D Canvas Error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback;
+    }
+
+    return this.props.children;
+  }
 }
 
 export default function Enhanced3DSkeleton({ patientData, className }: Enhanced3DSkeletonProps) {
@@ -825,63 +839,43 @@ export default function Enhanced3DSkeleton({ patientData, className }: Enhanced3
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 h-full">
         {/* 3D Viewer */}
         <div className="lg:col-span-3 bg-gray-900 rounded-lg overflow-hidden">
-          <Suspense fallback={<LoadingFallback />}>
-            <Canvas 
-              camera={{ position: [1.2, 0.8, 2], fov: 50 }}
-              shadows
-              gl={{ antialias: true, alpha: true }}
-            >
-              <ambientLight intensity={0.7} color="#f8f8ff" />
-              <directionalLight 
-                position={[5, 8, 3]} 
-                intensity={1.5} 
-                color="#ffffff"
-                castShadow
-                shadow-mapSize-width={4096}
-                shadow-mapSize-height={4096}
-                shadow-camera-near={0.1}
-                shadow-camera-far={30}
-                shadow-camera-left={-5}
-                shadow-camera-right={5}
-                shadow-camera-top={5}
-                shadow-camera-bottom={-5}
-              />
-              <directionalLight position={[-3, 4, -1]} intensity={0.6} color="#fff8dc" />
-              <pointLight position={[2, 2, 2]} intensity={0.4} color="#ffffff" />
-              <pointLight position={[-1, 1, -1]} intensity={0.3} color="#f0f8ff" />
-              
-              {/* Ground plane for shadows */}
-              <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1.5, 0]} receiveShadow>
-                <planeGeometry args={[6, 6]} />
-                <meshLambertMaterial color="#f8f8f8" transparent opacity={0.4} />
-              </mesh>
-              
-              {/* Grid for scale reference */}
-              <gridHelper args={[3, 15, "#dddddd", "#eeeeee"]} position={[0, -1.49, 0]} />
-              
-              <SkeletonModel
-                anthropometrics={patientData?.anthropometrics}
-                jointRestrictions={patientData?.jointRestrictions}
-                painAreas={patientData?.painAreas}
-                showJointLimits={showJointLimits}
-                selectedJoint={selectedJoint}
-                animationSpeed={isAnimating ? animationSpeed : 0}
-                currentExercise={isPerformingExercise ? selectedExercise : null}
-                isPerformingExercise={isPerformingExercise}
-              />
-              
-              <OrbitControls 
-                enablePan={true} 
-                enableZoom={true} 
-                enableRotate={true}
-                minDistance={1}
-                maxDistance={6}
-                target={[0, 0.2, 0]}
-                enableDamping={true}
-                dampingFactor={0.05}
-              />
-            </Canvas>
-          </Suspense>
+          <Canvas3DErrorBoundary 
+            fallback={
+              <div className="flex items-center justify-center h-full bg-gray-800 text-white">
+                <div className="text-center">
+                  <div className="mb-4">3D Skeleton Viewer</div>
+                  <div className="text-sm text-gray-400">WebGL not available or 3D rendering disabled</div>
+                  <Button 
+                    variant="outline" 
+                    className="mt-4" 
+                    onClick={() => window.location.reload()}
+                  >
+                    Retry
+                  </Button>
+                </div>
+              </div>
+            }
+          >
+            <Suspense fallback={<LoadingFallback />}>
+              <Canvas>
+                <ambientLight intensity={0.5} />
+                <directionalLight position={[5, 5, 5]} intensity={0.8} />
+                
+                <SkeletonModel
+                  anthropometrics={patientData?.anthropometrics}
+                  jointRestrictions={patientData?.jointRestrictions}
+                  painAreas={patientData?.painAreas || []}
+                  showJointLimits={showJointLimits}
+                  selectedJoint={selectedJoint}
+                  animationSpeed={isAnimating ? animationSpeed : 0}
+                  currentExercise={isPerformingExercise ? selectedExercise : null}
+                  isPerformingExercise={isPerformingExercise}
+                />
+                
+                <OrbitControls />
+              </Canvas>
+            </Suspense>
+          </Canvas3DErrorBoundary>
         </div>
 
         {/* Control Panel */}

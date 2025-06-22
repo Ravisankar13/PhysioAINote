@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'wouter';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -55,15 +55,16 @@ interface ResearchGap {
 }
 
 export default function CreateResearchProject() {
-  const [location, navigate] = useLocation();
+  const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [collaborationInput, setCollaborationInput] = useState('');
   const [collaborations, setCollaborations] = useState<string[]>([]);
   
-  // Get research gap data from navigation state if available
-  const [searchParams] = useState(() => new URLSearchParams(window.location.search));
+  // Get research gap data from URL parameters
+  const [searchParams] = useState(() => new URLSearchParams(location.search));
   const gapId = searchParams.get('gapId');
   const [researchGap, setResearchGap] = useState<ResearchGap | null>(null);
 

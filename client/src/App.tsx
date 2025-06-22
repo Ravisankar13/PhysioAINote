@@ -16,6 +16,7 @@ import Skeleton3DTool from "@/pages/Skeleton3DTool";
 import MotionCapturePage from "@/pages/MotionCapturePage";
 import ResearchHub from "@/pages/ResearchHub";
 import ResearchGaps from "@/pages/ResearchGaps";
+import CreateResearchProject from "@/pages/CreateResearchProject";
 import Membership from "@/pages/Membership";
 import ExercisePage from "@/pages/ExercisePage";
 import ManualTherapyPage from "@/pages/ManualTherapyPage";
@@ -53,6 +54,10 @@ function Router() {
           <Route path="/shared-notes" element={<SharedNotes />} />
           <Route path="/research" element={<ResearchHub />} />
           <Route path="/research/gaps" element={<ResearchGaps />} />
+          <Route 
+            path="/research/projects/create" 
+            element={<ProtectedRoute component={CreateResearchProject} />} 
+          />
           <Route
             path="/my-notes"
             element={<ProtectedRoute component={MyNotes} />}

@@ -80,7 +80,7 @@ const HeroSection = () => {
                   <span className="font-semibold">Virtual Patients</span>
                 </Button>
               </Link>
-              <Link to="/physio-gpt">
+              <Link to="/physiogpt">
                 <Button
                   size="lg"
                   className="w-full bg-green-500 text-white hover:bg-green-600 shadow-md flex items-center justify-center gap-2"

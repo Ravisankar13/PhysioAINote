@@ -117,16 +117,31 @@ export function setupAuth(app: Express) {
         return res.status(400).json({ message: "Username already exists" });
       }
 
+      // Set up 14-day free trial for new users
+      const now = new Date();
+      const trialEndDate = new Date(now.getTime() + (14 * 24 * 60 * 60 * 1000)); // 14 days from now
+
       const user = await storage.createUser({
         ...req.body,
         password: await hashPassword(req.body.password),
+        membershipTier: "basic", // Start with basic tier during trial
+        trialStartDate: now,
+        trialEndDate: trialEndDate,
+        hasUsedTrial: true, // Mark that they've used their trial
       });
 
       req.login(user, (err) => {
         if (err) return next(err);
         // Don't send the password hash to the client
         const { password, ...userWithoutPassword } = user;
-        res.status(201).json(userWithoutPassword);
+        res.status(201).json({
+          ...userWithoutPassword,
+          trialInfo: {
+            isInTrial: true,
+            trialEndsAt: trialEndDate,
+            daysRemaining: 14
+          }
+        });
       });
     } catch (err) {
       next(err);
@@ -160,9 +175,28 @@ export function setupAuth(app: Express) {
             console.error("Session save error:", err);
             return next(err);
           }
+          
+          // Calculate trial information if user has trial dates
+          let trialInfo = null;
+          if (user.trialStartDate && user.trialEndDate) {
+            const now = new Date();
+            const trialEnd = new Date(user.trialEndDate);
+            const isInTrial = now <= trialEnd;
+            const daysRemaining = Math.max(0, Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+            
+            trialInfo = {
+              isInTrial,
+              trialEndsAt: user.trialEndDate,
+              daysRemaining
+            };
+          }
+          
           // Don't send the password hash to the client
           const { password, ...userWithoutPassword } = user;
-          res.status(200).json(userWithoutPassword);
+          res.status(200).json({
+            ...userWithoutPassword,
+            trialInfo
+          });
         });
       });
     })(req, res, next);
@@ -177,9 +211,29 @@ export function setupAuth(app: Express) {
 
   app.get("/api/user", (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
-    // Don't send the password hash to the client
-    const { password, ...userWithoutPassword } = req.user as SelectUser;
-    res.json(userWithoutPassword);
+    
+    const user = req.user as SelectUser;
+    const { password, ...userWithoutPassword } = user;
+    
+    // Calculate trial information if user has trial dates
+    let trialInfo = null;
+    if (user.trialStartDate && user.trialEndDate) {
+      const now = new Date();
+      const trialEnd = new Date(user.trialEndDate);
+      const isInTrial = now <= trialEnd;
+      const daysRemaining = Math.max(0, Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+      
+      trialInfo = {
+        isInTrial,
+        trialEndsAt: user.trialEndDate,
+        daysRemaining
+      };
+    }
+    
+    res.json({
+      ...userWithoutPassword,
+      trialInfo
+    });
   });
   
   // Admin endpoint to view user statistics - only accessible by specific admin users

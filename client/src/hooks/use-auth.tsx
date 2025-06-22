@@ -8,13 +8,22 @@ import { User as SelectUser, InsertUser } from "@shared/schema";
 import { getQueryFn, queryClient } from "../lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
+// Extended user type with trial information
+type UserWithTrialInfo = SelectUser & {
+  trialInfo?: {
+    isInTrial: boolean;
+    trialEndsAt: Date;
+    daysRemaining: number;
+  };
+};
+
 type AuthContextType = {
-  user: SelectUser | null;
+  user: UserWithTrialInfo | null;
   isLoading: boolean;
   error: Error | null;
-  loginMutation: UseMutationResult<SelectUser, Error, LoginData>;
+  loginMutation: UseMutationResult<UserWithTrialInfo, Error, LoginData>;
   logoutMutation: UseMutationResult<void, Error, void>;
-  registerMutation: UseMutationResult<SelectUser, Error, InsertUser>;
+  registerMutation: UseMutationResult<UserWithTrialInfo, Error, InsertUser>;
 };
 
 type LoginData = Pick<InsertUser, "username" | "password"> & { rememberMe: boolean };

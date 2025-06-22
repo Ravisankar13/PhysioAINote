@@ -29,6 +29,7 @@ import SharedCaseFormPage from "@/pages/SharedCaseFormPage";
 import CaseStudyPage from "@/pages/CaseStudyPage";
 import AdminDashboard from "@/pages/admin-dashboard";
 import PhysioGPT from "@/pages/PhysioGPT";
+import TrialWelcome from "@/pages/TrialWelcome";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { ThemeProvider } from "next-themes";
@@ -92,6 +93,10 @@ function Router() {
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/auth" element={<AuthPage />} />
+          <Route
+            path="/trial-welcome"
+            element={<ProtectedRoute component={TrialWelcome} />}
+          />
           <Route
             path="/admin"
             element={<ProtectedRoute component={AdminDashboard} />}

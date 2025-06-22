@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -80,11 +81,20 @@ export default function ResearchGaps() {
       setLocation("/research");
     },
     onError: (error: Error) => {
+      console.error("Project creation error:", error);
+      const isAuthError = error.message?.includes("Not authenticated") || error.message?.includes("401");
       toast({
         title: "Project Creation Failed",
-        description: error.message,
+        description: isAuthError 
+          ? "Please log in to create research projects"
+          : error.message || "Unable to create research project",
         variant: "destructive",
       });
+      
+      // If authentication error, redirect to login
+      if (isAuthError) {
+        setLocation("/auth");
+      }
     },
   });
   

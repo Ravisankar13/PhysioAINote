@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useLocation } from "wouter";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -49,7 +49,7 @@ interface GapStatistics {
 export default function ResearchGaps() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [, setLocation] = useLocation();
+  const navigate = useNavigate();
   const { user } = useAuth();
 
   // Research project creation mutation
@@ -79,7 +79,7 @@ export default function ResearchGaps() {
       });
       queryClient.invalidateQueries({ queryKey: ["/api/research/projects"] });
       // Navigate to the research hub to view the created project
-      setLocation("/research");
+      navigate("/research");
     },
     onError: (error: Error) => {
       console.error("Project creation error:", error);
@@ -94,7 +94,7 @@ export default function ResearchGaps() {
       
       // If authentication error, redirect to login
       if (isAuthError) {
-        setLocation("/auth");
+        navigate("/auth");
       }
     },
   });
@@ -415,7 +415,7 @@ export default function ResearchGaps() {
                               description: "Please log in to create research projects",
                               variant: "destructive",
                             });
-                            setLocation("/auth");
+                            navigate("/auth");
                             return;
                           }
                           createProjectMutation.mutate(gap);

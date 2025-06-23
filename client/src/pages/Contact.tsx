@@ -104,7 +104,7 @@ const Contact = () => {
                   <MailOutline className="text-primary-600 h-6 w-6" />
                 </div>
                 <h3 className="text-lg font-bold text-neutral-900 mb-2">Email</h3>
-                <p className="text-neutral-600">contact@physioai.com</p>
+                <p className="text-neutral-600">physioconversation@gmail.com</p>
                 <p className="text-neutral-500 text-sm mt-1">We'll respond as soon as possible</p>
               </CardContent>
             </Card>

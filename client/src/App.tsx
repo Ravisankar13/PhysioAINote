@@ -8,6 +8,7 @@ import Home from "@/pages/Home";
 import ClinicalNotes from "@/pages/ClinicalNotes";
 import About from "@/pages/About";
 import Contact from "@/pages/Contact";
+import Terms from "@/pages/Terms";
 import AuthPage from "@/pages/auth-page";
 import SharedNotes from "@/pages/SharedNotes";
 import MyNotes from "@/pages/MyNotes";
@@ -99,6 +100,7 @@ function Router() {
           <Route path="/membership" element={<Membership />} />
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} />
+          <Route path="/terms" element={<Terms />} />
           <Route path="/auth" element={<AuthPage />} />
           <Route
             path="/trial-welcome"

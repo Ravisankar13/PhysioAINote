@@ -609,7 +609,7 @@ export default function CreateResearchProject() {
               </div>
             </form>
           </Form>
-        </div>
+      </div>
     </div>
   );
 }

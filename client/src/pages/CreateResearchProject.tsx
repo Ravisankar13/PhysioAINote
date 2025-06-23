@@ -186,6 +186,9 @@ export default function CreateResearchProject() {
     setCollaborations(collaborations.filter(inst => inst !== institution));
   };
 
+  // Debug: Check if component is rendering
+  console.log('CreateResearchProject component rendering', { user, researchGap });
+
   return (
     <div className="container max-w-4xl py-8 mx-auto">
       <Helmet>
@@ -193,8 +196,7 @@ export default function CreateResearchProject() {
         <meta name="description" content="Create a new physiotherapy research project with virtual patient data and collaboration tools." />
       </Helmet>
       
-      <MembershipRequired feature="research">
-        <div className="space-y-6">
+      <div className="space-y-6">
           {/* Header */}
           <div className="flex items-center gap-4">
             <Button variant="ghost" onClick={() => navigate('/research/gaps')}>
@@ -608,7 +610,6 @@ export default function CreateResearchProject() {
             </form>
           </Form>
         </div>
-      </MembershipRequired>
     </div>
   );
 }

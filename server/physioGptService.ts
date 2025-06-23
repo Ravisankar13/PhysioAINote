@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { physioGptStorage } from "./physioGptStorage";
 import { patientSessionStorage } from "./patientSessionStorage";
 import { storage } from "./storage";
+import { evidenceService, EvidenceSummary, ResearchPaper } from "./evidenceIntegration";
 
 if (!process.env.OPENAI_API_KEY) {
   throw new Error("OPENAI_API_KEY is required for PhysioGPT");
@@ -26,28 +27,58 @@ export interface PhysioGptResponse {
   response: string;
   conversationId: number;
   suggestions?: string[];
+  evidenceSummary?: EvidenceSummary;
+  researchPapers?: ResearchPaper[];
+  evidenceGrade?: 'A' | 'B' | 'C' | 'D';
+  confidenceLevel?: 'High' | 'Moderate' | 'Low' | 'Very Low';
 }
 
 export class PhysioGptService {
-  private buildSystemPrompt(): string {
-    return `You are PhysioGPT, an expert physiotherapy AI assistant. Provide evidence-based guidance to physiotherapists.
+  private buildSystemPrompt(evidenceSummary?: EvidenceSummary): string {
+    let evidenceContext = "";
+    
+    if (evidenceSummary) {
+      evidenceContext = `
+CURRENT EVIDENCE SUMMARY:
+- Topic: ${evidenceSummary.topic}
+- Evidence Grade: ${evidenceSummary.evidenceGrade} (${evidenceSummary.confidenceLevel} confidence)
+- Primary Recommendation: ${evidenceSummary.primaryRecommendation}
+- Supporting Studies: ${evidenceSummary.supportingStudies.length} papers
+- Last Updated: ${evidenceSummary.lastUpdated.toISOString().split('T')[0]}
+
+CLINICAL CONSIDERATIONS:
+${evidenceSummary.clinicalConsiderations.map(c => `- ${c}`).join('\n')}
+`;
+    }
+
+    return `You are PhysioGPT, an expert physiotherapy AI assistant with real-time access to current research evidence. Provide evidence-based guidance to physiotherapists.
+
+${evidenceContext}
 
 FOCUS AREAS:
-- Assessment and treatment advice
-- Exercise prescription
-- Clinical reasoning
-- Patient safety
+- Assessment and treatment advice backed by current research
+- Exercise prescription with evidence grading
+- Clinical reasoning incorporating latest evidence
+- Patient safety with research-supported recommendations
 
 RESPONSE STYLE:
-- Concise, actionable advice
-- Evidence-based recommendations
-- Safety considerations
-- Treatment progressions
-- Maintain professional clinical terminology
-- Always emphasize the importance of clinical judgment
+- Start with evidence-based recommendations when available
+- Include evidence grades (A, B, C, D) for treatment suggestions
+- Reference specific studies when making recommendations
+- Cite confidence levels (High, Moderate, Low, Very Low)
+- Provide actionable, research-backed advice
+- Note when evidence is limited or conflicting
+- Always emphasize clinical judgment alongside evidence
+
+EVIDENCE INTEGRATION:
+- When evidence is available, structure responses as:
+  1. Evidence-based recommendation (Grade X, Y confidence)
+  2. Supporting research summary
+  3. Clinical application guidance
+  4. Individual patient considerations
 
 LIMITATIONS:
-- You assist licensed professionals, not replace clinical assessment
+- You assist licensed professionals with evidence synthesis, not replace clinical assessment
 - Recommend referral when appropriate
 - Emphasize hands-on examination importance
 - Note when imaging or specialist consultation needed
@@ -139,6 +170,22 @@ Keep responses concise, practical, and directly applicable to clinical practice.
     return suggestions.sort(() => 0.5 - Math.random()).slice(0, 3);
   }
 
+  private async identifyResearchQuery(message: string): Promise<string | null> {
+    // Check if the message is asking for evidence-based information
+    const researchTriggers = [
+      'evidence', 'research', 'studies', 'effective', 'best practice',
+      'treatment for', 'exercise for', 'therapy for', 'rehabilitation',
+      'what works', 'outcomes', 'proven', 'clinical guidelines'
+    ];
+    
+    const lowerMessage = message.toLowerCase();
+    if (researchTriggers.some(trigger => lowerMessage.includes(trigger))) {
+      return message; // Use the full message as research query
+    }
+    
+    return null;
+  }
+
   async processMessage(request: PhysioGptRequest): Promise<PhysioGptResponse> {
     try {
       console.log("=== PhysioGPT Processing Start ===");
@@ -147,6 +194,21 @@ Keep responses concise, practical, and directly applicable to clinical practice.
       
       let conversationId = request.conversationId;
       let previousMessages: any[] = [];
+      let evidenceSummary: EvidenceSummary | undefined;
+      let researchPapers: ResearchPaper[] = [];
+      
+      // Check if this message requires evidence integration
+      const researchQuery = await this.identifyResearchQuery(request.message);
+      if (researchQuery) {
+        console.log("Generating evidence summary for:", researchQuery);
+        try {
+          evidenceSummary = await evidenceService.generateEvidenceSummary(researchQuery);
+          researchPapers = evidenceSummary.supportingStudies;
+          console.log(`Found ${researchPapers.length} supporting studies with evidence grade ${evidenceSummary.evidenceGrade}`);
+        } catch (error) {
+          console.error("Error generating evidence summary:", error);
+        }
+      }
       
       // Create conversation if needed
       if (!conversationId) {
@@ -186,8 +248,8 @@ Keep responses concise, practical, and directly applicable to clinical practice.
         content: request.message
       });
       
-      // Prepare messages for OpenAI - keep it minimal
-      const systemPrompt = this.buildSystemPrompt();
+      // Prepare messages for OpenAI with evidence context
+      const systemPrompt = this.buildSystemPrompt(evidenceSummary);
       const openaiMessages = [
         { role: 'system', content: systemPrompt },
         ...previousMessages,
@@ -237,10 +299,14 @@ Keep responses concise, practical, and directly applicable to clinical practice.
       console.log("Final aiResponse:", aiResponse);
       console.log("Final conversationId:", conversationId);
       
-      const result = {
+      const result: PhysioGptResponse = {
         response: aiResponse,
         conversationId,
-        suggestions: this.generateSuggestions(aiResponse)
+        suggestions: this.generateSuggestions(aiResponse),
+        evidenceSummary,
+        researchPapers,
+        evidenceGrade: evidenceSummary?.evidenceGrade,
+        confidenceLevel: evidenceSummary?.confidenceLevel
       };
       
       console.log("Returning result:", JSON.stringify(result));

@@ -30,6 +30,7 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
   const [recordingStartTime, setRecordingStartTime] = useState<number>(0);
   const [currentPose, setCurrentPose] = useState<Results | null>(null);
   const [isInitializing, setIsInitializing] = useState(false);
+  const [isPoseReady, setIsPoseReady] = useState(false);
 
   // Initialize MediaPipe Pose
   useEffect(() => {
@@ -56,6 +57,7 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
         // Wait for pose to initialize
         await pose.initialize();
         poseRef.current = pose;
+        setIsPoseReady(true);
         console.log('MediaPipe Pose initialized successfully');
       }
     };
@@ -120,7 +122,28 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
     try {
       console.log('Starting camera initialization...');
       
-      // First check if we have camera permissions
+      // Ensure pose detector is initialized first
+      if (!poseRef.current || !isPoseReady) {
+        console.log('Pose detector not ready, waiting for initialization...');
+        // Wait for pose detector to be ready with timeout
+        let attempts = 0;
+        while ((!poseRef.current || !isPoseReady) && attempts < 10) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+          attempts++;
+        }
+        if (!poseRef.current || !isPoseReady) {
+          throw new Error('Pose detector failed to initialize. Please refresh the page and try again.');
+        }
+      }
+      
+      // Ensure video element exists
+      if (!videoRef.current) {
+        throw new Error('Video element not available');
+      }
+      
+      console.log('Pose detector and video element ready, requesting camera access...');
+      
+      // Request camera permissions
       const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { 
           width: 640, 
@@ -344,8 +367,8 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
           {/* Status and Controls */}
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              <Badge variant={isPoseDetectionActive ? "default" : "secondary"}>
-                {isPoseDetectionActive ? "Camera Active" : "Camera Inactive"}
+              <Badge variant={isPoseDetectionActive ? "default" : isPoseReady ? "secondary" : "outline"}>
+                {isPoseDetectionActive ? "Camera Active" : isPoseReady ? "Camera Inactive" : "Initializing Pose Detector..."}
               </Badge>
               <Badge variant={currentPose?.poseLandmarks ? "default" : "secondary"}>
                 Pose Quality: {poseQuality}
@@ -365,7 +388,7 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
             {!isPoseDetectionActive ? (
               <Button 
                 onClick={startCamera} 
-                disabled={isInitializing}
+                disabled={isInitializing || !isPoseReady}
                 className="flex items-center gap-2"
               >
                 {isInitializing ? (

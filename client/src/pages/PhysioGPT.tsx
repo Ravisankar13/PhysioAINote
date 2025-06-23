@@ -35,15 +35,45 @@ import InteractiveSkeleton from "@/components/3d/InteractiveSkeleton";
 import AssessmentTemplates, { type AssessmentTemplate } from "@/components/clinical/AssessmentTemplates";
 import AssessmentForm, { type AssessmentResults } from "@/components/clinical/AssessmentForm";
 import EvidenceBasedProtocols from "@/components/clinical/EvidenceBasedProtocols";
+import EvidenceDisplay from "@/components/clinical/EvidenceDisplay";
 
 interface ChatMessage extends PhysioGptMessage {
   suggestions?: string[];
+}
+
+interface ResearchPaper {
+  title: string;
+  authors: string[];
+  journal: string;
+  year: number;
+  pmid?: string;
+  doi?: string;
+  abstract: string;
+  studyType: 'RCT' | 'Systematic Review' | 'Meta-Analysis' | 'Cohort' | 'Case Study' | 'Clinical Guideline';
+  evidenceLevel: 'I' | 'II' | 'III' | 'IV' | 'V';
+  gradeRecommendation: 'A' | 'B' | 'C' | 'D';
+  relevanceScore: number;
+}
+
+interface EvidenceSummary {
+  topic: string;
+  primaryRecommendation: string;
+  evidenceGrade: 'A' | 'B' | 'C' | 'D';
+  confidenceLevel: 'High' | 'Moderate' | 'Low' | 'Very Low';
+  supportingStudies: ResearchPaper[];
+  contradictoryEvidence?: string;
+  clinicalConsiderations: string[];
+  lastUpdated: Date;
 }
 
 interface PhysioGptResponse {
   response: string;
   conversationId: number;
   suggestions?: string[];
+  evidenceSummary?: EvidenceSummary;
+  researchPapers?: ResearchPaper[];
+  evidenceGrade?: 'A' | 'B' | 'C' | 'D';
+  confidenceLevel?: 'High' | 'Moderate' | 'Low' | 'Very Low';
 }
 
 export default function PhysioGPT() {
@@ -66,6 +96,7 @@ export default function PhysioGPT() {
   } | null>(null);
   const [selectedAssessmentTemplate, setSelectedAssessmentTemplate] = useState<any | null>(null);
   const [assessmentResults, setAssessmentResults] = useState<any | null>(null);
+  const [evidenceData, setEvidenceData] = useState<Map<number, PhysioGptResponse>>(new Map());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
@@ -179,6 +210,12 @@ export default function PhysioGPT() {
     onSuccess: (data: PhysioGptResponse) => {
       console.log("Message sent successfully, conversation ID:", data.conversationId);
       console.log("Setting selectedConversationId to:", data.conversationId);
+      
+      // Store evidence data if available
+      if (data.evidenceSummary || data.researchPapers || data.evidenceGrade) {
+        setEvidenceData(prev => new Map(prev.set(data.conversationId, data)));
+        console.log("Stored evidence data for conversation:", data.conversationId);
+      }
       
       // Set conversation ID first
       setSelectedConversationId(data.conversationId);
@@ -563,6 +600,17 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
                                 <div className="whitespace-pre-wrap text-xs sm:text-sm leading-relaxed">
                                   {msg?.content || "No content available"}
                                 </div>
+                                
+                                {/* Evidence Display for Assistant Messages */}
+                                {msg?.role === "assistant" && selectedConversationId && evidenceData.has(selectedConversationId) && (
+                                  <EvidenceDisplay
+                                    evidenceSummary={evidenceData.get(selectedConversationId)?.evidenceSummary}
+                                    researchPapers={evidenceData.get(selectedConversationId)?.researchPapers}
+                                    evidenceGrade={evidenceData.get(selectedConversationId)?.evidenceGrade}
+                                    confidenceLevel={evidenceData.get(selectedConversationId)?.confidenceLevel}
+                                  />
+                                )}
+                                
                                 <div className="text-xs opacity-70 mt-1 sm:mt-2">
                                   {msg?.createdAt ? new Date(msg.createdAt).toLocaleTimeString() : ""}
                                 </div>

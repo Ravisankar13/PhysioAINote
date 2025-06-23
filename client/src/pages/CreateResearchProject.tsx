@@ -424,7 +424,7 @@ export default function CreateResearchProject() {
                                 <SelectValue placeholder="Select gender criteria" />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="">Any Gender</SelectItem>
+                                <SelectItem value="any">Any Gender</SelectItem>
                                 <SelectItem value="male">Male</SelectItem>
                                 <SelectItem value="female">Female</SelectItem>
                               </SelectContent>

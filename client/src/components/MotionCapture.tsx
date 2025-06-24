@@ -134,7 +134,7 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
     
     setIsCameraActive(false);
     setIsRecording(false);
-    setPoseDetector(null);
+    setIsPoseDetectionActive(false);
   }, []);
 
   // Generate virtual patient from motion data  

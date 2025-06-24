@@ -307,7 +307,7 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
   }, [stopCamera]);
 
   return (
-    <div className={`space-y-6 ${className}`}>
+    <div className={`space-y-6 ${className}`} onClick={(e) => e.stopPropagation()}>
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -315,7 +315,7 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
             Motion Capture System
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4" onClick={(e) => e.stopPropagation()}>
           {error && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-md">
               <p className="text-red-700 text-sm">{error}</p>
@@ -366,7 +366,13 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
             
             {isRecording && (
               <Button 
-                onClick={(e) => stopRecording(e)}
+                onClick={(e) => {
+                  console.log('Stop recording button clicked');
+                  e.preventDefault();
+                  e.stopPropagation();
+                  stopRecording(e);
+                  return false;
+                }}
                 variant="destructive"
                 className="flex items-center gap-2"
                 type="button"

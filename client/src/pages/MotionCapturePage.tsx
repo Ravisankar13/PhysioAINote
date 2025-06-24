@@ -69,9 +69,9 @@ export default function MotionCapturePage() {
       </div>
 
       {/* Main Layout */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6" onClick={(e) => e.stopPropagation()}>
         {/* Motion Capture Panel */}
-        <div className="xl:col-span-2 space-y-6">
+        <div className="xl:col-span-2 space-y-6" onClick={(e) => e.stopPropagation()}>
           <MotionCapture 
             onMotionDataCapture={handleMotionDataCapture}
             className="w-full"

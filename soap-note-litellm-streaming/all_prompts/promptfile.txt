@@ -29,3 +29,5 @@ FORMAT GUIDELINES:
 When generating a specific section, focus exclusively on the requirements for that section (Subjective, Objective, Assessment, Plan, or Goals) without duplicating content across sections.
 
 You will be provided with the necessary patient information to complete this documentation accurately.
+
+For each SOAP section, generate a summary of notes on the generated SOAP note for each section.

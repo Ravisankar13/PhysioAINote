@@ -1,0 +1,15 @@
+Generate the SUBJECTIVE section of a SOAP note based on the provided patient information. Include:
+
+1. Chief complaint (CC) in patient's own words
+2. History of present illness (HPI) with relevant details:
+   - Onset, duration, and progression
+   - Location and radiation
+   - Quality and severity
+   - Aggravating and alleviating factors
+   - Associated symptoms
+3. Review of systems (ROS) relevant to the presenting complaint
+4. Past medical/surgical history if relevant to current complaint
+5. Current medications and allergies if pertinent
+6. Social history elements affecting current condition
+
+Format this as a concise narrative paragraph that captures the patient's perspective and experience. Focus only on subjective information reported by the patient.

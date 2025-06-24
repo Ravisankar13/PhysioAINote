@@ -1,0 +1,19 @@
+Generate the PLAN section of a SOAP note based on the provided assessment. Include:
+
+1. Detailed treatment plan with:
+   - Specific interventions and their frequency/duration
+   - Medications with dosage, frequency, and duration if applicable
+   - Home program recommendations
+   - Referrals to specialists or services
+2. Patient education provided:
+   - Condition explanation
+   - Self-management strategies
+   - Activity modifications
+3. Follow-up schedule and criteria:
+   - Timeframe for next appointment
+   - Parameters for monitoring progress
+   - Criteria for discharge or treatment modification
+4. Coordination of care with other providers
+5. Orders for additional diagnostic tests if needed
+
+Present this information in a structured, actionable format that clearly outlines next steps for both provider and patient.

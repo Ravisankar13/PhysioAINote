@@ -1,0 +1,14 @@
+Generate the ASSESSMENT section of a SOAP note based on the provided subjective and objective information. Include:
+
+1. Primary diagnosis or clinical impression with supporting evidence
+2. Differential diagnoses if applicable
+3. Analysis of findings explaining:
+   - Correlation between subjective complaints and objective findings
+   - Functional limitations and their impact
+   - Disease/condition progression or improvement since previous visits
+   - Current level of function or disability
+4. Prognosis with rationale
+5. Identification of barriers to recovery or contributing factors
+6. Clinical reasoning supporting your assessment
+
+Provide a clear, concise analysis that demonstrates critical thinking and connects the patient's presentation to clinical decision-making.

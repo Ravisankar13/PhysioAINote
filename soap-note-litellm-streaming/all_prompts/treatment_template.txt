@@ -1,0 +1,43 @@
+Generate the TREATMENT section of a SOAP note based on the provided assessment and patient information. Include:
+
+1. Treatment plan overview:
+   - Short-term and long-term goals
+   - Estimated duration of treatment
+   - Frequency of sessions
+
+2. Specific interventions:
+   - Manual therapy techniques (if applicable)
+   - Therapeutic exercises
+   - Modalities (e.g., heat, ice, electrical stimulation)
+   - Patient education topics
+
+3. Home exercise program:
+   - Detailed instructions for exercises
+   - Frequency and duration recommendations
+
+4. Lifestyle modifications or activity restrictions
+
+5. Referrals or consultations (if necessary):
+   - Other healthcare professionals
+   - Diagnostic tests
+
+6. Medications (if within scope of practice):
+   - Recommendations for over-the-counter medications
+   - Referral to physician for prescription medications if needed
+
+7. Follow-up plan:
+   - Next appointment scheduling
+   - Criteria for re-evaluation
+
+8. Patient education:
+   - Explanation of treatment rationale
+   - Self-management strategies
+   - Warning signs to watch for
+
+9. Precautions and contraindications specific to this patient
+
+10. Expected outcomes and timeline for improvement
+
+11. Plan for measuring and documenting progress
+
+Ensure the treatment plan is evidence-based, patient-centered, and directly addresses the issues identified in the assessment. Provide clear reasoning for each component of the treatment plan, demonstrating how it relates to the patient's condition and goals.

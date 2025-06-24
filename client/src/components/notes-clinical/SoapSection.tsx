@@ -11,6 +11,8 @@ interface SoapSectionProps {
   onSave: () => void;
   isSaving: boolean;
   useMarkdown?: boolean;
+  isStreaming?: boolean;
+  streamingComplete?: boolean;
 }
 
 const SoapSection: React.FC<SoapSectionProps> = ({
@@ -22,10 +24,23 @@ const SoapSection: React.FC<SoapSectionProps> = ({
   onSave,
   isSaving,
   useMarkdown = false,
+  isStreaming = false,
+  streamingComplete = false,
 }) => {
   return (
-    <div className="soap-section">
-      <h4>{title}</h4>
+    <div className={`soap-section ${isStreaming ? 'streaming' : ''} ${streamingComplete ? 'streaming-complete' : ''}`}>
+      <h4>
+        {title}
+        {isStreaming && !streamingComplete && (
+          <span className="streaming-indicator">
+            <span className="streaming-dots">...</span>
+            <span className="streaming-text">Generating</span>
+          </span>
+        )}
+        {streamingComplete && (
+          <span className="streaming-complete-indicator">✓</span>
+        )}
+      </h4>
       {isEditing ? (
         <>
           <textarea
@@ -60,9 +75,14 @@ const SoapSection: React.FC<SoapSectionProps> = ({
               }}
             />
           ) : (
-            <div className="soap-content">
+            <div className={`soap-content ${isStreaming ? 'streaming-content' : ''}`}>
               {content || (
-                <span className="empty-content">No content added yet</span>
+                <span className="empty-content">
+                  {isStreaming ? 'Generating content...' : 'No content added yet'}
+                </span>
+              )}
+              {isStreaming && content && (
+                <span className="streaming-cursor">▌</span>
               )}
             </div>
           )}
@@ -86,6 +106,8 @@ interface SoapNoteProps {
   isGeneratingSoapNote: boolean;
   generateSoapNote: () => void;
   isPolling: boolean;
+  isStreaming?: boolean;
+  streamingStatus?: Record<string, { isStreaming: boolean; isComplete: boolean }>;
 }
 
 interface SoapNoteData {
@@ -93,6 +115,8 @@ interface SoapNoteData {
   objective?: string;
   assessment?: string;
   plan?: string;
+  goals?: string;
+  treatment?: string;
   status?: string;
 }
 
@@ -107,6 +131,8 @@ const SoapNote: React.FC<SoapNoteProps> = ({
   isGeneratingSoapNote,
   generateSoapNote,
   isPolling,
+  isStreaming = false,
+  streamingStatus = {},
 }) => {
   const [editingSections, setEditingSections] = React.useState<
     Record<string, boolean>
@@ -115,6 +141,8 @@ const SoapNote: React.FC<SoapNoteProps> = ({
     objective: false,
     assessment: false,
     plan: false,
+    goals: false,
+    treatment: false,
   });
 
   const [savingSections, setSavingSections] = React.useState<
@@ -124,6 +152,8 @@ const SoapNote: React.FC<SoapNoteProps> = ({
     objective: false,
     assessment: false,
     plan: false,
+    goals: false,
+    treatment: false,
   });
 
   // Initialize SOAP sections if not present
@@ -132,6 +162,8 @@ const SoapNote: React.FC<SoapNoteProps> = ({
     objective: "",
     assessment: "",
     plan: "",
+    goals: "",
+    treatment: "",
     status: "pending",
   };
 
@@ -147,6 +179,8 @@ const SoapNote: React.FC<SoapNoteProps> = ({
         objective: "",
         assessment: "",
         plan: "",
+        goals: "",
+        treatment: "",
         [section]: value,
       });
     }
@@ -194,7 +228,7 @@ const SoapNote: React.FC<SoapNoteProps> = ({
             {copySuccess ? "Copied!" : "Copy Note"}
           </button>
         )}
-        {!soapNote && !isPolling && (
+        {!soapNote && !isPolling && !isStreaming && (
           <button
             className="generate-button"
             onClick={generateSoapNote}
@@ -203,14 +237,22 @@ const SoapNote: React.FC<SoapNoteProps> = ({
             {isGeneratingSoapNote ? "Generating..." : "Generate Clinical Note"}
           </button>
         )}
-        {isPolling && (
-          <div className="polling-message">
-            Generating clinical note, please wait...
+        {(isPolling || isStreaming) && (
+          <div className="generation-message">
+            {isStreaming ? (
+              <span className="streaming-message">
+                🔄 Streaming clinical note generation...
+              </span>
+            ) : (
+              <span className="polling-message">
+                Generating clinical note, please wait...
+              </span>
+            )}
           </div>
         )}
       </div>
 
-      {(soapNote || isPolling) && (
+      {(soapNote || isPolling || isStreaming) && (
         <div className="soap-sections">
           <SoapSection
             title="Subjective"
@@ -225,6 +267,8 @@ const SoapNote: React.FC<SoapNoteProps> = ({
             onSave={() => saveSection("subjective")}
             isSaving={savingSections.subjective}
             useMarkdown={true}
+            isStreaming={streamingStatus.subjective?.isStreaming || false}
+            streamingComplete={streamingStatus.subjective?.isComplete || false}
           />
 
           <SoapSection
@@ -238,6 +282,8 @@ const SoapNote: React.FC<SoapNoteProps> = ({
             onSave={() => saveSection("objective")}
             isSaving={savingSections.objective}
             useMarkdown={true}
+            isStreaming={streamingStatus.objective?.isStreaming || false}
+            streamingComplete={streamingStatus.objective?.isComplete || false}
           />
 
           <SoapSection
@@ -253,6 +299,8 @@ const SoapNote: React.FC<SoapNoteProps> = ({
             onSave={() => saveSection("assessment")}
             isSaving={savingSections.assessment}
             useMarkdown={true}
+            isStreaming={streamingStatus.assessment?.isStreaming || false}
+            streamingComplete={streamingStatus.assessment?.isComplete || false}
           />
 
           <SoapSection
@@ -266,6 +314,38 @@ const SoapNote: React.FC<SoapNoteProps> = ({
             onSave={() => saveSection("plan")}
             isSaving={savingSections.plan}
             useMarkdown={true}
+            isStreaming={streamingStatus.plan?.isStreaming || false}
+            streamingComplete={streamingStatus.plan?.isComplete || false}
+          />
+
+          <SoapSection
+            title="Goals"
+            content={currentNote.goals || ""}
+            isEditing={editingSections.goals}
+            setIsEditing={(value) =>
+              setEditingSections((prev) => ({ ...prev, goals: value }))
+            }
+            onContentChange={(value) => handleContentChange("goals", value)}
+            onSave={() => saveSection("goals")}
+            isSaving={savingSections.goals}
+            useMarkdown={true}
+            isStreaming={streamingStatus.goals?.isStreaming || false}
+            streamingComplete={streamingStatus.goals?.isComplete || false}
+          />
+
+          <SoapSection
+            title="Treatment"
+            content={currentNote.treatment || ""}
+            isEditing={editingSections.treatment}
+            setIsEditing={(value) =>
+              setEditingSections((prev) => ({ ...prev, treatment: value }))
+            }
+            onContentChange={(value) => handleContentChange("treatment", value)}
+            onSave={() => saveSection("treatment")}
+            isSaving={savingSections.treatment}
+            useMarkdown={true}
+            isStreaming={streamingStatus.treatment?.isStreaming || false}
+            streamingComplete={streamingStatus.treatment?.isComplete || false}
           />
         </div>
       )}

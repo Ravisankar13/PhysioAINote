@@ -177,31 +177,41 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
   const estimateAnthropometrics = () => {
     if (motionData.length === 0) return null;
 
-    // Use first frame for measurements
-    const landmarks = motionData[0].worldLandmarks;
+    // Use first frame for measurements with fallback
+    const landmarks = motionData[0].worldLandmarks || motionData[0].landmarks || [];
     
-    const leftShoulder = landmarks[POSE_LANDMARKS.LEFT_SHOULDER];
-    const rightShoulder = landmarks[POSE_LANDMARKS.RIGHT_SHOULDER];
-    const leftElbow = landmarks[POSE_LANDMARKS.LEFT_ELBOW];
-    const rightElbow = landmarks[POSE_LANDMARKS.RIGHT_ELBOW];
-    const leftWrist = landmarks[POSE_LANDMARKS.LEFT_WRIST];
-    const rightWrist = landmarks[POSE_LANDMARKS.RIGHT_WRIST];
-    const leftHip = landmarks[POSE_LANDMARKS.LEFT_HIP];
-    const rightHip = landmarks[POSE_LANDMARKS.RIGHT_HIP];
-    const leftKnee = landmarks[POSE_LANDMARKS.LEFT_KNEE];
-    const rightKnee = landmarks[POSE_LANDMARKS.RIGHT_KNEE];
-    const leftAnkle = landmarks[POSE_LANDMARKS.LEFT_ANKLE];
-    const rightAnkle = landmarks[POSE_LANDMARKS.RIGHT_ANKLE];
-    const nose = landmarks[POSE_LANDMARKS.NOSE];
+    if (!landmarks || landmarks.length === 0) return null;
+    
+    // Extract key landmarks with safety checks
+    const getLandmark = (index: number) => landmarks[index] || null;
+    
+    const leftShoulder = getLandmark(POSE_LANDMARKS.LEFT_SHOULDER);
+    const rightShoulder = getLandmark(POSE_LANDMARKS.RIGHT_SHOULDER);
+    const leftElbow = getLandmark(POSE_LANDMARKS.LEFT_ELBOW);
+    const rightElbow = getLandmark(POSE_LANDMARKS.RIGHT_ELBOW);
+    const leftWrist = getLandmark(POSE_LANDMARKS.LEFT_WRIST);
+    const rightWrist = getLandmark(POSE_LANDMARKS.RIGHT_WRIST);
+    const leftHip = getLandmark(POSE_LANDMARKS.LEFT_HIP);
+    const rightHip = getLandmark(POSE_LANDMARKS.RIGHT_HIP);
+    const leftKnee = getLandmark(POSE_LANDMARKS.LEFT_KNEE);
+    const rightKnee = getLandmark(POSE_LANDMARKS.RIGHT_KNEE);
+    const leftAnkle = getLandmark(POSE_LANDMARKS.LEFT_ANKLE);
+    const rightAnkle = getLandmark(POSE_LANDMARKS.RIGHT_ANKLE);
+    const nose = getLandmark(POSE_LANDMARKS.NOSE);
 
-    // Calculate limb lengths (normalized)
+    // Calculate limb lengths with safety checks
     const upperArmLength = (calculateDistance(leftShoulder, leftElbow) + calculateDistance(rightShoulder, rightElbow)) / 2;
     const forearmLength = (calculateDistance(leftElbow, leftWrist) + calculateDistance(rightElbow, rightWrist)) / 2;
     const thighLength = (calculateDistance(leftHip, leftKnee) + calculateDistance(rightHip, rightKnee)) / 2;
     const shinLength = (calculateDistance(leftKnee, leftAnkle) + calculateDistance(rightKnee, rightAnkle)) / 2;
     
-    // Estimate total height
-    const totalHeight = calculateDistance(nose, { x: (leftAnkle.x + rightAnkle.x) / 2, y: (leftAnkle.y + rightAnkle.y) / 2, z: (leftAnkle.z + rightAnkle.z) / 2 });
+    // Estimate total height with null checks
+    const totalHeight = nose && leftAnkle && rightAnkle ? 
+      calculateDistance(nose, { 
+        x: (leftAnkle.x + rightAnkle.x) / 2, 
+        y: (leftAnkle.y + rightAnkle.y) / 2, 
+        z: ((leftAnkle.z || 0) + (rightAnkle.z || 0)) / 2 
+      }) : 0;
 
     // Convert to realistic measurements (MediaPipe uses normalized coordinates)
     const heightScale = 170; // Assume average height for scaling
@@ -252,11 +262,17 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
 
   // Initialize analysis when motion data changes
   useEffect(() => {
-    if (motionData.length > 0) {
-      const anthropometrics = estimateAnthropometrics();
-      setEstimatedAnthropometrics(anthropometrics);
-      setMovementType(analyzeMovementType());
-      setCurrentFrame(0);
+    if (motionData && motionData.length > 0) {
+      try {
+        const anthropometrics = estimateAnthropometrics();
+        setEstimatedAnthropometrics(anthropometrics);
+        setMovementType(analyzeMovementType());
+        setCurrentFrame(0);
+      } catch (error) {
+        console.error('Error analyzing motion data:', error);
+        setEstimatedAnthropometrics(null);
+        setMovementType('unknown');
+      }
     }
   }, [motionData]);
 

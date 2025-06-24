@@ -36,6 +36,8 @@ import AssessmentTemplates, { type AssessmentTemplate } from "@/components/clini
 import AssessmentForm, { type AssessmentResults } from "@/components/clinical/AssessmentForm";
 import EvidenceBasedProtocols from "@/components/clinical/EvidenceBasedProtocols";
 import EvidenceDisplay from "@/components/clinical/EvidenceDisplay";
+import ColorCodedContent from "@/components/clinical/ColorCodedContent";
+import ColorCodeLegend from "@/components/clinical/ColorCodeLegend";
 
 interface ChatMessage extends PhysioGptMessage {
   suggestions?: string[];
@@ -97,6 +99,7 @@ export default function PhysioGPT() {
   const [selectedAssessmentTemplate, setSelectedAssessmentTemplate] = useState<any | null>(null);
   const [assessmentResults, setAssessmentResults] = useState<any | null>(null);
   const [evidenceData, setEvidenceData] = useState<Map<number, PhysioGptResponse>>(new Map());
+  const [showColorLegend, setShowColorLegend] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
@@ -597,9 +600,13 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
                                     : "bg-gray-100 text-gray-900"
                                 } rounded-lg p-2 sm:p-3`}
                               >
-                                <div className="whitespace-pre-wrap text-xs sm:text-sm leading-relaxed">
-                                  {msg?.content || "No content available"}
-                                </div>
+                                {msg?.role === "assistant" ? (
+                                  <ColorCodedContent content={msg?.content || "No content available"} />
+                                ) : (
+                                  <div className="whitespace-pre-wrap text-xs sm:text-sm leading-relaxed">
+                                    {msg?.content || "No content available"}
+                                  </div>
+                                )}
                                 
                                 {/* Evidence Display for Assistant Messages */}
                                 {msg?.role === "assistant" && selectedConversationId && evidenceData.has(selectedConversationId) && (

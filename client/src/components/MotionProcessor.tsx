@@ -39,41 +39,25 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
   const [estimatedAnthropometrics, setEstimatedAnthropometrics] = useState<any>(null);
   const [movementType, setMovementType] = useState<string>('unknown');
 
-  // MediaPipe pose landmark indices
-  const POSE_LANDMARKS = {
+  // MoveNet pose landmark indices (17 keypoints)
+  const MOVENET_LANDMARKS = {
     NOSE: 0,
-    LEFT_EYE_INNER: 1,
-    LEFT_EYE: 2,
-    LEFT_EYE_OUTER: 3,
-    RIGHT_EYE_INNER: 4,
-    RIGHT_EYE: 5,
-    RIGHT_EYE_OUTER: 6,
-    LEFT_EAR: 7,
-    RIGHT_EAR: 8,
-    MOUTH_LEFT: 9,
-    MOUTH_RIGHT: 10,
-    LEFT_SHOULDER: 11,
-    RIGHT_SHOULDER: 12,
-    LEFT_ELBOW: 13,
-    RIGHT_ELBOW: 14,
-    LEFT_WRIST: 15,
-    RIGHT_WRIST: 16,
-    LEFT_PINKY: 17,
-    RIGHT_PINKY: 18,
-    LEFT_INDEX: 19,
-    RIGHT_INDEX: 20,
-    LEFT_THUMB: 21,
-    RIGHT_THUMB: 22,
-    LEFT_HIP: 23,
-    RIGHT_HIP: 24,
-    LEFT_KNEE: 25,
-    RIGHT_KNEE: 26,
-    LEFT_ANKLE: 27,
-    RIGHT_ANKLE: 28,
-    LEFT_HEEL: 29,
-    RIGHT_HEEL: 30,
-    LEFT_FOOT_INDEX: 31,
-    RIGHT_FOOT_INDEX: 32
+    LEFT_EYE: 1,
+    RIGHT_EYE: 2,
+    LEFT_EAR: 3,
+    RIGHT_EAR: 4,
+    LEFT_SHOULDER: 5,
+    RIGHT_SHOULDER: 6,
+    LEFT_ELBOW: 7,
+    RIGHT_ELBOW: 8,
+    LEFT_WRIST: 9,
+    RIGHT_WRIST: 10,
+    LEFT_HIP: 11,
+    RIGHT_HIP: 12,
+    LEFT_KNEE: 13,
+    RIGHT_KNEE: 14,
+    LEFT_ANKLE: 15,
+    RIGHT_ANKLE: 16
   };
 
   // Calculate angle between three points with safety checks
@@ -119,56 +103,66 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
 
   // Process pose landmarks to extract joint angles
   const processFrame = (frame: PoseFrame): JointAngles => {
-    // Use landmarks instead of worldLandmarks since worldLandmarks might be undefined
-    const landmarks = frame.worldLandmarks || frame.landmarks || [];
-    
-    if (!landmarks || landmarks.length === 0) {
-      return {
-        leftShoulder: 0,
-        rightShoulder: 0,
-        leftElbow: 0,
-        rightElbow: 0,
-        leftHip: 0,
-        rightHip: 0,
-        leftKnee: 0,
-        rightKnee: 0,
-        spine: 0
-      };
+    if (!frame || !frame.landmarks) {
+      console.log('No frame or landmarks data');
+      return { leftShoulder: 0, rightShoulder: 0, leftElbow: 0, rightElbow: 0, leftHip: 0, rightHip: 0, leftKnee: 0, rightKnee: 0, spine: 0 };
     }
     
-    // Extract key landmarks with safety checks
-    const getLandmark = (index: number) => landmarks[index] || null;
+    const landmarks = frame.landmarks;
+    if (!landmarks || landmarks.length === 0) {
+      console.log('Empty landmarks array');
+      return { leftShoulder: 0, rightShoulder: 0, leftElbow: 0, rightElbow: 0, leftHip: 0, rightHip: 0, leftKnee: 0, rightKnee: 0, spine: 0 };
+    }
     
-    const leftShoulder = getLandmark(POSE_LANDMARKS.LEFT_SHOULDER);
-    const rightShoulder = getLandmark(POSE_LANDMARKS.RIGHT_SHOULDER);
-    const leftElbow = getLandmark(POSE_LANDMARKS.LEFT_ELBOW);
-    const rightElbow = getLandmark(POSE_LANDMARKS.RIGHT_ELBOW);
-    const leftWrist = getLandmark(POSE_LANDMARKS.LEFT_WRIST);
-    const rightWrist = getLandmark(POSE_LANDMARKS.RIGHT_WRIST);
-    const leftHip = getLandmark(POSE_LANDMARKS.LEFT_HIP);
-    const rightHip = getLandmark(POSE_LANDMARKS.RIGHT_HIP);
-    const leftKnee = getLandmark(POSE_LANDMARKS.LEFT_KNEE);
-    const rightKnee = getLandmark(POSE_LANDMARKS.RIGHT_KNEE);
-    const leftAnkle = getLandmark(POSE_LANDMARKS.LEFT_ANKLE);
-    const rightAnkle = getLandmark(POSE_LANDMARKS.RIGHT_ANKLE);
-    const nose = getLandmark(POSE_LANDMARKS.NOSE);
+    console.log('Processing frame with', landmarks.length, 'landmarks');
+    
+    // Extract key landmarks using MoveNet indices
+    const getLandmark = (index: number) => {
+      if (index >= 0 && index < landmarks.length && landmarks[index]) {
+        const landmark = landmarks[index];
+        // Check if it's a MoveNet keypoint structure
+        if (landmark.x !== undefined && landmark.y !== undefined) {
+          return { x: landmark.x, y: landmark.y, z: landmark.z || 0 };
+        }
+      }
+      return null;
+    };
+    
+    const nose = getLandmark(MOVENET_LANDMARKS.NOSE);
+    const leftShoulder = getLandmark(MOVENET_LANDMARKS.LEFT_SHOULDER);
+    const rightShoulder = getLandmark(MOVENET_LANDMARKS.RIGHT_SHOULDER);
+    const leftElbow = getLandmark(MOVENET_LANDMARKS.LEFT_ELBOW);
+    const rightElbow = getLandmark(MOVENET_LANDMARKS.RIGHT_ELBOW);
+    const leftWrist = getLandmark(MOVENET_LANDMARKS.LEFT_WRIST);
+    const rightWrist = getLandmark(MOVENET_LANDMARKS.RIGHT_WRIST);
+    const leftHip = getLandmark(MOVENET_LANDMARKS.LEFT_HIP);
+    const rightHip = getLandmark(MOVENET_LANDMARKS.RIGHT_HIP);
+    const leftKnee = getLandmark(MOVENET_LANDMARKS.LEFT_KNEE);
+    const rightKnee = getLandmark(MOVENET_LANDMARKS.RIGHT_KNEE);
+    const leftAnkle = getLandmark(MOVENET_LANDMARKS.LEFT_ANKLE);
+    const rightAnkle = getLandmark(MOVENET_LANDMARKS.RIGHT_ANKLE);
+    
+    console.log('Extracted landmarks:', { leftShoulder, rightShoulder, leftElbow, rightElbow });
 
-    // Calculate joint angles with null checks
+    // Calculate joint angles with proper null checks
     const jointAngles: JointAngles = {
-      leftShoulder: calculateAngle(leftElbow, leftShoulder, rightShoulder),
-      rightShoulder: calculateAngle(rightElbow, rightShoulder, leftShoulder),
-      leftElbow: calculateAngle(leftShoulder, leftElbow, leftWrist),
-      rightElbow: calculateAngle(rightShoulder, rightElbow, rightWrist),
-      leftHip: calculateAngle(leftKnee, leftHip, leftShoulder),
-      rightHip: calculateAngle(rightKnee, rightHip, rightShoulder),
-      leftKnee: calculateAngle(leftHip, leftKnee, leftAnkle),
-      rightKnee: calculateAngle(rightHip, rightKnee, rightAnkle),
-      spine: leftShoulder && rightShoulder && leftHip && rightHip && nose ? 
-        calculateAngle(nose, 
-          { x: (leftShoulder.x + rightShoulder.x) / 2, y: (leftShoulder.y + rightShoulder.y) / 2, z: ((leftShoulder.z || 0) + (rightShoulder.z || 0)) / 2 }, 
-          { x: (leftHip.x + rightHip.x) / 2, y: (leftHip.y + rightHip.y) / 2, z: ((leftHip.z || 0) + (rightHip.z || 0)) / 2 }
+      leftShoulder: leftElbow && leftShoulder && leftHip ? calculateAngle(leftElbow, leftShoulder, leftHip) : 0,
+      rightShoulder: rightElbow && rightShoulder && rightHip ? calculateAngle(rightElbow, rightShoulder, rightHip) : 0,
+      leftElbow: leftShoulder && leftElbow && leftWrist ? calculateAngle(leftShoulder, leftElbow, leftWrist) : 0,
+      rightElbow: rightShoulder && rightElbow && rightWrist ? calculateAngle(rightShoulder, rightElbow, rightWrist) : 0,
+      leftHip: leftShoulder && leftHip && leftKnee ? calculateAngle(leftShoulder, leftHip, leftKnee) : 0,
+      rightHip: rightShoulder && rightHip && rightKnee ? calculateAngle(rightShoulder, rightHip, rightKnee) : 0,
+      leftKnee: leftHip && leftKnee && leftAnkle ? calculateAngle(leftHip, leftKnee, leftAnkle) : 0,
+      rightKnee: rightHip && rightKnee && rightAnkle ? calculateAngle(rightHip, rightKnee, rightAnkle) : 0,
+      spine: leftShoulder && rightShoulder && leftHip && rightHip ? 
+        calculateAngle(
+          { x: (leftShoulder.x + rightShoulder.x) / 2, y: (leftShoulder.y + rightShoulder.y) / 2, z: 0 },
+          { x: (leftHip.x + rightHip.x) / 2, y: (leftHip.y + rightHip.y) / 2, z: 0 },
+          nose || { x: 0, y: 0, z: 0 }
         ) : 0
     };
+    
+    console.log('Calculated joint angles:', jointAngles);
 
     return jointAngles;
   };
@@ -177,27 +171,35 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
   const estimateAnthropometrics = () => {
     if (motionData.length === 0) return null;
 
-    // Use first frame for measurements with fallback
-    const landmarks = motionData[0].worldLandmarks || motionData[0].landmarks || [];
+    // Use first frame for measurements
+    const landmarks = motionData[0].landmarks || [];
     
     if (!landmarks || landmarks.length === 0) return null;
     
-    // Extract key landmarks with safety checks
-    const getLandmark = (index: number) => landmarks[index] || null;
+    // Extract key landmarks using MoveNet indices
+    const getLandmark = (index: number) => {
+      if (index >= 0 && index < landmarks.length && landmarks[index]) {
+        const landmark = landmarks[index];
+        if (landmark.x !== undefined && landmark.y !== undefined) {
+          return { x: landmark.x, y: landmark.y, z: landmark.z || 0 };
+        }
+      }
+      return null;
+    };
     
-    const leftShoulder = getLandmark(POSE_LANDMARKS.LEFT_SHOULDER);
-    const rightShoulder = getLandmark(POSE_LANDMARKS.RIGHT_SHOULDER);
-    const leftElbow = getLandmark(POSE_LANDMARKS.LEFT_ELBOW);
-    const rightElbow = getLandmark(POSE_LANDMARKS.RIGHT_ELBOW);
-    const leftWrist = getLandmark(POSE_LANDMARKS.LEFT_WRIST);
-    const rightWrist = getLandmark(POSE_LANDMARKS.RIGHT_WRIST);
-    const leftHip = getLandmark(POSE_LANDMARKS.LEFT_HIP);
-    const rightHip = getLandmark(POSE_LANDMARKS.RIGHT_HIP);
-    const leftKnee = getLandmark(POSE_LANDMARKS.LEFT_KNEE);
-    const rightKnee = getLandmark(POSE_LANDMARKS.RIGHT_KNEE);
-    const leftAnkle = getLandmark(POSE_LANDMARKS.LEFT_ANKLE);
-    const rightAnkle = getLandmark(POSE_LANDMARKS.RIGHT_ANKLE);
-    const nose = getLandmark(POSE_LANDMARKS.NOSE);
+    const leftShoulder = getLandmark(MOVENET_LANDMARKS.LEFT_SHOULDER);
+    const rightShoulder = getLandmark(MOVENET_LANDMARKS.RIGHT_SHOULDER);
+    const leftElbow = getLandmark(MOVENET_LANDMARKS.LEFT_ELBOW);
+    const rightElbow = getLandmark(MOVENET_LANDMARKS.RIGHT_ELBOW);
+    const leftWrist = getLandmark(MOVENET_LANDMARKS.LEFT_WRIST);
+    const rightWrist = getLandmark(MOVENET_LANDMARKS.RIGHT_WRIST);
+    const leftHip = getLandmark(MOVENET_LANDMARKS.LEFT_HIP);
+    const rightHip = getLandmark(MOVENET_LANDMARKS.RIGHT_HIP);
+    const leftKnee = getLandmark(MOVENET_LANDMARKS.LEFT_KNEE);
+    const rightKnee = getLandmark(MOVENET_LANDMARKS.RIGHT_KNEE);
+    const leftAnkle = getLandmark(MOVENET_LANDMARKS.LEFT_ANKLE);
+    const rightAnkle = getLandmark(MOVENET_LANDMARKS.RIGHT_ANKLE);
+    const nose = getLandmark(MOVENET_LANDMARKS.NOSE);
 
     // Calculate limb lengths with safety checks
     const upperArmLength = (calculateDistance(leftShoulder, leftElbow) + calculateDistance(rightShoulder, rightElbow)) / 2;
@@ -210,7 +212,7 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
       calculateDistance(nose, { 
         x: (leftAnkle.x + rightAnkle.x) / 2, 
         y: (leftAnkle.y + rightAnkle.y) / 2, 
-        z: ((leftAnkle.z || 0) + (rightAnkle.z || 0)) / 2 
+        z: 0
       }) : 0;
 
     // Convert to realistic measurements (MediaPipe uses normalized coordinates)

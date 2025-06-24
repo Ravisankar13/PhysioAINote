@@ -202,8 +202,8 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
     });
   }, [isCameraActive, toast]);
 
-  // Stop recording
-  const stopRecording = useCallback((e?: React.MouseEvent) => {
+  // Stop recording and automatically generate virtual patient
+  const stopRecording = useCallback(async (e?: React.MouseEvent) => {
     // Prevent any default form submission or navigation
     if (e) {
       e.preventDefault();
@@ -218,10 +218,64 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
       onMotionDataCapture(recordedFrames);
     }
     
-    toast({
-      title: "Recording Stopped",
-      description: `Captured ${recordedFrames.length} frames of motion data.`,
-    });
+    // Automatically generate virtual patient if we have motion data
+    if (recordedFrames.length > 0) {
+      try {
+        setIsLoading(true);
+        
+        // Analyze motion patterns from recorded frames
+        const motionAnalysis = {
+          totalFrames: recordedFrames.length,
+          duration: recordedFrames[recordedFrames.length - 1]?.timestamp || 0,
+          avgLandmarksPerFrame: recordedFrames.filter(f => f.landmarks.length > 0).length,
+          movementQuality: recordedFrames.filter(f => f.landmarks.length > 0).length / recordedFrames.length
+        };
+        
+        // Generate virtual patient profile based on motion data
+        const patientProfile = {
+          id: `vp_${Date.now()}`,
+          name: `Virtual Patient ${Math.floor(Math.random() * 1000)}`,
+          age: Math.floor(Math.random() * 50) + 20,
+          condition: motionAnalysis.movementQuality > 0.7 ? 'Normal movement patterns' : 'Movement dysfunction detected',
+          motionData: recordedFrames,
+          analysis: motionAnalysis,
+          recommendations: [
+            'Assess joint range of motion',
+            'Evaluate muscle strength',
+            'Check movement compensation patterns'
+          ],
+          createdAt: new Date().toISOString()
+        };
+        
+        setVirtualPatient(patientProfile);
+        setShowVirtualPatient(true);
+        setIsLoading(false);
+        
+        toast({
+          title: "Virtual Patient Created",
+          description: `Generated virtual patient from ${recordedFrames.length} motion frames.`,
+        });
+        
+        console.log('Virtual patient created:', patientProfile);
+        
+      } catch (error) {
+        console.error('Error creating virtual patient:', error);
+        setError('Failed to create virtual patient');
+        setIsLoading(false);
+        
+        toast({
+          title: "Error",
+          description: "Failed to create virtual patient from motion data.",
+          variant: "destructive",
+        });
+      }
+    } else {
+      toast({
+        title: "Recording Stopped",
+        description: "No motion data captured. Try recording with movement.",
+        variant: "destructive",
+      });
+    }
   }, [onMotionDataCapture, recordedFrames, toast]);
 
   // Download recording data
@@ -271,18 +325,28 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
           <div className="flex gap-2 flex-wrap">
             {!isCameraActive ? (
               <Button 
-                onClick={startCamera} 
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  startCamera();
+                }}
                 disabled={isLoading}
                 className="flex items-center gap-2"
+                type="button"
               >
                 <Camera className="h-4 w-4" />
                 {isLoading ? 'Starting...' : 'Start Camera'}
               </Button>
             ) : (
               <Button 
-                onClick={stopCamera} 
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  stopCamera();
+                }}
                 variant="destructive"
                 className="flex items-center gap-2"
+                type="button"
               >
                 <StopCircle className="h-4 w-4" />
                 Stop Camera

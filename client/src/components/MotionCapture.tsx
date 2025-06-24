@@ -35,20 +35,24 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
   const initializePoseDetection = useCallback(async () => {
     try {
       console.log('Initializing MediaPipe pose detection...');
+      setError('Loading pose detection models...');
       
-      // Dynamic import of MediaPipe modules
-      const [poseModule, cameraModule, drawingModule] = await Promise.all([
-        import('@mediapipe/pose'),
-        import('@mediapipe/camera_utils'),
-        import('@mediapipe/drawing_utils')
-      ]);
-
+      // Import MediaPipe modules with better error handling
+      console.log('Importing MediaPipe modules...');
+      const poseModule = await import('@mediapipe/pose');
+      const drawingModule = await import('@mediapipe/drawing_utils');
+      
+      console.log('MediaPipe modules imported successfully');
+      
       const pose = new poseModule.Pose({
         locateFile: (file: string) => {
-          return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
+          const url = `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
+          console.log('Loading MediaPipe file:', url);
+          return url;
         }
       });
 
+      console.log('Setting pose options...');
       pose.setOptions({
         modelComplexity: 1,
         smoothLandmarks: true,
@@ -58,48 +62,62 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
         minTrackingConfidence: 0.5
       });
 
+      console.log('Setting up pose results callback...');
       pose.onResults((results: any) => {
         if (canvasRef.current && results.image) {
           const canvas = canvasRef.current;
           const ctx = canvas.getContext('2d');
           if (ctx) {
-            // Clear and draw video frame
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
-            
-            // Draw pose landmarks if detected
-            if (results.poseLandmarks && results.poseLandmarks.length > 0) {
-              drawingModule.drawConnectors(ctx, results.poseLandmarks, poseModule.POSE_CONNECTIONS, {
-                color: '#00ff00',
-                lineWidth: 2
-              });
-              drawingModule.drawLandmarks(ctx, results.poseLandmarks, {
-                color: '#ff0000',
-                radius: 3
-              });
+            try {
+              // Clear and draw video frame
+              ctx.clearRect(0, 0, canvas.width, canvas.height);
+              ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
               
-              // Record pose data if recording
-              if (isRecording) {
-                const frameData: PoseFrame = {
-                  timestamp: Date.now() - recordingStartTime,
-                  landmarks: results.poseLandmarks,
-                  worldLandmarks: results.poseWorldLandmarks || []
-                };
-                setRecordedFrames(prev => [...prev, frameData]);
+              // Draw pose landmarks if detected
+              if (results.poseLandmarks && results.poseLandmarks.length > 0) {
+                console.log('Drawing pose landmarks:', results.poseLandmarks.length);
+                
+                // Draw connections (green lines)
+                drawingModule.drawConnectors(ctx, results.poseLandmarks, poseModule.POSE_CONNECTIONS, {
+                  color: '#00ff00',
+                  lineWidth: 2
+                });
+                
+                // Draw landmarks (red dots)
+                drawingModule.drawLandmarks(ctx, results.poseLandmarks, {
+                  color: '#ff0000',
+                  radius: 3
+                });
+                
+                // Record pose data if recording
+                if (isRecording) {
+                  const frameData: PoseFrame = {
+                    timestamp: Date.now() - recordingStartTime,
+                    landmarks: results.poseLandmarks,
+                    worldLandmarks: results.poseWorldLandmarks || []
+                  };
+                  setRecordedFrames(prev => [...prev, frameData]);
+                }
               }
+            } catch (drawError) {
+              console.error('Error drawing pose results:', drawError);
             }
           }
         }
       });
 
+      console.log('Initializing pose detector...');
       await pose.initialize();
+      
       setPoseDetector(pose);
       setIsPoseDetectionActive(true);
-      console.log('MediaPipe pose detection initialized successfully');
+      setError('');
+      console.log('MediaPipe pose detection initialized successfully!');
       
     } catch (error) {
-      console.warn('MediaPipe pose detection not available:', error);
+      console.error('Failed to initialize MediaPipe pose detection:', error);
       setError('Pose detection unavailable - camera will work in basic mode');
+      setIsPoseDetectionActive(false);
     }
   }, [isRecording, recordingStartTime]);
 
@@ -123,25 +141,14 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
         streamRef.current = stream;
         
         videoRef.current.onloadedmetadata = async () => {
+          console.log('Video metadata loaded, starting video...');
           videoRef.current?.play();
           setIsCameraActive(true);
           setIsLoading(false);
           
-          // Initialize pose detection
+          // Initialize pose detection after video is ready
+          console.log('Initializing pose detection after video start...');
           await initializePoseDetection();
-          
-          // Start pose processing loop
-          if (poseDetector) {
-            const processFrame = () => {
-              if (videoRef.current && poseDetector && isPoseDetectionActive) {
-                poseDetector.send({ image: videoRef.current });
-              }
-              if (isPoseDetectionActive) {
-                requestAnimationFrame(processFrame);
-              }
-            };
-            processFrame();
-          }
         };
       }
     } catch (err) {
@@ -149,7 +156,39 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
       setError('Camera access denied. Please allow camera permissions.');
       setIsLoading(false);
     }
-  }, [initializePoseDetection, poseDetector, isPoseDetectionActive]);
+  }, [initializePoseDetection]);
+
+  // Start pose processing loop when detector is ready
+  useEffect(() => {
+    let animationId: number;
+    
+    if (poseDetector && isPoseDetectionActive && isCameraActive) {
+      console.log('Starting pose processing loop...');
+      
+      const processFrame = () => {
+        if (videoRef.current && poseDetector && isPoseDetectionActive) {
+          try {
+            // Send video frame to pose detector
+            poseDetector.send({ image: videoRef.current });
+          } catch (error) {
+            console.warn('Error processing frame:', error);
+          }
+        }
+        
+        if (isPoseDetectionActive && isCameraActive) {
+          animationId = requestAnimationFrame(processFrame);
+        }
+      };
+      
+      animationId = requestAnimationFrame(processFrame);
+    }
+    
+    return () => {
+      if (animationId) {
+        cancelAnimationFrame(animationId);
+      }
+    };
+  }, [poseDetector, isPoseDetectionActive, isCameraActive]);
 
   // Stop camera
   const stopCamera = useCallback(() => {

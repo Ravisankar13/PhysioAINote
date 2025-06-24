@@ -40,11 +40,15 @@ PhysioGPT is an advanced AI-powered physiotherapy platform that provides evidenc
 - **De-identification**: Automated PII removal for case sharing
 - **Version Control**: Comprehensive tracking of note modifications
 
-### Virtual Patient System
+### Motion Capture & Virtual Patient System
+- **Camera Integration**: WebRTC camera access with permission handling and error recovery
+- **MediaPipe Integration**: Real-time pose detection with skeleton overlay visualization
+- **Virtual Patient Generation**: AI-powered patient creation from captured movement data with clinical analysis
+- **Movement Analysis**: Quality scoring, pattern recognition, and clinical recommendations
 - **Case Studies**: AI-generated clinical scenarios across all body regions
 - **Expert Frameworks**: Integration of renowned physiotherapist methodologies
 - **Interactive Analysis**: Real-time diagnostic and treatment recommendations
-- **Research Integration**: Evidence-based backing for all clinical decisions
+- **Data Export**: Comprehensive motion data and virtual patient profile export functionality
 
 ### Exercise Prescription
 - **Body Part Specific**: Comprehensive exercise database covering 11 body regions
@@ -134,12 +138,12 @@ PhysioGPT is an advanced AI-powered physiotherapy platform that provides evidenc
 - **Input Validation**: Zod schema validation for all API endpoints
 - **File Upload Security**: MIME type validation and size restrictions
 
-## Changelog
+## Recent Updates
 
-```
-Changelog:
-- June 24, 2025. Initial setup
-```
+- **June 24, 2025**: Motion capture system completed with MediaPipe pose detection and virtual patient creation
+- **June 24, 2025**: Enhanced PhysioGPT with color-coding system and real-time evidence integration  
+- **June 24, 2025**: Implemented comprehensive user authentication and 14-day trial system
+- **June 24, 2025**: Initial platform setup with core AI integration and database architecture
 
 ## User Preferences
 

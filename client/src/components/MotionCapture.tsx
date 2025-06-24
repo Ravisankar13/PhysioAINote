@@ -3,6 +3,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Camera, Square, Play, StopCircle, Download, User, Brain } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { apiRequest } from '@/lib/queryClient';
+import PoseDetection from './PoseDetection';
 
 interface PoseFrame {
   timestamp: number;
@@ -27,97 +30,18 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>('');
   const [isPoseDetectionActive, setIsPoseDetectionActive] = useState(false);
-  const [poseDetector, setPoseDetector] = useState<any>(null);
   const [virtualPatient, setVirtualPatient] = useState<any>(null);
   const [showVirtualPatient, setShowVirtualPatient] = useState(false);
 
-  // Initialize MediaPipe Pose Detection
-  const initializePoseDetection = useCallback(async () => {
-    try {
-      console.log('Initializing MediaPipe pose detection...');
-      setError('Loading pose detection models...');
-      
-      // Import MediaPipe modules with better error handling
-      console.log('Importing MediaPipe modules...');
-      const poseModule = await import('@mediapipe/pose');
-      const drawingModule = await import('@mediapipe/drawing_utils');
-      
-      console.log('MediaPipe modules imported successfully');
-      
-      const pose = new poseModule.Pose({
-        locateFile: (file: string) => {
-          const url = `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
-          console.log('Loading MediaPipe file:', url);
-          return url;
-        }
-      });
-
-      console.log('Setting pose options...');
-      pose.setOptions({
-        modelComplexity: 1,
-        smoothLandmarks: true,
-        enableSegmentation: false,
-        smoothSegmentation: false,
-        minDetectionConfidence: 0.5,
-        minTrackingConfidence: 0.5
-      });
-
-      console.log('Setting up pose results callback...');
-      pose.onResults((results: any) => {
-        if (canvasRef.current && results.image) {
-          const canvas = canvasRef.current;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            try {
-              // Clear and draw video frame
-              ctx.clearRect(0, 0, canvas.width, canvas.height);
-              ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
-              
-              // Draw pose landmarks if detected
-              if (results.poseLandmarks && results.poseLandmarks.length > 0) {
-                console.log('Drawing pose landmarks:', results.poseLandmarks.length);
-                
-                // Draw connections (green lines)
-                drawingModule.drawConnectors(ctx, results.poseLandmarks, poseModule.POSE_CONNECTIONS, {
-                  color: '#00ff00',
-                  lineWidth: 2
-                });
-                
-                // Draw landmarks (red dots)
-                drawingModule.drawLandmarks(ctx, results.poseLandmarks, {
-                  color: '#ff0000',
-                  radius: 3
-                });
-                
-                // Record pose data if recording
-                if (isRecording) {
-                  const frameData: PoseFrame = {
-                    timestamp: Date.now() - recordingStartTime,
-                    landmarks: results.poseLandmarks,
-                    worldLandmarks: results.poseWorldLandmarks || []
-                  };
-                  setRecordedFrames(prev => [...prev, frameData]);
-                }
-              }
-            } catch (drawError) {
-              console.error('Error drawing pose results:', drawError);
-            }
-          }
-        }
-      });
-
-      console.log('Initializing pose detector...');
-      await pose.initialize();
-      
-      setPoseDetector(pose);
-      setIsPoseDetectionActive(true);
-      setError('');
-      console.log('MediaPipe pose detection initialized successfully!');
-      
-    } catch (error) {
-      console.error('Failed to initialize MediaPipe pose detection:', error);
-      setError('Pose detection unavailable - camera will work in basic mode');
-      setIsPoseDetectionActive(false);
+  // Handle pose data from TensorFlow.js detector
+  const handlePoseData = useCallback((poses: any[]) => {
+    if (isRecording && poses.length > 0) {
+      const frameData: PoseFrame = {
+        timestamp: Date.now() - recordingStartTime,
+        landmarks: poses[0].keypoints,
+        worldLandmarks: poses[0].keypoints3D || []
+      };
+      setRecordedFrames(prev => [...prev, frameData]);
     }
   }, [isRecording, recordingStartTime]);
 
@@ -140,15 +64,11 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
         videoRef.current.srcObject = stream;
         streamRef.current = stream;
         
-        videoRef.current.onloadedmetadata = async () => {
-          console.log('Video metadata loaded, starting video...');
+        videoRef.current.onloadedmetadata = () => {
           videoRef.current?.play();
           setIsCameraActive(true);
           setIsLoading(false);
-          
-          // Initialize pose detection after video is ready
-          console.log('Initializing pose detection after video start...');
-          await initializePoseDetection();
+          setIsPoseDetectionActive(true);
         };
       }
     } catch (err) {
@@ -156,39 +76,7 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
       setError('Camera access denied. Please allow camera permissions.');
       setIsLoading(false);
     }
-  }, [initializePoseDetection]);
-
-  // Start pose processing loop when detector is ready
-  useEffect(() => {
-    let animationId: number;
-    
-    if (poseDetector && isPoseDetectionActive && isCameraActive) {
-      console.log('Starting pose processing loop...');
-      
-      const processFrame = () => {
-        if (videoRef.current && poseDetector && isPoseDetectionActive) {
-          try {
-            // Send video frame to pose detector
-            poseDetector.send({ image: videoRef.current });
-          } catch (error) {
-            console.warn('Error processing frame:', error);
-          }
-        }
-        
-        if (isPoseDetectionActive && isCameraActive) {
-          animationId = requestAnimationFrame(processFrame);
-        }
-      };
-      
-      animationId = requestAnimationFrame(processFrame);
-    }
-    
-    return () => {
-      if (animationId) {
-        cancelAnimationFrame(animationId);
-      }
-    };
-  }, [poseDetector, isPoseDetectionActive, isCameraActive]);
+  }, []);
 
   // Stop camera
   const stopCamera = useCallback(() => {

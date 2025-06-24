@@ -54,7 +54,7 @@ export const PoseDetection: React.FC<PoseDetectionProps> = ({
       const detectorConfig = {
         runtime: 'tfjs' as const,
         enableSmoothing: true,
-        modelType: 'SINGLEPOSE_LIGHTNING' as const
+        modelType: 'SinglePose.Lightning' as const
       };
 
       const poseDetector = await poseDetection.createDetector(
@@ -182,15 +182,21 @@ export const PoseDetection: React.FC<PoseDetectionProps> = ({
   }, [initializePoseDetection]);
 
   return (
-    <div className="pose-detection-status">
+    <div className="absolute top-2 left-2 z-10">
       {isLoading && (
-        <div className="text-sm text-blue-600">Loading pose detection models...</div>
+        <div className="bg-blue-500/80 text-white px-2 py-1 rounded text-xs">
+          Loading pose detection...
+        </div>
       )}
       {error && (
-        <div className="text-sm text-red-600">{error}</div>
+        <div className="bg-red-500/80 text-white px-2 py-1 rounded text-xs">
+          {error}
+        </div>
       )}
       {detector && !isLoading && !error && (
-        <div className="text-sm text-green-600">Pose detection ready</div>
+        <div className="bg-green-500/80 text-white px-2 py-1 rounded text-xs">
+          Pose detection active
+        </div>
       )}
     </div>
   );

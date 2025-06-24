@@ -182,17 +182,34 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
   }, [recordedFrames]);
 
   // Start recording
-  const startRecording = useCallback(() => {
+  const startRecording = useCallback((e?: React.MouseEvent) => {
+    // Prevent any default form submission or navigation
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    
     if (!isCameraActive) return;
     
     setRecordedFrames([]);
     setRecordingStartTime(Date.now());
     setIsRecording(true);
     console.log('Recording started with pose detection');
-  }, [isCameraActive]);
+    
+    toast({
+      title: "Recording Started",
+      description: "Motion capture is now recording pose data.",
+    });
+  }, [isCameraActive, toast]);
 
   // Stop recording
-  const stopRecording = useCallback(() => {
+  const stopRecording = useCallback((e?: React.MouseEvent) => {
+    // Prevent any default form submission or navigation
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    
     setIsRecording(false);
     console.log('Recording stopped. Frames captured:', recordedFrames.length);
     
@@ -200,7 +217,12 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
     if (onMotionDataCapture && recordedFrames.length > 0) {
       onMotionDataCapture(recordedFrames);
     }
-  }, [onMotionDataCapture, recordedFrames]);
+    
+    toast({
+      title: "Recording Stopped",
+      description: `Captured ${recordedFrames.length} frames of motion data.`,
+    });
+  }, [onMotionDataCapture, recordedFrames, toast]);
 
   // Download recording data
   const downloadRecording = useCallback(() => {
@@ -269,8 +291,9 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
             
             {isCameraActive && !isRecording && (
               <Button 
-                onClick={startRecording}
+                onClick={(e) => startRecording(e)}
                 className="flex items-center gap-2"
+                type="button"
               >
                 <Play className="h-4 w-4" />
                 Start Recording
@@ -279,9 +302,10 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
             
             {isRecording && (
               <Button 
-                onClick={stopRecording}
+                onClick={(e) => stopRecording(e)}
                 variant="destructive"
                 className="flex items-center gap-2"
+                type="button"
               >
                 <Square className="h-4 w-4" />
                 Stop Recording

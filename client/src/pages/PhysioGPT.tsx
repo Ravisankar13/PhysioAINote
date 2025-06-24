@@ -578,6 +578,11 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
                         </div>
                       ) : messages && messages.length > 0 ? (
                         <div className="space-y-3 sm:space-y-6 p-2 sm:p-4">
+                          {/* Color Code Legend */}
+                          <ColorCodeLegend 
+                            isVisible={showColorLegend}
+                            onToggle={() => setShowColorLegend(!showColorLegend)}
+                          />
                           {messages.map((msg: any, index: number) => (
                             <div
                               key={msg?.id || index}

@@ -19,39 +19,50 @@ interface ColorCodedContentProps {
   content: string;
 }
 
-// Keywords and patterns for content classification
+// Enhanced keywords and patterns for content classification
 const contentClassifiers = {
   assessment: [
     'physical examination', 'assess', 'evaluate', 'test', 'measure', 'palpation', 'observation',
     'range of motion', 'ROM', 'strength test', 'special tests', 'outcome measures',
     'functional assessment', 'postural analysis', 'gait analysis', 'pain scale',
-    'neurological examination', 'reflexes', 'sensation'
+    'neurological examination', 'reflexes', 'sensation', 'inspection', 'palpate',
+    'muscle testing', 'joint mobility', 'flexibility', 'stability test', 'provocative test',
+    'orthopedic test', 'neurodynamic', 'ligament test', 'meniscus test', 'impingement test',
+    'AROM', 'PROM', 'MMT', 'manual muscle test', 'tender points', 'trigger points'
   ],
   treatment: [
     'treatment', 'intervention', 'exercise', 'therapy', 'manual therapy', 'mobilization',
     'manipulation', 'strengthening', 'stretching', 'modalities', 'ultrasound',
     'electrotherapy', 'heat', 'cold', 'massage', 'rehabilitation', 'program',
-    'home exercises', 'progressive', 'protocol'
+    'home exercises', 'progressive', 'protocol', 'therapeutic exercise', 'conditioning',
+    'eccentric', 'concentric', 'isometric', 'plyometric', 'proprioception', 'balance training',
+    'cardiovascular', 'endurance', 'flexibility training', 'core stabilization',
+    'soft tissue mobilization', 'joint mobilization', 'neural mobilization', 'dry needling'
   ],
   differential: [
     'differential diagnosis', 'consider', 'rule out', 'possible', 'could be', 'may indicate',
     'differential', 'diagnosis', 'conditions', 'pathology', 'lesion', 'injury',
-    'syndrome', 'disorder', 'disease'
+    'syndrome', 'disorder', 'disease', 'etiology', 'causative factors', 'underlying cause',
+    'mimics', 'alternative diagnosis', 'comorbidity', 'associated conditions'
   ],
   evidence: [
     'research', 'study', 'evidence', 'systematic review', 'meta-analysis', 'RCT',
     'clinical trial', 'literature', 'grade', 'level of evidence', 'cochrane',
-    'pubmed', 'journal', 'published', 'findings', 'statistics', 'p-value'
+    'pubmed', 'journal', 'published', 'findings', 'statistics', 'p-value',
+    'confidence interval', 'effect size', 'clinical significance', 'evidence-based',
+    'best practice', 'guidelines', 'consensus', 'recommendation grade'
   ],
   education: [
     'explain', 'patient education', 'understanding', 'prognosis', 'recovery',
     'self-management', 'lifestyle', 'prevention', 'advice', 'guidance',
-    'what to expect', 'healing', 'timeline', 'factors'
+    'what to expect', 'healing', 'timeline', 'factors', 'modification', 'ergonomics',
+    'activity modification', 'load management', 'pacing', 'sleep hygiene'
   ],
   precautions: [
     'red flags', 'contraindications', 'precautions', 'warning', 'avoid', 'stop',
     'serious', 'emergency', 'refer', 'medical attention', 'danger', 'risk',
-    'complications', 'adverse', 'safety'
+    'complications', 'adverse', 'safety', 'caution', 'absolute contraindication',
+    'relative contraindication', 'monitoring required', 'immediately discontinue'
   ]
 };
 

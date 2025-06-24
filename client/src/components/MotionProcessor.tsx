@@ -76,58 +76,84 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
     RIGHT_FOOT_INDEX: 32
   };
 
-  // Calculate angle between three points
+  // Calculate angle between three points with safety checks
   const calculateAngle = (pointA: any, pointB: any, pointC: any): number => {
+    if (!pointA || !pointB || !pointC) return 0;
+    if (typeof pointA.x === 'undefined' || typeof pointB.x === 'undefined' || typeof pointC.x === 'undefined') return 0;
+    
     const vectorBA = {
       x: pointA.x - pointB.x,
       y: pointA.y - pointB.y,
-      z: pointA.z - pointB.z
+      z: (pointA.z || 0) - (pointB.z || 0)
     };
     
     const vectorBC = {
       x: pointC.x - pointB.x,
       y: pointC.y - pointB.y,
-      z: pointC.z - pointB.z
+      z: (pointC.z || 0) - (pointB.z || 0)
     };
     
     const dotProduct = vectorBA.x * vectorBC.x + vectorBA.y * vectorBC.y + vectorBA.z * vectorBC.z;
     const magnitudeBA = Math.sqrt(vectorBA.x * vectorBA.x + vectorBA.y * vectorBA.y + vectorBA.z * vectorBA.z);
     const magnitudeBC = Math.sqrt(vectorBC.x * vectorBC.x + vectorBC.y * vectorBC.y + vectorBC.z * vectorBC.z);
     
+    if (magnitudeBA === 0 || magnitudeBC === 0) return 0;
+    
     const cosAngle = dotProduct / (magnitudeBA * magnitudeBC);
-    const angle = Math.acos(Math.max(-1, Math.min(1, cosAngle)));
+    const clampedCos = Math.max(-1, Math.min(1, cosAngle));
+    const angle = Math.acos(clampedCos);
     
     return (angle * 180) / Math.PI;
   };
 
-  // Calculate distance between two points
+  // Calculate distance between two points with safety checks
   const calculateDistance = (pointA: any, pointB: any): number => {
+    if (!pointA || !pointB) return 0;
+    if (typeof pointA.x === 'undefined' || typeof pointB.x === 'undefined') return 0;
+    
     const dx = pointA.x - pointB.x;
     const dy = pointA.y - pointB.y;
-    const dz = pointA.z - pointB.z;
+    const dz = (pointA.z || 0) - (pointB.z || 0);
     return Math.sqrt(dx * dx + dy * dy + dz * dz);
   };
 
   // Process pose landmarks to extract joint angles
   const processFrame = (frame: PoseFrame): JointAngles => {
-    const landmarks = frame.worldLandmarks;
+    // Use landmarks instead of worldLandmarks since worldLandmarks might be undefined
+    const landmarks = frame.worldLandmarks || frame.landmarks || [];
     
-    // Extract key landmarks
-    const leftShoulder = landmarks[POSE_LANDMARKS.LEFT_SHOULDER];
-    const rightShoulder = landmarks[POSE_LANDMARKS.RIGHT_SHOULDER];
-    const leftElbow = landmarks[POSE_LANDMARKS.LEFT_ELBOW];
-    const rightElbow = landmarks[POSE_LANDMARKS.RIGHT_ELBOW];
-    const leftWrist = landmarks[POSE_LANDMARKS.LEFT_WRIST];
-    const rightWrist = landmarks[POSE_LANDMARKS.RIGHT_WRIST];
-    const leftHip = landmarks[POSE_LANDMARKS.LEFT_HIP];
-    const rightHip = landmarks[POSE_LANDMARKS.RIGHT_HIP];
-    const leftKnee = landmarks[POSE_LANDMARKS.LEFT_KNEE];
-    const rightKnee = landmarks[POSE_LANDMARKS.RIGHT_KNEE];
-    const leftAnkle = landmarks[POSE_LANDMARKS.LEFT_ANKLE];
-    const rightAnkle = landmarks[POSE_LANDMARKS.RIGHT_ANKLE];
-    const nose = landmarks[POSE_LANDMARKS.NOSE];
+    if (!landmarks || landmarks.length === 0) {
+      return {
+        leftShoulder: 0,
+        rightShoulder: 0,
+        leftElbow: 0,
+        rightElbow: 0,
+        leftHip: 0,
+        rightHip: 0,
+        leftKnee: 0,
+        rightKnee: 0,
+        spine: 0
+      };
+    }
+    
+    // Extract key landmarks with safety checks
+    const getLandmark = (index: number) => landmarks[index] || null;
+    
+    const leftShoulder = getLandmark(POSE_LANDMARKS.LEFT_SHOULDER);
+    const rightShoulder = getLandmark(POSE_LANDMARKS.RIGHT_SHOULDER);
+    const leftElbow = getLandmark(POSE_LANDMARKS.LEFT_ELBOW);
+    const rightElbow = getLandmark(POSE_LANDMARKS.RIGHT_ELBOW);
+    const leftWrist = getLandmark(POSE_LANDMARKS.LEFT_WRIST);
+    const rightWrist = getLandmark(POSE_LANDMARKS.RIGHT_WRIST);
+    const leftHip = getLandmark(POSE_LANDMARKS.LEFT_HIP);
+    const rightHip = getLandmark(POSE_LANDMARKS.RIGHT_HIP);
+    const leftKnee = getLandmark(POSE_LANDMARKS.LEFT_KNEE);
+    const rightKnee = getLandmark(POSE_LANDMARKS.RIGHT_KNEE);
+    const leftAnkle = getLandmark(POSE_LANDMARKS.LEFT_ANKLE);
+    const rightAnkle = getLandmark(POSE_LANDMARKS.RIGHT_ANKLE);
+    const nose = getLandmark(POSE_LANDMARKS.NOSE);
 
-    // Calculate joint angles
+    // Calculate joint angles with null checks
     const jointAngles: JointAngles = {
       leftShoulder: calculateAngle(leftElbow, leftShoulder, rightShoulder),
       rightShoulder: calculateAngle(rightElbow, rightShoulder, leftShoulder),
@@ -137,7 +163,11 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
       rightHip: calculateAngle(rightKnee, rightHip, rightShoulder),
       leftKnee: calculateAngle(leftHip, leftKnee, leftAnkle),
       rightKnee: calculateAngle(rightHip, rightKnee, rightAnkle),
-      spine: calculateAngle(nose, { x: (leftShoulder.x + rightShoulder.x) / 2, y: (leftShoulder.y + rightShoulder.y) / 2, z: (leftShoulder.z + rightShoulder.z) / 2 }, { x: (leftHip.x + rightHip.x) / 2, y: (leftHip.y + rightHip.y) / 2, z: (leftHip.z + rightHip.z) / 2 })
+      spine: leftShoulder && rightShoulder && leftHip && rightHip && nose ? 
+        calculateAngle(nose, 
+          { x: (leftShoulder.x + rightShoulder.x) / 2, y: (leftShoulder.y + rightShoulder.y) / 2, z: ((leftShoulder.z || 0) + (rightShoulder.z || 0)) / 2 }, 
+          { x: (leftHip.x + rightHip.x) / 2, y: (leftHip.y + rightHip.y) / 2, z: ((leftHip.z || 0) + (rightHip.z || 0)) / 2 }
+        ) : 0
     };
 
     return jointAngles;

@@ -204,31 +204,39 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
 
   // Stop recording and automatically generate virtual patient
   const stopRecording = useCallback(async (e?: React.MouseEvent) => {
-    // Prevent any default form submission or navigation
-    if (e) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
-    
-    setIsRecording(false);
-    console.log('Recording stopped. Frames captured:', recordedFrames.length);
-    
-    // Callback with recorded data
-    if (onMotionDataCapture && recordedFrames.length > 0) {
-      onMotionDataCapture(recordedFrames);
-    }
-    
-    // Automatically generate virtual patient if we have motion data
-    if (recordedFrames.length > 0) {
-      try {
+    try {
+      // Prevent any default form submission or navigation
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      
+      console.log('Stop recording called, current frames:', recordedFrames.length);
+      
+      setIsRecording(false);
+      
+      // Use current state directly instead of relying on recordedFrames state
+      const currentFrames = [...recordedFrames];
+      console.log('Recording stopped. Frames captured:', currentFrames.length);
+      
+      // Callback with recorded data
+      if (onMotionDataCapture && currentFrames.length > 0) {
+        onMotionDataCapture(currentFrames);
+      }
+      
+      // Automatically generate virtual patient if we have motion data
+      if (currentFrames.length > 0) {
         setIsLoading(true);
+        
+        // Add small delay to ensure state updates complete
+        await new Promise(resolve => setTimeout(resolve, 100));
         
         // Analyze motion patterns from recorded frames
         const motionAnalysis = {
-          totalFrames: recordedFrames.length,
-          duration: recordedFrames[recordedFrames.length - 1]?.timestamp || 0,
-          avgLandmarksPerFrame: recordedFrames.filter(f => f.landmarks.length > 0).length,
-          movementQuality: recordedFrames.filter(f => f.landmarks.length > 0).length / recordedFrames.length
+          totalFrames: currentFrames.length,
+          duration: currentFrames[currentFrames.length - 1]?.timestamp || 0,
+          avgLandmarksPerFrame: currentFrames.filter(f => f.landmarks.length > 0).length,
+          movementQuality: currentFrames.filter(f => f.landmarks.length > 0).length / currentFrames.length
         };
         
         // Generate virtual patient profile based on motion data
@@ -237,7 +245,7 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
           name: `Virtual Patient ${Math.floor(Math.random() * 1000)}`,
           age: Math.floor(Math.random() * 50) + 20,
           condition: motionAnalysis.movementQuality > 0.7 ? 'Normal movement patterns' : 'Movement dysfunction detected',
-          motionData: recordedFrames,
+          motionData: currentFrames,
           analysis: motionAnalysis,
           recommendations: [
             'Assess joint range of motion',
@@ -253,26 +261,26 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
         
         toast({
           title: "Virtual Patient Created",
-          description: `Generated virtual patient from ${recordedFrames.length} motion frames.`,
+          description: `Generated virtual patient from ${currentFrames.length} motion frames.`,
         });
         
         console.log('Virtual patient created:', patientProfile);
         
-      } catch (error) {
-        console.error('Error creating virtual patient:', error);
-        setError('Failed to create virtual patient');
-        setIsLoading(false);
-        
+      } else {
         toast({
-          title: "Error",
-          description: "Failed to create virtual patient from motion data.",
+          title: "Recording Stopped",
+          description: "No motion data captured. Try recording with movement.",
           variant: "destructive",
         });
       }
-    } else {
+    } catch (error) {
+      console.error('Error in stopRecording:', error);
+      setError('Failed to process recording');
+      setIsLoading(false);
+      
       toast({
-        title: "Recording Stopped",
-        description: "No motion data captured. Try recording with movement.",
+        title: "Error",
+        description: "Failed to process motion data.",
         variant: "destructive",
       });
     }
@@ -322,7 +330,7 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
             </div>
           )}
           
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-2 flex-wrap" onSubmit={(e) => e.preventDefault()}>
             {!isCameraActive ? (
               <Button 
                 onClick={(e) => {
@@ -376,9 +384,10 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
                 variant="destructive"
                 className="flex items-center gap-2"
                 type="button"
+                disabled={isLoading}
               >
                 <Square className="h-4 w-4" />
-                Stop Recording
+                {isLoading ? 'Processing...' : 'Stop Recording'}
               </Button>
             )}
             

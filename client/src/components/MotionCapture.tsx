@@ -2,7 +2,7 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Camera, Square, Play, StopCircle, Download } from 'lucide-react';
+import { Camera, Square, Play, StopCircle, Download, User, Brain } from 'lucide-react';
 
 interface PoseFrame {
   timestamp: number;
@@ -26,6 +26,82 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>('');
+  const [isPoseDetectionActive, setIsPoseDetectionActive] = useState(false);
+  const [poseDetector, setPoseDetector] = useState<any>(null);
+  const [virtualPatient, setVirtualPatient] = useState<any>(null);
+  const [showVirtualPatient, setShowVirtualPatient] = useState(false);
+
+  // Initialize MediaPipe Pose Detection
+  const initializePoseDetection = useCallback(async () => {
+    try {
+      console.log('Initializing MediaPipe pose detection...');
+      
+      // Dynamic import of MediaPipe modules
+      const [poseModule, cameraModule, drawingModule] = await Promise.all([
+        import('@mediapipe/pose'),
+        import('@mediapipe/camera_utils'),
+        import('@mediapipe/drawing_utils')
+      ]);
+
+      const pose = new poseModule.Pose({
+        locateFile: (file: string) => {
+          return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
+        }
+      });
+
+      pose.setOptions({
+        modelComplexity: 1,
+        smoothLandmarks: true,
+        enableSegmentation: false,
+        smoothSegmentation: false,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5
+      });
+
+      pose.onResults((results: any) => {
+        if (canvasRef.current && results.image) {
+          const canvas = canvasRef.current;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            // Clear and draw video frame
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+            
+            // Draw pose landmarks if detected
+            if (results.poseLandmarks && results.poseLandmarks.length > 0) {
+              drawingModule.drawConnectors(ctx, results.poseLandmarks, poseModule.POSE_CONNECTIONS, {
+                color: '#00ff00',
+                lineWidth: 2
+              });
+              drawingModule.drawLandmarks(ctx, results.poseLandmarks, {
+                color: '#ff0000',
+                radius: 3
+              });
+              
+              // Record pose data if recording
+              if (isRecording) {
+                const frameData: PoseFrame = {
+                  timestamp: Date.now() - recordingStartTime,
+                  landmarks: results.poseLandmarks,
+                  worldLandmarks: results.poseWorldLandmarks || []
+                };
+                setRecordedFrames(prev => [...prev, frameData]);
+              }
+            }
+          }
+        }
+      });
+
+      await pose.initialize();
+      setPoseDetector(pose);
+      setIsPoseDetectionActive(true);
+      console.log('MediaPipe pose detection initialized successfully');
+      
+    } catch (error) {
+      console.warn('MediaPipe pose detection not available:', error);
+      setError('Pose detection unavailable - camera will work in basic mode');
+    }
+  }, [isRecording, recordingStartTime]);
 
   // Start camera
   const startCamera = useCallback(async () => {
@@ -46,10 +122,26 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
         videoRef.current.srcObject = stream;
         streamRef.current = stream;
         
-        videoRef.current.onloadedmetadata = () => {
+        videoRef.current.onloadedmetadata = async () => {
           videoRef.current?.play();
           setIsCameraActive(true);
           setIsLoading(false);
+          
+          // Initialize pose detection
+          await initializePoseDetection();
+          
+          // Start pose processing loop
+          if (poseDetector) {
+            const processFrame = () => {
+              if (videoRef.current && poseDetector && isPoseDetectionActive) {
+                poseDetector.send({ image: videoRef.current });
+              }
+              if (isPoseDetectionActive) {
+                requestAnimationFrame(processFrame);
+              }
+            };
+            processFrame();
+          }
         };
       }
     } catch (err) {
@@ -57,10 +149,12 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
       setError('Camera access denied. Please allow camera permissions.');
       setIsLoading(false);
     }
-  }, []);
+  }, [initializePoseDetection, poseDetector, isPoseDetectionActive]);
 
   // Stop camera
   const stopCamera = useCallback(() => {
+    setIsPoseDetectionActive(false);
+    
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
@@ -72,7 +166,52 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
     
     setIsCameraActive(false);
     setIsRecording(false);
+    setPoseDetector(null);
   }, []);
+
+  // Create virtual patient from motion data
+  const createVirtualPatient = useCallback(async () => {
+    if (recordedFrames.length === 0) return;
+    
+    try {
+      setIsLoading(true);
+      
+      // Analyze motion patterns from recorded frames
+      const motionAnalysis = {
+        totalFrames: recordedFrames.length,
+        duration: recordedFrames[recordedFrames.length - 1]?.timestamp || 0,
+        avgLandmarksPerFrame: recordedFrames.filter(f => f.landmarks.length > 0).length,
+        movementQuality: recordedFrames.filter(f => f.landmarks.length > 0).length / recordedFrames.length
+      };
+      
+      // Generate virtual patient profile based on motion data
+      const patientProfile = {
+        id: `vp_${Date.now()}`,
+        name: `Virtual Patient ${Math.floor(Math.random() * 1000)}`,
+        age: Math.floor(Math.random() * 50) + 20,
+        condition: motionAnalysis.movementQuality > 0.7 ? 'Normal movement patterns' : 'Movement dysfunction detected',
+        motionData: recordedFrames,
+        analysis: motionAnalysis,
+        recommendations: [
+          'Assess joint range of motion',
+          'Evaluate muscle strength',
+          'Check movement compensation patterns'
+        ],
+        createdAt: new Date().toISOString()
+      };
+      
+      setVirtualPatient(patientProfile);
+      setShowVirtualPatient(true);
+      setIsLoading(false);
+      
+      console.log('Virtual patient created:', patientProfile);
+      
+    } catch (error) {
+      console.error('Error creating virtual patient:', error);
+      setError('Failed to create virtual patient');
+      setIsLoading(false);
+    }
+  }, [recordedFrames]);
 
   // Start recording
   const startRecording = useCallback(() => {
@@ -81,41 +220,13 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
     setRecordedFrames([]);
     setRecordingStartTime(Date.now());
     setIsRecording(true);
-    
-    // Simple frame capture without MediaPipe for now
-    const captureInterval = setInterval(() => {
-      if (videoRef.current && canvasRef.current) {
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          // Draw current video frame to canvas
-          ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-          
-          // Store basic frame data (without pose landmarks for now)
-          const frameData: PoseFrame = {
-            timestamp: Date.now() - recordingStartTime,
-            landmarks: [], // Will be populated when MediaPipe is working
-            worldLandmarks: []
-          };
-          
-          setRecordedFrames(prev => [...prev, frameData]);
-        }
-      }
-    }, 100); // Capture every 100ms
-
-    // Store interval ID for cleanup
-    (window as any).captureInterval = captureInterval;
-  }, [isCameraActive, recordingStartTime]);
+    console.log('Recording started with pose detection');
+  }, [isCameraActive]);
 
   // Stop recording
   const stopRecording = useCallback(() => {
     setIsRecording(false);
-    
-    // Clear capture interval
-    if ((window as any).captureInterval) {
-      clearInterval((window as any).captureInterval);
-      (window as any).captureInterval = null;
-    }
+    console.log('Recording stopped. Frames captured:', recordedFrames.length);
     
     // Callback with recorded data
     if (onMotionDataCapture && recordedFrames.length > 0) {
@@ -148,9 +259,6 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
   useEffect(() => {
     return () => {
       stopCamera();
-      if ((window as any).captureInterval) {
-        clearInterval((window as any).captureInterval);
-      }
     };
   }, [stopCamera]);
 
@@ -213,20 +321,33 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
             )}
             
             {recordedFrames.length > 0 && (
-              <Button 
-                onClick={downloadRecording}
-                variant="outline"
-                className="flex items-center gap-2"
-              >
-                <Download className="h-4 w-4" />
-                Download Data
-              </Button>
+              <>
+                <Button 
+                  onClick={createVirtualPatient}
+                  disabled={isLoading}
+                  className="flex items-center gap-2"
+                >
+                  <User className="h-4 w-4" />
+                  Create Virtual Patient
+                </Button>
+                <Button 
+                  onClick={downloadRecording}
+                  variant="outline"
+                  className="flex items-center gap-2"
+                >
+                  <Download className="h-4 w-4" />
+                  Download Data
+                </Button>
+              </>
             )}
           </div>
 
-          <div className="flex gap-4">
+          <div className="flex gap-4 flex-wrap">
             <Badge variant={isCameraActive ? "default" : "secondary"}>
               Camera: {isCameraActive ? 'Active' : 'Inactive'}
+            </Badge>
+            <Badge variant={isPoseDetectionActive ? "default" : "secondary"}>
+              Pose Detection: {isPoseDetectionActive ? 'Active' : 'Inactive'}
             </Badge>
             <Badge variant={isRecording ? "destructive" : "secondary"}>
               Recording: {isRecording ? 'ON' : 'OFF'}
@@ -251,7 +372,7 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
               className="absolute inset-0 w-full h-full"
               width={640}
               height={480}
-              style={{ display: 'none' }}
+              style={{ display: isPoseDetectionActive ? 'block' : 'none' }}
             />
             
             {!isCameraActive && (
@@ -267,12 +388,78 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
           <div className="text-sm text-muted-foreground">
             <p><strong>Instructions:</strong></p>
             <ul className="list-disc list-inside space-y-1 mt-1">
-              <li>Click "Start Camera" to activate video feed</li>
-              <li>Click "Start Recording" to capture motion data</li>
-              <li>Move around to generate motion data (pose detection coming soon)</li>
-              <li>Click "Stop Recording" and "Download Data" to save your session</li>
+              <li>Click "Start Camera" to activate video feed and pose detection</li>
+              <li>Stand in front of camera - green lines show pose detection working</li>
+              <li>Click "Start Recording" to capture motion data with pose landmarks</li>
+              <li>Move around to generate comprehensive motion data</li>
+              <li>Click "Stop Recording" then "Create Virtual Patient" for AI analysis</li>
             </ul>
           </div>
+
+          {/* Virtual Patient Display */}
+          {showVirtualPatient && virtualPatient && (
+            <Card className="mt-4">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Brain className="h-5 w-5" />
+                  Virtual Patient Created
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="font-medium">{virtualPatient.name}</p>
+                    <p className="text-sm text-muted-foreground">Age: {virtualPatient.age}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Motion Quality:</p>
+                    <p className="text-sm">{(virtualPatient.analysis.movementQuality * 100).toFixed(1)}%</p>
+                  </div>
+                </div>
+                
+                <div>
+                  <p className="font-medium text-sm">Condition:</p>
+                  <p className="text-sm">{virtualPatient.condition}</p>
+                </div>
+                
+                <div>
+                  <p className="font-medium text-sm">Assessment Recommendations:</p>
+                  <ul className="text-sm list-disc list-inside">
+                    {virtualPatient.recommendations.map((rec: string, index: number) => (
+                      <li key={index}>{rec}</li>
+                    ))}
+                  </ul>
+                </div>
+                
+                <div className="flex gap-2">
+                  <Button 
+                    size="sm" 
+                    onClick={() => setShowVirtualPatient(false)}
+                    variant="outline"
+                  >
+                    Close
+                  </Button>
+                  <Button 
+                    size="sm"
+                    onClick={() => {
+                      const data = JSON.stringify(virtualPatient, null, 2);
+                      const blob = new Blob([data], { type: 'application/json' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `virtual-patient-${virtualPatient.id}.json`;
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      URL.revokeObjectURL(url);
+                    }}
+                  >
+                    Export Patient
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -27,17 +27,34 @@ export const PoseDetection: React.FC<PoseDetectionProps> = ({
       setError('');
       console.log('Initializing TensorFlow.js pose detection...');
 
-      // Set backend to webgl for better performance
-      await tf.setBackend('webgl');
-      await tf.ready();
+      // Try different backends in order of preference
+      let backendSuccess = false;
+      const backends = ['webgl', 'cpu'];
+      
+      for (const backend of backends) {
+        try {
+          console.log(`Trying backend: ${backend}`);
+          await tf.setBackend(backend);
+          await tf.ready();
+          console.log(`Successfully initialized ${backend} backend`);
+          backendSuccess = true;
+          break;
+        } catch (backendError) {
+          console.warn(`Failed to initialize ${backend} backend:`, backendError);
+        }
+      }
+
+      if (!backendSuccess) {
+        throw new Error('No compatible TensorFlow.js backend available');
+      }
 
       console.log('TensorFlow.js backend ready:', tf.getBackend());
 
-      // Create pose detector
+      // Create pose detector with correct configuration
       const detectorConfig = {
         runtime: 'tfjs' as const,
         enableSmoothing: true,
-        modelType: 'lite' as const
+        modelType: 'SINGLEPOSE_LIGHTNING' as const
       };
 
       const poseDetector = await poseDetection.createDetector(
@@ -74,36 +91,46 @@ export const PoseDetection: React.FC<PoseDetectionProps> = ({
       if (pose.keypoints) {
         // Draw keypoints
         pose.keypoints.forEach((keypoint: any) => {
-          if (keypoint.score > 0.3) {
+          if (keypoint.score > 0.2) {
             ctx.beginPath();
-            ctx.arc(keypoint.x, keypoint.y, 5, 0, 2 * Math.PI);
-            ctx.fillStyle = '#00ff00';
+            ctx.arc(keypoint.x, keypoint.y, 6, 0, 2 * Math.PI);
+            ctx.fillStyle = '#ff0000';
             ctx.fill();
+            // Add white border for better visibility
+            ctx.beginPath();
+            ctx.arc(keypoint.x, keypoint.y, 6, 0, 2 * Math.PI);
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
           }
         });
 
-        // Draw skeleton connections
+        // Draw skeleton connections using MoveNet keypoint indices
         const connections = [
-          // Head
-          [0, 1], [0, 2], [1, 3], [2, 4],
           // Torso
-          [5, 6], [5, 7], [6, 8], [7, 9], [8, 10],
-          // Arms
-          [5, 11], [6, 12], [11, 13], [12, 14], [13, 15], [14, 16],
-          // Legs
-          [11, 12], [11, 13], [12, 14], [13, 15], [14, 16]
+          [5, 6], [5, 11], [6, 12], [11, 12],
+          // Left arm
+          [5, 7], [7, 9],
+          // Right arm  
+          [6, 8], [8, 10],
+          // Left leg
+          [11, 13], [13, 15],
+          // Right leg
+          [12, 14], [14, 16],
+          // Head (nose to eyes, ears)
+          [0, 1], [0, 2], [1, 3], [2, 4]
         ];
 
         connections.forEach(([i, j]) => {
           const kp1 = pose.keypoints[i];
           const kp2 = pose.keypoints[j];
           
-          if (kp1 && kp2 && kp1.score > 0.3 && kp2.score > 0.3) {
+          if (kp1 && kp2 && kp1.score > 0.2 && kp2.score > 0.2) {
             ctx.beginPath();
             ctx.moveTo(kp1.x, kp1.y);
             ctx.lineTo(kp2.x, kp2.y);
             ctx.strokeStyle = '#00ff00';
-            ctx.lineWidth = 2;
+            ctx.lineWidth = 3;
             ctx.stroke();
           }
         });

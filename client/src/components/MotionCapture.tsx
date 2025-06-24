@@ -32,6 +32,8 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
   const [isPoseDetectionActive, setIsPoseDetectionActive] = useState(false);
   const [virtualPatient, setVirtualPatient] = useState<any>(null);
   const [showVirtualPatient, setShowVirtualPatient] = useState(false);
+  
+  const { toast } = useToast();
 
   // Handle pose data from TensorFlow.js detector
   const handlePoseData = useCallback((poses: any[]) => {
@@ -44,6 +46,45 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
       setRecordedFrames(prev => [...prev, frameData]);
     }
   }, [isRecording, recordingStartTime]);
+
+  // Create virtual patient from recorded motion data
+  const createVirtualPatient = useCallback(async () => {
+    if (recordedFrames.length === 0) {
+      toast({
+        title: "No Motion Data",
+        description: "Please record some movement data first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await apiRequest('POST', '/api/virtual-patient/create', {
+        motionData: recordedFrames,
+        duration: recordedFrames[recordedFrames.length - 1]?.timestamp || 0,
+        frameCount: recordedFrames.length
+      });
+
+      const patient = await response.json();
+      setVirtualPatient(patient);
+      setShowVirtualPatient(true);
+      
+      toast({
+        title: "Virtual Patient Created",
+        description: "AI analysis complete with clinical recommendations.",
+      });
+    } catch (error) {
+      console.error('Error creating virtual patient:', error);
+      toast({
+        title: "Creation Failed",
+        description: "Failed to create virtual patient from motion data.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [recordedFrames, toast]);
 
   // Start camera
   const startCamera = useCallback(async () => {
@@ -96,8 +137,8 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
     setPoseDetector(null);
   }, []);
 
-  // Create virtual patient from motion data
-  const createVirtualPatient = useCallback(async () => {
+  // Generate virtual patient from motion data  
+  const generateVirtualPatient = useCallback(async () => {
     if (recordedFrames.length === 0) return;
     
     try {
@@ -250,7 +291,7 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
             {recordedFrames.length > 0 && (
               <>
                 <Button 
-                  onClick={createVirtualPatient}
+                  onClick={generateVirtualPatient}
                   disabled={isLoading}
                   className="flex items-center gap-2"
                 >
@@ -300,6 +341,14 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
               width={640}
               height={480}
               style={{ display: isPoseDetectionActive ? 'block' : 'none' }}
+            />
+            
+            {/* Pose Detection Component */}
+            <PoseDetection
+              videoRef={videoRef}
+              canvasRef={canvasRef}
+              isActive={isPoseDetectionActive && isCameraActive}
+              onPoseData={handlePoseData}
             />
             
             {!isCameraActive && (

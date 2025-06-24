@@ -1,8 +1,21 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
-import { Pose, Results } from '@mediapipe/pose';
-import { Camera } from '@mediapipe/camera_utils';
-import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils';
-import { POSE_CONNECTIONS } from '@mediapipe/pose';
+// Import MediaPipe with error handling
+let Pose: any, Camera: any, drawConnectors: any, drawLandmarks: any, POSE_CONNECTIONS: any, Results: any;
+
+try {
+  const mediapipePose = require('@mediapipe/pose');
+  const mediapipeCamera = require('@mediapipe/camera_utils');
+  const mediapipeDrawing = require('@mediapipe/drawing_utils');
+  
+  Pose = mediapipePose.Pose;
+  Results = mediapipePose.Results;
+  Camera = mediapipeCamera.Camera;
+  drawConnectors = mediapipeDrawing.drawConnectors;
+  drawLandmarks = mediapipeDrawing.drawLandmarks;
+  POSE_CONNECTIONS = mediapipePose.POSE_CONNECTIONS;
+} catch (error) {
+  console.warn('MediaPipe modules not available:', error);
+}
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -40,6 +53,7 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
         try {
           const pose = new Pose({
             locateFile: (file) => {
+              console.log('Loading MediaPipe file:', file);
               return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
             }
           });
@@ -53,23 +67,28 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
             minTrackingConfidence: 0.5
           });
 
-          pose.onResults(onPoseResults);
+          // Set up results callback
+          pose.onResults((results: Results) => {
+            console.log('Pose results received:', results.poseLandmarks ? 'Pose detected' : 'No pose');
+            onPoseResults(results);
+          });
           
           // Initialize pose detector
+          console.log('Initializing pose detector...');
           await pose.initialize();
+          
           poseRef.current = pose;
           setIsPoseReady(true);
           console.log('MediaPipe Pose initialized successfully');
         } catch (error) {
           console.error('Failed to initialize MediaPipe Pose:', error);
-          // Set pose ready to true anyway to allow camera initialization
-          setIsPoseReady(true);
+          setIsPoseReady(true); // Allow camera to work even if pose fails
         }
       }
     };
 
     initializePose();
-  }, []);
+  }, [onPoseResults]);
 
   // Cleanup on component unmount
   useEffect(() => {
@@ -80,28 +99,41 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
 
   // Handle pose detection results
   const onPoseResults = useCallback((results: Results) => {
+    console.log('Pose results callback triggered:', {
+      hasImage: !!results.image,
+      hasLandmarks: !!results.poseLandmarks,
+      landmarkCount: results.poseLandmarks?.length || 0
+    });
+    
     setCurrentPose(results);
     
     if (canvasRef.current && results.image) {
       const canvas = canvasRef.current;
       const ctx = canvas.getContext('2d');
       if (ctx) {
-        // Clear canvas
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        
-        // Draw the input image
-        ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
-        
-        // Draw pose landmarks and connections
-        if (results.poseLandmarks) {
-          drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS, {
-            color: '#00ff00',
-            lineWidth: 2
-          });
-          drawLandmarks(ctx, results.poseLandmarks, {
-            color: '#ff0000',
-            radius: 3
-          });
+        try {
+          // Clear canvas
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          
+          // Draw the input image
+          ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+          
+          // Draw pose landmarks and connections
+          if (results.poseLandmarks && results.poseLandmarks.length > 0) {
+            console.log('Drawing pose landmarks:', results.poseLandmarks.length);
+            drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS, {
+              color: '#00ff00',
+              lineWidth: 2
+            });
+            drawLandmarks(ctx, results.poseLandmarks, {
+              color: '#ff0000',
+              radius: 3
+            });
+          } else {
+            console.log('No pose landmarks to draw');
+          }
+        } catch (error) {
+          console.error('Error drawing pose results:', error);
         }
       }
     }
@@ -185,29 +217,34 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
 
       // Initialize pose detection if available
       if (poseRef.current) {
-        console.log('Starting MediaPipe Camera...');
+        console.log('Starting pose detection processing...');
         
-        // Create a simpler frame processing loop
-        const processFrame = async () => {
+        // Create a simple interval-based processing
+        const processInterval = setInterval(() => {
           if (poseRef.current && videoRef.current && isPoseDetectionActive) {
             try {
-              await poseRef.current.send({ image: videoRef.current });
+              // Ensure video is actually playing
+              if (videoRef.current.readyState >= 2 && !videoRef.current.paused) {
+                poseRef.current.send({ image: videoRef.current });
+              }
             } catch (error) {
               console.warn('Pose processing error:', error);
             }
-            
-            // Continue processing if still active
-            if (isPoseDetectionActive) {
-              requestAnimationFrame(processFrame);
+          }
+        }, 100); // Process every 100ms (10 FPS)
+        
+        // Store cleanup function
+        cameraRef.current = {
+          stop: () => {
+            if (processInterval) {
+              clearInterval(processInterval);
             }
           }
-        };
+        } as any;
         
-        // Start the processing loop
-        requestAnimationFrame(processFrame);
-        console.log('Pose detection loop started');
+        console.log('Pose detection interval started successfully');
       } else {
-        console.warn('Pose detector not available, but camera is active');
+        console.warn('Pose detector not ready, camera active without pose detection');
       }
       
     } catch (error) {

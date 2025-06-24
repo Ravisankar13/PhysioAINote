@@ -37,34 +37,38 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
     const initializePose = async () => {
       if (!poseRef.current) {
         console.log('Initializing MediaPipe Pose...');
-        const pose = new Pose({
-          locateFile: (file) => {
-            return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
-          }
-        });
+        try {
+          const pose = new Pose({
+            locateFile: (file) => {
+              return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
+            }
+          });
 
-        pose.setOptions({
-          modelComplexity: 1,
-          smoothLandmarks: true,
-          enableSegmentation: false,
-          smoothSegmentation: false,
-          minDetectionConfidence: 0.5,
-          minTrackingConfidence: 0.5
-        });
+          pose.setOptions({
+            modelComplexity: 1,
+            smoothLandmarks: true,
+            enableSegmentation: false,
+            smoothSegmentation: false,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+          });
 
-        pose.onResults(onPoseResults);
-        
-        // Wait for pose to initialize
-        await pose.initialize();
-        poseRef.current = pose;
-        setIsPoseReady(true);
-        console.log('MediaPipe Pose initialized successfully');
+          pose.onResults(onPoseResults);
+          
+          // Initialize pose detector
+          await pose.initialize();
+          poseRef.current = pose;
+          setIsPoseReady(true);
+          console.log('MediaPipe Pose initialized successfully');
+        } catch (error) {
+          console.error('Failed to initialize MediaPipe Pose:', error);
+          // Set pose ready to true anyway to allow camera initialization
+          setIsPoseReady(true);
+        }
       }
     };
 
-    initializePose().catch(error => {
-      console.error('Failed to initialize MediaPipe Pose:', error);
-    });
+    initializePose();
   }, []);
 
   // Cleanup on component unmount
@@ -122,96 +126,101 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
     try {
       console.log('Starting camera initialization...');
       
-      // Ensure pose detector is initialized first
-      if (!poseRef.current || !isPoseReady) {
-        console.log('Pose detector not ready, waiting for initialization...');
-        // Wait for pose detector to be ready with timeout
-        let attempts = 0;
-        while ((!poseRef.current || !isPoseReady) && attempts < 10) {
-          await new Promise(resolve => setTimeout(resolve, 500));
-          attempts++;
-        }
-        if (!poseRef.current || !isPoseReady) {
-          throw new Error('Pose detector failed to initialize. Please refresh the page and try again.');
-        }
-      }
-      
       // Ensure video element exists
       if (!videoRef.current) {
         throw new Error('Video element not available');
       }
       
-      console.log('Pose detector and video element ready, requesting camera access...');
+      console.log('Requesting camera access...');
       
-      // Request camera permissions
+      // Request camera permissions with better constraints
       const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { 
-          width: 640, 
-          height: 480,
+          width: { ideal: 640 }, 
+          height: { ideal: 480 },
           facingMode: 'user'
-        } 
+        },
+        audio: false
       });
       
-      console.log('Camera stream obtained:', stream);
+      console.log('Camera stream obtained successfully');
       
-      if (videoRef.current && poseRef.current) {
-        // Set the video source to the camera stream
-        videoRef.current.srcObject = stream;
-        
-        // Wait for the video to be ready
-        await new Promise((resolve, reject) => {
-          if (videoRef.current) {
-            const timeout = setTimeout(() => {
-              reject(new Error('Video loading timeout'));
-            }, 10000); // 10 second timeout
+      // Set the video source to the camera stream
+      videoRef.current.srcObject = stream;
+      
+      // Wait for the video to be ready and start playing
+      await new Promise((resolve, reject) => {
+        if (videoRef.current) {
+          const timeout = setTimeout(() => {
+            reject(new Error('Video loading timeout after 10 seconds'));
+          }, 10000);
+          
+          const onLoadedMetadata = () => {
+            clearTimeout(timeout);
+            console.log('Video metadata loaded, starting playback...');
             
-            videoRef.current.onloadedmetadata = () => {
-              clearTimeout(timeout);
-              console.log('Video metadata loaded');
-              videoRef.current?.play().then(() => {
-                console.log('Video playing');
-                resolve(true);
-              }).catch(reject);
-            };
-            
-            videoRef.current.onerror = (error) => {
-              clearTimeout(timeout);
-              reject(error);
-            };
-          }
-        });
-
-        console.log('Video is ready, setting pose detection active');
-        // Set pose detection active first since we have the video stream
-        setIsPoseDetectionActive(true);
-
-        // Initialize MediaPipe Camera
-        console.log('Initializing MediaPipe Camera...');
-        const camera = new Camera(videoRef.current, {
-          onFrame: async () => {
-            if (poseRef.current && videoRef.current) {
-              await poseRef.current.send({ image: videoRef.current });
+            if (videoRef.current) {
+              videoRef.current.play()
+                .then(() => {
+                  console.log('Video is now playing');
+                  resolve(true);
+                })
+                .catch(reject);
             }
-          },
-          width: 640,
-          height: 480
-        });
+          };
+          
+          const onError = (error: any) => {
+            clearTimeout(timeout);
+            console.error('Video error:', error);
+            reject(error);
+          };
+          
+          videoRef.current.addEventListener('loadedmetadata', onLoadedMetadata, { once: true });
+          videoRef.current.addEventListener('error', onError, { once: true });
+        }
+      });
+
+      console.log('Video is ready, activating pose detection...');
+      setIsPoseDetectionActive(true);
+
+      // Initialize pose detection if available
+      if (poseRef.current) {
+        console.log('Starting MediaPipe Camera...');
         
-        await camera.start();
-        cameraRef.current = camera;
-        console.log('Camera started successfully');
+        // Create a simpler frame processing loop
+        const processFrame = async () => {
+          if (poseRef.current && videoRef.current && isPoseDetectionActive) {
+            try {
+              await poseRef.current.send({ image: videoRef.current });
+            } catch (error) {
+              console.warn('Pose processing error:', error);
+            }
+            
+            // Continue processing if still active
+            if (isPoseDetectionActive) {
+              requestAnimationFrame(processFrame);
+            }
+          }
+        };
+        
+        // Start the processing loop
+        requestAnimationFrame(processFrame);
+        console.log('Pose detection loop started');
       } else {
-        throw new Error('Video element or pose detector not available');
+        console.warn('Pose detector not available, but camera is active');
       }
+      
     } catch (error) {
       console.error('Error starting camera:', error);
-      setIsPoseDetectionActive(false); // Reset state on error
+      setIsPoseDetectionActive(false);
       
       const errorObj = error as Error & { name?: string };
       if (errorObj.name === 'NotAllowedError') {
-        alert('Camera access denied. Please allow camera permissions and try again.');
+        alert('Camera access denied. Please allow camera permissions in your browser and try again.');
       } else if (errorObj.name === 'NotFoundError') {
         alert('No camera found. Please connect a camera and try again.');
+      } else if (errorObj.name === 'NotSupportedError') {
+        alert('Camera not supported on this device or browser.');
       } else if (errorObj.message?.includes('timeout')) {
         alert('Camera loading timed out. Please try again.');
       } else {
@@ -224,20 +233,35 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
 
   // Stop camera and pose detection
   const stopCamera = () => {
-    // Stop MediaPipe camera
+    console.log('Stopping camera...');
+    
+    // Stop pose detection first
+    setIsPoseDetectionActive(false);
+    
+    // Stop MediaPipe camera if it exists
     if (cameraRef.current) {
-      cameraRef.current.stop();
+      try {
+        cameraRef.current.stop();
+      } catch (error) {
+        console.warn('Error stopping MediaPipe camera:', error);
+      }
       cameraRef.current = null;
     }
     
     // Stop video stream
     if (videoRef.current && videoRef.current.srcObject) {
       const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach(track => track.stop());
+      stream.getTracks().forEach(track => {
+        try {
+          track.stop();
+          console.log('Stopped camera track:', track.kind);
+        } catch (error) {
+          console.warn('Error stopping track:', error);
+        }
+      });
       videoRef.current.srcObject = null;
     }
     
-    setIsPoseDetectionActive(false);
     setCurrentPose(null);
     
     // Clear canvas
@@ -247,6 +271,8 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
         ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
       }
     }
+    
+    console.log('Camera stopped successfully');
   };
 
   // Start recording motion data

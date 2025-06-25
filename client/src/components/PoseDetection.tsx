@@ -2,6 +2,14 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import * as tf from '@tensorflow/tfjs';
 import * as poseDetection from '@tensorflow-models/pose-detection';
 
+// Ensure TensorFlow.js is properly loaded
+if (typeof window !== 'undefined') {
+  // Set up TensorFlow.js platform
+  tf.ready().then(() => {
+    console.log('TensorFlow.js is ready, backend:', tf.getBackend());
+  });
+}
+
 interface PoseDetectionProps {
   videoRef: React.RefObject<HTMLVideoElement>;
   canvasRef: React.RefObject<HTMLCanvasElement>;
@@ -50,13 +58,14 @@ export const PoseDetection: React.FC<PoseDetectionProps> = ({
 
       console.log('TensorFlow.js backend ready:', tf.getBackend());
 
-      // Create pose detector with correct configuration
+      // Create pose detector with working configuration
       const detectorConfig = {
         runtime: 'tfjs' as const,
-        enableSmoothing: true,
-        modelType: 'SinglePose.Lightning' as const
+        enableSmoothing: false,
+        modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
       };
 
+      console.log('Creating MoveNet detector with config:', detectorConfig);
       const poseDetector = await poseDetection.createDetector(
         poseDetection.SupportedModels.MoveNet,
         detectorConfig
@@ -68,7 +77,8 @@ export const PoseDetection: React.FC<PoseDetectionProps> = ({
 
     } catch (err) {
       console.error('Failed to initialize pose detection:', err);
-      setError('Pose detection initialization failed');
+      console.error('Error details:', err.message, err.stack);
+      setError(`Pose detection initialization failed: ${err.message}`);
       setIsLoading(false);
     }
   }, []);

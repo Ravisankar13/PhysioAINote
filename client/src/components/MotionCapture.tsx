@@ -33,7 +33,7 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
   const [isPoseDetectionActive, setIsPoseDetectionActive] = useState(false);
   const [virtualPatient, setVirtualPatient] = useState<any>(null);
   const [showVirtualPatient, setShowVirtualPatient] = useState(false);
-  const [useMockPoseDetection, setUseMockPoseDetection] = useState(true);
+  const [useMockPoseDetection, setUseMockPoseDetection] = useState(false);
   
   const { toast } = useToast();
 
@@ -333,9 +333,33 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
           {error && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-md">
               <p className="text-red-700 text-sm">{error}</p>
+              <Button 
+                onClick={() => setUseMockPoseDetection(!useMockPoseDetection)} 
+                size="sm" 
+                variant="outline"
+                className="mt-2"
+              >
+                <Brain className="h-4 w-4 mr-2" />
+                {useMockPoseDetection ? "Try Real AI Detection" : "Use Demo Mode"}
+              </Button>
             </div>
           )}
           
+          {/* Mode Toggle */}
+          <div className="flex items-center gap-2 mb-4">
+            <Button 
+              onClick={() => setUseMockPoseDetection(!useMockPoseDetection)} 
+              size="sm" 
+              variant={useMockPoseDetection ? "secondary" : "outline"}
+            >
+              <Brain className="h-4 w-4 mr-2" />
+              {useMockPoseDetection ? "Demo Mode" : "AI Detection"}
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              {useMockPoseDetection ? "Using simulated pose data" : "Using TensorFlow.js AI detection"}
+            </span>
+          </div>
+
           <div className="flex gap-2 flex-wrap" onSubmit={(e) => e.preventDefault()}>
             {!isCameraActive ? (
               <Button 

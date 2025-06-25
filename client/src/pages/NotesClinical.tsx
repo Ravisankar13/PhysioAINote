@@ -100,7 +100,7 @@ function NotesClinical(): React.ReactElement {
   >({});
 
   const navigate = useNavigate();
-  const soap_note_streaming_api_base_url = 'http://3.17.183.7:8000/'
+  const soap_note_streaming_api_base_url = 'api.physioconversation.stackaisolutions.com'
 
   useEffect(() => {
     const handleLogin = async () => {

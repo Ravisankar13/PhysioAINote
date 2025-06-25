@@ -115,13 +115,14 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
     }
     
     console.log('Processing frame with', landmarks.length, 'landmarks');
+    console.log('Sample landmark:', landmarks[0]);
     
     // Extract key landmarks using MoveNet indices
     const getLandmark = (index: number) => {
       if (index >= 0 && index < landmarks.length && landmarks[index]) {
         const landmark = landmarks[index];
         // Check if it's a MoveNet keypoint structure
-        if (landmark.x !== undefined && landmark.y !== undefined) {
+        if (landmark.x !== undefined && landmark.y !== undefined && landmark.score > 0.3) {
           return { x: landmark.x, y: landmark.y, z: landmark.z || 0 };
         }
       }
@@ -266,10 +267,17 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
   useEffect(() => {
     if (motionData && motionData.length > 0) {
       try {
+        console.log('Initializing motion analysis with', motionData.length, 'frames');
+        console.log('First frame sample:', motionData[0]);
         const anthropometrics = estimateAnthropometrics();
         setEstimatedAnthropometrics(anthropometrics);
         setMovementType(analyzeMovementType());
         setCurrentFrame(0);
+        
+        // Process first frame immediately
+        const initialJointAngles = processFrame(motionData[0]);
+        console.log('Initial joint angles:', initialJointAngles);
+        setCurrentJointAngles(initialJointAngles);
       } catch (error) {
         console.error('Error analyzing motion data:', error);
         setEstimatedAnthropometrics(null);
@@ -298,12 +306,18 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
 
   // Update skeleton when frame changes
   useEffect(() => {
-    if (motionData.length > 0 && currentFrame < motionData.length) {
-      const jointAngles = processFrame(motionData[currentFrame]);
-      setCurrentJointAngles(jointAngles);
-      
-      if (onSkeletonUpdate) {
-        onSkeletonUpdate(jointAngles, estimatedAnthropometrics);
+    if (motionData && motionData.length > 0 && currentFrame < motionData.length) {
+      try {
+        console.log('Processing frame', currentFrame, 'of', motionData.length);
+        const jointAngles = processFrame(motionData[currentFrame]);
+        console.log('Setting joint angles:', jointAngles);
+        setCurrentJointAngles(jointAngles);
+        
+        if (onSkeletonUpdate) {
+          onSkeletonUpdate(jointAngles, estimatedAnthropometrics);
+        }
+      } catch (error) {
+        console.error('Error processing frame:', error);
       }
     }
   }, [currentFrame, motionData, estimatedAnthropometrics, onSkeletonUpdate]);
@@ -387,21 +401,41 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
         )}
 
         {/* Current Joint Angles */}
-        {currentJointAngles && (
-          <div className="space-y-2">
-            <h3 className="text-sm font-medium">Current Joint Angles (degrees)</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-              <div>L Shoulder: {Math.round(currentJointAngles.leftShoulder)}°</div>
-              <div>R Shoulder: {Math.round(currentJointAngles.rightShoulder)}°</div>
-              <div>L Elbow: {Math.round(currentJointAngles.leftElbow)}°</div>
-              <div>R Elbow: {Math.round(currentJointAngles.rightElbow)}°</div>
-              <div>L Hip: {Math.round(currentJointAngles.leftHip)}°</div>
-              <div>R Hip: {Math.round(currentJointAngles.rightHip)}°</div>
-              <div>L Knee: {Math.round(currentJointAngles.leftKnee)}°</div>
-              <div>R Knee: {Math.round(currentJointAngles.rightKnee)}°</div>
+        <div className="space-y-2">
+          <h3 className="text-sm font-medium">Current Joint Angles (degrees)</h3>
+          {currentJointAngles ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              <div className="bg-gray-50 p-2 rounded text-center">
+                <div className="text-xs text-gray-600">L Shoulder</div>
+                <div className="text-lg font-bold text-blue-600">{Math.round(currentJointAngles.leftShoulder)}°</div>
+              </div>
+              <div className="bg-gray-50 p-2 rounded text-center">
+                <div className="text-xs text-gray-600">R Shoulder</div>
+                <div className="text-lg font-bold text-blue-600">{Math.round(currentJointAngles.rightShoulder)}°</div>
+              </div>
+              <div className="bg-gray-50 p-2 rounded text-center">
+                <div className="text-xs text-gray-600">L Elbow</div>
+                <div className="text-lg font-bold text-green-600">{Math.round(currentJointAngles.leftElbow)}°</div>
+              </div>
+              <div className="bg-gray-50 p-2 rounded text-center">
+                <div className="text-xs text-gray-600">R Elbow</div>
+                <div className="text-lg font-bold text-green-600">{Math.round(currentJointAngles.rightElbow)}°</div>
+              </div>
+              <div className="bg-gray-50 p-2 rounded text-center">
+                <div className="text-xs text-gray-600">L Knee</div>
+                <div className="text-lg font-bold text-purple-600">{Math.round(currentJointAngles.leftKnee)}°</div>
+              </div>
+              <div className="bg-gray-50 p-2 rounded text-center">
+                <div className="text-xs text-gray-600">R Knee</div>
+                <div className="text-lg font-bold text-purple-600">{Math.round(currentJointAngles.rightKnee)}°</div>
+              </div>
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="text-center text-gray-500 p-4">
+              No joint angle data - press play to start analysis
+            </div>
+          )}
+        </div>
 
         {/* Playback Controls */}
         <div className="space-y-4">

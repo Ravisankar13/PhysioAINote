@@ -256,7 +256,14 @@ export default function AssessmentTemplates({ onSelectTemplate, selectedBodyPart
   };
 
   return (
-    <div className="space-y-3">
+    <div className="p-4 space-y-6">
+      <div className="text-center">
+        <h2 className="text-2xl font-bold mb-2">Clinical Assessment Templates</h2>
+        <p className="text-muted-foreground">
+          Select a structured assessment template to guide your clinical evaluation
+        </p>
+      </div>
+      
       {/* Red Flag Screening */}
       <Card className="border-red-200">
         <CardHeader>

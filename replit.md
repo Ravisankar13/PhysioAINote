@@ -140,6 +140,8 @@ PhysioGPT is an advanced AI-powered physiotherapy platform that provides evidenc
 
 ## Recent Updates
 
+- **January 25, 2025**: Fixed content positioning issues in Assessments and Protocols tabs - content now starts at top of page
+- **January 25, 2025**: Enhanced AI motion capture with improved error handling for TensorFlow.js ROI width errors
 - **June 24, 2025**: Motion capture system completed with MediaPipe pose detection and virtual patient creation
 - **June 24, 2025**: Enhanced PhysioGPT with color-coding system and real-time evidence integration  
 - **June 24, 2025**: Implemented comprehensive user authentication and 14-day trial system

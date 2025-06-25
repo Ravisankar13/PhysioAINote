@@ -613,11 +613,19 @@ export default function EvidenceBasedProtocols({ selectedCondition, selectedBody
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <BookOpen className="h-5 w-5" />
-          Evidence-Based Treatment Protocols
+    <div className="p-4 space-y-6">
+      <div className="text-center">
+        <h2 className="text-2xl font-bold mb-2">Evidence-Based Treatment Protocols</h2>
+        <p className="text-muted-foreground">
+          Select a protocol to view detailed treatment guidelines
+        </p>
+      </div>
+      
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BookOpen className="h-5 w-5" />
+            Treatment Protocols
         </CardTitle>
         <p className="text-sm text-muted-foreground">
           Standardized, research-backed treatment approaches for common conditions
@@ -666,6 +674,7 @@ export default function EvidenceBasedProtocols({ selectedCondition, selectedBody
         </div>
       </CardContent>
     </Card>
+    </div>
   );
 }
 

@@ -705,34 +705,28 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
                   </TabsContent>
 
                   {/* Assessments Tab */}
-                  <TabsContent value="assessments" className="flex-1 flex flex-col p-0 m-0 min-h-0 data-[state=active]:mt-0">
-                    <div className="flex-1 overflow-y-auto pt-0">
-                      {selectedAssessmentTemplate ? (
-                        <div className="p-2 sm:p-3">
-                          <AssessmentForm
-                            template={selectedAssessmentTemplate}
-                            onComplete={setAssessmentResults}
-                            onBack={() => setSelectedAssessmentTemplate(null)}
-                          />
-                        </div>
-                      ) : (
-                        <div className="pt-0">
-                          <AssessmentTemplates
-                            onSelectTemplate={setSelectedAssessmentTemplate}
-                            selectedBodyPart={selectedBodyRegion || undefined}
-                          />
-                        </div>
-                      )}
-                    </div>
+                  <TabsContent value="assessments" className="flex-1 overflow-y-auto p-0 m-0 min-h-0 data-[state=active]:mt-0 space-y-0">
+                    {selectedAssessmentTemplate ? (
+                      <div className="p-3">
+                        <AssessmentForm
+                          template={selectedAssessmentTemplate}
+                          onComplete={setAssessmentResults}
+                          onBack={() => setSelectedAssessmentTemplate(null)}
+                        />
+                      </div>
+                    ) : (
+                      <AssessmentTemplates
+                        onSelectTemplate={setSelectedAssessmentTemplate}
+                        selectedBodyPart={selectedBodyRegion || undefined}
+                      />
+                    )}
                   </TabsContent>
 
                   {/* Protocols Tab */}
-                  <TabsContent value="protocols" className="flex-1 flex flex-col p-0 m-0 min-h-0 data-[state=active]:mt-0">
-                    <div className="flex-1 overflow-y-auto pt-0">
-                      <EvidenceBasedProtocols
-                        selectedBodyPart={selectedBodyRegion || undefined}
-                      />
-                    </div>
+                  <TabsContent value="protocols" className="flex-1 overflow-y-auto p-0 m-0 min-h-0 data-[state=active]:mt-0 space-y-0">
+                    <EvidenceBasedProtocols
+                      selectedBodyPart={selectedBodyRegion || undefined}
+                    />
                   </TabsContent>
                 </Tabs>
               </CardContent>

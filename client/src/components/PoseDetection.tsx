@@ -216,17 +216,27 @@ export const PoseDetection: React.FC<PoseDetectionProps> = ({
     const video = videoRef.current;
     const canvas = canvasRef.current;
 
-    // Ensure video is ready
-    if (video.readyState < 2) {
+    // Ensure video is ready and has valid dimensions
+    if (video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) {
       animationIdRef.current = requestAnimationFrame(processFrame);
       return;
     }
 
     try {
+      // Ensure valid video dimensions before processing
+      const videoWidth = video.videoWidth || 640;
+      const videoHeight = video.videoHeight || 480;
+      
+      if (videoWidth <= 0 || videoHeight <= 0) {
+        // Skip this frame if video dimensions are invalid
+        animationIdRef.current = requestAnimationFrame(processFrame);
+        return;
+      }
+
       // Set canvas size to match video
-      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-        canvas.width = video.videoWidth || 640;
-        canvas.height = video.videoHeight || 480;
+      if (canvas.width !== videoWidth || canvas.height !== videoHeight) {
+        canvas.width = videoWidth;
+        canvas.height = videoHeight;
       }
 
       const poses = await detector.estimatePoses(video);
@@ -257,7 +267,13 @@ export const PoseDetection: React.FC<PoseDetectionProps> = ({
         }
       }
     } catch (err) {
-      console.warn('Error processing frame:', err);
+      if (err.message.includes('roi width cannot be 0')) {
+        // This is a TensorFlow.js internal error due to invalid video dimensions
+        // Skip this frame and continue
+        console.warn('Skipping frame due to invalid dimensions');
+      } else {
+        console.warn('Error processing frame:', err.message);
+      }
     }
 
     if (isActive) {

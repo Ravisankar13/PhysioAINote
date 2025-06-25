@@ -207,7 +207,7 @@ export const PoseDetection: React.FC<PoseDetectionProps> = ({
     });
   }, [videoRef]);
 
-  // Process frames with improved error handling
+  // Process frames with robust error handling
   const processFrame = useCallback(async () => {
     if (!detector || !videoRef.current || !canvasRef.current || !isActive) {
       return;
@@ -216,47 +216,61 @@ export const PoseDetection: React.FC<PoseDetectionProps> = ({
     const video = videoRef.current;
     const canvas = canvasRef.current;
 
-    // Ensure video is ready and has valid dimensions
-    if (video.readyState < 4 || video.videoWidth === 0 || video.videoHeight === 0 || !video.srcObject) {
-      // Wait longer for video to be fully loaded
+    // Comprehensive video validation
+    if (video.readyState < 4 || 
+        video.videoWidth === 0 || 
+        video.videoHeight === 0 || 
+        !video.srcObject ||
+        video.paused ||
+        video.ended) {
+      
+      // Wait for video to be ready
       setTimeout(() => {
         if (isActive) {
           animationIdRef.current = requestAnimationFrame(processFrame);
         }
-      }, 100);
+      }, 200);
       return;
     }
 
     try {
-      // Get actual video dimensions
-      const videoWidth = video.videoWidth;
-      const videoHeight = video.videoHeight;
+      // Get video dimensions with fallbacks
+      const videoWidth = video.videoWidth || 640;
+      const videoHeight = video.videoHeight || 480;
       
-      // Double-check dimensions are valid
-      if (!videoWidth || !videoHeight || videoWidth <= 0 || videoHeight <= 0) {
-        console.warn('Invalid video dimensions:', videoWidth, 'x', videoHeight);
+      // Validate dimensions are reasonable
+      if (videoWidth < 100 || videoHeight < 100 || videoWidth > 4000 || videoHeight > 4000) {
+        console.warn('Unusual video dimensions:', videoWidth, 'x', videoHeight);
         setTimeout(() => {
           if (isActive) {
             animationIdRef.current = requestAnimationFrame(processFrame);
           }
-        }, 100);
+        }, 200);
         return;
       }
 
-      // Set canvas size to match video exactly
+      // Update canvas size if needed
       if (canvas.width !== videoWidth || canvas.height !== videoHeight) {
         canvas.width = videoWidth;
         canvas.height = videoHeight;
-        console.log('Set canvas size to:', videoWidth, 'x', videoHeight);
+        console.log('Canvas resized to:', videoWidth, 'x', videoHeight);
       }
 
-      // Only proceed if video is actually playing
-      if (video.paused || video.ended) {
-        animationIdRef.current = requestAnimationFrame(processFrame);
-        return;
+      // Create a temporary canvas to ensure we have a clean frame
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = videoWidth;
+      tempCanvas.height = videoHeight;
+      const tempCtx = tempCanvas.getContext('2d');
+      
+      if (!tempCtx) {
+        throw new Error('Could not create temporary canvas context');
       }
 
-      const poses = await detector.estimatePoses(video);
+      // Draw video frame to temporary canvas first
+      tempCtx.drawImage(video, 0, 0, videoWidth, videoHeight);
+
+      // Use the temporary canvas for pose detection
+      const poses = await detector.estimatePoses(tempCanvas);
       
       if (poses && poses.length > 0) {
         console.log('Poses detected:', poses.length, 'poses with', poses[0].keypoints?.length || 0, 'keypoints');
@@ -285,18 +299,19 @@ export const PoseDetection: React.FC<PoseDetectionProps> = ({
         }
       }
     } catch (err) {
-      if (err.message.includes('roi width cannot be 0')) {
-        // This is a TensorFlow.js internal error due to invalid video dimensions
-        // Stop processing temporarily and wait for valid video
-        console.warn('ROI width error - waiting for valid video stream');
+      if (err.message.includes('roi width cannot be 0') || 
+          err.message.includes('width') || 
+          err.message.includes('height')) {
+        // Video dimension related error - wait longer
+        console.warn('Video dimension error, waiting for stream to stabilize...');
         setTimeout(() => {
           if (isActive) {
             animationIdRef.current = requestAnimationFrame(processFrame);
           }
-        }, 500);
+        }, 1000);
         return;
       } else {
-        console.warn('Error processing frame:', err.message);
+        console.error('Pose detection error:', err);
       }
     }
 

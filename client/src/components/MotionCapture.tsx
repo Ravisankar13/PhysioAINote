@@ -33,7 +33,7 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
   const [isPoseDetectionActive, setIsPoseDetectionActive] = useState(false);
   const [virtualPatient, setVirtualPatient] = useState<any>(null);
   const [showVirtualPatient, setShowVirtualPatient] = useState(false);
-  const [useMockPoseDetection, setUseMockPoseDetection] = useState(true);
+  const [useMockPoseDetection, setUseMockPoseDetection] = useState(false);
   
   const { toast } = useToast();
 
@@ -133,13 +133,25 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
           console.log('Video can start playing');
           console.log('Video dimensions:', videoRef.current?.videoWidth, 'x', videoRef.current?.videoHeight);
           
-          // Only enable pose detection after video is ready
+          // Only enable camera state immediately
+          setIsCameraActive(true);
+          setIsLoading(false);
+          
+          // Wait longer before enabling pose detection to ensure stable stream
           setTimeout(() => {
-            setIsCameraActive(true);
-            setIsLoading(false);
-            setIsPoseDetectionActive(true);
-            console.log('Pose detection enabled');
-          }, 1000); // Give video time to stabilize
+            if (videoRef.current && 
+                videoRef.current.videoWidth > 0 && 
+                videoRef.current.videoHeight > 0 &&
+                !videoRef.current.paused) {
+              setIsPoseDetectionActive(true);
+              console.log('Pose detection enabled after stabilization');
+            } else {
+              console.warn('Video not ready yet, retrying...');
+              setTimeout(() => {
+                setIsPoseDetectionActive(true);
+              }, 1000);
+            }
+          }, 2000);
         };
       }
     } catch (err) {
@@ -386,23 +398,24 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
           )}
           
           {/* Mode Toggle */}
-          <div className="flex items-center gap-2 mb-4 p-3 bg-blue-50 rounded-lg">
+          <div className="flex items-center gap-2 mb-4 p-3 bg-gradient-to-r from-blue-50 to-green-50 rounded-lg border">
             <Button 
               onClick={() => setUseMockPoseDetection(!useMockPoseDetection)} 
               size="sm" 
-              variant={useMockPoseDetection ? "default" : "outline"}
+              variant={useMockPoseDetection ? "secondary" : "default"}
+              className={useMockPoseDetection ? "bg-orange-100 hover:bg-orange-200" : "bg-green-100 hover:bg-green-200"}
             >
               <Brain className="h-4 w-4 mr-2" />
-              {useMockPoseDetection ? "Demo Mode" : "AI Detection"}
+              {useMockPoseDetection ? "Switch to AI" : "AI Detection"}
             </Button>
             <div className="flex-1">
-              <div className="text-sm font-medium text-blue-800">
+              <div className={`text-sm font-medium ${useMockPoseDetection ? 'text-orange-800' : 'text-green-800'}`}>
                 {useMockPoseDetection ? "Demo Mode Active" : "AI Detection Mode"}
               </div>
-              <div className="text-xs text-blue-600">
+              <div className={`text-xs ${useMockPoseDetection ? 'text-orange-600' : 'text-green-600'}`}>
                 {useMockPoseDetection 
-                  ? "Using simulated realistic human movement data for testing" 
-                  : "Using TensorFlow.js with PoseNet/BlazePose/MoveNet models"
+                  ? "Using simulated realistic human movement for testing" 
+                  : "Real-time AI pose detection with TensorFlow.js"
                 }
               </div>
             </div>

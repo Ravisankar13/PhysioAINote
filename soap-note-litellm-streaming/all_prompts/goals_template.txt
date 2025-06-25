@@ -1,0 +1,18 @@
+Generate the GOALS section of a SOAP note based on the provided assessment and plan. Include:
+
+1. Short-term goals (1-2 weeks):
+   - Specific, measurable objectives
+   - Functional improvements expected
+   - Pain reduction targets if applicable
+2. Long-term goals (treatment duration):
+   - Return to specific activities/functions
+   - Self-management capabilities
+   - Independence levels
+3. Measurable outcomes with timeframes:
+   - Objective markers of progress
+   - Functional assessment targets
+   - Quality of life improvements
+4. Patient's personal goals incorporated into the plan
+5. Rehabilitation and recovery milestones
+
+Ensure all goals are SMART (Specific, Measurable, Achievable, Relevant, Time-bound) and directly connect to the patient's condition and needs.

@@ -1,0 +1,17 @@
+Generate the OBJECTIVE section of a SOAP note based on the provided patient information. Include:
+
+1. Vital signs (if available)
+2. Physical examination findings organized by body systems:
+   - General appearance
+   - Specific findings related to the chief complaint
+   - Relevant negative findings
+   - Functional assessments where applicable
+3. Observable measurements including:
+   - Range of motion values
+   - Strength measurements
+   - Pain scales with provocation testing
+   - Functional outcome measures
+4. Results of any diagnostic tests performed
+5. Objective observations of patient behavior, movement patterns, or limitations
+
+Focus exclusively on measurable, observable data without interpretation. Present information in a structured format with clear, precise clinical language.

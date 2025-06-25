@@ -28,6 +28,8 @@ interface SoapNoteData {
   objective?: string;
   assessment?: string;
   plan?: string;
+  goals?: string;
+  treatment?: string;
   status?: string;
 }
 
@@ -92,8 +94,13 @@ function NotesClinical(): React.ReactElement {
   const [isGeneratingSoapNote, setIsGeneratingSoapNote] =
     useState<boolean>(false);
   const [isPolling, setIsPolling] = useState<boolean>(false);
+  const [isStreaming, setIsStreaming] = useState<boolean>(false);
+  const [streamingStatus, setStreamingStatus] = useState<
+    Record<string, { isStreaming: boolean; isComplete: boolean }>
+  >({});
 
   const navigate = useNavigate();
+  const soap_note_streaming_api_base_url = 'http://127.0.0.1:8030'
 
   useEffect(() => {
     const handleLogin = async () => {
@@ -296,6 +303,8 @@ function NotesClinical(): React.ReactElement {
     setShowTranscript(false);
     setRecordTime(0);
     setAudioBlob(null);
+    setIsStreaming(false);
+    setStreamingStatus({});
   };
 
   const uploadDemographicData = async (): Promise<void> => {
@@ -305,8 +314,10 @@ function NotesClinical(): React.ReactElement {
     }
 
     try {
+      
       await axios.post(
-        "https://hqy44mb8l7.execute-api.us-east-2.amazonaws.com/dev/save-demographic-data",
+        // "https://hqy44mb8l7.execute-api.us-east-2.amazonaws.com/dev/save-demographic-data",
+        `${soap_note_streaming_api_base_url}/save-demographic-data`,
         {
           ...patientData,
           user_id: userId,
@@ -333,38 +344,215 @@ function NotesClinical(): React.ReactElement {
       return;
     }
 
-    try {
-      await axios.post(
-        "https://hqy44mb8l7.execute-api.us-east-2.amazonaws.com/dev/gen-soap-note",
-        {
-          ...patientData,
-          user_id: userId,
-          transcript_s3_uri: `s3://physio-convo-data/${sessionId}/transcript.csv`,
-          session_id: sessionId,
-        },
-        {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${jwtToken}`,
+    // Check if this is a new session (use streaming) or existing session (use polling)
+    const isNewSession = !soapNote || (soapNote && soapNote.status === "pending");
+    
+    if (isNewSession) {
+      // Use streaming for new SOAP note generation
+      streamSoapNoteGeneration();
+    } else {
+      // Use existing polling logic for completed sessions
+      try {
+        await axios.post(
+          "https://hqy44mb8l7.execute-api.us-east-2.amazonaws.com/dev/gen-soap-note",
+          {
+            ...patientData,
+            user_id: userId,
+            transcript_s3_uri: `s3://physio-convo-data/${sessionId}/transcript.csv`,
+            session_id: sessionId,
           },
-        }
-      );
+          {
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${jwtToken}`,
+            },
+          }
+        );
 
-      // Initialize an empty SOAP note
+        // Initialize an empty SOAP note
+        const emptySoapNote: SoapNoteData = {
+          subjective: "",
+          objective: "",
+          assessment: "",
+          plan: "",
+          goals: "",
+          treatment: "",
+          status: "pending",
+        };
+        setSoapNote(emptySoapNote);
+        setIsPolling(true);
+        pollSoapNote();
+      } catch (error) {
+        console.error("Error generating SOAP note:", error);
+      }
+    }
+    setIsGeneratingSoapNote(false);
+  };
+
+  const streamSoapNoteGeneration = async (): Promise<void> => {
+    if (!jwtToken || !userId || !sessionId) {
+      console.error("Missing required data for streaming");
+      return;
+    }
+
+    try {
+      setIsStreaming(true);
+      setStreamingStatus({});
+      
+      // Initialize empty SOAP note for streaming
       const emptySoapNote: SoapNoteData = {
         subjective: "",
         objective: "",
         assessment: "",
         plan: "",
-        status: "pending",
+        goals: "",
+        treatment: "",
+        status: "in_progress",
       };
       setSoapNote(emptySoapNote);
-      setIsPolling(true);
-      pollSoapNote();
+
+      // Use the streaming endpoint
+      const response = await fetch(
+        `${soap_note_streaming_api_base_url}/gen-soap-note-stream`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            ...patientData,
+            user_id: userId,
+            transcript_s3_uri: `s3://physio-convo-data/${sessionId}/transcript.csv`,
+            session_id: sessionId,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+        throw new Error("Failed to get response reader");
+      }
+
+      let buffer = "";
+      
+      while (true) {
+        const { value, done } = await reader.read();
+        
+        if (done) break;
+        
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        
+        // Keep the last incomplete line in buffer
+        buffer = lines.pop() || "";
+        
+        for (const line of lines) {
+          if (line.trim() === "") continue;
+          
+          if (line.startsWith("data: ")) {
+            try {
+              const jsonData = line.slice(6).trim();
+              if (jsonData === "[DONE]") continue;
+              
+              const data = JSON.parse(jsonData);
+              handleStreamEvent(data);
+            } catch (e) {
+              console.warn("Failed to parse streaming data:", line, e);
+            }
+          }
+        }
+      }
     } catch (error) {
-      console.error("Error generating SOAP note:", error);
+      console.error("Error streaming SOAP note:", error);
+      setIsStreaming(false);
     }
-    setIsGeneratingSoapNote(false);
+  };
+
+  const handleStreamEvent = (data: any) => {
+    const { type, section, content, message } = data;
+    
+    switch (type) {
+      case "status":
+        console.log("Status:", message);
+        break;
+        
+      case "section_start":
+        setStreamingStatus(prev => ({
+          ...prev,
+          [section]: { isStreaming: true, isComplete: false }
+        }));
+        break;
+        
+      case "content_delta":
+        if (section && content) {
+          setSoapNote(prev => {
+            if (!prev) {
+              return {
+                subjective: "",
+                objective: "",
+                assessment: "",
+                plan: "",
+                goals: "",
+                treatment: "",
+                status: "in_progress",
+                [section]: content
+              };
+            }
+            return {
+              ...prev,
+              [section]: (prev[section as keyof SoapNoteData] || "") + content
+            };
+          });
+        }
+        break;
+        
+      case "section_complete":
+        if (section) {
+          setStreamingStatus(prev => ({
+            ...prev,
+            [section]: { isStreaming: false, isComplete: true }
+          }));
+          
+          if (content) {
+            setSoapNote(prev => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                [section]: content
+              };
+            });
+          }
+        }
+        break;
+        
+      case "complete":
+        setIsStreaming(false);
+        setShowCopyButton(true);
+        setSoapNote(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            status: "completed"
+          };
+        });
+        console.log("SOAP note generation completed");
+        break;
+        
+      case "error":
+        console.error("Streaming error:", message);
+        setIsStreaming(false);
+        break;
+        
+      default:
+        console.log("Unknown event type:", type, data);
+        break;
+    }
   };
 
   const pollSoapNote = async (): Promise<void> => {
@@ -887,6 +1075,8 @@ function NotesClinical(): React.ReactElement {
                   isGeneratingSoapNote={isGeneratingSoapNote}
                   generateSoapNote={generateSoapNote}
                   isPolling={isPolling}
+                  isStreaming={isStreaming}
+                  streamingStatus={streamingStatus}
                 />
               )}
             </div>

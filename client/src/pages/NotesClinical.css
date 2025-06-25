@@ -1017,3 +1017,85 @@ button:hover {
     max-width: 220px;
   }
 }
+
+/* Streaming Styles */
+.soap-section.streaming {
+  border-left: 3px solid var(--primary-color);
+  background-color: hsla(196, 100%, 47%, 0.05);
+}
+
+.soap-section.streaming-complete {
+  border-left: 3px solid #28a745;
+  background-color: hsla(120, 60%, 50%, 0.05);
+}
+
+.streaming-indicator {
+  margin-left: 10px;
+  font-size: 0.8em;
+  color: var(--primary-color);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.streaming-dots {
+  animation: streamingDots 1.5s infinite;
+}
+
+@keyframes streamingDots {
+  0%, 20% { content: '.'; }
+  40% { content: '..'; }
+  60% { content: '...'; }
+  80%, 100% { content: '.'; }
+}
+
+.streaming-text {
+  font-weight: 500;
+}
+
+.streaming-complete-indicator {
+  margin-left: 10px;
+  color: #28a745;
+  font-weight: bold;
+}
+
+.streaming-content {
+  position: relative;
+}
+
+.streaming-cursor {
+  animation: blink 1s infinite;
+  color: var(--primary-color);
+  font-weight: bold;
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+.generation-message {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background-color: hsla(196, 100%, 47%, 0.1);
+  border-radius: 4px;
+  margin: 10px 0;
+}
+
+.streaming-message {
+  color: var(--primary-color);
+  font-weight: 500;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.polling-message {
+  color: #666;
+  font-weight: 500;
+}

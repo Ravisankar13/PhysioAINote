@@ -33,7 +33,7 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
   const [isPoseDetectionActive, setIsPoseDetectionActive] = useState(false);
   const [virtualPatient, setVirtualPatient] = useState<any>(null);
   const [showVirtualPatient, setShowVirtualPatient] = useState(false);
-  const [useMockPoseDetection, setUseMockPoseDetection] = useState(false);
+  const [useMockPoseDetection, setUseMockPoseDetection] = useState(true);
   
   const { toast } = useToast();
 
@@ -119,11 +119,27 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
         videoRef.current.srcObject = stream;
         streamRef.current = stream;
         
+        // Wait for video to fully load before starting pose detection
         videoRef.current.onloadedmetadata = () => {
+          console.log('Video metadata loaded');
           videoRef.current?.play();
-          setIsCameraActive(true);
-          setIsLoading(false);
-          setIsPoseDetectionActive(true);
+        };
+        
+        videoRef.current.onloadeddata = () => {
+          console.log('Video data loaded');
+        };
+        
+        videoRef.current.oncanplay = () => {
+          console.log('Video can start playing');
+          console.log('Video dimensions:', videoRef.current?.videoWidth, 'x', videoRef.current?.videoHeight);
+          
+          // Only enable pose detection after video is ready
+          setTimeout(() => {
+            setIsCameraActive(true);
+            setIsLoading(false);
+            setIsPoseDetectionActive(true);
+            console.log('Pose detection enabled');
+          }, 1000); // Give video time to stabilize
         };
       }
     } catch (err) {

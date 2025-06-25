@@ -217,26 +217,43 @@ export const PoseDetection: React.FC<PoseDetectionProps> = ({
     const canvas = canvasRef.current;
 
     // Ensure video is ready and has valid dimensions
-    if (video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) {
-      animationIdRef.current = requestAnimationFrame(processFrame);
+    if (video.readyState < 4 || video.videoWidth === 0 || video.videoHeight === 0 || !video.srcObject) {
+      // Wait longer for video to be fully loaded
+      setTimeout(() => {
+        if (isActive) {
+          animationIdRef.current = requestAnimationFrame(processFrame);
+        }
+      }, 100);
       return;
     }
 
     try {
-      // Ensure valid video dimensions before processing
-      const videoWidth = video.videoWidth || 640;
-      const videoHeight = video.videoHeight || 480;
+      // Get actual video dimensions
+      const videoWidth = video.videoWidth;
+      const videoHeight = video.videoHeight;
       
-      if (videoWidth <= 0 || videoHeight <= 0) {
-        // Skip this frame if video dimensions are invalid
-        animationIdRef.current = requestAnimationFrame(processFrame);
+      // Double-check dimensions are valid
+      if (!videoWidth || !videoHeight || videoWidth <= 0 || videoHeight <= 0) {
+        console.warn('Invalid video dimensions:', videoWidth, 'x', videoHeight);
+        setTimeout(() => {
+          if (isActive) {
+            animationIdRef.current = requestAnimationFrame(processFrame);
+          }
+        }, 100);
         return;
       }
 
-      // Set canvas size to match video
+      // Set canvas size to match video exactly
       if (canvas.width !== videoWidth || canvas.height !== videoHeight) {
         canvas.width = videoWidth;
         canvas.height = videoHeight;
+        console.log('Set canvas size to:', videoWidth, 'x', videoHeight);
+      }
+
+      // Only proceed if video is actually playing
+      if (video.paused || video.ended) {
+        animationIdRef.current = requestAnimationFrame(processFrame);
+        return;
       }
 
       const poses = await detector.estimatePoses(video);
@@ -270,8 +287,14 @@ export const PoseDetection: React.FC<PoseDetectionProps> = ({
     } catch (err) {
       if (err.message.includes('roi width cannot be 0')) {
         // This is a TensorFlow.js internal error due to invalid video dimensions
-        // Skip this frame and continue
-        console.warn('Skipping frame due to invalid dimensions');
+        // Stop processing temporarily and wait for valid video
+        console.warn('ROI width error - waiting for valid video stream');
+        setTimeout(() => {
+          if (isActive) {
+            animationIdRef.current = requestAnimationFrame(processFrame);
+          }
+        }, 500);
+        return;
       } else {
         console.warn('Error processing frame:', err.message);
       }

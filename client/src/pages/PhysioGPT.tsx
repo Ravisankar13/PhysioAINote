@@ -521,12 +521,13 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
               <CardContent className="flex-1 flex flex-col p-0 min-h-0">
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col h-full">
                   {/* Chat Tab */}
-                  <TabsContent value="chat" className="flex-1 flex flex-col p-0 m-0 min-h-0 data-[state=active]:mt-0">
-                    <div 
-                      ref={scrollAreaRef}
-                      className="flex-1 overflow-y-auto px-3 sm:px-6 min-h-[50vh] sm:min-h-[60vh] max-h-[calc(100vh-300px)] sm:max-h-[calc(90vh-150px)]"
-                      onScroll={checkScrollPosition}
-                    >
+                  {activeTab === 'chat' && (
+                    <div className="flex-1 flex flex-col">
+                      <div 
+                        ref={scrollAreaRef}
+                        className="flex-1 overflow-y-auto px-3 sm:px-6 min-h-[50vh] sm:min-h-[60vh] max-h-[calc(100vh-300px)] sm:max-h-[calc(90vh-150px)]"
+                        onScroll={checkScrollPosition}
+                      >
                       {!selectedConversationId ? (
                         <div className="flex items-center justify-center h-full py-4">
                           <div className="text-center space-y-3 sm:space-y-4 max-w-md px-4">
@@ -702,7 +703,8 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
                         </Button>
                       </div>
                     </div>
-                  </TabsContent>
+                    </div>
+                  )}
 
                   {/* Assessments Tab */}
                   {activeTab === 'assessments' && (

@@ -59,49 +59,77 @@ export const PoseDetection: React.FC<PoseDetectionProps> = ({
 
       console.log('TensorFlow.js backend ready:', tf.getBackend());
 
-      // Try PoseNet first as it's more reliable for network-restricted environments
+      // Initialize pose detection with proper error handling and model selection
       let poseDetector;
       
+      // First try PoseNet with minimal configuration
       try {
-        console.log('Loading PoseNet model (works offline)...');
+        console.log('Attempting to load PoseNet...');
+        
         const poseNetConfig = {
           architecture: 'MobileNetV1' as const,
           outputStride: 16,
-          inputResolution: { width: 640, height: 480 },
-          multiplier: 0.75
+          inputResolution: { width: 513, height: 513 },
+          multiplier: 0.75,
+          quantBytes: 2
         };
         
         poseDetector = await poseDetection.createDetector(
           poseDetection.SupportedModels.PoseNet,
           poseNetConfig
         );
-        console.log('Successfully created PoseNet detector');
+        console.log('✓ PoseNet detector created successfully');
         
       } catch (poseNetError) {
-        console.warn('PoseNet failed, trying MoveNet:', poseNetError);
+        console.warn('PoseNet initialization failed:', poseNetError.message);
         
-        // Fallback to MoveNet with simplified config
+        // Try BlazePose as it uses different model sources
         try {
-          const moveNetConfig = {
-            modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
+          console.log('Trying BlazePose fallback...');
+          const blazePoseConfig = {
+            runtime: 'tfjs' as const,
+            enableSmoothing: true,
+            modelType: 'lite' as const
           };
           
           poseDetector = await poseDetection.createDetector(
-            poseDetection.SupportedModels.MoveNet,
-            moveNetConfig
+            poseDetection.SupportedModels.BlazePose,
+            blazePoseConfig
           );
-          console.log('Successfully created MoveNet detector');
+          console.log('✓ BlazePose detector created successfully');
           
-        } catch (moveNetError) {
-          console.warn('MoveNet also failed:', moveNetError);
-          throw new Error('All pose detection models failed to load. Please check network connectivity.');
+        } catch (blazePoseError) {
+          console.warn('BlazePose failed:', blazePoseError.message);
+          
+          // Final attempt with MoveNet
+          try {
+            console.log('Final attempt with MoveNet...');
+            const moveNetConfig = {
+              modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,
+              enableSmoothing: false
+            };
+            
+            poseDetector = await poseDetection.createDetector(
+              poseDetection.SupportedModels.MoveNet,
+              moveNetConfig
+            );
+            console.log('✓ MoveNet detector created successfully');
+            
+          } catch (moveNetError) {
+            console.error('All models failed:', moveNetError.message);
+            throw new Error(`Failed to load any pose detection model. Network or compatibility issue: ${moveNetError.message}`);
+          }
         }
+      }
+
+      if (!poseDetector) {
+        throw new Error('No pose detector was created');
       }
 
       setDetector(poseDetector);
       setIsLoading(false);
       setError(''); // Clear any previous errors
-      console.log('Pose detector initialized successfully');
+      console.log('✓ Pose detection system ready');
 
     } catch (err) {
       console.error('Failed to initialize pose detection:', err);
@@ -210,16 +238,28 @@ export const PoseDetection: React.FC<PoseDetectionProps> = ({
 
       const poses = await detector.estimatePoses(video);
       
-      if (poses.length > 0) {
+      if (poses && poses.length > 0) {
         drawPoses(poses, canvas);
         
-        // Send formatted pose data to parent
+        // Send formatted pose data to parent with better structure
         if (onPoseData) {
           const formattedPoses = poses.map(pose => ({
-            keypoints: pose.keypoints,
+            keypoints: pose.keypoints ? pose.keypoints.map(kp => ({
+              x: kp.x || 0,
+              y: kp.y || 0,
+              z: kp.z || 0,
+              score: kp.score || 0,
+              name: kp.name || ''
+            })) : [],
             score: pose.score || 0.5
           }));
           onPoseData(formattedPoses);
+        }
+      } else {
+        // Clear canvas if no poses detected
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
         }
       }
     } catch (err) {

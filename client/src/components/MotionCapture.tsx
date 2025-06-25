@@ -33,7 +33,7 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
   const [isPoseDetectionActive, setIsPoseDetectionActive] = useState(false);
   const [virtualPatient, setVirtualPatient] = useState<any>(null);
   const [showVirtualPatient, setShowVirtualPatient] = useState(false);
-  const [useMockPoseDetection, setUseMockPoseDetection] = useState(true);
+  const [useMockPoseDetection, setUseMockPoseDetection] = useState(false);
   
   const { toast } = useToast();
 
@@ -377,7 +377,7 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
               <div className="text-xs text-blue-600">
                 {useMockPoseDetection 
                   ? "Using simulated realistic human movement data for testing" 
-                  : "Using TensorFlow.js AI models for real pose detection"
+                  : "Using TensorFlow.js with PoseNet/BlazePose/MoveNet models"
                 }
               </div>
             </div>

@@ -33,7 +33,7 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
   const [isPoseDetectionActive, setIsPoseDetectionActive] = useState(false);
   const [virtualPatient, setVirtualPatient] = useState<any>(null);
   const [showVirtualPatient, setShowVirtualPatient] = useState(false);
-  const [useMockPoseDetection, setUseMockPoseDetection] = useState(false);
+  const [useMockPoseDetection, setUseMockPoseDetection] = useState(true);
   
   const { toast } = useToast();
 
@@ -332,32 +332,55 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
         <CardContent className="space-y-4" onClick={(e) => e.stopPropagation()}>
           {error && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-md">
-              <p className="text-red-700 text-sm">{error}</p>
-              <Button 
-                onClick={() => setUseMockPoseDetection(!useMockPoseDetection)} 
-                size="sm" 
-                variant="outline"
-                className="mt-2"
-              >
-                <Brain className="h-4 w-4 mr-2" />
-                {useMockPoseDetection ? "Try Real AI Detection" : "Use Demo Mode"}
-              </Button>
+              <p className="text-red-700 text-sm font-medium">AI Detection Error</p>
+              <p className="text-red-600 text-sm mt-1">{error}</p>
+              <div className="mt-3 flex gap-2">
+                <Button 
+                  onClick={() => {
+                    setError('');
+                    setUseMockPoseDetection(true);
+                  }} 
+                  size="sm" 
+                  variant="default"
+                >
+                  <Brain className="h-4 w-4 mr-2" />
+                  Switch to Demo Mode
+                </Button>
+                <Button 
+                  onClick={() => {
+                    setError('');
+                    setUseMockPoseDetection(false);
+                  }} 
+                  size="sm" 
+                  variant="outline"
+                >
+                  Retry AI Detection
+                </Button>
+              </div>
             </div>
           )}
           
           {/* Mode Toggle */}
-          <div className="flex items-center gap-2 mb-4">
+          <div className="flex items-center gap-2 mb-4 p-3 bg-blue-50 rounded-lg">
             <Button 
               onClick={() => setUseMockPoseDetection(!useMockPoseDetection)} 
               size="sm" 
-              variant={useMockPoseDetection ? "secondary" : "outline"}
+              variant={useMockPoseDetection ? "default" : "outline"}
             >
               <Brain className="h-4 w-4 mr-2" />
               {useMockPoseDetection ? "Demo Mode" : "AI Detection"}
             </Button>
-            <span className="text-sm text-muted-foreground">
-              {useMockPoseDetection ? "Using simulated pose data" : "Using TensorFlow.js AI detection"}
-            </span>
+            <div className="flex-1">
+              <div className="text-sm font-medium text-blue-800">
+                {useMockPoseDetection ? "Demo Mode Active" : "AI Detection Mode"}
+              </div>
+              <div className="text-xs text-blue-600">
+                {useMockPoseDetection 
+                  ? "Using simulated realistic human movement data for testing" 
+                  : "Using TensorFlow.js AI models for real pose detection"
+                }
+              </div>
+            </div>
           </div>
 
           <div className="flex gap-2 flex-wrap" onSubmit={(e) => e.preventDefault()}>
@@ -477,12 +500,21 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
             />
             
             {/* Pose Detection Component */}
-            <PoseDetection
-              videoRef={videoRef}
-              canvasRef={canvasRef}
-              isActive={isPoseDetectionActive && isCameraActive}
-              onPoseData={handlePoseData}
-            />
+            {useMockPoseDetection ? (
+              <MockPoseDetection
+                videoRef={videoRef}
+                canvasRef={canvasRef}
+                isActive={isPoseDetectionActive && isCameraActive}
+                onPoseData={handlePoseData}
+              />
+            ) : (
+              <PoseDetection
+                videoRef={videoRef}
+                canvasRef={canvasRef}
+                isActive={isPoseDetectionActive && isCameraActive}
+                onPoseData={handlePoseData}
+              />
+            )}
             
             {!isCameraActive && (
               <div className="absolute inset-0 flex items-center justify-center">

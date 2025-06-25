@@ -441,10 +441,10 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
 
         {/* Playback Controls */}
         <div className="space-y-4">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Button onClick={togglePlayback} size="sm" className="bg-blue-600 hover:bg-blue-700">
               {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-              {isPlaying ? ' Pause' : ' Play Motion'}
+              {isPlaying ? ' Pause' : ' Analyze Motion'}
             </Button>
             <Button onClick={resetPlayback} size="sm" variant="outline">
               <RotateCcw className="h-4 w-4" />
@@ -454,8 +454,8 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
               Frame {currentFrame + 1} of {motionData.length}
             </div>
             {isPlaying && (
-              <div className="text-sm text-green-600 font-medium">
-                Playing motion analysis...
+              <div className="text-sm text-green-600 font-medium animate-pulse">
+                Analyzing joint movements...
               </div>
             )}
           </div>

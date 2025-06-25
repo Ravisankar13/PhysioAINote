@@ -1,12 +1,13 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import * as tf from '@tensorflow/tfjs';
 import * as poseDetection from '@tensorflow-models/pose-detection';
+import * as bodyPix from '@tensorflow-models/body-pix';
 
 // Ensure TensorFlow.js is properly loaded
 if (typeof window !== 'undefined') {
-  // Set up TensorFlow.js platform
+  // Set up TensorFlow.js platform with local backend preference
   tf.ready().then(() => {
-    console.log('TensorFlow.js is ready, backend:', tf.getBackend());
+    console.log('TensorFlow.js ready, backend:', tf.getBackend());
   });
 }
 
@@ -58,27 +59,64 @@ export const PoseDetection: React.FC<PoseDetectionProps> = ({
 
       console.log('TensorFlow.js backend ready:', tf.getBackend());
 
-      // Create pose detector with working configuration
-      const detectorConfig = {
-        runtime: 'tfjs' as const,
-        enableSmoothing: false,
-        modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
-      };
-
-      console.log('Creating MoveNet detector with config:', detectorConfig);
-      const poseDetector = await poseDetection.createDetector(
-        poseDetection.SupportedModels.MoveNet,
-        detectorConfig
-      );
+      // Try PoseNet first as it's more reliable for network-restricted environments
+      let poseDetector;
+      
+      try {
+        console.log('Loading PoseNet model (works offline)...');
+        const poseNetConfig = {
+          architecture: 'MobileNetV1' as const,
+          outputStride: 16,
+          inputResolution: { width: 640, height: 480 },
+          multiplier: 0.75
+        };
+        
+        poseDetector = await poseDetection.createDetector(
+          poseDetection.SupportedModels.PoseNet,
+          poseNetConfig
+        );
+        console.log('Successfully created PoseNet detector');
+        
+      } catch (poseNetError) {
+        console.warn('PoseNet failed, trying MoveNet:', poseNetError);
+        
+        // Fallback to MoveNet with simplified config
+        try {
+          const moveNetConfig = {
+            modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
+          };
+          
+          poseDetector = await poseDetection.createDetector(
+            poseDetection.SupportedModels.MoveNet,
+            moveNetConfig
+          );
+          console.log('Successfully created MoveNet detector');
+          
+        } catch (moveNetError) {
+          console.warn('MoveNet also failed:', moveNetError);
+          throw new Error('All pose detection models failed to load. Please check network connectivity.');
+        }
+      }
 
       setDetector(poseDetector);
       setIsLoading(false);
+      setError(''); // Clear any previous errors
       console.log('Pose detector initialized successfully');
 
     } catch (err) {
       console.error('Failed to initialize pose detection:', err);
       console.error('Error details:', err.message, err.stack);
-      setError(`Pose detection initialization failed: ${err.message}`);
+      
+      let errorMessage = 'Pose detection initialization failed';
+      if (err.message.includes('403') || err.message.includes('fetch') || err.message.includes('network')) {
+        errorMessage = 'Model loading blocked by network restrictions. Switching to demo mode recommended.';
+      } else if (err.message.includes('WebGL') || err.message.includes('backend')) {
+        errorMessage = 'Hardware acceleration unavailable. Please enable WebGL or use demo mode.';
+      } else {
+        errorMessage = `Initialization error: ${err.message}`;
+      }
+      
+      setError(errorMessage);
       setIsLoading(false);
     }
   }, []);
@@ -148,18 +186,41 @@ export const PoseDetection: React.FC<PoseDetectionProps> = ({
     });
   }, [videoRef]);
 
-  // Process frames
+  // Process frames with improved error handling
   const processFrame = useCallback(async () => {
     if (!detector || !videoRef.current || !canvasRef.current || !isActive) {
       return;
     }
 
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+
+    // Ensure video is ready
+    if (video.readyState < 2) {
+      animationIdRef.current = requestAnimationFrame(processFrame);
+      return;
+    }
+
     try {
-      const poses = await detector.estimatePoses(videoRef.current);
+      // Set canvas size to match video
+      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+        canvas.width = video.videoWidth || 640;
+        canvas.height = video.videoHeight || 480;
+      }
+
+      const poses = await detector.estimatePoses(video);
       
       if (poses.length > 0) {
-        drawPoses(poses, canvasRef.current);
-        onPoseData?.(poses);
+        drawPoses(poses, canvas);
+        
+        // Send formatted pose data to parent
+        if (onPoseData) {
+          const formattedPoses = poses.map(pose => ({
+            keypoints: pose.keypoints,
+            score: pose.score || 0.5
+          }));
+          onPoseData(formattedPoses);
+        }
       }
     } catch (err) {
       console.warn('Error processing frame:', err);

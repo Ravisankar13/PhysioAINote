@@ -100,7 +100,7 @@ function NotesClinical(): React.ReactElement {
   >({});
 
   const navigate = useNavigate();
-  const soap_note_streaming_api_base_url = 'http://127.0.0.1:8030'
+  const soap_note_streaming_api_base_url = 'http://3.17.183.7:8000/'
 
   useEffect(() => {
     const handleLogin = async () => {

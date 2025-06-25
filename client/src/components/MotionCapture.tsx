@@ -6,6 +6,7 @@ import { Camera, Square, Play, StopCircle, Download, User, Brain } from 'lucide-
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import PoseDetection from './PoseDetection';
+import MockPoseDetection from './MockPoseDetection';
 
 interface PoseFrame {
   timestamp: number;
@@ -32,6 +33,7 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
   const [isPoseDetectionActive, setIsPoseDetectionActive] = useState(false);
   const [virtualPatient, setVirtualPatient] = useState<any>(null);
   const [showVirtualPatient, setShowVirtualPatient] = useState(false);
+  const [useMockPoseDetection, setUseMockPoseDetection] = useState(true);
   
   const { toast } = useToast();
 
@@ -221,6 +223,7 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
       // Use current state directly instead of relying on recordedFrames state
       const currentFrames = [...recordedFrames];
       console.log('Recording stopped. Frames captured:', currentFrames.length);
+      console.log('Sample frame structure:', currentFrames[0]);
       
       // Callback with recorded data
       if (onMotionDataCapture && currentFrames.length > 0) {

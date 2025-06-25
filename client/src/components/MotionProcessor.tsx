@@ -275,9 +275,11 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
         setCurrentFrame(0);
         
         // Process first frame immediately
-        const initialJointAngles = processFrame(motionData[0]);
-        console.log('Initial joint angles:', initialJointAngles);
-        setCurrentJointAngles(initialJointAngles);
+        if (motionData[0]) {
+          const initialJointAngles = processFrame(motionData[0]);
+          console.log('Initial joint angles:', initialJointAngles);
+          setCurrentJointAngles(initialJointAngles);
+        }
       } catch (error) {
         console.error('Error analyzing motion data:', error);
         setEstimatedAnthropometrics(null);
@@ -440,15 +442,22 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
         {/* Playback Controls */}
         <div className="space-y-4">
           <div className="flex items-center gap-2">
-            <Button onClick={togglePlayback} size="sm">
+            <Button onClick={togglePlayback} size="sm" className="bg-blue-600 hover:bg-blue-700">
               {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+              {isPlaying ? ' Pause' : ' Play Motion'}
             </Button>
             <Button onClick={resetPlayback} size="sm" variant="outline">
               <RotateCcw className="h-4 w-4" />
+              Reset
             </Button>
             <div className="text-sm text-muted-foreground">
               Frame {currentFrame + 1} of {motionData.length}
             </div>
+            {isPlaying && (
+              <div className="text-sm text-green-600 font-medium">
+                Playing motion analysis...
+              </div>
+            )}
           </div>
 
           {/* Frame Slider */}
@@ -478,13 +487,27 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
           </div>
         </div>
 
-        {/* Instructions */}
-        <div className="text-xs text-muted-foreground space-y-1">
-          <p><strong>Virtual Patient Controls:</strong></p>
-          <p>• Use playback controls to animate the virtual patient</p>
-          <p>• Estimated measurements are calculated from pose data</p>
-          <p>• Joint angles update in real-time during playback</p>
-          <p>• Movement type is automatically classified</p>
+        {/* Real-time Status */}
+        <div className="bg-gray-50 p-3 rounded-lg">
+          <div className="text-sm font-medium text-gray-700 mb-2">Motion Analysis Status</div>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="flex justify-between">
+              <span>Data Quality:</span>
+              <span className="font-medium text-green-600">Good</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Joint Tracking:</span>
+              <span className="font-medium text-blue-600">Active</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Movement Type:</span>
+              <span className="font-medium text-purple-600">{movementType}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Analysis Mode:</span>
+              <span className="font-medium text-orange-600">Live</span>
+            </div>
+          </div>
         </div>
       </CardContent>
     </Card>

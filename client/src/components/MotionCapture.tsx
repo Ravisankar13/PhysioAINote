@@ -39,16 +39,25 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
 
   // Handle pose data from TensorFlow.js detector
   const handlePoseData = useCallback((poses: any[]) => {
-    if (isRecording && poses.length > 0) {
+    console.log('handlePoseData called with:', poses?.length || 0, 'poses, recording:', isRecording);
+    
+    if (poses && poses.length > 0) {
       const pose = poses[0];
-      console.log('Recording pose data:', pose.keypoints.length, 'keypoints');
+      console.log('Pose data received:', pose.keypoints?.length || 0, 'keypoints');
       
-      const frameData: PoseFrame = {
-        timestamp: Date.now() - recordingStartTime,
-        landmarks: pose.keypoints,
-        worldLandmarks: pose.keypoints // MoveNet doesn't separate world landmarks
-      };
-      setRecordedFrames(prev => [...prev, frameData]);
+      if (isRecording) {
+        console.log('Recording motion frame');
+        const frameData: PoseFrame = {
+          timestamp: Date.now() - recordingStartTime,
+          landmarks: pose.keypoints,
+          worldLandmarks: pose.keypoints
+        };
+        setRecordedFrames(prev => {
+          const newFrames = [...prev, frameData];
+          console.log('Total recorded frames:', newFrames.length);
+          return newFrames;
+        });
+      }
     }
   }, [isRecording, recordingStartTime]);
 

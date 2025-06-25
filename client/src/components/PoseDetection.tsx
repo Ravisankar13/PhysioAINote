@@ -242,11 +242,12 @@ export const PoseDetection: React.FC<PoseDetectionProps> = ({
       const poses = await detector.estimatePoses(video);
       
       if (poses && poses.length > 0) {
-        console.log('🎯 Poses detected:', poses.length, 'pose(s)');
+        console.log('Poses detected:', poses.length, 'poses with', poses[0].keypoints?.length || 0, 'keypoints');
         drawPoses(poses, canvas);
         
         // Send formatted pose data to parent
         if (onPoseData) {
+          console.log('Sending pose data to parent component');
           const formattedPoses = poses.map(pose => ({
             keypoints: pose.keypoints ? pose.keypoints.map(kp => ({
               x: kp.x || 0,
@@ -284,10 +285,10 @@ export const PoseDetection: React.FC<PoseDetectionProps> = ({
   // Start/stop detection based on isActive prop
   useEffect(() => {
     if (isActive && detector) {
-      console.log('🎥 Starting AI pose detection...');
+      console.log('Starting AI pose detection with detector ready');
       processFrame();
     } else if (animationIdRef.current) {
-      console.log('⏸️ Stopping pose detection');
+      console.log('Stopping pose detection');
       cancelAnimationFrame(animationIdRef.current);
     }
 

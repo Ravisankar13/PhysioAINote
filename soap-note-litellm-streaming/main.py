@@ -110,6 +110,15 @@ class DemographicResponse(BaseModel):
     message: str
     session_id: Optional[str] = None
 
+class SOAPSummaryRequest(BaseModel):
+    session_id: str = Field(..., description="Session ID for the patient")
+    user_id: Optional[str] = Field(None, description="User ID")
+
+class SOAPSummaryResponse(BaseModel):
+    session_id: str
+    summaries: Dict[str, str] = Field(default_factory=dict, description="Dictionary of section summaries")
+    status: str
+
 # Helper functions
 def create_error_response(status_code: int, message: str) -> JSONResponse:
     """Create standardized error response"""
@@ -574,6 +583,98 @@ async def get_soap_note(session_id: str, user_id: Optional[str] = None):
     except Exception as e:
         logger.error(f"Error retrieving SOAP note: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error retrieving SOAP note: {str(e)}")
+
+@app.post("/soap-note-summary", response_model=SOAPSummaryResponse)
+async def get_or_generate_soap_summaries(request: SOAPSummaryRequest):
+    """Get existing SOAP note summaries or generate them if they don't exist"""
+    try:
+        session_id = request.session_id
+        user_id = request.user_id
+        
+        if not session_data_db:
+            raise HTTPException(status_code=503, detail="Database service unavailable")
+        
+        # Get existing SOAP note from database
+        if user_id:
+            item = session_data_db.table.get_item(
+                Key={'pk': session_id, 'user_id': user_id}
+            ).get('Item')
+        else:
+            item = session_data_db.get_item(session_id)
+        
+        if not item:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        soap_note = item.get('soap_note')
+        if not soap_note:
+            raise HTTPException(status_code=404, detail="SOAP note not found for this session")
+        
+        # Parse JSON string if needed
+        if isinstance(soap_note, str):
+            soap_note = json.loads(soap_note)
+        
+        # Check if SOAP note is completed
+        if soap_note.get("status") != "completed":
+            raise HTTPException(status_code=400, detail="SOAP note generation not completed yet")
+        
+        # Check if summaries already exist
+        existing_summaries = item.get('soap_summaries', {})
+        if isinstance(existing_summaries, str):
+            existing_summaries = json.loads(existing_summaries)
+        
+        # Check if all sections have summaries
+        missing_sections = []
+        for section in SOAP_SECTIONS:
+            if section in soap_note and soap_note[section] and section not in existing_summaries:
+                missing_sections.append(section)
+        
+        if not missing_sections:
+            # All summaries exist, return them
+            return SOAPSummaryResponse(
+                session_id=session_id,
+                summaries=existing_summaries,
+                status="completed"
+            )
+        
+        # Generate missing summaries
+        logger.info(f"Generating summaries for missing sections: {missing_sections}")
+        
+        # Initialize SOAP generator (we don't need transcript for summaries)
+        soap_generator = SOAPGenerator(
+            LTLM_CONFIG["primary_model"],
+            LTLM_CONFIG["fallback_models"],
+            LTLM_CONFIG["model_configs"],
+            ""  # Empty transcript since we're just summarizing existing content
+        )
+        
+        # Generate summaries for missing sections
+        new_summaries = existing_summaries.copy()
+        for section in missing_sections:
+            if section in soap_note and soap_note[section]:
+                section_content = soap_note[section]
+                summary = soap_generator.generate_soap_summary(section_content, section)
+                new_summaries[section] = summary
+                logger.info(f"Generated summary for {section} section")
+        
+        # Save summaries back to database
+        if user_id:
+            session_data_db.update_field_composite(session_id, user_id, "soap_summaries", new_summaries)
+        else:
+            session_data_db.update_field(session_id, "soap_summaries", new_summaries)
+        
+        logger.info(f"Saved summaries to database for session: {session_id}")
+        
+        return SOAPSummaryResponse(
+            session_id=session_id,
+            summaries=new_summaries,
+            status="completed"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error processing SOAP note summaries: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error processing SOAP note summaries: {str(e)}")
 
 # Exception handlers
 @app.exception_handler(HTTPException)

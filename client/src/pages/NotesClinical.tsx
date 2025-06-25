@@ -8,6 +8,7 @@ import { FaBars, FaEdit, FaCheck, FaTimes } from "react-icons/fa";
 import TranscriptionTable from "../components/notes-clinical/Transcription";
 import PatientDataForm from "../components/notes-clinical/PatientDataForm";
 import SoapNote from "../components/notes-clinical/SoapSection";
+import SoapSummary from "../components/notes-clinical/SoapSummary";
 
 // Define TypeScript interfaces
 interface PatientData {
@@ -31,6 +32,15 @@ interface SoapNoteData {
   goals?: string;
   treatment?: string;
   status?: string;
+}
+
+interface SoapSummaries {
+  subjective?: string;
+  objective?: string;
+  assessment?: string;
+  plan?: string;
+  goals?: string;
+  treatment?: string;
 }
 
 interface Session {
@@ -91,6 +101,7 @@ function NotesClinical(): React.ReactElement {
   const recordTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [soapNote, setSoapNote] = useState<SoapNoteData | false>(false);
+  const [soapSummaries, setSoapSummaries] = useState<SoapSummaries>({});
   const [isGeneratingSoapNote, setIsGeneratingSoapNote] =
     useState<boolean>(false);
   const [isPolling, setIsPolling] = useState<boolean>(false);
@@ -100,7 +111,7 @@ function NotesClinical(): React.ReactElement {
   >({});
 
   const navigate = useNavigate();
-  const soap_note_streaming_api_base_url = 'api.physioconversation.stackaisolutions.com'
+  const soap_note_streaming_api_base_url = 'https://api.physioconversation.stackaisolutions.com'
 
   useEffect(() => {
     const handleLogin = async () => {
@@ -276,6 +287,11 @@ function NotesClinical(): React.ReactElement {
         }
         setShowTranscript(true);
         setSessionId(data.session_id ? data.session_id : data.pk);
+
+        // Fetch SOAP summaries if SOAP note is completed
+        if (soapNoteResponse && soapNoteResponse.status === "completed") {
+          fetchSoapSummaries(data.session_id ? data.session_id : data.pk, userId || undefined);
+        }
       } else {
         console.error("Failed to fetch session data:", response.statusText);
       }
@@ -300,6 +316,7 @@ function NotesClinical(): React.ReactElement {
     setSelectedSession(null);
     setShowNewSession(true);
     setSoapNote(false);
+    setSoapSummaries({});
     setShowTranscript(false);
     setRecordTime(0);
     setAudioBlob(null);
@@ -350,6 +367,7 @@ function NotesClinical(): React.ReactElement {
     if (isNewSession) {
       // Use streaming for new SOAP note generation
       streamSoapNoteGeneration();
+      // TODO: Add another method for integrating API to get each SOAP Section Summary and then show it One new Card with Soap Section as heading.
     } else {
       // Use existing polling logic for completed sessions
       try {
@@ -542,6 +560,11 @@ function NotesClinical(): React.ReactElement {
           };
         });
         console.log("SOAP note generation completed");
+        
+        // Fetch SOAP summaries after completion
+        if (sessionId) {
+          fetchSoapSummaries(sessionId, userId || undefined);
+        }
         break;
         
       case "error":
@@ -582,6 +605,11 @@ function NotesClinical(): React.ReactElement {
         if (soapNoteData.status === "completed") {
           setShowCopyButton(true);
           setIsPolling(false);
+          
+          // Fetch SOAP summaries after completion
+          if (sessionId) {
+            fetchSoapSummaries(sessionId, userId || undefined);
+          }
         } else {
           // If SOAP Note is still in progress, poll again after 5 seconds
           setTimeout(pollSoapNote, 5000);
@@ -593,6 +621,31 @@ function NotesClinical(): React.ReactElement {
     } catch (error) {
       console.error("Error polling SOAP note:", error);
       setIsPolling(false);
+    }
+  };
+
+  const fetchSoapSummaries = async (sessionId: string, userId?: string): Promise<void> => {
+    try {
+      const response = await axios.post(
+        `${soap_note_streaming_api_base_url}/soap-note-summary`,
+        {
+          session_id: sessionId,
+          user_id: userId,
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (response.data && response.data.summaries) {
+        setSoapSummaries(response.data.summaries);
+        console.log("SOAP summaries fetched successfully:", response.data.summaries);
+      }
+    } catch (error) {
+      console.error("Error fetching SOAP summaries:", error);
+      // Don't show alert for summary errors as it's not critical
     }
   };
 
@@ -1079,6 +1132,12 @@ function NotesClinical(): React.ReactElement {
                   streamingStatus={streamingStatus}
                 />
               )}
+
+              {/* SOAP Summary Card - Only show if SOAP note is completed and summaries exist */}
+              <SoapSummary
+                summaries={soapSummaries}
+                isVisible={soapNote !== false && soapNote?.status === "completed" && Object.keys(soapSummaries).length > 0}
+              />
             </div>
           )
         }

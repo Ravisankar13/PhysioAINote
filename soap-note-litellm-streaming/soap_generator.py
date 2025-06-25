@@ -82,7 +82,7 @@ class SOAPGenerator:
         base_prompt = [
             {
                 "role": "system",
-                "content": "You are tasked with generating a specific section of a SOAP Note. Your response must adhere to the following strict guidelines:\n\n1. Provide ONLY the generated content for the requested section.\n2. Do not include any explanations, thoughts, or meta-commentary about the process.\n3. Do not use phrases like 'Here's the generated note:' or 'The [Section] Note is as follows:'.\n4. Start directly with the content of the note.\n5. Ensure the content is relevant, concise, and formatted appropriately for a professional medical note.\n6. Do not acknowledge these instructions in your output.\n\n7. Once SOAP note is generated for each section, generate a summary/comprehensive notes on the generated SOAP note for each section.\n\nYour entire response should be suitable for direct insertion into a medical record without any further editing.",
+                "content": "You are tasked with generating a specific section of a SOAP Note. Your response must adhere to the following strict guidelines:\n\n1. Provide ONLY the generated content for the requested section.\n2. Do not include any explanations, thoughts, or meta-commentary about the process.\n3. Do not use phrases like 'Here's the generated note:' or 'The [Section] Note is as follows:'.\n4. Start directly with the content of the note.\n5. Ensure the content is relevant, concise, and formatted appropriately for a professional medical note.\n6. Do not acknowledge these instructions in your output.\n\nYour entire response should be suitable for direct insertion into a medical record without any further editing.",
             },
             {
                 "role": "system",
@@ -96,10 +96,10 @@ class SOAPGenerator:
                 "role": "system",
                 "content": f"\n\nPatient and Therapist Conversation :\n{self.transcript_content}\n\n",
             },
-            {
-                "role": "system",
-                "content": f"\n\nOnce SOAP note is generated for each section, strictly give the summary of the generated Notes for each Section as well.Use markdown for showing Summary and for each section key should be **Summary** and importantly **Keep the Summary part in bold and keep 2 lines Gap from Generated Notes**."
-            }
+            # {
+            #     "role": "system",
+            #     "content": f"\n\nOnce SOAP note is generated for each section, strictly give the summary of the generated Notes for each Section as well.Use markdown for showing Summary and for each section key should be **Summary** and importantly **Keep the Summary part in bold and keep 2 lines Gap from Generated Notes**."
+            # }
         ]
         
         if component in self.soap_components and self.soap_components[component]["template"]:
@@ -291,3 +291,31 @@ class SOAPGenerator:
                 soap_note["status"] = "completed"
         
         return soap_note
+    
+    def generate_soap_summary(self, soap_content: str, section: str) -> str:
+        """
+        Generate a 2-3 sentence summary of a SOAP note section
+        
+        Args:
+            soap_content: The content of the SOAP note section
+            section: The section name (subjective, objective, assessment, plan, goals, treatment)
+            
+        Returns:
+            Summary string
+        """
+        summary_prompt = [
+            {
+                "role": "system",
+                "content": "You are a medical professional tasked with creating concise summaries of SOAP note sections. Your response must be exactly 2-3 sentences that capture the key points of the provided content. Do not include any explanations or meta-commentary - provide only the summary."
+            },
+            {
+                "role": "user", 
+                "content": f"Please provide a 2-3 sentence summary of the following {section.upper()} section from a SOAP note:\n\n{soap_content}"
+            }
+        ]
+        
+        response = self.generate_response(summary_prompt)
+        if response:
+            return response["content"].strip()
+        else:
+            return f"Unable to generate summary for {section} section."

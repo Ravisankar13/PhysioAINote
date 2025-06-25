@@ -36,25 +36,30 @@ export const PoseDetection: React.FC<PoseDetectionProps> = ({
       setError('');
       console.log('Initializing TensorFlow.js pose detection...');
 
-      // Try different backends in order of preference
-      let backendSuccess = false;
-      const backends = ['webgl', 'cpu'];
+      // Initialize TensorFlow.js backend with improved compatibility
+      console.log('Setting up TensorFlow.js backend...');
       
-      for (const backend of backends) {
-        try {
-          console.log(`Trying backend: ${backend}`);
-          await tf.setBackend(backend);
-          await tf.ready();
-          console.log(`Successfully initialized ${backend} backend`);
-          backendSuccess = true;
-          break;
-        } catch (backendError) {
-          console.warn(`Failed to initialize ${backend} backend:`, backendError);
+      try {
+        // First ensure we have a clean state
+        await tf.ready();
+        console.log('Current backend:', tf.getBackend());
+        
+        // Try to force WebGL if available, otherwise use CPU
+        if (tf.getBackend() !== 'webgl') {
+          try {
+            await tf.setBackend('webgl');
+            await tf.ready();
+            console.log('Switched to WebGL backend');
+          } catch (webglError) {
+            console.warn('WebGL unavailable, using CPU:', webglError.message);
+            await tf.setBackend('cpu');
+            await tf.ready();
+            console.log('Using CPU backend');
+          }
         }
-      }
-
-      if (!backendSuccess) {
-        throw new Error('No compatible TensorFlow.js backend available');
+      } catch (backendError) {
+        console.error('Backend initialization failed:', backendError);
+        throw new Error(`TensorFlow.js backend failed: ${backendError.message}`);
       }
 
       console.log('TensorFlow.js backend ready:', tf.getBackend());
@@ -62,63 +67,45 @@ export const PoseDetection: React.FC<PoseDetectionProps> = ({
       // Initialize pose detection with proper error handling and model selection
       let poseDetector;
       
-      // First try PoseNet with minimal configuration
+      // Try PoseNet with the most basic configuration
       try {
-        console.log('Attempting to load PoseNet...');
+        console.log('Loading PoseNet with basic config...');
         
+        // Use the simplest possible configuration
         const poseNetConfig = {
           architecture: 'MobileNetV1' as const,
           outputStride: 16,
-          inputResolution: { width: 513, height: 513 },
-          multiplier: 0.75,
-          quantBytes: 2
+          multiplier: 0.75
         };
         
         poseDetector = await poseDetection.createDetector(
           poseDetection.SupportedModels.PoseNet,
           poseNetConfig
         );
-        console.log('✓ PoseNet detector created successfully');
+        console.log('✓ PoseNet loaded successfully');
         
       } catch (poseNetError) {
         console.warn('PoseNet initialization failed:', poseNetError.message);
         
-        // Try BlazePose as it uses different model sources
+        // Try MoveNet as backup - it's more reliable than BlazePose
         try {
-          console.log('Trying BlazePose fallback...');
-          const blazePoseConfig = {
-            runtime: 'tfjs' as const,
-            enableSmoothing: true,
-            modelType: 'lite' as const
+          console.log('Trying MoveNet as backup...');
+          const moveNetConfig = {
+            modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
           };
           
           poseDetector = await poseDetection.createDetector(
-            poseDetection.SupportedModels.BlazePose,
-            blazePoseConfig
+            poseDetection.SupportedModels.MoveNet,
+            moveNetConfig
           );
-          console.log('✓ BlazePose detector created successfully');
+          console.log('✓ MoveNet loaded successfully');
           
-        } catch (blazePoseError) {
-          console.warn('BlazePose failed:', blazePoseError.message);
+        } catch (moveNetError) {
+          console.error('MoveNet backup failed:', moveNetError.message);
+          console.error('Full error details:', moveNetError);
           
-          // Final attempt with MoveNet
-          try {
-            console.log('Final attempt with MoveNet...');
-            const moveNetConfig = {
-              modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,
-              enableSmoothing: false
-            };
-            
-            poseDetector = await poseDetection.createDetector(
-              poseDetection.SupportedModels.MoveNet,
-              moveNetConfig
-            );
-            console.log('✓ MoveNet detector created successfully');
-            
-          } catch (moveNetError) {
-            console.error('All models failed:', moveNetError.message);
-            throw new Error(`Failed to load any pose detection model. Network or compatibility issue: ${moveNetError.message}`);
-          }
+          // If we get here, both models failed - provide detailed error info
+          throw new Error(`All pose detection models failed to load. PoseNet error: ${poseNetError.message}. MoveNet error: ${moveNetError.message}`);
         }
       }
 
@@ -132,20 +119,26 @@ export const PoseDetection: React.FC<PoseDetectionProps> = ({
       console.log('✓ Pose detection system ready');
 
     } catch (err) {
-      console.error('Failed to initialize pose detection:', err);
-      console.error('Error details:', err.message, err.stack);
+      console.error('❌ Pose detection initialization failed:', err);
+      console.error('Full error:', err);
+      console.error('Stack trace:', err.stack);
       
-      let errorMessage = 'Pose detection initialization failed';
-      if (err.message.includes('403') || err.message.includes('fetch') || err.message.includes('network')) {
-        errorMessage = 'Model loading blocked by network restrictions. Switching to demo mode recommended.';
+      let errorMessage = 'AI pose detection failed to initialize';
+      
+      // Provide specific error messages based on the error type
+      if (err.message.includes('403') || err.message.includes('Failed to fetch')) {
+        errorMessage = 'Model download blocked (network/CORS error). Network restrictions prevent TensorFlow.js model loading.';
       } else if (err.message.includes('WebGL') || err.message.includes('backend')) {
-        errorMessage = 'Hardware acceleration unavailable. Please enable WebGL or use demo mode.';
+        errorMessage = 'Graphics acceleration unavailable. WebGL backend required for pose detection.';
+      } else if (err.message.includes('tfhub') || err.message.includes('model')) {
+        errorMessage = 'TensorFlow model loading failed. External model servers may be unreachable.';
       } else {
-        errorMessage = `Initialization error: ${err.message}`;
+        errorMessage = `Pose detection error: ${err.message}`;
       }
       
       setError(errorMessage);
       setIsLoading(false);
+      console.log('💡 Suggestion: Try demo mode for motion capture testing');
     }
   }, []);
 
@@ -239,9 +232,10 @@ export const PoseDetection: React.FC<PoseDetectionProps> = ({
       const poses = await detector.estimatePoses(video);
       
       if (poses && poses.length > 0) {
+        console.log('🎯 Poses detected:', poses.length, 'pose(s)');
         drawPoses(poses, canvas);
         
-        // Send formatted pose data to parent with better structure
+        // Send formatted pose data to parent
         if (onPoseData) {
           const formattedPoses = poses.map(pose => ({
             keypoints: pose.keypoints ? pose.keypoints.map(kp => ({
@@ -274,9 +268,10 @@ export const PoseDetection: React.FC<PoseDetectionProps> = ({
   // Start/stop detection based on isActive prop
   useEffect(() => {
     if (isActive && detector) {
-      console.log('Starting pose detection...');
+      console.log('🎥 Starting AI pose detection...');
       processFrame();
     } else if (animationIdRef.current) {
+      console.log('⏸️ Stopping pose detection');
       cancelAnimationFrame(animationIdRef.current);
     }
 

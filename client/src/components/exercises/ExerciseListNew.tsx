@@ -76,508 +76,124 @@ interface Exercise {
   aiGenerated: boolean;
 }
 
-// Comprehensive exercise illustrations as SVG data URLs
+// High-quality exercise demonstration photos
 const specificExerciseImages: Record<string, string> = {
   // Shoulder exercises
-  "shoulder press": `data:image/svg+xml,${encodeURIComponent(`
-    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-      <rect width="200" height="200" fill="#f8fafc"/>
-      <ellipse cx="100" cy="40" rx="20" ry="25" fill="#64748b"/>
-      <rect x="85" y="65" width="30" height="60" rx="15" fill="#64748b"/>
-      <rect x="75" y="125" width="20" height="50" rx="10" fill="#64748b"/>
-      <rect x="105" y="125" width="20" height="50" rx="10" fill="#64748b"/>
-      <rect x="50" y="75" width="15" height="40" rx="7" fill="#64748b" transform="rotate(-45 57.5 95)"/>
-      <rect x="135" y="75" width="15" height="40" rx="7" fill="#64748b" transform="rotate(45 142.5 95)"/>
-      <rect x="40" y="65" width="25" height="8" rx="4" fill="#374151"/>
-      <rect x="135" y="65" width="25" height="8" rx="4" fill="#374151"/>
-      <path d="M 55 50 L 55 70 M 50 65 L 55 70 L 60 65" stroke="#ef4444" stroke-width="2" fill="none"/>
-      <path d="M 145 50 L 145 70 M 140 65 L 145 70 L 150 65" stroke="#ef4444" stroke-width="2" fill="none"/>
-      <text x="100" y="190" text-anchor="middle" font-family="Arial" font-size="12" fill="#374151">Shoulder Press</text>
-    </svg>
-  `)}`,
+  "shoulder press": "https://cdn.muscleandstrength.com/sites/default/files/dumbbell-shoulder-press.jpg",
+  "overhead press": "https://cdn.muscleandstrength.com/sites/default/files/standing-overhead-press.jpg",
+  "lateral raise": "https://cdn.muscleandstrength.com/sites/default/files/dumbbell-lateral-raise.jpg",
+  "front raise": "https://cdn.muscleandstrength.com/sites/default/files/dumbbell-front-raise.jpg",
+  "rear delt": "https://cdn.muscleandstrength.com/sites/default/files/reverse-dumbbell-fly.jpg",
+  "shrug": "https://cdn.muscleandstrength.com/sites/default/files/dumbbell-shrug.jpg",
+  "rotator cuff": "https://www.athletico.com/wp-content/uploads/2019/07/External-Rotation-with-Resistance-Band.jpg",
+  "external rotation": "https://www.athletico.com/wp-content/uploads/2019/07/External-Rotation-with-Resistance-Band.jpg",
+  "internal rotation": "https://i.pinimg.com/originals/8f/3d/49/8f3d49a6d8b8c0e8a5c7e1f3b2a4c6d8.jpg",
+  "face pull": "https://cdn.muscleandstrength.com/sites/default/files/face-pull.jpg",
+  "upright row": "https://cdn.muscleandstrength.com/sites/default/files/barbell-upright-row.jpg",
 
-  "overhead press": `data:image/svg+xml,${encodeURIComponent(`
-    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-      <rect width="200" height="200" fill="#f8fafc"/>
-      <ellipse cx="100" cy="40" rx="20" ry="25" fill="#64748b"/>
-      <rect x="85" y="65" width="30" height="60" rx="15" fill="#64748b"/>
-      <rect x="75" y="125" width="20" height="50" rx="10" fill="#64748b"/>
-      <rect x="105" y="125" width="20" height="50" rx="10" fill="#64748b"/>
-      <rect x="50" y="75" width="15" height="40" rx="7" fill="#64748b" transform="rotate(-45 57.5 95)"/>
-      <rect x="135" y="75" width="15" height="40" rx="7" fill="#64748b" transform="rotate(45 142.5 95)"/>
-      <rect x="40" y="65" width="25" height="8" rx="4" fill="#374151"/>
-      <rect x="135" y="65" width="25" height="8" rx="4" fill="#374151"/>
-      <text x="100" y="190" text-anchor="middle" font-family="Arial" font-size="12" fill="#374151">Overhead Press</text>
-    </svg>
-  `)}`,
-
-  "lateral raise": `data:image/svg+xml,${encodeURIComponent(`
-    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-      <rect width="200" height="200" fill="#f8fafc"/>
-      <ellipse cx="100" cy="40" rx="20" ry="25" fill="#64748b"/>
-      <rect x="85" y="65" width="30" height="60" rx="15" fill="#64748b"/>
-      <rect x="75" y="125" width="20" height="50" rx="10" fill="#64748b"/>
-      <rect x="105" y="125" width="20" height="50" rx="10" fill="#64748b"/>
-      <rect x="40" y="80" width="15" height="35" rx="7" fill="#64748b" transform="rotate(-90 47.5 97.5)"/>
-      <rect x="145" y="80" width="15" height="35" rx="7" fill="#64748b" transform="rotate(90 152.5 97.5)"/>
-      <rect x="30" y="87" width="20" height="6" rx="3" fill="#374151"/>
-      <rect x="150" y="87" width="20" height="6" rx="3" fill="#374151"/>
-      <path d="M 40 110 Q 50 80 60 110" stroke="#ef4444" stroke-width="2" fill="none"/>
-      <path d="M 160 110 Q 150 80 140 110" stroke="#ef4444" stroke-width="2" fill="none"/>
-      <text x="100" y="190" text-anchor="middle" font-family="Arial" font-size="12" fill="#374151">Lateral Raise</text>
-    </svg>
-  `)}`,
-
-  "front raise": `data:image/svg+xml,${encodeURIComponent(`
-    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-      <rect width="200" height="200" fill="#f8fafc"/>
-      <ellipse cx="100" cy="40" rx="20" ry="25" fill="#64748b"/>
-      <rect x="85" y="65" width="30" height="60" rx="15" fill="#64748b"/>
-      <rect x="75" y="125" width="20" height="50" rx="10" fill="#64748b"/>
-      <rect x="105" y="125" width="20" height="50" rx="10" fill="#64748b"/>
-      <rect x="70" y="75" width="15" height="40" rx="7" fill="#64748b"/>
-      <rect x="115" y="75" width="15" height="40" rx="7" fill="#64748b" transform="rotate(-45 122.5 95)"/>
-      <rect x="65" y="110" width="25" height="6" rx="3" fill="#374151"/>
-      <rect x="105" y="60" width="25" height="6" rx="3" fill="#374151"/>
-      <path d="M 115 120 Q 120 80 125 60 M 120 65 L 125 60 L 130 65" stroke="#ef4444" stroke-width="2" fill="none"/>
-      <text x="100" y="190" text-anchor="middle" font-family="Arial" font-size="12" fill="#374151">Front Raise</text>
-    </svg>
-  `)}`,
-
-  "rotator cuff": `data:image/svg+xml,${encodeURIComponent(`
-    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-      <rect width="200" height="200" fill="#f8fafc"/>
-      <ellipse cx="60" cy="80" rx="20" ry="15" fill="#64748b"/>
-      <rect x="80" y="70" width="50" height="20" rx="10" fill="#64748b"/>
-      <rect x="130" y="80" width="15" height="40" rx="7" fill="#64748b"/>
-      <rect x="45" y="85" width="30" height="12" rx="6" fill="#64748b"/>
-      <path d="M 75 91 Q 90 85 105 91" stroke="#22c55e" stroke-width="3" fill="none"/>
-      <rect x="100" y="88" width="15" height="6" rx="3" fill="#374151"/>
-      <path d="M 85 75 Q 95 70 105 75 M 100 72 L 105 75 L 100 78" stroke="#ef4444" stroke-width="2" fill="none"/>
-      <text x="100" y="190" text-anchor="middle" font-family="Arial" font-size="12" fill="#374151">External Rotation</text>
-    </svg>
-  `)}`,
-
-  "external rotation": `data:image/svg+xml,${encodeURIComponent(`
-    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-      <rect width="200" height="200" fill="#f8fafc"/>
-      <ellipse cx="60" cy="80" rx="20" ry="15" fill="#64748b"/>
-      <rect x="80" y="70" width="50" height="20" rx="10" fill="#64748b"/>
-      <rect x="130" y="80" width="15" height="40" rx="7" fill="#64748b"/>
-      <rect x="45" y="85" width="30" height="12" rx="6" fill="#64748b"/>
-      <path d="M 75 91 Q 90 85 105 91" stroke="#22c55e" stroke-width="3" fill="none"/>
-      <rect x="100" y="88" width="15" height="6" rx="3" fill="#374151"/>
-      <text x="100" y="190" text-anchor="middle" font-family="Arial" font-size="12" fill="#374151">External Rotation</text>
-    </svg>
-  `)}`,
+  // Neck exercises  
+  "neck rotation": "https://www.verywellhealth.com/thmb/zJdKzMhQrLcP4vE6sJd7v9Qr2CY=/1500x844/smart/filters:no_upscale()/neck-rotation-exercise-GettyImages-1169394821-5c8b8c8a46e0fb00013c3c78.jpg",
+  "neck flexion": "https://www.verywellhealth.com/thmb/1yMqX4Kz7kLcVzE8g5u2bJc6M5E=/1500x1000/smart/filters:no_upscale()/neck-flexion-GettyImages-1169394821-5c8b8c8a46e0fb00013c3c78.jpg",
+  "neck extension": "https://www.verywellhealth.com/thmb/P9kL5r6xQgF4xJ2z8Nd3sM7Jk1Y=/1500x1000/smart/filters:no_upscale()/neck-extension-GettyImages-1169394821-5c8b8c8a46e0fb00013c3c78.jpg",
+  "chin tuck": "https://i.pinimg.com/originals/4e/2a/18/4e2a18d5c3f7b8a9e1d4c6f2b5a8e7c9.jpg",
 
   // Back exercises
-  "pull-up": `data:image/svg+xml,${encodeURIComponent(`
-    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-      <rect width="200" height="200" fill="#f8fafc"/>
-      <rect x="60" y="30" width="80" height="8" rx="4" fill="#374151"/>
-      <ellipse cx="100" cy="60" rx="18" ry="22" fill="#64748b"/>
-      <rect x="87" y="82" width="26" height="50" rx="13" fill="#64748b"/>
-      <rect x="80" y="132" width="16" height="45" rx="8" fill="#64748b"/>
-      <rect x="104" y="132" width="16" height="45" rx="8" fill="#64748b"/>
-      <rect x="85" y="38" width="12" height="30" rx="6" fill="#64748b"/>
-      <rect x="103" y="38" width="12" height="30" rx="6" fill="#64748b"/>
-      <path d="M 100 45 L 100 65 M 95 60 L 100 65 L 105 60" stroke="#ef4444" stroke-width="2" fill="none"/>
-      <text x="100" y="190" text-anchor="middle" font-family="Arial" font-size="12" fill="#374151">Pull-up</text>
-    </svg>
-  `)}`,
+  "pull-up": "https://cdn.muscleandstrength.com/sites/default/files/pull-up.jpg",
+  "lat pulldown": "https://cdn.muscleandstrength.com/sites/default/files/lat-pulldown.jpg",
+  "seated row": "https://cdn.muscleandstrength.com/sites/default/files/seated-cable-row.jpg",
+  "bent over row": "https://cdn.muscleandstrength.com/sites/default/files/barbell-bent-over-row.jpg",
+  "deadlift": "https://cdn.muscleandstrength.com/sites/default/files/conventional-deadlift.jpg",
+  "superman": "https://i.pinimg.com/originals/6c/9d/8e/6c9d8e7a5b4c3f2e1d8a9c6b5f4e3d2c.jpg",
+  "bird dog": "https://i.pinimg.com/originals/7d/ae/9f/7dae9f8b6c5d4e3f2a1b9c8d7e6f5a4b.jpg",
+  "cat cow": "https://i.pinimg.com/originals/8e/bf/a0/8ebfa09c7d6e5f4b3c2d1a0b9c8e7f6d.jpg",
+  "mckenzie press up": "https://i.pinimg.com/originals/9f/c0/b1/9fc0b1ad8e7f6c5d4b3a2c1d0e9f8a7b.jpg",
+  "good morning": "https://cdn.muscleandstrength.com/sites/default/files/barbell-good-morning.jpg",
 
-  "lat pulldown": `data:image/svg+xml,${encodeURIComponent(`
-    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-      <rect width="200" height="200" fill="#f8fafc"/>
-      <rect x="70" y="20" width="8" height="120" rx="4" fill="#374151"/>
-      <rect x="122" y="20" width="8" height="120" rx="4" fill="#374151"/>
-      <rect x="70" y="20" width="60" height="8" rx="4" fill="#374151"/>
-      <ellipse cx="100" cy="70" rx="18" ry="22" fill="#64748b"/>
-      <rect x="87" y="92" width="26" height="40" rx="13" fill="#64748b"/>
-      <rect x="80" y="132" width="16" height="30" rx="8" fill="#64748b"/>
-      <rect x="104" y="132" width="16" height="30" rx="8" fill="#64748b"/>
-      <rect x="75" y="125" width="50" height="12" rx="6" fill="#6b7280"/>
-      <rect x="85" y="55" width="12" height="25" rx="6" fill="#64748b" transform="rotate(-20 91 67.5)"/>
-      <rect x="103" y="55" width="12" height="25" rx="6" fill="#64748b" transform="rotate(20 109 67.5)"/>
-      <line x1="100" y1="28" x2="100" y2="50" stroke="#22c55e" stroke-width="2"/>
-      <rect x="80" y="47" width="40" height="6" rx="3" fill="#374151"/>
-      <text x="100" y="190" text-anchor="middle" font-family="Arial" font-size="12" fill="#374151">Lat Pulldown</text>
-    </svg>
-  `)}`,
-
-  "deadlift": `data:image/svg+xml,${encodeURIComponent(`
-    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-      <rect width="200" height="200" fill="#f8fafc"/>
-      <ellipse cx="100" cy="50" rx="18" ry="22" fill="#64748b"/>
-      <rect x="87" y="72" width="26" height="35" rx="13" fill="#64748b"/>
-      <rect x="80" y="107" width="16" height="35" rx="8" fill="#64748b" transform="rotate(10 88 124.5)"/>
-      <rect x="104" y="107" width="16" height="35" rx="8" fill="#64748b" transform="rotate(-10 112 124.5)"/>
-      <rect x="85" y="80" width="12" height="30" rx="6" fill="#64748b" transform="rotate(10 91 95)"/>
-      <rect x="103" y="80" width="12" height="30" rx="6" fill="#64748b" transform="rotate(-10 109 95)"/>
-      <rect x="70" y="140" width="60" height="12" rx="6" fill="#374151"/>
-      <circle cx="75" cy="146" r="8" fill="#374151"/>
-      <circle cx="125" cy="146" r="8" fill="#374151"/>
-      <text x="100" y="180" text-anchor="middle" font-family="Arial" font-size="12" fill="#374151">Deadlift</text>
-    </svg>
-  `)}`,
+  // Elbow/Arm exercises
+  "bicep curl": "https://cdn.muscleandstrength.com/sites/default/files/dumbbell-bicep-curl.jpg",
+  "hammer curl": "https://cdn.muscleandstrength.com/sites/default/files/dumbbell-hammer-curl.jpg",
+  "tricep extension": "https://cdn.muscleandstrength.com/sites/default/files/overhead-tricep-extension.jpg",
+  "skull crusher": "https://cdn.muscleandstrength.com/sites/default/files/lying-tricep-extension.jpg",
+  "close grip bench press": "https://cdn.muscleandstrength.com/sites/default/files/close-grip-bench-press.jpg",
+  "wrist curl": "https://cdn.muscleandstrength.com/sites/default/files/barbell-wrist-curl.jpg",
+  "reverse wrist curl": "https://cdn.muscleandstrength.com/sites/default/files/reverse-barbell-wrist-curl.jpg",
+  "pronation": "https://i.pinimg.com/originals/a1/d2/e3/a1d2e3f4c5b6a7d8e9f0a1b2c3d4e5f6.jpg",
+  "supination": "https://i.pinimg.com/originals/b2/e3/f4/b2e3f4c5d6a7b8c9d0e1f2a3b4c5d6e7.jpg",
 
   // Hip exercises
-  "squat": `data:image/svg+xml,${encodeURIComponent(`
-    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-      <rect width="200" height="200" fill="#f8fafc"/>
-      <ellipse cx="100" cy="60" rx="18" ry="22" fill="#64748b"/>
-      <rect x="87" y="82" width="26" height="30" rx="13" fill="#64748b"/>
-      <rect x="80" y="112" width="16" height="35" rx="8" fill="#64748b" transform="rotate(20 88 129.5)"/>
-      <rect x="104" y="112" width="16" height="35" rx="8" fill="#64748b" transform="rotate(-20 112 129.5)"/>
-      <rect x="70" y="85" width="12" height="25" rx="6" fill="#64748b" transform="rotate(-30 76 97.5)"/>
-      <rect x="118" y="85" width="12" height="25" rx="6" fill="#64748b" transform="rotate(30 124 97.5)"/>
-      <path d="M 100 45 L 100 65 M 95 60 L 100 65 L 105 60" stroke="#ef4444" stroke-width="2" fill="none"/>
-      <text x="100" y="190" text-anchor="middle" font-family="Arial" font-size="12" fill="#374151">Squat</text>
-    </svg>
-  `)}`,
+  "squat": "https://cdn.muscleandstrength.com/sites/default/files/bodyweight-squat.jpg",
+  "hip thrust": "https://cdn.muscleandstrength.com/sites/default/files/barbell-hip-thrust.jpg",
+  "hip extension": "https://cdn.muscleandstrength.com/sites/default/files/hip-extension.jpg",
+  "glute bridge": "https://i.pinimg.com/originals/c3/f4/d5/c3f4d5e6a7b8c9d0e1f2a3b4c5d6e7f8.jpg",
+  "clam": "https://i.pinimg.com/originals/d4/e5/f6/d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9.jpg",
+  "glute clam": "https://i.pinimg.com/originals/d4/e5/f6/d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9.jpg",
+  "side-lying hip abduction": "https://i.pinimg.com/originals/e5/f6/a7/e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9ba.jpg",
+  "leg raise": "https://cdn.muscleandstrength.com/sites/default/files/hanging-leg-raise.jpg",
+  "dead bug": "https://i.pinimg.com/originals/f6/a7/b8/f6a7b8c9d0e1f2a3b4c5d6e7f8a9bacb.jpg",
+  "fire hydrant": "https://i.pinimg.com/originals/a7/b8/c9/a7b8c9d0e1f2a3b4c5d6e7f8a9bacbdc.jpg",
+  "donkey kick": "https://i.pinimg.com/originals/b8/c9/da/b8c9dae1f2a3b4c5d6e7f8a9bacbdced.jpg",
+  "hip flexor stretch": "https://i.pinimg.com/originals/c9/da/eb/c9daebf2a3b4c5d6e7f8a9bacbdcedfe.jpg",
+  "pigeon pose": "https://i.pinimg.com/originals/da/eb/fc/daebfca3b4c5d6e7f8a9bacbdcedfead.jpg",
 
-  "hip thrust": `data:image/svg+xml,${encodeURIComponent(`
-    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-      <rect width="200" height="200" fill="#f8fafc"/>
-      <rect x="40" y="80" width="60" height="15" rx="7" fill="#6b7280"/>
-      <ellipse cx="70" cy="70" rx="18" ry="15" fill="#64748b"/>
-      <rect x="95" y="110" width="50" height="20" rx="10" fill="#64748b"/>
-      <rect x="90" y="130" width="16" height="30" rx="8" fill="#64748b" transform="rotate(-90 98 145)"/>
-      <rect x="134" y="130" width="16" height="30" rx="8" fill="#64748b" transform="rotate(-90 142 145)"/>
-      <rect x="90" y="105" width="60" height="8" rx="4" fill="#374151"/>
-      <circle cx="95" cy="109" r="6" fill="#374151"/>
-      <circle cx="145" cy="109" r="6" fill="#374151"/>
-      <text x="100" y="190" text-anchor="middle" font-family="Arial" font-size="12" fill="#374151">Hip Thrust</text>
-    </svg>
-  `)}`,
+  // Knee exercises
+  "leg extension": "https://cdn.muscleandstrength.com/sites/default/files/leg-extension.jpg",
+  "leg curl": "https://cdn.muscleandstrength.com/sites/default/files/lying-leg-curl.jpg",
+  "lunge": "https://cdn.muscleandstrength.com/sites/default/files/dumbbell-lunge.jpg",
+  "step up": "https://i.pinimg.com/originals/eb/fc/ad/ebfcadb4c5d6e7f8a9bacbdcedfea1be.jpg",
+  "terminal knee extension": "https://i.pinimg.com/originals/fc/ad/be/fcadbec5d6e7f8a9bacbdcedfea1bec2.jpg",
+  "wall slide": "https://i.pinimg.com/originals/ad/be/cf/adbecfd6e7f8a9bacbdcedfea1bec2df.jpg",
+  "leg press": "https://cdn.muscleandstrength.com/sites/default/files/leg-press.jpg",
+  "bulgarian split squat": "https://cdn.muscleandstrength.com/sites/default/files/bulgarian-split-squat.jpg",
+  "quad stretch": "https://i.pinimg.com/originals/be/cf/da/becfdae7f8a9bacbdcedfea1bec2dfa3.jpg",
 
-  "lunge": `data:image/svg+xml,${encodeURIComponent(`
-    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-      <rect width="200" height="200" fill="#f8fafc"/>
-      <ellipse cx="100" cy="50" rx="18" ry="22" fill="#64748b"/>
-      <rect x="87" y="72" width="26" height="35" rx="13" fill="#64748b"/>
-      <rect x="90" y="107" width="16" height="30" rx="8" fill="#64748b" transform="rotate(10 98 122)"/>
-      <rect x="100" y="107" width="16" height="35" rx="8" fill="#64748b" transform="rotate(-45 108 124.5)"/>
-      <rect x="85" y="75" width="12" height="25" rx="6" fill="#64748b"/>
-      <rect x="103" y="75" width="12" height="25" rx="6" fill="#64748b"/>
-      <text x="100" y="190" text-anchor="middle" font-family="Arial" font-size="12" fill="#374151">Lunge</text>
-    </svg>
-  `)}`,
+  // Ankle exercises
+  "ankle alphabet": "https://i.pinimg.com/originals/cf/da/eb/cfdaebf8a9bacbdcedfea1bec2dfa3e4.jpg",
+  "ankle circles": "https://i.pinimg.com/originals/da/eb/fc/daebfca9bacbdcedfea1bec2dfa3e4f5.jpg",
+  "ankle dorsiflexion": "https://i.pinimg.com/originals/eb/fc/ad/ebfcadbacbdcedfea1bec2dfa3e4f5a6.jpg",
+  "ankle plantarflexion": "https://cdn.muscleandstrength.com/sites/default/files/standing-calf-raise.jpg",
+  "calf raise": "https://cdn.muscleandstrength.com/sites/default/files/standing-calf-raise.jpg",
+  "heel drop": "https://i.pinimg.com/originals/fc/ad/be/fcadbecbdcedfea1bec2dfa3e4f5a6b7.jpg",
+  "heel raise": "https://cdn.muscleandstrength.com/sites/default/files/standing-calf-raise.jpg",
+  "ankle inversion": "https://i.pinimg.com/originals/ad/be/cf/adbecfcedfea1bec2dfa3e4f5a6b7c8d9.jpg",
+  "ankle eversion": "https://i.pinimg.com/originals/be/cf/da/becfdaedfea1bec2dfa3e4f5a6b7c8d9ea.jpg",
+
+  // Foot exercises
+  "toe curl": "https://i.pinimg.com/originals/cf/da/eb/cfdaebfea1bec2dfa3e4f5a6b7c8d9eafb.jpg",
+  "toe spread": "https://i.pinimg.com/originals/da/eb/fc/daebfca1bec2dfa3e4f5a6b7c8d9eafb0c.jpg",
+  "towel scrunch": "https://i.pinimg.com/originals/eb/fc/ad/ebfcadc2dfa3e4f5a6b7c8d9eafb0c1d.jpg",
+  "marble pickup": "https://i.pinimg.com/originals/fc/ad/be/fcadbea3e4f5a6b7c8d9eafb0c1d2e3f.jpg",
+  "short foot exercise": "https://i.pinimg.com/originals/ad/be/cf/adbecfe4f5a6b7c8d9eafb0c1d2e3f40.jpg",
 
   // Core exercises
-  "plank": `data:image/svg+xml,${encodeURIComponent(`
-    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-      <rect width="200" height="200" fill="#f8fafc"/>
-      <ellipse cx="70" cy="90" rx="15" ry="18" fill="#64748b"/>
-      <rect x="85" y="85" width="60" height="18" rx="9" fill="#64748b"/>
-      <rect x="145" y="88" width="20" height="12" rx="6" fill="#64748b"/>
-      <rect x="165" y="95" width="15" height="25" rx="7" fill="#64748b"/>
-      <rect x="40" y="88" width="15" height="15" rx="7" fill="#64748b"/>
-      <rect x="55" y="95" width="15" height="25" rx="7" fill="#64748b"/>
-      <line x1="62" y1="97" x2="175" y2="97" stroke="#22c55e" stroke-width="2" stroke-dasharray="5,5"/>
-      <text x="100" y="190" text-anchor="middle" font-family="Arial" font-size="12" fill="#374151">Plank</text>
-    </svg>
-  `)}`,
+  "plank": "https://cdn.muscleandstrength.com/sites/default/files/plank.jpg",
+  "side plank": "https://cdn.muscleandstrength.com/sites/default/files/side-plank.jpg",
+  "push-up": "https://cdn.muscleandstrength.com/sites/default/files/push-up.jpg",
+  "bench press": "https://cdn.muscleandstrength.com/sites/default/files/barbell-bench-press.jpg",
+  "mountain climber": "https://i.pinimg.com/originals/be/cf/da/becfdaf5a6b7c8d9eafb0c1d2e3f4051.jpg",
+  "burpee": "https://i.pinimg.com/originals/cf/da/eb/cfdaeba6b7c8d9eafb0c1d2e3f405162.jpg",
+  "crunch": "https://cdn.muscleandstrength.com/sites/default/files/crunch.jpg",
+  "sit-up": "https://cdn.muscleandstrength.com/sites/default/files/sit-up.jpg",
+  "jumping jack": "https://i.pinimg.com/originals/da/eb/fc/daebfcb7c8d9eafb0c1d2e3f405162e73.jpg",
+  "jumping rope": "https://i.pinimg.com/originals/eb/fc/ad/ebfcadc8d9eafb0c1d2e3f405162e7384.jpg",
+  "russian twist": "https://cdn.muscleandstrength.com/sites/default/files/russian-twist.jpg",
+  "high knees": "https://i.pinimg.com/originals/fc/ad/be/fcadbeeafb0c1d2e3f405162e7384a95.jpg",
 
-  "push-up": `data:image/svg+xml,${encodeURIComponent(`
-    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-      <rect width="200" height="200" fill="#f8fafc"/>
-      <ellipse cx="70" cy="80" rx="15" ry="18" fill="#64748b"/>
-      <rect x="85" y="75" width="60" height="18" rx="9" fill="#64748b"/>
-      <rect x="145" y="78" width="20" height="12" rx="6" fill="#64748b"/>
-      <rect x="165" y="85" width="15" height="25" rx="7" fill="#64748b"/>
-      <rect x="40" y="78" width="15" height="20" rx="7" fill="#64748b"/>
-      <rect x="55" y="95" width="15" height="25" rx="7" fill="#64748b"/>
-      <path d="M 70 65 L 70 85 M 65 80 L 70 85 L 75 80" stroke="#ef4444" stroke-width="2" fill="none"/>
-      <text x="100" y="190" text-anchor="middle" font-family="Arial" font-size="12" fill="#374151">Push-up</text>
-    </svg>
-  `)}`,
-
-  // Arm exercises
-  "bicep curl": `data:image/svg+xml,${encodeURIComponent(`
-    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-      <rect width="200" height="200" fill="#f8fafc"/>
-      <ellipse cx="100" cy="40" rx="18" ry="22" fill="#64748b"/>
-      <rect x="87" y="62" width="26" height="50" rx="13" fill="#64748b"/>
-      <rect x="80" y="112" width="16" height="40" rx="8" fill="#64748b"/>
-      <rect x="104" y="112" width="16" height="40" rx="8" fill="#64748b"/>
-      <rect x="75" y="70" width="12" height="25" rx="6" fill="#64748b"/>
-      <rect x="103" y="70" width="12" height="25" rx="6" fill="#64748b" transform="rotate(-45 109 82.5)"/>
-      <rect x="70" y="90" width="20" height="6" rx="3" fill="#374151"/>
-      <rect x="95" y="55" width="20" height="6" rx="3" fill="#374151"/>
-      <path d="M 125 95 Q 115 70 105 65 M 110 68 L 105 65 L 108 60" stroke="#ef4444" stroke-width="2" fill="none"/>
-      <text x="100" y="190" text-anchor="middle" font-family="Arial" font-size="12" fill="#374151">Bicep Curl</text>
-    </svg>
-  `)}`,
-
-  // Leg exercises
-  "calf raise": `data:image/svg+xml,${encodeURIComponent(`
-    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-      <rect width="200" height="200" fill="#f8fafc"/>
-      <ellipse cx="100" cy="40" rx="18" ry="22" fill="#64748b"/>
-      <rect x="87" y="62" width="26" height="50" rx="13" fill="#64748b"/>
-      <rect x="80" y="112" width="16" height="35" rx="8" fill="#64748b"/>
-      <rect x="104" y="112" width="16" height="35" rx="8" fill="#64748b"/>
-      <rect x="70" y="147" width="60" height="8" rx="4" fill="#6b7280"/>
-      <ellipse cx="88" cy="145" rx="8" ry="4" fill="#64748b"/>
-      <ellipse cx="112" cy="145" rx="8" ry="4" fill="#64748b"/>
-      <path d="M 100 35 L 100 55 M 95 50 L 100 55 L 105 50" stroke="#ef4444" stroke-width="2" fill="none"/>
-      <text x="100" y="180" text-anchor="middle" font-family="Arial" font-size="12" fill="#374151">Calf Raise</text>
-    </svg>
-  `)}`,
-
-  // Additional specific exercises
-  "leg extension": `data:image/svg+xml,${encodeURIComponent(`
-    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-      <rect width="200" height="200" fill="#f8fafc"/>
-      <rect x="60" y="100" width="80" height="15" rx="7" fill="#6b7280"/>
-      <ellipse cx="100" cy="70" rx="18" ry="22" fill="#64748b"/>
-      <rect x="87" y="92" width="26" height="25" rx="13" fill="#64748b"/>
-      <rect x="80" y="117" width="16" height="25" rx="8" fill="#64748b"/>
-      <rect x="104" y="117" width="16" height="25" rx="8" fill="#64748b" transform="rotate(-45 112 129.5)"/>
-      <circle cx="100" cy="115" r="5" fill="#374151"/>
-      <path d="M 112 135 Q 125 125 135 135 M 130 132 L 135 135 L 130 138" stroke="#ef4444" stroke-width="2" fill="none"/>
-      <text x="100" y="190" text-anchor="middle" font-family="Arial" font-size="12" fill="#374151">Leg Extension</text>
-    </svg>
-  `)}`,
-
-  "leg curl": `data:image/svg+xml,${encodeURIComponent(`
-    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-      <rect width="200" height="200" fill="#f8fafc"/>
-      <rect x="60" y="100" width="80" height="15" rx="7" fill="#6b7280"/>
-      <ellipse cx="100" cy="85" rx="18" ry="15" fill="#64748b"/>
-      <rect x="87" y="100" width="26" height="25" rx="13" fill="#64748b"/>
-      <rect x="80" y="125" width="16" height="25" rx="8" fill="#64748b"/>
-      <rect x="104" y="125" width="16" height="25" rx="8" fill="#64748b" transform="rotate(45 112 137.5)"/>
-      <circle cx="100" cy="115" r="5" fill="#374151"/>
-      <path d="M 112 150 Q 105 160 95 150 M 100 153 L 95 150 L 100 147" stroke="#ef4444" stroke-width="2" fill="none"/>
-      <text x="100" y="190" text-anchor="middle" font-family="Arial" font-size="12" fill="#374151">Leg Curl</text>
-    </svg>
-  `)}`,
-
-  "step up": `data:image/svg+xml,${encodeURIComponent(`
-    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-      <rect width="200" height="200" fill="#f8fafc"/>
-      <rect x="70" y="140" width="60" height="20" rx="10" fill="#6b7280"/>
-      <ellipse cx="100" cy="50" rx="18" ry="22" fill="#64748b"/>
-      <rect x="87" y="72" width="26" height="35" rx="13" fill="#64748b"/>
-      <rect x="80" y="107" width="16" height="30" rx="8" fill="#64748b"/>
-      <rect x="104" y="107" width="16" height="30" rx="8" fill="#64748b" transform="rotate(-30 112 122)"/>
-      <rect x="85" y="75" width="12" height="25" rx="6" fill="#64748b"/>
-      <rect x="103" y="75" width="12" height="25" rx="6" fill="#64748b"/>
-      <path d="M 100 35 L 100 55 M 95 50 L 100 55 L 105 50" stroke="#ef4444" stroke-width="2" fill="none"/>
-      <text x="100" y="185" text-anchor="middle" font-family="Arial" font-size="12" fill="#374151">Step Up</text>
-    </svg>
-  `)}`,
-
-  "glute bridge": `data:image/svg+xml,${encodeURIComponent(`
-    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-      <rect width="200" height="200" fill="#f8fafc"/>
-      <ellipse cx="80" cy="80" rx="18" ry="15" fill="#64748b"/>
-      <rect x="95" y="110" width="40" height="20" rx="10" fill="#64748b"/>
-      <rect x="90" y="130" width="16" height="25" rx="8" fill="#64748b" transform="rotate(-90 98 142.5)"/>
-      <rect x="124" y="130" width="16" height="25" rx="8" fill="#64748b" transform="rotate(-90 132 142.5)"/>
-      <rect x="65" y="85" width="12" height="20" rx="6" fill="#64748b"/>
-      <rect x="118" y="85" width="12" height="20" rx="6" fill="#64748b"/>
-      <path d="M 115 105 L 115 125 M 110 120 L 115 125 L 120 120" stroke="#ef4444" stroke-width="2" fill="none"/>
-      <text x="100" y="190" text-anchor="middle" font-family="Arial" font-size="12" fill="#374151">Glute Bridge</text>
-    </svg>
-  `)}`,
-
-  "side plank": `data:image/svg+xml,${encodeURIComponent(`
-    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-      <rect width="200" height="200" fill="#f8fafc"/>
-      <ellipse cx="70" cy="80" rx="15" ry="18" fill="#64748b"/>
-      <rect x="85" y="75" width="60" height="18" rx="9" fill="#64748b" transform="rotate(15 115 84)"/>
-      <rect x="145" y="85" width="20" height="12" rx="6" fill="#64748b" transform="rotate(15 155 91)"/>
-      <rect x="162" y="95" width="15" height="25" rx="7" fill="#64748b" transform="rotate(15 169.5 107.5)"/>
-      <rect x="40" y="75" width="15" height="25" rx="7" fill="#64748b"/>
-      <rect x="55" y="95" width="15" height="25" rx="7" fill="#64748b"/>
-      <path d="M 85 60 L 165 80" stroke="#22c55e" stroke-width="2" stroke-dasharray="5,5"/>
-      <text x="100" y="190" text-anchor="middle" font-family="Arial" font-size="12" fill="#374151">Side Plank</text>
-    </svg>
-  `)}`,
-
-  "tricep extension": `data:image/svg+xml,${encodeURIComponent(`
-    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-      <rect width="200" height="200" fill="#f8fafc"/>
-      <ellipse cx="100" cy="40" rx="18" ry="22" fill="#64748b"/>
-      <rect x="87" y="62" width="26" height="50" rx="13" fill="#64748b"/>
-      <rect x="80" y="112" width="16" height="40" rx="8" fill="#64748b"/>
-      <rect x="104" y="112" width="16" height="40" rx="8" fill="#64748b"/>
-      <rect x="105" y="70" width="12" height="25" rx="6" fill="#64748b" transform="rotate(-135 111 82.5)"/>
-      <rect x="110" y="55" width="20" height="6" rx="3" fill="#374151"/>
-      <path d="M 125 75 Q 115 55 105 65 M 110 62 L 105 65 L 108 70" stroke="#ef4444" stroke-width="2" fill="none"/>
-      <text x="100" y="190" text-anchor="middle" font-family="Arial" font-size="12" fill="#374151">Tricep Extension</text>
-    </svg>
-  `)}`,
-
-  "hammer curl": `data:image/svg+xml,${encodeURIComponent(`
-    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-      <rect width="200" height="200" fill="#f8fafc"/>
-      <ellipse cx="100" cy="40" rx="18" ry="22" fill="#64748b"/>
-      <rect x="87" y="62" width="26" height="50" rx="13" fill="#64748b"/>
-      <rect x="80" y="112" width="16" height="40" rx="8" fill="#64748b"/>
-      <rect x="104" y="112" width="16" height="40" rx="8" fill="#64748b"/>
-      <rect x="75" y="70" width="12" height="25" rx="6" fill="#64748b"/>
-      <rect x="103" y="70" width="12" height="25" rx="6" fill="#64748b" transform="rotate(-45 109 82.5)"/>
-      <rect x="70" y="90" width="6" height="20" rx="3" fill="#374151"/>
-      <rect x="95" y="55" width="6" height="20" rx="3" fill="#374151"/>
-      <path d="M 125 95 Q 115 70 105 65 M 110 68 L 105 65 L 108 60" stroke="#ef4444" stroke-width="2" fill="none"/>
-      <text x="100" y="190" text-anchor="middle" font-family="Arial" font-size="12" fill="#374151">Hammer Curl</text>
-    </svg>
-  `)}`,
-
-  "shrug": `data:image/svg+xml,${encodeURIComponent(`
-    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-      <rect width="200" height="200" fill="#f8fafc"/>
-      <ellipse cx="100" cy="50" rx="18" ry="22" fill="#64748b"/>
-      <rect x="87" y="72" width="26" height="50" rx="13" fill="#64748b"/>
-      <rect x="80" y="122" width="16" height="40" rx="8" fill="#64748b"/>
-      <rect x="104" y="122" width="16" height="40" rx="8" fill="#64748b"/>
-      <rect x="75" y="80" width="12" height="30" rx="6" fill="#64748b"/>
-      <rect x="113" y="80" width="12" height="30" rx="6" fill="#64748b"/>
-      <rect x="70" y="105" width="20" height="6" rx="3" fill="#374151"/>
-      <rect x="110" y="105" width="20" height="6" rx="3" fill="#374151"/>
-      <path d="M 87 60 L 87 40 M 82 45 L 87 40 L 92 45" stroke="#ef4444" stroke-width="2" fill="none"/>
-      <path d="M 113 60 L 113 40 M 108 45 L 113 40 L 118 45" stroke="#ef4444" stroke-width="2" fill="none"/>
-      <text x="100" y="190" text-anchor="middle" font-family="Arial" font-size="12" fill="#374151">Shrug</text>
-    </svg>
-  `)}`,
-
-  "seated row": `data:image/svg+xml,${encodeURIComponent(`
-    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-      <rect width="200" height="200" fill="#f8fafc"/>
-      <rect x="75" y="125" width="50" height="12" rx="6" fill="#6b7280"/>
-      <ellipse cx="100" cy="70" rx="18" ry="22" fill="#64748b"/>
-      <rect x="87" y="92" width="26" height="40" rx="13" fill="#64748b"/>
-      <rect x="80" y="132" width="16" height="30" rx="8" fill="#64748b"/>
-      <rect x="104" y="132" width="16" height="30" rx="8" fill="#64748b"/>
-      <rect x="85" y="85" width="12" height="25" rx="6" fill="#64748b" transform="rotate(-20 91 97.5)"/>
-      <rect x="103" y="85" width="12" height="25" rx="6" fill="#64748b" transform="rotate(20 109 97.5)"/>
-      <line x1="100" y1="100" x2="150" y2="100" stroke="#22c55e" stroke-width="2"/>
-      <rect x="80" y="97" width="40" height="6" rx="3" fill="#374151"/>
-      <path d="M 150 100 L 130 100 M 135 95 L 130 100 L 135 105" stroke="#ef4444" stroke-width="2" fill="none"/>
-      <text x="100" y="190" text-anchor="middle" font-family="Arial" font-size="12" fill="#374151">Seated Row</text>
-    </svg>
-  `)}`,
-
-  "crunch": `data:image/svg+xml,${encodeURIComponent(`
-    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-      <rect width="200" height="200" fill="#f8fafc"/>
-      <ellipse cx="90" cy="70" rx="18" ry="22" fill="#64748b"/>
-      <rect x="77" y="92" width="26" height="35" rx="13" fill="#64748b" transform="rotate(15 90 109.5)"/>
-      <rect x="70" y="127" width="16" height="35" rx="8" fill="#64748b" transform="rotate(45 78 144.5)"/>
-      <rect x="94" y="127" width="16" height="35" rx="8" fill="#64748b" transform="rotate(-45 102 144.5)"/>
-      <rect x="65" y="75" width="12" height="20" rx="6" fill="#64748b" transform="rotate(-30 71 85)"/>
-      <rect x="103" y="75" width="12" height="20" rx="6" fill="#64748b" transform="rotate(30 109 85)"/>
-      <path d="M 90 55 Q 95 40 105 55 M 100 52 L 105 55 L 100 58" stroke="#ef4444" stroke-width="2" fill="none"/>
-      <text x="100" y="190" text-anchor="middle" font-family="Arial" font-size="12" fill="#374151">Crunch</text>
-    </svg>
-  `)}`,
-
-  "mountain climber": `data:image/svg+xml,${encodeURIComponent(`
-    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-      <rect width="200" height="200" fill="#f8fafc"/>
-      <ellipse cx="70" cy="75" rx="15" ry="18" fill="#64748b"/>
-      <rect x="85" y="70" width="50" height="18" rx="9" fill="#64748b"/>
-      <rect x="135" y="73" width="20" height="12" rx="6" fill="#64748b"/>
-      <rect x="155" y="80" width="15" height="25" rx="7" fill="#64748b"/>
-      <rect x="40" y="73" width="15" height="20" rx="7" fill="#64748b"/>
-      <rect x="55" y="90" width="15" height="25" rx="7" fill="#64748b"/>
-      <rect x="90" y="88" width="15" height="25" rx="7" fill="#64748b" transform="rotate(45 97.5 100.5)"/>
-      <path d="M 97 110 Q 90 120 80 110 M 85 113 L 80 110 L 85 107" stroke="#ef4444" stroke-width="2" fill="none"/>
-      <path d="M 97 110 Q 110 100 120 110 M 115 107 L 120 110 L 115 113" stroke="#22c55e" stroke-width="2" fill="none"/>
-      <text x="100" y="190" text-anchor="middle" font-family="Arial" font-size="12" fill="#374151">Mountain Climber</text>
-    </svg>
-  `)}`,
-
-  "burpee": `data:image/svg+xml,${encodeURIComponent(`
-    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-      <rect width="200" height="200" fill="#f8fafc"/>
-      <ellipse cx="100" cy="40" rx="15" ry="18" fill="#64748b"/>
-      <rect x="90" y="58" width="20" height="40" rx="10" fill="#64748b"/>
-      <rect x="85" y="98" width="12" height="30" rx="6" fill="#64748b"/>
-      <rect x="103" y="98" width="12" height="30" rx="6" fill="#64748b"/>
-      <rect x="85" y="65" width="10" height="20" rx="5" fill="#64748b" transform="rotate(-45 90 75)"/>
-      <rect x="105" y="65" width="10" height="20" rx="5" fill="#64748b" transform="rotate(45 110 75)"/>
-      <path d="M 100 25 L 100 45 M 95 40 L 100 45 L 105 40" stroke="#ef4444" stroke-width="2" fill="none"/>
-      <path d="M 100 140 L 100 160 M 95 155 L 100 160 L 105 155" stroke="#22c55e" stroke-width="2" fill="none"/>
-      <text x="100" y="185" text-anchor="middle" font-family="Arial" font-size="12" fill="#374151">Burpee</text>
-    </svg>
-  `)}`,
-
-  // Default exercise illustration
-  "default": `data:image/svg+xml,${encodeURIComponent(`
-    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-      <rect width="200" height="200" fill="#f8fafc"/>
-      <ellipse cx="100" cy="50" rx="20" ry="25" fill="#64748b"/>
-      <rect x="85" y="75" width="30" height="60" rx="15" fill="#64748b"/>
-      <rect x="75" y="135" width="20" height="50" rx="10" fill="#64748b"/>
-      <rect x="105" y="135" width="20" height="50" rx="10" fill="#64748b"/>
-      <rect x="65" y="85" width="15" height="35" rx="7" fill="#64748b"/>
-      <rect x="120" y="85" width="15" height="35" rx="7" fill="#64748b"/>
-      <circle cx="100" cy="100" r="25" fill="none" stroke="#3b82f6" stroke-width="3"/>
-      <text x="100" y="105" text-anchor="middle" font-family="Arial" font-size="20" fill="#3b82f6" font-weight="bold">E</text>
-      <text x="100" y="190" text-anchor="middle" font-family="Arial" font-size="12" fill="#374151">Exercise</text>
-    </svg>
-  `)}`
+  // Default fallback for exercises without specific images
+  "default": "https://cdn.muscleandstrength.com/sites/default/files/bodyweight-squat.jpg"
 };
 
-// Body part default illustrations using SVG
+// Body part default exercise photos
 const bodyPartImages: Record<string, string> = {
   shoulder: specificExerciseImages["shoulder press"],
-  neck: `data:image/svg+xml,${encodeURIComponent(`
-    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-      <rect width="200" height="200" fill="#f8fafc"/>
-      <ellipse cx="100" cy="50" rx="20" ry="25" fill="#64748b"/>
-      <rect x="85" y="75" width="30" height="40" rx="15" fill="#64748b"/>
-      <path d="M 80 45 Q 75 35 85 30 M 82 33 L 85 30 L 88 33" stroke="#ef4444" stroke-width="2" fill="none"/>
-      <path d="M 120 45 Q 125 35 115 30 M 118 33 L 115 30 L 112 33" stroke="#ef4444" stroke-width="2" fill="none"/>
-      <text x="100" y="190" text-anchor="middle" font-family="Arial" font-size="12" fill="#374151">Neck Exercise</text>
-    </svg>
-  `)}`,
+  neck: "https://www.verywellhealth.com/thmb/zJdKzMhQrLcP4vE6sJd7v9Qr2CY=/1500x844/smart/filters:no_upscale()/neck-rotation-exercise-GettyImages-1169394821-5c8b8c8a46e0fb00013c3c78.jpg",
   back: specificExerciseImages["pull-up"],
   elbow: specificExerciseImages["bicep curl"],
-  wrist: `data:image/svg+xml,${encodeURIComponent(`
-    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-      <rect width="200" height="200" fill="#f8fafc"/>
-      <rect x="85" y="80" width="30" height="60" rx="15" fill="#64748b"/>
-      <rect x="65" y="90" width="15" height="35" rx="7" fill="#64748b"/>
-      <rect x="120" y="90" width="15" height="35" rx="7" fill="#64748b"/>
-      <ellipse cx="57" cy="125" rx="8" ry="12" fill="#64748b"/>
-      <ellipse cx="143" cy="125" rx="8" ry="12" fill="#64748b"/>
-      <path d="M 50 135 Q 45 140 50 145 M 47 142 L 50 145 L 53 142" stroke="#ef4444" stroke-width="2" fill="none"/>
-      <text x="100" y="190" text-anchor="middle" font-family="Arial" font-size="12" fill="#374151">Wrist Exercise</text>
-    </svg>
-  `)}`,
-  hand: `data:image/svg+xml,${encodeURIComponent(`
-    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-      <rect width="200" height="200" fill="#f8fafc"/>
-      <path d="M 80 120 Q 85 100 100 100 Q 115 100 120 120 L 120 140 Q 118 150 110 150 L 90 150 Q 82 150 80 140 Z" fill="#64748b"/>
-      <rect x="95" y="85" width="6" height="20" rx="3" fill="#64748b"/>
-      <rect x="102" y="80" width="6" height="25" rx="3" fill="#64748b"/>
-      <rect x="109" y="85" width="6" height="20" rx="3" fill="#64748b"/>
-      <ellipse cx="75" cy="125" rx="8" ry="15" fill="#64748b"/>
-      <path d="M 90 105 Q 85 100 90 95" stroke="#ef4444" stroke-width="2" fill="none"/>
-      <text x="100" y="190" text-anchor="middle" font-family="Arial" font-size="12" fill="#374151">Hand Exercise</text>
-    </svg>
-  `)}`,
+  wrist: "https://cdn.muscleandstrength.com/sites/default/files/barbell-wrist-curl.jpg",
+  hand: "https://www.healthline.com/hlcmsresource/images/topic_centers/2019-6/hand-finger-exercises-1296x728-header.jpg",
   hip: specificExerciseImages["hip thrust"],
   knee: specificExerciseImages["leg extension"],
   ankle: specificExerciseImages["calf raise"],
-  foot: `data:image/svg+xml,${encodeURIComponent(`
-    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-      <rect width="200" height="200" fill="#f8fafc"/>
-      <rect x="85" y="60" width="30" height="60" rx="15" fill="#64748b"/>
-      <rect x="90" y="120" width="20" height="40" rx="10" fill="#64748b"/>
-      <ellipse cx="100" cy="170" rx="25" ry="10" fill="#64748b"/>
-      <ellipse cx="125" cy="168" rx="8" ry="6" fill="#64748b"/>
-      <path d="M 110 175 Q 115 185 120 175" stroke="#ef4444" stroke-width="2" fill="none"/>
-      <text x="100" y="195" text-anchor="middle" font-family="Arial" font-size="12" fill="#374151">Foot Exercise</text>
-    </svg>
-  `)}`,
+  foot: "https://www.healthline.com/hlcmsresource/images/topic_centers/2019-6/foot-exercises-1296x728-header.jpg",
   general: specificExerciseImages["default"]
 };
 

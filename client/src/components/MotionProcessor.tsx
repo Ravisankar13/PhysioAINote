@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -38,6 +38,117 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
   const [currentJointAngles, setCurrentJointAngles] = useState<JointAngles | null>(null);
   const [estimatedAnthropometrics, setEstimatedAnthropometrics] = useState<any>(null);
   const [movementType, setMovementType] = useState<string>('unknown');
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const sceneRef = useRef<THREE.Scene | null>(null);
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const skeletonRef = useRef<THREE.Group | null>(null);
+
+  // Initialize 3D scene for virtual patient
+  const initVirtualPatient = () => {
+    if (!canvasRef.current) return;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf0f0f0);
+    
+    const camera = new THREE.PerspectiveCamera(75, 400 / 300, 0.1, 1000);
+    camera.position.set(0, 1, 3);
+    
+    const renderer = new THREE.WebGLRenderer({ canvas: canvasRef.current, antialias: true });
+    renderer.setSize(400, 300);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    
+    // Add lighting
+    const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+    scene.add(ambientLight);
+    
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight.position.set(5, 10, 5);
+    directionalLight.castShadow = true;
+    scene.add(directionalLight);
+    
+    // Create skeleton group
+    const skeleton = new THREE.Group();
+    scene.add(skeleton);
+    
+    sceneRef.current = scene;
+    rendererRef.current = renderer;
+    cameraRef.current = camera;
+    skeletonRef.current = skeleton;
+    
+    // Initial render
+    renderer.render(scene, camera);
+  };
+
+  // Create 3D skeleton from pose landmarks
+  const createSkeleton = (landmarks: any[]) => {
+    if (!skeletonRef.current || !landmarks || landmarks.length < 17) return;
+    
+    // Clear previous skeleton
+    skeletonRef.current.clear();
+    
+    // Joint material
+    const jointMaterial = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
+    const boneMaterial = new THREE.MeshPhongMaterial({ color: 0x0066cc });
+    
+    // Create joints
+    landmarks.forEach((landmark, index) => {
+      if (landmark.visibility > 0.5) {
+        const joint = new THREE.SphereGeometry(0.02, 8, 6);
+        const jointMesh = new THREE.Mesh(joint, jointMaterial);
+        jointMesh.position.set(
+          (landmark.x - 0.5) * 2,
+          -(landmark.y - 0.5) * 2,
+          landmark.z || 0
+        );
+        skeletonRef.current!.add(jointMesh);
+      }
+    });
+    
+    // Create bones (connections between joints)
+    const connections = [
+      [5, 6], // shoulders
+      [5, 7], [7, 9], // left arm
+      [6, 8], [8, 10], // right arm
+      [5, 11], [6, 12], // torso to hips
+      [11, 12], // hips
+      [11, 13], [13, 15], // left leg
+      [12, 14], [14, 16], // right leg
+      [0, 1], [0, 2], // head
+      [1, 3], [2, 4] // ears
+    ];
+    
+    connections.forEach(([start, end]) => {
+      const startLandmark = landmarks[start];
+      const endLandmark = landmarks[end];
+      
+      if (startLandmark && endLandmark && 
+          startLandmark.visibility > 0.5 && endLandmark.visibility > 0.5) {
+        
+        const startPos = new THREE.Vector3(
+          (startLandmark.x - 0.5) * 2,
+          -(startLandmark.y - 0.5) * 2,
+          startLandmark.z || 0
+        );
+        const endPos = new THREE.Vector3(
+          (endLandmark.x - 0.5) * 2,
+          -(endLandmark.y - 0.5) * 2,
+          endLandmark.z || 0
+        );
+        
+        const distance = startPos.distanceTo(endPos);
+        const bone = new THREE.CylinderGeometry(0.01, 0.01, distance, 8);
+        const boneMesh = new THREE.Mesh(bone, boneMaterial);
+        
+        boneMesh.position.copy(startPos.clone().add(endPos).divideScalar(2));
+        boneMesh.lookAt(endPos);
+        boneMesh.rotateX(Math.PI / 2);
+        
+        skeletonRef.current!.add(boneMesh);
+      }
+    });
+  };
 
   // MoveNet pose landmark indices (17 keypoints)
   const MOVENET_LANDMARKS = {
@@ -263,6 +374,18 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
     return 'general movement';
   };
 
+  // Initialize virtual patient scene
+  useEffect(() => {
+    initVirtualPatient();
+    
+    // Cleanup on unmount
+    return () => {
+      if (rendererRef.current) {
+        rendererRef.current.dispose();
+      }
+    };
+  }, []);
+
   // Initialize analysis when motion data changes
   useEffect(() => {
     if (motionData && motionData.length > 0) {
@@ -279,6 +402,14 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
           const initialJointAngles = processFrame(motionData[0]);
           console.log('Initial joint angles:', initialJointAngles);
           setCurrentJointAngles(initialJointAngles);
+          
+          // Create initial virtual patient skeleton
+          if (motionData[0].landmarks) {
+            createSkeleton(motionData[0].landmarks);
+            if (rendererRef.current && sceneRef.current && cameraRef.current) {
+              rendererRef.current.render(sceneRef.current, cameraRef.current);
+            }
+          }
         }
       } catch (error) {
         console.error('Error analyzing motion data:', error);
@@ -314,6 +445,14 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
         const jointAngles = processFrame(motionData[currentFrame]);
         console.log('Setting joint angles:', jointAngles);
         setCurrentJointAngles(jointAngles);
+        
+        // Update virtual patient skeleton movement
+        if (motionData[currentFrame].landmarks) {
+          createSkeleton(motionData[currentFrame].landmarks);
+          if (rendererRef.current && sceneRef.current && cameraRef.current) {
+            rendererRef.current.render(sceneRef.current, cameraRef.current);
+          }
+        }
         
         if (onSkeletonUpdate) {
           onSkeletonUpdate(jointAngles, estimatedAnthropometrics);

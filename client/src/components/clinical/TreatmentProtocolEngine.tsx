@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
-import { CheckCircle, Clock, Target, Activity, AlertCircle, FileText } from 'lucide-react';
+import { CheckCircle, Clock, Target, Activity, AlertCircle, FileText, Zap, Brain } from 'lucide-react';
+import SmartExerciseEngine from './SmartExerciseEngine';
 
 interface TreatmentPhase {
   id: string;
@@ -51,9 +52,18 @@ interface DiagnosticResult {
   redFlags: string[];
 }
 
+interface MovementAbnormality {
+  type: string;
+  severity: 'mild' | 'moderate' | 'severe';
+  description: string;
+  affectedSide: 'left' | 'right' | 'bilateral';
+  clinicalSignificance: string;
+}
+
 interface TreatmentProtocolEngineProps {
   diagnosticResult: DiagnosticResult;
   patientAnswers: Record<string, any>;
+  abnormalities?: MovementAbnormality[];
   onProtocolSelect: (protocol: TreatmentProtocol) => void;
 }
 

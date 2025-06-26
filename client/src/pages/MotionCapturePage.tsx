@@ -314,7 +314,7 @@ export default function MotionCapturePage() {
         </div>
 
         {/* 3D Visualization Panel */}
-        <div className="xl:col-span-2">
+        <div className="xl:col-span-1">
           <Card className="h-[800px]">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">

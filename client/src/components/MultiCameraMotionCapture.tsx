@@ -356,16 +356,17 @@ export const MultiCameraMotionCapture: React.FC<MultiCameraMotionCaptureProps> =
       {/* Camera Views */}
       <Card>
         <CardHeader>
+          <CardTitle>Camera Views</CardTitle>
+        </CardHeader>
+        <CardContent>
           <Tabs value={selectedView} onValueChange={setSelectedView}>
             <TabsList>
               <TabsTrigger value="multi">Multi-View</TabsTrigger>
               <TabsTrigger value="single">Single View</TabsTrigger>
               <TabsTrigger value="comparison">Side-by-Side</TabsTrigger>
             </TabsList>
-          </Tabs>
-        </CardHeader>
-        <CardContent>
-          <TabsContent value="multi" className="mt-0">
+            
+            <TabsContent value="multi" className="mt-4">
             {/* Multi-camera grid view */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {cameras.slice(0, 3).map((camera, index) => (
@@ -412,7 +413,7 @@ export const MultiCameraMotionCapture: React.FC<MultiCameraMotionCaptureProps> =
             </div>
           </TabsContent>
 
-          <TabsContent value="single" className="mt-0">
+          <TabsContent value="single" className="mt-4">
             {/* Single camera view with selection */}
             <div className="space-y-4">
               <div className="flex items-center gap-2">
@@ -446,7 +447,7 @@ export const MultiCameraMotionCapture: React.FC<MultiCameraMotionCaptureProps> =
             </div>
           </TabsContent>
 
-          <TabsContent value="comparison" className="mt-0">
+          <TabsContent value="comparison" className="mt-4">
             {/* Side-by-side comparison view */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {activeCameras.slice(0, 2).map((cameraIndex) => (
@@ -470,6 +471,7 @@ export const MultiCameraMotionCapture: React.FC<MultiCameraMotionCaptureProps> =
               ))}
             </div>
           </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
 

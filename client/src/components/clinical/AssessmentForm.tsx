@@ -564,6 +564,191 @@ export default function AssessmentForm({ template, onComplete, onBack }: Assessm
     return recommendations;
   };
 
+  const getLaslettBackSIJInterpretation = (responses: { [key: string]: any }): string => {
+    const interpretations = [];
+    
+    const painLocation = responses['pain_location'];
+    const positiveTests = [];
+    
+    if (responses['sij_distraction_test'] === 'Positive - reproduces familiar pain') positiveTests.push('Distraction');
+    if (responses['sij_compression_test'] === 'Positive - reproduces familiar pain') positiveTests.push('Compression');
+    if (responses['posterior_shear_test'] === 'Positive - reproduces familiar pain') positiveTests.push('Thigh Thrust');
+    if (responses['sacral_thrust_test'] === 'Positive - reproduces familiar pain') positiveTests.push('Sacral Thrust');
+    if (responses['gaenslen_test'] === 'Positive - reproduces familiar pain') positiveTests.push('Gaenslen');
+    if (responses['patrick_test'] === 'Positive - reproduces familiar pain') positiveTests.push('Patrick');
+    
+    if (painLocation) interpretations.push(`Pain: ${painLocation}`);
+    if (positiveTests.length > 0) interpretations.push(`Positive tests: ${positiveTests.join(', ')}`);
+    if (responses['centralization_phenomenon']) interpretations.push(`Centralization: ${responses['centralization_phenomenon']}`);
+    
+    return interpretations.join(' | ');
+  };
+
+  const getLaslettBackSIJRecommendations = (responses: { [key: string]: any }): string[] => {
+    const recommendations = [];
+    
+    // Count positive SIJ tests
+    const sijTests = ['sij_distraction_test', 'sij_compression_test', 'posterior_shear_test', 'sacral_thrust_test', 'gaenslen_test'];
+    const positiveSIJTests = sijTests.filter(test => responses[test] === 'Positive - reproduces familiar pain').length;
+    
+    if (positiveSIJTests >= 3) {
+      recommendations.push('High probability of SIJ dysfunction (3+ positive tests)');
+      recommendations.push('SIJ-specific manual therapy and stabilization exercises');
+    } else if (positiveSIJTests >= 1) {
+      recommendations.push('Possible SIJ involvement (consider further assessment)');
+      recommendations.push('Combine SIJ and lumbar spine treatment approaches');
+    } else {
+      recommendations.push('Low probability of SIJ dysfunction');
+      recommendations.push('Focus on lumbar spine assessment and treatment');
+    }
+    
+    if (responses['centralization_phenomenon'] === 'Yes - centralizes easily') {
+      recommendations.push('Excellent response to McKenzie approach expected');
+      recommendations.push('Directional preference exercises indicated');
+    } else if (responses['centralization_phenomenon'] === 'Peripheralizes') {
+      recommendations.push('Avoid movements causing peripheralization');
+      recommendations.push('Consider alternative treatment approaches');
+    }
+    
+    if (responses['sitting_tolerance'] === 'Cannot sit' || responses['sitting_tolerance'] === 'Cannot sit >30 minutes') {
+      recommendations.push('Significant functional limitation - modify work/daily activities');
+      recommendations.push('Focus on extension-based exercises');
+    }
+    
+    if (responses['morning_stiffness'] === '>60 minutes' || responses['morning_stiffness'] === 'All day') {
+      recommendations.push('Consider inflammatory component');
+      recommendations.push('Morning mobility routine essential');
+    }
+    
+    return recommendations;
+  };
+
+  const getHandInjuryInterpretation = (responses: { [key: string]: any }): string => {
+    const interpretations = [];
+    
+    const mechanism = responses['injury_mechanism'];
+    const location = responses['pain_location_hand'];
+    const gripStrength = responses['grip_strength_loss'];
+    const swelling = responses['swelling_deformity'];
+    
+    if (mechanism) interpretations.push(`Mechanism: ${mechanism}`);
+    if (location) interpretations.push(`Location: ${location}`);
+    if (gripStrength) interpretations.push(`Grip: ${gripStrength}`);
+    if (swelling && swelling !== 'None visible') interpretations.push(`Swelling: ${swelling}`);
+    
+    return interpretations.join(' | ');
+  };
+
+  const getHandInjuryRecommendations = (responses: { [key: string]: any }): string[] => {
+    const recommendations = [];
+    
+    // Mechanism-based recommendations
+    if (responses['injury_mechanism'] === 'Fall on outstretched hand') {
+      recommendations.push('High risk of scaphoid or distal radius fracture');
+      recommendations.push('Consider imaging if severe pain or limited motion');
+    } else if (responses['injury_mechanism'] === 'Direct blow/crush') {
+      recommendations.push('Monitor for fracture or soft tissue damage');
+      recommendations.push('RICE protocol and protective splinting');
+    }
+    
+    // Location-specific recommendations
+    if (responses['pain_location_hand'] === 'Thumb base/CMC joint') {
+      recommendations.push('Possible CMC arthritis or Bennett fracture');
+      recommendations.push('Thumb spica splinting and CMC joint protection');
+    } else if (responses['pain_location_hand'] === 'Wrist - radial side') {
+      recommendations.push('Consider scaphoid injury or de Quervain\'s tenosynovitis');
+      recommendations.push('Scaphoid immobilization or thumb spica splinting');
+    }
+    
+    // Functional test recommendations
+    if (responses['finkelstein_test'] === 'Positive - sharp pain') {
+      recommendations.push('de Quervain\'s tenosynovitis confirmed');
+      recommendations.push('Thumb spica splinting and tendon gliding exercises');
+    }
+    
+    if (responses['carpal_tunnel_signs'] !== 'No symptoms') {
+      recommendations.push('Carpal tunnel syndrome present');
+      recommendations.push('Wrist splinting and nerve gliding exercises');
+    }
+    
+    // Severity-based recommendations
+    if (responses['grip_strength_loss'] === 'Severely reduced' || responses['grip_strength_loss'] === 'Unable to grip') {
+      recommendations.push('Significant functional impairment');
+      recommendations.push('Urgent referral for further evaluation');
+    }
+    
+    if (responses['swelling_deformity'] === 'Visible deformity' || responses['swelling_deformity'] === 'Severe swelling/deformity') {
+      recommendations.push('Possible fracture or dislocation');
+      recommendations.push('Immediate medical evaluation required');
+    }
+    
+    return recommendations;
+  };
+
+  const getFootInjuryInterpretation = (responses: { [key: string]: any }): string => {
+    const interpretations = [];
+    
+    const mechanism = responses['foot_injury_mechanism'];
+    const location = responses['foot_pain_location'];
+    const weightBearing = responses['weight_bearing_ability'];
+    const achillesTest = responses['achilles_squeeze_test'];
+    
+    if (mechanism) interpretations.push(`Mechanism: ${mechanism}`);
+    if (location) interpretations.push(`Location: ${location}`);
+    if (weightBearing) interpretations.push(`Weight-bearing: ${weightBearing}`);
+    if (achillesTest && achillesTest !== 'Normal plantarflexion') interpretations.push(`Achilles: ${achillesTest}`);
+    
+    return interpretations.join(' | ');
+  };
+
+  const getFootInjuryRecommendations = (responses: { [key: string]: any }): string[] => {
+    const recommendations = [];
+    
+    // Location-specific recommendations
+    if (responses['foot_pain_location'] === 'Heel/plantar fascia') {
+      recommendations.push('Likely plantar fasciitis');
+      recommendations.push('Plantar fascia stretching and arch support');
+    } else if (responses['foot_pain_location'] === 'Achilles tendon') {
+      recommendations.push('Achilles tendinopathy management');
+      recommendations.push('Progressive loading and eccentric exercises');
+    } else if (responses['foot_pain_location'] === 'Forefoot/metatarsals') {
+      recommendations.push('Possible metatarsal stress fracture or neuroma');
+      recommendations.push('Metatarsal padding and activity modification');
+    }
+    
+    // Test-specific recommendations
+    if (responses['achilles_squeeze_test'] === 'No plantarflexion') {
+      recommendations.push('Complete Achilles rupture suspected');
+      recommendations.push('Immediate orthopedic referral required');
+    } else if (responses['achilles_squeeze_test'] === 'Reduced plantarflexion') {
+      recommendations.push('Partial Achilles tear possible');
+      recommendations.push('Protective boot and progressive rehabilitation');
+    }
+    
+    if (responses['plantar_fascia_stretch'] === 'Positive - heel pain') {
+      recommendations.push('Plantar fasciitis confirmed');
+      recommendations.push('Calf stretching and plantar fascia release exercises');
+    }
+    
+    // Functional recommendations
+    if (responses['weight_bearing_ability'] === 'Non-weight-bearing' || responses['weight_bearing_ability'] === 'Unable to stand') {
+      recommendations.push('Severe injury - possible fracture');
+      recommendations.push('Urgent medical evaluation and imaging');
+    }
+    
+    if (responses['navicular_drop_test'] === 'Excessive drop (>20mm)') {
+      recommendations.push('Significant foot pronation/flat feet');
+      recommendations.push('Arch support and posterior tibial strengthening');
+    }
+    
+    if (responses['foot_sensation'] !== 'Normal sensation') {
+      recommendations.push('Neurological involvement present');
+      recommendations.push('Consider nerve entrapment or systemic causes');
+    }
+    
+    return recommendations;
+  };
+
   const renderQuestion = (question: AssessmentQuestion) => {
     const response = responses[question.id];
 
@@ -668,6 +853,15 @@ export default function AssessmentForm({ template, onComplete, onBack }: Assessm
     } else if (template.id === 'running_injury_assessment') {
       results.interpretation = getRunningInjuryInterpretation(responses);
       results.recommendations = getRunningInjuryRecommendations(responses);
+    } else if (template.id === 'laslett_back_sij') {
+      results.interpretation = getLaslettBackSIJInterpretation(responses);
+      results.recommendations = getLaslettBackSIJRecommendations(responses);
+    } else if (template.id === 'hand_injury_assessment') {
+      results.interpretation = getHandInjuryInterpretation(responses);
+      results.recommendations = getHandInjuryRecommendations(responses);
+    } else if (template.id === 'foot_injury_assessment') {
+      results.interpretation = getFootInjuryInterpretation(responses);
+      results.recommendations = getFootInjuryRecommendations(responses);
     }
 
     return (

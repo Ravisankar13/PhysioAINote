@@ -1031,6 +1031,253 @@ const assessmentTemplates: AssessmentTemplate[] = [
         required: true
       }
     ]
+  },
+  {
+    id: 'laslett_back_sij',
+    name: 'Mark Laslett Back and SIJ Pain Assessment',
+    bodyPart: 'Lower Back/Pelvis',
+    category: 'assessment',
+    description: 'Evidence-based assessment protocol for differentiating lumbar spine and sacroiliac joint pain based on Mark Laslett\'s research',
+    evidenceLevel: 'A',
+    questions: [
+      {
+        id: 'pain_location',
+        type: 'select',
+        question: 'Primary pain location',
+        options: ['Central lower back', 'Unilateral lower back', 'Buttock/posterior pelvis', 'Groin/anterior pelvis', 'Leg pain below knee'],
+        required: true
+      },
+      {
+        id: 'sij_distraction_test',
+        type: 'select',
+        question: 'SIJ Distraction Test',
+        options: ['Negative', 'Positive - reproduces familiar pain', 'Positive - different pain', 'Unable to perform'],
+        required: true
+      },
+      {
+        id: 'sij_compression_test',
+        type: 'select',
+        question: 'SIJ Compression Test',
+        options: ['Negative', 'Positive - reproduces familiar pain', 'Positive - different pain', 'Unable to perform'],
+        required: true
+      },
+      {
+        id: 'posterior_shear_test',
+        type: 'select',
+        question: 'Posterior Shear Test (Thigh Thrust)',
+        options: ['Negative', 'Positive - reproduces familiar pain', 'Positive - different pain', 'Unable to perform'],
+        required: true
+      },
+      {
+        id: 'sacral_thrust_test',
+        type: 'select',
+        question: 'Sacral Thrust Test',
+        options: ['Negative', 'Positive - reproduces familiar pain', 'Positive - different pain', 'Unable to perform'],
+        required: true
+      },
+      {
+        id: 'gaenslen_test',
+        type: 'select',
+        question: 'Gaenslen Test',
+        options: ['Negative', 'Positive - reproduces familiar pain', 'Positive - different pain', 'Unable to perform'],
+        required: true
+      },
+      {
+        id: 'patrick_test',
+        type: 'select',
+        question: 'Patrick Test (FABER)',
+        options: ['Negative', 'Positive - reproduces familiar pain', 'Positive - different pain', 'Unable to perform'],
+        required: true
+      },
+      {
+        id: 'centralization_phenomenon',
+        type: 'select',
+        question: 'Centralization phenomenon with repeated movements',
+        options: ['Yes - centralizes easily', 'Partial centralization', 'No centralization', 'Peripheralizes'],
+        required: true
+      },
+      {
+        id: 'sitting_tolerance',
+        type: 'select',
+        question: 'Sitting tolerance',
+        options: ['Normal tolerance', 'Mild discomfort', 'Moderate discomfort', 'Cannot sit >30 minutes', 'Cannot sit'],
+        required: true
+      },
+      {
+        id: 'morning_stiffness',
+        type: 'select',
+        question: 'Morning stiffness duration',
+        options: ['No stiffness', '<30 minutes', '30-60 minutes', '>60 minutes', 'All day'],
+        required: true
+      },
+      {
+        id: 'age_related_factors',
+        type: 'select',
+        question: 'Age and onset factors',
+        options: ['Young adult - sudden onset', 'Middle aged - gradual onset', 'Older adult - degenerative', 'Post-pregnancy onset', 'Post-trauma onset'],
+        required: true
+      }
+    ]
+  },
+  {
+    id: 'hand_injury_assessment',
+    name: 'Evidence-Based Hand Injury Assessment',
+    bodyPart: 'Hand/Wrist',
+    category: 'assessment',
+    description: 'Comprehensive hand injury assessment based on current evidence and clinical guidelines',
+    evidenceLevel: 'A',
+    questions: [
+      {
+        id: 'injury_mechanism',
+        type: 'select',
+        question: 'Mechanism of injury',
+        options: ['Fall on outstretched hand', 'Direct blow/crush', 'Twisting/rotation', 'Repetitive stress', 'Cut/laceration', 'No specific trauma'],
+        required: true
+      },
+      {
+        id: 'pain_location_hand',
+        type: 'select',
+        question: 'Primary pain location',
+        options: ['Thumb base/CMC joint', 'Wrist - radial side', 'Wrist - ulnar side', 'Palm/thenar', 'Fingers', 'Dorsal hand'],
+        required: true
+      },
+      {
+        id: 'swelling_deformity',
+        type: 'select',
+        question: 'Swelling or visible deformity',
+        options: ['None visible', 'Mild localized swelling', 'Moderate generalized swelling', 'Visible deformity', 'Severe swelling/deformity'],
+        required: true
+      },
+      {
+        id: 'grip_strength_loss',
+        type: 'select',
+        question: 'Grip strength compared to unaffected side',
+        options: ['Normal strength', 'Slightly reduced', 'Moderately reduced', 'Severely reduced', 'Unable to grip'],
+        required: true
+      },
+      {
+        id: 'thumb_opposition',
+        type: 'select',
+        question: 'Thumb opposition to little finger',
+        options: ['Full opposition', 'Slight limitation', 'Moderate limitation', 'Severe limitation', 'Cannot oppose'],
+        required: true
+      },
+      {
+        id: 'finger_flexion',
+        type: 'select',
+        question: 'Finger flexion (make a fist)',
+        options: ['Complete fist', 'Nearly complete', 'Moderate limitation', 'Severe limitation', 'Cannot make fist'],
+        required: true
+      },
+      {
+        id: 'wrist_extension',
+        type: 'select',
+        question: 'Wrist extension range',
+        options: ['Normal (>60 degrees)', 'Mildly limited (45-60 degrees)', 'Moderately limited (30-45 degrees)', 'Severely limited (<30 degrees)', 'Unable to extend'],
+        required: true
+      },
+      {
+        id: 'finkelstein_test',
+        type: 'select',
+        question: 'Finkelstein Test (thumb tendon)',
+        options: ['Negative', 'Positive - sharp pain', 'Positive - mild discomfort', 'Unable to perform'],
+        required: true
+      },
+      {
+        id: 'carpal_tunnel_signs',
+        type: 'select',
+        question: 'Carpal tunnel signs (numbness/tingling)',
+        options: ['No symptoms', 'Thumb/index finger', 'Thumb/index/middle finger', 'All fingers except little', 'Nighttime symptoms'],
+        required: true
+      },
+      {
+        id: 'functional_impact_hand',
+        type: 'select',
+        question: 'Functional impact on daily activities',
+        options: ['No impact', 'Difficulty with fine tasks', 'Difficulty with grip tasks', 'Unable to use hand normally', 'Complete dysfunction'],
+        required: true
+      }
+    ]
+  },
+  {
+    id: 'foot_injury_assessment',
+    name: 'Evidence-Based Foot Injury Assessment',
+    bodyPart: 'Foot',
+    category: 'assessment',
+    description: 'Comprehensive foot injury assessment based on current evidence and clinical practice guidelines',
+    evidenceLevel: 'A',
+    questions: [
+      {
+        id: 'foot_injury_mechanism',
+        type: 'select',
+        question: 'Mechanism of injury',
+        options: ['Inversion ankle sprain', 'Direct impact/crush', 'Overuse/repetitive stress', 'Jump/landing injury', 'Hyperextension', 'No specific trauma'],
+        required: true
+      },
+      {
+        id: 'foot_pain_location',
+        type: 'select',
+        question: 'Primary pain location',
+        options: ['Heel/plantar fascia', 'Achilles tendon', 'Midfoot/arch', 'Forefoot/metatarsals', 'Big toe/1st MTP', 'Lateral foot border'],
+        required: true
+      },
+      {
+        id: 'weight_bearing_ability',
+        type: 'select',
+        question: 'Weight-bearing ability',
+        options: ['Full weight-bearing', 'Partial weight-bearing', 'Toe-touch only', 'Non-weight-bearing', 'Unable to stand'],
+        required: true
+      },
+      {
+        id: 'foot_swelling',
+        type: 'select',
+        question: 'Foot swelling/edema',
+        options: ['None visible', 'Mild localized', 'Moderate generalized', 'Severe with deformity', 'Unable to assess'],
+        required: true
+      },
+      {
+        id: 'plantar_fascia_stretch',
+        type: 'select',
+        question: 'Plantar fascia stretch test (toe extension)',
+        options: ['Negative', 'Positive - heel pain', 'Positive - arch pain', 'Unable to perform'],
+        required: true
+      },
+      {
+        id: 'achilles_squeeze_test',
+        type: 'select',
+        question: 'Achilles squeeze test (Thompson test)',
+        options: ['Normal plantarflexion', 'Reduced plantarflexion', 'No plantarflexion', 'Unable to perform'],
+        required: true
+      },
+      {
+        id: 'great_toe_extension',
+        type: 'select',
+        question: 'Great toe extension (1st MTP dorsiflexion)',
+        options: ['Normal (>60 degrees)', 'Mildly limited (45-60 degrees)', 'Moderately limited (30-45 degrees)', 'Severely limited (<30 degrees)', 'Unable to move'],
+        required: true
+      },
+      {
+        id: 'navicular_drop_test',
+        type: 'select',
+        question: 'Navicular drop test (arch support)',
+        options: ['Normal (<10mm drop)', 'Mild drop (10-15mm)', 'Moderate drop (15-20mm)', 'Excessive drop (>20mm)', 'Unable to assess'],
+        required: true
+      },
+      {
+        id: 'foot_sensation',
+        type: 'select',
+        question: 'Foot sensation/numbness',
+        options: ['Normal sensation', 'Numbness in toes', 'Numbness in forefoot', 'Numbness in heel', 'Complete loss of sensation'],
+        required: true
+      },
+      {
+        id: 'walking_ability',
+        type: 'select',
+        question: 'Walking ability',
+        options: ['Normal gait', 'Slight limp', 'Significant limp', 'Cannot walk normally', 'Cannot walk'],
+        required: true
+      }
+    ]
   }
 ];
 

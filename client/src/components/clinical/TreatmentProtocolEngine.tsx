@@ -592,15 +592,91 @@ export default function TreatmentProtocolEngine({
 
   // Main component with tabs for both standard protocols and smart engine
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Brain className="h-5 w-5" />
-          Treatment Planning & Exercise Prescription
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+    <div className="space-y-6">
+      {/* Diagnostic Summary & Treatment Connection */}
+      <Card className="border-2 border-blue-200 bg-gradient-to-r from-blue-50 to-green-50">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Brain className="h-5 w-5 text-blue-600" />
+            From Diagnosis to Treatment
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="space-y-3">
+              <div>
+                <h4 className="font-semibold text-blue-800 mb-2">Clinical Diagnosis</h4>
+                <div className="bg-white p-3 rounded border border-blue-200">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-medium">{diagnosticResult.primaryDiagnosis}</span>
+                    <Badge variant="default" className="bg-blue-600">
+                      {diagnosticResult.confidence}% confidence
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-gray-600">{diagnosticResult.functionalImpact}</p>
+                </div>
+              </div>
+              
+              {diagnosticResult.redFlags.length > 0 && (
+                <div>
+                  <h4 className="font-semibold text-red-700 mb-2">Red Flags Identified</h4>
+                  <div className="space-y-1">
+                    {diagnosticResult.redFlags.map((flag, index) => (
+                      <div key={index} className="flex items-center gap-2 p-2 bg-red-50 border border-red-200 rounded">
+                        <AlertCircle className="h-4 w-4 text-red-600" />
+                        <span className="text-sm text-red-700">{flag}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <h4 className="font-semibold text-green-800 mb-2">Movement Patterns Detected</h4>
+                <div className="space-y-2">
+                  {abnormalities.slice(0, 3).map((abnormality, index) => (
+                    <div key={index} className="bg-white p-2 rounded border border-green-200">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">{abnormality.description}</span>
+                        <Badge variant={abnormality.severity === 'severe' ? 'destructive' : 'secondary'} className="text-xs">
+                          {abnormality.severity}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                  {abnormalities.length > 3 && (
+                    <div className="text-xs text-gray-500 text-center">
+                      +{abnormalities.length - 3} more patterns detected
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              <div className="bg-green-100 p-3 rounded border border-green-300">
+                <div className="flex items-center gap-2 mb-1">
+                  <Target className="h-4 w-4 text-green-700" />
+                  <span className="text-sm font-semibold text-green-800">Treatment Ready</span>
+                </div>
+                <p className="text-xs text-green-700">
+                  Evidence-based protocols and AI-powered exercise prescriptions available below
+                </p>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Brain className="h-5 w-5" />
+            Treatment Planning & Exercise Prescription
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="protocols" className="flex items-center gap-2">
               <FileText className="h-4 w-4" />
@@ -633,9 +709,396 @@ export default function TreatmentProtocolEngine({
             {smartPrescription && renderSmartResults()}
           </TabsContent>
         </Tabs>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </div>
   );
+
+  function renderStandardProtocols() {
+    if (matchingProtocols.length === 0) {
+      return (
+        <div className="text-center py-8">
+          <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+          <p className="text-muted-foreground">No specific protocol found for {diagnosticResult.primaryDiagnosis}</p>
+          <p className="text-sm text-muted-foreground mt-2">Try the AI Exercise Engine for customized recommendations</p>
+        </div>
+      );
+    }
+
+    if (!selectedProtocol) {
+      return (
+        <div className="space-y-4">
+          <h3 className="font-semibold text-lg">Select Treatment Protocol</h3>
+          {matchingProtocols.map((protocol) => (
+            <Card key={protocol.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => selectProtocol(protocol)}>
+              <CardContent className="p-4">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="font-semibold text-lg">{protocol.name}</h3>
+                    <p className="text-gray-600 mt-1">{protocol.description}</p>
+                    <div className="flex items-center gap-4 mt-2">
+                      <Badge variant="outline">
+                        <Clock className="h-3 w-3 mr-1" />
+                        {protocol.totalDuration}
+                      </Badge>
+                      <Badge variant="outline">
+                        <Target className="h-3 w-3 mr-1" />
+                        {protocol.phases.length} phases
+                      </Badge>
+                    </div>
+                  </div>
+                  <Button size="sm">Select</Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      );
+    }
+
+    return renderSelectedProtocol();
+  }
+
+  function renderSelectedProtocol() {
+    if (!selectedProtocol) return null;
+    
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <span>{selectedProtocol.name}</span>
+              <Button variant="outline" onClick={() => setSelectedProtocol(null)}>
+                Change Protocol
+              </Button>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-gray-600 mb-4">{selectedProtocol.description}</p>
+            <div className="flex items-center gap-4">
+              <Badge>
+                <Clock className="h-3 w-3 mr-1" />
+                {selectedProtocol.totalDuration}
+              </Badge>
+              <Badge variant="outline">
+                <Target className="h-3 w-3 mr-1" />
+                {selectedProtocol.phases.length} phases
+              </Badge>
+              <Badge variant="outline">
+                Recommended Protocol
+              </Badge>
+            </div>
+          </CardContent>
+        </Card>
+
+      {getSeverityBasedModifications().length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-orange-500" />
+              Protocol Modifications
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {getSeverityBasedModifications().map((modification, index) => (
+                <div key={index} className="p-2 bg-orange-50 border-l-4 border-orange-500 rounded">
+                  <span className="text-orange-700">{modification}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Treatment Phases</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {selectedProtocol.phases.map((phase, index) => (
+              <div key={phase.id} className="border rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                      index <= currentPhase ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'
+                    }`}>
+                      {index + 1}
+                    </div>
+                    <div>
+                      <h3 className="font-semibold">{phase.name}</h3>
+                      <p className="text-sm text-gray-600">{phase.duration}</p>
+                    </div>
+                  </div>
+                  <Progress value={getPhaseProgress(index)} className="w-20" />
+                </div>
+                
+                <Tabs defaultValue="goals" className="w-full">
+                  <TabsList className="grid w-full grid-cols-4">
+                    <TabsTrigger value="goals">Goals</TabsTrigger>
+                    <TabsTrigger value="exercises">Exercises</TabsTrigger>
+                    <TabsTrigger value="precautions">Precautions</TabsTrigger>
+                    <TabsTrigger value="progress">Progress</TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="goals" className="mt-4">
+                    <div className="space-y-2">
+                      {phase.goals.map((goal, goalIndex) => (
+                        <div key={goalIndex} className="flex items-center gap-2">
+                          <Target className="h-4 w-4 text-blue-600" />
+                          <span>{goal}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </TabsContent>
+                  
+                  <TabsContent value="exercises" className="mt-4">
+                    <div className="space-y-4">
+                      {phase.exercises.map((exercise) => (
+                        <Card key={exercise.id}>
+                          <CardContent className="p-4">
+                            <div className="flex justify-between items-start mb-2">
+                              <h4 className="font-semibold">{exercise.name}</h4>
+                              <Badge variant="outline">{exercise.intensity}</Badge>
+                            </div>
+                            <p className="text-gray-600 mb-3">{exercise.description}</p>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                              <div>
+                                <span className="font-medium">Sets:</span> {exercise.sets}
+                              </div>
+                              <div>
+                                <span className="font-medium">Reps:</span> {exercise.reps}
+                              </div>
+                              <div>
+                                <span className="font-medium">Frequency:</span> {exercise.frequency}
+                              </div>
+                              <div>
+                                <span className="font-medium">Progression:</span> {exercise.progression}
+                              </div>
+                            </div>
+                            <div className="mt-3">
+                              <p className="text-sm"><span className="font-medium">Target:</span> {exercise.functionalGoal}</p>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </TabsContent>
+                  
+                  <TabsContent value="precautions" className="mt-4">
+                    <div className="space-y-2">
+                      {phase.precautions.map((precaution, index) => (
+                        <div key={index} className="flex items-center gap-2 p-2 bg-yellow-50 rounded">
+                          <AlertCircle className="h-4 w-4 text-yellow-600" />
+                          <span className="text-yellow-700">{precaution}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </TabsContent>
+                  
+                  <TabsContent value="progress" className="mt-4">
+                    <div className="space-y-2">
+                      {phase.progressCriteria.map((criteria, index) => (
+                        <div key={index} className="flex items-center gap-2">
+                          <CheckCircle className="h-4 w-4 text-green-600" />
+                          <span>{criteria}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid md:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Activity className="h-5 w-5" />
+              Home Exercise Program
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {selectedProtocol.homeExerciseProgram.map((exercise) => (
+                <div key={exercise.id} className="p-3 border rounded">
+                  <h4 className="font-medium">{exercise.name}</h4>
+                  <p className="text-sm text-gray-600 mt-1">{exercise.description}</p>
+                  <div className="flex gap-4 text-xs mt-2">
+                    <span>{exercise.sets} sets</span>
+                    <span>{exercise.reps} reps</span>
+                    <span>{exercise.frequency}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Patient Education
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {selectedProtocol.patientEducation.map((topic, index) => (
+                <div key={index} className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-blue-600" />
+                  <span className="text-sm">{topic}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Outcome Measures & Discharge Criteria</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid md:grid-cols-2 gap-6">
+            <div>
+              <h4 className="font-semibold mb-3">Assessment Tools</h4>
+              <div className="space-y-2">
+                {selectedProtocol.outcomesMeasures.map((measure, index) => (
+                  <div key={index} className="text-sm p-2 bg-gray-50 rounded">
+                    {measure}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div>
+              <h4 className="font-semibold mb-3">Discharge Criteria</h4>
+              <div className="space-y-2">
+                {selectedProtocol.dischargeCriteria.map((criteria, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <CheckCircle className="h-4 w-4 text-green-600" />
+                    <span className="text-sm">{criteria}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+    );
+  }
+
+  function renderSmartResults() {
+    if (!smartPrescription) return null;
+
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Zap className="h-4 w-4 text-yellow-600" />
+              AI-Generated Exercise Prescription
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4">
+              {smartPrescription.exercises?.map((exercise: any, index: number) => (
+                <div key={exercise.id || index} className="border rounded-lg p-4">
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <h4 className="font-medium">{exercise.name}</h4>
+                      <Badge variant={
+                        exercise.recommendationStrength === 'highly recommended' ? 'default' :
+                        exercise.recommendationStrength === 'recommended' ? 'secondary' : 'outline'
+                      } className="text-xs">
+                        {exercise.recommendationStrength}
+                      </Badge>
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-600 mb-2">{exercise.description}</p>
+                  <div className="text-xs space-y-1">
+                    <div><strong>Sets:</strong> {exercise.loadingParameters?.sets}</div>
+                    <div><strong>Reps:</strong> {exercise.loadingParameters?.reps}</div>
+                    <div><strong>Frequency:</strong> {exercise.loadingParameters?.frequency}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Target className="h-4 w-4 text-green-600" />
+              Expected Outcomes
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {smartPrescription.expectedOutcomes?.map((outcome: string, index: number) => (
+                <div key={index} className="flex items-center gap-2 p-2 bg-green-50 rounded">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  <span className="text-sm">{outcome}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {smartPrescription.homeProgram?.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Activity className="h-4 w-4 text-orange-600" />
+                Home Exercise Program
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-3">
+                {smartPrescription.homeProgram.map((exercise: any, index: number) => (
+                  <div key={exercise.id || index} className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                    <div className="flex items-center justify-between">
+                      <h5 className="font-medium">{exercise.name}</h5>
+                      <Badge variant="outline" className="bg-orange-100">
+                        Home Exercise
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-gray-600 mt-1">{exercise.homeExerciseAdaptation}</p>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 text-blue-600" />
+              Monitoring Guidelines
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {smartPrescription.monitoringGuidelines?.map((guideline: string, index: number) => (
+                <div key={index} className="flex items-start gap-2 p-2 bg-blue-50 rounded">
+                  <Clock className="h-4 w-4 text-blue-600 mt-0.5" />
+                  <span className="text-sm">{guideline}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+}
 
   function renderStandardProtocols() {
     if (matchingProtocols.length === 0) {

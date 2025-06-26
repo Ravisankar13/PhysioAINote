@@ -80,6 +80,122 @@ const redFlags: RedFlag[] = [
 
 const assessmentTemplates: AssessmentTemplate[] = [
   {
+    id: 'jo_gibson_shoulder',
+    name: 'Jo Gibson Shoulder Assessment',
+    bodyPart: 'shoulder',
+    category: 'assessment',
+    description: 'Comprehensive shoulder assessment based on Jo Gibson\'s clinical approach',
+    evidenceLevel: 'A',
+    questions: [
+      {
+        id: 'is_it_torn',
+        type: 'select',
+        question: 'Is it torn? (Structural integrity assessment)',
+        options: ['No signs of tear', 'Possible partial tear', 'Likely full thickness tear', 'Uncertain - imaging needed'],
+        required: true,
+        scoring: {
+          type: 'interpretation',
+          interpretation: {
+            'No signs of tear': 'Structural integrity appears intact',
+            'Possible partial tear': 'Consider imaging and modified loading',
+            'Likely full thickness tear': 'Imaging recommended, potential surgical consultation',
+            'Uncertain - imaging needed': 'Further investigation required'
+          }
+        }
+      },
+      {
+        id: 'is_it_stiff',
+        type: 'select',
+        question: 'Is it stiff? (Range of motion assessment)',
+        options: ['Normal ROM', 'Mildly restricted', 'Moderately restricted', 'Severely restricted'],
+        required: true,
+        scoring: {
+          type: 'interpretation',
+          interpretation: {
+            'Normal ROM': 'No mobility restrictions identified',
+            'Mildly restricted': 'Light mobilization and stretching indicated',
+            'Moderately restricted': 'Progressive mobilization program needed',
+            'Severely restricted': 'Intensive mobilization, consider capsular pattern'
+          }
+        }
+      },
+      {
+        id: 'is_it_irritable',
+        type: 'select',
+        question: 'Is it irritable? (Pain and inflammation level)',
+        options: ['Not irritable', 'Mildly irritable', 'Moderately irritable', 'Highly irritable'],
+        required: true,
+        scoring: {
+          type: 'interpretation',
+          interpretation: {
+            'Not irritable': 'Can progress with normal loading',
+            'Mildly irritable': 'Gentle progression with monitoring',
+            'Moderately irritable': 'Conservative approach, pain-free range',
+            'Highly irritable': 'Rest, gentle range of motion only'
+          }
+        }
+      },
+      {
+        id: 'can_you_change_it',
+        type: 'select',
+        question: 'Can you change it? (Modifiability assessment)',
+        options: ['Highly modifiable', 'Moderately modifiable', 'Minimally modifiable', 'Not modifiable'],
+        required: true,
+        scoring: {
+          type: 'interpretation',
+          interpretation: {
+            'Highly modifiable': 'Excellent prognosis for conservative treatment',
+            'Moderately modifiable': 'Good response expected with appropriate intervention',
+            'Minimally modifiable': 'Slower progress, persistent approach needed',
+            'Not modifiable': 'Consider alternative treatments or referral'
+          }
+        }
+      },
+      {
+        id: 'movement_pattern',
+        type: 'select',
+        question: 'Movement pattern quality',
+        options: ['Normal scapulohumeral rhythm', 'Mild dysfunction', 'Moderate dysfunction', 'Severe dysfunction'],
+        required: true
+      },
+      {
+        id: 'strength_deficit',
+        type: 'select',
+        question: 'Strength deficit present?',
+        options: ['No deficit', 'Mild weakness', 'Moderate weakness', 'Significant weakness'],
+        required: true
+      },
+      {
+        id: 'functional_impact',
+        type: 'select',
+        question: 'Functional impact on daily activities',
+        options: ['No impact', 'Mild impact', 'Moderate impact', 'Severe impact'],
+        required: true
+      },
+      {
+        id: 'pain_behavior',
+        type: 'select',
+        question: 'Pain behavior pattern',
+        options: ['Mechanical pain', 'Inflammatory pain', 'Mixed pattern', 'Non-mechanical pain'],
+        required: true
+      },
+      {
+        id: 'response_to_loading',
+        type: 'select',
+        question: 'Response to loading/exercise',
+        options: ['Improves with loading', 'No change with loading', 'Worsens with loading', 'Variable response'],
+        required: true
+      },
+      {
+        id: 'sleep_disturbance',
+        type: 'select',
+        question: 'Sleep disturbance due to shoulder pain',
+        options: ['No sleep issues', 'Occasional disturbance', 'Frequent disturbance', 'Severe sleep disruption'],
+        required: true
+      }
+    ]
+  },
+  {
     id: 'dash',
     name: 'DASH - Disabilities of Arm, Shoulder and Hand',
     bodyPart: 'upper_extremity',

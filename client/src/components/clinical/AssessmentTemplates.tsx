@@ -25,6 +25,8 @@ interface AssessmentQuestion {
   type: 'text' | 'number' | 'select' | 'checkbox' | 'scale';
   question: string;
   options?: string[];
+  min?: number;
+  max?: number;
   required: boolean;
   scoring?: {
     type: 'sum' | 'weighted' | 'interpretation';
@@ -669,6 +671,248 @@ const assessmentTemplates: AssessmentTemplate[] = [
         id: 'stm_q4',
         type: 'checkbox',
         question: 'In the last 2 weeks, I have dressed more slowly than usual because of back pain',
+        required: true
+      }
+    ]
+  },
+  {
+    id: 'bisset_elbow',
+    name: 'Leanne Bisset Elbow Assessment',
+    bodyPart: 'elbow',
+    category: 'assessment',
+    description: 'Comprehensive elbow assessment based on Leanne Bisset\'s evidence-based approach for lateral elbow tendinopathy',
+    evidenceLevel: 'A',
+    questions: [
+      {
+        id: 'elbow_pain_location',
+        type: 'select',
+        question: 'Primary location of elbow pain',
+        options: ['Lateral epicondyle', 'Medial epicondyle', 'Olecranon', 'Anterior elbow', 'Diffuse'],
+        required: true
+      },
+      {
+        id: 'elbow_pain_onset',
+        type: 'select',
+        question: 'Onset of elbow symptoms',
+        options: ['Gradual over weeks', 'Gradual over months', 'Sudden onset', 'Post-injury'],
+        required: true
+      },
+      {
+        id: 'elbow_aggravating_factors',
+        type: 'select',
+        question: 'Primary aggravating factors',
+        options: ['Gripping activities', 'Lifting objects', 'Computer/desk work', 'Sports activities', 'All activities'],
+        required: true
+      },
+      {
+        id: 'elbow_pain_intensity',
+        type: 'scale',
+        question: 'Current pain intensity (0-10 scale)',
+        min: 0,
+        max: 10,
+        required: true
+      },
+      {
+        id: 'elbow_functional_impact',
+        type: 'select',
+        question: 'Functional impact on daily activities',
+        options: ['Mild - minimal impact', 'Moderate - some limitation', 'Severe - significant limitation', 'Unable to perform activities'],
+        required: true
+      },
+      {
+        id: 'lateral_epicondyle_palpation',
+        type: 'select',
+        question: 'Lateral epicondyle palpation findings',
+        options: ['Non-tender', 'Mildly tender', 'Moderately tender', 'Severely tender'],
+        required: true
+      },
+      {
+        id: 'wrist_extension_strength',
+        type: 'select',
+        question: 'Resisted wrist extension strength',
+        options: ['Full strength', 'Slightly weak', 'Moderately weak', 'Severely weak', 'Unable to test'],
+        required: true
+      },
+      {
+        id: 'grip_strength_pain',
+        type: 'checkbox',
+        question: 'Pain with grip strength testing',
+        required: true
+      },
+      {
+        id: 'mills_test',
+        type: 'select',
+        question: 'Mills Test (passive wrist flexion with elbow extension)',
+        options: ['Negative', 'Positive - reproduces symptoms', 'Unable to perform'],
+        required: true
+      },
+      {
+        id: 'elbow_rom',
+        type: 'select',
+        question: 'Elbow range of motion',
+        options: ['Full ROM', 'Slightly limited', 'Moderately limited', 'Severely limited'],
+        required: true
+      }
+    ]
+  },
+  {
+    id: 'robertson_knee',
+    name: 'Claire Patella Robertson Knee Pain Assessment',
+    bodyPart: 'knee',
+    category: 'assessment',
+    description: 'Specialized knee pain assessment based on Claire Patella Robertson\'s clinical expertise in patellofemoral disorders',
+    evidenceLevel: 'A',
+    questions: [
+      {
+        id: 'knee_pain_location',
+        type: 'select',
+        question: 'Primary location of knee pain',
+        options: ['Anterior knee/patella', 'Medial knee', 'Lateral knee', 'Posterior knee', 'Diffuse knee pain'],
+        required: true
+      },
+      {
+        id: 'knee_pain_onset',
+        type: 'select',
+        question: 'Onset of knee symptoms',
+        options: ['Gradual onset', 'Sudden onset after activity', 'Post-traumatic', 'Insidious onset'],
+        required: true
+      },
+      {
+        id: 'knee_aggravating_activities',
+        type: 'select',
+        question: 'Activities that worsen knee pain',
+        options: ['Stairs (up/down)', 'Squatting/kneeling', 'Prolonged sitting', 'Running/jumping', 'All weight-bearing'],
+        required: true
+      },
+      {
+        id: 'knee_pain_intensity',
+        type: 'scale',
+        question: 'Current knee pain intensity (0-10 scale)',
+        min: 0,
+        max: 10,
+        required: true
+      },
+      {
+        id: 'patella_tracking',
+        type: 'select',
+        question: 'Patella tracking during active knee extension',
+        options: ['Normal tracking', 'Lateral tracking', 'Medial tracking', 'Irregular tracking', 'Unable to assess'],
+        required: true
+      },
+      {
+        id: 'patella_apprehension',
+        type: 'select',
+        question: 'Patella apprehension test',
+        options: ['Negative', 'Positive - apprehension only', 'Positive - pain and apprehension', 'Unable to perform'],
+        required: true
+      },
+      {
+        id: 'patella_compression',
+        type: 'select',
+        question: 'Patella compression test (Clarke\'s test)',
+        options: ['Negative', 'Positive - pain only', 'Positive - unable to hold contraction', 'Unable to perform'],
+        required: true
+      },
+      {
+        id: 'knee_quadriceps_strength',
+        type: 'select',
+        question: 'Quadriceps strength assessment',
+        options: ['Full strength', 'Slightly weak', 'Moderately weak', 'Severely weak', 'Unable to test'],
+        required: true
+      },
+      {
+        id: 'knee_swelling',
+        type: 'select',
+        question: 'Knee swelling/effusion',
+        options: ['None visible', 'Mild swelling', 'Moderate swelling', 'Severe swelling'],
+        required: true
+      },
+      {
+        id: 'knee_rom',
+        type: 'select',
+        question: 'Knee range of motion',
+        options: ['Full ROM', 'Slightly limited', 'Moderately limited', 'Severely limited'],
+        required: true
+      }
+    ]
+  },
+  {
+    id: 'mayer_ankle',
+    name: 'Sue Mayer Ankle Pain Assessment',
+    bodyPart: 'ankle',
+    category: 'assessment',
+    description: 'Comprehensive ankle assessment based on Sue Mayer\'s clinical approach to ankle and foot disorders',
+    evidenceLevel: 'A',
+    questions: [
+      {
+        id: 'ankle_pain_location',
+        type: 'select',
+        question: 'Primary location of ankle pain',
+        options: ['Lateral ankle', 'Medial ankle', 'Anterior ankle', 'Posterior ankle', 'Achilles region'],
+        required: true
+      },
+      {
+        id: 'ankle_pain_onset',
+        type: 'select',
+        question: 'Onset of ankle symptoms',
+        options: ['Acute injury/sprain', 'Gradual onset', 'Overuse related', 'Post-surgery complications'],
+        required: true
+      },
+      {
+        id: 'ankle_mechanism_injury',
+        type: 'select',
+        question: 'Mechanism of injury (if applicable)',
+        options: ['Inversion sprain', 'Eversion sprain', 'Achilles strain', 'Direct impact', 'No specific injury'],
+        required: true
+      },
+      {
+        id: 'ankle_pain_intensity',
+        type: 'scale',
+        question: 'Current ankle pain intensity (0-10 scale)',
+        min: 0,
+        max: 10,
+        required: true
+      },
+      {
+        id: 'ankle_weight_bearing',
+        type: 'select',
+        question: 'Weight-bearing ability',
+        options: ['Full weight-bearing', 'Partial weight-bearing', 'Non-weight-bearing', 'Weight-bearing with aid'],
+        required: true
+      },
+      {
+        id: 'ankle_swelling',
+        type: 'select',
+        question: 'Ankle swelling/edema',
+        options: ['None', 'Mild localized', 'Moderate generalized', 'Severe'],
+        required: true
+      },
+      {
+        id: 'ankle_stability',
+        type: 'select',
+        question: 'Ankle stability (anterior drawer test)',
+        options: ['Stable/negative', 'Mild laxity', 'Moderate instability', 'Severe instability', 'Unable to test'],
+        required: true
+      },
+      {
+        id: 'ankle_dorsiflexion_rom',
+        type: 'select',
+        question: 'Ankle dorsiflexion range of motion',
+        options: ['Normal (>10 degrees)', 'Slightly limited (5-10 degrees)', 'Moderately limited (0-5 degrees)', 'Severely limited (<0 degrees)'],
+        required: true
+      },
+      {
+        id: 'ankle_plantarflexion_strength',
+        type: 'select',
+        question: 'Plantarflexion strength (calf raise ability)',
+        options: ['Normal strength', 'Slightly weak', 'Moderately weak', 'Unable to perform single calf raise'],
+        required: true
+      },
+      {
+        id: 'ankle_functional_impact',
+        type: 'select',
+        question: 'Functional impact on activities',
+        options: ['Minimal impact', 'Difficulty with stairs', 'Difficulty with walking', 'Unable to perform normal activities'],
         required: true
       }
     ]

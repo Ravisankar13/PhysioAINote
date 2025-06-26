@@ -305,6 +305,165 @@ export default function AssessmentForm({ template, onComplete, onBack }: Assessm
     return recommendations;
   };
 
+  const getBissetElbowInterpretation = (responses: { [key: string]: any }): string => {
+    const interpretations = [];
+    
+    const painLocation = responses['elbow_pain_location'];
+    const palpation = responses['lateral_epicondyle_palpation'];
+    const strength = responses['wrist_extension_strength'];
+    const millsTest = responses['mills_test'];
+    
+    if (painLocation) interpretations.push(`Pain location: ${painLocation}`);
+    if (palpation) interpretations.push(`Palpation: ${palpation}`);
+    if (strength) interpretations.push(`Strength: ${strength}`);
+    if (millsTest) interpretations.push(`Mills test: ${millsTest}`);
+    
+    return interpretations.join(' | ');
+  };
+
+  const getBissetElbowRecommendations = (responses: { [key: string]: any }): string[] => {
+    const recommendations = [];
+    
+    if (responses['elbow_pain_location'] === 'Lateral epicondyle') {
+      recommendations.push('Likely lateral epicondylitis - focus on extensor tendon management');
+      recommendations.push('Progressive loading program for extensor tendons');
+    }
+    
+    if (responses['lateral_epicondyle_palpation'] !== 'Non-tender') {
+      recommendations.push('Pain management strategies for acute inflammation');
+      recommendations.push('Avoid aggravating activities initially');
+    }
+    
+    if (responses['wrist_extension_strength'] !== 'Full strength') {
+      recommendations.push('Gradual strengthening of wrist extensors');
+      recommendations.push('Eccentric strengthening exercises');
+    }
+    
+    if (responses['mills_test'] === 'Positive - reproduces symptoms') {
+      recommendations.push('Confirms extensor tendon involvement');
+      recommendations.push('Focus on tendon loading tolerance');
+    }
+    
+    if (responses['grip_strength_pain']) {
+      recommendations.push('Modify gripping activities');
+      recommendations.push('Use ergonomic tools to reduce grip strain');
+    }
+    
+    return recommendations;
+  };
+
+  const getRobertsonKneeInterpretation = (responses: { [key: string]: any }): string => {
+    const interpretations = [];
+    
+    const painLocation = responses['knee_pain_location'];
+    const tracking = responses['patella_tracking'];
+    const apprehension = responses['patella_apprehension'];
+    const compression = responses['patella_compression'];
+    
+    if (painLocation) interpretations.push(`Pain: ${painLocation}`);
+    if (tracking) interpretations.push(`Tracking: ${tracking}`);
+    if (apprehension) interpretations.push(`Apprehension: ${apprehension}`);
+    if (compression) interpretations.push(`Compression: ${compression}`);
+    
+    return interpretations.join(' | ');
+  };
+
+  const getRobertsonKneeRecommendations = (responses: { [key: string]: any }): string[] => {
+    const recommendations = [];
+    
+    if (responses['knee_pain_location'] === 'Anterior knee/patella') {
+      recommendations.push('Likely patellofemoral pain syndrome');
+      recommendations.push('Focus on patella tracking and VMO strengthening');
+    }
+    
+    if (responses['patella_tracking'] !== 'Normal tracking') {
+      recommendations.push('Patella tracking dysfunction present');
+      recommendations.push('VMO strengthening and patellar taping');
+    }
+    
+    if (responses['patella_apprehension'] !== 'Negative') {
+      recommendations.push('Patella instability concerns');
+      recommendations.push('Focus on quadriceps strengthening and proprioception');
+    }
+    
+    if (responses['patella_compression'] !== 'Negative') {
+      recommendations.push('Patellofemoral joint irritation');
+      recommendations.push('Activity modification and pain management');
+    }
+    
+    if (responses['knee_quadriceps_strength'] !== 'Full strength') {
+      recommendations.push('Quadriceps strengthening program essential');
+      recommendations.push('Focus on VMO activation exercises');
+    }
+    
+    if (responses['knee_swelling'] !== 'None visible') {
+      recommendations.push('Address inflammation and swelling');
+      recommendations.push('RICE protocol and anti-inflammatory measures');
+    }
+    
+    return recommendations;
+  };
+
+  const getMayerAnkleInterpretation = (responses: { [key: string]: any }): string => {
+    const interpretations = [];
+    
+    const painLocation = responses['ankle_pain_location'];
+    const mechanism = responses['ankle_mechanism_injury'];
+    const stability = responses['ankle_stability'];
+    const weightBearing = responses['ankle_weight_bearing'];
+    
+    if (painLocation) interpretations.push(`Pain: ${painLocation}`);
+    if (mechanism) interpretations.push(`Mechanism: ${mechanism}`);
+    if (stability) interpretations.push(`Stability: ${stability}`);
+    if (weightBearing) interpretations.push(`Weight-bearing: ${weightBearing}`);
+    
+    return interpretations.join(' | ');
+  };
+
+  const getMayerAnkleRecommendations = (responses: { [key: string]: any }): string[] => {
+    const recommendations = [];
+    
+    if (responses['ankle_pain_location'] === 'Lateral ankle') {
+      recommendations.push('Likely lateral ankle sprain');
+      recommendations.push('Focus on lateral ligament rehabilitation');
+    } else if (responses['ankle_pain_location'] === 'Achilles region') {
+      recommendations.push('Achilles tendon involvement');
+      recommendations.push('Progressive loading program for Achilles');
+    }
+    
+    if (responses['ankle_mechanism_injury'] === 'Inversion sprain') {
+      recommendations.push('Inversion injury pattern - focus on lateral structures');
+      recommendations.push('Proprioception and balance training essential');
+    }
+    
+    if (responses['ankle_stability'] !== 'Stable/negative') {
+      recommendations.push('Ankle instability present');
+      recommendations.push('Comprehensive stability and proprioception program');
+    }
+    
+    if (responses['ankle_weight_bearing'] !== 'Full weight-bearing') {
+      recommendations.push('Progressive weight-bearing program');
+      recommendations.push('Address pain and swelling first');
+    }
+    
+    if (responses['ankle_swelling'] !== 'None') {
+      recommendations.push('Control swelling with elevation and compression');
+      recommendations.push('Ice therapy and anti-inflammatory measures');
+    }
+    
+    if (responses['ankle_dorsiflexion_rom'] !== 'Normal (>10 degrees)') {
+      recommendations.push('Address ankle dorsiflexion limitation');
+      recommendations.push('Calf stretching and joint mobilization');
+    }
+    
+    if (responses['ankle_plantarflexion_strength'] !== 'Normal strength') {
+      recommendations.push('Calf strengthening program');
+      recommendations.push('Progressive loading from partial to full weight-bearing');
+    }
+    
+    return recommendations;
+  };
+
   const renderQuestion = (question: AssessmentQuestion) => {
     const response = responses[question.id];
 
@@ -358,10 +517,13 @@ export default function AssessmentForm({ template, onComplete, onBack }: Assessm
         );
 
       case 'scale':
+        const min = question.min || 0;
+        const max = question.max || 10;
+        const scaleValues = Array.from({ length: max - min + 1 }, (_, i) => min + i);
         return (
           <RadioGroup value={response?.toString() || ''} onValueChange={(value) => handleResponse(question.id, parseInt(value))}>
-            <div className="flex space-x-4">
-              {[1, 2, 3, 4, 5].map((num) => (
+            <div className="flex flex-wrap gap-4">
+              {scaleValues.map((num) => (
                 <div key={num} className="flex items-center space-x-2">
                   <RadioGroupItem value={num.toString()} id={`${question.id}-${num}`} />
                   <Label htmlFor={`${question.id}-${num}`}>{num}</Label>
@@ -394,6 +556,15 @@ export default function AssessmentForm({ template, onComplete, onBack }: Assessm
     } else if (template.id === 'mckenzie_lower_back') {
       results.interpretation = getMcKenzieLowerBackInterpretation(responses);
       results.recommendations = getMcKenzieLowerBackRecommendations(responses);
+    } else if (template.id === 'bisset_elbow') {
+      results.interpretation = getBissetElbowInterpretation(responses);
+      results.recommendations = getBissetElbowRecommendations(responses);
+    } else if (template.id === 'robertson_knee') {
+      results.interpretation = getRobertsonKneeInterpretation(responses);
+      results.recommendations = getRobertsonKneeRecommendations(responses);
+    } else if (template.id === 'mayer_ankle') {
+      results.interpretation = getMayerAnkleInterpretation(responses);
+      results.recommendations = getMayerAnkleRecommendations(responses);
     }
 
     return (

@@ -2549,6 +2549,7 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
               <DiagnosticEngine
                 abnormalities={detectedAbnormalities}
                 onDiagnosisComplete={handleDiagnosisComplete}
+                onProceedToTreatment={() => setActiveTab('treatment')}
               />
             ) : (
               <div className="text-center py-8 text-muted-foreground">

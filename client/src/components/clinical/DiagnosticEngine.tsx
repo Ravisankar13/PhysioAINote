@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, CheckCircle, Brain, FileText } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Brain, FileText, Stethoscope } from 'lucide-react';
 
 // Types for the diagnostic system
 interface MovementAbnormality {
@@ -57,6 +57,7 @@ interface DiagnosticResult {
 interface DiagnosticEngineProps {
   abnormalities: MovementAbnormality[];
   onDiagnosisComplete: (result: DiagnosticResult) => void;
+  onProceedToTreatment?: () => void;
 }
 
 // Diagnostic patterns based on movement abnormalities
@@ -653,6 +654,23 @@ export default function DiagnosticEngine({ abnormalities, onDiagnosisComplete }:
             </div>
           </CardContent>
         </Card>
+
+        {/* Proceed to Treatment Button */}
+        <div className="flex justify-center pt-6">
+          <Button 
+            onClick={() => {
+              // Switch to treatment tab
+              const treatmentTab = document.querySelector('[data-value="treatment"]') as HTMLElement;
+              if (treatmentTab) {
+                treatmentTab.click();
+              }
+            }}
+            className="bg-green-600 hover:bg-green-700 text-white font-semibold px-8 py-3 text-lg"
+          >
+            <Stethoscope className="h-5 w-5 mr-2" />
+            Proceed to Treatment Plan
+          </Button>
+        </div>
       </div>
     );
   }

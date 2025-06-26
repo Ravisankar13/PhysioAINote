@@ -1278,6 +1278,1743 @@ const assessmentTemplates: AssessmentTemplate[] = [
         required: true
       }
     ]
+  },
+  // COMPREHENSIVE OUTCOME MEASURES
+  {
+    id: 'dash',
+    name: 'DASH (Disabilities of Arm, Shoulder and Hand)',
+    bodyPart: 'upper_extremity',
+    category: 'outcome',
+    description: 'Standardized outcome measure for upper extremity disabilities. 30-item questionnaire assessing symptoms and functional status.',
+    evidenceLevel: 'A',
+    questions: [
+      {
+        id: 'dash_1',
+        type: 'scale',
+        question: 'During the past week, to what degree has your arm, shoulder or hand problem interfered with your normal social activities with family, friends, neighbours or groups?',
+        min: 1,
+        max: 5,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'dash_2',
+        type: 'scale',
+        question: 'During the past week, were you limited in your work or other regular daily activities as a result of your arm, shoulder or hand problem?',
+        min: 1,
+        max: 5,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'dash_3',
+        type: 'scale',
+        question: 'Open a tight or new jar',
+        min: 1,
+        max: 5,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'dash_4',
+        type: 'scale',
+        question: 'Write',
+        min: 1,
+        max: 5,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'dash_5',
+        type: 'scale',
+        question: 'Cut food above the level of your shoulder',
+        min: 1,
+        max: 5,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'dash_6',
+        type: 'scale',
+        question: 'Arm, shoulder or hand pain',
+        min: 1,
+        max: 5,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'dash_7',
+        type: 'scale',
+        question: 'Tingling (pins and needles) in your arm, shoulder or hand',
+        min: 1,
+        max: 5,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'dash_8',
+        type: 'scale',
+        question: 'Weakness in your arm, shoulder or hand',
+        min: 1,
+        max: 5,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'dash_9',
+        type: 'scale',
+        question: 'Stiffness in your arm, shoulder or hand',
+        min: 1,
+        max: 5,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'dash_10',
+        type: 'scale',
+        question: 'Difficulty sleeping due to arm, shoulder or hand pain',
+        min: 1,
+        max: 5,
+        required: true,
+        scoring: { type: 'sum' }
+      }
+    ]
+  },
+  {
+    id: 'oswestry',
+    name: 'Oswestry Disability Index (ODI)',
+    bodyPart: 'back',
+    category: 'outcome',
+    description: 'Gold standard outcome measure for low back pain disability. 10-item questionnaire assessing functional limitations.',
+    evidenceLevel: 'A',
+    questions: [
+      {
+        id: 'odi_pain_intensity',
+        type: 'select',
+        question: 'Pain Intensity',
+        options: [
+          'I have no pain at the moment',
+          'The pain is very mild at the moment',
+          'The pain is moderate at the moment',
+          'The pain is fairly severe at the moment',
+          'The pain is very severe at the moment',
+          'The pain is the worst imaginable at the moment'
+        ],
+        required: true,
+        scoring: { type: 'weighted' }
+      },
+      {
+        id: 'odi_personal_care',
+        type: 'select',
+        question: 'Personal Care (Washing, Dressing, etc.)',
+        options: [
+          'I can look after myself normally without causing extra pain',
+          'I can look after myself normally but it causes extra pain',
+          'It is painful to look after myself and I am slow and careful',
+          'I need some help but manage most of my personal care',
+          'I need help every day in most aspects of self care',
+          'I do not get dressed, I wash with difficulty and stay in bed'
+        ],
+        required: true,
+        scoring: { type: 'weighted' }
+      },
+      {
+        id: 'odi_lifting',
+        type: 'select',
+        question: 'Lifting',
+        options: [
+          'I can lift heavy weights without extra pain',
+          'I can lift heavy weights but it gives extra pain',
+          'Pain prevents me from lifting heavy weights off the floor, but I can manage if they are conveniently positioned',
+          'Pain prevents me from lifting heavy weights, but I can manage light to medium weights if they are conveniently positioned',
+          'I can lift very light weights',
+          'I cannot lift or carry anything at all'
+        ],
+        required: true,
+        scoring: { type: 'weighted' }
+      },
+      {
+        id: 'odi_walking',
+        type: 'select',
+        question: 'Walking',
+        options: [
+          'Pain does not prevent me walking any distance',
+          'Pain prevents me from walking more than 1 mile',
+          'Pain prevents me from walking more than 1/2 mile',
+          'Pain prevents me from walking more than 100 yards',
+          'I can only walk using a stick or crutches',
+          'I am in bed most of the time'
+        ],
+        required: true,
+        scoring: { type: 'weighted' }
+      },
+      {
+        id: 'odi_sitting',
+        type: 'select',
+        question: 'Sitting',
+        options: [
+          'I can sit in any chair as long as I like',
+          'I can only sit in my favourite chair as long as I like',
+          'Pain prevents me sitting more than one hour',
+          'Pain prevents me from sitting more than 30 minutes',
+          'Pain prevents me from sitting more than 10 minutes',
+          'Pain prevents me from sitting at all'
+        ],
+        required: true,
+        scoring: { type: 'weighted' }
+      },
+      {
+        id: 'odi_standing',
+        type: 'select',
+        question: 'Standing',
+        options: [
+          'I can stand as long as I want without extra pain',
+          'I can stand as long as I want but it gives me extra pain',
+          'Pain prevents me from standing for more than 1 hour',
+          'Pain prevents me from standing for more than 30 minutes',
+          'Pain prevents me from standing for more than 10 minutes',
+          'Pain prevents me from standing at all'
+        ],
+        required: true,
+        scoring: { type: 'weighted' }
+      },
+      {
+        id: 'odi_sleeping',
+        type: 'select',
+        question: 'Sleeping',
+        options: [
+          'My sleep is never disturbed by pain',
+          'My sleep is occasionally disturbed by pain',
+          'Because of pain I have less than 6 hours sleep',
+          'Because of pain I have less than 4 hours sleep',
+          'Because of pain I have less than 2 hours sleep',
+          'Pain prevents me from sleeping at all'
+        ],
+        required: true,
+        scoring: { type: 'weighted' }
+      },
+      {
+        id: 'odi_sex_life',
+        type: 'select',
+        question: 'Sex Life (if applicable)',
+        options: [
+          'My sex life is normal and causes no extra pain',
+          'My sex life is normal but causes some extra pain',
+          'My sex life is nearly normal but is very painful',
+          'My sex life is severely restricted by pain',
+          'My sex life is nearly absent because of pain',
+          'Pain prevents any sex life at all'
+        ],
+        required: false,
+        scoring: { type: 'weighted' }
+      },
+      {
+        id: 'odi_social_life',
+        type: 'select',
+        question: 'Social Life',
+        options: [
+          'My social life is normal and gives me no extra pain',
+          'My social life is normal but increases the degree of pain',
+          'Pain has no significant effect on my social life apart from limiting my more energetic interests',
+          'Pain has restricted my social life and I do not go out as often',
+          'Pain has restricted my social life to my home',
+          'I have no social life because of pain'
+        ],
+        required: true,
+        scoring: { type: 'weighted' }
+      },
+      {
+        id: 'odi_travelling',
+        type: 'select',
+        question: 'Travelling',
+        options: [
+          'I can travel anywhere without pain',
+          'I can travel anywhere but it gives me extra pain',
+          'Pain is bad but I manage journeys over two hours',
+          'Pain restricts me to journeys of less than one hour',
+          'Pain restricts me to short necessary journeys under 30 minutes',
+          'Pain prevents me from travelling except to receive treatment'
+        ],
+        required: true,
+        scoring: { type: 'weighted' }
+      }
+    ]
+  },
+  {
+    id: 'womac',
+    name: 'WOMAC (Western Ontario and McMaster Universities Osteoarthritis Index)',
+    bodyPart: 'hip_knee',
+    category: 'outcome',
+    description: 'Standardized outcome measure for hip and knee osteoarthritis. Assesses pain, stiffness, and physical function.',
+    evidenceLevel: 'A',
+    questions: [
+      {
+        id: 'womac_pain_walking',
+        type: 'scale',
+        question: 'How much pain do you have walking on flat surface?',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'womac_pain_stairs_up',
+        type: 'scale',
+        question: 'How much pain do you have going up or down stairs?',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'womac_pain_night',
+        type: 'scale',
+        question: 'How much pain do you have at night while in bed?',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'womac_pain_sitting',
+        type: 'scale',
+        question: 'How much pain do you have sitting or lying?',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'womac_pain_standing',
+        type: 'scale',
+        question: 'How much pain do you have standing upright?',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'womac_stiffness_morning',
+        type: 'scale',
+        question: 'How severe is your stiffness after first wakening in the morning?',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'womac_stiffness_sitting',
+        type: 'scale',
+        question: 'How severe is your stiffness after sitting, lying or resting later in the day?',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'womac_function_stairs_down',
+        type: 'scale',
+        question: 'Descending stairs',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'womac_function_stairs_up',
+        type: 'scale',
+        question: 'Ascending stairs',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'womac_function_rising_sitting',
+        type: 'scale',
+        question: 'Rising from sitting',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'womac_function_standing',
+        type: 'scale',
+        question: 'Standing',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'womac_function_bending',
+        type: 'scale',
+        question: 'Bending to floor/picking up an object',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'womac_function_walking_flat',
+        type: 'scale',
+        question: 'Walking on flat surface',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'womac_function_getting_in_out_car',
+        type: 'scale',
+        question: 'Getting in/out of car',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'womac_function_shopping',
+        type: 'scale',
+        question: 'Going shopping',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'womac_function_socks',
+        type: 'scale',
+        question: 'Putting on socks/stockings',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'womac_function_rising_bed',
+        type: 'scale',
+        question: 'Rising from bed',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      }
+    ]
+  },
+  {
+    id: 'ndi',
+    name: 'NDI (Neck Disability Index)',
+    bodyPart: 'neck',
+    category: 'outcome',
+    description: 'Standardized outcome measure for neck pain and disability. 10-item questionnaire assessing functional limitations.',
+    evidenceLevel: 'A',
+    questions: [
+      {
+        id: 'ndi_pain_intensity',
+        type: 'select',
+        question: 'Pain Intensity',
+        options: [
+          'I have no pain at the moment',
+          'The pain is very mild at the moment',
+          'The pain is moderate at the moment',
+          'The pain is fairly severe at the moment',
+          'The pain is very severe at the moment',
+          'The pain is the worst imaginable'
+        ],
+        required: true,
+        scoring: { type: 'weighted' }
+      },
+      {
+        id: 'ndi_personal_care',
+        type: 'select',
+        question: 'Personal Care (washing, dressing, etc.)',
+        options: [
+          'I can look after myself normally without causing extra pain',
+          'I can look after myself normally but it causes extra pain',
+          'It is painful to look after myself and I am slow and careful',
+          'I need some help but manage most of my personal care',
+          'I need help every day in most aspects of self care',
+          'I do not get dressed, wash with difficulty and stay in bed'
+        ],
+        required: true,
+        scoring: { type: 'weighted' }
+      },
+      {
+        id: 'ndi_lifting',
+        type: 'select',
+        question: 'Lifting',
+        options: [
+          'I can lift heavy weights without extra pain',
+          'I can lift heavy weights but it gives extra pain',
+          'Pain prevents me from lifting heavy weights off the floor',
+          'Pain prevents me from lifting heavy weights but I can manage light weights',
+          'I can lift very light weights',
+          'I cannot lift or carry anything'
+        ],
+        required: true,
+        scoring: { type: 'weighted' }
+      },
+      {
+        id: 'ndi_reading',
+        type: 'select',
+        question: 'Reading',
+        options: [
+          'I can read as much as I want to with no pain in my neck',
+          'I can read as much as I want with slight pain in my neck',
+          'I can read as much as I want with moderate pain in my neck',
+          'I cannot read as much as I want because of moderate pain',
+          'I cannot read as much as I want because of severe pain',
+          'I cannot read at all'
+        ],
+        required: true,
+        scoring: { type: 'weighted' }
+      },
+      {
+        id: 'ndi_headaches',
+        type: 'select',
+        question: 'Headaches',
+        options: [
+          'I have no headaches at all',
+          'I have slight headaches which come infrequently',
+          'I have moderate headaches which come infrequently',
+          'I have moderate headaches which come frequently',
+          'I have severe headaches which come frequently',
+          'I have headaches almost all the time'
+        ],
+        required: true,
+        scoring: { type: 'weighted' }
+      },
+      {
+        id: 'ndi_concentration',
+        type: 'select',
+        question: 'Concentration',
+        options: [
+          'I can concentrate fully when I want to with no difficulty',
+          'I can concentrate fully when I want to with slight difficulty',
+          'I have a fair degree of difficulty in concentrating when I want to',
+          'I have a lot of difficulty in concentrating when I want to',
+          'I have a great deal of difficulty in concentrating when I want to',
+          'I cannot concentrate at all'
+        ],
+        required: true,
+        scoring: { type: 'weighted' }
+      },
+      {
+        id: 'ndi_work',
+        type: 'select',
+        question: 'Work',
+        options: [
+          'I can do as much work as I want to',
+          'I can only do my usual work but no more',
+          'I can do most of my usual work but no more',
+          'I cannot do my usual work',
+          'I can hardly do any work at all',
+          'I cannot do any work at all'
+        ],
+        required: true,
+        scoring: { type: 'weighted' }
+      },
+      {
+        id: 'ndi_driving',
+        type: 'select',
+        question: 'Driving',
+        options: [
+          'I can drive my car without any neck pain',
+          'I can drive my car as long as I want with slight pain',
+          'I can drive my car as long as I want with moderate pain',
+          'I cannot drive my car as long as I want because of moderate pain',
+          'I can hardly drive at all because of severe pain',
+          'I cannot drive my car at all'
+        ],
+        required: true,
+        scoring: { type: 'weighted' }
+      },
+      {
+        id: 'ndi_sleeping',
+        type: 'select',
+        question: 'Sleeping',
+        options: [
+          'I have no trouble sleeping',
+          'My sleep is slightly disturbed (less than 1 hour sleepless)',
+          'My sleep is mildly disturbed (1-2 hours sleepless)',
+          'My sleep is moderately disturbed (2-3 hours sleepless)',
+          'My sleep is greatly disturbed (3-5 hours sleepless)',
+          'My sleep is completely disturbed (5-7 hours sleepless)'
+        ],
+        required: true,
+        scoring: { type: 'weighted' }
+      },
+      {
+        id: 'ndi_recreation',
+        type: 'select',
+        question: 'Recreation',
+        options: [
+          'I am able to engage in all recreation activities with no neck pain',
+          'I am able to engage in all recreation activities with some neck pain',
+          'I am able to engage in most recreation activities because of neck pain',
+          'I am able to engage in a few recreation activities because of neck pain',
+          'I can hardly do any recreation activities because of neck pain',
+          'I cannot do any recreation activities at all'
+        ],
+        required: true,
+        scoring: { type: 'weighted' }
+      }
+    ]
+  },
+  {
+    id: 'koos',
+    name: 'KOOS (Knee Injury and Osteoarthritis Outcome Score)',
+    bodyPart: 'knee',
+    category: 'outcome',
+    description: 'Comprehensive knee-specific outcome measure assessing pain, symptoms, ADL function, sport/recreation, and quality of life.',
+    evidenceLevel: 'A',
+    questions: [
+      {
+        id: 'koos_pain_frequency',
+        type: 'scale',
+        question: 'How often do you experience knee pain?',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'koos_pain_twisting',
+        type: 'scale',
+        question: 'Twisting/pivoting on your knee',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'koos_pain_straightening',
+        type: 'scale',
+        question: 'Straightening knee fully',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'koos_pain_bending',
+        type: 'scale',
+        question: 'Bending knee fully',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'koos_pain_walking_flat',
+        type: 'scale',
+        question: 'Walking on flat surface',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'koos_pain_stairs',
+        type: 'scale',
+        question: 'Going up or down stairs',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'koos_pain_night',
+        type: 'scale',
+        question: 'At night while in bed',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'koos_stiffness_morning',
+        type: 'scale',
+        question: 'How severe is your knee joint stiffness after first awakening in the morning?',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'koos_stiffness_sitting',
+        type: 'scale',
+        question: 'How severe is your knee stiffness after sitting, lying or resting later in the day?',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'koos_function_stairs_down',
+        type: 'scale',
+        question: 'Descending stairs',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'koos_function_stairs_up',
+        type: 'scale',
+        question: 'Ascending stairs',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'koos_function_rising_sitting',
+        type: 'scale',
+        question: 'Rising from sitting',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'koos_function_standing',
+        type: 'scale',
+        question: 'Standing',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'koos_function_bending',
+        type: 'scale',
+        question: 'Bending to floor/picking up an object',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'koos_sport_squatting',
+        type: 'scale',
+        question: 'Squatting',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'koos_sport_running',
+        type: 'scale',
+        question: 'Running',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'koos_sport_jumping',
+        type: 'scale',
+        question: 'Jumping and landing',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'koos_sport_turning',
+        type: 'scale',
+        question: 'Turning/twisting on your injured knee',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'koos_qol_aware',
+        type: 'scale',
+        question: 'How often are you aware of your knee problem?',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'koos_qol_lifestyle',
+        type: 'scale',
+        question: 'Have you modified your lifestyle to avoid potentially damaging activities to your knee?',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      }
+    ]
+  },
+  {
+    id: 'spadi',
+    name: 'SPADI (Shoulder Pain and Disability Index)',
+    bodyPart: 'shoulder',
+    category: 'outcome',
+    description: 'Shoulder-specific outcome measure with 13 items assessing pain and disability in shoulder conditions.',
+    evidenceLevel: 'A',
+    questions: [
+      {
+        id: 'spadi_pain_worst',
+        type: 'scale',
+        question: 'At its worst?',
+        min: 0,
+        max: 10,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'spadi_pain_lying_affected_side',
+        type: 'scale',
+        question: 'When lying on the involved side?',
+        min: 0,
+        max: 10,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'spadi_pain_reaching_overhead',
+        type: 'scale',
+        question: 'Reaching for something on a high shelf?',
+        min: 0,
+        max: 10,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'spadi_pain_touching_back',
+        type: 'scale',
+        question: 'Touching the back of your neck?',
+        min: 0,
+        max: 10,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'spadi_pain_pushing',
+        type: 'scale',
+        question: 'Pushing with the involved arm?',
+        min: 0,
+        max: 10,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'spadi_disability_washing_hair',
+        type: 'scale',
+        question: 'Washing your hair?',
+        min: 0,
+        max: 10,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'spadi_disability_washing_back',
+        type: 'scale',
+        question: 'Washing your back?',
+        min: 0,
+        max: 10,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'spadi_disability_putting_on_shirt',
+        type: 'scale',
+        question: 'Putting on an undershirt or pullover sweater?',
+        min: 0,
+        max: 10,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'spadi_disability_putting_on_coat',
+        type: 'scale',
+        question: 'Putting on a shirt that buttons down the front?',
+        min: 0,
+        max: 10,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'spadi_disability_placing_object_shelf',
+        type: 'scale',
+        question: 'Placing an object on a high shelf?',
+        min: 0,
+        max: 10,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'spadi_disability_carrying_10_pounds',
+        type: 'scale',
+        question: 'Carrying a heavy object of 10 pounds?',
+        min: 0,
+        max: 10,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'spadi_disability_removing_from_back_pocket',
+        type: 'scale',
+        question: 'Removing something from your back pocket?',
+        min: 0,
+        max: 10,
+        required: true,
+        scoring: { type: 'sum' }
+      }
+    ]
+  },
+  {
+    id: 'pem',
+    name: 'PEM (Patient Evaluation Measure)',
+    bodyPart: 'elbow',
+    category: 'outcome',
+    description: 'Elbow-specific outcome measure assessing pain, function, and satisfaction.',
+    evidenceLevel: 'B',
+    questions: [
+      {
+        id: 'pem_pain_rest',
+        type: 'scale',
+        question: 'Pain at rest',
+        min: 1,
+        max: 10,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'pem_pain_grip',
+        type: 'scale',
+        question: 'Pain with gripping',
+        min: 1,
+        max: 10,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'pem_pain_lifting',
+        type: 'scale',
+        question: 'Pain with lifting',
+        min: 1,
+        max: 10,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'pem_function_dressing',
+        type: 'scale',
+        question: 'Dressing',
+        min: 1,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'pem_function_hygiene',
+        type: 'scale',
+        question: 'Personal hygiene',
+        min: 1,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'pem_function_eating',
+        type: 'scale',
+        question: 'Eating/cutting food',
+        min: 1,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'pem_function_household',
+        type: 'scale',
+        question: 'Household tasks',
+        min: 1,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'pem_function_carrying',
+        type: 'scale',
+        question: 'Carrying',
+        min: 1,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      }
+    ]
+  },
+  {
+    id: 'faam',
+    name: 'FAAM (Foot and Ankle Ability Measure)',
+    bodyPart: 'ankle',
+    category: 'outcome',
+    description: 'Foot and ankle specific outcome measure assessing activities of daily living and sports activities.',
+    evidenceLevel: 'A',
+    questions: [
+      {
+        id: 'faam_standing',
+        type: 'scale',
+        question: 'Standing',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'faam_walking_even_surfaces',
+        type: 'scale',
+        question: 'Walking on even ground',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'faam_walking_uneven_ground',
+        type: 'scale',
+        question: 'Walking on uneven ground',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'faam_walking_hills',
+        type: 'scale',
+        question: 'Walking up hills',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'faam_walking_stairs',
+        type: 'scale',
+        question: 'Going up and down stairs',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'faam_walking_curbs',
+        type: 'scale',
+        question: 'Walking on uneven ground',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'faam_squatting',
+        type: 'scale',
+        question: 'Squatting',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'faam_coming_up_on_toes',
+        type: 'scale',
+        question: 'Coming up on your toes',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'faam_walking_initially',
+        type: 'scale',
+        question: 'Walking initially',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'faam_walking_5_minutes',
+        type: 'scale',
+        question: 'Walking 5 minutes or less',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'faam_walking_10_minutes',
+        type: 'scale',
+        question: 'Walking approximately 10 minutes',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'faam_walking_15_minutes',
+        type: 'scale',
+        question: 'Walking 15 minutes or greater',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'faam_home_responsibilities',
+        type: 'scale',
+        question: 'Home responsibilities',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'faam_activities_daily_living',
+        type: 'scale',
+        question: 'Activities of daily living',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'faam_personal_care',
+        type: 'scale',
+        question: 'Personal care responsibilities',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'faam_light_to_moderate_work',
+        type: 'scale',
+        question: 'Light to moderate work (standing, walking)',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'faam_heavy_work',
+        type: 'scale',
+        question: 'Heavy work (pushing, pulling, climbing, carrying)',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'faam_recreational_activities',
+        type: 'scale',
+        question: 'Recreational activities',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      }
+    ]
+  },
+  {
+    id: 'rolq',
+    name: 'ROLQ (Roland Morris Low Back Pain and Disability Questionnaire)',
+    bodyPart: 'back',
+    category: 'outcome',
+    description: 'Functional disability questionnaire for low back pain. 24-item yes/no questionnaire.',
+    evidenceLevel: 'A',
+    questions: [
+      {
+        id: 'rolq_1',
+        type: 'checkbox',
+        question: 'I stay at home most of the time because of my back',
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'rolq_2',
+        type: 'checkbox',
+        question: 'I change position frequently to try and get my back comfortable',
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'rolq_3',
+        type: 'checkbox',
+        question: 'I walk more slowly than usual because of my back',
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'rolq_4',
+        type: 'checkbox',
+        question: 'Because of my back I am not doing any of the jobs that I usually do around the house',
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'rolq_5',
+        type: 'checkbox',
+        question: 'Because of my back, I use a handrail to get upstairs',
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'rolq_6',
+        type: 'checkbox',
+        question: 'Because of my back, I lie down to rest more often',
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'rolq_7',
+        type: 'checkbox',
+        question: 'Because of my back, I have to hold on to something to get out of an easy chair',
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'rolq_8',
+        type: 'checkbox',
+        question: 'Because of my back, I try to get other people to do things for me',
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'rolq_9',
+        type: 'checkbox',
+        question: 'I get dressed more slowly than usual because of my back',
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'rolq_10',
+        type: 'checkbox',
+        question: 'I only stand for short periods of time because of my back',
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'rolq_11',
+        type: 'checkbox',
+        question: 'Because of my back, I try not to bend or kneel down',
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'rolq_12',
+        type: 'checkbox',
+        question: 'I find it difficult to get out of a chair because of my back',
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'rolq_13',
+        type: 'checkbox',
+        question: 'My back is painful almost all the time',
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'rolq_14',
+        type: 'checkbox',
+        question: 'I find it difficult to turn over in bed because of my back',
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'rolq_15',
+        type: 'checkbox',
+        question: 'My appetite is not very good because of my back pain',
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'rolq_16',
+        type: 'checkbox',
+        question: 'I have trouble putting on my socks (or stockings) because of the pain in my back',
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'rolq_17',
+        type: 'checkbox',
+        question: 'I only walk short distances because of my back pain',
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'rolq_18',
+        type: 'checkbox',
+        question: 'I sleep less well because of my back',
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'rolq_19',
+        type: 'checkbox',
+        question: 'Because of my back pain, I get dressed with help from someone else',
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'rolq_20',
+        type: 'checkbox',
+        question: 'I sit down for most of the day because of my back',
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'rolq_21',
+        type: 'checkbox',
+        question: 'I avoid heavy jobs around the house because of my back',
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'rolq_22',
+        type: 'checkbox',
+        question: 'Because of my back pain, I am more irritable and bad tempered with people than usual',
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'rolq_23',
+        type: 'checkbox',
+        question: 'Because of my back, I go upstairs more slowly than usual',
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'rolq_24',
+        type: 'checkbox',
+        question: 'I stay in bed most of the time because of my back',
+        required: true,
+        scoring: { type: 'sum' }
+      }
+    ]
+  },
+  {
+    id: 'harris_hip_score',
+    name: 'Harris Hip Score',
+    bodyPart: 'hip',
+    category: 'outcome',
+    description: 'Standardized outcome measure for hip function and pain assessment. Widely used in hip replacement and hip pathology.',
+    evidenceLevel: 'A',
+    questions: [
+      {
+        id: 'harris_pain',
+        type: 'select',
+        question: 'Pain',
+        options: [
+          'None or ignores it (44 points)',
+          'Slight, occasional, no compromise in activities (40 points)',
+          'Mild pain, no effect on average activities, rarely moderate pain with unusual activity (30 points)',
+          'Moderate pain, tolerable but makes concessions to pain (20 points)',
+          'Marked pain, serious limitation of activities (10 points)',
+          'Totally disabled, crippled, pain in bed, bedridden (0 points)'
+        ],
+        required: true,
+        scoring: { type: 'weighted' }
+      },
+      {
+        id: 'harris_limp',
+        type: 'select',
+        question: 'Limp',
+        options: [
+          'None (11 points)',
+          'Slight (8 points)',
+          'Moderate (5 points)',
+          'Severe (0 points)'
+        ],
+        required: true,
+        scoring: { type: 'weighted' }
+      },
+      {
+        id: 'harris_support',
+        type: 'select',
+        question: 'Support',
+        options: [
+          'None (11 points)',
+          'Cane for long walks (7 points)',
+          'Cane most of time (5 points)',
+          'One crutch (3 points)',
+          'Two canes (2 points)',
+          'Two crutches (0 points)',
+          'Not able to walk (0 points)'
+        ],
+        required: true,
+        scoring: { type: 'weighted' }
+      },
+      {
+        id: 'harris_distance_walked',
+        type: 'select',
+        question: 'Distance walked',
+        options: [
+          'Unlimited (11 points)',
+          'Six blocks (8 points)',
+          'Two or three blocks (5 points)',
+          'Indoors only (2 points)',
+          'Bed and chair (0 points)'
+        ],
+        required: true,
+        scoring: { type: 'weighted' }
+      },
+      {
+        id: 'harris_stairs',
+        type: 'select',
+        question: 'Stairs',
+        options: [
+          'Normally without using a railing (4 points)',
+          'Normally using a railing (2 points)',
+          'In any manner (1 point)',
+          'Unable to do stairs (0 points)'
+        ],
+        required: true,
+        scoring: { type: 'weighted' }
+      },
+      {
+        id: 'harris_shoes_socks',
+        type: 'select',
+        question: 'Put on shoes and socks',
+        options: [
+          'With ease (4 points)',
+          'With difficulty (2 points)',
+          'Unable (0 points)'
+        ],
+        required: true,
+        scoring: { type: 'weighted' }
+      },
+      {
+        id: 'harris_sitting',
+        type: 'select',
+        question: 'Sitting',
+        options: [
+          'Comfortably in ordinary chair for one hour (5 points)',
+          'On a high chair for 30 minutes (3 points)',
+          'Unable to sit comfortably in any chair (0 points)'
+        ],
+        required: true,
+        scoring: { type: 'weighted' }
+      },
+      {
+        id: 'harris_enter_public_transport',
+        type: 'select',
+        question: 'Enter public transportation',
+        options: [
+          'Yes (1 point)',
+          'No (0 points)'
+        ],
+        required: true,
+        scoring: { type: 'weighted' }
+      }
+    ]
+  },
+  {
+    id: 'constant_murley',
+    name: 'Constant-Murley Shoulder Score',
+    bodyPart: 'shoulder',
+    category: 'outcome',
+    description: 'Comprehensive shoulder assessment combining subjective and objective measures including pain, ADL, ROM and strength.',
+    evidenceLevel: 'A',
+    questions: [
+      {
+        id: 'constant_pain',
+        type: 'scale',
+        question: 'Pain (15 points maximum)',
+        min: 0,
+        max: 15,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'constant_adl_work',
+        type: 'scale',
+        question: 'Activity level - Work (4 points maximum)',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'constant_adl_recreation',
+        type: 'scale',
+        question: 'Activity level - Recreation/Sport (4 points maximum)',
+        min: 0,
+        max: 4,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'constant_adl_sleep',
+        type: 'scale',
+        question: 'Activity level - Sleep (2 points maximum)',
+        min: 0,
+        max: 2,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'constant_positioning',
+        type: 'select',
+        question: 'Positioning - Up to waist',
+        options: [
+          '2 points',
+          '0 points'
+        ],
+        required: true,
+        scoring: { type: 'weighted' }
+      },
+      {
+        id: 'constant_positioning_xiphoid',
+        type: 'select',
+        question: 'Positioning - Up to xiphoid',
+        options: [
+          '4 points',
+          '0 points'
+        ],
+        required: true,
+        scoring: { type: 'weighted' }
+      },
+      {
+        id: 'constant_positioning_neck',
+        type: 'select',
+        question: 'Positioning - Up to neck',
+        options: [
+          '6 points',
+          '0 points'
+        ],
+        required: true,
+        scoring: { type: 'weighted' }
+      },
+      {
+        id: 'constant_positioning_top_head',
+        type: 'select',
+        question: 'Positioning - Top of head',
+        options: [
+          '8 points',
+          '0 points'
+        ],
+        required: true,
+        scoring: { type: 'weighted' }
+      },
+      {
+        id: 'constant_positioning_above_head',
+        type: 'select',
+        question: 'Positioning - Above head',
+        options: [
+          '10 points',
+          '0 points'
+        ],
+        required: true,
+        scoring: { type: 'weighted' }
+      },
+      {
+        id: 'constant_forward_flexion',
+        type: 'number',
+        question: 'Range of Motion - Forward Flexion (degrees)',
+        min: 0,
+        max: 180,
+        required: true,
+        scoring: { type: 'weighted' }
+      },
+      {
+        id: 'constant_lateral_elevation',
+        type: 'number',
+        question: 'Range of Motion - Lateral Elevation (degrees)',
+        min: 0,
+        max: 180,
+        required: true,
+        scoring: { type: 'weighted' }
+      },
+      {
+        id: 'constant_external_rotation',
+        type: 'number',
+        question: 'Range of Motion - External Rotation (degrees)',
+        min: 0,
+        max: 90,
+        required: true,
+        scoring: { type: 'weighted' }
+      },
+      {
+        id: 'constant_internal_rotation',
+        type: 'select',
+        question: 'Range of Motion - Internal Rotation',
+        options: [
+          'Hand behind back - lateral thigh (0 points)',
+          'Hand behind back - buttock (2 points)',
+          'Hand behind back - lumbosacral junction (4 points)',
+          'Hand behind back - waist (L3) (6 points)',
+          'Hand behind back - T12 vertebra (8 points)',
+          'Hand behind back - interscapular (T7) (10 points)'
+        ],
+        required: true,
+        scoring: { type: 'weighted' }
+      },
+      {
+        id: 'constant_strength',
+        type: 'number',
+        question: 'Strength (pounds of pull) - Maximum 25 points',
+        min: 0,
+        max: 25,
+        required: true,
+        scoring: { type: 'sum' }
+      }
+    ]
+  },
+  {
+    id: 'prwe',
+    name: 'PRWE (Patient-Rated Wrist Evaluation)',
+    bodyPart: 'wrist',
+    category: 'outcome',
+    description: 'Wrist-specific outcome measure assessing pain and functional disability in wrist disorders.',
+    evidenceLevel: 'A',
+    questions: [
+      {
+        id: 'prwe_pain_rest',
+        type: 'scale',
+        question: 'Rate the average amount of pain in your wrist during the past week when you were at rest',
+        min: 0,
+        max: 10,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'prwe_pain_holding',
+        type: 'scale',
+        question: 'Rate the average amount of pain in your wrist during the past week when you were doing a task with repeated wrist motions',
+        min: 0,
+        max: 10,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'prwe_pain_carrying',
+        type: 'scale',
+        question: 'Rate the average amount of pain in your wrist during the past week when you were carrying a heavy object (over 10 pounds)',
+        min: 0,
+        max: 10,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'prwe_pain_worst',
+        type: 'scale',
+        question: 'Rate your worst amount of pain during the past week',
+        min: 0,
+        max: 10,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'prwe_pain_frequency',
+        type: 'scale',
+        question: 'How often did you have pain during the past week?',
+        min: 0,
+        max: 10,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'prwe_specific_turning_doorknob',
+        type: 'scale',
+        question: 'Turn a door knob',
+        min: 0,
+        max: 10,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'prwe_specific_cutting_food',
+        type: 'scale',
+        question: 'Cut food using a knife in affected hand',
+        min: 0,
+        max: 10,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'prwe_specific_fastening_buttons',
+        type: 'scale',
+        question: 'Fasten buttons on clothing',
+        min: 0,
+        max: 10,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'prwe_specific_use_bathroom_tissue',
+        type: 'scale',
+        question: 'Use bathroom tissue',
+        min: 0,
+        max: 10,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'prwe_specific_wash_dishes',
+        type: 'scale',
+        question: 'Wash dishes',
+        min: 0,
+        max: 10,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'prwe_usual_personal_care',
+        type: 'scale',
+        question: 'Personal care activities (dress, wash, brush teeth)',
+        min: 0,
+        max: 10,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'prwe_usual_household_work',
+        type: 'scale',
+        question: 'Household work (cleaning, laundry, yard work)',
+        min: 0,
+        max: 10,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'prwe_usual_work',
+        type: 'scale',
+        question: 'Work (your job or usual everyday work)',
+        min: 0,
+        max: 10,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'prwe_usual_recreational',
+        type: 'scale',
+        question: 'Recreational activities',
+        min: 0,
+        max: 10,
+        required: true,
+        scoring: { type: 'sum' }
+      },
+      {
+        id: 'prwe_usual_social',
+        type: 'scale',
+        question: 'Social activities',
+        min: 0,
+        max: 10,
+        required: true,
+        scoring: { type: 'sum' }
+      }
+    ]
   }
 ];
 

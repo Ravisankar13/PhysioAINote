@@ -140,6 +140,7 @@ PhysioGPT is an advanced AI-powered physiotherapy platform that provides evidenc
 
 ## Recent Updates
 
+- **January 25, 2025**: Added comprehensive standardized outcome measures to PhysioGPT Assessment tabs including DASH, Oswestry Disability Index (ODI), WOMAC, Neck Disability Index (NDI), KOOS, SPADI, PEM, FAAM, Roland Morris Low Back Pain Questionnaire, Harris Hip Score, Constant-Murley Shoulder Score, and Patient-Rated Wrist Evaluation (PRWE). These evidence-based assessment tools provide standardized scoring and clinical interpretation for comprehensive patient evaluation.
 - **January 25, 2025**: Added Motion Capture as prominent action button in navigation header alongside PhysioGPT, AI Notes, and Research for easy access to motion capture and diagnostic features
 - **January 25, 2025**: Implemented comprehensive Smart Exercise Recommendation Engine with AI-powered exercise prescription system. System analyzes movement abnormalities, patient parameters, and diagnostic results to generate evidence-based exercise prescriptions with loading parameters, progression plans, and home exercise adaptations
 - **January 25, 2025**: Integrated Smart Exercise Engine into TreatmentProtocolEngine with tabbed interface providing both standard protocols and AI-generated prescriptions. Engine generates exercises based on movement patterns with research support, modification options, and clinical reasoning scores

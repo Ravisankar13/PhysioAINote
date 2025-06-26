@@ -655,20 +655,44 @@ export default function DiagnosticEngine({ abnormalities, onDiagnosisComplete, o
           </CardContent>
         </Card>
 
-        {/* Proceed to Treatment Button */}
-        <div className="flex justify-center pt-6">
-          <Button 
-            onClick={() => {
-              if (onProceedToTreatment) {
-                onProceedToTreatment();
-              }
-            }}
-            className="bg-green-600 hover:bg-green-700 text-white font-semibold px-8 py-3 text-lg"
-          >
-            <Stethoscope className="h-5 w-5 mr-2" />
-            Proceed to Treatment Plan
-          </Button>
-        </div>
+        {/* Enhanced Treatment Planning Call-to-Action */}
+        <Card className="border-2 border-green-200 bg-gradient-to-r from-green-50 to-blue-50">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="h-6 w-6 text-green-600" />
+                  <h3 className="text-lg font-semibold text-green-800">Diagnosis Complete</h3>
+                </div>
+                <p className="text-sm text-gray-700">
+                  Clinical assessment finished. Ready to create personalized treatment protocols 
+                  and evidence-based exercise prescriptions.
+                </p>
+                <div className="flex items-center gap-4 text-xs text-gray-600">
+                  <span>✓ Movement patterns analyzed</span>
+                  <span>✓ Clinical diagnosis established</span>
+                  <span>→ Treatment planning ready</span>
+                </div>
+              </div>
+              <div className="flex flex-col gap-2">
+                <Button 
+                  onClick={() => {
+                    if (onProceedToTreatment) {
+                      onProceedToTreatment();
+                    }
+                  }}
+                  className="bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-3"
+                >
+                  <Stethoscope className="h-5 w-5 mr-2" />
+                  Create Treatment Plan
+                </Button>
+                <div className="text-xs text-center text-gray-500">
+                  AI-powered protocols & exercises
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }

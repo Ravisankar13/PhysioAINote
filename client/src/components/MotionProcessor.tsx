@@ -2371,7 +2371,7 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
         <div className="space-y-2">
           <h3 className="text-sm font-medium flex items-center gap-2">
             <Activity className="h-4 w-4" />
-            Movement Analysis
+            Movement Analysis Results
           </h3>
           {detectedAbnormalities.length > 0 ? (
             <div className="space-y-2">
@@ -2420,17 +2420,50 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
                   </div>
                 </div>
               ))}
-              <div className="text-xs text-gray-500 mt-2">
-                {detectedAbnormalities.length} movement pattern{detectedAbnormalities.length !== 1 ? 's' : ''} detected during analysis
+              <div className="flex items-center justify-between mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div>
+                  <div className="text-sm font-medium text-blue-800">
+                    {detectedAbnormalities.length} movement pattern{detectedAbnormalities.length !== 1 ? 's' : ''} detected
+                  </div>
+                  <div className="text-xs text-blue-600 mt-1">
+                    Ready for clinical diagnosis and treatment planning
+                  </div>
+                </div>
+                <Button 
+                  onClick={proceedToDiagnosis}
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  <Brain className="h-4 w-4 mr-2" />
+                  Proceed to Diagnosis
+                </Button>
               </div>
             </div>
           ) : (
-            <div className="bg-green-50 p-3 rounded-lg border border-green-200">
-              <div className="text-sm text-green-700">
-                No significant movement abnormalities detected
+            <div className="space-y-3">
+              <div className="bg-green-50 p-3 rounded-lg border border-green-200">
+                <div className="text-sm text-green-700">
+                  No significant movement abnormalities detected
+                </div>
+                <div className="text-xs text-green-600 mt-1">
+                  Movement patterns appear within normal ranges
+                </div>
               </div>
-              <div className="text-xs text-green-600 mt-1">
-                Movement patterns appear within normal ranges
+              <div className="flex items-center justify-between p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                <div>
+                  <div className="text-sm font-medium text-gray-700">
+                    Normal movement patterns detected
+                  </div>
+                  <div className="text-xs text-gray-600 mt-1">
+                    Proceed to clinical assessment for comprehensive evaluation
+                  </div>
+                </div>
+                <Button 
+                  onClick={proceedToDiagnosis}
+                  variant="outline"
+                >
+                  <Brain className="h-4 w-4 mr-2" />
+                  Clinical Assessment
+                </Button>
               </div>
             </div>
           )}

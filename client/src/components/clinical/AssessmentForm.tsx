@@ -404,33 +404,35 @@ export default function AssessmentForm({ template, onComplete, onBack }: Assessm
             Assessment Complete: {template.name}
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-6">
-          {results.interpretation && (
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <h3 className="font-semibold text-blue-900 mb-2">Clinical Interpretation</h3>
-              <p className="text-blue-800">{results.interpretation}</p>
-            </div>
-          )}
+        <CardContent className="space-y-6 max-h-[calc(100vh-200px)] overflow-y-auto">
+          <div className="space-y-4">
+            {results.interpretation && (
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h3 className="font-semibold text-blue-900 mb-2">Clinical Interpretation</h3>
+                <p className="text-blue-800">{results.interpretation}</p>
+              </div>
+            )}
 
-          {results.recommendations && results.recommendations.length > 0 && (
-            <div className="bg-green-50 p-4 rounded-lg">
-              <h3 className="font-semibold text-green-900 mb-2">Treatment Recommendations</h3>
-              <ul className="list-disc list-inside space-y-1 text-green-800">
-                {results.recommendations.map((recommendation, index) => (
-                  <li key={index}>{recommendation}</li>
-                ))}
-              </ul>
-            </div>
-          )}
+            {results.recommendations && results.recommendations.length > 0 && (
+              <div className="bg-green-50 p-4 rounded-lg">
+                <h3 className="font-semibold text-green-900 mb-2">Treatment Recommendations</h3>
+                <ul className="list-disc list-inside space-y-1 text-green-800">
+                  {results.recommendations.map((recommendation, index) => (
+                    <li key={index}>{recommendation}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
-          {results.score !== undefined && (
-            <div className="bg-yellow-50 p-4 rounded-lg">
-              <h3 className="font-semibold text-yellow-900 mb-2">Assessment Score</h3>
-              <p className="text-yellow-800">Score: {results.score}</p>
-            </div>
-          )}
+            {results.score !== undefined && (
+              <div className="bg-yellow-50 p-4 rounded-lg">
+                <h3 className="font-semibold text-yellow-900 mb-2">Assessment Score</h3>
+                <p className="text-yellow-800">Score: {results.score}</p>
+              </div>
+            )}
+          </div>
 
-          <div className="flex gap-3">
+          <div className="flex gap-3 pt-4 border-t mt-6">
             <Button onClick={onBack} variant="outline">
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back to Templates
@@ -461,7 +463,7 @@ export default function AssessmentForm({ template, onComplete, onBack }: Assessm
         <Progress value={progress} className="w-full" />
       </CardHeader>
 
-      <CardContent className="space-y-6">
+      <CardContent className="flex flex-col space-y-6 max-h-[calc(100vh-300px)] overflow-y-auto">
         <div className="space-y-4">
           <div className="flex items-start gap-2">
             {currentQuestion.required && (

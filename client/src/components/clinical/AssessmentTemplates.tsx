@@ -806,7 +806,7 @@ export default function AssessmentTemplates({ onSelectTemplate, selectedBodyPart
             </TabsList>
 
             <TabsContent value={activeTab} className="mt-6">
-              <div className="grid gap-4">
+              <div className="grid gap-4 max-h-[calc(100vh-400px)] overflow-y-auto pr-2">
                 {filteredTemplates.map((template) => (
                   <Card key={template.id} className="cursor-pointer hover:shadow-md transition-shadow">
                     <CardContent className="p-4">

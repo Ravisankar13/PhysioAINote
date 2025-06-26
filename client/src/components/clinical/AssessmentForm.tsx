@@ -70,7 +70,7 @@ export default function AssessmentForm({ template, onComplete, onBack }: Assessm
 
     // Calculate scores based on template type
     if (template.id === 'dash') {
-      const scoreValues = Object.values(responses).map(val => {
+      const scoreValues = Object.values(responses).map((val: any): number => {
         switch (val) {
           case 'No difficulty': return 1;
           case 'Mild difficulty': return 2;
@@ -80,7 +80,7 @@ export default function AssessmentForm({ template, onComplete, onBack }: Assessm
           default: return 0;
         }
       });
-      const totalScore = scoreValues.reduce((sum, val) => sum + val, 0);
+      const totalScore = scoreValues.reduce((sum: number, val: number) => sum + val, 0);
       const dashScore = ((totalScore - template.questions.length) / (template.questions.length * 4)) * 100;
       results.score = Math.round(dashScore);
       results.interpretation = getDashInterpretation(dashScore);
@@ -174,6 +174,137 @@ export default function AssessmentForm({ template, onComplete, onBack }: Assessm
     ];
   };
 
+  const getJoGibsonShoulderInterpretation = (responses: { [key: string]: any }): string => {
+    const interpretations = [];
+    
+    // Extract key findings
+    const torn = responses['is_it_torn'];
+    const stiff = responses['is_it_stiff'];
+    const irritable = responses['is_it_irritable'];
+    const changeable = responses['can_you_change_it'];
+    
+    if (torn) interpretations.push(`Structure: ${torn}`);
+    if (stiff) interpretations.push(`Mobility: ${stiff}`);
+    if (irritable) interpretations.push(`Irritability: ${irritable}`);
+    if (changeable) interpretations.push(`Modifiability: ${changeable}`);
+    
+    return interpretations.join(' | ');
+  };
+
+  const getJoGibsonShoulderRecommendations = (responses: { [key: string]: any }): string[] => {
+    const recommendations = [];
+    
+    // Base recommendations on key responses
+    if (responses['is_it_irritable'] === 'Highly irritable') {
+      recommendations.push('Rest and gentle range of motion only');
+      recommendations.push('Pain management strategies');
+    } else if (responses['is_it_irritable'] === 'Moderately irritable') {
+      recommendations.push('Conservative approach within pain-free range');
+      recommendations.push('Gentle progressive loading');
+    } else {
+      recommendations.push('Normal loading progression appropriate');
+    }
+    
+    if (responses['is_it_stiff'] !== 'Normal ROM') {
+      recommendations.push('Progressive mobilization program');
+      recommendations.push('Range of motion exercises');
+    }
+    
+    if (responses['can_you_change_it'] === 'Highly modifiable') {
+      recommendations.push('Excellent prognosis - aggressive treatment appropriate');
+    } else if (responses['can_you_change_it'] === 'Not modifiable') {
+      recommendations.push('Consider alternative treatments or specialist referral');
+    }
+    
+    return recommendations;
+  };
+
+  const getGrimaldiHipInterpretation = (responses: { [key: string]: any }): string => {
+    const interpretations = [];
+    
+    const painLocation = responses['lateral_hip_pain_location'];
+    const strength = responses['gluteal_strength_test'];
+    const loading = responses['tendon_loading_response'];
+    
+    if (painLocation) interpretations.push(`Pain: ${painLocation}`);
+    if (strength) interpretations.push(`Strength: ${strength}`);
+    if (loading) interpretations.push(`Loading response: ${loading}`);
+    
+    return interpretations.join(' | ');
+  };
+
+  const getGrimaldiHipRecommendations = (responses: { [key: string]: any }): string[] => {
+    const recommendations = [];
+    
+    if (responses['lateral_hip_pain_location'] === 'Greater trochanter') {
+      recommendations.push('Focus on gluteal tendinopathy management');
+      recommendations.push('Progressive loading program for gluteal tendons');
+    }
+    
+    if (responses['gluteal_strength_test'] !== 'Normal strength') {
+      recommendations.push('Gluteal strengthening program');
+      recommendations.push('Motor control training');
+    }
+    
+    if (responses['tendon_loading_response'] === 'Improves with loading') {
+      recommendations.push('Continue progressive loading - excellent prognosis');
+    } else if (responses['tendon_loading_response'] === 'Worsens immediately') {
+      recommendations.push('Reduce loading intensity initially');
+      recommendations.push('Focus on pain management before strengthening');
+    }
+    
+    if (responses['itb_tightness'] !== 'Normal') {
+      recommendations.push('ITB/TFL stretching program');
+    }
+    
+    return recommendations;
+  };
+
+  const getMcKenzieLowerBackInterpretation = (responses: { [key: string]: any }): string => {
+    const interpretations = [];
+    
+    const centralization = responses['centralization_phenomenon'];
+    const extensionResponse = responses['extension_response'];
+    const flexionResponse = responses['flexion_response'];
+    
+    if (centralization) interpretations.push(`Centralization: ${centralization}`);
+    if (extensionResponse) interpretations.push(`Extension: ${extensionResponse}`);
+    if (flexionResponse) interpretations.push(`Flexion: ${flexionResponse}`);
+    
+    return interpretations.join(' | ');
+  };
+
+  const getMcKenzieLowerBackRecommendations = (responses: { [key: string]: any }): string[] => {
+    const recommendations = [];
+    
+    if (responses['centralization_phenomenon'] === 'Yes, easily') {
+      recommendations.push('Excellent prognosis - rapid recovery expected');
+      recommendations.push('Continue with directional preference exercises');
+    } else if (responses['centralization_phenomenon'] === 'No centralization') {
+      recommendations.push('Consider alternative approaches');
+      recommendations.push('May require different treatment strategy');
+    }
+    
+    if (responses['extension_response'] === 'Pain centralizes') {
+      recommendations.push('Extension exercises are indicated');
+      recommendations.push('Avoid flexion-based activities initially');
+    } else if (responses['flexion_response'] === 'Pain centralizes') {
+      recommendations.push('Flexion exercises may be beneficial');
+    }
+    
+    if (responses['lateral_shift'] !== 'No shift') {
+      recommendations.push('Address lateral shift correction first');
+      recommendations.push('Lateral glide mobilizations indicated');
+    }
+    
+    if (responses['sitting_tolerance'] === 'Cannot sit' || responses['sitting_tolerance'] === 'Moderate discomfort') {
+      recommendations.push('Minimize sitting time initially');
+      recommendations.push('Focus on extension-based approach');
+    }
+    
+    return recommendations;
+  };
+
   const renderQuestion = (question: AssessmentQuestion) => {
     const response = responses[question.id];
 
@@ -246,12 +377,24 @@ export default function AssessmentForm({ template, onComplete, onBack }: Assessm
   };
 
   if (showResults) {
-    const results = {
+    const results: AssessmentResults = {
       templateId: template.id,
       templateName: template.name,
       responses,
       timestamp: new Date()
     };
+
+    // Calculate results based on template
+    if (template.id === 'jo_gibson_shoulder') {
+      results.interpretation = getJoGibsonShoulderInterpretation(responses);
+      results.recommendations = getJoGibsonShoulderRecommendations(responses);
+    } else if (template.id === 'alison_grimaldi_hip') {
+      results.interpretation = getGrimaldiHipInterpretation(responses);
+      results.recommendations = getGrimaldiHipRecommendations(responses);
+    } else if (template.id === 'mckenzie_lower_back') {
+      results.interpretation = getMcKenzieLowerBackInterpretation(responses);
+      results.recommendations = getMcKenzieLowerBackRecommendations(responses);
+    }
 
     return (
       <Card>
@@ -262,14 +405,30 @@ export default function AssessmentForm({ template, onComplete, onBack }: Assessm
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="text-center">
-            <div className="text-3xl font-bold text-green-600 mb-2">
-              Assessment Completed
+          {results.interpretation && (
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <h3 className="font-semibold text-blue-900 mb-2">Clinical Interpretation</h3>
+              <p className="text-blue-800">{results.interpretation}</p>
             </div>
-            <p className="text-muted-foreground">
-              Results have been calculated and are ready for review
-            </p>
-          </div>
+          )}
+
+          {results.recommendations && results.recommendations.length > 0 && (
+            <div className="bg-green-50 p-4 rounded-lg">
+              <h3 className="font-semibold text-green-900 mb-2">Treatment Recommendations</h3>
+              <ul className="list-disc list-inside space-y-1 text-green-800">
+                {results.recommendations.map((recommendation, index) => (
+                  <li key={index}>{recommendation}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {results.score !== undefined && (
+            <div className="bg-yellow-50 p-4 rounded-lg">
+              <h3 className="font-semibold text-yellow-900 mb-2">Assessment Score</h3>
+              <p className="text-yellow-800">Score: {results.score}</p>
+            </div>
+          )}
 
           <div className="flex gap-3">
             <Button onClick={onBack} variant="outline">
@@ -277,7 +436,7 @@ export default function AssessmentForm({ template, onComplete, onBack }: Assessm
               Back to Templates
             </Button>
             <Button onClick={() => onComplete(results)}>
-              View Results & Recommendations
+              Save Results
             </Button>
           </div>
         </CardContent>

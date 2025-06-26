@@ -368,6 +368,177 @@ const assessmentTemplates: AssessmentTemplate[] = [
     ]
   },
   {
+    id: 'mckenzie_lower_back',
+    name: 'McKenzie Lower Back Pain Assessment',
+    bodyPart: 'back',
+    category: 'assessment',
+    description: 'Comprehensive lower back assessment based on McKenzie approach to spinal pain and dysfunction',
+    evidenceLevel: 'A',
+    questions: [
+      {
+        id: 'pain_location',
+        type: 'select',
+        question: 'Primary pain location',
+        options: ['Central lower back', 'Unilateral lower back', 'Bilateral lower back', 'Radiating to leg', 'Multiple areas'],
+        required: true,
+        scoring: {
+          type: 'interpretation',
+          interpretation: {
+            'Central lower back': 'Central syndrome likely - good prognosis',
+            'Unilateral lower back': 'Possible lateral shift or facet involvement',
+            'Bilateral lower back': 'Consider postural or degenerative factors',
+            'Radiating to leg': 'Possible disc involvement or nerve root compression',
+            'Multiple areas': 'Complex presentation requiring detailed assessment'
+          }
+        }
+      },
+      {
+        id: 'pain_behavior',
+        type: 'select',
+        question: 'Pain behavior with movement',
+        options: ['Better with movement', 'Worse with movement', 'No change with movement', 'Variable response'],
+        required: true,
+        scoring: {
+          type: 'interpretation',
+          interpretation: {
+            'Better with movement': 'Derangement syndrome likely',
+            'Worse with movement': 'Dysfunction or inflammatory component',
+            'No change with movement': 'Consider other causes or chronic pain',
+            'Variable response': 'Mixed syndrome or complex presentation'
+          }
+        }
+      },
+      {
+        id: 'flexion_response',
+        type: 'select',
+        question: 'Response to repeated forward bending',
+        options: ['Pain centralizes', 'Pain peripheralizes', 'No change', 'Increases centrally'],
+        required: true,
+        scoring: {
+          type: 'interpretation',
+          interpretation: {
+            'Pain centralizes': 'Excellent prognostic sign - continue extension',
+            'Pain peripheralizes': 'Avoid flexion - poor prognostic sign',
+            'No change': 'Flexion not primary movement direction',
+            'Increases centrally': 'Some flexion sensitivity but centralization occurring'
+          }
+        }
+      },
+      {
+        id: 'extension_response',
+        type: 'select',
+        question: 'Response to repeated backward bending',
+        options: ['Pain centralizes', 'Pain peripheralizes', 'No change', 'Increases centrally'],
+        required: true,
+        scoring: {
+          type: 'interpretation',
+          interpretation: {
+            'Pain centralizes': 'Extension is the direction of preference',
+            'Pain peripheralizes': 'Avoid extension exercises',
+            'No change': 'Extension not primary movement direction',
+            'Increases centrally': 'Some extension sensitivity'
+          }
+        }
+      },
+      {
+        id: 'lateral_shift',
+        type: 'select',
+        question: 'Visible lateral shift present?',
+        options: ['No shift', 'Slight shift', 'Moderate shift', 'Marked shift'],
+        required: true,
+        scoring: {
+          type: 'interpretation',
+          interpretation: {
+            'No shift': 'No lateral component to address',
+            'Slight shift': 'Minor lateral correction may be needed',
+            'Moderate shift': 'Lateral shift correction indicated',
+            'Marked shift': 'Primary focus on lateral shift correction'
+          }
+        }
+      },
+      {
+        id: 'sitting_tolerance',
+        type: 'select',
+        question: 'Sitting tolerance',
+        options: ['Normal tolerance', 'Mild discomfort', 'Moderate discomfort', 'Cannot sit'],
+        required: true,
+        scoring: {
+          type: 'interpretation',
+          interpretation: {
+            'Normal tolerance': 'Sitting not a primary aggravator',
+            'Mild discomfort': 'Some postural education needed',
+            'Moderate discomfort': 'Significant sitting intolerance - disc involvement likely',
+            'Cannot sit': 'Severe disc derangement possible'
+          }
+        }
+      },
+      {
+        id: 'morning_stiffness',
+        type: 'select',
+        question: 'Morning stiffness duration',
+        options: ['No stiffness', 'Less than 30 minutes', '30-60 minutes', 'More than 60 minutes'],
+        required: true,
+        scoring: {
+          type: 'interpretation',
+          interpretation: {
+            'No stiffness': 'No significant inflammatory component',
+            'Less than 30 minutes': 'Normal response to rest',
+            '30-60 minutes': 'Some disc or joint stiffness',
+            'More than 60 minutes': 'Significant inflammatory component'
+          }
+        }
+      },
+      {
+        id: 'centralization_phenomenon',
+        type: 'select',
+        question: 'Can symptoms be centralized with movement?',
+        options: ['Yes, easily', 'Yes, with effort', 'Partially', 'No centralization'],
+        required: true,
+        scoring: {
+          type: 'interpretation',
+          interpretation: {
+            'Yes, easily': 'Excellent prognosis - rapid recovery expected',
+            'Yes, with effort': 'Good prognosis with appropriate treatment',
+            'Partially': 'Moderate prognosis - consistent approach needed',
+            'No centralization': 'Guarded prognosis - may need alternative approach'
+          }
+        }
+      },
+      {
+        id: 'functional_impact',
+        type: 'select',
+        question: 'Impact on daily function',
+        options: ['Minimal impact', 'Mild limitation', 'Moderate limitation', 'Severe limitation'],
+        required: true,
+        scoring: {
+          type: 'interpretation',
+          interpretation: {
+            'Minimal impact': 'Early intervention can prevent progression',
+            'Mild limitation': 'Good response to McKenzie approach expected',
+            'Moderate limitation': 'Consistent treatment approach required',
+            'Severe limitation': 'Intensive treatment and education needed'
+          }
+        }
+      },
+      {
+        id: 'previous_episodes',
+        type: 'select',
+        question: 'History of previous episodes',
+        options: ['First episode', 'Occasional episodes', 'Frequent episodes', 'Chronic ongoing'],
+        required: true,
+        scoring: {
+          type: 'interpretation',
+          interpretation: {
+            'First episode': 'Excellent recovery potential with education',
+            'Occasional episodes': 'Prevention strategies important',
+            'Frequent episodes': 'Underlying movement dysfunction likely',
+            'Chronic ongoing': 'Comprehensive approach including lifestyle factors'
+          }
+        }
+      }
+    ]
+  },
+  {
     id: 'dash',
     name: 'DASH - Disabilities of Arm, Shoulder and Hand',
     bodyPart: 'upper_extremity',

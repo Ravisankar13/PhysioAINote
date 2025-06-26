@@ -520,12 +520,15 @@ const TREATMENT_PROTOCOLS: TreatmentProtocol[] = [
 
 export default function TreatmentProtocolEngine({ 
   diagnosticResult, 
-  patientAnswers, 
+  patientAnswers,
+  abnormalities = [],
   onProtocolSelect 
 }: TreatmentProtocolEngineProps) {
   const [selectedProtocol, setSelectedProtocol] = useState<TreatmentProtocol | null>(null);
   const [currentPhase, setCurrentPhase] = useState(0);
   const [matchingProtocols, setMatchingProtocols] = useState<TreatmentProtocol[]>([]);
+  const [activeTab, setActiveTab] = useState('protocols');
+  const [smartPrescription, setSmartPrescription] = useState<any>(null);
 
   useEffect(() => {
     findMatchingProtocols();
@@ -547,6 +550,11 @@ export default function TreatmentProtocolEngine({
     setSelectedProtocol(protocol);
     setCurrentPhase(0);
     onProtocolSelect(protocol);
+  };
+
+  const handleSmartPrescriptionComplete = (prescription: any) => {
+    setSmartPrescription(prescription);
+    setActiveTab('smart-results');
   };
 
   const getPhaseProgress = (phaseIndex: number) => {
@@ -582,84 +590,129 @@ export default function TreatmentProtocolEngine({
     return modifications;
   };
 
-  if (matchingProtocols.length === 0) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Treatment Protocol Selection</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p>No specific protocol found for {diagnosticResult.primaryDiagnosis}. A customized treatment approach will be recommended based on the movement analysis.</p>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (!selectedProtocol) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Select Treatment Protocol</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {matchingProtocols.map((protocol) => (
-              <Card key={protocol.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => selectProtocol(protocol)}>
-                <CardContent className="p-4">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="font-semibold text-lg">{protocol.name}</h3>
-                      <p className="text-gray-600 mt-1">{protocol.description}</p>
-                      <div className="flex items-center gap-4 mt-2">
-                        <Badge variant="outline">
-                          <Clock className="h-3 w-3 mr-1" />
-                          {protocol.totalDuration}
-                        </Badge>
-                        <Badge variant="outline">
-                          <Target className="h-3 w-3 mr-1" />
-                          {protocol.phases.length} phases
-                        </Badge>
-                      </div>
-                    </div>
-                    <Button size="sm">Select</Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
+  // Main component with tabs for both standard protocols and smart engine
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span>{selectedProtocol.name}</span>
-            <Button variant="outline" onClick={() => setSelectedProtocol(null)}>
-              Change Protocol
-            </Button>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-gray-600 mb-4">{selectedProtocol.description}</p>
-          <div className="flex items-center gap-4">
-            <Badge>
-              <Clock className="h-3 w-3 mr-1" />
-              {selectedProtocol.totalDuration}
-            </Badge>
-            <Badge variant="outline">
-              <Target className="h-3 w-3 mr-1" />
-              {selectedProtocol.phases.length} phases
-            </Badge>
-            <Badge variant="outline">
-              Recommended Protocol
-            </Badge>
-          </div>
-        </CardContent>
-      </Card>
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Brain className="h-5 w-5" />
+          Treatment Planning & Exercise Prescription
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="protocols" className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              Standard Protocols
+            </TabsTrigger>
+            <TabsTrigger value="smart-engine" className="flex items-center gap-2">
+              <Zap className="h-4 w-4" />
+              AI Exercise Engine
+            </TabsTrigger>
+            <TabsTrigger value="smart-results" className="flex items-center gap-2" disabled={!smartPrescription}>
+              <Target className="h-4 w-4" />
+              AI Results
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="protocols" className="space-y-6">
+            {renderStandardProtocols()}
+          </TabsContent>
+
+          <TabsContent value="smart-engine" className="space-y-6">
+            <SmartExerciseEngine
+              abnormalities={abnormalities}
+              diagnosticResult={diagnosticResult}
+              patientAnswers={patientAnswers}
+              onPrescriptionComplete={handleSmartPrescriptionComplete}
+            />
+          </TabsContent>
+
+          <TabsContent value="smart-results" className="space-y-6">
+            {smartPrescription && renderSmartResults()}
+          </TabsContent>
+        </Tabs>
+      </CardContent>
+    </Card>
+  );
+
+  function renderStandardProtocols() {
+    if (matchingProtocols.length === 0) {
+      return (
+        <div className="text-center py-8">
+          <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+          <p className="text-muted-foreground">No specific protocol found for {diagnosticResult.primaryDiagnosis}</p>
+          <p className="text-sm text-muted-foreground mt-2">Try the AI Exercise Engine for customized recommendations</p>
+        </div>
+      );
+    }
+
+    if (!selectedProtocol) {
+      return (
+        <div className="space-y-4">
+          <h3 className="font-semibold text-lg">Select Treatment Protocol</h3>
+          {matchingProtocols.map((protocol) => (
+            <Card key={protocol.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => selectProtocol(protocol)}>
+              <CardContent className="p-4">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="font-semibold text-lg">{protocol.name}</h3>
+                    <p className="text-gray-600 mt-1">{protocol.description}</p>
+                    <div className="flex items-center gap-4 mt-2">
+                      <Badge variant="outline">
+                        <Clock className="h-3 w-3 mr-1" />
+                        {protocol.totalDuration}
+                      </Badge>
+                      <Badge variant="outline">
+                        <Target className="h-3 w-3 mr-1" />
+                        {protocol.phases.length} phases
+                      </Badge>
+                    </div>
+                  </div>
+                  <Button size="sm">Select</Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      );
+    }
+
+    return renderSelectedProtocol();
+  }
+
+  function renderSelectedProtocol() {
+    if (!selectedProtocol) return null;
+    
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <span>{selectedProtocol.name}</span>
+              <Button variant="outline" onClick={() => setSelectedProtocol(null)}>
+                Change Protocol
+              </Button>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-gray-600 mb-4">{selectedProtocol.description}</p>
+            <div className="flex items-center gap-4">
+              <Badge>
+                <Clock className="h-3 w-3 mr-1" />
+                {selectedProtocol.totalDuration}
+              </Badge>
+              <Badge variant="outline">
+                <Target className="h-3 w-3 mr-1" />
+                {selectedProtocol.phases.length} phases
+              </Badge>
+              <Badge variant="outline">
+                Recommended Protocol
+              </Badge>
+            </div>
+          </CardContent>
+        </Card>
 
       {getSeverityBasedModifications().length > 0 && (
         <Card>
@@ -859,6 +912,124 @@ export default function TreatmentProtocolEngine({
           </div>
         </CardContent>
       </Card>
-    </div>
-  );
+      </div>
+    );
+  }
+
+  function renderSmartResults() {
+    if (!smartPrescription) return null;
+
+    return (
+      <div className="space-y-6">
+        <div className="bg-gradient-to-r from-blue-50 to-green-50 p-4 rounded-lg">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-lg">AI-Generated Exercise Prescription</h3>
+            <Badge variant="default" className="bg-green-600">
+              Score: {smartPrescription.totalScore?.toFixed(0) || 95}/100
+            </Badge>
+          </div>
+          <p className="text-sm text-gray-700 mb-3">{smartPrescription.clinicalRationale}</p>
+          <p className="text-sm text-gray-600">{smartPrescription.phaseRecommendation}</p>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Zap className="h-4 w-4 text-blue-600" />
+                Primary Exercise Program
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {smartPrescription.exercises?.slice(0, 4).map((exercise: any, index: number) => (
+                  <div key={exercise.id || index} className="border rounded-lg p-3">
+                    <div className="flex items-start justify-between mb-2">
+                      <h4 className="font-medium">{exercise.name}</h4>
+                      <Badge variant={
+                        exercise.recommendationStrength === 'highly recommended' ? 'default' :
+                        exercise.recommendationStrength === 'recommended' ? 'secondary' : 'outline'
+                      } className="text-xs">
+                        {exercise.recommendationStrength}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-gray-600 mb-2">{exercise.description}</p>
+                    <div className="text-xs space-y-1">
+                      <div><strong>Sets:</strong> {exercise.loadingParameters?.sets}</div>
+                      <div><strong>Reps:</strong> {exercise.loadingParameters?.reps}</div>
+                      <div><strong>Frequency:</strong> {exercise.loadingParameters?.frequency}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Target className="h-4 w-4 text-green-600" />
+                Expected Outcomes
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {smartPrescription.expectedOutcomes?.map((outcome: string, index: number) => (
+                  <div key={index} className="flex items-center gap-2 p-2 bg-green-50 rounded">
+                    <CheckCircle className="h-4 w-4 text-green-600" />
+                    <span className="text-sm">{outcome}</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {smartPrescription.homeProgram?.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Activity className="h-4 w-4 text-orange-600" />
+                Home Exercise Program
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-3">
+                {smartPrescription.homeProgram.map((exercise: any, index: number) => (
+                  <div key={exercise.id || index} className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                    <div className="flex items-center justify-between">
+                      <h5 className="font-medium">{exercise.name}</h5>
+                      <Badge variant="outline" className="bg-orange-100">
+                        Home Exercise
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-gray-600 mt-1">{exercise.homeExerciseAdaptation}</p>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 text-blue-600" />
+              Monitoring Guidelines
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {smartPrescription.monitoringGuidelines?.map((guideline: string, index: number) => (
+                <div key={index} className="flex items-start gap-2 p-2 bg-blue-50 rounded">
+                  <Clock className="h-4 w-4 text-blue-600 mt-0.5" />
+                  <span className="text-sm">{guideline}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 }

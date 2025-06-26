@@ -2563,6 +2563,7 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
               <TreatmentProtocolEngine
                 diagnosticResult={diagnosticResult}
                 patientAnswers={patientAnswers}
+                abnormalities={detectedAbnormalities}
                 onProtocolSelect={handleProtocolSelect}
               />
             ) : (

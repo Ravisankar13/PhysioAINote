@@ -25,7 +25,9 @@ interface JointAngles {
 }
 
 interface MovementAbnormality {
-  type: 'knee_valgus' | 'trendelenburg' | 'forward_head' | 'ankle_pronation' | 'hip_drop' | 'pelvic_tilt';
+  type: 'knee_valgus' | 'trendelenburg' | 'forward_head' | 'ankle_pronation' | 'hip_drop' | 'pelvic_tilt' | 
+        'shoulder_elevation' | 'hip_hiking' | 'lumbar_extension' | 'cervical_rotation' | 'thoracic_kyphosis' | 
+        'knee_varus' | 'excessive_hip_flexion' | 'ankle_dorsiflexion_loss' | 'scapular_winging' | 'lateral_trunk_lean';
   severity: 'mild' | 'moderate' | 'severe';
   description: string;
   timestamp: number;
@@ -218,14 +220,356 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
     return abnormalities;
   };
 
+  const detectAnklePronation = (landmarks: any[], timestamp: number): MovementAbnormality[] => {
+    const abnormalities: MovementAbnormality[] = [];
+    
+    const leftKnee = landmarks[25];
+    const leftAnkle = landmarks[27];
+    const rightKnee = landmarks[26];
+    const rightAnkle = landmarks[28];
+    
+    if (!leftKnee || !leftAnkle || !rightKnee || !rightAnkle) return abnormalities;
+    
+    // Calculate ankle alignment relative to knee
+    const calculatePronationAngle = (knee: any, ankle: any) => {
+      const kneeAnkleVector = { x: ankle.x - knee.x, y: ankle.y - knee.y };
+      const verticalVector = { x: 0, y: 1 };
+      
+      const angle = Math.atan2(
+        kneeAnkleVector.x * verticalVector.y - kneeAnkleVector.y * verticalVector.x,
+        kneeAnkleVector.x * verticalVector.x + kneeAnkleVector.y * verticalVector.y
+      ) * (180 / Math.PI);
+      
+      return Math.abs(angle);
+    };
+    
+    const leftPronationAngle = calculatePronationAngle(leftKnee, leftAnkle);
+    const rightPronationAngle = calculatePronationAngle(rightKnee, rightAnkle);
+    
+    if (leftPronationAngle > 8) {
+      const severity = leftPronationAngle > 20 ? 'severe' : leftPronationAngle > 15 ? 'moderate' : 'mild';
+      abnormalities.push({
+        type: 'ankle_pronation',
+        severity,
+        description: `Left ankle overpronation detected (${leftPronationAngle.toFixed(1)}°)`,
+        timestamp,
+        affectedSide: 'left',
+        angle: leftPronationAngle,
+        normalRange: '< 8°',
+        clinicalSignificance: 'May cause foot pain, plantar fasciitis, or knee tracking issues'
+      });
+    }
+    
+    if (rightPronationAngle > 8) {
+      const severity = rightPronationAngle > 20 ? 'severe' : rightPronationAngle > 15 ? 'moderate' : 'mild';
+      abnormalities.push({
+        type: 'ankle_pronation',
+        severity,
+        description: `Right ankle overpronation detected (${rightPronationAngle.toFixed(1)}°)`,
+        timestamp,
+        affectedSide: 'right',
+        angle: rightPronationAngle,
+        normalRange: '< 8°',
+        clinicalSignificance: 'May cause foot pain, plantar fasciitis, or knee tracking issues'
+      });
+    }
+    
+    return abnormalities;
+  };
+
+  const detectShoulderElevation = (landmarks: any[], timestamp: number): MovementAbnormality[] => {
+    const abnormalities: MovementAbnormality[] = [];
+    
+    const leftShoulder = landmarks[11];
+    const rightShoulder = landmarks[12];
+    const leftEar = landmarks[3];
+    const rightEar = landmarks[4];
+    
+    if (!leftShoulder || !rightShoulder || !leftEar || !rightEar) return abnormalities;
+    
+    // Calculate shoulder height difference
+    const shoulderHeightDiff = Math.abs(leftShoulder.y - rightShoulder.y);
+    
+    // Calculate ear-shoulder distance to detect shoulder elevation
+    const leftEarShoulderDist = Math.abs(leftEar.y - leftShoulder.y);
+    const rightEarShoulderDist = Math.abs(rightEar.y - rightShoulder.y);
+    const normalEarShoulderDist = 0.15; // Normal distance threshold
+    
+    if (shoulderHeightDiff > 0.04) {
+      const severity = shoulderHeightDiff > 0.08 ? 'severe' : shoulderHeightDiff > 0.06 ? 'moderate' : 'mild';
+      const elevatedSide = leftShoulder.y < rightShoulder.y ? 'left' : 'right';
+      
+      abnormalities.push({
+        type: 'shoulder_elevation',
+        severity,
+        description: `${elevatedSide} shoulder elevation detected`,
+        timestamp,
+        affectedSide: elevatedSide as 'left' | 'right',
+        angle: shoulderHeightDiff * 100,
+        normalRange: '< 4cm difference',
+        clinicalSignificance: 'May indicate upper trapezius tension, stress response, or compensatory patterns'
+      });
+    }
+    
+    if (leftEarShoulderDist < normalEarShoulderDist) {
+      const severity = leftEarShoulderDist < 0.08 ? 'severe' : leftEarShoulderDist < 0.12 ? 'moderate' : 'mild';
+      abnormalities.push({
+        type: 'shoulder_elevation',
+        severity,
+        description: 'Left shoulder elevated toward ear',
+        timestamp,
+        affectedSide: 'left',
+        angle: (normalEarShoulderDist - leftEarShoulderDist) * 100,
+        normalRange: '> 15cm ear-shoulder distance',
+        clinicalSignificance: 'Indicates upper trapezius overactivity and potential cervical dysfunction'
+      });
+    }
+    
+    if (rightEarShoulderDist < normalEarShoulderDist) {
+      const severity = rightEarShoulderDist < 0.08 ? 'severe' : rightEarShoulderDist < 0.12 ? 'moderate' : 'mild';
+      abnormalities.push({
+        type: 'shoulder_elevation',
+        severity,
+        description: 'Right shoulder elevated toward ear',
+        timestamp,
+        affectedSide: 'right',
+        angle: (normalEarShoulderDist - rightEarShoulderDist) * 100,
+        normalRange: '> 15cm ear-shoulder distance',
+        clinicalSignificance: 'Indicates upper trapezius overactivity and potential cervical dysfunction'
+      });
+    }
+    
+    return abnormalities;
+  };
+
+  const detectExcessiveHipFlexion = (landmarks: any[], timestamp: number): MovementAbnormality[] => {
+    const abnormalities: MovementAbnormality[] = [];
+    
+    const leftShoulder = landmarks[11];
+    const leftHip = landmarks[23];
+    const leftKnee = landmarks[25];
+    const rightShoulder = landmarks[12];
+    const rightHip = landmarks[24];
+    const rightKnee = landmarks[26];
+    
+    if (!leftShoulder || !leftHip || !leftKnee || !rightShoulder || !rightHip || !rightKnee) return abnormalities;
+    
+    // Calculate hip flexion angles
+    const calculateHipFlexionAngle = (shoulder: any, hip: any, knee: any) => {
+      const hipShoulderVector = { x: shoulder.x - hip.x, y: shoulder.y - hip.y };
+      const hipKneeVector = { x: knee.x - hip.x, y: knee.y - hip.y };
+      
+      const angle = Math.atan2(
+        hipShoulderVector.x * hipKneeVector.y - hipShoulderVector.y * hipKneeVector.x,
+        hipShoulderVector.x * hipKneeVector.x + hipShoulderVector.y * hipKneeVector.y
+      ) * (180 / Math.PI);
+      
+      return Math.abs(angle);
+    };
+    
+    const leftHipFlexion = calculateHipFlexionAngle(leftShoulder, leftHip, leftKnee);
+    const rightHipFlexion = calculateHipFlexionAngle(rightShoulder, rightHip, rightKnee);
+    
+    if (leftHipFlexion > 25) {
+      const severity = leftHipFlexion > 45 ? 'severe' : leftHipFlexion > 35 ? 'moderate' : 'mild';
+      abnormalities.push({
+        type: 'excessive_hip_flexion',
+        severity,
+        description: `Excessive left hip flexion detected (${leftHipFlexion.toFixed(1)}°)`,
+        timestamp,
+        affectedSide: 'left',
+        angle: leftHipFlexion,
+        normalRange: '< 25° in standing',
+        clinicalSignificance: 'May indicate hip flexor tightness, anterior pelvic tilt, or postural dysfunction'
+      });
+    }
+    
+    if (rightHipFlexion > 25) {
+      const severity = rightHipFlexion > 45 ? 'severe' : rightHipFlexion > 35 ? 'moderate' : 'mild';
+      abnormalities.push({
+        type: 'excessive_hip_flexion',
+        severity,
+        description: `Excessive right hip flexion detected (${rightHipFlexion.toFixed(1)}°)`,
+        timestamp,
+        affectedSide: 'right',
+        angle: rightHipFlexion,
+        normalRange: '< 25° in standing',
+        clinicalSignificance: 'May indicate hip flexor tightness, anterior pelvic tilt, or postural dysfunction'
+      });
+    }
+    
+    return abnormalities;
+  };
+
+  const detectThoracicKyphosis = (landmarks: any[], timestamp: number): MovementAbnormality[] => {
+    const abnormalities: MovementAbnormality[] = [];
+    
+    const nose = landmarks[0];
+    const leftShoulder = landmarks[11];
+    const rightShoulder = landmarks[12];
+    const leftHip = landmarks[23];
+    const rightHip = landmarks[24];
+    
+    if (!nose || !leftShoulder || !rightShoulder || !leftHip || !rightHip) return abnormalities;
+    
+    // Calculate shoulder midpoint and hip midpoint
+    const shoulderMidpoint = {
+      x: (leftShoulder.x + rightShoulder.x) / 2,
+      y: (leftShoulder.y + rightShoulder.y) / 2
+    };
+    
+    const hipMidpoint = {
+      x: (leftHip.x + rightHip.x) / 2,
+      y: (leftHip.y + rightHip.y) / 2
+    };
+    
+    // Calculate thoracic curve by measuring head-shoulder-hip alignment
+    const headShoulderVector = { x: nose.x - shoulderMidpoint.x, y: nose.y - shoulderMidpoint.y };
+    const shoulderHipVector = { x: shoulderMidpoint.x - hipMidpoint.x, y: shoulderMidpoint.y - hipMidpoint.y };
+    
+    const kyphosisAngle = Math.atan2(
+      headShoulderVector.x * shoulderHipVector.y - headShoulderVector.y * shoulderHipVector.x,
+      headShoulderVector.x * shoulderHipVector.x + headShoulderVector.y * shoulderHipVector.y
+    ) * (180 / Math.PI);
+    
+    if (Math.abs(kyphosisAngle) > 20) {
+      const severity = Math.abs(kyphosisAngle) > 40 ? 'severe' : Math.abs(kyphosisAngle) > 30 ? 'moderate' : 'mild';
+      
+      abnormalities.push({
+        type: 'thoracic_kyphosis',
+        severity,
+        description: `Excessive thoracic kyphosis detected (${Math.abs(kyphosisAngle).toFixed(1)}°)`,
+        timestamp,
+        affectedSide: 'bilateral',
+        angle: Math.abs(kyphosisAngle),
+        normalRange: '< 20°',
+        clinicalSignificance: 'May indicate thoracic spine stiffness, weak deep neck flexors, or postural syndrome'
+      });
+    }
+    
+    return abnormalities;
+  };
+
+  const detectKneeVarus = (landmarks: any[], timestamp: number): MovementAbnormality[] => {
+    const abnormalities: MovementAbnormality[] = [];
+    
+    const leftHip = landmarks[23];
+    const leftKnee = landmarks[25];
+    const leftAnkle = landmarks[27];
+    const rightHip = landmarks[24];
+    const rightKnee = landmarks[26];
+    const rightAnkle = landmarks[28];
+    
+    if (!leftHip || !leftKnee || !leftAnkle || !rightHip || !rightKnee || !rightAnkle) return abnormalities;
+    
+    // Calculate varus angle (opposite of valgus - knee bowing outward)
+    const calculateVarusAngle = (hip: any, knee: any, ankle: any) => {
+      const hipKneeVector = { x: knee.x - hip.x, y: knee.y - hip.y };
+      const kneeAnkleVector = { x: ankle.x - knee.x, y: ankle.y - knee.y };
+      
+      // For varus, we look for outward deviation
+      const crossProduct = hipKneeVector.x * kneeAnkleVector.y - hipKneeVector.y * kneeAnkleVector.x;
+      const dotProduct = hipKneeVector.x * kneeAnkleVector.x + hipKneeVector.y * kneeAnkleVector.y;
+      
+      const angle = Math.atan2(crossProduct, dotProduct) * (180 / Math.PI);
+      
+      // Return positive for outward deviation (varus)
+      return angle < 0 ? Math.abs(angle) : 0;
+    };
+    
+    const leftVarusAngle = calculateVarusAngle(leftHip, leftKnee, leftAnkle);
+    const rightVarusAngle = calculateVarusAngle(rightHip, rightKnee, rightAnkle);
+    
+    if (leftVarusAngle > 12) {
+      const severity = leftVarusAngle > 25 ? 'severe' : leftVarusAngle > 18 ? 'moderate' : 'mild';
+      abnormalities.push({
+        type: 'knee_varus',
+        severity,
+        description: `Left knee varus detected (${leftVarusAngle.toFixed(1)}°)`,
+        timestamp,
+        affectedSide: 'left',
+        angle: leftVarusAngle,
+        normalRange: '< 12°',
+        clinicalSignificance: 'May indicate lateral knee compartment loading, IT band tightness, or hip abductor weakness'
+      });
+    }
+    
+    if (rightVarusAngle > 12) {
+      const severity = rightVarusAngle > 25 ? 'severe' : rightVarusAngle > 18 ? 'moderate' : 'mild';
+      abnormalities.push({
+        type: 'knee_varus',
+        severity,
+        description: `Right knee varus detected (${rightVarusAngle.toFixed(1)}°)`,
+        timestamp,
+        affectedSide: 'right',
+        angle: rightVarusAngle,
+        normalRange: '< 12°',
+        clinicalSignificance: 'May indicate lateral knee compartment loading, IT band tightness, or hip abductor weakness'
+      });
+    }
+    
+    return abnormalities;
+  };
+
+  const detectLateralTrunkLean = (landmarks: any[], timestamp: number): MovementAbnormality[] => {
+    const abnormalities: MovementAbnormality[] = [];
+    
+    const nose = landmarks[0];
+    const leftShoulder = landmarks[11];
+    const rightShoulder = landmarks[12];
+    const leftHip = landmarks[23];
+    const rightHip = landmarks[24];
+    
+    if (!nose || !leftShoulder || !rightShoulder || !leftHip || !rightHip) return abnormalities;
+    
+    // Calculate trunk centerline
+    const shoulderCenter = { x: (leftShoulder.x + rightShoulder.x) / 2, y: (leftShoulder.y + rightShoulder.y) / 2 };
+    const hipCenter = { x: (leftHip.x + rightHip.x) / 2, y: (leftHip.y + rightHip.y) / 2 };
+    
+    // Calculate lateral deviation from vertical
+    const trunkLateralDeviation = Math.abs(shoulderCenter.x - hipCenter.x);
+    const trunkLength = Math.abs(shoulderCenter.y - hipCenter.y);
+    
+    if (trunkLength > 0) {
+      const leanAngle = Math.atan(trunkLateralDeviation / trunkLength) * (180 / Math.PI);
+      
+      if (leanAngle > 8) {
+        const severity = leanAngle > 20 ? 'severe' : leanAngle > 15 ? 'moderate' : 'mild';
+        const leanDirection = shoulderCenter.x > hipCenter.x ? 'right' : 'left';
+        
+        abnormalities.push({
+          type: 'lateral_trunk_lean',
+          severity,
+          description: `Lateral trunk lean detected - leaning ${leanDirection} (${leanAngle.toFixed(1)}°)`,
+          timestamp,
+          affectedSide: leanDirection as 'left' | 'right',
+          angle: leanAngle,
+          normalRange: '< 8°',
+          clinicalSignificance: 'May indicate hip abductor weakness, scoliosis, or compensatory movement pattern'
+        });
+      }
+    }
+    
+    return abnormalities;
+  };
+
   // Comprehensive abnormality analysis
   const analyzeMovementAbnormalities = (landmarks: any[], timestamp: number): MovementAbnormality[] => {
     const allAbnormalities: MovementAbnormality[] = [];
     
+    // Original detections
     allAbnormalities.push(...detectKneeValgus(landmarks, timestamp));
     allAbnormalities.push(...detectTrendelenburg(landmarks, timestamp));
     allAbnormalities.push(...detectForwardHead(landmarks, timestamp));
     allAbnormalities.push(...detectPelvicTilt(landmarks, timestamp));
+    
+    // New comprehensive detections
+    allAbnormalities.push(...detectAnklePronation(landmarks, timestamp));
+    allAbnormalities.push(...detectShoulderElevation(landmarks, timestamp));
+    allAbnormalities.push(...detectExcessiveHipFlexion(landmarks, timestamp));
+    allAbnormalities.push(...detectThoracicKyphosis(landmarks, timestamp));
+    allAbnormalities.push(...detectKneeVarus(landmarks, timestamp));
+    allAbnormalities.push(...detectLateralTrunkLean(landmarks, timestamp));
     
     return allAbnormalities;
   };

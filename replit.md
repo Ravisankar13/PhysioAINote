@@ -140,6 +140,8 @@ PhysioGPT is an advanced AI-powered physiotherapy platform that provides evidenc
 
 ## Recent Updates
 
+- **January 25, 2025**: Enhanced movement abnormality detection system with 10 comprehensive analysis types including ankle pronation, shoulder elevation, excessive hip flexion, thoracic kyphosis, knee varus, and lateral trunk lean
+- **January 25, 2025**: Fixed 3D skeleton visualization with proper Three.js rendering, enhanced debugging, and fallback test skeleton display
 - **January 25, 2025**: Added three comprehensive assessments: Mark Laslett Back and SIJ Pain Assessment, Evidence-Based Hand Injury Assessment, and Evidence-Based Foot Injury Assessment
 - **January 25, 2025**: Added Running Injury Assessment Protocol with comprehensive evaluation for common running injuries and evidence-based recommendations
 - **January 25, 2025**: Added three additional expert clinical assessments: Leanne Bisset Elbow Assessment, Claire Patella Robertson Knee Pain Assessment, and Sue Mayer Ankle Pain Assessment with comprehensive clinical interpretations

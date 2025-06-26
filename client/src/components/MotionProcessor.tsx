@@ -541,6 +541,23 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
           </div>
         )}
 
+        {/* Virtual Patient Visualization */}
+        <div className="space-y-2">
+          <h3 className="text-sm font-medium">Virtual Patient Movement</h3>
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <canvas 
+              ref={canvasRef}
+              width={400}
+              height={300}
+              className="w-full h-48 bg-gray-100 rounded border"
+              style={{ maxWidth: '400px', maxHeight: '300px' }}
+            />
+            <div className="text-xs text-gray-600 mt-2 text-center">
+              3D Virtual Patient - Shows movement during analysis
+            </div>
+          </div>
+        </div>
+
         {/* Current Joint Angles */}
         <div className="space-y-2">
           <h3 className="text-sm font-medium">Current Joint Angles (degrees)</h3>

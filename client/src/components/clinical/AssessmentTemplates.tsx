@@ -916,6 +916,121 @@ const assessmentTemplates: AssessmentTemplate[] = [
         required: true
       }
     ]
+  },
+  {
+    id: 'running_injury_assessment',
+    name: 'Running Injury Assessment Protocol',
+    bodyPart: 'Lower Extremity',
+    category: 'assessment',
+    description: 'Comprehensive running injury assessment based on evidence-based protocols for injury prevention and management',
+    evidenceLevel: 'A',
+    questions: [
+      {
+        id: 'running_experience',
+        type: 'select',
+        question: 'How long have you been running regularly?',
+        options: ['Less than 6 months', '6 months - 1 year', '1-3 years', '3-5 years', 'Over 5 years'],
+        required: true
+      },
+      {
+        id: 'weekly_mileage',
+        type: 'select',
+        question: 'What is your average weekly mileage?',
+        options: ['Less than 10 miles', '10-20 miles', '21-30 miles', '31-50 miles', 'Over 50 miles'],
+        required: true
+      },
+      {
+        id: 'injury_location',
+        type: 'select',
+        question: 'Where is your primary pain/injury located?',
+        options: ['Knee', 'Shin/Tibia', 'Achilles tendon', 'Plantar fascia/Heel', 'Hip/Glute', 'IT Band', 'Calf', 'Ankle', 'Other'],
+        required: true
+      },
+      {
+        id: 'pain_onset',
+        type: 'select',
+        question: 'When did the pain first appear?',
+        options: ['During running', 'After running', 'The next day', 'Gradual onset over weeks', 'Sudden onset'],
+        required: true
+      },
+      {
+        id: 'pain_intensity',
+        type: 'scale',
+        question: 'Rate your pain intensity during running (0 = no pain, 10 = worst pain)',
+        min: 0,
+        max: 10,
+        required: true
+      },
+      {
+        id: 'training_changes',
+        type: 'select',
+        question: 'Have you recently made changes to your training?',
+        options: ['Increased mileage suddenly', 'Increased speed/intensity', 'Changed running surface', 'New shoes', 'No recent changes'],
+        required: true
+      },
+      {
+        id: 'running_surface',
+        type: 'select',
+        question: 'What surface do you primarily run on?',
+        options: ['Concrete/Pavement', 'Asphalt road', 'Treadmill', 'Trail/Dirt', 'Track', 'Mixed surfaces'],
+        required: true
+      },
+      {
+        id: 'shoe_age',
+        type: 'select',
+        question: 'How old are your current running shoes?',
+        options: ['Less than 3 months', '3-6 months', '6-12 months', 'Over 1 year', 'Not sure'],
+        required: true
+      },
+      {
+        id: 'previous_injuries',
+        type: 'checkbox',
+        question: 'Have you had previous running injuries?',
+        required: false
+      },
+      {
+        id: 'warmup_routine',
+        type: 'select',
+        question: 'Do you perform a warm-up before running?',
+        options: ['Always', 'Usually', 'Sometimes', 'Rarely', 'Never'],
+        required: true
+      },
+      {
+        id: 'strength_training',
+        type: 'select',
+        question: 'How often do you do strength training?',
+        options: ['3+ times per week', '2 times per week', '1 time per week', 'Occasionally', 'Never'],
+        required: true
+      },
+      {
+        id: 'hip_drop_test',
+        type: 'select',
+        question: 'Single leg stance test (30 seconds) - Hip stability',
+        options: ['Stable - no hip drop', 'Slight hip drop', 'Moderate hip drop', 'Significant instability', 'Cannot perform'],
+        required: true
+      },
+      {
+        id: 'calf_raise_test',
+        type: 'select',
+        question: 'Single leg calf raise test (10 repetitions)',
+        options: ['Completed easily', 'Completed with difficulty', 'Completed 5-9 reps', 'Completed less than 5', 'Cannot perform'],
+        required: true
+      },
+      {
+        id: 'hop_test',
+        type: 'select',
+        question: 'Single leg hop test - Pain or difficulty?',
+        options: ['No pain or difficulty', 'Mild discomfort', 'Moderate pain', 'Significant pain', 'Cannot perform'],
+        required: true
+      },
+      {
+        id: 'running_form',
+        type: 'select',
+        question: 'How would you describe your running gait?',
+        options: ['Heel striker', 'Midfoot striker', 'Forefoot striker', 'Not sure', 'Varies'],
+        required: true
+      }
+    ]
   }
 ];
 

@@ -464,6 +464,106 @@ export default function AssessmentForm({ template, onComplete, onBack }: Assessm
     return recommendations;
   };
 
+  const getRunningInjuryInterpretation = (responses: { [key: string]: any }): string => {
+    const interpretations = [];
+    
+    const injuryLocation = responses['injury_location'];
+    const painOnset = responses['pain_onset'];
+    const trainingChanges = responses['training_changes'];
+    const painIntensity = responses['pain_intensity'];
+    
+    if (injuryLocation) interpretations.push(`Primary injury: ${injuryLocation}`);
+    if (painOnset) interpretations.push(`Onset: ${painOnset}`);
+    if (trainingChanges && trainingChanges !== 'No recent changes') interpretations.push(`Training factor: ${trainingChanges}`);
+    if (painIntensity) interpretations.push(`Pain level: ${painIntensity}/10`);
+    
+    return interpretations.join(' | ');
+  };
+
+  const getRunningInjuryRecommendations = (responses: { [key: string]: any }): string[] => {
+    const recommendations = [];
+    
+    // Injury-specific recommendations
+    if (responses['injury_location'] === 'Knee') {
+      recommendations.push('Likely patellofemoral pain or IT band syndrome');
+      recommendations.push('Focus on hip strengthening and gait modification');
+    } else if (responses['injury_location'] === 'Shin/Tibia') {
+      recommendations.push('Possible medial tibial stress syndrome');
+      recommendations.push('Address training load and running surface');
+    } else if (responses['injury_location'] === 'Achilles tendon') {
+      recommendations.push('Achilles tendinopathy management required');
+      recommendations.push('Progressive loading program essential');
+    } else if (responses['injury_location'] === 'Plantar fascia/Heel') {
+      recommendations.push('Plantar fasciitis protocol indicated');
+      recommendations.push('Calf stretching and foot strengthening');
+    } else if (responses['injury_location'] === 'IT Band') {
+      recommendations.push('IT band syndrome - focus on hip abductor strength');
+      recommendations.push('Foam rolling and stretching program');
+    }
+    
+    // Training-related recommendations
+    if (responses['training_changes'] === 'Increased mileage suddenly') {
+      recommendations.push('Reduce weekly mileage by 20-30% immediately');
+      recommendations.push('Follow 10% weekly increase rule for progression');
+    } else if (responses['training_changes'] === 'Increased speed/intensity') {
+      recommendations.push('Reduce intensity training temporarily');
+      recommendations.push('Focus on base building before speed work');
+    }
+    
+    // Equipment and surface recommendations
+    if (responses['shoe_age'] === 'Over 1 year' || responses['shoe_age'] === '6-12 months') {
+      recommendations.push('Consider replacing running shoes');
+      recommendations.push('Shoes typically need replacement every 300-500 miles');
+    }
+    
+    if (responses['running_surface'] === 'Concrete/Pavement') {
+      recommendations.push('Consider softer running surfaces when possible');
+      recommendations.push('Mix in trail or track running');
+    }
+    
+    // Strength and conditioning recommendations
+    if (responses['strength_training'] === 'Never' || responses['strength_training'] === 'Occasionally') {
+      recommendations.push('Implement regular strength training program');
+      recommendations.push('Focus on hip, core, and lower leg strengthening');
+    }
+    
+    if (responses['warmup_routine'] === 'Never' || responses['warmup_routine'] === 'Rarely') {
+      recommendations.push('Establish consistent warm-up routine');
+      recommendations.push('Include dynamic stretching and activation exercises');
+    }
+    
+    // Functional test-based recommendations
+    if (responses['hip_drop_test'] !== 'Stable - no hip drop') {
+      recommendations.push('Hip stability weakness identified');
+      recommendations.push('Single leg strengthening and balance training');
+    }
+    
+    if (responses['calf_raise_test'] !== 'Completed easily') {
+      recommendations.push('Calf strength deficiency noted');
+      recommendations.push('Progressive calf strengthening program');
+    }
+    
+    if (responses['hop_test'] !== 'No pain or difficulty') {
+      recommendations.push('Functional loading tolerance compromised');
+      recommendations.push('Progressive return to impact activities');
+    }
+    
+    // Pain intensity-based recommendations
+    const painLevel = responses['pain_intensity'];
+    if (painLevel >= 7) {
+      recommendations.push('High pain level - consider rest from running');
+      recommendations.push('Focus on pain management and gentle rehabilitation');
+    } else if (painLevel >= 4) {
+      recommendations.push('Moderate pain - reduce running volume significantly');
+      recommendations.push('Cross-training with low-impact activities');
+    } else if (painLevel > 0) {
+      recommendations.push('Mild pain - monitor closely and modify as needed');
+      recommendations.push('Implement prevention strategies');
+    }
+    
+    return recommendations;
+  };
+
   const renderQuestion = (question: AssessmentQuestion) => {
     const response = responses[question.id];
 
@@ -565,6 +665,9 @@ export default function AssessmentForm({ template, onComplete, onBack }: Assessm
     } else if (template.id === 'mayer_ankle') {
       results.interpretation = getMayerAnkleInterpretation(responses);
       results.recommendations = getMayerAnkleRecommendations(responses);
+    } else if (template.id === 'running_injury_assessment') {
+      results.interpretation = getRunningInjuryInterpretation(responses);
+      results.recommendations = getRunningInjuryRecommendations(responses);
     }
 
     return (

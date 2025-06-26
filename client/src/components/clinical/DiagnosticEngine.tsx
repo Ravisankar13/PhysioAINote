@@ -207,7 +207,7 @@ const CLINICAL_QUESTIONS: ClinicalQuestion[] = [
   }
 ];
 
-export default function DiagnosticEngine({ abnormalities, onDiagnosisComplete }: DiagnosticEngineProps) {
+export default function DiagnosticEngine({ abnormalities, onDiagnosisComplete, onProceedToTreatment }: DiagnosticEngineProps) {
   const [currentStep, setCurrentStep] = useState<'analysis' | 'questions' | 'results'>('analysis');
   const [detectedPatterns, setDetectedPatterns] = useState<DiagnosticPattern[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -659,10 +659,8 @@ export default function DiagnosticEngine({ abnormalities, onDiagnosisComplete }:
         <div className="flex justify-center pt-6">
           <Button 
             onClick={() => {
-              // Switch to treatment tab
-              const treatmentTab = document.querySelector('[data-value="treatment"]') as HTMLElement;
-              if (treatmentTab) {
-                treatmentTab.click();
+              if (onProceedToTreatment) {
+                onProceedToTreatment();
               }
             }}
             className="bg-green-600 hover:bg-green-700 text-white font-semibold px-8 py-3 text-lg"

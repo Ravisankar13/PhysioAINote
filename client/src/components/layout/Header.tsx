@@ -25,6 +25,7 @@ import {
   BarChart3,
   Brain,
   BookOpen,
+  Camera,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Link, useLocation } from "react-router-dom";
@@ -46,6 +47,7 @@ const Header = () => {
     { to: "/exercises", label: "Exercise Library" },
     { to: "/manual-therapy", label: "Manual Therapy" },
     { to: "/virtual-patients", label: "Virtual Patients" },
+    { to: "/motion-capture", label: "Motion Capture" },
     { to: "/membership", label: "Membership" },
   ];
 
@@ -217,6 +219,14 @@ const Header = () => {
                       <div className="flex items-center cursor-pointer w-full">
                         <Activity className="mr-2 h-4 w-4" />
                         <span>Virtual Patients</span>
+                      </div>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="flex items-center" asChild>
+                    <Link to="/motion-capture">
+                      <div className="flex items-center cursor-pointer w-full">
+                        <Camera className="mr-2 h-4 w-4" />
+                        <span>Motion Capture</span>
                       </div>
                     </Link>
                   </DropdownMenuItem>

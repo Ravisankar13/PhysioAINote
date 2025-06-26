@@ -140,6 +140,7 @@ PhysioGPT is an advanced AI-powered physiotherapy platform that provides evidenc
 
 ## Recent Updates
 
+- **January 25, 2025**: Added Motion Capture button to main navigation menu for easy access to motion capture and diagnostic features
 - **January 25, 2025**: Implemented comprehensive Smart Exercise Recommendation Engine with AI-powered exercise prescription system. System analyzes movement abnormalities, patient parameters, and diagnostic results to generate evidence-based exercise prescriptions with loading parameters, progression plans, and home exercise adaptations
 - **January 25, 2025**: Integrated Smart Exercise Engine into TreatmentProtocolEngine with tabbed interface providing both standard protocols and AI-generated prescriptions. Engine generates exercises based on movement patterns with research support, modification options, and clinical reasoning scores
 - **January 25, 2025**: Enhanced motion capture diagnostic workflow with complete integration from movement analysis through AI-powered exercise prescription. System now provides end-to-end clinical decision support from pose detection to personalized treatment plans

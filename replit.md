@@ -140,7 +140,9 @@ PhysioGPT is an advanced AI-powered physiotherapy platform that provides evidenc
 
 ## Recent Updates
 
-- **January 25, 2025**: Expanded movement abnormality detection system to 27 comprehensive analysis types including spinal abnormalities (cervical extension, lumbar lordosis, scoliosis), upper extremity patterns (internal shoulder rotation, elbow hyperextension, wrist drop), lower extremity issues (foot drop, calcaneal alignment, toe walking), gait patterns (antalgic, steppage, circumduction, scissoring), functional movements (pelvic rotation, weight shift imbalance), and neurological indicators (tremor, ataxia, bradykinesia, muscle rigidity)
+- **January 25, 2025**: Implemented comprehensive motion capture diagnostic system with clinical reasoning engine, interactive patient questioning, and automated treatment protocol generation. System now provides complete workflow from movement analysis → clinical diagnosis → treatment planning with 27 movement abnormality detection types and evidence-based treatment protocols
+- **January 25, 2025**: Added DiagnosticEngine with pattern recognition for Upper Crossed Syndrome, Hip Abductor Weakness, Dynamic Knee Valgus, Neurological Dysfunction, Gait Dysfunction, and Spinal Alignment issues. Interactive questioning system gathers clinical data for accurate diagnosis
+- **January 25, 2025**: Created TreatmentProtocolEngine with phase-based protocols for Upper Crossed Syndrome and Hip Abductor Weakness, including exercise prescriptions, patient education, outcome measures, and discharge criteria. System generates comprehensive clinical reports
 - **January 25, 2025**: Fixed 3D skeleton visualization with proper Three.js rendering, enhanced debugging, and fallback test skeleton display
 - **January 25, 2025**: Added three comprehensive assessments: Mark Laslett Back and SIJ Pain Assessment, Evidence-Based Hand Injury Assessment, and Evidence-Based Foot Injury Assessment
 - **January 25, 2025**: Added Running Injury Assessment Protocol with comprehensive evaluation for common running injuries and evidence-based recommendations

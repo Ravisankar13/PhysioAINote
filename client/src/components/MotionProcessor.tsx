@@ -51,6 +51,17 @@ interface MotionProcessorProps {
   className?: string;
 }
 
+interface DiagnosticResult {
+  primaryDiagnosis: string;
+  confidence: number;
+  differentialDiagnoses: Array<{ diagnosis: string; likelihood: number }>;
+  redFlags: string[];
+  functionalImpact: string;
+  recommendedTreatment: string;
+  exercisePrescription: string[];
+  followUpRecommendations: string[];
+}
+
 export default function MotionProcessor({ motionData, onSkeletonUpdate, className }: MotionProcessorProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentFrame, setCurrentFrame] = useState(0);
@@ -59,6 +70,11 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
   const [estimatedAnthropometrics, setEstimatedAnthropometrics] = useState<any>(null);
   const [movementType, setMovementType] = useState<string>('unknown');
   const [detectedAbnormalities, setDetectedAbnormalities] = useState<MovementAbnormality[]>([]);
+  const [activeTab, setActiveTab] = useState('analysis');
+  const [diagnosticResult, setDiagnosticResult] = useState<DiagnosticResult | null>(null);
+  const [selectedProtocol, setSelectedProtocol] = useState<any>(null);
+  const [patientAnswers, setPatientAnswers] = useState<Record<string, any>>({});
+  const [analysisPhase, setAnalysisPhase] = useState<'motion' | 'diagnosis' | 'treatment'>('motion');
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -1614,6 +1630,51 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
     return allAbnormalities;
   };
 
+  // Diagnostic workflow handlers
+  const handleDiagnosisComplete = (result: DiagnosticResult) => {
+    setDiagnosticResult(result);
+    setAnalysisPhase('treatment');
+    setActiveTab('treatment');
+  };
+
+  const handleProtocolSelect = (protocol: any) => {
+    setSelectedProtocol(protocol);
+  };
+
+  const generateComprehensiveReport = () => {
+    if (!diagnosticResult || !selectedProtocol) return;
+
+    const report = {
+      patientInfo: patientAnswers,
+      movementAnalysis: {
+        totalFrames: motionData.length,
+        duration: Math.round(motionData[motionData.length - 1]?.timestamp / 1000 || 0),
+        movementType,
+        abnormalities: detectedAbnormalities
+      },
+      clinicalDiagnosis: diagnosticResult,
+      treatmentPlan: selectedProtocol,
+      anthropometrics: estimatedAnthropometrics,
+      timestamp: new Date().toISOString()
+    };
+
+    // Create downloadable report
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `motion-analysis-report-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const proceedToDiagnosis = () => {
+    setAnalysisPhase('diagnosis');
+    setActiveTab('diagnosis');
+  };
+
   // Initialize 3D scene for virtual patient
   const initVirtualPatient = () => {
     console.log('Initializing virtual patient 3D scene...');
@@ -2195,14 +2256,65 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
   return (
     <Card className={className}>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Users className="h-5 w-5" />
-          Virtual Patient Motion
+        <CardTitle className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Users className="h-5 w-5" />
+            Motion Analysis & Clinical Assessment
+          </div>
+          {diagnosticResult && selectedProtocol && (
+            <Button onClick={generateComprehensiveReport} variant="outline" size="sm">
+              <FileText className="h-4 w-4 mr-2" />
+              Export Report
+            </Button>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Motion Analysis */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {/* Progress Indicator */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center space-x-4">
+            <div className={`flex items-center space-x-2 ${analysisPhase === 'motion' ? 'text-blue-600' : analysisPhase === 'diagnosis' || analysisPhase === 'treatment' ? 'text-green-600' : 'text-gray-400'}`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${analysisPhase === 'motion' ? 'bg-blue-600 text-white' : analysisPhase === 'diagnosis' || analysisPhase === 'treatment' ? 'bg-green-600 text-white' : 'bg-gray-200'}`}>
+                1
+              </div>
+              <span className="font-medium">Motion Analysis</span>
+            </div>
+            <div className="w-8 h-px bg-gray-300"></div>
+            <div className={`flex items-center space-x-2 ${analysisPhase === 'diagnosis' ? 'text-blue-600' : analysisPhase === 'treatment' ? 'text-green-600' : 'text-gray-400'}`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${analysisPhase === 'diagnosis' ? 'bg-blue-600 text-white' : analysisPhase === 'treatment' ? 'bg-green-600 text-white' : 'bg-gray-200'}`}>
+                2
+              </div>
+              <span className="font-medium">Clinical Diagnosis</span>
+            </div>
+            <div className="w-8 h-px bg-gray-300"></div>
+            <div className={`flex items-center space-x-2 ${analysisPhase === 'treatment' ? 'text-blue-600' : 'text-gray-400'}`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${analysisPhase === 'treatment' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>
+                3
+              </div>
+              <span className="font-medium">Treatment Planning</span>
+            </div>
+          </div>
+        </div>
+
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="analysis" className="flex items-center gap-2">
+              <Activity className="h-4 w-4" />
+              Motion Analysis
+            </TabsTrigger>
+            <TabsTrigger value="diagnosis" className="flex items-center gap-2" disabled={detectedAbnormalities.length === 0}>
+              <Brain className="h-4 w-4" />
+              Clinical Diagnosis
+            </TabsTrigger>
+            <TabsTrigger value="treatment" className="flex items-center gap-2" disabled={!diagnosticResult}>
+              <Stethoscope className="h-4 w-4" />
+              Treatment Plan
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="analysis" className="space-y-4">
+            {/* Motion Analysis Summary */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="text-center">
             <div className="text-2xl font-bold">{motionData.length}</div>
             <div className="text-xs text-muted-foreground">Frames</div>
@@ -2409,17 +2521,58 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
           </div>
         </div>
 
-        {/* Real-time Status */}
-        <div className="bg-gray-50 p-3 rounded-lg">
-          <div className="text-xs text-gray-600">
-            Virtual Patient Status: {currentJointAngles ? 'Active Analysis' : 'Ready for Analysis'}
-          </div>
-          {currentJointAngles && (
-            <div className="text-xs text-green-600 mt-1">
-              Real-time biomechanical analysis and movement pattern detection active
+            {/* Real-time Status */}
+            <div className="bg-gray-50 p-3 rounded-lg">
+              <div className="text-xs text-gray-600">
+                Virtual Patient Status: {currentJointAngles ? 'Active Analysis' : 'Ready for Analysis'}
+              </div>
+              {currentJointAngles && (
+                <div className="text-xs text-green-600 mt-1">
+                  Real-time biomechanical analysis and movement pattern detection active
+                </div>
+              )}
             </div>
-          )}
-        </div>
+
+            {/* Proceed to Diagnosis Button */}
+            {detectedAbnormalities.length > 0 && analysisPhase === 'motion' && (
+              <div className="flex justify-center pt-4">
+                <Button onClick={proceedToDiagnosis} className="bg-blue-600 hover:bg-blue-700">
+                  <Brain className="h-4 w-4 mr-2" />
+                  Proceed to Clinical Diagnosis
+                </Button>
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="diagnosis" className="space-y-4">
+            {detectedAbnormalities.length > 0 ? (
+              <DiagnosticEngine
+                abnormalities={detectedAbnormalities}
+                onDiagnosisComplete={handleDiagnosisComplete}
+              />
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <Brain className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>Complete motion analysis first to proceed with diagnosis</p>
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="treatment" className="space-y-4">
+            {diagnosticResult ? (
+              <TreatmentProtocolEngine
+                diagnosticResult={diagnosticResult}
+                patientAnswers={patientAnswers}
+                onProtocolSelect={handleProtocolSelect}
+              />
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <Stethoscope className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>Complete clinical diagnosis first to proceed with treatment planning</p>
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
       </CardContent>
     </Card>
   );

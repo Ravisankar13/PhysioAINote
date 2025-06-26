@@ -25,6 +25,17 @@ interface JointAngles {
   spine: number;
 }
 
+interface MovementAbnormality {
+  type: 'knee_valgus' | 'trendelenburg' | 'forward_head' | 'ankle_pronation' | 'hip_drop' | 'pelvic_tilt';
+  severity: 'mild' | 'moderate' | 'severe';
+  description: string;
+  timestamp: number;
+  affectedSide: 'left' | 'right' | 'bilateral';
+  angle?: number;
+  normalRange?: string;
+  clinicalSignificance: string;
+}
+
 interface MotionProcessorProps {
   motionData: PoseFrame[];
   onSkeletonUpdate?: (jointAngles: JointAngles, anthropometrics: any) => void;
@@ -38,11 +49,187 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
   const [currentJointAngles, setCurrentJointAngles] = useState<JointAngles | null>(null);
   const [estimatedAnthropometrics, setEstimatedAnthropometrics] = useState<any>(null);
   const [movementType, setMovementType] = useState<string>('unknown');
+  const [detectedAbnormalities, setDetectedAbnormalities] = useState<MovementAbnormality[]>([]);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const skeletonRef = useRef<THREE.Group | null>(null);
+
+  // Movement abnormality detection functions
+  const detectKneeValgus = (landmarks: any[], timestamp: number): MovementAbnormality[] => {
+    const abnormalities: MovementAbnormality[] = [];
+    
+    // Get hip, knee, and ankle positions for both sides
+    const leftHip = landmarks[23];
+    const leftKnee = landmarks[25];
+    const leftAnkle = landmarks[27];
+    const rightHip = landmarks[24];
+    const rightKnee = landmarks[26];
+    const rightAnkle = landmarks[28];
+    
+    if (!leftHip || !leftKnee || !leftAnkle || !rightHip || !rightKnee || !rightAnkle) {
+      return abnormalities;
+    }
+    
+    // Calculate knee valgus angle for each leg
+    const calculateValgusAngle = (hip: any, knee: any, ankle: any) => {
+      const hipKneeVector = { x: knee.x - hip.x, y: knee.y - hip.y };
+      const kneeAnkleVector = { x: ankle.x - knee.x, y: ankle.y - knee.y };
+      
+      const angle = Math.atan2(
+        hipKneeVector.x * kneeAnkleVector.y - hipKneeVector.y * kneeAnkleVector.x,
+        hipKneeVector.x * kneeAnkleVector.x + hipKneeVector.y * kneeAnkleVector.y
+      ) * (180 / Math.PI);
+      
+      return Math.abs(angle);
+    };
+    
+    const leftValgusAngle = calculateValgusAngle(leftHip, leftKnee, leftAnkle);
+    const rightValgusAngle = calculateValgusAngle(rightHip, rightKnee, rightAnkle);
+    
+    // Check for abnormal valgus (normal is typically < 10 degrees)
+    if (leftValgusAngle > 15) {
+      const severity = leftValgusAngle > 25 ? 'severe' : leftValgusAngle > 20 ? 'moderate' : 'mild';
+      abnormalities.push({
+        type: 'knee_valgus',
+        severity,
+        description: `Left knee valgus detected (${leftValgusAngle.toFixed(1)}°)`,
+        timestamp,
+        affectedSide: 'left',
+        angle: leftValgusAngle,
+        normalRange: '< 10°',
+        clinicalSignificance: 'May indicate hip weakness, poor movement control, or increased injury risk'
+      });
+    }
+    
+    if (rightValgusAngle > 15) {
+      const severity = rightValgusAngle > 25 ? 'severe' : rightValgusAngle > 20 ? 'moderate' : 'mild';
+      abnormalities.push({
+        type: 'knee_valgus',
+        severity,
+        description: `Right knee valgus detected (${rightValgusAngle.toFixed(1)}°)`,
+        timestamp,
+        affectedSide: 'right',
+        angle: rightValgusAngle,
+        normalRange: '< 10°',
+        clinicalSignificance: 'May indicate hip weakness, poor movement control, or increased injury risk'
+      });
+    }
+    
+    return abnormalities;
+  };
+
+  const detectTrendelenburg = (landmarks: any[], timestamp: number): MovementAbnormality[] => {
+    const abnormalities: MovementAbnormality[] = [];
+    
+    const leftHip = landmarks[23];
+    const rightHip = landmarks[24];
+    
+    if (!leftHip || !rightHip) return abnormalities;
+    
+    // Calculate hip height difference
+    const hipHeightDiff = Math.abs(leftHip.y - rightHip.y);
+    const normalThreshold = 0.03; // 3cm difference threshold
+    
+    if (hipHeightDiff > normalThreshold) {
+      const severity = hipHeightDiff > 0.06 ? 'severe' : hipHeightDiff > 0.04 ? 'moderate' : 'mild';
+      const affectedSide = leftHip.y > rightHip.y ? 'right' : 'left';
+      
+      abnormalities.push({
+        type: 'trendelenburg',
+        severity,
+        description: `Trendelenburg gait pattern - ${affectedSide} hip drop detected`,
+        timestamp,
+        affectedSide,
+        angle: hipHeightDiff * 100, // Convert to percentage
+        normalRange: '< 3cm difference',
+        clinicalSignificance: 'Indicates hip abductor weakness, may lead to compensatory patterns'
+      });
+    }
+    
+    return abnormalities;
+  };
+
+  const detectForwardHead = (landmarks: any[], timestamp: number): MovementAbnormality[] => {
+    const abnormalities: MovementAbnormality[] = [];
+    
+    const nose = landmarks[0];
+    const leftShoulder = landmarks[11];
+    const rightShoulder = landmarks[12];
+    
+    if (!nose || !leftShoulder || !rightShoulder) return abnormalities;
+    
+    // Calculate shoulder midpoint
+    const shoulderMidpoint = {
+      x: (leftShoulder.x + rightShoulder.x) / 2,
+      y: (leftShoulder.y + rightShoulder.y) / 2
+    };
+    
+    // Calculate forward head angle
+    const headForwardDistance = nose.x - shoulderMidpoint.x;
+    const verticalDistance = Math.abs(nose.y - shoulderMidpoint.y);
+    const forwardHeadAngle = Math.atan(headForwardDistance / verticalDistance) * (180 / Math.PI);
+    
+    if (Math.abs(forwardHeadAngle) > 15) {
+      const severity = Math.abs(forwardHeadAngle) > 30 ? 'severe' : Math.abs(forwardHeadAngle) > 22 ? 'moderate' : 'mild';
+      
+      abnormalities.push({
+        type: 'forward_head',
+        severity,
+        description: `Forward head posture detected (${Math.abs(forwardHeadAngle).toFixed(1)}°)`,
+        timestamp,
+        affectedSide: 'bilateral',
+        angle: Math.abs(forwardHeadAngle),
+        normalRange: '< 15°',
+        clinicalSignificance: 'May cause neck strain, headaches, and upper cervical dysfunction'
+      });
+    }
+    
+    return abnormalities;
+  };
+
+  const detectPelvicTilt = (landmarks: any[], timestamp: number): MovementAbnormality[] => {
+    const abnormalities: MovementAbnormality[] = [];
+    
+    const leftHip = landmarks[23];
+    const rightHip = landmarks[24];
+    
+    if (!leftHip || !rightHip) return abnormalities;
+    
+    // Calculate pelvic tilt angle
+    const pelvicTiltAngle = Math.atan2(rightHip.y - leftHip.y, rightHip.x - leftHip.x) * (180 / Math.PI);
+    
+    if (Math.abs(pelvicTiltAngle) > 5) {
+      const severity = Math.abs(pelvicTiltAngle) > 15 ? 'severe' : Math.abs(pelvicTiltAngle) > 10 ? 'moderate' : 'mild';
+      const direction = pelvicTiltAngle > 0 ? 'right elevation' : 'left elevation';
+      
+      abnormalities.push({
+        type: 'pelvic_tilt',
+        severity,
+        description: `Pelvic tilt detected - ${direction} (${Math.abs(pelvicTiltAngle).toFixed(1)}°)`,
+        timestamp,
+        affectedSide: pelvicTiltAngle > 0 ? 'right' : 'left',
+        angle: Math.abs(pelvicTiltAngle),
+        normalRange: '< 5°',
+        clinicalSignificance: 'May indicate muscle imbalances, leg length discrepancy, or compensatory patterns'
+      });
+    }
+    
+    return abnormalities;
+  };
+
+  // Comprehensive abnormality analysis
+  const analyzeMovementAbnormalities = (landmarks: any[], timestamp: number): MovementAbnormality[] => {
+    const allAbnormalities: MovementAbnormality[] = [];
+    
+    allAbnormalities.push(...detectKneeValgus(landmarks, timestamp));
+    allAbnormalities.push(...detectTrendelenburg(landmarks, timestamp));
+    allAbnormalities.push(...detectForwardHead(landmarks, timestamp));
+    allAbnormalities.push(...detectPelvicTilt(landmarks, timestamp));
+    
+    return allAbnormalities;
+  };
 
   // Initialize 3D scene for virtual patient
   const initVirtualPatient = () => {
@@ -397,6 +584,9 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
         setMovementType(analyzeMovementType());
         setCurrentFrame(0);
         
+        // Clear previous abnormalities for new analysis
+        setDetectedAbnormalities([]);
+        
         // Process first frame immediately
         if (motionData[0]) {
           const initialJointAngles = processFrame(motionData[0]);
@@ -452,6 +642,32 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
           if (rendererRef.current && sceneRef.current && cameraRef.current) {
             rendererRef.current.render(sceneRef.current, cameraRef.current);
           }
+        }
+        
+        // Analyze movement abnormalities for current frame
+        if (motionData[currentFrame].landmarks) {
+          const frameAbnormalities = analyzeMovementAbnormalities(
+            motionData[currentFrame].landmarks, 
+            motionData[currentFrame].timestamp
+          );
+          
+          // Update detected abnormalities (avoid duplicates)
+          setDetectedAbnormalities(prev => {
+            const newAbnormalities = [...prev];
+            frameAbnormalities.forEach(abnormality => {
+              // Only add if not already detected for this type in recent frames
+              const recentSimilar = newAbnormalities.find(existing => 
+                existing.type === abnormality.type && 
+                existing.affectedSide === abnormality.affectedSide &&
+                Math.abs(existing.timestamp - abnormality.timestamp) < 500 // Within 0.5 seconds
+              );
+              
+              if (!recentSimilar) {
+                newAbnormalities.push(abnormality);
+              }
+            });
+            return newAbnormalities;
+          });
         }
         
         if (onSkeletonUpdate) {
@@ -591,6 +807,75 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
           ) : (
             <div className="text-center text-gray-500 p-4">
               No joint angle data - press play to start analysis
+            </div>
+          )}
+        </div>
+
+        {/* Movement Abnormality Detection */}
+        <div className="space-y-2">
+          <h3 className="text-sm font-medium flex items-center gap-2">
+            <Activity className="h-4 w-4" />
+            Movement Analysis
+          </h3>
+          {detectedAbnormalities.length > 0 ? (
+            <div className="space-y-2">
+              {detectedAbnormalities.map((abnormality, index) => (
+                <div 
+                  key={index} 
+                  className={`p-3 rounded-lg border-l-4 ${
+                    abnormality.severity === 'severe' 
+                      ? 'bg-red-50 border-red-500' 
+                      : abnormality.severity === 'moderate'
+                      ? 'bg-orange-50 border-orange-500'
+                      : 'bg-yellow-50 border-yellow-500'
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Badge 
+                          variant={abnormality.severity === 'severe' ? 'destructive' : 'secondary'}
+                          className="text-xs"
+                        >
+                          {abnormality.severity.toUpperCase()}
+                        </Badge>
+                        <span className="text-xs text-gray-500">
+                          {abnormality.affectedSide} side
+                        </span>
+                      </div>
+                      <div className="text-sm font-medium text-gray-900 mb-1">
+                        {abnormality.description}
+                      </div>
+                      <div className="text-xs text-gray-600 mb-2">
+                        {abnormality.clinicalSignificance}
+                      </div>
+                      <div className="flex items-center gap-4 text-xs">
+                        <span>
+                          <strong>Measured:</strong> {abnormality.angle?.toFixed(1)}°
+                        </span>
+                        <span>
+                          <strong>Normal:</strong> {abnormality.normalRange}
+                        </span>
+                        <span className="text-gray-500">
+                          @{(abnormality.timestamp / 1000).toFixed(1)}s
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <div className="text-xs text-gray-500 mt-2">
+                {detectedAbnormalities.length} movement pattern{detectedAbnormalities.length !== 1 ? 's' : ''} detected during analysis
+              </div>
+            </div>
+          ) : (
+            <div className="bg-green-50 p-3 rounded-lg border border-green-200">
+              <div className="text-sm text-green-700">
+                No significant movement abnormalities detected
+              </div>
+              <div className="text-xs text-green-600 mt-1">
+                Movement patterns appear within normal ranges
+              </div>
             </div>
           )}
         </div>

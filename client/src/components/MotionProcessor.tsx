@@ -3,8 +3,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
-import { Play, Pause, RotateCcw, Activity, Users } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Play, Pause, RotateCcw, Activity, Users, Brain, Stethoscope, FileText } from 'lucide-react';
 import * as THREE from 'three';
+import DiagnosticEngine from './clinical/DiagnosticEngine';
+import TreatmentProtocolEngine from './clinical/TreatmentProtocolEngine';
 
 interface PoseFrame {
   timestamp: number;

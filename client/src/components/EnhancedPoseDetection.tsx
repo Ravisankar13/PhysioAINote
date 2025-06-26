@@ -1,20 +1,9 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import * as tf from '@tensorflow/tfjs';
 import * as poseDetection from '@tensorflow-models/pose-detection';
+import { AdvancedPoseFilterSystem, FilteredPose, PosePoint } from './AdvancedPoseFilters';
 
 // Enhanced pose detection with multiple models and filtering
-interface PosePoint {
-  x: number;
-  y: number;
-  z?: number;
-  confidence: number;
-}
-
-interface FilteredPose {
-  keypoints: PosePoint[];
-  score: number;
-  timestamp: number;
-}
 
 interface EnhancedPoseDetectionProps {
   videoRefs: React.RefObject<HTMLVideoElement>[];
@@ -25,38 +14,18 @@ interface EnhancedPoseDetectionProps {
   enableAdvancedFiltering?: boolean;
 }
 
-// Kalman Filter for pose smoothing
-class KalmanFilter {
-  private Q: number = 0.01; // Process noise
-  private R: number = 0.1;  // Measurement noise
-  private P: number = 1;    // Estimation error
-  private X: number = 0;    // Initial state
-  private K: number = 0;    // Kalman gain
 
-  constructor(processNoise = 0.01, measurementNoise = 0.1) {
-    this.Q = processNoise;
-    this.R = measurementNoise;
-  }
-
-  update(measurement: number): number {
-    // Prediction
-    this.P += this.Q;
-
-    // Update
-    this.K = this.P / (this.P + this.R);
-    this.X += this.K * (measurement - this.X);
-    this.P *= (1 - this.K);
-
-    return this.X;
-  }
-}
 
 // Multi-model pose detector ensemble
 class EnhancedPoseDetector {
   private detectors: Map<string, poseDetection.PoseDetector> = new Map();
-  private kalmanFilters: Map<string, KalmanFilter> = new Map();
+  private filterSystem: AdvancedPoseFilterSystem;
   private poseHistory: FilteredPose[] = [];
   private readonly historySize = 10;
+
+  constructor() {
+    this.filterSystem = new AdvancedPoseFilterSystem();
+  }
 
   async initializeModels() {
     try {
@@ -153,7 +122,7 @@ class EnhancedPoseDetector {
     }
   }
 
-  // Advanced filtering with Kalman filter and temporal smoothing
+  // Advanced filtering with comprehensive filtering system
   private applyAdvancedFiltering(poses: any[]): FilteredPose[] {
     if (!poses || poses.length === 0) return [];
 
@@ -163,38 +132,23 @@ class EnhancedPoseDetector {
     poses.forEach((pose, poseIndex) => {
       if (pose.score < 0.3) return; // Skip low-confidence poses
 
-      const filteredKeypoints: PosePoint[] = pose.keypoints.map((kp: any, index: number) => {
-        const filterKey = `pose${poseIndex}_kp${index}`;
-
-        // Initialize Kalman filters if needed
-        if (!this.kalmanFilters.has(`${filterKey}_x`)) {
-          this.kalmanFilters.set(`${filterKey}_x`, new KalmanFilter(0.01, 0.1));
-          this.kalmanFilters.set(`${filterKey}_y`, new KalmanFilter(0.01, 0.1));
-        }
-
-        const xFilter = this.kalmanFilters.get(`${filterKey}_x`)!;
-        const yFilter = this.kalmanFilters.get(`${filterKey}_y`)!;
-
-        // Apply Kalman filtering
-        const filteredX = xFilter.update(kp.x);
-        const filteredY = yFilter.update(kp.y);
-
-        return {
-          x: filteredX,
-          y: filteredY,
+      // Convert pose to FilteredPose format
+      const filteredPose: FilteredPose = {
+        keypoints: pose.keypoints.map((kp: any) => ({
+          x: kp.x,
+          y: kp.y,
           z: kp.z || 0,
           confidence: kp.score || 0
-        };
-      });
-
-      // Apply temporal smoothing
-      const smoothedPose: FilteredPose = {
-        keypoints: this.applySpatialSmoothing(filteredKeypoints),
+        })),
         score: pose.score,
         timestamp
       };
 
-      filteredPoses.push(smoothedPose);
+      // Apply advanced filtering system
+      const enhancedPose = this.filterSystem.filterPose(filteredPose);
+      if (enhancedPose) {
+        filteredPoses.push(enhancedPose);
+      }
     });
 
     // Update pose history
@@ -206,54 +160,9 @@ class EnhancedPoseDetector {
     return filteredPoses;
   }
 
-  // Spatial smoothing based on anatomical constraints
-  private applySpatialSmoothing(keypoints: PosePoint[]): PosePoint[] {
-    // Apply bilateral filter for spatial smoothing
-    const smoothedKeypoints = [...keypoints];
-    
-    // Define connected keypoint pairs for constraint enforcement
-    const connections = [
-      [5, 6],   // shoulders
-      [11, 12], // hips
-      [5, 7],   // left shoulder to elbow
-      [7, 9],   // left elbow to wrist
-      [6, 8],   // right shoulder to elbow
-      [8, 10],  // right elbow to wrist
-      [11, 13], // left hip to knee
-      [13, 15], // left knee to ankle
-      [12, 14], // right hip to knee
-      [14, 16]  // right knee to ankle
-    ];
-
-    // Enforce anatomical constraints
-    connections.forEach(([a, b]) => {
-      if (smoothedKeypoints[a] && smoothedKeypoints[b]) {
-        const minConfidence = Math.min(smoothedKeypoints[a].confidence, smoothedKeypoints[b].confidence);
-        if (minConfidence > 0.5) {
-          // Apply constraint-based smoothing
-          const distance = Math.sqrt(
-            Math.pow(smoothedKeypoints[a].x - smoothedKeypoints[b].x, 2) +
-            Math.pow(smoothedKeypoints[a].y - smoothedKeypoints[b].y, 2)
-          );
-          
-          // If distance is unrealistic, apply correction
-          if (distance > 200) { // Threshold for unrealistic limb length
-            const midX = (smoothedKeypoints[a].x + smoothedKeypoints[b].x) / 2;
-            const midY = (smoothedKeypoints[a].y + smoothedKeypoints[b].y) / 2;
-            
-            if (smoothedKeypoints[a].confidence < smoothedKeypoints[b].confidence) {
-              smoothedKeypoints[a].x = midX + (smoothedKeypoints[a].x - midX) * 0.7;
-              smoothedKeypoints[a].y = midY + (smoothedKeypoints[a].y - midY) * 0.7;
-            } else {
-              smoothedKeypoints[b].x = midX + (smoothedKeypoints[b].x - midX) * 0.7;
-              smoothedKeypoints[b].y = midY + (smoothedKeypoints[b].y - midY) * 0.7;
-            }
-          }
-        }
-      }
-    });
-
-    return smoothedKeypoints;
+  // Get quality metrics from the filtering system
+  getQualityMetrics() {
+    return this.filterSystem.getQualityMetrics();
   }
 
   // Multi-camera pose fusion

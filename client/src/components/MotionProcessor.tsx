@@ -3,7 +3,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Play, Pause, RotateCcw, Activity, Users } from 'lucide-react';
 import * as THREE from 'three';
 
@@ -255,14 +254,9 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
     directionalLight.castShadow = true;
     scene.add(directionalLight);
     
-    // Create skeleton group
-    const skeleton = new THREE.Group();
-    scene.add(skeleton);
-    
     sceneRef.current = scene;
     rendererRef.current = renderer;
     cameraRef.current = camera;
-    skeletonRef.current = skeleton;
     
     // Initial render
     renderer.render(scene, camera);
@@ -270,292 +264,227 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
 
   // Create 3D skeleton from pose landmarks
   const createSkeleton = (landmarks: any[]) => {
-    if (!skeletonRef.current || !landmarks || landmarks.length < 17) return;
+    console.log('Creating skeleton with landmarks:', landmarks.length);
+    
+    if (!sceneRef.current || !rendererRef.current || !cameraRef.current) {
+      console.log('Missing 3D scene components');
+      return;
+    }
+
+    if (!landmarks || landmarks.length === 0) {
+      console.log('No landmarks provided');
+      return;
+    }
     
     // Clear previous skeleton
-    skeletonRef.current.clear();
+    if (skeletonRef.current) {
+      sceneRef.current.remove(skeletonRef.current);
+    }
+
+    const skeleton = new THREE.Group();
     
-    // Joint material
-    const jointMaterial = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
-    const boneMaterial = new THREE.MeshPhongMaterial({ color: 0x0066cc });
+    // Create joint spheres (green)
+    const jointGeometry = new THREE.SphereGeometry(0.03, 8, 8);
+    const jointMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
     
-    // Create joints
+    console.log('Adding joints...');
+    let jointsAdded = 0;
+    
     landmarks.forEach((landmark, index) => {
-      if (landmark.visibility > 0.5) {
-        const joint = new THREE.SphereGeometry(0.02, 8, 6);
-        const jointMesh = new THREE.Mesh(joint, jointMaterial);
-        jointMesh.position.set(
-          (landmark.x - 0.5) * 2,
-          -(landmark.y - 0.5) * 2,
-          landmark.z || 0
+      if (landmark && landmark.x !== undefined && landmark.y !== undefined) {
+        const joint = new THREE.Mesh(jointGeometry, jointMaterial);
+        joint.position.set(
+          (landmark.x - 0.5) * 3,  // Scale up for better visibility
+          -(landmark.y - 0.5) * 3,
+          (landmark.z || 0) * 3
         );
-        skeletonRef.current!.add(jointMesh);
+        skeleton.add(joint);
+        jointsAdded++;
       }
     });
     
-    // Create bones (connections between joints)
+    console.log(`Added ${jointsAdded} joints`);
+
+    // Define bone connections for human pose (MediaPipe format)
     const connections = [
-      [5, 6], // shoulders
-      [5, 7], [7, 9], // left arm
-      [6, 8], [8, 10], // right arm
-      [5, 11], [6, 12], // torso to hips
-      [11, 12], // hips
-      [11, 13], [13, 15], // left leg
-      [12, 14], [14, 16], // right leg
-      [0, 1], [0, 2], // head
-      [1, 3], [2, 4] // ears
+      // Face connections
+      [0, 1], [1, 2], [2, 3], [3, 7],
+      [0, 4], [4, 5], [5, 6], [6, 8],
+      [9, 10],
+      // Upper body
+      [11, 12], // shoulders
+      [11, 13], [13, 15], // left arm
+      [12, 14], [14, 16], // right arm
+      [11, 23], [12, 24], // torso
+      [23, 24], // hips
+      // Lower body
+      [23, 25], [25, 27], [27, 29], [27, 31], // left leg
+      [24, 26], [26, 28], [28, 30], [28, 32]  // right leg
     ];
+
+    // Create bone lines (blue)
+    const lineMaterial = new THREE.LineBasicMaterial({ color: 0x0066ff, linewidth: 2 });
     
-    connections.forEach(([start, end]) => {
-      const startLandmark = landmarks[start];
-      const endLandmark = landmarks[end];
+    console.log('Adding bones...');
+    let bonesAdded = 0;
+    
+    connections.forEach(([startIdx, endIdx]) => {
+      const start = landmarks[startIdx];
+      const end = landmarks[endIdx];
       
-      if (startLandmark && endLandmark && 
-          startLandmark.visibility > 0.5 && endLandmark.visibility > 0.5) {
+      if (start && end && 
+          start.x !== undefined && start.y !== undefined &&
+          end.x !== undefined && end.y !== undefined) {
         
-        const startPos = new THREE.Vector3(
-          (startLandmark.x - 0.5) * 2,
-          -(startLandmark.y - 0.5) * 2,
-          startLandmark.z || 0
-        );
-        const endPos = new THREE.Vector3(
-          (endLandmark.x - 0.5) * 2,
-          -(endLandmark.y - 0.5) * 2,
-          endLandmark.z || 0
-        );
+        const points = [
+          new THREE.Vector3(
+            (start.x - 0.5) * 3,
+            -(start.y - 0.5) * 3,
+            (start.z || 0) * 3
+          ),
+          new THREE.Vector3(
+            (end.x - 0.5) * 3,
+            -(end.y - 0.5) * 3,
+            (end.z || 0) * 3
+          )
+        ];
         
-        const distance = startPos.distanceTo(endPos);
-        const bone = new THREE.CylinderGeometry(0.01, 0.01, distance, 8);
-        const boneMesh = new THREE.Mesh(bone, boneMaterial);
-        
-        boneMesh.position.copy(startPos.clone().add(endPos).divideScalar(2));
-        boneMesh.lookAt(endPos);
-        boneMesh.rotateX(Math.PI / 2);
-        
-        skeletonRef.current!.add(boneMesh);
+        const geometry = new THREE.BufferGeometry().setFromPoints(points);
+        const line = new THREE.Line(geometry, lineMaterial);
+        skeleton.add(line);
+        bonesAdded++;
       }
     });
+
+    console.log(`Added ${bonesAdded} bones`);
+    
+    skeletonRef.current = skeleton;
+    sceneRef.current.add(skeleton);
+    
+    // Force render
+    rendererRef.current.render(sceneRef.current, cameraRef.current);
+    console.log('Skeleton rendered');
   };
 
-  // MoveNet pose landmark indices (17 keypoints)
-  const MOVENET_LANDMARKS = {
-    NOSE: 0,
-    LEFT_EYE: 1,
-    RIGHT_EYE: 2,
-    LEFT_EAR: 3,
-    RIGHT_EAR: 4,
-    LEFT_SHOULDER: 5,
-    RIGHT_SHOULDER: 6,
-    LEFT_ELBOW: 7,
-    RIGHT_ELBOW: 8,
-    LEFT_WRIST: 9,
-    RIGHT_WRIST: 10,
-    LEFT_HIP: 11,
-    RIGHT_HIP: 12,
-    LEFT_KNEE: 13,
-    RIGHT_KNEE: 14,
-    LEFT_ANKLE: 15,
-    RIGHT_ANKLE: 16
-  };
-
-  // Calculate angle between three points with safety checks
+  // Calculate angle between three points
   const calculateAngle = (pointA: any, pointB: any, pointC: any): number => {
     if (!pointA || !pointB || !pointC) return 0;
     if (typeof pointA.x === 'undefined' || typeof pointB.x === 'undefined' || typeof pointC.x === 'undefined') return 0;
     
     const vectorBA = {
       x: pointA.x - pointB.x,
-      y: pointA.y - pointB.y,
-      z: (pointA.z || 0) - (pointB.z || 0)
+      y: pointA.y - pointB.y
     };
     
     const vectorBC = {
       x: pointC.x - pointB.x,
-      y: pointC.y - pointB.y,
-      z: (pointC.z || 0) - (pointB.z || 0)
+      y: pointC.y - pointB.y
     };
     
-    const dotProduct = vectorBA.x * vectorBC.x + vectorBA.y * vectorBC.y + vectorBA.z * vectorBC.z;
-    const magnitudeBA = Math.sqrt(vectorBA.x * vectorBA.x + vectorBA.y * vectorBA.y + vectorBA.z * vectorBA.z);
-    const magnitudeBC = Math.sqrt(vectorBC.x * vectorBC.x + vectorBC.y * vectorBC.y + vectorBC.z * vectorBC.z);
+    const dotProduct = vectorBA.x * vectorBC.x + vectorBA.y * vectorBC.y;
+    const magnitudeBA = Math.sqrt(vectorBA.x ** 2 + vectorBA.y ** 2);
+    const magnitudeBC = Math.sqrt(vectorBC.x ** 2 + vectorBC.y ** 2);
     
     if (magnitudeBA === 0 || magnitudeBC === 0) return 0;
     
     const cosAngle = dotProduct / (magnitudeBA * magnitudeBC);
     const clampedCos = Math.max(-1, Math.min(1, cosAngle));
-    const angle = Math.acos(clampedCos);
+    const angleRad = Math.acos(clampedCos);
     
-    return (angle * 180) / Math.PI;
+    return (angleRad * 180) / Math.PI;
   };
 
-  // Calculate distance between two points with safety checks
-  const calculateDistance = (pointA: any, pointB: any): number => {
-    if (!pointA || !pointB) return 0;
-    if (typeof pointA.x === 'undefined' || typeof pointB.x === 'undefined') return 0;
-    
-    const dx = pointA.x - pointB.x;
-    const dy = pointA.y - pointB.y;
-    const dz = (pointA.z || 0) - (pointB.z || 0);
-    return Math.sqrt(dx * dx + dy * dy + dz * dz);
-  };
-
-  // Process pose landmarks to extract joint angles
+  // Process single frame for joint angles
   const processFrame = (frame: PoseFrame): JointAngles => {
-    if (!frame || !frame.landmarks) {
-      console.log('No frame or landmarks data');
-      return { leftShoulder: 0, rightShoulder: 0, leftElbow: 0, rightElbow: 0, leftHip: 0, rightHip: 0, leftKnee: 0, rightKnee: 0, spine: 0 };
-    }
-    
     const landmarks = frame.landmarks;
-    if (!landmarks || landmarks.length === 0) {
-      console.log('Empty landmarks array');
-      return { leftShoulder: 0, rightShoulder: 0, leftElbow: 0, rightElbow: 0, leftHip: 0, rightHip: 0, leftKnee: 0, rightKnee: 0, spine: 0 };
+    
+    if (!landmarks || landmarks.length < 17) {
+      return {
+        leftShoulder: 0, rightShoulder: 0,
+        leftElbow: 0, rightElbow: 0,
+        leftHip: 0, rightHip: 0,
+        leftKnee: 0, rightKnee: 0,
+        spine: 0
+      };
     }
-    
-    console.log('Processing frame with', landmarks.length, 'landmarks');
-    console.log('Sample landmark:', landmarks[0]);
-    
-    // Extract key landmarks using MoveNet indices
-    const getLandmark = (index: number) => {
-      if (index >= 0 && index < landmarks.length && landmarks[index]) {
-        const landmark = landmarks[index];
-        // Check if it's a MoveNet keypoint structure
-        if (landmark.x !== undefined && landmark.y !== undefined && landmark.score > 0.3) {
-          return { x: landmark.x, y: landmark.y, z: landmark.z || 0 };
-        }
-      }
-      return null;
-    };
-    
-    const nose = getLandmark(MOVENET_LANDMARKS.NOSE);
-    const leftShoulder = getLandmark(MOVENET_LANDMARKS.LEFT_SHOULDER);
-    const rightShoulder = getLandmark(MOVENET_LANDMARKS.RIGHT_SHOULDER);
-    const leftElbow = getLandmark(MOVENET_LANDMARKS.LEFT_ELBOW);
-    const rightElbow = getLandmark(MOVENET_LANDMARKS.RIGHT_ELBOW);
-    const leftWrist = getLandmark(MOVENET_LANDMARKS.LEFT_WRIST);
-    const rightWrist = getLandmark(MOVENET_LANDMARKS.RIGHT_WRIST);
-    const leftHip = getLandmark(MOVENET_LANDMARKS.LEFT_HIP);
-    const rightHip = getLandmark(MOVENET_LANDMARKS.RIGHT_HIP);
-    const leftKnee = getLandmark(MOVENET_LANDMARKS.LEFT_KNEE);
-    const rightKnee = getLandmark(MOVENET_LANDMARKS.RIGHT_KNEE);
-    const leftAnkle = getLandmark(MOVENET_LANDMARKS.LEFT_ANKLE);
-    const rightAnkle = getLandmark(MOVENET_LANDMARKS.RIGHT_ANKLE);
-    
-    console.log('Extracted landmarks:', { leftShoulder, rightShoulder, leftElbow, rightElbow });
 
-    // Calculate joint angles with proper null checks
-    const jointAngles: JointAngles = {
-      leftShoulder: leftElbow && leftShoulder && leftHip ? calculateAngle(leftElbow, leftShoulder, leftHip) : 0,
-      rightShoulder: rightElbow && rightShoulder && rightHip ? calculateAngle(rightElbow, rightShoulder, rightHip) : 0,
-      leftElbow: leftShoulder && leftElbow && leftWrist ? calculateAngle(leftShoulder, leftElbow, leftWrist) : 0,
-      rightElbow: rightShoulder && rightElbow && rightWrist ? calculateAngle(rightShoulder, rightElbow, rightWrist) : 0,
-      leftHip: leftShoulder && leftHip && leftKnee ? calculateAngle(leftShoulder, leftHip, leftKnee) : 0,
-      rightHip: rightShoulder && rightHip && rightKnee ? calculateAngle(rightShoulder, rightHip, rightKnee) : 0,
-      leftKnee: leftHip && leftKnee && leftAnkle ? calculateAngle(leftHip, leftKnee, leftAnkle) : 0,
-      rightKnee: rightHip && rightKnee && rightAnkle ? calculateAngle(rightHip, rightKnee, rightAnkle) : 0,
-      spine: leftShoulder && rightShoulder && leftHip && rightHip ? 
-        calculateAngle(
-          { x: (leftShoulder.x + rightShoulder.x) / 2, y: (leftShoulder.y + rightShoulder.y) / 2, z: 0 },
-          { x: (leftHip.x + rightHip.x) / 2, y: (leftHip.y + rightHip.y) / 2, z: 0 },
-          nose || { x: 0, y: 0, z: 0 }
-        ) : 0
+    return {
+      leftShoulder: calculateAngle(landmarks[13], landmarks[11], landmarks[23]),
+      rightShoulder: calculateAngle(landmarks[14], landmarks[12], landmarks[24]),
+      leftElbow: calculateAngle(landmarks[11], landmarks[13], landmarks[15]),
+      rightElbow: calculateAngle(landmarks[12], landmarks[14], landmarks[16]),
+      leftHip: calculateAngle(landmarks[25], landmarks[23], landmarks[11]),
+      rightHip: calculateAngle(landmarks[26], landmarks[24], landmarks[12]),
+      leftKnee: calculateAngle(landmarks[23], landmarks[25], landmarks[27]),
+      rightKnee: calculateAngle(landmarks[24], landmarks[26], landmarks[28]),
+      spine: calculateAngle(landmarks[11], landmarks[23], landmarks[24])
     };
-    
-    console.log('Calculated joint angles:', jointAngles);
-
-    return jointAngles;
   };
 
-  // Estimate anthropometric measurements from pose data
+  // Estimate anthropometric measurements
   const estimateAnthropometrics = () => {
-    if (motionData.length === 0) return null;
-
-    // Use first frame for measurements
-    const landmarks = motionData[0].landmarks || [];
+    if (!motionData || motionData.length === 0) return null;
     
-    if (!landmarks || landmarks.length === 0) return null;
+    const firstFrame = motionData[0];
+    if (!firstFrame.landmarks || firstFrame.landmarks.length < 17) return null;
     
-    // Extract key landmarks using MoveNet indices
-    const getLandmark = (index: number) => {
-      if (index >= 0 && index < landmarks.length && landmarks[index]) {
-        const landmark = landmarks[index];
-        if (landmark.x !== undefined && landmark.y !== undefined) {
-          return { x: landmark.x, y: landmark.y, z: landmark.z || 0 };
-        }
-      }
-      return null;
+    const landmarks = firstFrame.landmarks;
+    
+    // Calculate distances for limb lengths
+    const calculateDistance = (p1: any, p2: any) => {
+      if (!p1 || !p2 || typeof p1.x === 'undefined' || typeof p2.x === 'undefined') return 0;
+      return Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2)) * 100; // Convert to cm
     };
-    
-    const leftShoulder = getLandmark(MOVENET_LANDMARKS.LEFT_SHOULDER);
-    const rightShoulder = getLandmark(MOVENET_LANDMARKS.RIGHT_SHOULDER);
-    const leftElbow = getLandmark(MOVENET_LANDMARKS.LEFT_ELBOW);
-    const rightElbow = getLandmark(MOVENET_LANDMARKS.RIGHT_ELBOW);
-    const leftWrist = getLandmark(MOVENET_LANDMARKS.LEFT_WRIST);
-    const rightWrist = getLandmark(MOVENET_LANDMARKS.RIGHT_WRIST);
-    const leftHip = getLandmark(MOVENET_LANDMARKS.LEFT_HIP);
-    const rightHip = getLandmark(MOVENET_LANDMARKS.RIGHT_HIP);
-    const leftKnee = getLandmark(MOVENET_LANDMARKS.LEFT_KNEE);
-    const rightKnee = getLandmark(MOVENET_LANDMARKS.RIGHT_KNEE);
-    const leftAnkle = getLandmark(MOVENET_LANDMARKS.LEFT_ANKLE);
-    const rightAnkle = getLandmark(MOVENET_LANDMARKS.RIGHT_ANKLE);
-    const nose = getLandmark(MOVENET_LANDMARKS.NOSE);
-
-    // Calculate limb lengths with safety checks
-    const upperArmLength = (calculateDistance(leftShoulder, leftElbow) + calculateDistance(rightShoulder, rightElbow)) / 2;
-    const forearmLength = (calculateDistance(leftElbow, leftWrist) + calculateDistance(rightElbow, rightWrist)) / 2;
-    const thighLength = (calculateDistance(leftHip, leftKnee) + calculateDistance(rightHip, rightKnee)) / 2;
-    const shinLength = (calculateDistance(leftKnee, leftAnkle) + calculateDistance(rightKnee, rightAnkle)) / 2;
-    
-    // Estimate total height with null checks
-    const totalHeight = nose && leftAnkle && rightAnkle ? 
-      calculateDistance(nose, { 
-        x: (leftAnkle.x + rightAnkle.x) / 2, 
-        y: (leftAnkle.y + rightAnkle.y) / 2, 
-        z: 0
-      }) : 0;
-
-    // Convert to realistic measurements (MediaPipe uses normalized coordinates)
-    const heightScale = 170; // Assume average height for scaling
     
     return {
-      height: heightScale,
-      weight: 70, // Default weight
       limbLengths: {
-        upperArm: Math.round(upperArmLength * 100), // Convert to cm
-        forearm: Math.round(forearmLength * 100),
-        thigh: Math.round(thighLength * 100),
-        shin: Math.round(shinLength * 100)
+        upperArm: Math.round(calculateDistance(landmarks[11], landmarks[13])),
+        forearm: Math.round(calculateDistance(landmarks[13], landmarks[15])),
+        thigh: Math.round(calculateDistance(landmarks[23], landmarks[25])),
+        shin: Math.round(calculateDistance(landmarks[25], landmarks[27]))
       }
     };
   };
 
-  // Analyze movement type based on joint patterns
-  const analyzeMovementType = () => {
-    if (motionData.length < 10) return 'unknown';
-
-    let maxKneeFlexion = 0;
-    let avgHipFlexion = 0;
-    let spineMovement = 0;
-
-    motionData.forEach(frame => {
-      const angles = processFrame(frame);
-      maxKneeFlexion = Math.max(maxKneeFlexion, Math.max(180 - angles.leftKnee, 180 - angles.rightKnee));
-      avgHipFlexion += (180 - angles.leftHip + 180 - angles.rightHip) / 2;
-      spineMovement += Math.abs(angles.spine - 180);
-    });
-
-    avgHipFlexion /= motionData.length;
-    spineMovement /= motionData.length;
-
-    // Classify movement based on patterns
-    if (maxKneeFlexion > 60 && avgHipFlexion > 30) {
-      return 'squat';
-    } else if (maxKneeFlexion > 45 && spineMovement > 10) {
-      return 'lunge';
-    } else if (spineMovement > 20) {
-      return 'bend';
-    } else if (maxKneeFlexion < 20) {
-      return 'reach';
+  // Analyze movement type
+  const analyzeMovementType = (): string => {
+    if (!motionData || motionData.length < 10) return 'insufficient data';
+    
+    const firstFrame = motionData[0];
+    const lastFrame = motionData[motionData.length - 1];
+    
+    if (!firstFrame.landmarks || !lastFrame.landmarks) return 'unknown';
+    
+    const firstLeftWrist = firstFrame.landmarks[15];
+    const lastLeftWrist = lastFrame.landmarks[15];
+    const firstRightWrist = firstFrame.landmarks[16];
+    const lastRightWrist = lastFrame.landmarks[16];
+    
+    if (!firstLeftWrist || !lastLeftWrist || !firstRightWrist || !lastRightWrist) {
+      return 'unknown';
+    }
+    
+    const leftWristMovement = Math.abs(lastLeftWrist.y - firstLeftWrist.y);
+    const rightWristMovement = Math.abs(lastRightWrist.y - firstRightWrist.y);
+    
+    if (leftWristMovement > 0.2 || rightWristMovement > 0.2) {
+      return 'upper body exercise';
+    }
+    
+    const firstLeftAnkle = firstFrame.landmarks[27];
+    const lastLeftAnkle = lastFrame.landmarks[27];
+    const firstRightAnkle = firstFrame.landmarks[28];
+    const lastRightAnkle = lastFrame.landmarks[28];
+    
+    if (!firstLeftAnkle || !lastLeftAnkle || !firstRightAnkle || !lastRightAnkle) {
+      return 'unknown';
+    }
+    
+    const leftAnkleMovement = Math.abs(lastLeftAnkle.y - firstLeftAnkle.y);
+    const rightAnkleMovement = Math.abs(lastRightAnkle.y - firstRightAnkle.y);
+    
+    if (leftAnkleMovement > 0.1 || rightAnkleMovement > 0.1) {
+      return 'lower body exercise';
     }
     
     return 'general movement';
@@ -596,9 +525,6 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
           // Create initial virtual patient skeleton
           if (motionData[0].landmarks) {
             createSkeleton(motionData[0].landmarks);
-            if (rendererRef.current && sceneRef.current && cameraRef.current) {
-              rendererRef.current.render(sceneRef.current, cameraRef.current);
-            }
           }
         }
       } catch (error) {
@@ -639,9 +565,6 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
         // Update virtual patient skeleton movement
         if (motionData[currentFrame].landmarks) {
           createSkeleton(motionData[currentFrame].landmarks);
-          if (rendererRef.current && sceneRef.current && cameraRef.current) {
-            rendererRef.current.render(sceneRef.current, cameraRef.current);
-          }
         }
         
         // Analyze movement abnormalities for current frame
@@ -697,12 +620,18 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
     setPlaybackSpeed(value[0]);
   };
 
-  if (motionData.length === 0) {
+  if (!motionData || motionData.length === 0) {
     return (
       <Card className={className}>
-        <CardContent className="p-6">
-          <div className="text-center text-muted-foreground">
-            <Activity className="h-12 w-12 mx-auto mb-2 opacity-50" />
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Users className="h-5 w-5" />
+            Motion Analysis
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-8 text-muted-foreground">
+            <Activity className="h-12 w-12 mx-auto mb-4 opacity-50" />
             <p>No motion data available</p>
             <p className="text-sm">Record patient movement to see analysis</p>
           </div>
@@ -774,43 +703,6 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
           </div>
         </div>
 
-        {/* Current Joint Angles */}
-        <div className="space-y-2">
-          <h3 className="text-sm font-medium">Current Joint Angles (degrees)</h3>
-          {currentJointAngles ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              <div className="bg-gray-50 p-2 rounded text-center">
-                <div className="text-xs text-gray-600">L Shoulder</div>
-                <div className="text-lg font-bold text-blue-600">{Math.round(currentJointAngles.leftShoulder)}°</div>
-              </div>
-              <div className="bg-gray-50 p-2 rounded text-center">
-                <div className="text-xs text-gray-600">R Shoulder</div>
-                <div className="text-lg font-bold text-blue-600">{Math.round(currentJointAngles.rightShoulder)}°</div>
-              </div>
-              <div className="bg-gray-50 p-2 rounded text-center">
-                <div className="text-xs text-gray-600">L Elbow</div>
-                <div className="text-lg font-bold text-green-600">{Math.round(currentJointAngles.leftElbow)}°</div>
-              </div>
-              <div className="bg-gray-50 p-2 rounded text-center">
-                <div className="text-xs text-gray-600">R Elbow</div>
-                <div className="text-lg font-bold text-green-600">{Math.round(currentJointAngles.rightElbow)}°</div>
-              </div>
-              <div className="bg-gray-50 p-2 rounded text-center">
-                <div className="text-xs text-gray-600">L Knee</div>
-                <div className="text-lg font-bold text-purple-600">{Math.round(currentJointAngles.leftKnee)}°</div>
-              </div>
-              <div className="bg-gray-50 p-2 rounded text-center">
-                <div className="text-xs text-gray-600">R Knee</div>
-                <div className="text-lg font-bold text-purple-600">{Math.round(currentJointAngles.rightKnee)}°</div>
-              </div>
-            </div>
-          ) : (
-            <div className="text-center text-gray-500 p-4">
-              No joint angle data - press play to start analysis
-            </div>
-          )}
-        </div>
-
         {/* Movement Abnormality Detection */}
         <div className="space-y-2">
           <h3 className="text-sm font-medium flex items-center gap-2">
@@ -880,6 +772,43 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
           )}
         </div>
 
+        {/* Current Joint Angles */}
+        <div className="space-y-2">
+          <h3 className="text-sm font-medium">Current Joint Angles (degrees)</h3>
+          {currentJointAngles ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              <div className="bg-gray-50 p-2 rounded text-center">
+                <div className="text-xs text-gray-600">L Shoulder</div>
+                <div className="text-lg font-bold text-blue-600">{Math.round(currentJointAngles.leftShoulder)}°</div>
+              </div>
+              <div className="bg-gray-50 p-2 rounded text-center">
+                <div className="text-xs text-gray-600">R Shoulder</div>
+                <div className="text-lg font-bold text-blue-600">{Math.round(currentJointAngles.rightShoulder)}°</div>
+              </div>
+              <div className="bg-gray-50 p-2 rounded text-center">
+                <div className="text-xs text-gray-600">L Elbow</div>
+                <div className="text-lg font-bold text-green-600">{Math.round(currentJointAngles.leftElbow)}°</div>
+              </div>
+              <div className="bg-gray-50 p-2 rounded text-center">
+                <div className="text-xs text-gray-600">R Elbow</div>
+                <div className="text-lg font-bold text-green-600">{Math.round(currentJointAngles.rightElbow)}°</div>
+              </div>
+              <div className="bg-gray-50 p-2 rounded text-center">
+                <div className="text-xs text-gray-600">L Knee</div>
+                <div className="text-lg font-bold text-purple-600">{Math.round(currentJointAngles.leftKnee)}°</div>
+              </div>
+              <div className="bg-gray-50 p-2 rounded text-center">
+                <div className="text-xs text-gray-600">R Knee</div>
+                <div className="text-lg font-bold text-purple-600">{Math.round(currentJointAngles.rightKnee)}°</div>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center text-sm text-muted-foreground py-4">
+              Press "Analyze Motion" to see joint angles
+            </div>
+          )}
+        </div>
+
         {/* Playback Controls */}
         <div className="space-y-4">
           <div className="flex items-center gap-2 flex-wrap">
@@ -930,25 +859,14 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
 
         {/* Real-time Status */}
         <div className="bg-gray-50 p-3 rounded-lg">
-          <div className="text-sm font-medium text-gray-700 mb-2">Motion Analysis Status</div>
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <div className="flex justify-between">
-              <span>Data Quality:</span>
-              <span className="font-medium text-green-600">Good</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Joint Tracking:</span>
-              <span className="font-medium text-blue-600">Active</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Movement Type:</span>
-              <span className="font-medium text-purple-600">{movementType}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Analysis Mode:</span>
-              <span className="font-medium text-orange-600">Live</span>
-            </div>
+          <div className="text-xs text-gray-600">
+            Virtual Patient Status: {currentJointAngles ? 'Active Analysis' : 'Ready for Analysis'}
           </div>
+          {currentJointAngles && (
+            <div className="text-xs text-green-600 mt-1">
+              Real-time biomechanical analysis and movement pattern detection active
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>

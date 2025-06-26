@@ -196,6 +196,178 @@ const assessmentTemplates: AssessmentTemplate[] = [
     ]
   },
   {
+    id: 'alison_grimaldi_hip',
+    name: 'Alison Grimaldi Hip Assessment',
+    bodyPart: 'hip',
+    category: 'assessment',
+    description: 'Comprehensive hip assessment based on Alison Grimaldi\'s approach to gluteal tendinopathy and lateral hip pain',
+    evidenceLevel: 'A',
+    questions: [
+      {
+        id: 'lateral_hip_pain_location',
+        type: 'select',
+        question: 'Primary pain location',
+        options: ['Greater trochanter', 'Lateral thigh', 'Buttock', 'Groin', 'Multiple locations'],
+        required: true,
+        scoring: {
+          type: 'interpretation',
+          interpretation: {
+            'Greater trochanter': 'Typical gluteal tendinopathy presentation',
+            'Lateral thigh': 'Consider ITB syndrome or referred pain',
+            'Buttock': 'Deep gluteal syndrome possible',
+            'Groin': 'Anterior hip pathology likely',
+            'Multiple locations': 'Complex presentation - multiple structures involved'
+          }
+        }
+      },
+      {
+        id: 'gluteal_strength_test',
+        type: 'select',
+        question: 'Gluteal strength assessment (side-lying abduction)',
+        options: ['Normal strength', 'Mild weakness', 'Moderate weakness', 'Severe weakness'],
+        required: true,
+        scoring: {
+          type: 'interpretation',
+          interpretation: {
+            'Normal strength': 'Strength not primary issue',
+            'Mild weakness': 'Progressive strengthening indicated',
+            'Moderate weakness': 'Focused gluteal rehabilitation needed',
+            'Severe weakness': 'Intensive strengthening program required'
+          }
+        }
+      },
+      {
+        id: 'single_leg_stance',
+        type: 'select',
+        question: 'Single leg stance test (30 seconds)',
+        options: ['Normal control', 'Mild Trendelenburg', 'Moderate Trendelenburg', 'Severe Trendelenburg'],
+        required: true,
+        scoring: {
+          type: 'interpretation',
+          interpretation: {
+            'Normal control': 'Good functional strength',
+            'Mild Trendelenburg': 'Motor control training needed',
+            'Moderate Trendelenburg': 'Strength and control deficits',
+            'Severe Trendelenburg': 'Significant gluteal dysfunction'
+          }
+        }
+      },
+      {
+        id: 'step_down_test',
+        type: 'select',
+        question: 'Single leg step down test quality',
+        options: ['Good control', 'Mild dysfunction', 'Moderate dysfunction', 'Poor control'],
+        required: true,
+        scoring: {
+          type: 'interpretation',
+          interpretation: {
+            'Good control': 'Functional movement intact',
+            'Mild dysfunction': 'Minor movement compensations',
+            'Moderate dysfunction': 'Significant movement faults',
+            'Poor control': 'Major functional deficits'
+          }
+        }
+      },
+      {
+        id: 'aggravating_activities',
+        type: 'select',
+        question: 'Primary aggravating activities',
+        options: ['Walking', 'Stairs', 'Side lying', 'Sitting', 'Running/sports'],
+        required: true,
+        scoring: {
+          type: 'interpretation',
+          interpretation: {
+            'Walking': 'Load-related tendinopathy likely',
+            'Stairs': 'Eccentric loading sensitivity',
+            'Side lying': 'Compression sensitivity',
+            'Sitting': 'Possible posterior hip involvement',
+            'Running/sports': 'High-level functional deficits'
+          }
+        }
+      },
+      {
+        id: 'tendon_loading_response',
+        type: 'select',
+        question: 'Response to tendon loading',
+        options: ['Improves with loading', 'No change', 'Worsens immediately', 'Delayed onset soreness'],
+        required: true,
+        scoring: {
+          type: 'interpretation',
+          interpretation: {
+            'Improves with loading': 'Reactive tendinopathy - good prognosis',
+            'No change': 'Degenerative changes possible',
+            'Worsens immediately': 'Reactive/inflammatory phase',
+            'Delayed onset soreness': 'Typical tendinopathy response'
+          }
+        }
+      },
+      {
+        id: 'hip_flexor_length',
+        type: 'select',
+        question: 'Hip flexor length assessment (Thomas test)',
+        options: ['Normal length', 'Mild tightness', 'Moderate tightness', 'Severe restriction'],
+        required: true,
+        scoring: {
+          type: 'interpretation',
+          interpretation: {
+            'Normal length': 'Anterior structures not restricted',
+            'Mild tightness': 'Light stretching indicated',
+            'Moderate tightness': 'Stretching program needed',
+            'Severe restriction': 'Intensive mobility work required'
+          }
+        }
+      },
+      {
+        id: 'itb_tightness',
+        type: 'select',
+        question: 'ITB/TFL tightness (Ober test)',
+        options: ['Normal', 'Mild tightness', 'Moderate tightness', 'Severe tightness'],
+        required: true,
+        scoring: {
+          type: 'interpretation',
+          interpretation: {
+            'Normal': 'ITB not contributing factor',
+            'Mild tightness': 'Minor mobility work needed',
+            'Moderate tightness': 'ITB stretching important',
+            'Severe tightness': 'Major contributor to dysfunction'
+          }
+        }
+      },
+      {
+        id: 'pain_behavior_pattern',
+        type: 'select',
+        question: 'Pain behavior pattern',
+        options: ['Mechanical', 'Inflammatory', 'Neuropathic', 'Mixed pattern'],
+        required: true,
+        scoring: {
+          type: 'interpretation',
+          interpretation: {
+            'Mechanical': 'Load management approach',
+            'Inflammatory': 'Anti-inflammatory strategies',
+            'Neuropathic': 'Neural mobilization techniques',
+            'Mixed pattern': 'Multimodal approach needed'
+          }
+        }
+      },
+      {
+        id: 'functional_impact_level',
+        type: 'select',
+        question: 'Functional impact on daily activities',
+        options: ['Minimal impact', 'Mild limitation', 'Moderate limitation', 'Severe limitation'],
+        required: true,
+        scoring: {
+          type: 'interpretation',
+          interpretation: {
+            'Minimal impact': 'Early intervention effective',
+            'Mild limitation': 'Activity modification needed',
+            'Moderate limitation': 'Comprehensive rehabilitation required',
+            'Severe limitation': 'Intensive treatment approach'
+          }
+        }
+      }
+    ]
+  },
+  {
     id: 'dash',
     name: 'DASH - Disabilities of Arm, Shoulder and Hand',
     bodyPart: 'upper_extremity',

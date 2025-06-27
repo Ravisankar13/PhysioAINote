@@ -64,32 +64,31 @@ export const PoseDetection: React.FC<PoseDetectionProps> = ({
 
       console.log('TensorFlow.js backend ready:', tf.getBackend());
 
-      // Initialize pose detection with proper error handling and model selection
+      // Initialize pose detection with full body optimization
       let poseDetector;
       
-      // Try PoseNet with the most basic configuration
+      // Try MoveNet Thunder first - best for full body detection including legs
       try {
-        console.log('Loading PoseNet with basic config...');
+        console.log('Loading MoveNet Thunder for full body detection...');
         
-        // Use the simplest possible configuration
-        const poseNetConfig = {
-          architecture: 'MobileNetV1' as const,
-          outputStride: 16,
-          multiplier: 0.75
+        const moveNetConfig = {
+          modelType: poseDetection.movenet.modelType.SINGLEPOSE_THUNDER, // More accurate for full body
+          enableSmoothing: true,
+          enableSegmentation: false
         };
         
         poseDetector = await poseDetection.createDetector(
-          poseDetection.SupportedModels.PoseNet,
-          poseNetConfig
+          poseDetection.SupportedModels.MoveNet,
+          moveNetConfig
         );
-        console.log('✓ PoseNet loaded successfully');
+        console.log('✓ MoveNet Thunder loaded successfully');
         
-      } catch (poseNetError) {
-        console.warn('PoseNet initialization failed:', poseNetError.message);
+      } catch (moveNetError) {
+        console.warn('MoveNet Thunder failed, trying Lightning:', moveNetError.message);
         
-        // Try MoveNet as backup - it's more reliable than BlazePose
+        // Fallback to MoveNet Lightning
         try {
-          console.log('Trying MoveNet as backup...');
+          console.log('Trying MoveNet Lightning as backup...');
           const moveNetConfig = {
             modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
           };
@@ -98,14 +97,33 @@ export const PoseDetection: React.FC<PoseDetectionProps> = ({
             poseDetection.SupportedModels.MoveNet,
             moveNetConfig
           );
-          console.log('✓ MoveNet loaded successfully');
+          console.log('✓ MoveNet Lightning loaded successfully');
           
-        } catch (moveNetError) {
-          console.error('MoveNet backup failed:', moveNetError.message);
-          console.error('Full error details:', moveNetError);
+        } catch (lightningError) {
+          console.warn('MoveNet Lightning failed, trying PoseNet:', lightningError.message);
           
-          // If we get here, both models failed - provide detailed error info
-          throw new Error(`All pose detection models failed to load. PoseNet error: ${poseNetError.message}. MoveNet error: ${moveNetError.message}`);
+          // Final fallback to PoseNet with optimized settings for full body
+          try {
+            console.log('Loading PoseNet with full body optimization...');
+            
+            const poseNetConfig = {
+              architecture: 'ResNet50' as const, // Better accuracy for full body
+              outputStride: 16, // Good balance of accuracy and performance
+              inputResolution: { width: 513, height: 513 }, // Higher resolution for better leg detection
+              multiplier: 1.0, // Full model for better accuracy
+              quantBytes: 4 // Higher precision
+            };
+            
+            poseDetector = await poseDetection.createDetector(
+              poseDetection.SupportedModels.PoseNet,
+              poseNetConfig
+            );
+            console.log('✓ PoseNet with full body optimization loaded successfully');
+            
+          } catch (poseNetError) {
+            console.error('All pose detection models failed');
+            throw new Error(`All pose detection models failed. Last error: ${poseNetError.message}`);
+          }
         }
       }
 

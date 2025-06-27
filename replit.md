@@ -140,6 +140,7 @@ PhysioGPT is an advanced AI-powered physiotherapy platform that provides evidenc
 
 ## Recent Updates
 
+- **January 25, 2025**: Enhanced motion capture for full body detection: increased camera resolution to 1280x720, optimized AI models with MoveNet Thunder for better leg tracking, added visual positioning guides and setup instructions to help users properly frame their entire body
 - **January 25, 2025**: Simplified motion capture configuration by removing "Enhanced AI" and "Multi-Camera" options, keeping only standard capture mode for streamlined user experience
 - **June 26, 2025**: Enhanced diagnostic-to-treatment pathway visibility with prominent action buttons, visual progress indicators, and comprehensive diagnostic summary in treatment planning. Added "Proceed to Diagnosis" and "Create Treatment Plan" buttons with clear workflow guidance from motion analysis through clinical diagnosis to personalized treatment protocols.
 - **January 25, 2025**: Implemented advanced motion capture technical improvements including enhanced pose detection models (BlazePose, MoveNet, PoseNet ensemble), multi-camera setup with synchronized capture and pose fusion, and comprehensive advanced filtering system with Kalman filters, temporal smoothing, outlier detection, confidence-based validation, and anatomical constraints. System now provides professional-grade motion analysis with real-time quality metrics and movement pattern recognition.

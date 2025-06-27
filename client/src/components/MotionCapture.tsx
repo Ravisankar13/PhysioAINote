@@ -108,9 +108,11 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
       
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          width: { ideal: 640 },
-          height: { ideal: 480 },
-          facingMode: 'user'
+          width: { ideal: 1280, min: 640 },
+          height: { ideal: 720, min: 480 },
+          facingMode: 'user',
+          frameRate: { ideal: 30, max: 60 },
+          aspectRatio: { ideal: 16/9 }
         },
         audio: false
       });
@@ -397,6 +399,34 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
             </div>
           )}
           
+          {/* Full Body Setup Guide */}
+          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg mb-4">
+            <h4 className="font-semibold text-blue-800 mb-2 flex items-center gap-2">
+              <User className="h-4 w-4" />
+              Full Body Capture Setup
+            </h4>
+            <div className="grid md:grid-cols-2 gap-4 text-sm text-blue-700">
+              <div>
+                <p className="font-medium mb-1">Camera Position:</p>
+                <ul className="space-y-1 text-xs">
+                  <li>• Place camera at chest height</li>
+                  <li>• Step back 6-8 feet from camera</li>
+                  <li>• Ensure entire body is visible in frame</li>
+                  <li>• Use landscape/horizontal orientation</li>
+                </ul>
+              </div>
+              <div>
+                <p className="font-medium mb-1">Movement Tips:</p>
+                <ul className="space-y-1 text-xs">
+                  <li>• Start with arms at sides, then move slowly</li>
+                  <li>• Make sure legs are fully visible</li>
+                  <li>• Good lighting helps detection</li>
+                  <li>• Avoid busy backgrounds</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
           {/* Mode Toggle */}
           <div className="flex items-center gap-2 mb-4 p-3 bg-gradient-to-r from-blue-50 to-green-50 rounded-lg border">
             <Button 
@@ -536,6 +566,52 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
               height={720}
               style={{ display: isPoseDetectionActive ? 'block' : 'none' }}
             />
+            
+            {/* Full Body Positioning Guide Overlay */}
+            {isCameraActive && !isRecording && (
+              <div className="absolute inset-0 pointer-events-none">
+                {/* Human silhouette guide */}
+                <div className="absolute inset-4 border-2 border-dashed border-blue-400 rounded-lg bg-blue-500/10">
+                  <div className="absolute top-2 left-2 bg-blue-600 text-white text-xs px-2 py-1 rounded">
+                    Position your full body within this frame
+                  </div>
+                  
+                  {/* Head area guide */}
+                  <div className="absolute top-8 left-1/2 transform -translate-x-1/2 w-16 h-16 border-2 border-dashed border-green-400 rounded-full bg-green-500/10">
+                    <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 text-xs text-green-600 font-medium whitespace-nowrap">
+                      Head
+                    </div>
+                  </div>
+                  
+                  {/* Body area guide */}
+                  <div className="absolute top-24 left-1/2 transform -translate-x-1/2 w-20 h-32 border-2 border-dashed border-yellow-400 rounded-lg bg-yellow-500/10">
+                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-xs text-yellow-600 font-medium">
+                      Body
+                    </div>
+                  </div>
+                  
+                  {/* Legs area guide */}
+                  <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 w-24 h-24 border-2 border-dashed border-orange-400 rounded-lg bg-orange-500/10">
+                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-xs text-orange-600 font-medium">
+                      Legs
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Distance indicator */}
+                <div className="absolute bottom-4 right-4 bg-black/70 text-white text-xs px-3 py-2 rounded">
+                  Stand 6-8 feet from camera
+                </div>
+              </div>
+            )}
+            
+            {/* Recording indicator */}
+            {isRecording && (
+              <div className="absolute top-4 right-4 flex items-center gap-2 bg-red-600 text-white px-3 py-2 rounded animate-pulse">
+                <div className="w-3 h-3 bg-white rounded-full"></div>
+                RECORDING
+              </div>
+            )}
             
             {/* Pose Detection Component */}
             {useMockPoseDetection ? (

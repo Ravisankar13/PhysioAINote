@@ -7,7 +7,8 @@ import { useAuth } from "@/hooks/use-auth";
 import MotionCapture from "@/components/MotionCapture";
 import MotionProcessor from "@/components/MotionProcessor";
 import Enhanced3DSkeleton from "@/components/3d/Enhanced3DSkeleton";
-import { Camera, Users, Activity, ArrowLeft, Settings } from "lucide-react";
+import { Camera, Users, Activity, ArrowLeft, Settings, Scan } from "lucide-react";
+import { StaticPosturalAnalysis } from "@/components/StaticPosturalAnalysis";
 import { Link } from "wouter";
 
 export default function MotionCapturePage() {

@@ -5,17 +5,16 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import MotionCapture from "@/components/MotionCapture";
-import MultiCameraMotionCapture from "@/components/MultiCameraMotionCapture";
 import MotionProcessor from "@/components/MotionProcessor";
 import Enhanced3DSkeleton from "@/components/3d/Enhanced3DSkeleton";
-import { Camera, Users, Activity, ArrowLeft, Settings, BarChart3, Zap } from "lucide-react";
+import { Camera, Users, Activity, ArrowLeft, Settings } from "lucide-react";
 import { Link } from "wouter";
 
 export default function MotionCapturePage() {
   const { user } = useAuth();
   const [motionData, setMotionData] = useState<any[]>([]);
   const [virtualPatientData, setVirtualPatientData] = useState<any>(null);
-  const [captureMode, setCaptureMode] = useState<'standard' | 'enhanced' | 'multi-camera'>('enhanced');
+  const [captureMode, setCaptureMode] = useState<'standard'>('standard');
   const [recordingSession, setRecordingSession] = useState<any[]>([]);
   const [analysisResults, setAnalysisResults] = useState<any>(null);
 
@@ -23,23 +22,7 @@ export default function MotionCapturePage() {
     setMotionData(data);
   };
 
-  const handleEnhancedMotionData = (data: any) => {
-    setMotionData(prev => [...prev, data]);
-    
-    // Real-time analysis for enhanced mode
-    if (data.quality > 0.8) {
-      // High quality data - perform detailed analysis
-      performMotionAnalysis(data);
-    }
-  };
 
-  const handleRecordingComplete = (recordingData: any[]) => {
-    setRecordingSession(recordingData);
-    console.log(`Motion capture session completed: ${recordingData.length} frames`);
-    
-    // Trigger comprehensive analysis
-    performSessionAnalysis(recordingData);
-  };
 
   const performMotionAnalysis = async (data: any) => {
     // Advanced motion analysis with pattern recognition
@@ -155,7 +138,7 @@ export default function MotionCapturePage() {
         </div>
       </div>
 
-      {/* Capture Mode Selection */}
+      {/* Motion Capture Configuration */}
       <Card className="mb-6">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -166,32 +149,12 @@ export default function MotionCapturePage() {
         <CardContent>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-medium">Capture Mode:</span>
+              <span className="text-sm font-medium">Mode:</span>
               <div className="flex gap-2">
-                <Button
-                  onClick={() => setCaptureMode('standard')}
-                  variant={captureMode === 'standard' ? "default" : "outline"}
-                  size="sm"
-                >
-                  <Camera className="h-4 w-4 mr-2" />
-                  Standard
-                </Button>
-                <Button
-                  onClick={() => setCaptureMode('enhanced')}
-                  variant={captureMode === 'enhanced' ? "default" : "outline"}
-                  size="sm"
-                >
-                  <Zap className="h-4 w-4 mr-2" />
-                  Enhanced AI
-                </Button>
-                <Button
-                  onClick={() => setCaptureMode('multi-camera')}
-                  variant={captureMode === 'multi-camera' ? "default" : "outline"}
-                  size="sm"
-                >
-                  <BarChart3 className="h-4 w-4 mr-2" />
-                  Multi-Camera
-                </Button>
+                <div className="flex items-center gap-2 px-3 py-1 bg-blue-50 border border-blue-200 rounded-md">
+                  <Camera className="h-4 w-4 text-blue-600" />
+                  <span className="text-sm font-medium text-blue-700">Standard Motion Capture</span>
+                </div>
               </div>
             </div>
             {analysisResults && (
@@ -214,19 +177,10 @@ export default function MotionCapturePage() {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6" onClick={(e) => e.stopPropagation()}>
         {/* Motion Capture Panel */}
         <div className="xl:col-span-2 space-y-6" onClick={(e) => e.stopPropagation()}>
-          {captureMode === 'standard' && (
-            <MotionCapture 
-              onMotionDataCapture={handleMotionDataCapture}
-              className="w-full"
-            />
-          )}
-          
-          {(captureMode === 'enhanced' || captureMode === 'multi-camera') && (
-            <MultiCameraMotionCapture
-              onMotionData={handleEnhancedMotionData}
-              onRecordingComplete={handleRecordingComplete}
-            />
-          )}
+          <MotionCapture 
+            onMotionDataCapture={handleMotionDataCapture}
+            className="w-full"
+          />
           
           {motionData.length > 0 && (
             <MotionProcessor

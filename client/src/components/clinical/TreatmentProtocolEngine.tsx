@@ -61,10 +61,12 @@ interface MovementAbnormality {
 }
 
 interface TreatmentProtocolEngineProps {
-  diagnosticResult: DiagnosticResult;
-  patientAnswers: Record<string, any>;
+  diagnosticResult?: DiagnosticResult;
+  patientAnswers?: Record<string, any>;
   abnormalities?: MovementAbnormality[];
-  onProtocolSelect: (protocol: TreatmentProtocol) => void;
+  assessmentData?: any;
+  onProtocolSelect?: (protocol: TreatmentProtocol) => void;
+  onTreatmentComplete?: (data: any) => void;
 }
 
 // Comprehensive treatment protocols
@@ -152,9 +154,11 @@ const TREATMENT_PROTOCOLS: TreatmentProtocol[] = [
 
 function TreatmentProtocolEngine({ 
   diagnosticResult, 
-  patientAnswers,
+  patientAnswers = {},
   abnormalities = [],
-  onProtocolSelect 
+  assessmentData,
+  onProtocolSelect,
+  onTreatmentComplete
 }: TreatmentProtocolEngineProps) {
   const [selectedProtocol, setSelectedProtocol] = useState<TreatmentProtocol | null>(null);
   const [currentPhase, setCurrentPhase] = useState(0);
@@ -163,10 +167,14 @@ function TreatmentProtocolEngine({
   const [smartPrescription, setSmartPrescription] = useState<any>(null);
 
   useEffect(() => {
-    findMatchingProtocols();
+    if (diagnosticResult) {
+      findMatchingProtocols();
+    }
   }, [diagnosticResult]);
 
   const findMatchingProtocols = () => {
+    if (!diagnosticResult) return;
+    
     const protocols = TREATMENT_PROTOCOLS.filter(protocol => 
       protocol.condition.toLowerCase().includes(diagnosticResult.primaryDiagnosis.toLowerCase()) ||
       diagnosticResult.primaryDiagnosis.toLowerCase().includes(protocol.condition.toLowerCase())
@@ -181,7 +189,9 @@ function TreatmentProtocolEngine({
   const selectProtocol = (protocol: TreatmentProtocol) => {
     setSelectedProtocol(protocol);
     setCurrentPhase(0);
-    onProtocolSelect(protocol);
+    if (onProtocolSelect) {
+      onProtocolSelect(protocol);
+    }
   };
 
   const handleSmartPrescriptionComplete = (prescription: any) => {
@@ -376,22 +386,23 @@ function TreatmentProtocolEngine({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid md:grid-cols-2 gap-6">
-            <div className="space-y-3">
-              <div>
-                <h4 className="font-semibold text-blue-800 mb-2">Clinical Diagnosis</h4>
-                <div className="bg-white p-3 rounded border border-blue-200">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-medium">{diagnosticResult.primaryDiagnosis}</span>
-                    <Badge variant="default" className="bg-blue-600">
-                      {diagnosticResult.confidence}% confidence
-                    </Badge>
+          {diagnosticResult ? (
+            <div className="grid md:grid-cols-2 gap-6">
+              <div className="space-y-3">
+                <div>
+                  <h4 className="font-semibold text-blue-800 mb-2">Clinical Diagnosis</h4>
+                  <div className="bg-white p-3 rounded border border-blue-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-medium">{diagnosticResult.primaryDiagnosis}</span>
+                      <Badge variant="default" className="bg-blue-600">
+                        {diagnosticResult.confidence}% confidence
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-gray-600">{diagnosticResult.functionalImpact}</p>
                   </div>
-                  <p className="text-sm text-gray-600">{diagnosticResult.functionalImpact}</p>
                 </div>
-              </div>
-              
-              {diagnosticResult.redFlags.length > 0 && (
+                
+                {diagnosticResult.redFlags.length > 0 && (
                 <div>
                   <h4 className="font-semibold text-red-700 mb-2">Red Flags Identified</h4>
                   <div className="space-y-1">
@@ -439,6 +450,13 @@ function TreatmentProtocolEngine({
               </div>
             </div>
           </div>
+          ) : (
+            <div className="text-center py-8">
+              <Brain className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p className="text-muted-foreground">Assessment in progress...</p>
+              <p className="text-sm text-muted-foreground mt-2">Complete the diagnostic assessment to generate treatment protocols</p>
+            </div>
+          )}
         </CardContent>
       </Card>
 

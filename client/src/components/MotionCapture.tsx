@@ -2,7 +2,8 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Camera, Square, Play, StopCircle, Download, User, Brain } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Camera, Square, Play, StopCircle, Download, User, Brain, FlipHorizontal } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import PoseDetection from './PoseDetection';
@@ -43,8 +44,35 @@ export default function MotionCapture({
   const [virtualPatient, setVirtualPatient] = useState<any>(null);
   const [showVirtualPatient, setShowVirtualPatient] = useState(false);
   const [useMockPoseDetection, setUseMockPoseDetection] = useState(false);
+  const [cameraFacing, setCameraFacing] = useState<'user' | 'environment'>('user');
+  const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]);
+  const [selectedCameraId, setSelectedCameraId] = useState<string>('');
   
   const { toast } = useToast();
+
+  // Get available cameras on component mount
+  useEffect(() => {
+    const getAvailableCameras = async () => {
+      try {
+        // Request permission first
+        const tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        tempStream.getTracks().forEach(track => track.stop());
+        
+        // Get device list
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter(device => device.kind === 'videoinput');
+        setAvailableCameras(videoDevices);
+        
+        if (videoDevices.length > 0 && !selectedCameraId) {
+          setSelectedCameraId(videoDevices[0].deviceId);
+        }
+      } catch (error) {
+        console.log('Could not enumerate cameras:', error);
+      }
+    };
+    
+    getAvailableCameras();
+  }, [selectedCameraId]);
 
   // Generate correlations between static postural findings and motion patterns
   const generateStaticMotionCorrelations = useCallback((staticData: any, motionAnalysis: any) => {
@@ -158,14 +186,23 @@ export default function MotionCapture({
       setIsLoading(true);
       setError('');
       
-      const stream = await navigator.mediaDevices.getUserMedia({
+      // Build camera constraints
+      const constraints: MediaStreamConstraints = {
         video: {
           width: { ideal: 1280 },
           height: { ideal: 960 },
-          facingMode: 'user'
         },
         audio: false
-      });
+      };
+
+      // Use specific device ID if selected, otherwise use facing mode
+      if (selectedCameraId) {
+        (constraints.video as any).deviceId = { exact: selectedCameraId };
+      } else {
+        (constraints.video as any).facingMode = cameraFacing;
+      }
+      
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -241,7 +278,36 @@ export default function MotionCapture({
       setError(errorMessage);
       setIsLoading(false);
     }
-  }, []);
+  }, [selectedCameraId, cameraFacing]);
+
+  // Switch camera function
+  const switchCamera = useCallback(async (newCameraId?: string, newFacing?: 'user' | 'environment') => {
+    // Stop current camera
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    
+    setIsCameraActive(false);
+    setIsPoseDetectionActive(false);
+    
+    // Update camera settings
+    if (newCameraId) {
+      setSelectedCameraId(newCameraId);
+    }
+    if (newFacing) {
+      setCameraFacing(newFacing);
+    }
+    
+    // Small delay to ensure state updates
+    setTimeout(() => {
+      startCamera();
+    }, 100);
+  }, [startCamera]);
 
   // Stop camera
   const stopCamera = useCallback(() => {

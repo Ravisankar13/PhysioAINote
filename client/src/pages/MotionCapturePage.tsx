@@ -174,9 +174,9 @@ export default function MotionCapturePage() {
       </Card>
 
       {/* Main Layout */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full" onClick={(e) => e.stopPropagation()}>
         {/* Motion Capture Panel */}
-        <div className="xl:col-span-2 space-y-6" onClick={(e) => e.stopPropagation()}>
+        <div className="space-y-6" onClick={(e) => e.stopPropagation()}>
           <MotionCapture 
             onMotionDataCapture={handleMotionDataCapture}
             className="w-full"
@@ -267,40 +267,7 @@ export default function MotionCapturePage() {
           )}
         </div>
 
-        {/* 3D Visualization Panel */}
-        <div className="xl:col-span-1">
-          <Card className="h-[800px]">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5" />
-                Virtual Patient Visualization
-                {virtualPatientData && (
-                  <Badge variant="default" className="ml-2">
-                    Live
-                  </Badge>
-                )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 h-[720px]">
-              <div className="w-full h-full bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg border">
-                {virtualPatientData ? (
-                  <Enhanced3DSkeleton 
-                    patientData={virtualPatientData}
-                    className="h-full"
-                  />
-                ) : (
-                  <div className="flex items-center justify-center h-full">
-                    <div className="text-center text-muted-foreground">
-                      <Users className="h-16 w-16 mx-auto mb-4 opacity-20" />
-                      <h3 className="text-lg font-medium mb-2">No Virtual Patient Data</h3>
-                      <p className="text-sm">Record patient movement to see virtual recreation</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+
       </div>
 
       {/* Instructions */}

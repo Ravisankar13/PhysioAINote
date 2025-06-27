@@ -1723,18 +1723,36 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
       rendererRef.current = renderer;
       cameraRef.current = camera;
       
+      // Create animation loop for continuous rendering
+      const animate = () => {
+        if (rendererRef.current && sceneRef.current && cameraRef.current) {
+          rendererRef.current.render(sceneRef.current, cameraRef.current);
+        }
+        requestAnimationFrame(animate);
+      };
+      animate();
+      
       // Initial render with test cube
       renderer.render(scene, camera);
-      console.log('✓ 3D scene initialized successfully with test cube');
+      console.log('✓ 3D scene initialized successfully with test cube and animation loop');
       
-      // Remove test cube after 2 seconds
+      // Remove test cube and show skeleton after 1 second
       setTimeout(() => {
         if (scene && testCube) {
           scene.remove(testCube);
+          
+          // If we have motion data, create skeleton immediately
+          if (motionData && motionData.length > 0 && motionData[0]?.landmarks) {
+            createSkeleton(motionData[0].landmarks);
+          } else {
+            // Show test skeleton if no motion data
+            createTestSkeleton();
+          }
+          
           renderer.render(scene, camera);
-          console.log('Test cube removed, scene ready for skeleton');
+          console.log('Test cube removed, skeleton displayed');
         }
-      }, 2000);
+      }, 1000);
       
     } catch (error) {
       console.error('Error initializing 3D scene:', error);
@@ -2135,9 +2153,11 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
           console.log('Initial joint angles:', initialJointAngles);
           setCurrentJointAngles(initialJointAngles);
           
-          // Create initial virtual patient skeleton
+          // Create initial virtual patient skeleton with delay to ensure 3D scene is ready
           if (motionData[0].landmarks) {
-            createSkeleton(motionData[0].landmarks);
+            setTimeout(() => {
+              createSkeleton(motionData[0].landmarks);
+            }, 500);
           }
         }
       } catch (error) {
@@ -2359,7 +2379,7 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
               width={400}
               height={300}
               className="w-full h-48 bg-gray-100 rounded border"
-              style={{ maxWidth: '400px', maxHeight: '300px' }}
+              style={{ maxWidth: '400px', maxHeight: '300px', display: 'block' }}
             />
             <div className="text-xs text-gray-600 mt-2 text-center">
               3D Virtual Patient - Shows movement during analysis

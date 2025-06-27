@@ -551,13 +551,14 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
             )}
           </div>
 
-          <div className="relative bg-black rounded-lg overflow-hidden" style={{ aspectRatio: '16/9', minHeight: '480px' }}>
+          <div className="relative bg-black rounded-lg overflow-hidden" style={{ aspectRatio: '16/9', minHeight: '720px', maxHeight: '900px' }}>
             <video
               ref={videoRef}
               className="w-full h-full object-cover"
               autoPlay
               muted
               playsInline
+              style={{ minHeight: '720px' }}
             />
             <canvas
               ref={canvasRef}

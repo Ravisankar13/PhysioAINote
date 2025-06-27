@@ -16,10 +16,19 @@ interface PoseFrame {
 
 interface MotionCaptureProps {
   onMotionDataCapture?: (data: PoseFrame[]) => void;
+  onAnalysisComplete?: (data: any) => void;
+  previousData?: any;
+  staticPosturalData?: any;
   className?: string;
 }
 
-export default function MotionCapture({ onMotionDataCapture, className }: MotionCaptureProps) {
+export default function MotionCapture({ 
+  onMotionDataCapture, 
+  onAnalysisComplete,
+  previousData,
+  staticPosturalData,
+  className 
+}: MotionCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -338,6 +347,17 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
         });
         
         console.log('Virtual patient created:', patientProfile);
+        
+        // Call the completion callback if provided
+        if (onAnalysisComplete) {
+          onAnalysisComplete({
+            motionData: currentFrames,
+            analysis: motionAnalysis,
+            virtualPatient: patientProfile,
+            staticPosturalCorrelations: staticPosturalData ? 
+              generateStaticMotionCorrelations(staticPosturalData, motionAnalysis) : []
+          });
+        }
         
       } else {
         toast({

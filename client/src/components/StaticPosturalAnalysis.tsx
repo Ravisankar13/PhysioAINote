@@ -107,6 +107,20 @@ export function StaticPosturalAnalysis({
     }
   }, []);
 
+  // Load previous data if available
+  useEffect(() => {
+    if (previousData) {
+      setAnalysisResult(previousData);
+    }
+  }, [previousData]);
+
+  // Call completion handler when analysis is complete
+  useEffect(() => {
+    if (analysisResult && onAnalysisComplete) {
+      onAnalysisComplete(analysisResult);
+    }
+  }, [analysisResult, onAnalysisComplete]);
+
   // Process video frames for pose detection
   const processFrame = useCallback(async () => {
     if (!detector || !videoRef.current || !canvasRef.current || !isCameraActive) return;
@@ -788,9 +802,14 @@ export function StaticPosturalAnalysis({
       {/* Control Panel */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Activity className="h-5 w-5" />
-            Static Postural Analysis
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Activity className="h-5 w-5" />
+              Static Postural Analysis
+            </div>
+            <Badge variant="outline" className="capitalize">
+              {viewMode} Plane
+            </Badge>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -815,6 +834,33 @@ export function StaticPosturalAnalysis({
                 Reset Analysis
               </Button>
             )}
+          </div>
+
+          {/* Positioning Instructions */}
+          <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <h4 className="font-medium text-blue-900 mb-2">
+              {viewMode === 'frontal' ? 'Frontal Plane Positioning' : 'Sagittal Plane Positioning'}
+            </h4>
+            <div className="text-sm text-blue-700 space-y-1">
+              {viewMode === 'frontal' ? (
+                <>
+                  <p>• Face the camera directly (front-facing view)</p>
+                  <p>• Stand with feet shoulder-width apart</p>
+                  <p>• Look straight ahead at the camera</p>
+                  <p>• Keep arms relaxed at your sides</p>
+                  <p>• Maintain your natural posture</p>
+                </>
+              ) : (
+                <>
+                  <p>• Stand sideways to the camera (profile view)</p>
+                  <p>• Position your right side toward the camera</p>
+                  <p>• Stand with feet hip-width apart</p>
+                  <p>• Look straight ahead (not at camera)</p>
+                  <p>• Keep arms relaxed at your sides</p>
+                  <p>• Maintain your natural posture</p>
+                </>
+              )}
+            </div>
           </div>
 
           {isCapturing && (

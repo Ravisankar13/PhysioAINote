@@ -2,7 +2,8 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Camera, Play, Square, RotateCcw, Activity, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Camera, Play, Square, RotateCcw, Activity, AlertTriangle, CheckCircle, XCircle, User, FlipHorizontal } from 'lucide-react';
 import * as tf from '@tensorflow/tfjs';
 import * as poseDetection from '@tensorflow-models/pose-detection';
 
@@ -66,13 +67,53 @@ export function StaticPosturalAnalysis({
   const [detector, setDetector] = useState<poseDetection.PoseDetector | null>(null);
   const [isDetectorLoading, setIsDetectorLoading] = useState(false);
   const animationIdRef = useRef<number>();
+  const [cameraFacing, setCameraFacing] = useState<'user' | 'environment'>('user');
+  const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]);
+  const [selectedCameraId, setSelectedCameraId] = useState<string>('');
+
+  // Get available cameras on component mount
+  useEffect(() => {
+    const getAvailableCameras = async () => {
+      try {
+        // Request permission first
+        const tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        tempStream.getTracks().forEach(track => track.stop());
+        
+        // Get device list
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter(device => device.kind === 'videoinput');
+        setAvailableCameras(videoDevices);
+        
+        if (videoDevices.length > 0 && !selectedCameraId) {
+          setSelectedCameraId(videoDevices[0].deviceId);
+        }
+      } catch (error) {
+        console.log('Could not enumerate cameras:', error);
+      }
+    };
+    
+    getAvailableCameras();
+  }, [selectedCameraId]);
 
   // Initialize camera
   const initializeCamera = useCallback(async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 1280, height: 960, facingMode: 'user' }
-      });
+      // Build camera constraints
+      const constraints: MediaStreamConstraints = {
+        video: {
+          width: 1280,
+          height: 960,
+        }
+      };
+
+      // Use specific device ID if selected, otherwise use facing mode
+      if (selectedCameraId) {
+        (constraints.video as any).deviceId = { exact: selectedCameraId };
+      } else {
+        (constraints.video as any).facingMode = cameraFacing;
+      }
+      
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
       
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -81,7 +122,32 @@ export function StaticPosturalAnalysis({
     } catch (error) {
       console.error('Camera access failed:', error);
     }
-  }, []);
+  }, [selectedCameraId, cameraFacing]);
+
+  // Switch camera function
+  const switchCamera = useCallback(async (newCameraId?: string, newFacing?: 'user' | 'environment') => {
+    // Stop current camera
+    if (videoRef.current?.srcObject) {
+      const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
+      tracks.forEach(track => track.stop());
+      videoRef.current.srcObject = null;
+    }
+    
+    setIsCameraActive(false);
+    
+    // Update camera settings
+    if (newCameraId) {
+      setSelectedCameraId(newCameraId);
+    }
+    if (newFacing) {
+      setCameraFacing(newFacing);
+    }
+    
+    // Small delay to ensure state updates
+    setTimeout(() => {
+      initializeCamera();
+    }, 100);
+  }, [initializeCamera]);
 
   // Initialize pose detection
   const initializePoseDetection = useCallback(async () => {
@@ -812,7 +878,76 @@ export function StaticPosturalAnalysis({
             </Badge>
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {/* Camera Selection Controls */}
+          <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+            <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+              <Camera className="h-4 w-4" />
+              Camera Settings
+            </h4>
+            <div className="grid md:grid-cols-2 gap-4">
+              {/* Camera Type Selection */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">Camera Type</label>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant={cameraFacing === 'user' ? "default" : "outline"}
+                    onClick={() => switchCamera(undefined, 'user')}
+                    className="flex-1"
+                  >
+                    <User className="h-4 w-4 mr-2" />
+                    Front Camera
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={cameraFacing === 'environment' ? "default" : "outline"}
+                    onClick={() => switchCamera(undefined, 'environment')}
+                    className="flex-1"
+                  >
+                    <FlipHorizontal className="h-4 w-4 mr-2" />
+                    Rear Camera
+                  </Button>
+                </div>
+              </div>
+
+              {/* Specific Camera Selection */}
+              {availableCameras.length > 1 && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Select Camera</label>
+                  <Select 
+                    value={selectedCameraId} 
+                    onValueChange={(value) => switchCamera(value)}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Choose camera..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableCameras.map((camera, index) => (
+                        <SelectItem key={camera.deviceId} value={camera.deviceId}>
+                          {camera.label || `Camera ${index + 1}`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+            
+            {/* Camera Status */}
+            <div className="mt-3 flex items-center gap-2 text-sm">
+              <Badge variant={isCameraActive ? "default" : "secondary"}>
+                {isCameraActive ? `Camera Active (${cameraFacing === 'user' ? 'Front' : 'Rear'})` : 'Camera Inactive'}
+              </Badge>
+              {availableCameras.length > 0 && (
+                <Badge variant="outline">
+                  {availableCameras.length} camera{availableCameras.length !== 1 ? 's' : ''} available
+                </Badge>
+              )}
+            </div>
+          </div>
+
+          {/* Analysis Controls */}
           <div className="flex flex-wrap gap-3">
             {!isCapturing && !analysisResult && (
               <Button onClick={startStaticCapture} className="flex items-center gap-2">

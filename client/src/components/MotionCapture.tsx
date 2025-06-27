@@ -584,6 +584,74 @@ export default function MotionCapture({
             </div>
           </div>
 
+          {/* Camera Selection Controls */}
+          <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+            <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+              <Camera className="h-4 w-4" />
+              Camera Settings
+            </h4>
+            <div className="grid md:grid-cols-2 gap-4">
+              {/* Camera Type Selection */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">Camera Type</label>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant={cameraFacing === 'user' ? "default" : "outline"}
+                    onClick={() => switchCamera(undefined, 'user')}
+                    className="flex-1"
+                  >
+                    <User className="h-4 w-4 mr-2" />
+                    Front Camera
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={cameraFacing === 'environment' ? "default" : "outline"}
+                    onClick={() => switchCamera(undefined, 'environment')}
+                    className="flex-1"
+                  >
+                    <FlipHorizontal className="h-4 w-4 mr-2" />
+                    Rear Camera
+                  </Button>
+                </div>
+              </div>
+
+              {/* Specific Camera Selection */}
+              {availableCameras.length > 1 && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Select Camera</label>
+                  <Select 
+                    value={selectedCameraId} 
+                    onValueChange={(value) => switchCamera(value)}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Choose camera..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableCameras.map((camera, index) => (
+                        <SelectItem key={camera.deviceId} value={camera.deviceId}>
+                          {camera.label || `Camera ${index + 1}`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+            
+            {/* Camera Status */}
+            <div className="mt-3 flex items-center gap-2 text-sm">
+              <Badge variant={isCameraActive ? "default" : "secondary"}>
+                {isCameraActive ? `Camera Active (${cameraFacing === 'user' ? 'Front' : 'Rear'})` : 'Camera Inactive'}
+              </Badge>
+              {availableCameras.length > 0 && (
+                <Badge variant="outline">
+                  {availableCameras.length} camera{availableCameras.length !== 1 ? 's' : ''} available
+                </Badge>
+              )}
+            </div>
+          </div>
+
           {/* Mode Toggle */}
           <div className="flex items-center gap-2 mb-4 p-3 bg-gradient-to-r from-blue-50 to-green-50 rounded-lg border">
             <Button 

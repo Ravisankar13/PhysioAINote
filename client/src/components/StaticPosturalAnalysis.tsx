@@ -3,7 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Camera, Play, Square, RotateCcw, Activity, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
-import { PoseDetection } from './PoseDetection';
+import * as tf from '@tensorflow/tfjs';
+import * as poseDetection from '@tensorflow-models/pose-detection';
 
 interface PosturalAnalysisResult {
   // Spinal Alignment
@@ -49,13 +50,153 @@ export function StaticPosturalAnalysis({ className }: StaticPosturalAnalysisProp
   const [isCapturing, setIsCapturing] = useState(false);
   const captureTimeoutRef = useRef<NodeJS.Timeout>();
   const frameCountRef = useRef(0);
+  
+  // Camera and pose detection refs
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const [detector, setDetector] = useState<poseDetection.PoseDetector | null>(null);
+  const [isDetectorLoading, setIsDetectorLoading] = useState(false);
+  const animationIdRef = useRef<number>();
 
-  const handlePoseData = useCallback((poses: any[]) => {
-    if (isCapturing && poses.length > 0) {
-      setCapturedFrames(prev => [...prev, poses[0]]);
-      frameCountRef.current += 1;
+  // Initialize camera
+  const initializeCamera = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 1280, height: 960, facingMode: 'user' }
+      });
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        setIsCameraActive(true);
+      }
+    } catch (error) {
+      console.error('Camera access failed:', error);
     }
-  }, [isCapturing]);
+  }, []);
+
+  // Initialize pose detection
+  const initializePoseDetection = useCallback(async () => {
+    try {
+      setIsDetectorLoading(true);
+      await tf.ready();
+      
+      const moveNetConfig = {
+        modelType: poseDetection.movenet.modelType.SINGLEPOSE_THUNDER,
+        enableSmoothing: true,
+      };
+      
+      const poseDetector = await poseDetection.createDetector(
+        poseDetection.SupportedModels.MoveNet,
+        moveNetConfig
+      );
+      
+      setDetector(poseDetector);
+      setIsDetectorLoading(false);
+    } catch (error) {
+      console.error('Pose detection initialization failed:', error);
+      setIsDetectorLoading(false);
+    }
+  }, []);
+
+  // Process video frames for pose detection
+  const processFrame = useCallback(async () => {
+    if (!detector || !videoRef.current || !canvasRef.current || !isCameraActive) return;
+
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+
+    if (video.readyState >= 4) {
+      try {
+        const poses = await detector.estimatePoses(video);
+        
+        // Update canvas dimensions
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        
+        // Draw video and poses
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(video, 0, 0);
+          
+          // Draw poses
+          poses.forEach(pose => {
+            if (pose.keypoints) {
+              // Draw keypoints
+              pose.keypoints.forEach((keypoint: any) => {
+                if (keypoint.score > 0.3) {
+                  ctx.beginPath();
+                  ctx.arc(keypoint.x, keypoint.y, 5, 0, 2 * Math.PI);
+                  ctx.fillStyle = '#ff0000';
+                  ctx.fill();
+                }
+              });
+              
+              // Draw skeleton connections
+              const connections = [
+                [5, 6], [5, 11], [6, 12], [11, 12], // torso
+                [5, 7], [7, 9], [6, 8], [8, 10], // arms
+                [11, 13], [13, 15], [12, 14], [14, 16] // legs
+              ];
+              
+              connections.forEach(([i, j]) => {
+                const kp1 = pose.keypoints[i];
+                const kp2 = pose.keypoints[j];
+                
+                if (kp1 && kp2 && (kp1.score || 0) > 0.3 && (kp2.score || 0) > 0.3) {
+                  ctx.beginPath();
+                  ctx.moveTo(kp1.x, kp1.y);
+                  ctx.lineTo(kp2.x, kp2.y);
+                  ctx.strokeStyle = '#00ff00';
+                  ctx.lineWidth = 2;
+                  ctx.stroke();
+                }
+              });
+            }
+          });
+        }
+        
+        // Handle pose data for capture
+        if (isCapturing && poses.length > 0) {
+          setCapturedFrames(prev => [...prev, poses[0]]);
+          frameCountRef.current += 1;
+        }
+      } catch (error) {
+        console.error('Frame processing error:', error);
+      }
+    }
+
+    animationIdRef.current = requestAnimationFrame(processFrame);
+  }, [detector, isCameraActive, isCapturing]);
+
+  // Start pose detection loop
+  useEffect(() => {
+    if (detector && isCameraActive) {
+      processFrame();
+    }
+    
+    return () => {
+      if (animationIdRef.current) {
+        cancelAnimationFrame(animationIdRef.current);
+      }
+    };
+  }, [detector, isCameraActive, processFrame]);
+
+  // Initialize everything on mount
+  useEffect(() => {
+    initializeCamera();
+    initializePoseDetection();
+    
+    return () => {
+      if (animationIdRef.current) {
+        cancelAnimationFrame(animationIdRef.current);
+      }
+      if (videoRef.current?.srcObject) {
+        const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
+        tracks.forEach(track => track.stop());
+      }
+    };
+  }, [initializeCamera, initializePoseDetection]);
 
   const startStaticCapture = useCallback(() => {
     setIsCapturing(true);
@@ -695,13 +836,45 @@ export function StaticPosturalAnalysis({ className }: StaticPosturalAnalysisProp
       {/* Camera Feed */}
       <Card>
         <CardHeader>
-          <CardTitle>Live Camera Feed</CardTitle>
+          <CardTitle className="flex items-center justify-between">
+            Live Camera Feed
+            <div className="flex items-center gap-2">
+              {isDetectorLoading && (
+                <Badge variant="secondary">Loading AI...</Badge>
+              )}
+              {detector && isCameraActive && (
+                <Badge variant="default">AI Active</Badge>
+              )}
+              {isCameraActive && (
+                <Badge variant="outline" className="text-green-600">Camera On</Badge>
+              )}
+            </div>
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <PoseDetection 
-            onPoseData={handlePoseData}
-            className="w-full h-[500px]"
-          />
+          <div className="relative w-full h-[500px] bg-gray-900 rounded-lg overflow-hidden">
+            <video 
+              ref={videoRef}
+              autoPlay 
+              playsInline 
+              muted
+              className="absolute inset-0 w-full h-full object-cover"
+              style={{ display: 'none' }}
+            />
+            <canvas 
+              ref={canvasRef}
+              className="absolute inset-0 w-full h-full object-cover"
+            />
+            {!isCameraActive && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="text-center text-muted-foreground">
+                  <Camera className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                  <h3 className="text-lg font-medium mb-2">Initializing Camera</h3>
+                  <p className="text-sm">Please allow camera access when prompted</p>
+                </div>
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 

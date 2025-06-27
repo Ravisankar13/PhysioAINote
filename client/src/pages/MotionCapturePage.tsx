@@ -3,11 +3,12 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/hooks/use-auth";
 import MotionCapture from "@/components/MotionCapture";
 import MotionProcessor from "@/components/MotionProcessor";
 import Enhanced3DSkeleton from "@/components/3d/Enhanced3DSkeleton";
-import { Camera, Users, Activity, ArrowLeft, Settings, Scan } from "lucide-react";
+import { Camera, Users, Activity, ArrowLeft, Settings, Scan, Video } from "lucide-react";
 import { StaticPosturalAnalysis } from "@/components/StaticPosturalAnalysis";
 import { Link } from "wouter";
 
@@ -174,25 +175,36 @@ export default function MotionCapturePage() {
         </CardContent>
       </Card>
 
-      {/* Main Layout */}
-      <div className="w-full" onClick={(e) => e.stopPropagation()}>
-        {/* Motion Capture Panel */}
-        <div className="space-y-6" onClick={(e) => e.stopPropagation()}>
-          <MotionCapture 
-            onMotionDataCapture={handleMotionDataCapture}
-            className="w-full"
-          />
-          
-          {motionData.length > 0 && (
-            <MotionProcessor
-              motionData={motionData}
-              onSkeletonUpdate={handleSkeletonUpdate}
+      {/* Main Content with Tabs */}
+      <Tabs defaultValue="motion-capture" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="motion-capture" className="flex items-center gap-2">
+            <Video className="h-4 w-4" />
+            Motion Capture
+          </TabsTrigger>
+          <TabsTrigger value="static-analysis" className="flex items-center gap-2">
+            <Scan className="h-4 w-4" />
+            Static Postural Analysis
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="motion-capture" className="mt-6">
+          <div className="space-y-6">
+            <MotionCapture 
+              onMotionDataCapture={handleMotionDataCapture}
               className="w-full"
             />
-          )}
+            
+            {motionData.length > 0 && (
+              <MotionProcessor
+                motionData={motionData}
+                onSkeletonUpdate={handleSkeletonUpdate}
+                className="w-full"
+              />
+            )}
 
-          {/* Real-time Analysis Display */}
-          {analysisResults && (
+            {/* Real-time Analysis Display */}
+            {analysisResults && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -266,10 +278,13 @@ export default function MotionCapturePage() {
               </CardContent>
             </Card>
           )}
-        </div>
+          </div>
+        </TabsContent>
 
-
-      </div>
+        <TabsContent value="static-analysis" className="mt-6">
+          <StaticPosturalAnalysis />
+        </TabsContent>
+      </Tabs>
 
       {/* Instructions */}
       <Card className="mt-6">

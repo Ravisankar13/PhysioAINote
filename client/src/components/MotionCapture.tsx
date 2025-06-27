@@ -108,11 +108,9 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
       
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          width: { ideal: 1280, min: 640 },
-          height: { ideal: 1600, min: 900 },
-          facingMode: 'user',
-          frameRate: { ideal: 30, max: 60 },
-          aspectRatio: { ideal: 4/5 }
+          width: { ideal: 1280 },
+          height: { ideal: 960 },
+          facingMode: 'user'
         },
         audio: false
       });
@@ -156,9 +154,39 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
           }, 2000);
         };
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Camera access error:', err);
-      setError('Camera access denied. Please allow camera permissions.');
+      
+      let errorMessage = 'Camera access failed. ';
+      if (err.name === 'NotAllowedError') {
+        errorMessage += 'Please allow camera permissions and refresh the page.';
+      } else if (err.name === 'NotFoundError') {
+        errorMessage += 'No camera device found.';
+      } else if (err.name === 'OverconstrainedError') {
+        errorMessage += 'Camera settings not supported. Trying with basic settings...';
+        
+        // Try again with minimal constraints
+        try {
+          const basicStream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false
+          });
+          
+          if (videoRef.current) {
+            videoRef.current.srcObject = basicStream;
+            streamRef.current = basicStream;
+            setIsCameraActive(true);
+            setIsLoading(false);
+            return;
+          }
+        } catch (basicErr) {
+          errorMessage += ' Basic camera access also failed.';
+        }
+      } else {
+        errorMessage += `Error: ${err.message}`;
+      }
+      
+      setError(errorMessage);
       setIsLoading(false);
     }
   }, []);
@@ -564,7 +592,7 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
               ref={canvasRef}
               className="absolute inset-0 w-full h-full"
               width={1280}
-              height={1600}
+              height={960}
               style={{ display: isPoseDetectionActive ? 'block' : 'none' }}
             />
             

@@ -206,11 +206,11 @@ function TreatmentProtocolEngine({
   };
 
   const getSeverityBasedModifications = () => {
-    if (!selectedProtocol) return [];
+    if (!selectedProtocol || !diagnosticResult) return [];
     
     const modifications = [];
-    const painLevel = patientAnswers.pain_intensity || 0;
-    const functionalImpact = patientAnswers.functional_impact || 0;
+    const painLevel = patientAnswers?.pain_intensity || 0;
+    const functionalImpact = patientAnswers?.functional_impact || 0;
     
     if (painLevel >= 7) {
       modifications.push('Reduce exercise intensity by 25-50%');
@@ -233,6 +233,16 @@ function TreatmentProtocolEngine({
   };
 
   const renderStandardProtocols = () => {
+    if (!diagnosticResult) {
+      return (
+        <div className="text-center py-8">
+          <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+          <p className="text-muted-foreground">Complete diagnostic assessment first</p>
+          <p className="text-sm text-muted-foreground mt-2">Standard protocols require diagnostic results</p>
+        </div>
+      );
+    }
+    
     if (matchingProtocols.length === 0) {
       return (
         <div className="text-center py-8">
@@ -489,12 +499,20 @@ function TreatmentProtocolEngine({
             </TabsContent>
 
             <TabsContent value="smart-engine" className="space-y-6">
-              <SmartExerciseEngine
-                abnormalities={abnormalities}
-                diagnosticResult={diagnosticResult}
-                patientAnswers={patientAnswers}
-                onPrescriptionComplete={handleSmartPrescriptionComplete}
-              />
+              {diagnosticResult ? (
+                <SmartExerciseEngine
+                  abnormalities={abnormalities}
+                  diagnosticResult={diagnosticResult}
+                  patientAnswers={patientAnswers}
+                  onPrescriptionComplete={handleSmartPrescriptionComplete}
+                />
+              ) : (
+                <div className="text-center py-8">
+                  <Zap className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p className="text-muted-foreground">Complete diagnostic assessment first</p>
+                  <p className="text-sm text-muted-foreground mt-2">AI exercise prescription requires diagnostic results</p>
+                </div>
+              )}
             </TabsContent>
 
             <TabsContent value="smart-results" className="space-y-6">

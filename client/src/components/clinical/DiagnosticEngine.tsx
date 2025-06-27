@@ -214,6 +214,7 @@ export default function DiagnosticEngine({ abnormalities, assessmentData, onDiag
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [diagnosticResult, setDiagnosticResult] = useState<DiagnosticResult | null>(null);
+  const [allAbnormalities, setAllAbnormalities] = useState<MovementAbnormality[]>([]);
 
   // Analyze movement patterns
   useEffect(() => {
@@ -224,7 +225,7 @@ export default function DiagnosticEngine({ abnormalities, assessmentData, onDiag
     const patterns: DiagnosticPattern[] = [];
     
     // Extract abnormalities from assessment data if not provided directly
-    let allAbnormalities: MovementAbnormality[] = abnormalities || [];
+    let extractedAbnormalities: MovementAbnormality[] = abnormalities || [];
     
     if (assessmentData) {
       // Extract abnormalities from static postural analysis
@@ -233,17 +234,20 @@ export default function DiagnosticEngine({ abnormalities, assessmentData, onDiag
           ...(assessmentData.staticPostural.frontal?.abnormalities || []),
           ...(assessmentData.staticPostural.sagittal?.abnormalities || [])
         ];
-        allAbnormalities = allAbnormalities.concat(staticAbnormalities);
+        extractedAbnormalities = extractedAbnormalities.concat(staticAbnormalities);
       }
       
       // Extract abnormalities from motion capture analysis
       if (assessmentData.motionCapture?.analysis) {
         const motionAbnormalities = assessmentData.motionCapture.analysis.abnormalities || [];
-        allAbnormalities = allAbnormalities.concat(motionAbnormalities);
+        extractedAbnormalities = extractedAbnormalities.concat(motionAbnormalities);
       }
     }
     
-    const abnormalityTypes = allAbnormalities.map(a => a.type);
+    // Update state with all abnormalities
+    setAllAbnormalities(extractedAbnormalities);
+    
+    const abnormalityTypes = extractedAbnormalities.map(a => a.type);
 
     DIAGNOSTIC_PATTERNS.forEach(pattern => {
       const hasRequiredAbnormalities = pattern.requiredAbnormalities.every(req => 
@@ -493,9 +497,9 @@ export default function DiagnosticEngine({ abnormalities, assessmentData, onDiag
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            <p>Analyzing {abnormalities.length} detected movement abnormalities...</p>
+            <p>Analyzing {allAbnormalities.length} detected movement abnormalities...</p>
             <div className="grid gap-2">
-              {abnormalities.map((abnormality, index) => (
+              {allAbnormalities.map((abnormality, index) => (
                 <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
                   <span className="font-medium">{abnormality.type.replace(/_/g, ' ')}</span>
                   <Badge variant={abnormality.severity === 'severe' ? 'destructive' : abnormality.severity === 'moderate' ? 'default' : 'secondary'}>

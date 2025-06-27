@@ -55,7 +55,8 @@ interface DiagnosticResult {
 }
 
 interface DiagnosticEngineProps {
-  abnormalities: MovementAbnormality[];
+  abnormalities?: MovementAbnormality[];
+  assessmentData?: any;
   onDiagnosisComplete: (result: DiagnosticResult) => void;
   onProceedToTreatment?: () => void;
 }
@@ -207,7 +208,7 @@ const CLINICAL_QUESTIONS: ClinicalQuestion[] = [
   }
 ];
 
-export default function DiagnosticEngine({ abnormalities, onDiagnosisComplete, onProceedToTreatment }: DiagnosticEngineProps) {
+export default function DiagnosticEngine({ abnormalities, assessmentData, onDiagnosisComplete, onProceedToTreatment }: DiagnosticEngineProps) {
   const [currentStep, setCurrentStep] = useState<'analysis' | 'questions' | 'results'>('analysis');
   const [detectedPatterns, setDetectedPatterns] = useState<DiagnosticPattern[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -221,7 +222,28 @@ export default function DiagnosticEngine({ abnormalities, onDiagnosisComplete, o
 
   const analyzeMovementPatterns = () => {
     const patterns: DiagnosticPattern[] = [];
-    const abnormalityTypes = abnormalities.map(a => a.type);
+    
+    // Extract abnormalities from assessment data if not provided directly
+    let allAbnormalities: MovementAbnormality[] = abnormalities || [];
+    
+    if (assessmentData) {
+      // Extract abnormalities from static postural analysis
+      if (assessmentData.staticPostural) {
+        const staticAbnormalities = [
+          ...(assessmentData.staticPostural.frontal?.abnormalities || []),
+          ...(assessmentData.staticPostural.sagittal?.abnormalities || [])
+        ];
+        allAbnormalities = allAbnormalities.concat(staticAbnormalities);
+      }
+      
+      // Extract abnormalities from motion capture analysis
+      if (assessmentData.motionCapture?.analysis) {
+        const motionAbnormalities = assessmentData.motionCapture.analysis.abnormalities || [];
+        allAbnormalities = allAbnormalities.concat(motionAbnormalities);
+      }
+    }
+    
+    const abnormalityTypes = allAbnormalities.map(a => a.type);
 
     DIAGNOSTIC_PATTERNS.forEach(pattern => {
       const hasRequiredAbnormalities = pattern.requiredAbnormalities.every(req => 

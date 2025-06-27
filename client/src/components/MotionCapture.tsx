@@ -46,6 +46,49 @@ export default function MotionCapture({
   
   const { toast } = useToast();
 
+  // Generate correlations between static postural findings and motion patterns
+  const generateStaticMotionCorrelations = useCallback((staticData: any, motionAnalysis: any) => {
+    const correlations: any[] = [];
+    
+    if (staticData.frontal?.abnormalities || staticData.sagittal?.abnormalities) {
+      const allAbnormalities = [
+        ...(staticData.frontal?.abnormalities || []),
+        ...(staticData.sagittal?.abnormalities || [])
+      ];
+      
+      allAbnormalities.forEach((abnormality: any) => {
+        if (abnormality.type?.includes('shoulder') && motionAnalysis.movementQuality < 0.8) {
+          correlations.push({
+            static: abnormality.type,
+            dynamic: 'Reduced movement quality',
+            correlation: 'Strong - Static shoulder asymmetry affects dynamic movement patterns',
+            clinicalSignificance: 'Consider shoulder stability and strengthening exercises'
+          });
+        }
+        
+        if (abnormality.type?.includes('hip') && motionAnalysis.movementQuality < 0.7) {
+          correlations.push({
+            static: abnormality.type,
+            dynamic: 'Movement compensation patterns',
+            correlation: 'Moderate - Hip positioning affects overall movement efficiency',
+            clinicalSignificance: 'Address hip mobility and alignment before advancing exercises'
+          });
+        }
+        
+        if (abnormality.type?.includes('spine') && motionAnalysis.avgLandmarksPerFrame < motionAnalysis.totalFrames * 0.9) {
+          correlations.push({
+            static: abnormality.type,
+            dynamic: 'Inconsistent pose detection',
+            correlation: 'Possible - Spinal alignment may affect movement visibility',
+            clinicalSignificance: 'Consider postural correction exercises'
+          });
+        }
+      });
+    }
+    
+    return correlations;
+  }, []);
+
   // Handle pose data from TensorFlow.js detector
   const handlePoseData = useCallback((poses: any[]) => {
     console.log('handlePoseData called with:', poses?.length || 0, 'poses, recording:', isRecording);

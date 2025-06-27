@@ -124,6 +124,12 @@ const Header = () => {
                 <span>Static Analysis</span>
               </Button>
             </Link>
+            <Link to="/integrated-assessment">
+              <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold shadow-sm flex items-center gap-2">
+                <Stethoscope className="h-4 w-4" />
+                <span>Full Assessment</span>
+              </Button>
+            </Link>
 
             {/* Login button for users who aren't logged in - visible on all devices */}
             {!user && (

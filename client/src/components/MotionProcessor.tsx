@@ -1689,7 +1689,7 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
       scene.background = new THREE.Color(0xf0f0f0);
       
       const camera = new THREE.PerspectiveCamera(75, 400 / 300, 0.1, 1000);
-      camera.position.set(0, 1, 3);
+      camera.position.set(0, 0, 3);
       camera.lookAt(0, 0, 0);
       
       const renderer = new THREE.WebGLRenderer({ 
@@ -1712,12 +1712,25 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
       directionalLight.castShadow = true;
       scene.add(directionalLight);
       
-      // Add a test cube to verify rendering works
-      const testGeometry = new THREE.BoxGeometry(0.2, 0.2, 0.2);
-      const testMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+      // Add a test cube to verify rendering works - make it more visible
+      const testGeometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+      const testMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
       const testCube = new THREE.Mesh(testGeometry, testMaterial);
       testCube.position.set(0, 0, 0);
       scene.add(testCube);
+      
+      // Also add a rotating animation to the cube to make it obvious
+      const animateCube = () => {
+        if (testCube.parent) {
+          testCube.rotation.x += 0.01;
+          testCube.rotation.y += 0.01;
+          if (rendererRef.current && sceneRef.current && cameraRef.current) {
+            rendererRef.current.render(sceneRef.current, cameraRef.current);
+          }
+          requestAnimationFrame(animateCube);
+        }
+      };
+      animateCube();
       
       sceneRef.current = scene;
       rendererRef.current = renderer;
@@ -1801,9 +1814,10 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
           validLandmarks++;
           
           const joint = new THREE.Mesh(jointGeometry, jointMaterial);
-          const x = (landmark.x - 0.5) * 2;  // Scale for visibility
-          const y = -(landmark.y - 0.5) * 2;
-          const z = (landmark.z || 0) * 2;
+          // Normalize coordinates from camera space to 3D space
+          const x = (landmark.x / 1280 - 0.5) * 2;  // Normalize to -1 to 1
+          const y = -(landmark.y / 720 - 0.5) * 2;  // Normalize to -1 to 1
+          const z = (landmark.z || 0) * 0.5;
           
           joint.position.set(x, y, z);
           skeleton.add(joint);
@@ -1852,15 +1866,15 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
             !isNaN(end.x) && !isNaN(end.y)) {
           
           const startPos = new THREE.Vector3(
-            (start.x - 0.5) * 2,
-            -(start.y - 0.5) * 2,
-            (start.z || 0) * 2
+            (start.x / 1280 - 0.5) * 2,
+            -(start.y / 720 - 0.5) * 2,
+            (start.z || 0) * 0.5
           );
           
           const endPos = new THREE.Vector3(
-            (end.x - 0.5) * 2,
-            -(end.y - 0.5) * 2,
-            (end.z || 0) * 2
+            (end.x / 1280 - 0.5) * 2,
+            -(end.y / 720 - 0.5) * 2,
+            (end.z || 0) * 0.5
           );
           
           const points = [startPos, endPos];
@@ -2123,15 +2137,29 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
 
   // Initialize virtual patient scene
   useEffect(() => {
-    initVirtualPatient();
+    console.log('useEffect triggered - initializing virtual patient');
+    
+    // Add a small delay to ensure canvas is mounted
+    const timer = setTimeout(() => {
+      initVirtualPatient();
+    }, 100);
     
     // Cleanup on unmount
     return () => {
+      clearTimeout(timer);
       if (rendererRef.current) {
         rendererRef.current.dispose();
       }
     };
   }, []);
+
+  // Also initialize when canvas ref becomes available
+  useEffect(() => {
+    if (canvasRef.current && !sceneRef.current) {
+      console.log('Canvas ref available, initializing 3D scene');
+      initVirtualPatient();
+    }
+  }, [canvasRef.current]);
 
   // Initialize analysis when motion data changes
   useEffect(() => {
@@ -2383,6 +2411,7 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
             />
             <div className="text-xs text-gray-600 mt-2 text-center">
               3D Virtual Patient - Shows movement during analysis
+              {sceneRef.current ? ' (Active)' : ' (Initializing...)'}
             </div>
           </div>
         </div>

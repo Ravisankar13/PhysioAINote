@@ -26,6 +26,7 @@ import {
   Brain,
   BookOpen,
   Camera,
+  Scan,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Link, useLocation } from "react-router-dom";
@@ -115,6 +116,12 @@ const Header = () => {
               <Button className="bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-sm flex items-center gap-2">
                 <Camera className="h-4 w-4" />
                 <span>Motion Capture</span>
+              </Button>
+            </Link>
+            <Link to="/static-postural-analysis">
+              <Button className="bg-purple-600 hover:bg-purple-700 text-white font-semibold shadow-sm flex items-center gap-2">
+                <Scan className="h-4 w-4" />
+                <span>Static Analysis</span>
               </Button>
             </Link>
 

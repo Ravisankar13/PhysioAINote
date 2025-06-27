@@ -177,7 +177,7 @@ const IntegratedClinicalAssessment: React.FC = () => {
       case 'clinical-interview':
         return (
           <ClinicalInterview
-            onInterviewComplete={(data) => handleStepComplete('clinical-interview', data)}
+            onInterviewComplete={(data: any) => handleStepComplete('clinical-interview', data)}
             previousData={assessmentData.clinicalInterview}
             objectiveFindings={{
               staticPostural: assessmentData.staticPostural,

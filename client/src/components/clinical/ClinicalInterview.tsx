@@ -71,7 +71,7 @@ const INTERVIEW_QUESTIONS: Question[] = [
   }
 ];
 
-export default function ClinicalInterview({ 
+function ClinicalInterview({ 
   posturalFindings, 
   motionFindings, 
   onInterviewComplete,
@@ -244,3 +244,5 @@ export default function ClinicalInterview({
     </Card>
   );
 }
+
+export default ClinicalInterview;

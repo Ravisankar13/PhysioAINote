@@ -41,9 +41,17 @@ interface PosturalAnalysisResult {
 
 interface StaticPosturalAnalysisProps {
   className?: string;
+  viewMode?: 'frontal' | 'sagittal';
+  onAnalysisComplete?: (data: PosturalAnalysisResult) => void;
+  previousData?: PosturalAnalysisResult | null;
 }
 
-export function StaticPosturalAnalysis({ className }: StaticPosturalAnalysisProps) {
+export function StaticPosturalAnalysis({ 
+  className, 
+  viewMode = 'frontal',
+  onAnalysisComplete,
+  previousData 
+}: StaticPosturalAnalysisProps) {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<PosturalAnalysisResult | null>(null);
   const [capturedFrames, setCapturedFrames] = useState<any[]>([]);
@@ -1109,3 +1117,5 @@ export function StaticPosturalAnalysis({ className }: StaticPosturalAnalysisProp
     </div>
   );
 }
+
+export default StaticPosturalAnalysis;

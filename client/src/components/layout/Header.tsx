@@ -41,7 +41,6 @@ const Header = () => {
 
   const navItems = [
     { to: "/", label: "Home" },
-    { to: "/skeleton-3d-tool", label: "3D Skeleton Tool" },
     { to: "/case-studies", label: "AI Case Studies" },
     { to: "/shared-cases", label: "Forum" },
     { to: "/exercises", label: "Exercise Library" },
@@ -179,14 +178,7 @@ const Header = () => {
                     </Link>
                   </DropdownMenuItem>
 
-                  <DropdownMenuItem className="flex items-center" asChild>
-                    <Link to="/skeleton-3d-tool">
-                      <div className="flex items-center cursor-pointer w-full">
-                        <Bone className="mr-2 h-4 w-4" />
-                        <span>3D Skeleton Tool</span>
-                      </div>
-                    </Link>
-                  </DropdownMenuItem>
+
                   <DropdownMenuItem className="flex items-center" asChild>
                     <Link to="/virtual-patients">
                       <div className="flex items-center cursor-pointer w-full">
@@ -323,14 +315,7 @@ const Header = () => {
                           </span>
                         </Link>
 
-                        <Link to="/skeleton-3d-tool">
-                          <span
-                            className="px-2 py-2 text-base block cursor-pointer text-muted-foreground hover:text-foreground"
-                            onClick={() => setOpen(false)}
-                          >
-                            3D Skeleton Tool
-                          </span>
-                        </Link>
+
                         <Link to="/exercises">
                           <span
                             className="px-2 py-2 text-base block cursor-pointer text-muted-foreground hover:text-foreground"

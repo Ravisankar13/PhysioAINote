@@ -1814,9 +1814,9 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
           validLandmarks++;
           
           const joint = new THREE.Mesh(jointGeometry, jointMaterial);
-          // Normalize coordinates from camera space to 3D space
+          // Normalize coordinates from camera space to 3D space (updated for taller camera)
           const x = (landmark.x / 1280 - 0.5) * 2;  // Normalize to -1 to 1
-          const y = -(landmark.y / 720 - 0.5) * 2;  // Normalize to -1 to 1
+          const y = -(landmark.y / 1600 - 0.5) * 2;  // Normalize to -1 to 1 (updated for taller camera)
           const z = (landmark.z || 0) * 0.5;
           
           joint.position.set(x, y, z);
@@ -1867,13 +1867,13 @@ export default function MotionProcessor({ motionData, onSkeletonUpdate, classNam
           
           const startPos = new THREE.Vector3(
             (start.x / 1280 - 0.5) * 2,
-            -(start.y / 720 - 0.5) * 2,
+            -(start.y / 1600 - 0.5) * 2,
             (start.z || 0) * 0.5
           );
           
           const endPos = new THREE.Vector3(
             (end.x / 1280 - 0.5) * 2,
-            -(end.y / 720 - 0.5) * 2,
+            -(end.y / 1600 - 0.5) * 2,
             (end.z || 0) * 0.5
           );
           

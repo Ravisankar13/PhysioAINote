@@ -109,10 +109,10 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           width: { ideal: 1280, min: 640 },
-          height: { ideal: 720, min: 480 },
+          height: { ideal: 1600, min: 900 },
           facingMode: 'user',
           frameRate: { ideal: 30, max: 60 },
-          aspectRatio: { ideal: 16/9 }
+          aspectRatio: { ideal: 4/5 }
         },
         audio: false
       });
@@ -551,20 +551,20 @@ export default function MotionCapture({ onMotionDataCapture, className }: Motion
             )}
           </div>
 
-          <div className="relative bg-black rounded-lg overflow-hidden" style={{ aspectRatio: '16/9', minHeight: '720px', maxHeight: '900px' }}>
+          <div className="relative bg-black rounded-lg overflow-hidden" style={{ aspectRatio: '4/5', minHeight: '900px', maxHeight: '1100px' }}>
             <video
               ref={videoRef}
               className="w-full h-full object-cover"
               autoPlay
               muted
               playsInline
-              style={{ minHeight: '720px' }}
+              style={{ minHeight: '900px' }}
             />
             <canvas
               ref={canvasRef}
               className="absolute inset-0 w-full h-full"
               width={1280}
-              height={720}
+              height={1600}
               style={{ display: isPoseDetectionActive ? 'block' : 'none' }}
             />
             

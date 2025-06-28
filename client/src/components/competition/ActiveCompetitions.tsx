@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,8 +14,12 @@ import {
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 
 export default function ActiveCompetitions() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   
   const { data: activeCompetitions, isLoading: loadingActive } = useQuery({
     queryKey: ['/api/competitions/active']
@@ -23,6 +27,29 @@ export default function ActiveCompetitions() {
 
   const { data: upcomingCompetitions, isLoading: loadingUpcoming } = useQuery({
     queryKey: ['/api/competitions/upcoming']
+  });
+
+  // Join competition mutation
+  const joinCompetition = useMutation({
+    mutationFn: async (competitionId: number) => {
+      const response = await apiRequest('POST', `/api/competitions/${competitionId}/join`);
+      return response.json();
+    },
+    onSuccess: (data, competitionId) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/competitions/active'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/competitions/upcoming'] });
+      toast({
+        title: "Joined Competition!",
+        description: "You're now participating in this competition. Good luck!",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Join Failed",
+        description: error.message || "Failed to join competition",
+        variant: "destructive",
+      });
+    },
   });
 
   const getCompetitionIcon = (type: string) => {
@@ -75,17 +102,15 @@ export default function ActiveCompetitions() {
   if (loadingActive || loadingUpcoming) {
     return (
       <div className="space-y-6">
-        {[1, 2, 3].map((i) => (
-          <Card key={i}>
-            <CardContent className="p-6">
-              <div className="animate-pulse space-y-4">
-                <div className="h-6 bg-gray-200 rounded w-1/3"></div>
-                <div className="h-4 bg-gray-200 rounded w-2/3"></div>
-                <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+        <div className="grid gap-4">
+          {[1, 2, 3].map((i) => (
+            <Card key={i}>
+              <CardContent className="flex items-center justify-center h-40">
+                <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </div>
     );
   }
@@ -100,7 +125,7 @@ export default function ActiveCompetitions() {
           Active Competitions
         </h3>
         
-        {!activeCompetitions || activeCompetitions.length === 0 ? (
+        {!activeCompetitions || !Array.isArray(activeCompetitions) || activeCompetitions.length === 0 ? (
           <Alert>
             <AlertDescription>
               No active competitions at the moment. Check back soon or join upcoming competitions!
@@ -134,11 +159,11 @@ export default function ActiveCompetitions() {
                     </div>
                     <div className="flex items-center gap-2">
                       <Users className="h-4 w-4 text-muted-foreground" />
-                      <span>{competition.maxParticipants} max</span>
+                      <span>{competition.maxParticipants || 'Unlimited'} max</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Timer className="h-4 w-4 text-muted-foreground" />
-                      <span>{competition.timeLimit} min</span>
+                      <span>{competition.timeLimit ? `${competition.timeLimit} min` : 'No limit'}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Target className="h-4 w-4 text-muted-foreground" />
@@ -163,8 +188,12 @@ export default function ActiveCompetitions() {
                       <Button variant="outline" size="sm">
                         View Details
                       </Button>
-                      <Button size="sm">
-                        Join Competition
+                      <Button 
+                        size="sm"
+                        onClick={() => joinCompetition.mutate(competition.id)}
+                        disabled={joinCompetition.isPending}
+                      >
+                        {joinCompetition.isPending ? "Joining..." : "Join Competition"}
                       </Button>
                     </div>
                   </div>
@@ -182,7 +211,7 @@ export default function ActiveCompetitions() {
           Upcoming Competitions
         </h3>
         
-        {!upcomingCompetitions || upcomingCompetitions.length === 0 ? (
+        {!upcomingCompetitions || !Array.isArray(upcomingCompetitions) || upcomingCompetitions.length === 0 ? (
           <Alert>
             <AlertDescription>
               No upcoming competitions scheduled. Stay tuned for new challenges!
@@ -211,20 +240,20 @@ export default function ActiveCompetitions() {
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                     <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-muted-foreground" />
-                      <span>{new Date(competition.startTime).toLocaleDateString()}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
                       <Clock className="h-4 w-4 text-muted-foreground" />
-                      <span>{new Date(competition.startTime).toLocaleTimeString()}</span>
+                      <span>Starts {new Date(competition.startTime).toLocaleDateString()}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Users className="h-4 w-4 text-muted-foreground" />
-                      <span>{competition.maxParticipants} max</span>
+                      <span>{competition.maxParticipants || 'Unlimited'} max</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Timer className="h-4 w-4 text-muted-foreground" />
-                      <span>{competition.timeLimit} min</span>
+                      <span>{competition.timeLimit ? `${competition.timeLimit} min` : 'No limit'}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Target className="h-4 w-4 text-muted-foreground" />
+                      <span className="capitalize">{competition.bodyPart || 'All Areas'}</span>
                     </div>
                   </div>
                   
@@ -235,9 +264,11 @@ export default function ActiveCompetitions() {
                       <Badge variant="outline" className="capitalize">
                         {competition.difficulty}
                       </Badge>
-                      <Badge variant="outline" className="capitalize">
-                        {competition.bodyPart || 'All Areas'}
-                      </Badge>
+                      {competition.bodyPart && (
+                        <Badge variant="outline" className="capitalize">
+                          {competition.bodyPart || 'All Areas'}
+                        </Badge>
+                      )}
                     </div>
                     <div className="space-x-2">
                       <Button variant="outline" size="sm">

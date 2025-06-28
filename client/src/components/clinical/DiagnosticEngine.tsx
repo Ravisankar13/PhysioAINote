@@ -1,14 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useState, useEffect, useMemo } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, CheckCircle, Brain, FileText, Stethoscope } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Separator } from '@/components/ui/separator';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Slider } from '@/components/ui/slider';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Brain, Stethoscope, Activity, Users, ChevronRight, CheckCircle, AlertTriangle, ArrowLeft, ArrowRight } from 'lucide-react';
 
-// Types for the diagnostic system
 interface MovementAbnormality {
   type: string;
   severity: 'mild' | 'moderate' | 'severe';
@@ -61,82 +64,21 @@ interface DiagnosticEngineProps {
   onProceedToTreatment?: () => void;
 }
 
-// Diagnostic patterns based on movement abnormalities
-const DIAGNOSTIC_PATTERNS: DiagnosticPattern[] = [
-  {
-    id: 'upper_crossed_syndrome',
-    name: 'Upper Crossed Syndrome',
-    abnormalities: ['forward_head', 'cervical_extension', 'shoulder_elevation', 'thoracic_kyphosis'],
-    requiredAbnormalities: ['forward_head', 'shoulder_elevation'],
-    likelihood: 0.85,
-    description: 'Postural syndrome characterized by muscle imbalances in the upper body',
-    commonCauses: ['Prolonged sitting', 'Computer work', 'Poor ergonomics', 'Weak deep neck flexors'],
-    associatedConditions: ['Cervical pain', 'Headaches', 'Shoulder impingement', 'TMJ dysfunction']
-  },
-  {
-    id: 'hip_abductor_weakness',
-    name: 'Hip Abductor Weakness',
-    abnormalities: ['trendelenburg', 'hip_drop', 'lateral_trunk_lean', 'pelvic_tilt'],
-    requiredAbnormalities: ['trendelenburg'],
-    likelihood: 0.90,
-    description: 'Weakness of hip abductor muscles causing compensatory movement patterns',
-    commonCauses: ['Gluteus medius weakness', 'Hip pathology', 'L5 nerve root irritation', 'Post-surgical weakness'],
-    associatedConditions: ['Lower back pain', 'Hip pain', 'IT band syndrome', 'Knee pain']
-  },
-  {
-    id: 'dynamic_knee_valgus',
-    name: 'Dynamic Knee Valgus Pattern',
-    abnormalities: ['knee_valgus', 'ankle_pronation', 'hip_drop', 'internal_shoulder_rotation'],
-    requiredAbnormalities: ['knee_valgus', 'ankle_pronation'],
-    likelihood: 0.80,
-    description: 'Movement pattern associated with increased injury risk and patellofemoral pain',
-    commonCauses: ['Hip weakness', 'Ankle stiffness', 'Poor movement control', 'Muscle imbalances'],
-    associatedConditions: ['Patellofemoral pain', 'ACL injury risk', 'IT band syndrome', 'Ankle instability']
-  },
-  {
-    id: 'neurological_dysfunction',
-    name: 'Neurological Movement Disorder',
-    abnormalities: ['tremor', 'bradykinesia', 'muscle_rigidity', 'ataxic_movement'],
-    requiredAbnormalities: ['tremor', 'bradykinesia'],
-    likelihood: 0.75,
-    description: 'Movement patterns suggesting neurological involvement',
-    commonCauses: ['Parkinson\'s disease', 'Essential tremor', 'Medication effects', 'Cerebellar dysfunction'],
-    associatedConditions: ['Balance impairments', 'Fall risk', 'Functional limitations', 'Cognitive changes']
-  },
-  {
-    id: 'gait_dysfunction',
-    name: 'Gait Pattern Dysfunction',
-    abnormalities: ['antalgic_gait', 'steppage_gait', 'circumduction_gait', 'foot_drop'],
-    requiredAbnormalities: ['antalgic_gait'],
-    likelihood: 0.85,
-    description: 'Abnormal gait patterns indicating pain or neurological involvement',
-    commonCauses: ['Pain avoidance', 'Nerve injury', 'Muscle weakness', 'Joint restriction'],
-    associatedConditions: ['Chronic pain', 'Functional limitations', 'Fall risk', 'Activity restrictions']
-  },
-  {
-    id: 'spinal_dysfunction',
-    name: 'Spinal Alignment Dysfunction',
-    abnormalities: ['scoliosis', 'lumbar_lordosis', 'cervical_extension', 'pelvic_rotation'],
-    requiredAbnormalities: ['scoliosis'],
-    likelihood: 0.70,
-    description: 'Spinal alignment issues affecting overall posture and movement',
-    commonCauses: ['Structural abnormalities', 'Muscle imbalances', 'Poor posture', 'Developmental issues'],
-    associatedConditions: ['Back pain', 'Reduced mobility', 'Respiratory issues', 'Functional limitations']
-  }
-];
-
-// Clinical assessment questions
-const CLINICAL_QUESTIONS: ClinicalQuestion[] = [
+const clinicalQuestions: ClinicalQuestion[] = [
   {
     id: 'pain_location',
-    question: 'Where is your primary area of pain or discomfort?',
-    type: 'text',
+    question: 'Where is your primary pain located?',
+    type: 'multiple',
+    options: [
+      'Neck', 'Shoulder', 'Upper back', 'Lower back', 'Hip', 'Knee', 'Ankle', 'Foot',
+      'Elbow', 'Wrist', 'Hand', 'Chest', 'Multiple areas'
+    ],
     required: true,
     category: 'pain'
   },
   {
     id: 'pain_intensity',
-    question: 'Rate your current pain level (0 = no pain, 10 = worst pain imaginable)',
+    question: 'Rate your current pain intensity (0 = no pain, 10 = worst possible pain)',
     type: 'scale',
     scaleMin: 0,
     scaleMax: 10,
@@ -146,9 +88,12 @@ const CLINICAL_QUESTIONS: ClinicalQuestion[] = [
   },
   {
     id: 'symptom_duration',
-    question: 'How long have you been experiencing these symptoms?',
+    question: 'How long have you had these symptoms?',
     type: 'multiple',
-    options: ['Less than 1 week', '1-4 weeks', '1-3 months', '3-6 months', 'More than 6 months'],
+    options: [
+      'Less than 1 week', '1-4 weeks', '1-3 months', '3-6 months', 
+      '6-12 months', 'More than 1 year'
+    ],
     required: true,
     category: 'history'
   },
@@ -156,67 +101,77 @@ const CLINICAL_QUESTIONS: ClinicalQuestion[] = [
     id: 'onset_mechanism',
     question: 'How did your symptoms begin?',
     type: 'multiple',
-    options: ['Sudden onset (acute injury)', 'Gradual onset (no specific injury)', 'After specific activity', 'Following an accident', 'Unknown/can\'t remember'],
+    options: [
+      'Gradual onset', 'Sudden onset', 'After specific injury', 
+      'After repetitive activity', 'Unknown cause'
+    ],
     required: true,
     category: 'history'
   },
   {
     id: 'aggravating_factors',
-    question: 'What activities or positions make your symptoms worse?',
+    question: 'What makes your symptoms worse?',
     type: 'text',
     required: false,
     category: 'symptoms'
   },
   {
     id: 'relieving_factors',
-    question: 'What activities or positions make your symptoms better?',
+    question: 'What makes your symptoms better?',
     type: 'text',
     required: false,
     category: 'symptoms'
   },
   {
+    id: 'functional_impact',
+    question: 'How much do your symptoms interfere with daily activities? (0 = no interference, 10 = unable to perform activities)',
+    type: 'scale',
+    scaleMin: 0,
+    scaleMax: 10,
+    scaleLabels: { min: 'No interference', max: 'Unable to perform' },
+    required: true,
+    category: 'function'
+  },
+  {
     id: 'previous_episodes',
-    question: 'Have you experienced similar symptoms before?',
+    question: 'Have you had similar symptoms before?',
     type: 'boolean',
     required: true,
     category: 'history'
   },
   {
-    id: 'functional_impact',
-    question: 'How much do these symptoms affect your daily activities? (0 = no impact, 10 = unable to function)',
-    type: 'scale',
-    scaleMin: 0,
-    scaleMax: 10,
-    scaleLabels: { min: 'No impact', max: 'Unable to function' },
-    required: true,
-    category: 'function'
-  },
-  {
-    id: 'medical_history',
-    question: 'Do you have any relevant medical history (surgeries, chronic conditions, medications)?',
+    id: 'current_medications',
+    question: 'Are you currently taking any medications for this condition?',
     type: 'text',
     required: false,
     category: 'history'
   },
   {
-    id: 'red_flag_symptoms',
-    question: 'Are you experiencing any of the following? (Select all that apply)',
-    type: 'multiple',
-    options: ['Severe unrelenting pain', 'Numbness or tingling', 'Weakness in arms/legs', 'Loss of bowel/bladder control', 'Fever', 'Unexplained weight loss', 'Night pain that wakes you'],
+    id: 'sleep_impact',
+    question: 'Do your symptoms affect your sleep?',
+    type: 'boolean',
     required: true,
-    category: 'symptoms'
+    category: 'function'
   }
 ];
 
 export default function DiagnosticEngine({ abnormalities, assessmentData, onDiagnosisComplete, onProceedToTreatment }: DiagnosticEngineProps) {
-  const [currentStep, setCurrentStep] = useState<'analysis' | 'questions' | 'results'>('analysis');
-  const [detectedPatterns, setDetectedPatterns] = useState<DiagnosticPattern[]>([]);
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [currentStep, setCurrentStep] = useState<'interview' | 'analysis' | 'results'>('interview');
   const [answers, setAnswers] = useState<Record<string, any>>({});
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [diagnosticResult, setDiagnosticResult] = useState<DiagnosticResult | null>(null);
-  const [allAbnormalities, setAllAbnormalities] = useState<MovementAbnormality[]>([]);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
-  // AI diagnosis functions
+  const allAbnormalities = useMemo(() => {
+    const movementAbnormalities = abnormalities || [];
+    const staticPosturalAbnormalities = assessmentData?.staticPostural?.abnormalities || [];
+    return [...movementAbnormalities, ...staticPosturalAbnormalities];
+  }, [abnormalities, assessmentData]);
+
+  const currentQuestion = clinicalQuestions[currentQuestionIndex];
+  const totalQuestions = clinicalQuestions.length;
+  const progress = ((currentQuestionIndex + 1) / totalQuestions) * 100;
+
   const generateAIDiagnosis = async () => {
     try {
       const response = await fetch('/api/ai-diagnosis', {
@@ -268,23 +223,6 @@ export default function DiagnosticEngine({ abnormalities, assessmentData, onDiag
     return createFallbackDifferentials();
   };
 
-  const createClinicalInterviewPattern = (): DiagnosticPattern => {
-    const painLocation = answers.pain_location || 'unspecified region';
-    const painIntensity = answers.pain_intensity || 0;
-    const duration = answers.symptom_duration || 'unknown duration';
-    
-    return {
-      id: 'clinical_interview_diagnosis',
-      name: `${painLocation.charAt(0).toUpperCase() + painLocation.slice(1)} Pain Syndrome`,
-      abnormalities: [],
-      requiredAbnormalities: [],
-      likelihood: 0.70,
-      description: `Pain condition affecting the ${painLocation} based on clinical presentation`,
-      commonCauses: ['Overuse', 'Poor mechanics', 'Muscle imbalance', 'Previous injury'],
-      associatedConditions: ['Functional limitation', 'Movement dysfunction', 'Activity restriction']
-    };
-  };
-
   const createFallbackDifferentials = () => {
     const painLocation = answers.pain_location?.toLowerCase() || '';
     
@@ -321,327 +259,288 @@ export default function DiagnosticEngine({ abnormalities, assessmentData, onDiag
     ];
   };
 
-  // Analyze movement patterns
-  useEffect(() => {
-    analyzeMovementPatterns();
-  }, [abnormalities]);
-
-  const analyzeMovementPatterns = () => {
-    const patterns: DiagnosticPattern[] = [];
+  const createClinicalInterviewPattern = (): DiagnosticPattern => {
+    const painLocation = answers.pain_location || 'unspecified region';
     
-    // Extract abnormalities from assessment data if not provided directly
-    let extractedAbnormalities: MovementAbnormality[] = abnormalities || [];
-    
-    if (assessmentData) {
-      // Extract abnormalities from static postural analysis
-      if (assessmentData.staticPostural) {
-        const staticAbnormalities = [
-          ...(assessmentData.staticPostural.frontal?.abnormalities || []),
-          ...(assessmentData.staticPostural.sagittal?.abnormalities || [])
-        ];
-        extractedAbnormalities = extractedAbnormalities.concat(staticAbnormalities);
-      }
-      
-      // Extract abnormalities from motion capture analysis
-      if (assessmentData.motionCapture?.analysis) {
-        const motionAbnormalities = assessmentData.motionCapture.analysis.abnormalities || [];
-        extractedAbnormalities = extractedAbnormalities.concat(motionAbnormalities);
-      }
-    }
-    
-    // Update state with all abnormalities
-    setAllAbnormalities(extractedAbnormalities);
-    
-    const abnormalityTypes = extractedAbnormalities.map(a => a.type);
-
-    DIAGNOSTIC_PATTERNS.forEach(pattern => {
-      const hasRequiredAbnormalities = pattern.requiredAbnormalities.every(req => 
-        abnormalityTypes.includes(req)
-      );
-
-      if (hasRequiredAbnormalities) {
-        const matchingAbnormalities = pattern.abnormalities.filter(ab => 
-          abnormalityTypes.includes(ab)
-        );
-        
-        const matchScore = matchingAbnormalities.length / pattern.abnormalities.length;
-        const adjustedLikelihood = pattern.likelihood * matchScore;
-
-        if (adjustedLikelihood > 0.5) {
-          patterns.push({
-            ...pattern,
-            likelihood: adjustedLikelihood
-          });
-        }
-      }
-    });
-
-    // Sort by likelihood
-    patterns.sort((a, b) => b.likelihood - a.likelihood);
-    setDetectedPatterns(patterns);
-
-    if (patterns.length > 0) {
-      setCurrentStep('questions');
-    }
+    return {
+      id: 'clinical_interview_diagnosis',
+      name: `${painLocation.charAt(0).toUpperCase() + painLocation.slice(1)} Pain Syndrome`,
+      abnormalities: [],
+      requiredAbnormalities: [],
+      likelihood: 0.70,
+      description: `Pain condition affecting the ${painLocation} based on clinical presentation`,
+      commonCauses: ['Overuse', 'Poor mechanics', 'Muscle imbalance', 'Previous injury'],
+      associatedConditions: ['Functional limitation', 'Movement dysfunction', 'Activity restriction']
+    };
   };
 
-  const handleAnswerChange = (questionId: string, value: any) => {
+  const handleAnswer = (value: any) => {
     setAnswers(prev => ({
       ...prev,
-      [questionId]: value
+      [currentQuestion.id]: value
     }));
   };
 
   const nextQuestion = () => {
-    if (currentQuestionIndex < CLINICAL_QUESTIONS.length - 1) {
+    if (currentQuestionIndex < totalQuestions - 1) {
       setCurrentQuestionIndex(prev => prev + 1);
     } else {
-      generateDiagnosis();
+      handleCompleteInterview();
     }
   };
 
-  const generateDiagnosis = async () => {
-    let primaryPattern = detectedPatterns[0];
-    let confidence = 0;
-    
-    // If no patterns detected from movement analysis, use AI-powered diagnosis
-    if (!primaryPattern || detectedPatterns.length === 0) {
+  const previousQuestion = () => {
+    if (currentQuestionIndex > 0) {
+      setCurrentQuestionIndex(prev => prev - 1);
+    }
+  };
+
+  const handleCompleteInterview = async () => {
+    setCurrentStep('analysis');
+    setIsAnalyzing(true);
+
+    try {
+      // Try to get AI diagnosis first
       const aiDiagnosis = await generateAIDiagnosis();
+      const aiDifferentials = await generateAIDifferentials();
+
+      let primaryDiagnosis = '';
+      let confidence = 70;
+      let description = '';
+      let commonCauses: string[] = [];
+      let associatedConditions: string[] = [];
+
       if (aiDiagnosis) {
-        primaryPattern = {
-          id: 'ai_diagnosis',
-          name: aiDiagnosis.primaryDiagnosis,
-          abnormalities: [],
-          requiredAbnormalities: [],
-          likelihood: aiDiagnosis.confidence / 100,
-          description: aiDiagnosis.description || 'AI-generated diagnosis based on clinical interview and available assessment data',
-          commonCauses: aiDiagnosis.commonCauses || [],
-          associatedConditions: aiDiagnosis.associatedConditions || []
-        };
+        primaryDiagnosis = aiDiagnosis.primaryDiagnosis;
         confidence = aiDiagnosis.confidence;
+        description = aiDiagnosis.description;
+        commonCauses = aiDiagnosis.commonCauses || [];
+        associatedConditions = aiDiagnosis.associatedConditions || [];
       } else {
-        // Fallback pattern for clinical interview only
-        primaryPattern = createClinicalInterviewPattern();
-        confidence = 70;
+        // Fallback to clinical interview pattern
+        const pattern = createClinicalInterviewPattern();
+        primaryDiagnosis = pattern.name;
+        confidence = pattern.likelihood * 100;
+        description = pattern.description;
+        commonCauses = pattern.commonCauses;
+        associatedConditions = pattern.associatedConditions;
       }
-    } else {
-      confidence = Math.round(primaryPattern.likelihood * 100);
+
+      const treatmentRecommendations = generateTreatmentRecommendations(answers);
+
+      const result: DiagnosticResult = {
+        primaryDiagnosis,
+        confidence,
+        differentialDiagnoses: aiDifferentials,
+        redFlags: identifyRedFlags(answers),
+        functionalImpact: assessFunctionalImpact(answers),
+        recommendedTreatment: treatmentRecommendations.approach,
+        exercisePrescription: treatmentRecommendations.exercises,
+        followUpRecommendations: treatmentRecommendations.followUp
+      };
+
+      setDiagnosticResult(result);
+      setCurrentStep('results');
+      onDiagnosisComplete(result);
+
+    } catch (error) {
+      console.error('Error completing diagnosis:', error);
+    } finally {
+      setIsAnalyzing(false);
     }
-    
-    // Assess red flags
-    const redFlags = [];
-    if (answers.red_flag_symptoms && Array.isArray(answers.red_flag_symptoms)) {
-      redFlags.push(...answers.red_flag_symptoms);
-    }
-    if (answers.pain_intensity >= 8) {
-      redFlags.push('High pain intensity (>= 8/10)');
-    }
-
-    // Generate differential diagnoses
-    let differentialDiagnoses = detectedPatterns.slice(1, 4).map(pattern => ({
-      diagnosis: pattern.name,
-      likelihood: Math.round(pattern.likelihood * 100)
-    }));
-
-    // If no movement-based differentials, generate AI differentials
-    if (differentialDiagnoses.length === 0) {
-      differentialDiagnoses = await generateAIDifferentials();
-    }
-
-    // Determine treatment approach based on pattern and answers
-    const treatmentRecommendations = generateTreatmentRecommendations(primaryPattern, answers);
-
-    const result: DiagnosticResult = {
-      primaryDiagnosis: primaryPattern.name,
-      confidence,
-      differentialDiagnoses,
-      redFlags,
-      functionalImpact: getFunctionalImpactDescription(answers.functional_impact),
-      recommendedTreatment: treatmentRecommendations.approach,
-      exercisePrescription: treatmentRecommendations.exercises,
-      followUpRecommendations: treatmentRecommendations.followUp
-    };
-
-    setDiagnosticResult(result);
-    setCurrentStep('results');
-    onDiagnosisComplete(result);
   };
 
-  const generateTreatmentRecommendations = (pattern: DiagnosticPattern, answers: Record<string, any>) => {
+  const generateTreatmentRecommendations = (answers: Record<string, any>) => {
     const isAcute = answers.symptom_duration === 'Less than 1 week' || answers.symptom_duration === '1-4 weeks';
     const painLevel = answers.pain_intensity || 0;
+    const painLocation = answers.pain_location || '';
 
     let approach = '';
     let exercises: string[] = [];
     let followUp: string[] = [];
 
-    switch (pattern.id) {
-      case 'upper_crossed_syndrome':
-        approach = isAcute ? 'Initial focus on pain reduction and gentle mobility' : 'Progressive strengthening and postural correction';
-        exercises = [
-          'Deep neck flexor strengthening',
-          'Chin tucks',
-          'Upper trap stretches',
-          'Doorway chest stretches',
-          'Thoracic extension exercises',
-          'Scapular retraction exercises'
-        ];
-        followUp = [
-          'Ergonomic assessment of workstation',
-          'Progress to advanced strengthening in 2-3 weeks',
-          'Monitor posture throughout day'
-        ];
-        break;
-
-      case 'hip_abductor_weakness':
-        approach = 'Progressive hip strengthening with focus on functional movement patterns';
-        exercises = [
-          'Clamshells',
-          'Side-lying hip abduction',
-          'Single-leg bridges',
-          'Monster walks with resistance band',
-          'Step-ups',
-          'Single-leg balance exercises'
-        ];
-        followUp = [
-          'Progress to plyometric exercises when strength improves',
-          'Assess for underlying hip pathology if no improvement',
-          'Consider gait retraining'
-        ];
-        break;
-
-      case 'dynamic_knee_valgus':
-        approach = 'Movement pattern retraining with strengthening and mobility work';
-        exercises = [
-          'Hip strengthening (glutes, external rotators)',
-          'Ankle mobility exercises',
-          'Single-leg squat progression',
-          'Jump landing training',
-          'Balance and proprioception exercises',
-          'Core strengthening'
-        ];
-        followUp = [
-          'Video analysis of movement patterns',
-          'Sport-specific movement training',
-          'Consider footwear assessment'
-        ];
-        break;
-
-      default:
-        approach = 'Individualized treatment based on specific presentation';
-        exercises = ['Assessment-guided exercise prescription'];
-        followUp = ['Regular monitoring and progression'];
-    }
-
-    if (painLevel >= 7) {
-      approach = 'Initial pain management focus before progressing to active treatment';
-      followUp.unshift('Pain management strategies');
+    if (painLocation.toLowerCase().includes('shoulder')) {
+      approach = isAcute ? 'Initial focus on pain reduction and gentle mobility' : 'Progressive strengthening and range of motion restoration';
+      exercises = [
+        'Pendulum exercises',
+        'Passive range of motion',
+        'Scapular stabilization',
+        'Rotator cuff strengthening',
+        'Postural correction exercises'
+      ];
+      followUp = [
+        'Monitor pain levels and ROM',
+        'Progress exercises as tolerated',
+        'Consider imaging if no improvement in 4-6 weeks'
+      ];
+    } else if (painLocation.toLowerCase().includes('back')) {
+      approach = isAcute ? 'Pain management and gentle movement' : 'Core strengthening and movement restoration';
+      exercises = [
+        'Gentle spinal mobility',
+        'Core stabilization',
+        'Hip flexor stretches',
+        'Postural strengthening',
+        'Movement re-education'
+      ];
+      followUp = [
+        'Activity modification guidance',
+        'Ergonomic assessment',
+        'Monitor for red flag symptoms'
+      ];
+    } else {
+      // Generic recommendations
+      approach = isAcute ? 'Conservative management with gentle mobilization' : 'Progressive rehabilitation approach';
+      exercises = [
+        'Range of motion exercises',
+        'Strengthening exercises',
+        'Functional movement training',
+        'Postural correction',
+        'Activity-specific training'
+      ];
+      followUp = [
+        'Regular reassessment',
+        'Progress monitoring',
+        'Home exercise compliance'
+      ];
     }
 
     return { approach, exercises, followUp };
   };
 
-  const getFunctionalImpactDescription = (score: number): string => {
-    if (score <= 2) return 'Minimal functional impact';
-    if (score <= 4) return 'Mild functional limitations';
-    if (score <= 6) return 'Moderate functional limitations';
-    if (score <= 8) return 'Significant functional limitations';
-    return 'Severe functional limitations';
+  const identifyRedFlags = (answers: Record<string, any>): string[] => {
+    const redFlags: string[] = [];
+    
+    if (answers.pain_intensity >= 8) {
+      redFlags.push('High pain intensity requiring close monitoring');
+    }
+    
+    if (answers.functional_impact >= 8) {
+      redFlags.push('Severe functional limitation');
+    }
+    
+    if (answers.sleep_impact) {
+      redFlags.push('Sleep disturbance affecting recovery');
+    }
+    
+    return redFlags;
+  };
+
+  const assessFunctionalImpact = (answers: Record<string, any>): string => {
+    const impactLevel = answers.functional_impact || 0;
+    
+    if (impactLevel >= 8) return 'Severe functional limitation requiring immediate intervention';
+    if (impactLevel >= 6) return 'Moderate functional limitation affecting daily activities';
+    if (impactLevel >= 3) return 'Mild functional limitation with some activity restrictions';
+    return 'Minimal functional impact on daily activities';
   };
 
   const renderQuestion = (question: ClinicalQuestion) => {
     const currentAnswer = answers[question.id];
 
-    return (
-      <Card key={question.id} className="mb-4">
-        <CardContent className="pt-6">
-          <Label className="text-base font-medium mb-4 block">
-            {question.question}
-            {question.required && <span className="text-red-500 ml-1">*</span>}
-          </Label>
-
-          {question.type === 'scale' && (
-            <div className="space-y-4">
-              <Input
-                type="range"
-                min={question.scaleMin}
-                max={question.scaleMax}
-                value={currentAnswer || question.scaleMin}
-                onChange={(e) => handleAnswerChange(question.id, parseInt(e.target.value))}
-                className="w-full"
-              />
-              <div className="flex justify-between text-sm text-gray-600">
-                <span>{question.scaleLabels?.min}</span>
-                <span className="font-medium">{currentAnswer || question.scaleMin}</span>
-                <span>{question.scaleLabels?.max}</span>
-              </div>
-            </div>
-          )}
-
-          {question.type === 'multiple' && (
-            <RadioGroup
-              value={currentAnswer || ''}
-              onValueChange={(value) => handleAnswerChange(question.id, value)}
-            >
-              {question.options?.map((option, index) => (
-                <div key={index} className="flex items-center space-x-2">
-                  <RadioGroupItem value={option} id={`${question.id}-${index}`} />
-                  <Label htmlFor={`${question.id}-${index}`}>{option}</Label>
-                </div>
+    switch (question.type) {
+      case 'multiple':
+        return (
+          <Select value={currentAnswer} onValueChange={handleAnswer}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select an option..." />
+            </SelectTrigger>
+            <SelectContent>
+              {question.options?.map(option => (
+                <SelectItem key={option} value={option}>
+                  {option}
+                </SelectItem>
               ))}
-            </RadioGroup>
-          )}
+            </SelectContent>
+          </Select>
+        );
 
-          {question.type === 'text' && (
-            <Textarea
-              value={currentAnswer || ''}
-              onChange={(e) => handleAnswerChange(question.id, e.target.value)}
-              placeholder="Please provide details..."
+      case 'scale':
+        return (
+          <div className="space-y-4">
+            <div className="flex justify-between text-sm text-muted-foreground">
+              <span>{question.scaleLabels?.min}</span>
+              <span>{question.scaleLabels?.max}</span>
+            </div>
+            <Slider
+              value={[currentAnswer || 0]}
+              onValueChange={(values) => handleAnswer(values[0])}
+              max={question.scaleMax}
+              min={question.scaleMin}
+              step={1}
               className="w-full"
             />
-          )}
+            <div className="text-center text-lg font-semibold">
+              {currentAnswer || 0} / {question.scaleMax}
+            </div>
+          </div>
+        );
 
-          {question.type === 'boolean' && (
-            <RadioGroup
-              value={currentAnswer?.toString() || ''}
-              onValueChange={(value) => handleAnswerChange(question.id, value === 'true')}
-            >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="true" id={`${question.id}-yes`} />
-                <Label htmlFor={`${question.id}-yes`}>Yes</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="false" id={`${question.id}-no`} />
-                <Label htmlFor={`${question.id}-no`}>No</Label>
-              </div>
-            </RadioGroup>
-          )}
-        </CardContent>
-      </Card>
-    );
+      case 'boolean':
+        return (
+          <RadioGroup value={currentAnswer} onValueChange={handleAnswer}>
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="yes" id="yes" />
+              <Label htmlFor="yes">Yes</Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="no" id="no" />
+              <Label htmlFor="no">No</Label>
+            </div>
+          </RadioGroup>
+        );
+
+      case 'text':
+        return (
+          <Textarea
+            value={currentAnswer || ''}
+            onChange={(e) => handleAnswer(e.target.value)}
+            placeholder="Please describe..."
+            rows={3}
+          />
+        );
+
+      default:
+        return null;
+    }
   };
 
   if (currentStep === 'analysis') {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Brain className="h-5 w-5" />
-            Analyzing Movement Patterns
-          </CardTitle>
+      <Card className="w-full max-w-2xl mx-auto">
+        <CardHeader className="text-center">
+          <div className="flex justify-center mb-4">
+            <Brain className="h-12 w-12 text-blue-600 animate-pulse" />
+          </div>
+          <CardTitle>Analyzing Clinical Data</CardTitle>
+          <CardDescription>
+            Processing your assessment data and clinical interview responses...
+          </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <p>Analyzing {allAbnormalities.length} detected movement abnormalities...</p>
-            <div className="grid gap-2">
-              {allAbnormalities.map((abnormality, index) => (
-                <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                  <span className="font-medium">{abnormality.type.replace(/_/g, ' ')}</span>
-                  <Badge variant={abnormality.severity === 'severe' ? 'destructive' : abnormality.severity === 'moderate' ? 'default' : 'secondary'}>
-                    {abnormality.severity}
-                  </Badge>
-                </div>
-              ))}
+        <CardContent className="space-y-6">
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <span>Analysis Progress</span>
+              <span>Processing...</span>
+            </div>
+            <Progress value={75} className="w-full" />
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div className="flex items-center space-x-2">
+              <CheckCircle className="h-4 w-4 text-green-600" />
+              <span>Clinical Interview</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <CheckCircle className="h-4 w-4 text-green-600" />
+              <span>Movement Analysis</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Activity className="h-4 w-4 text-blue-600 animate-pulse" />
+              <span>AI Diagnosis</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Activity className="h-4 w-4 text-blue-600 animate-pulse" />
+              <span>Treatment Planning</span>
             </div>
           </div>
         </CardContent>
@@ -649,208 +548,121 @@ export default function DiagnosticEngine({ abnormalities, assessmentData, onDiag
     );
   }
 
-  if (currentStep === 'questions') {
-    const currentQuestion = CLINICAL_QUESTIONS[currentQuestionIndex];
-    const canProceed = !currentQuestion.required || answers[currentQuestion.id] !== undefined;
-
-    return (
-      <div className="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span>Clinical Assessment</span>
-              <span className="text-sm font-normal">
-                Question {currentQuestionIndex + 1} of {CLINICAL_QUESTIONS.length}
-              </span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="mb-4">
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${((currentQuestionIndex + 1) / CLINICAL_QUESTIONS.length) * 100}%` }}
-                />
-              </div>
-            </div>
-            
-            {renderQuestion(currentQuestion)}
-            
-            <div className="flex justify-between mt-6">
-              <Button
-                variant="outline"
-                onClick={() => setCurrentQuestionIndex(prev => Math.max(0, prev - 1))}
-                disabled={currentQuestionIndex === 0}
-              >
-                Previous
-              </Button>
-              <Button
-                onClick={nextQuestion}
-                disabled={!canProceed}
-              >
-                {currentQuestionIndex === CLINICAL_QUESTIONS.length - 1 ? 'Generate Diagnosis' : 'Next'}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {detectedPatterns.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Detected Movement Patterns</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {detectedPatterns.slice(0, 3).map((pattern, index) => (
-                  <div key={pattern.id} className="flex items-center justify-between p-3 bg-gray-50 rounded">
-                    <div>
-                      <span className="font-medium">{pattern.name}</span>
-                      <p className="text-sm text-gray-600 mt-1">{pattern.description}</p>
-                    </div>
-                    <Badge variant="outline">
-                      {Math.round(pattern.likelihood * 100)}% match
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-    );
-  }
-
   if (currentStep === 'results' && diagnosticResult) {
     return (
-      <div className="space-y-6">
+      <div className="w-full max-w-4xl mx-auto space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              Diagnostic Results
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
+            <div className="flex items-center justify-between">
               <div>
-                <h3 className="font-semibold text-lg mb-2">Primary Diagnosis</h3>
-                <div className="flex items-center justify-between p-3 bg-blue-50 rounded">
-                  <span className="font-medium">{diagnosticResult.primaryDiagnosis}</span>
-                  <Badge>{diagnosticResult.confidence}% confidence</Badge>
-                </div>
+                <CardTitle className="text-2xl flex items-center gap-2">
+                  <Stethoscope className="h-6 w-6 text-blue-600" />
+                  Diagnostic Results
+                </CardTitle>
+                <CardDescription>
+                  AI-powered clinical analysis based on your comprehensive assessment
+                </CardDescription>
               </div>
+              <Badge variant="outline" className="text-lg px-3 py-1">
+                {diagnosticResult.confidence}% Confidence
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Primary Diagnosis */}
+            <div>
+              <h3 className="text-lg font-semibold mb-2">Primary Diagnosis</h3>
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h4 className="font-medium text-blue-900">{diagnosticResult.primaryDiagnosis}</h4>
+                <Progress value={diagnosticResult.confidence} className="mt-2" />
+              </div>
+            </div>
 
-              {diagnosticResult.redFlags.length > 0 && (
-                <div>
-                  <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
-                    <AlertTriangle className="h-5 w-5 text-red-500" />
-                    Red Flags
-                  </h3>
-                  <div className="space-y-2">
-                    {diagnosticResult.redFlags.map((flag, index) => (
-                      <div key={index} className="p-2 bg-red-50 border-l-4 border-red-500 rounded">
-                        <span className="text-red-700">{flag}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
+            {/* Differential Diagnoses */}
+            {diagnosticResult.differentialDiagnoses.length > 0 && (
               <div>
-                <h3 className="font-semibold text-lg mb-2">Differential Diagnoses</h3>
+                <h3 className="text-lg font-semibold mb-2">Differential Diagnoses</h3>
                 <div className="space-y-2">
                   {diagnosticResult.differentialDiagnoses.map((diff, index) => (
-                    <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                       <span>{diff.diagnosis}</span>
-                      <Badge variant="outline">{diff.likelihood}%</Badge>
+                      <Badge variant="secondary">{diff.likelihood}%</Badge>
                     </div>
                   ))}
                 </div>
               </div>
+            )}
 
-              <div>
-                <h3 className="font-semibold text-lg mb-2">Functional Impact</h3>
-                <p className="p-3 bg-gray-50 rounded">{diagnosticResult.functionalImpact}</p>
-              </div>
+            {/* Red Flags */}
+            {diagnosticResult.redFlags.length > 0 && (
+              <Alert>
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>Clinical Considerations:</strong>
+                  <ul className="mt-2 space-y-1">
+                    {diagnosticResult.redFlags.map((flag, index) => (
+                      <li key={index} className="text-sm">• {flag}</li>
+                    ))}
+                  </ul>
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {/* Functional Impact */}
+            <div>
+              <h3 className="text-lg font-semibold mb-2">Functional Impact</h3>
+              <p className="text-muted-foreground">{diagnosticResult.functionalImpact}</p>
             </div>
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CheckCircle className="h-5 w-5" />
-              Treatment Recommendations
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div>
-                <h3 className="font-semibold mb-2">Treatment Approach</h3>
-                <p className="p-3 bg-blue-50 rounded">{diagnosticResult.recommendedTreatment}</p>
-              </div>
-
-              <div>
-                <h3 className="font-semibold mb-2">Exercise Prescription</h3>
-                <div className="space-y-2">
-                  {diagnosticResult.exercisePrescription.map((exercise, index) => (
-                    <div key={index} className="flex items-center gap-2 p-2 bg-green-50 rounded">
-                      <CheckCircle className="h-4 w-4 text-green-600" />
-                      <span>{exercise}</span>
-                    </div>
-                  ))}
+            {/* Treatment Recommendations */}
+            <div>
+              <h3 className="text-lg font-semibold mb-2">Recommended Treatment Approach</h3>
+              <p className="mb-4">{diagnosticResult.recommendedTreatment}</p>
+              
+              {diagnosticResult.exercisePrescription.length > 0 && (
+                <div>
+                  <h4 className="font-medium mb-2">Exercise Prescription</h4>
+                  <ul className="space-y-1">
+                    {diagnosticResult.exercisePrescription.map((exercise, index) => (
+                      <li key={index} className="flex items-center space-x-2">
+                        <CheckCircle className="h-4 w-4 text-green-600" />
+                        <span className="text-sm">{exercise}</span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-              </div>
+              )}
+            </div>
 
+            {/* Follow-up Recommendations */}
+            {diagnosticResult.followUpRecommendations.length > 0 && (
               <div>
-                <h3 className="font-semibold mb-2">Follow-up Recommendations</h3>
-                <div className="space-y-2">
+                <h3 className="text-lg font-semibold mb-2">Follow-up Recommendations</h3>
+                <ul className="space-y-1">
                   {diagnosticResult.followUpRecommendations.map((recommendation, index) => (
-                    <div key={index} className="p-2 bg-yellow-50 border-l-4 border-yellow-500 rounded">
-                      <span>{recommendation}</span>
-                    </div>
+                    <li key={index} className="flex items-center space-x-2">
+                      <ChevronRight className="h-4 w-4 text-blue-600" />
+                      <span className="text-sm">{recommendation}</span>
+                    </li>
                   ))}
-                </div>
+                </ul>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            )}
 
-        {/* Enhanced Treatment Planning Call-to-Action */}
-        <Card className="border-2 border-green-200 bg-gradient-to-r from-green-50 to-blue-50">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="h-6 w-6 text-green-600" />
-                  <h3 className="text-lg font-semibold text-green-800">Diagnosis Complete</h3>
-                </div>
-                <p className="text-sm text-gray-700">
-                  Clinical assessment finished. Ready to create personalized treatment protocols 
-                  and evidence-based exercise prescriptions.
-                </p>
-                <div className="flex items-center gap-4 text-xs text-gray-600">
-                  <span>✓ Movement patterns analyzed</span>
-                  <span>✓ Clinical diagnosis established</span>
-                  <span>→ Treatment planning ready</span>
-                </div>
-              </div>
-              <div className="flex flex-col gap-2">
-                <Button 
-                  onClick={() => {
-                    if (onProceedToTreatment) {
-                      onProceedToTreatment();
-                    }
-                  }}
-                  className="bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-3"
-                >
-                  <Stethoscope className="h-5 w-5 mr-2" />
-                  Create Treatment Plan
+            <Separator />
+
+            {/* Action Buttons */}
+            <div className="flex gap-4">
+              {onProceedToTreatment && (
+                <Button onClick={onProceedToTreatment} className="flex-1">
+                  <ChevronRight className="h-4 w-4 mr-2" />
+                  Proceed to Treatment Planning
                 </Button>
-                <div className="text-xs text-center text-gray-500">
-                  AI-powered protocols & exercises
-                </div>
-              </div>
+              )}
+              <Button variant="outline" onClick={() => setCurrentStep('interview')}>
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Review Assessment
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -858,5 +670,67 @@ export default function DiagnosticEngine({ abnormalities, assessmentData, onDiag
     );
   }
 
-  return null;
+  // Clinical Interview Step
+  return (
+    <div className="w-full max-w-2xl mx-auto space-y-6">
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5 text-blue-600" />
+                Clinical Interview
+              </CardTitle>
+              <CardDescription>
+                Question {currentQuestionIndex + 1} of {totalQuestions}
+              </CardDescription>
+            </div>
+            <Badge variant="outline">
+              {Math.round(progress)}% Complete
+            </Badge>
+          </div>
+          <Progress value={progress} className="w-full" />
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div>
+            <Label className="text-base font-medium">
+              {currentQuestion.question}
+              {currentQuestion.required && <span className="text-red-500 ml-1">*</span>}
+            </Label>
+            <div className="mt-4">
+              {renderQuestion(currentQuestion)}
+            </div>
+          </div>
+
+          <div className="flex justify-between">
+            <Button
+              variant="outline"
+              onClick={previousQuestion}
+              disabled={currentQuestionIndex === 0}
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Previous
+            </Button>
+            
+            <Button
+              onClick={nextQuestion}
+              disabled={currentQuestion.required && !answers[currentQuestion.id]}
+            >
+              {currentQuestionIndex === totalQuestions - 1 ? (
+                <>
+                  <Brain className="h-4 w-4 mr-2" />
+                  Complete Diagnosis
+                </>
+              ) : (
+                <>
+                  Next
+                  <ArrowRight className="h-4 w-4 ml-2" />
+                </>
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
 }

@@ -32,13 +32,15 @@ interface ClinicalQuestionsInputProps {
   posturalData: any;
   movementData: any;
   onQuestionsComplete: (responses: QuestionResponse[]) => void;
+  onProceedToVisualization?: () => void;
 }
 
 export default function ClinicalQuestionsInput({ 
   symptomData, 
   posturalData, 
   movementData,
-  onQuestionsComplete 
+  onQuestionsComplete,
+  onProceedToVisualization
 }: ClinicalQuestionsInputProps) {
   const [clinicalQuestions, setClinicalQuestions] = useState<ClinicalQuestion[]>([]);
   const [questionResponses, setQuestionResponses] = useState<QuestionResponse[]>([]);
@@ -238,6 +240,9 @@ export default function ClinicalQuestionsInput({
 
   const handleCompleteQuestions = () => {
     onQuestionsComplete(questionResponses);
+    if (onProceedToVisualization) {
+      onProceedToVisualization();
+    }
   };
 
   const getCompletedQuestions = () => {

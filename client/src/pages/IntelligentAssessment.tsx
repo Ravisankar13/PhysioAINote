@@ -140,67 +140,21 @@ export default function IntelligentAssessment() {
       
       case 'movement':
         return (
-          <div className="w-full max-w-4xl mx-auto">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Activity className="h-6 w-6 text-blue-600" />
-                  AI-Recommended Movement Testing
-                </CardTitle>
-                <CardDescription>
-                  Functional movement tests based on symptom and postural analysis
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {assessmentData.symptomAnalysis?.recommendedMovements && (
-                  <div>
-                    <h3 className="text-lg font-semibold mb-4">Recommended Movement Tests</h3>
-                    <div className="grid gap-4">
-                      {assessmentData.symptomAnalysis.recommendedMovements.map((movement: any, index: number) => (
-                        <div key={index} className="border rounded-lg p-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <h4 className="font-medium">{movement.name}</h4>
-                            <Badge variant={
-                              movement.priority === 'high' ? 'default' :
-                              movement.priority === 'medium' ? 'secondary' : 'outline'
-                            }>
-                              {movement.priority} priority
-                            </Badge>
-                          </div>
-                          <p className="text-sm text-muted-foreground mb-2">
-                            <strong>Purpose:</strong> {movement.purpose}
-                          </p>
-                          <p className="text-sm text-muted-foreground">{movement.description}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <h4 className="font-medium text-blue-900 mb-2">Next: AI Clinical Visualization</h4>
-                  <p className="text-sm text-blue-800 mb-3">
-                    Based on your assessment findings, AI will generate patient-specific anatomical illustrations showing the suspected pathology.
-                  </p>
-                  <Button onClick={() => proceedToNextStep('visualization')}>
-                    <Target className="h-4 w-4 mr-2" />
-                    Generate Clinical Visualization
-                  </Button>
-                </div>
-
-                <div className="flex justify-between">
-                  <Button variant="outline" onClick={() => goBackToStep('posture')}>
-                    <ArrowLeft className="h-4 w-4 mr-2" />
-                    Back to Posture
-                  </Button>
-                  <Button onClick={() => proceedToNextStep('visualization')}>
-                    Continue to Visualization
-                    <ChevronRight className="h-4 w-4 ml-2" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+          <MovementTestInput
+            symptomData={assessmentData.symptomAnalysis}
+            posturalData={assessmentData.posturalAnalysis}
+            onTestResultsComplete={handleMovementTestsComplete}
+          />
+        );
+      
+      case 'questions':
+        return (
+          <ClinicalQuestionsInput
+            symptomData={assessmentData.symptomAnalysis}
+            posturalData={assessmentData.posturalAnalysis}
+            movementData={assessmentData.movementTestResults}
+            onQuestionsComplete={handleClinicalQuestionsComplete}
+          />
         );
       
       case 'visualization':
@@ -247,14 +201,15 @@ export default function IntelligentAssessment() {
                 <ClinicalVisualizationEngine
                   symptomData={assessmentData.symptomAnalysis}
                   posturalData={assessmentData.posturalAnalysis}
-                  movementData={assessmentData.movementAnalysis}
+                  movementData={assessmentData.movementTestResults}
+                  clinicalQuestions={assessmentData.clinicalQuestionResponses}
                   onVisualizationComplete={handleVisualizationComplete}
                 />
 
                 <div className="flex justify-between">
-                  <Button variant="outline" onClick={() => goBackToStep('movement')}>
+                  <Button variant="outline" onClick={() => goBackToStep('questions')}>
                     <ArrowLeft className="h-4 w-4 mr-2" />
-                    Back to Movement
+                    Back to Questions
                   </Button>
                   <Button onClick={() => proceedToNextStep('treatment')}>
                     Continue to Treatment

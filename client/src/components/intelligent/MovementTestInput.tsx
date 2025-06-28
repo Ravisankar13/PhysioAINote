@@ -32,12 +32,14 @@ interface MovementTestInputProps {
   symptomData: any;
   posturalData: any;
   onTestResultsComplete: (results: MovementTestResult[]) => void;
+  onProceedToQuestions?: () => void;
 }
 
 export default function MovementTestInput({ 
   symptomData, 
   posturalData, 
-  onTestResultsComplete 
+  onTestResultsComplete,
+  onProceedToQuestions
 }: MovementTestInputProps) {
   const [recommendedTests, setRecommendedTests] = useState<MovementTest[]>([]);
   const [testResults, setTestResults] = useState<MovementTestResult[]>([]);
@@ -199,6 +201,9 @@ export default function MovementTestInput({
 
   const handleCompleteAssessment = () => {
     onTestResultsComplete(testResults);
+    if (onProceedToQuestions) {
+      onProceedToQuestions();
+    }
   };
 
   const getCompletedTests = () => {

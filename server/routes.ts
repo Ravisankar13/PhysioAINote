@@ -1130,6 +1130,9 @@ Provide analysis in JSON format with these exact keys:
 
 Remember: Your diagnosis must be completely different for different locations. Front knee pain ≠ Back knee pain. Be anatomically precise.`;
 
+      console.log('Making OpenAI API call for symptom analysis...');
+      console.log('Pain location:', painLocation);
+      
       const response = await openai.chat.completions.create({
         model: "gpt-4o",
         messages: [
@@ -1146,12 +1149,17 @@ Remember: Your diagnosis must be completely different for different locations. F
         temperature: 0.1
       });
 
+      console.log('OpenAI API call successful');
       const aiResponse = response.choices[0].message.content;
+      console.log('AI Response received:', aiResponse?.substring(0, 200) + '...');
       
       try {
         const parsedResponse = JSON.parse(aiResponse || '{}');
+        console.log('Successfully parsed AI response');
         res.json(parsedResponse);
       } catch (parseError) {
+        console.log('Failed to parse AI response, using fallback. Parse error:', parseError);
+        console.log('Raw AI response was:', aiResponse);
         // Fallback response structure
         res.json({
           bodyRegion: painLocation || 'Musculoskeletal',

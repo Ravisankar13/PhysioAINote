@@ -3846,6 +3846,106 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
 
+  // Medical Illustration Generation Route
+  app.post("/api/generate-medical-illustration", async (req: Request, res: Response) => {
+    try {
+      const { prompt, anatomicalStructure, pathologyType, severity } = req.body;
+
+      if (!prompt) {
+        return res.status(400).json({ error: "Illustration prompt is required" });
+      }
+
+      // Enhanced prompt for medical accuracy
+      const enhancedPrompt = `Medical illustration: ${prompt}. Style: Clinical anatomy textbook, detailed cross-section, labeled structures, professional medical diagram with anatomical accuracy. High quality, educational medical visualization.`;
+
+      // Try to generate using DALL-E 3 first
+      const response = await openai.images.generate({
+        model: "dall-e-3",
+        prompt: enhancedPrompt,
+        n: 1,
+        size: "1024x1024",
+        quality: "standard",
+      });
+
+      res.json({
+        imageUrl: response.data[0].url,
+        anatomicalStructure,
+        pathologyType,
+        severity,
+        prompt: enhancedPrompt
+      });
+    } catch (error: any) {
+      console.error("Error generating medical illustration:", error);
+      
+      // Fallback to creating SVG diagram
+      const svgDiagram = createAnatomicalSVG(req.body);
+      
+      res.json({
+        imageUrl: svgDiagram,
+        anatomicalStructure: req.body.anatomicalStructure,
+        pathologyType: req.body.pathologyType,
+        severity: req.body.severity,
+        fallback: true
+      });
+    }
+  });
+
+  function createAnatomicalSVG({ anatomicalStructure, pathologyType, severity }: any): string {
+    const svg = `
+      <svg width="400" height="400" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <pattern id="inflammation" patternUnits="userSpaceOnUse" width="4" height="4">
+            <rect width="4" height="4" fill="#ff6b6b"/>
+            <circle cx="2" cy="2" r="1" fill="#ff4757"/>
+          </pattern>
+          <linearGradient id="tissueGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#e1f5fe;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#b3e5fc;stop-opacity:1" />
+          </linearGradient>
+        </defs>
+        
+        <!-- Background -->
+        <rect width="400" height="400" fill="#f8f9fa"/>
+        
+        <!-- Title -->
+        <text x="200" y="30" text-anchor="middle" font-family="Arial" font-size="16" font-weight="bold">
+          ${anatomicalStructure || 'Anatomical Structure'}
+        </text>
+        <text x="200" y="50" text-anchor="middle" font-family="Arial" font-size="12" fill="#666">
+          ${pathologyType || 'Pathological Change'}
+        </text>
+        
+        <!-- Main anatomical structure -->
+        <ellipse cx="200" cy="200" rx="80" ry="120" fill="url(#tissueGrad)" stroke="#0277bd" stroke-width="2"/>
+        
+        <!-- Pathology area -->
+        <ellipse cx="180" cy="160" rx="30" ry="20" fill="url(#inflammation)" stroke="#d32f2f" stroke-width="2"/>
+        
+        <!-- Labels and annotations -->
+        <line x1="210" y1="160" x2="280" y2="120" stroke="#333" stroke-width="1"/>
+        <text x="285" y="115" font-family="Arial" font-size="10" fill="#333">
+          ${pathologyType || 'Pathology'}
+        </text>
+        <text x="285" y="128" font-family="Arial" font-size="8" fill="#666">
+          ${severity || 'moderate'} severity
+        </text>
+        
+        <!-- Additional anatomical markers -->
+        <circle cx="160" cy="180" r="3" fill="#333"/>
+        <circle cx="240" cy="220" r="3" fill="#333"/>
+        <line x1="120" y1="200" x2="280" y2="200" stroke="#999" stroke-width="1" stroke-dasharray="5,5"/>
+        
+        <!-- Legend box -->
+        <rect x="30" y="320" width="340" height="60" fill="#fff" stroke="#ddd" stroke-width="1" rx="5"/>
+        <text x="40" y="340" font-family="Arial" font-size="12" font-weight="bold">Clinical Visualization:</text>
+        <text x="40" y="355" font-family="Arial" font-size="10">Red area indicates pathological changes</text>
+        <text x="40" y="370" font-family="Arial" font-size="10">Generated for educational purposes - ${new Date().toLocaleDateString()}</text>
+      </svg>
+    `;
+    
+    return `data:image/svg+xml;base64,${btoa(svg)}`;
+  }
+
   // Free Trial Management Routes
   app.post("/api/trial/start", ensureAuthenticated, async (req: Request, res: Response) => {
     try {

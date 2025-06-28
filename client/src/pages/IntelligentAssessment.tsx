@@ -4,9 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Brain, Camera, Activity, Target, CheckCircle, ChevronRight, ArrowLeft } from 'lucide-react';
+import { Brain, Camera, Activity, Target, CheckCircle, ChevronRight, ArrowLeft, Eye } from 'lucide-react';
 import SymptomAnalysisEngine from '@/components/intelligent/SymptomAnalysisEngine';
 import EnhancedPosturalAnalysis from '@/components/intelligent/EnhancedPosturalAnalysis';
+import ClinicalVisualizationEngine from '@/components/clinical/ClinicalVisualizationEngine';
 
 type AssessmentStep = 'symptoms' | 'posture' | 'movement' | 'visualization' | 'treatment';
 
@@ -73,6 +74,11 @@ export default function IntelligentAssessment() {
   const handlePosturalAnalysisComplete = (analysis: any) => {
     setAssessmentData(prev => ({ ...prev, posturalAnalysis: analysis }));
     markStepComplete('posture');
+  };
+
+  const handleVisualizationComplete = (data: any) => {
+    setAssessmentData(prev => ({ ...prev, clinicalVisualization: data }));
+    markStepComplete('visualization');
   };
 
   const proceedToNextStep = (nextStep: AssessmentStep) => {
@@ -216,23 +222,12 @@ export default function IntelligentAssessment() {
                   </div>
                 )}
 
-                <div className="space-y-4">
-                  <h4 className="font-semibold">Coming Soon: AI Medical Illustrations</h4>
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <div className="border rounded-lg p-4">
-                      <h5 className="font-medium mb-2">Example: Meniscus Tear Visualization</h5>
-                      <p className="text-sm text-muted-foreground">
-                        AI would generate a 3D anatomical model showing the exact location, type, and extent of the suspected meniscal tear based on assessment findings.
-                      </p>
-                    </div>
-                    <div className="border rounded-lg p-4">
-                      <h5 className="font-medium mb-2">Example: GTPS Illustration</h5>
-                      <p className="text-sm text-muted-foreground">
-                        AI would create a detailed visualization of inflamed gluteus medius tendon and trochanteric bursa with anatomical accuracy.
-                      </p>
-                    </div>
-                  </div>
-                </div>
+                <ClinicalVisualizationEngine
+                  symptomData={assessmentData.symptomAnalysis}
+                  posturalData={assessmentData.posturalAnalysis}
+                  movementData={assessmentData.movementAnalysis}
+                  onVisualizationComplete={handleVisualizationComplete}
+                />
 
                 <div className="flex justify-between">
                   <Button variant="outline" onClick={() => goBackToStep('movement')}>

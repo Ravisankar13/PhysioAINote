@@ -16,10 +16,12 @@ import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { useLocation } from "wouter";
 
 export default function ActiveCompetitions() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
   
   const { data: activeCompetitions, isLoading: loadingActive } = useQuery({
     queryKey: ['/api/competitions/active']
@@ -40,8 +42,12 @@ export default function ActiveCompetitions() {
       queryClient.invalidateQueries({ queryKey: ['/api/competitions/upcoming'] });
       toast({
         title: "Joined Competition!",
-        description: "You're now participating in this competition. Good luck!",
+        description: "Taking you to the competition dashboard...",
       });
+      // Navigate to competition participation page
+      setTimeout(() => {
+        setLocation(`/competitions/${competitionId}`);
+      }, 1000);
     },
     onError: (error: any) => {
       toast({

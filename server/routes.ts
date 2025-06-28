@@ -4766,6 +4766,93 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
 
+  // Get user's participation in a specific competition
+  app.get("/api/competitions/:id/participation", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const competitionId = parseInt(req.params.id);
+      const userId = req.user!.id;
+      
+      const participation = await competitionStorage.getParticipantByUserAndCompetition(userId, competitionId);
+      if (!participation) {
+        return res.status(404).json({ error: "Not participating in this competition" });
+      }
+      
+      res.json(participation);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get case studies for a competition
+  app.get("/api/competitions/:id/cases", async (req, res) => {
+    try {
+      const competitionId = parseInt(req.params.id);
+      
+      // Get random case studies for this competition
+      const caseStudyIds = await competitionStorage.getRandomCaseStudies(undefined, undefined, 5);
+      const caseStudies = [];
+      
+      for (const id of caseStudyIds) {
+        const caseStudy = await competitionStorage.getCaseStudyWithCorrectAnswers(id);
+        if (caseStudy) {
+          caseStudies.push({
+            id: caseStudy.id,
+            title: caseStudy.title,
+            patientDescription: caseStudy.patientDescription,
+            bodyPart: caseStudy.bodyPart,
+            complexity: caseStudy.complexity
+          });
+        }
+      }
+      
+      res.json(caseStudies);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Start a case study within a competition
+  app.post("/api/competitions/:id/cases/:caseId/start", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const competitionId = parseInt(req.params.id);
+      const caseId = parseInt(req.params.caseId);
+      const userId = req.user!.id;
+      
+      // Verify user is participating in the competition
+      const participation = await competitionStorage.getParticipantByUserAndCompetition(userId, competitionId);
+      if (!participation) {
+        return res.status(403).json({ error: "Not participating in this competition" });
+      }
+      
+      // Get case study details
+      const caseStudy = await competitionStorage.getCaseStudyWithCorrectAnswers(caseId);
+      if (!caseStudy) {
+        return res.status(404).json({ error: "Case study not found" });
+      }
+      
+      res.json({
+        message: "Case started",
+        caseStudy: {
+          id: caseStudy.id,
+          title: caseStudy.title,
+          patientDescription: caseStudy.patientDescription,
+          history: caseStudy.history,
+          presentingSymptoms: caseStudy.presentingSymptoms,
+          vitalSigns: caseStudy.vitalSigns,
+          bodyPart: caseStudy.bodyPart,
+          complexity: caseStudy.complexity,
+          hiddenFindings: caseStudy.hiddenFindings
+        }
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Submit competition attempt
   app.post("/api/competitions/:id/submit", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);

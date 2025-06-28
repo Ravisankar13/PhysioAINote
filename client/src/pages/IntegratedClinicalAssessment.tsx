@@ -116,7 +116,7 @@ const IntegratedClinicalAssessment: React.FC = () => {
   };
 
   const canGoNext = () => {
-    return currentStep < steps.length - 1 && canProceedToStep(currentStep + 1);
+    return currentStep < steps.length - 1;
   };
 
   const canGoPrevious = () => {
@@ -155,13 +155,8 @@ const IntegratedClinicalAssessment: React.FC = () => {
   };
 
   const canProceedToStep = (stepIndex: number) => {
-    if (stepIndex === 0) return true; // First step always available
-    if (stepIndex === 1) return isStepCompleted('static-frontal');
-    if (stepIndex === 2) return isStepCompleted('static-sagittal');
-    if (stepIndex === 3) return isStepCompleted('motion-capture');
-    if (stepIndex === 4) return isStepCompleted('clinical-interview');
-    if (stepIndex === 5) return isStepCompleted('diagnosis');
-    return false;
+    // All steps are now accessible regardless of completion status
+    return stepIndex >= 0 && stepIndex < steps.length;
   };
 
   const renderCurrentStep = () => {
@@ -268,11 +263,9 @@ const IntegratedClinicalAssessment: React.FC = () => {
                     <Button
                       key={step.id}
                       variant={isCurrent ? "default" : isCompleted ? "secondary" : "ghost"}
-                      className={`w-full justify-start h-auto p-3 ${
-                        !canProceed ? 'opacity-50 cursor-not-allowed' : ''
-                      }`}
-                      onClick={() => canProceed && handleStepNavigation(index)}
-                      disabled={!canProceed || isProcessing}
+                      className="w-full justify-start h-auto p-3"
+                      onClick={() => handleStepNavigation(index)}
+                      disabled={isProcessing}
                     >
                       <div className="flex items-center gap-3 w-full">
                         <div className="relative">

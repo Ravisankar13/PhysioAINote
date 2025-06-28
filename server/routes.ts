@@ -1154,7 +1154,16 @@ Remember: Your diagnosis must be completely different for different locations. F
       console.log('AI Response received:', aiResponse?.substring(0, 200) + '...');
       
       try {
-        const parsedResponse = JSON.parse(aiResponse || '{}');
+        // Clean the response by removing markdown code blocks if present
+        let cleanResponse = aiResponse || '{}';
+        console.log('Original response starts with:', cleanResponse.substring(0, 20));
+        // Remove markdown code blocks (both ```json and ``` variants) with multiline support
+        cleanResponse = cleanResponse.replace(/```json\s*/gm, '').replace(/```\s*/gm, '');
+        console.log('After cleaning starts with:', cleanResponse.substring(0, 20));
+        // Trim any remaining whitespace
+        cleanResponse = cleanResponse.trim();
+        
+        const parsedResponse = JSON.parse(cleanResponse);
         console.log('Successfully parsed AI response');
         res.json(parsedResponse);
       } catch (parseError) {

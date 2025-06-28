@@ -216,6 +216,111 @@ export default function DiagnosticEngine({ abnormalities, assessmentData, onDiag
   const [diagnosticResult, setDiagnosticResult] = useState<DiagnosticResult | null>(null);
   const [allAbnormalities, setAllAbnormalities] = useState<MovementAbnormality[]>([]);
 
+  // AI diagnosis functions
+  const generateAIDiagnosis = async () => {
+    try {
+      const response = await fetch('/api/ai-diagnosis', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          staticPosturalData: assessmentData?.staticPostural || null,
+          motionCaptureData: assessmentData?.motionCapture || null,
+          clinicalInterviewData: answers,
+          detectedAbnormalities: allAbnormalities
+        }),
+      });
+
+      if (response.ok) {
+        const aiDiagnosis = await response.json();
+        return aiDiagnosis;
+      }
+    } catch (error) {
+      console.error('AI diagnosis failed:', error);
+    }
+    return null;
+  };
+
+  const generateAIDifferentials = async () => {
+    try {
+      const response = await fetch('/api/ai-differentials', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          clinicalInterviewData: answers,
+          staticPosturalData: assessmentData?.staticPostural || null,
+          motionCaptureData: assessmentData?.motionCapture || null
+        }),
+      });
+
+      if (response.ok) {
+        const differentials = await response.json();
+        return differentials.differentialDiagnoses || [];
+      }
+    } catch (error) {
+      console.error('AI differentials failed:', error);
+    }
+    
+    // Fallback differentials based on clinical interview
+    return createFallbackDifferentials();
+  };
+
+  const createClinicalInterviewPattern = (): DiagnosticPattern => {
+    const painLocation = answers.pain_location || 'unspecified region';
+    const painIntensity = answers.pain_intensity || 0;
+    const duration = answers.symptom_duration || 'unknown duration';
+    
+    return {
+      id: 'clinical_interview_diagnosis',
+      name: `${painLocation.charAt(0).toUpperCase() + painLocation.slice(1)} Pain Syndrome`,
+      abnormalities: [],
+      requiredAbnormalities: [],
+      likelihood: 0.70,
+      description: `Pain condition affecting the ${painLocation} based on clinical presentation`,
+      commonCauses: ['Overuse', 'Poor mechanics', 'Muscle imbalance', 'Previous injury'],
+      associatedConditions: ['Functional limitation', 'Movement dysfunction', 'Activity restriction']
+    };
+  };
+
+  const createFallbackDifferentials = () => {
+    const painLocation = answers.pain_location?.toLowerCase() || '';
+    
+    if (painLocation.includes('shoulder')) {
+      return [
+        { diagnosis: 'Rotator Cuff Tendinopathy', likelihood: 75 },
+        { diagnosis: 'Adhesive Capsulitis', likelihood: 65 },
+        { diagnosis: 'Subacromial Impingement', likelihood: 60 }
+      ];
+    } else if (painLocation.includes('back') || painLocation.includes('spine')) {
+      return [
+        { diagnosis: 'Mechanical Low Back Pain', likelihood: 70 },
+        { diagnosis: 'Facet Joint Dysfunction', likelihood: 60 },
+        { diagnosis: 'Muscle Strain', likelihood: 55 }
+      ];
+    } else if (painLocation.includes('knee')) {
+      return [
+        { diagnosis: 'Patellofemoral Pain Syndrome', likelihood: 70 },
+        { diagnosis: 'IT Band Syndrome', likelihood: 60 },
+        { diagnosis: 'Meniscal Pathology', likelihood: 55 }
+      ];
+    } else if (painLocation.includes('hip')) {
+      return [
+        { diagnosis: 'Hip Flexor Strain', likelihood: 65 },
+        { diagnosis: 'Greater Trochanteric Pain Syndrome', likelihood: 70 },
+        { diagnosis: 'Hip Osteoarthritis', likelihood: 50 }
+      ];
+    }
+    
+    return [
+      { diagnosis: 'Musculoskeletal Pain Syndrome', likelihood: 65 },
+      { diagnosis: 'Overuse Injury', likelihood: 60 },
+      { diagnosis: 'Movement Dysfunction', likelihood: 55 }
+    ];
+  };
+
   // Analyze movement patterns
   useEffect(() => {
     analyzeMovementPatterns();
@@ -295,8 +400,33 @@ export default function DiagnosticEngine({ abnormalities, assessmentData, onDiag
     }
   };
 
-  const generateDiagnosis = () => {
-    const primaryPattern = detectedPatterns[0];
+  const generateDiagnosis = async () => {
+    let primaryPattern = detectedPatterns[0];
+    let confidence = 0;
+    
+    // If no patterns detected from movement analysis, use AI-powered diagnosis
+    if (!primaryPattern || detectedPatterns.length === 0) {
+      const aiDiagnosis = await generateAIDiagnosis();
+      if (aiDiagnosis) {
+        primaryPattern = {
+          id: 'ai_diagnosis',
+          name: aiDiagnosis.primaryDiagnosis,
+          abnormalities: [],
+          requiredAbnormalities: [],
+          likelihood: aiDiagnosis.confidence / 100,
+          description: aiDiagnosis.description || 'AI-generated diagnosis based on clinical interview and available assessment data',
+          commonCauses: aiDiagnosis.commonCauses || [],
+          associatedConditions: aiDiagnosis.associatedConditions || []
+        };
+        confidence = aiDiagnosis.confidence;
+      } else {
+        // Fallback pattern for clinical interview only
+        primaryPattern = createClinicalInterviewPattern();
+        confidence = 70;
+      }
+    } else {
+      confidence = Math.round(primaryPattern.likelihood * 100);
+    }
     
     // Assess red flags
     const redFlags = [];
@@ -308,17 +438,22 @@ export default function DiagnosticEngine({ abnormalities, assessmentData, onDiag
     }
 
     // Generate differential diagnoses
-    const differentialDiagnoses = detectedPatterns.slice(1, 4).map(pattern => ({
+    let differentialDiagnoses = detectedPatterns.slice(1, 4).map(pattern => ({
       diagnosis: pattern.name,
       likelihood: Math.round(pattern.likelihood * 100)
     }));
+
+    // If no movement-based differentials, generate AI differentials
+    if (differentialDiagnoses.length === 0) {
+      differentialDiagnoses = await generateAIDifferentials();
+    }
 
     // Determine treatment approach based on pattern and answers
     const treatmentRecommendations = generateTreatmentRecommendations(primaryPattern, answers);
 
     const result: DiagnosticResult = {
       primaryDiagnosis: primaryPattern.name,
-      confidence: Math.round(primaryPattern.likelihood * 100),
+      confidence,
       differentialDiagnoses,
       redFlags,
       functionalImpact: getFunctionalImpactDescription(answers.functional_impact),

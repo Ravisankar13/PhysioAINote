@@ -144,6 +144,7 @@ export default function IntelligentAssessment() {
             symptomData={assessmentData.symptomAnalysis}
             posturalData={assessmentData.posturalAnalysis}
             onTestResultsComplete={handleMovementTestsComplete}
+            onProceedToQuestions={() => proceedToNextStep('questions')}
           />
         );
       
@@ -154,6 +155,7 @@ export default function IntelligentAssessment() {
             posturalData={assessmentData.posturalAnalysis}
             movementData={assessmentData.movementTestResults}
             onQuestionsComplete={handleClinicalQuestionsComplete}
+            onProceedToVisualization={() => proceedToNextStep('visualization')}
           />
         );
       
@@ -202,7 +204,6 @@ export default function IntelligentAssessment() {
                   symptomData={assessmentData.symptomAnalysis}
                   posturalData={assessmentData.posturalAnalysis}
                   movementData={assessmentData.movementTestResults}
-                  clinicalQuestions={assessmentData.clinicalQuestionResponses}
                   onVisualizationComplete={handleVisualizationComplete}
                 />
 

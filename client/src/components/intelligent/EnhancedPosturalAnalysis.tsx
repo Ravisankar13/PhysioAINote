@@ -752,6 +752,14 @@ export default function EnhancedPosturalAnalysis({
                 <li key={index}>• {instruction}</li>
               ))}
             </ul>
+            
+            {/* Camera Recommendation */}
+            <div className="mt-3 pt-3 border-t border-blue-200">
+              <p className="text-xs text-blue-700">
+                <span className="font-medium">Recommended:</span> {getRecommendedCameraType(currentView.id) === 'rear' ? 'Rear' : 'Front'} camera 
+                for optimal {currentView.name.toLowerCase()} perspective and full body capture
+              </p>
+            </div>
           </div>
 
           {/* Camera View */}

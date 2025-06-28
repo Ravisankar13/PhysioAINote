@@ -227,7 +227,7 @@ export default function EnhancedPosturalAnalysis({
     setIsCameraOn(false);
   }, []);
 
-  const captureImage = useCallback(() => {
+  const captureImage = useCallback(async () => {
     if (!videoRef.current || !canvasRef.current) return;
 
     const video = videoRef.current;
@@ -242,6 +242,9 @@ export default function EnhancedPosturalAnalysis({
 
     // Capture the current frame
     ctx.drawImage(video, 0, 0);
+
+    // Perform real-time postural analysis with visual overlay
+    await analyzePostureWithVisualOverlay(canvas, ctx);
 
     // Convert to base64
     const imageData = canvas.toDataURL('image/jpeg', 0.8);
@@ -267,6 +270,296 @@ export default function EnhancedPosturalAnalysis({
       analyzePosturalData();
     }
   }, [currentView, views]);
+
+  const analyzePostureWithVisualOverlay = async (canvas: HTMLCanvasElement, context: CanvasRenderingContext2D) => {
+    try {
+      // Import MediaPipe Pose for real-time analysis
+      const { Pose } = await import('@mediapipe/pose');
+      const { POSE_CONNECTIONS } = await import('@mediapipe/pose');
+
+      const pose = new Pose({
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+      });
+
+      pose.setOptions({
+        modelComplexity: 1,
+        smoothLandmarks: true,
+        enableSegmentation: false,
+        smoothSegmentation: false,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5
+      });
+
+      await new Promise((resolve) => {
+        pose.onResults((results) => {
+          if (results.poseLandmarks) {
+            // Draw alignment analysis overlays
+            drawPosturalAnalysisOverlays(context, results.poseLandmarks, canvas.width, canvas.height);
+          }
+          resolve(results);
+        });
+
+        // Process the image
+        pose.send({ image: canvas });
+      });
+    } catch (error) {
+      console.error('MediaPipe pose analysis failed:', error);
+      // Fallback to simple grid overlay
+      drawFallbackAnalysisGrid(context, canvas.width, canvas.height);
+    }
+  };
+
+  const drawPosturalAnalysisOverlays = (context: CanvasRenderingContext2D, landmarks: any[], width: number, height: number) => {
+    // Define key landmarks for postural analysis
+    const keyPoints = {
+      nose: landmarks[0],
+      leftShoulder: landmarks[11],
+      rightShoulder: landmarks[12],
+      leftHip: landmarks[23],
+      rightHip: landmarks[24],
+      leftKnee: landmarks[25],
+      rightKnee: landmarks[26],
+      leftAnkle: landmarks[27],
+      rightAnkle: landmarks[28]
+    };
+
+    // Set drawing styles
+    context.lineWidth = 3;
+    context.font = 'bold 16px Arial';
+    context.shadowColor = 'rgba(0,0,0,0.5)';
+    context.shadowBlur = 2;
+
+    // Analyze and draw based on current view
+    if (currentView.id === 'anterior') {
+      drawAnteriorViewAnalysis(context, keyPoints, width, height);
+    } else if (currentView.id === 'posterior') {
+      drawPosteriorViewAnalysis(context, keyPoints, width, height);
+    } else if (currentView.id.includes('lateral')) {
+      drawLateralViewAnalysis(context, keyPoints, width, height);
+    }
+  };
+
+  const drawAnteriorViewAnalysis = (context: CanvasRenderingContext2D, keyPoints: any, width: number, height: number) => {
+    const { leftShoulder, rightShoulder, leftHip, rightHip, leftKnee, rightKnee, leftAnkle, rightAnkle } = keyPoints;
+
+    // 1. Shoulder Level Analysis
+    if (leftShoulder && rightShoulder) {
+      const shoulderHeightDiff = Math.abs(leftShoulder.y - rightShoulder.y) * height;
+      const isLevel = shoulderHeightDiff < 15; // Threshold in pixels
+      
+      context.strokeStyle = isLevel ? '#00ff00' : '#ff0000';
+      context.lineWidth = 4;
+      context.beginPath();
+      context.moveTo(leftShoulder.x * width - 50, leftShoulder.y * height);
+      context.lineTo(rightShoulder.x * width + 50, rightShoulder.y * height);
+      context.stroke();
+      
+      // Add status text with background
+      const text = isLevel ? 'SHOULDERS LEVEL ✓' : `SHOULDER DROP: ${shoulderHeightDiff.toFixed(0)}px`;
+      const centerX = (leftShoulder.x * width + rightShoulder.x * width) / 2;
+      const centerY = (leftShoulder.y * height + rightShoulder.y * height) / 2 - 25;
+      
+      context.fillStyle = 'rgba(0,0,0,0.7)';
+      context.fillRect(centerX - 80, centerY - 15, 160, 25);
+      context.fillStyle = isLevel ? '#00ff00' : '#ff0000';
+      context.textAlign = 'center';
+      context.fillText(text, centerX, centerY + 5);
+    }
+
+    // 2. Hip Level Analysis
+    if (leftHip && rightHip) {
+      const hipHeightDiff = Math.abs(leftHip.y - rightHip.y) * height;
+      const isLevel = hipHeightDiff < 12;
+      
+      context.strokeStyle = isLevel ? '#00ff00' : '#ff0000';
+      context.lineWidth = 4;
+      context.beginPath();
+      context.moveTo(leftHip.x * width - 40, leftHip.y * height);
+      context.lineTo(rightHip.x * width + 40, rightHip.y * height);
+      context.stroke();
+      
+      const text = isLevel ? 'HIPS LEVEL ✓' : `HIP DROP: ${hipHeightDiff.toFixed(0)}px`;
+      const centerX = (leftHip.x * width + rightHip.x * width) / 2;
+      const centerY = (leftHip.y * height + rightHip.y * height) / 2 + 30;
+      
+      context.fillStyle = 'rgba(0,0,0,0.7)';
+      context.fillRect(centerX - 70, centerY - 15, 140, 25);
+      context.fillStyle = isLevel ? '#00ff00' : '#ff0000';
+      context.textAlign = 'center';
+      context.fillText(text, centerX, centerY + 5);
+    }
+
+    // 3. Knee Alignment Analysis (Valgus/Varus)
+    if (leftKnee && rightKnee && leftHip && rightHip) {
+      // Draw vertical reference lines from hips
+      context.strokeStyle = '#ffff00';
+      context.setLineDash([8, 8]);
+      context.lineWidth = 2;
+      context.beginPath();
+      context.moveTo(leftHip.x * width, leftHip.y * height);
+      context.lineTo(leftHip.x * width, leftKnee.y * height + 60);
+      context.moveTo(rightHip.x * width, rightHip.y * height);
+      context.lineTo(rightHip.x * width, rightKnee.y * height + 60);
+      context.stroke();
+      context.setLineDash([]);
+      
+      // Analyze knee alignment
+      const leftKneeOffset = Math.abs(leftKnee.x - leftHip.x) * width;
+      const rightKneeOffset = Math.abs(rightKnee.x - rightHip.x) * width;
+      
+      const leftAlignment = leftKneeOffset < 20 ? 'GOOD' : 'VALGUS';
+      const rightAlignment = rightKneeOffset < 20 ? 'GOOD' : 'VALGUS';
+      
+      // Left knee status
+      context.fillStyle = 'rgba(0,0,0,0.7)';
+      context.fillRect(leftKnee.x * width - 35, leftKnee.y * height + 20, 70, 25);
+      context.fillStyle = leftAlignment === 'GOOD' ? '#00ff00' : '#ff8800';
+      context.textAlign = 'center';
+      context.fillText(`L: ${leftAlignment}`, leftKnee.x * width, leftKnee.y * height + 37);
+      
+      // Right knee status
+      context.fillStyle = 'rgba(0,0,0,0.7)';
+      context.fillRect(rightKnee.x * width - 35, rightKnee.y * height + 20, 70, 25);
+      context.fillStyle = rightAlignment === 'GOOD' ? '#00ff00' : '#ff8800';
+      context.textAlign = 'center';
+      context.fillText(`R: ${rightAlignment}`, rightKnee.x * width, rightKnee.y * height + 37);
+    }
+
+    // 4. Center of Mass Line
+    if (leftShoulder && rightShoulder && leftAnkle && rightAnkle) {
+      const shoulderCenter = ((leftShoulder.x + rightShoulder.x) / 2) * width;
+      const ankleCenter = ((leftAnkle.x + rightAnkle.x) / 2) * width;
+      const deviation = Math.abs(shoulderCenter - ankleCenter);
+      
+      context.strokeStyle = deviation < 25 ? '#00ff00' : '#ff8800';
+      context.setLineDash([5, 5]);
+      context.lineWidth = 3;
+      context.beginPath();
+      context.moveTo(shoulderCenter, leftShoulder.y * height);
+      context.lineTo(ankleCenter, leftAnkle.y * height);
+      context.stroke();
+      context.setLineDash([]);
+      
+      const balanceStatus = deviation < 25 ? 'BALANCED' : 'SHIFTED';
+      context.fillStyle = 'rgba(0,0,0,0.7)';
+      context.fillRect(Math.min(shoulderCenter, ankleCenter) - 40, ((leftShoulder.y + leftAnkle.y) / 2) * height - 10, 80, 20);
+      context.fillStyle = deviation < 25 ? '#00ff00' : '#ff8800';
+      context.textAlign = 'center';
+      context.fillText(balanceStatus, (shoulderCenter + ankleCenter) / 2, ((leftShoulder.y + leftAnkle.y) / 2) * height + 5);
+    }
+  };
+
+  const drawLateralViewAnalysis = (context: CanvasRenderingContext2D, keyPoints: any, width: number, height: number) => {
+    const { nose, leftShoulder, rightShoulder, leftHip, rightHip } = keyPoints;
+    
+    // Use the more visible shoulder and hip (typically one side in lateral view)
+    const shoulder = leftShoulder?.x > 0.3 ? leftShoulder : rightShoulder;
+    const hip = leftHip?.x > 0.3 ? leftHip : rightHip;
+
+    if (nose && shoulder && hip) {
+      // 1. Plumb Line Analysis
+      context.strokeStyle = '#00ffff';
+      context.setLineDash([8, 8]);
+      context.lineWidth = 2;
+      context.beginPath();
+      context.moveTo(nose.x * width, 50);
+      context.lineTo(nose.x * width, height - 50);
+      context.stroke();
+      context.setLineDash([]);
+
+      // 2. Forward Head Posture Analysis
+      const headForwardDistance = Math.abs(nose.x - shoulder.x) * width;
+      const isGoodHeadPosture = headForwardDistance < 25;
+      
+      context.strokeStyle = isGoodHeadPosture ? '#00ff00' : '#ff0000';
+      context.lineWidth = 4;
+      context.beginPath();
+      context.moveTo(nose.x * width, nose.y * height);
+      context.lineTo(shoulder.x * width, shoulder.y * height);
+      context.stroke();
+      
+      const headText = isGoodHeadPosture ? 'HEAD POSTURE ✓' : 'FORWARD HEAD';
+      const headX = Math.min(nose.x, shoulder.x) * width - 20;
+      const headY = (nose.y * height + shoulder.y * height) / 2 - 20;
+      
+      context.fillStyle = 'rgba(0,0,0,0.7)';
+      context.fillRect(headX, headY, 140, 25);
+      context.fillStyle = isGoodHeadPosture ? '#00ff00' : '#ff0000';
+      context.textAlign = 'left';
+      context.fillText(headText, headX + 5, headY + 17);
+
+      // 3. Overall Vertical Alignment
+      const shoulderHipOffset = Math.abs(shoulder.x - hip.x) * width;
+      const isGoodAlignment = shoulderHipOffset < 30;
+      
+      context.strokeStyle = isGoodAlignment ? '#00ff00' : '#ff8800';
+      context.lineWidth = 4;
+      context.beginPath();
+      context.moveTo(shoulder.x * width, shoulder.y * height);
+      context.lineTo(hip.x * width, hip.y * height);
+      context.stroke();
+      
+      const alignText = isGoodAlignment ? 'ALIGNMENT ✓' : 'POSTURAL SHIFT';
+      const alignX = Math.min(shoulder.x, hip.x) * width + 15;
+      const alignY = (shoulder.y * height + hip.y * height) / 2;
+      
+      context.fillStyle = 'rgba(0,0,0,0.7)';
+      context.fillRect(alignX, alignY - 10, 120, 25);
+      context.fillStyle = isGoodAlignment ? '#00ff00' : '#ff8800';
+      context.textAlign = 'left';
+      context.fillText(alignText, alignX + 5, alignY + 7);
+    }
+  };
+
+  const drawPosteriorViewAnalysis = (context: CanvasRenderingContext2D, keyPoints: any, width: number, height: number) => {
+    // Use similar analysis to anterior view for symmetry
+    drawAnteriorViewAnalysis(context, keyPoints, width, height);
+    
+    // Add posterior-specific overlay
+    context.fillStyle = 'rgba(255,255,255,0.9)';
+    context.fillRect(10, 10, 200, 30);
+    context.fillStyle = '#333';
+    context.font = 'bold 14px Arial';
+    context.textAlign = 'left';
+    context.fillText('POSTERIOR VIEW - Spinal Analysis', 15, 30);
+  };
+
+  const drawFallbackAnalysisGrid = (context: CanvasRenderingContext2D, width: number, height: number) => {
+    // Draw professional analysis grid when pose detection fails
+    context.strokeStyle = '#00ff00';
+    context.lineWidth = 2;
+    context.setLineDash([10, 10]);
+    context.globalAlpha = 0.7;
+    
+    // Vertical center line
+    context.beginPath();
+    context.moveTo(width / 2, 50);
+    context.lineTo(width / 2, height - 50);
+    context.stroke();
+    
+    // Horizontal reference lines at key anatomical levels
+    const levels = [0.2, 0.35, 0.6, 0.8]; // Head, shoulder, hip, knee levels
+    levels.forEach(ratio => {
+      context.beginPath();
+      context.moveTo(width * 0.1, height * ratio);
+      context.lineTo(width * 0.9, height * ratio);
+      context.stroke();
+    });
+    
+    context.setLineDash([]);
+    context.globalAlpha = 1;
+    
+    // Add instruction overlay
+    context.fillStyle = 'rgba(0,0,0,0.8)';
+    context.fillRect(10, 10, 300, 80);
+    context.fillStyle = '#00ff00';
+    context.font = 'bold 16px Arial';
+    context.textAlign = 'left';
+    context.fillText('POSTURAL ANALYSIS GRID', 15, 30);
+    context.font = '14px Arial';
+    context.fillText('• Use reference lines for alignment', 15, 50);
+    context.fillText('• Green lines = proper alignment zones', 15, 70);
+  };
 
   const analyzePosturalData = async () => {
     setIsAnalyzing(true);

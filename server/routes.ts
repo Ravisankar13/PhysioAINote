@@ -3855,8 +3855,8 @@ Base your analysis on established postural assessment principles and correlate f
         return res.status(400).json({ error: "Illustration prompt is required" });
       }
 
-      // Enhanced prompt for medical accuracy
-      const enhancedPrompt = `Medical illustration: ${prompt}. Style: Clinical anatomy textbook, detailed cross-section, labeled structures, professional medical diagram with anatomical accuracy. High quality, educational medical visualization.`;
+      // Enhanced prompt for medical accuracy and professional quality
+      const enhancedPrompt = `Professional medical illustration: ${prompt}. Create a detailed anatomical diagram in the style of Gray's Anatomy or Netter's Atlas. Include: precise anatomical structures, accurate proportions, clinical cross-sections, labeled pathology, medical textbook quality, scientific accuracy, detailed tissue layers, proper anatomical orientation markers (anterior/posterior, medial/lateral). High resolution medical visualization for clinical education.`;
 
       // Try to generate using DALL-E 3 first
       const response = await openai.images.generate({
@@ -3891,55 +3891,539 @@ Base your analysis on established postural assessment principles and correlate f
   });
 
   function createAnatomicalSVG({ anatomicalStructure, pathologyType, severity }: any): string {
+    // Create anatomically-specific illustrations based on structure
+    const illustrations = {
+      'knee': createKneeIllustration,
+      'shoulder': createShoulderIllustration,
+      'hip': createHipIllustration,
+      'spine': createSpineIllustration,
+      'ankle': createAnkleIllustration,
+      'default': createGenericIllustration
+    };
+
+    const structureLower = anatomicalStructure?.toLowerCase() || 'default';
+    const illustrationType = Object.keys(illustrations).find(key => 
+      structureLower.includes(key)
+    ) || 'default';
+
+    const illustrationFn = illustrations[illustrationType as keyof typeof illustrations] || illustrations.default;
+    
+    return illustrationFn(anatomicalStructure, pathologyType, severity);
+  }
+
+  function createKneeIllustration(structure: string, pathology: string, severity: string): string {
     const svg = `
-      <svg width="400" height="400" xmlns="http://www.w3.org/2000/svg">
+      <svg width="600" height="700" xmlns="http://www.w3.org/2000/svg">
         <defs>
-          <pattern id="inflammation" patternUnits="userSpaceOnUse" width="4" height="4">
-            <rect width="4" height="4" fill="#ff6b6b"/>
-            <circle cx="2" cy="2" r="1" fill="#ff4757"/>
+          <linearGradient id="boneGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#f5f5f5;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#e0e0e0;stop-opacity:1" />
+          </linearGradient>
+          <linearGradient id="cartilageGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#e3f2fd;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#bbdefb;stop-opacity:1" />
+          </linearGradient>
+          <pattern id="inflammation" patternUnits="userSpaceOnUse" width="3" height="3">
+            <rect width="3" height="3" fill="#ff5722"/>
+            <circle cx="1.5" cy="1.5" r="0.5" fill="#d32f2f"/>
           </pattern>
+          <pattern id="tearPattern" patternUnits="userSpaceOnUse" width="5" height="5">
+            <rect width="5" height="5" fill="#8bc34a"/>
+            <path d="M0,0 L5,5 M5,0 L0,5" stroke="#4caf50" stroke-width="1"/>
+          </pattern>
+        </defs>
+        
+        <!-- Background -->
+        <rect width="600" height="700" fill="#fafafa"/>
+        
+        <!-- Title -->
+        <text x="300" y="40" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="#1565c0">
+          ${structure || 'Knee Joint'} - Sagittal View
+        </text>
+        <text x="300" y="65" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" fill="#424242">
+          ${pathology || 'Pathological Changes'} (${severity || 'Moderate'} Severity)
+        </text>
+        
+        <!-- Femur -->
+        <path d="M200 100 Q250 120 280 150 L280 250 Q270 260 250 265 L200 260 Q180 250 180 200 Z" 
+              fill="url(#boneGrad)" stroke="#757575" stroke-width="2"/>
+        
+        <!-- Tibia -->
+        <path d="M220 400 Q250 410 280 420 L320 500 Q310 520 280 525 L220 520 Q200 500 200 450 Z" 
+              fill="url(#boneGrad)" stroke="#757575" stroke-width="2"/>
+        
+        <!-- Patella -->
+        <ellipse cx="240" cy="280" rx="25" ry="35" fill="url(#boneGrad)" stroke="#757575" stroke-width="2"/>
+        
+        <!-- Medial Meniscus -->
+        <path d="M200 320 Q230 310 260 320 Q250 340 230 345 Q210 340 200 320 Z" 
+              fill="${pathology?.toLowerCase().includes('meniscus') ? 'url(#tearPattern)' : 'url(#cartilageGrad)'}" 
+              stroke="#1976d2" stroke-width="2"/>
+        
+        <!-- Lateral Meniscus -->
+        <path d="M280 320 Q310 310 340 320 Q330 340 310 345 Q290 340 280 320 Z" 
+              fill="${pathology?.toLowerCase().includes('meniscus') ? 'url(#tearPattern)' : 'url(#cartilageGrad)'}" 
+              stroke="#1976d2" stroke-width="2"/>
+        
+        <!-- ACL -->
+        <line x1="220" y1="290" x2="280" y2="350" stroke="#8bc34a" stroke-width="4"/>
+        
+        <!-- PCL -->
+        <line x1="280" y1="290" x2="220" y2="350" stroke="#4caf50" stroke-width="4"/>
+        
+        <!-- Inflammation markers if applicable -->
+        ${pathology?.toLowerCase().includes('inflammation') || pathology?.toLowerCase().includes('arthritis') ? `
+        <ellipse cx="240" cy="320" rx="60" ry="40" fill="url(#inflammation)" opacity="0.6"/>
+        ` : ''}
+        
+        <!-- Anatomical Labels -->
+        <g font-family="Arial, sans-serif" font-size="12" fill="#333">
+          <!-- Femur label -->
+          <line x1="180" y1="150" x2="120" y2="120" stroke="#666" stroke-width="1"/>
+          <text x="115" y="115" text-anchor="end">Femur</text>
+          
+          <!-- Patella label -->
+          <line x1="240" y1="250" x2="160" y2="220" stroke="#666" stroke-width="1"/>
+          <text x="155" y="215" text-anchor="end">Patella</text>
+          
+          <!-- Tibia label -->
+          <line x1="220" y1="450" x2="140" y2="480" stroke="#666" stroke-width="1"/>
+          <text x="135" y="485" text-anchor="end">Tibia</text>
+          
+          <!-- Meniscus labels -->
+          <line x1="230" y1="330" x2="350" y2="300" stroke="#666" stroke-width="1"/>
+          <text x="355" y="295">Medial Meniscus</text>
+          <text x="355" y="308" fill="${pathology?.toLowerCase().includes('meniscus') ? '#d32f2f' : '#333'}">
+            ${pathology?.toLowerCase().includes('meniscus') ? '(Tear Present)' : '(Normal)'}
+          </text>
+          
+          <line x1="310" y1="330" x2="380" y2="360" stroke="#666" stroke-width="1"/>
+          <text x="385" y="355">Lateral Meniscus</text>
+          
+          <!-- Ligament labels -->
+          <line x1="250" y1="320" x2="400" y2="400" stroke="#666" stroke-width="1"/>
+          <text x="405" y="395">ACL</text>
+          <text x="405" y="408">PCL</text>
+        </g>
+        
+        <!-- Clinical Information Box -->
+        <rect x="50" y="550" width="500" height="120" fill="#fff" stroke="#ddd" stroke-width="2" rx="8"/>
+        <text x="70" y="580" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#1565c0">
+          Clinical Assessment
+        </text>
+        <text x="70" y="605" font-family="Arial, sans-serif" font-size="12" fill="#333">
+          Structure: ${structure || 'Knee Joint'}
+        </text>
+        <text x="70" y="625" font-family="Arial, sans-serif" font-size="12" fill="#333">
+          Pathology: ${pathology || 'Normal anatomy'}
+        </text>
+        <text x="70" y="645" font-family="Arial, sans-serif" font-size="12" fill="#333">
+          Severity: ${severity || 'N/A'} ${severity ? '- Requires clinical correlation' : ''}
+        </text>
+        <text x="70" y="665" font-family="Arial, sans-serif" font-size="10" fill="#666">
+          Generated: ${new Date().toLocaleDateString()} | For educational purposes only
+        </text>
+      </svg>
+    `;
+    
+    return `data:image/svg+xml;base64,${btoa(svg)}`;
+  }
+
+  function createShoulderIllustration(structure: string, pathology: string, severity: string): string {
+    const svg = `
+      <svg width="600" height="650" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="boneGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#f5f5f5;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#e0e0e0;stop-opacity:1" />
+          </linearGradient>
+          <linearGradient id="muscleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#ffcdd2;stop-opacity:0.8" />
+            <stop offset="100%" style="stop-color:#f8bbd9;stop-opacity:0.8" />
+          </linearGradient>
+          <pattern id="inflammation" patternUnits="userSpaceOnUse" width="4" height="4">
+            <rect width="4" height="4" fill="#ff5722"/>
+            <circle cx="2" cy="2" r="1" fill="#d32f2f"/>
+          </pattern>
+        </defs>
+        
+        <!-- Background -->
+        <rect width="600" height="650" fill="#fafafa"/>
+        
+        <!-- Title -->
+        <text x="300" y="40" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="#1565c0">
+          ${structure || 'Shoulder Joint'} - Coronal View
+        </text>
+        <text x="300" y="65" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" fill="#424242">
+          ${pathology || 'Anatomical Structure'} (${severity || 'Assessment'})
+        </text>
+        
+        <!-- Clavicle -->
+        <ellipse cx="250" cy="120" rx="80" ry="12" fill="url(#boneGrad)" stroke="#757575" stroke-width="2"/>
+        
+        <!-- Acromion -->
+        <path d="M180 120 Q160 130 150 150 L170 160 Q190 150 200 140 Z" 
+              fill="url(#boneGrad)" stroke="#757575" stroke-width="2"/>
+        
+        <!-- Humerus Head -->
+        <circle cx="200" cy="220" r="45" fill="url(#boneGrad)" stroke="#757575" stroke-width="2"/>
+        
+        <!-- Humerus Shaft -->
+        <rect x="185" y="260" width="30" height="200" fill="url(#boneGrad)" stroke="#757575" stroke-width="2" rx="15"/>
+        
+        <!-- Glenoid -->
+        <ellipse cx="280" cy="220" rx="20" ry="35" fill="url(#boneGrad)" stroke="#757575" stroke-width="2"/>
+        
+        <!-- Supraspinatus Muscle/Tendon -->
+        <path d="M150 160 Q180 180 200 200 Q220 190 240 180 Q250 190 240 200 Q220 210 200 220 Q180 210 160 190 Z" 
+              fill="${pathology?.toLowerCase().includes('supraspinatus') || pathology?.toLowerCase().includes('rotator') ? 'url(#inflammation)' : 'url(#muscleGrad)'}" 
+              stroke="#e91e63" stroke-width="2"/>
+        
+        <!-- Infraspinatus -->
+        <path d="M240 200 Q260 210 280 230 Q270 250 250 240 Q230 230 240 200 Z" 
+              fill="url(#muscleGrad)" stroke="#e91e63" stroke-width="2"/>
+        
+        <!-- Subscapularis -->
+        <path d="M280 200 Q300 210 310 230 Q300 250 280 240 Q270 220 280 200 Z" 
+              fill="url(#muscleGrad)" stroke="#e91e63" stroke-width="2"/>
+        
+        <!-- Teres Minor -->
+        <path d="M250 240 Q270 250 280 270 Q270 280 250 270 Q240 260 250 240 Z" 
+              fill="url(#muscleGrad)" stroke="#e91e63" stroke-width="2"/>
+        
+        <!-- Subacromial Bursa -->
+        <ellipse cx="190" cy="180" rx="25" ry="8" 
+                 fill="${pathology?.toLowerCase().includes('bursa') || pathology?.toLowerCase().includes('impingement') ? 'url(#inflammation)' : '#e8f5e8'}" 
+                 stroke="#4caf50" stroke-width="1" opacity="0.7"/>
+        
+        <!-- Labels -->
+        <g font-family="Arial, sans-serif" font-size="12" fill="#333">
+          <!-- Clavicle -->
+          <line x1="250" y1="105" x2="250" y2="80" stroke="#666" stroke-width="1"/>
+          <text x="250" y="75" text-anchor="middle">Clavicle</text>
+          
+          <!-- Acromion -->
+          <line x1="150" y1="140" x2="100" y2="110" stroke="#666" stroke-width="1"/>
+          <text x="95" y="105" text-anchor="end">Acromion</text>
+          
+          <!-- Humerus -->
+          <line x1="245" y1="220" x2="320" y2="180" stroke="#666" stroke-width="1"/>
+          <text x="325" y="175">Humeral Head</text>
+          
+          <!-- Glenoid -->
+          <line x1="300" y1="220" x2="350" y2="200" stroke="#666" stroke-width="1"/>
+          <text x="355" y="195">Glenoid</text>
+          
+          <!-- Rotator Cuff -->
+          <line x1="200" y1="190" x2="400" y2="120" stroke="#666" stroke-width="1"/>
+          <text x="405" y="115">Supraspinatus</text>
+          <text x="405" y="130" fill="${pathology?.toLowerCase().includes('supraspinatus') ? '#d32f2f' : '#333'}">
+            ${pathology?.toLowerCase().includes('supraspinatus') ? '(Pathology Present)' : '(Normal)'}
+          </text>
+          
+          <!-- Bursa -->
+          <line x1="190" y1="170" x2="400" y2="150" stroke="#666" stroke-width="1"/>
+          <text x="405" y="145">Subacromial Bursa</text>
+          <text x="405" y="160" fill="${pathology?.toLowerCase().includes('bursa') ? '#d32f2f' : '#333'}">
+            ${pathology?.toLowerCase().includes('bursa') ? '(Inflamed)' : '(Normal)'}
+          </text>
+        </g>
+        
+        <!-- Clinical Information -->
+        <rect x="50" y="480" width="500" height="120" fill="#fff" stroke="#ddd" stroke-width="2" rx="8"/>
+        <text x="70" y="510" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#1565c0">
+          Clinical Assessment
+        </text>
+        <text x="70" y="535" font-family="Arial, sans-serif" font-size="12" fill="#333">
+          Structure: ${structure || 'Shoulder Complex'}
+        </text>
+        <text x="70" y="555" font-family="Arial, sans-serif" font-size="12" fill="#333">
+          Pathology: ${pathology || 'Normal anatomy'}
+        </text>
+        <text x="70" y="575" font-family="Arial, sans-serif" font-size="12" fill="#333">
+          Severity: ${severity || 'N/A'} ${severity ? '- Clinical correlation recommended' : ''}
+        </text>
+        <text x="70" y="595" font-family="Arial, sans-serif" font-size="10" fill="#666">
+          Professional medical illustration | ${new Date().toLocaleDateString()}
+        </text>
+      </svg>
+    `;
+    
+    return `data:image/svg+xml;base64,${btoa(svg)}`;
+  }
+
+  function createHipIllustration(structure: string, pathology: string, severity: string): string {
+    const svg = `
+      <svg width="600" height="650" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="boneGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#f5f5f5;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#e0e0e0;stop-opacity:1" />
+          </linearGradient>
+          <pattern id="inflammation" patternUnits="userSpaceOnUse" width="4" height="4">
+            <rect width="4" height="4" fill="#ff5722"/>
+            <circle cx="2" cy="2" r="1" fill="#d32f2f"/>
+          </pattern>
+        </defs>
+        
+        <!-- Background -->
+        <rect width="600" height="650" fill="#fafafa"/>
+        
+        <!-- Title -->
+        <text x="300" y="40" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="#1565c0">
+          ${structure || 'Hip Joint'} - Anterior View
+        </text>
+        
+        <!-- Pelvis -->
+        <path d="M150 200 Q200 180 250 180 Q300 180 350 200 Q380 220 380 250 Q370 280 350 300 L250 300 Q200 300 150 280 Q120 250 120 220 Q120 200 150 200 Z" 
+              fill="url(#boneGrad)" stroke="#757575" stroke-width="2"/>
+        
+        <!-- Acetabulum -->
+        <circle cx="200" cy="280" r="35" fill="none" stroke="#757575" stroke-width="3"/>
+        <circle cx="350" cy="280" r="35" fill="none" stroke="#757575" stroke-width="3"/>
+        
+        <!-- Femoral Head -->
+        <circle cx="200" cy="280" r="25" fill="url(#boneGrad)" stroke="#757575" stroke-width="2"/>
+        <circle cx="350" cy="280" r="25" fill="url(#boneGrad)" stroke="#757575" stroke-width="2"/>
+        
+        <!-- Femoral Neck -->
+        <ellipse cx="190" cy="320" rx="15" ry="40" fill="url(#boneGrad)" stroke="#757575" stroke-width="2" transform="rotate(-30 190 320)"/>
+        <ellipse cx="360" cy="320" rx="15" ry="40" fill="url(#boneGrad)" stroke="#757575" stroke-width="2" transform="rotate(30 360 320)"/>
+        
+        <!-- Greater Trochanter -->
+        <ellipse cx="160" cy="340" rx="20" ry="15" fill="url(#boneGrad)" stroke="#757575" stroke-width="2"/>
+        <ellipse cx="390" cy="340" rx="20" ry="15" fill="url(#boneGrad)" stroke="#757575" stroke-width="2"/>
+        
+        <!-- Gluteus Medius Tendon and Bursa -->
+        <ellipse cx="160" cy="330" rx="12" ry="8" 
+                 fill="${pathology?.toLowerCase().includes('gluteus') || pathology?.toLowerCase().includes('gtps') ? 'url(#inflammation)' : '#ffcdd2'}" 
+                 stroke="#e91e63" stroke-width="2"/>
+        <ellipse cx="390" cy="330" rx="12" ry="8" 
+                 fill="${pathology?.toLowerCase().includes('gluteus') || pathology?.toLowerCase().includes('gtps') ? 'url(#inflammation)' : '#ffcdd2'}" 
+                 stroke="#e91e63" stroke-width="2"/>
+        
+        <!-- Trochanteric Bursa -->
+        <ellipse cx="155" cy="340" rx="8" ry="4" 
+                 fill="${pathology?.toLowerCase().includes('bursa') || pathology?.toLowerCase().includes('gtps') ? 'url(#inflammation)' : '#e8f5e8'}" 
+                 stroke="#4caf50" stroke-width="1" opacity="0.8"/>
+        <ellipse cx="395" cy="340" rx="8" ry="4" 
+                 fill="${pathology?.toLowerCase().includes('bursa') || pathology?.toLowerCase().includes('gtps') ? 'url(#inflammation)' : '#e8f5e8'}" 
+                 stroke="#4caf50" stroke-width="1" opacity="0.8"/>
+        
+        <!-- Labels -->
+        <g font-family="Arial, sans-serif" font-size="12" fill="#333">
+          <line x1="200" y1="250" x2="120" y2="200" stroke="#666" stroke-width="1"/>
+          <text x="115" y="195" text-anchor="end">Femoral Head</text>
+          
+          <line x1="160" y1="320" x2="80" y2="280" stroke="#666" stroke-width="1"/>
+          <text x="75" y="275" text-anchor="end">Greater Trochanter</text>
+          
+          <line x1="160" y1="340" x2="60" y2="380" stroke="#666" stroke-width="1"/>
+          <text x="55" y="375" text-anchor="end">Gluteus Medius</text>
+          <text x="55" y="390" text-anchor="end" fill="${pathology?.toLowerCase().includes('gluteus') ? '#d32f2f' : '#333'}">
+            ${pathology?.toLowerCase().includes('gluteus') ? '(Inflamed)' : '(Normal)'}
+          </text>
+          
+          <line x1="155" y1="350" x2="60" y2="420" stroke="#666" stroke-width="1"/>
+          <text x="55" y="415" text-anchor="end">Trochanteric Bursa</text>
+          <text x="55" y="430" text-anchor="end" fill="${pathology?.toLowerCase().includes('bursa') ? '#d32f2f' : '#333'}">
+            ${pathology?.toLowerCase().includes('bursa') ? '(Bursitis)' : '(Normal)'}
+          </text>
+        </g>
+        
+        <!-- Clinical Information -->
+        <rect x="50" y="480" width="500" height="120" fill="#fff" stroke="#ddd" stroke-width="2" rx="8"/>
+        <text x="70" y="510" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#1565c0">
+          Clinical Assessment
+        </text>
+        <text x="70" y="535" font-family="Arial, sans-serif" font-size="12" fill="#333">
+          Structure: ${structure || 'Hip Joint Complex'}
+        </text>
+        <text x="70" y="555" font-family="Arial, sans-serif" font-size="12" fill="#333">
+          Pathology: ${pathology || 'Normal anatomy'}
+        </text>
+        <text x="70" y="575" font-family="Arial, sans-serif" font-size="12" fill="#333">
+          Severity: ${severity || 'N/A'} ${severity ? '- Requires imaging correlation' : ''}
+        </text>
+        <text x="70" y="595" font-family="Arial, sans-serif" font-size="10" fill="#666">
+          Anatomical illustration for clinical education | ${new Date().toLocaleDateString()}
+        </text>
+      </svg>
+    `;
+    
+    return `data:image/svg+xml;base64,${btoa(svg)}`;
+  }
+
+  function createSpineIllustration(structure: string, pathology: string, severity: string): string {
+    const svg = `
+      <svg width="600" height="700" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="boneGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#f5f5f5;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#e0e0e0;stop-opacity:1" />
+          </linearGradient>
+          <linearGradient id="discGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#e1f5fe;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#b3e5fc;stop-opacity:1" />
+          </linearGradient>
+          <pattern id="herniation" patternUnits="userSpaceOnUse" width="5" height="5">
+            <rect width="5" height="5" fill="#ff5722"/>
+            <path d="M0,0 L5,5 M5,0 L0,5" stroke="#d32f2f" stroke-width="1"/>
+          </pattern>
+        </defs>
+        
+        <!-- Background -->
+        <rect width="600" height="700" fill="#fafafa"/>
+        
+        <!-- Title -->
+        <text x="300" y="40" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="#1565c0">
+          ${structure || 'Lumbar Spine'} - Sagittal View
+        </text>
+        
+        <!-- Vertebral Bodies L1-L5 -->
+        <rect x="250" y="120" width="60" height="40" fill="url(#boneGrad)" stroke="#757575" stroke-width="2" rx="5"/>
+        <rect x="250" y="180" width="60" height="40" fill="url(#boneGrad)" stroke="#757575" stroke-width="2" rx="5"/>
+        <rect x="250" y="240" width="60" height="40" fill="url(#boneGrad)" stroke="#757575" stroke-width="2" rx="5"/>
+        <rect x="250" y="300" width="60" height="40" fill="url(#boneGrad)" stroke="#757575" stroke-width="2" rx="5"/>
+        <rect x="250" y="360" width="60" height="40" fill="url(#boneGrad)" stroke="#757575" stroke-width="2" rx="5"/>
+        
+        <!-- Intervertebral Discs -->
+        <ellipse cx="280" cy="170" rx="35" ry="8" 
+                 fill="${pathology?.toLowerCase().includes('disc') ? 'url(#herniation)' : 'url(#discGrad)'}" 
+                 stroke="#1976d2" stroke-width="2"/>
+        <ellipse cx="280" cy="230" rx="35" ry="8" 
+                 fill="${pathology?.toLowerCase().includes('disc') ? 'url(#herniation)' : 'url(#discGrad)'}" 
+                 stroke="#1976d2" stroke-width="2"/>
+        <ellipse cx="280" cy="290" rx="35" ry="8" 
+                 fill="${pathology?.toLowerCase().includes('disc') ? 'url(#herniation)' : 'url(#discGrad)'}" 
+                 stroke="#1976d2" stroke-width="2"/>
+        <ellipse cx="280" cy="350" rx="35" ry="8" 
+                 fill="${pathology?.toLowerCase().includes('disc') ? 'url(#herniation)' : 'url(#discGrad)'}" 
+                 stroke="#1976d2" stroke-width="2"/>
+        
+        <!-- Spinous Processes -->
+        <polygon points="275,120 285,120 290,100 280,95 270,100" fill="url(#boneGrad)" stroke="#757575" stroke-width="1"/>
+        <polygon points="275,180 285,180 290,160 280,155 270,160" fill="url(#boneGrad)" stroke="#757575" stroke-width="1"/>
+        <polygon points="275,240 285,240 290,220 280,215 270,220" fill="url(#boneGrad)" stroke="#757575" stroke-width="1"/>
+        <polygon points="275,300 285,300 290,280 280,275 270,280" fill="url(#boneGrad)" stroke="#757575" stroke-width="1"/>
+        <polygon points="275,360 285,360 290,340 280,335 270,340" fill="url(#boneGrad)" stroke="#757575" stroke-width="1"/>
+        
+        <!-- Spinal Canal -->
+        <ellipse cx="265" cy="140" rx="8" ry="15" fill="#fff" stroke="#999" stroke-width="1"/>
+        <ellipse cx="265" cy="200" rx="8" ry="15" fill="#fff" stroke="#999" stroke-width="1"/>
+        <ellipse cx="265" cy="260" rx="8" ry="15" fill="#fff" stroke="#999" stroke-width="1"/>
+        <ellipse cx="265" cy="320" rx="8" ry="15" fill="#fff" stroke="#999" stroke-width="1"/>
+        <ellipse cx="265" cy="380" rx="8" ry="15" fill="#fff" stroke="#999" stroke-width="1"/>
+        
+        <!-- Nerve Roots -->
+        <line x1="270" y1="170" x2="350" y2="190" stroke="#ffc107" stroke-width="3"/>
+        <line x1="270" y1="230" x2="350" y2="250" stroke="#ffc107" stroke-width="3"/>
+        <line x1="270" y1="290" x2="350" y2="310" stroke="#ffc107" stroke-width="3"/>
+        
+        <!-- Labels -->
+        <g font-family="Arial, sans-serif" font-size="12" fill="#333">
+          <text x="320" y="145">L1</text>
+          <text x="320" y="205">L2</text>
+          <text x="320" y="265">L3</text>
+          <text x="320" y="325">L4</text>
+          <text x="320" y="385">L5</text>
+          
+          <line x1="315" y1="170" x2="400" y2="140" stroke="#666" stroke-width="1"/>
+          <text x="405" y="135">Intervertebral Disc</text>
+          <text x="405" y="150" fill="${pathology?.toLowerCase().includes('disc') ? '#d32f2f' : '#333'}">
+            ${pathology?.toLowerCase().includes('disc') ? '(Herniation)' : '(Normal)'}
+          </text>
+          
+          <line x1="350" y1="190" x2="420" y2="170" stroke="#666" stroke-width="1"/>
+          <text x="425" y="165">Nerve Root</text>
+        </g>
+        
+        <!-- Clinical Information -->
+        <rect x="50" y="520" width="500" height="120" fill="#fff" stroke="#ddd" stroke-width="2" rx="8"/>
+        <text x="70" y="550" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#1565c0">
+          Clinical Assessment
+        </text>
+        <text x="70" y="575" font-family="Arial, sans-serif" font-size="12" fill="#333">
+          Structure: ${structure || 'Lumbar Spine'}
+        </text>
+        <text x="70" y="595" font-family="Arial, sans-serif" font-size="12" fill="#333">
+          Pathology: ${pathology || 'Normal anatomy'}
+        </text>
+        <text x="70" y="615" font-family="Arial, sans-serif" font-size="12" fill="#333">
+          Severity: ${severity || 'N/A'} ${severity ? '- MRI correlation recommended' : ''}
+        </text>
+        <text x="70" y="635" font-family="Arial, sans-serif" font-size="10" fill="#666">
+          Anatomical cross-section for clinical education | ${new Date().toLocaleDateString()}
+        </text>
+      </svg>
+    `;
+    
+    return `data:image/svg+xml;base64,${btoa(svg)}`;
+  }
+
+  function createAnkleIllustration(structure: string, pathology: string, severity: string): string {
+    return createGenericIllustration(structure, pathology, severity);
+  }
+
+  function createGenericIllustration(structure: string, pathology: string, severity: string): string {
+    const svg = `
+      <svg width="600" height="500" xmlns="http://www.w3.org/2000/svg">
+        <defs>
           <linearGradient id="tissueGrad" x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" style="stop-color:#e1f5fe;stop-opacity:1" />
             <stop offset="100%" style="stop-color:#b3e5fc;stop-opacity:1" />
           </linearGradient>
+          <pattern id="pathology" patternUnits="userSpaceOnUse" width="4" height="4">
+            <rect width="4" height="4" fill="#ff6b6b"/>
+            <circle cx="2" cy="2" r="1" fill="#ff4757"/>
+          </pattern>
         </defs>
         
         <!-- Background -->
-        <rect width="400" height="400" fill="#f8f9fa"/>
+        <rect width="600" height="500" fill="#fafafa"/>
         
         <!-- Title -->
-        <text x="200" y="30" text-anchor="middle" font-family="Arial" font-size="16" font-weight="bold">
-          ${anatomicalStructure || 'Anatomical Structure'}
+        <text x="300" y="40" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="#1565c0">
+          ${structure || 'Anatomical Structure'}
         </text>
-        <text x="200" y="50" text-anchor="middle" font-family="Arial" font-size="12" fill="#666">
-          ${pathologyType || 'Pathological Change'}
+        <text x="300" y="65" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" fill="#424242">
+          ${pathology || 'Clinical Assessment'} ${severity ? `(${severity} severity)` : ''}
         </text>
         
         <!-- Main anatomical structure -->
-        <ellipse cx="200" cy="200" rx="80" ry="120" fill="url(#tissueGrad)" stroke="#0277bd" stroke-width="2"/>
+        <ellipse cx="300" cy="200" rx="120" ry="80" fill="url(#tissueGrad)" stroke="#0277bd" stroke-width="3"/>
         
-        <!-- Pathology area -->
-        <ellipse cx="180" cy="160" rx="30" ry="20" fill="url(#inflammation)" stroke="#d32f2f" stroke-width="2"/>
+        <!-- Pathology overlay -->
+        <ellipse cx="280" cy="180" rx="40" ry="25" fill="url(#pathology)" stroke="#d32f2f" stroke-width="2" opacity="0.8"/>
         
-        <!-- Labels and annotations -->
-        <line x1="210" y1="160" x2="280" y2="120" stroke="#333" stroke-width="1"/>
-        <text x="285" y="115" font-family="Arial" font-size="10" fill="#333">
-          ${pathologyType || 'Pathology'}
+        <!-- Anatomical markers -->
+        <circle cx="250" cy="200" r="4" fill="#333"/>
+        <circle cx="350" cy="200" r="4" fill="#333"/>
+        <line x1="200" y1="200" x2="400" y2="200" stroke="#999" stroke-width="1" stroke-dasharray="5,5"/>
+        
+        <!-- Labels -->
+        <line x1="320" y1="180" x2="400" y2="130" stroke="#333" stroke-width="1"/>
+        <text x="405" y="125" font-family="Arial, sans-serif" font-size="12" fill="#333">
+          ${pathology || 'Pathological area'}
         </text>
-        <text x="285" y="128" font-family="Arial" font-size="8" fill="#666">
-          ${severity || 'moderate'} severity
+        
+        <!-- Clinical Information -->
+        <rect x="50" y="320" width="500" height="120" fill="#fff" stroke="#ddd" stroke-width="2" rx="8"/>
+        <text x="70" y="350" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#1565c0">
+          Clinical Visualization
         </text>
-        
-        <!-- Additional anatomical markers -->
-        <circle cx="160" cy="180" r="3" fill="#333"/>
-        <circle cx="240" cy="220" r="3" fill="#333"/>
-        <line x1="120" y1="200" x2="280" y2="200" stroke="#999" stroke-width="1" stroke-dasharray="5,5"/>
-        
-        <!-- Legend box -->
-        <rect x="30" y="320" width="340" height="60" fill="#fff" stroke="#ddd" stroke-width="1" rx="5"/>
-        <text x="40" y="340" font-family="Arial" font-size="12" font-weight="bold">Clinical Visualization:</text>
-        <text x="40" y="355" font-family="Arial" font-size="10">Red area indicates pathological changes</text>
-        <text x="40" y="370" font-family="Arial" font-size="10">Generated for educational purposes - ${new Date().toLocaleDateString()}</text>
+        <text x="70" y="375" font-family="Arial, sans-serif" font-size="12" fill="#333">
+          Structure: ${structure || 'Generic anatomical structure'}
+        </text>
+        <text x="70" y="395" font-family="Arial, sans-serif" font-size="12" fill="#333">
+          Findings: ${pathology || 'Normal anatomy visualization'}
+        </text>
+        <text x="70" y="415" font-family="Arial, sans-serif" font-size="12" fill="#333">
+          Assessment: ${severity || 'Clinical correlation required'}
+        </text>
+        <text x="70" y="435" font-family="Arial, sans-serif" font-size="10" fill="#666">
+          Professional medical illustration | Generated ${new Date().toLocaleDateString()}
+        </text>
       </svg>
     `;
     

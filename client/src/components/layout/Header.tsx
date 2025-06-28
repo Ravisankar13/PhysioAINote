@@ -43,6 +43,7 @@ const Header = () => {
   const navItems = [
     { to: "/", label: "Home" },
     { to: "/case-studies", label: "AI Case Studies" },
+    { to: "/competitions", label: "Competitions" },
     { to: "/shared-cases", label: "Forum" },
     { to: "/exercises", label: "Exercise Library" },
     { to: "/manual-therapy", label: "Manual Therapy" },

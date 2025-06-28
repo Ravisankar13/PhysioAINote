@@ -36,6 +36,7 @@ import CaseStudyPage from "@/pages/CaseStudyPage";
 import AdminDashboard from "@/pages/admin-dashboard";
 import PhysioGPT from "@/pages/PhysioGPT";
 import TrialWelcome from "@/pages/TrialWelcome";
+import CompetitionPage from "@/pages/CompetitionPage";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { ThemeProvider } from "next-themes";
@@ -98,6 +99,10 @@ function Router() {
           <Route
             path="/case-studies"
             element={<ProtectedRoute component={CaseStudyPage} />}
+          />
+          <Route
+            path="/competitions"
+            element={<ProtectedRoute component={CompetitionPage} />}
           />
           <Route
             path="/physiogpt"

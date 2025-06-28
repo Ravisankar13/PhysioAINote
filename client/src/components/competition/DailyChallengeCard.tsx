@@ -24,9 +24,10 @@ import { apiRequest } from "@/lib/queryClient";
 
 interface DailyChallengeCardProps {
   preview?: boolean;
+  onStartChallenge?: () => void;
 }
 
-export default function DailyChallengeCard({ preview = false }: DailyChallengeCardProps) {
+export default function DailyChallengeCard({ preview = false, onStartChallenge }: DailyChallengeCardProps) {
   const [isStarted, setIsStarted] = useState(false);
   const [startTime, setStartTime] = useState<Date | null>(null);
   const [userDiagnosis, setUserDiagnosis] = useState("");
@@ -133,7 +134,7 @@ export default function DailyChallengeCard({ preview = false }: DailyChallengeCa
         <p className="text-sm text-muted-foreground mb-4">
           Test your diagnostic skills with a new clinical case every day
         </p>
-        <Button className="w-full">
+        <Button className="w-full" onClick={onStartChallenge}>
           Start Today's Challenge
         </Button>
       </div>

@@ -145,7 +145,10 @@ export default function CompetitionPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <DailyChallengeCard preview={true} />
+                  <DailyChallengeCard 
+                    preview={true} 
+                    onStartChallenge={() => setActiveTab("daily")}
+                  />
                 </CardContent>
               </Card>
 

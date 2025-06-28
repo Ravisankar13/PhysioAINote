@@ -140,6 +140,7 @@ PhysioGPT is an advanced AI-powered physiotherapy platform that provides evidenc
 
 ## Recent Updates
 
+- **January 28, 2025**: Implemented revolutionary Intelligent Assessment System with AI-powered symptom analysis, multi-plane postural assessment, movement prediction, and clinical visualization framework. System includes advanced NLP symptom processing, automated movement test selection, comprehensive postural analysis with multi-camera support, and foundation for AI-generated anatomical pathology illustrations. Added dedicated server routes (/api/analyze-symptoms, /api/analyze-posture) with OpenAI GPT-4o integration for clinical reasoning and assessment recommendations.
 - **January 28, 2025**: Added flexible step-by-step navigation to integrated clinical assessment with Previous/Next buttons, free movement between all steps without completion requirements, visual progress indicators, and enhanced user workflow allowing users to jump to any assessment stage
 - **January 28, 2025**: Implemented comprehensive camera selection functionality for both Motion Capture and Static Postural Analysis components with front/rear camera switching, device-specific selection dropdown, camera status indicators, and mobile device compatibility
 - **January 25, 2025**: Increased camera height for full body capture: changed aspect ratio from 16:9 to 4:5, increased camera resolution to 1280x1600, enhanced display height to 900px minimum, and updated 3D skeleton coordinate system to properly handle taller camera dimensions for better leg and full-body movement detection

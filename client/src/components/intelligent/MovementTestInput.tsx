@@ -227,12 +227,40 @@ export default function MovementTestInput({
       <div className="text-center">
         <h2 className="text-2xl font-bold text-gray-900 mb-2">Movement Testing Phase</h2>
         <p className="text-gray-600 mb-4">
-          Perform the AI-recommended movement tests and record your findings
+          Perform the AI-recommended movement tests and record your findings. You can complete as many or as few tests as needed.
         </p>
-        <Badge variant="outline" className="mb-4">
-          {getCompletedTests()} of {recommendedTests.length} tests completed
-        </Badge>
+        <div className="flex justify-center items-center space-x-4 mb-4">
+          <Badge variant="outline">
+            {getCompletedTests()} of {recommendedTests.length} tests completed
+          </Badge>
+          {getCompletedTests() === 0 && (
+            <Badge variant="secondary">
+              Optional - You can skip if tests aren't applicable
+            </Badge>
+          )}
+        </div>
       </div>
+
+      {/* Instructions Card */}
+      {recommendedTests.length > 0 && (
+        <Card className="bg-blue-50 border-blue-200">
+          <CardContent className="pt-6">
+            <div className="flex items-start space-x-3">
+              <Activity className="h-5 w-5 text-blue-600 mt-0.5" />
+              <div>
+                <h3 className="font-semibold text-blue-900 mb-2">How to Complete Movement Tests</h3>
+                <ol className="text-sm text-blue-800 space-y-1 list-decimal list-inside">
+                  <li>Check the box next to a test when you want to perform it</li>
+                  <li>Follow the test instructions provided</li>
+                  <li>Record your findings using the dropdown menus and text fields</li>
+                  <li>Complete as many tests as relevant - you can skip tests that aren't applicable</li>
+                  <li>Click "Complete" or "Skip" to proceed to the next phase</li>
+                </ol>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-6">
         {recommendedTests.map((test, index) => (
@@ -365,16 +393,23 @@ export default function MovementTestInput({
         ))}
       </div>
 
-      <div className="flex justify-center pt-6">
+      <div className="flex justify-center pt-6 space-x-4">
         <Button 
           onClick={handleCompleteAssessment}
           size="lg"
           className="px-8"
-          disabled={getCompletedTests() === 0}
         >
-          Complete Movement Assessment
+          {getCompletedTests() > 0 ? 'Complete Movement Assessment' : 'Skip Movement Tests'}
           <CheckCircle className="ml-2 h-5 w-5" />
         </Button>
+        
+        {getCompletedTests() === 0 && (
+          <div className="text-center">
+            <p className="text-sm text-gray-500 mt-2 max-w-md">
+              You can skip movement tests if they're not applicable or proceed to continue the assessment
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

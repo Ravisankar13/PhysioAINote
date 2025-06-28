@@ -15,6 +15,8 @@ interface PosturalView {
   completed: boolean;
   imageData?: string;
   analysis?: PosturalAnalysisResult;
+  selectedCamera?: string;
+  cameraType?: 'front' | 'rear';
 }
 
 interface PosturalAnalysisResult {
@@ -105,6 +107,9 @@ export default function EnhancedPosturalAnalysis({
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [selectedCamera, setSelectedCamera] = useState<string>('');
   const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]);
+  const [frontCameras, setFrontCameras] = useState<MediaDeviceInfo[]>([]);
+  const [rearCameras, setRearCameras] = useState<MediaDeviceInfo[]>([]);
+  const [currentCameraType, setCurrentCameraType] = useState<'front' | 'rear'>('rear');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisComplete, setAnalysisComplete] = useState(false);
   const [comprehensiveAnalysis, setComprehensiveAnalysis] = useState<any>(null);
@@ -126,17 +131,63 @@ export default function EnhancedPosturalAnalysis({
       const cameras = devices.filter(device => device.kind === 'videoinput');
       setAvailableCameras(cameras);
       
+      // Categorize cameras by type
+      const frontCams = cameras.filter(camera => 
+        camera.label.toLowerCase().includes('front') || 
+        camera.label.toLowerCase().includes('user') ||
+        camera.label.toLowerCase().includes('facing')
+      );
+      
+      const rearCams = cameras.filter(camera => 
+        camera.label.toLowerCase().includes('back') || 
+        camera.label.toLowerCase().includes('rear') ||
+        camera.label.toLowerCase().includes('environment')
+      );
+      
+      // If cameras don't have clear labels, assume first is front, second is rear
+      if (frontCams.length === 0 && rearCams.length === 0 && cameras.length >= 2) {
+        frontCams.push(cameras[0]);
+        rearCams.push(cameras[1]);
+      } else if (cameras.length === 1) {
+        // Single camera - assume it can be used for both
+        frontCams.push(cameras[0]);
+        rearCams.push(cameras[0]);
+      }
+      
+      setFrontCameras(frontCams);
+      setRearCameras(rearCams);
+      
       if (cameras.length > 0 && !selectedCamera) {
-        // Prefer back camera on mobile devices
-        const backCamera = cameras.find(camera => 
-          camera.label.toLowerCase().includes('back') || 
-          camera.label.toLowerCase().includes('rear') ||
-          camera.label.toLowerCase().includes('environment')
-        );
-        setSelectedCamera(backCamera?.deviceId || cameras[0].deviceId);
+        // Prefer back camera for postural analysis
+        const preferredCamera = rearCams.length > 0 ? rearCams[0] : cameras[0];
+        setSelectedCamera(preferredCamera.deviceId);
+        setCurrentCameraType(rearCams.length > 0 ? 'rear' : 'front');
       }
     } catch (error) {
       console.error('Error enumerating cameras:', error);
+    }
+  };
+
+  const switchCameraType = (type: 'front' | 'rear') => {
+    setCurrentCameraType(type);
+    const cameras = type === 'front' ? frontCameras : rearCameras;
+    if (cameras.length > 0) {
+      setSelectedCamera(cameras[0].deviceId);
+      
+      // Update current view with selected camera info
+      setViews(prevViews => 
+        prevViews.map(view => 
+          view.id === currentView.id 
+            ? { ...view, selectedCamera: cameras[0].deviceId, cameraType: type }
+            : view
+        )
+      );
+      
+      // Restart camera if it's currently on
+      if (isCameraOn) {
+        stopCamera();
+        setTimeout(() => startCamera(), 100);
+      }
     }
   };
 
@@ -147,7 +198,7 @@ export default function EnhancedPosturalAnalysis({
           deviceId: selectedCamera ? { exact: selectedCamera } : undefined,
           width: { ideal: 1280 },
           height: { ideal: 720 },
-          facingMode: selectedCamera ? undefined : { ideal: 'environment' }
+          facingMode: selectedCamera ? undefined : { ideal: currentCameraType === 'rear' ? 'environment' : 'user' }
         },
         audio: false
       };
@@ -163,7 +214,7 @@ export default function EnhancedPosturalAnalysis({
       console.error('Camera access failed:', error);
       alert('Camera access failed. Please ensure camera permissions are granted.');
     }
-  }, [selectedCamera]);
+  }, [selectedCamera, currentCameraType]);
 
   const stopCamera = useCallback(() => {
     if (streamRef.current) {
@@ -380,6 +431,37 @@ export default function EnhancedPosturalAnalysis({
 
   const selectView = (view: PosturalView) => {
     setCurrentView(view);
+    
+    // Restore camera settings for this view if previously set
+    if (view.selectedCamera && view.cameraType) {
+      setSelectedCamera(view.selectedCamera);
+      setCurrentCameraType(view.cameraType);
+    } else {
+      // Set recommended camera type for each view
+      const recommendedType = getRecommendedCameraType(view.id);
+      setCurrentCameraType(recommendedType);
+      
+      const cameras = recommendedType === 'front' ? frontCameras : rearCameras;
+      if (cameras.length > 0) {
+        setSelectedCamera(cameras[0].deviceId);
+      }
+    }
+    
+    stopCamera();
+  };
+
+  const getRecommendedCameraType = (viewId: string): 'front' | 'rear' => {
+    // Front views typically use rear camera for better perspective
+    // Side views can use either but rear camera provides more distance
+    switch (viewId) {
+      case 'anterior':
+      case 'posterior':
+      case 'lateral_right':
+      case 'lateral_left':
+        return rearCameras.length > 0 ? 'rear' : 'front';
+      default:
+        return 'rear';
+    }
   };
 
   const retakePhoto = () => {
@@ -610,24 +692,57 @@ export default function EnhancedPosturalAnalysis({
             ))}
           </div>
 
-          {/* Camera Selection */}
-          {availableCameras.length > 1 && (
+          {/* Camera Type and Selection */}
+          <div className="space-y-4">
+            {/* Camera Type Selection */}
             <div className="space-y-2">
-              <label className="text-sm font-medium">Camera Selection:</label>
-              <Select value={selectedCamera} onValueChange={setSelectedCamera}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select camera..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableCameras.map((camera) => (
-                    <SelectItem key={camera.deviceId} value={camera.deviceId}>
-                      {camera.label || `Camera ${camera.deviceId.slice(0, 8)}`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <label className="text-sm font-medium">Camera Type for {currentView.name}:</label>
+              <div className="flex gap-2">
+                <Button
+                  variant={currentCameraType === 'front' ? "default" : "outline"}
+                  onClick={() => switchCameraType('front')}
+                  className="flex-1"
+                  disabled={frontCameras.length === 0}
+                >
+                  <Camera className="h-4 w-4 mr-2" />
+                  Front Camera
+                  {frontCameras.length === 0 && <span className="ml-1 text-xs">(N/A)</span>}
+                </Button>
+                <Button
+                  variant={currentCameraType === 'rear' ? "default" : "outline"}
+                  onClick={() => switchCameraType('rear')}
+                  className="flex-1"
+                  disabled={rearCameras.length === 0}
+                >
+                  <Camera className="h-4 w-4 mr-2" />
+                  Rear Camera
+                  {rearCameras.length === 0 && <span className="ml-1 text-xs">(N/A)</span>}
+                </Button>
+              </div>
             </div>
-          )}
+
+            {/* Specific Camera Selection */}
+            {((currentCameraType === 'front' && frontCameras.length > 1) || 
+              (currentCameraType === 'rear' && rearCameras.length > 1)) && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  Select {currentCameraType === 'front' ? 'Front' : 'Rear'} Camera:
+                </label>
+                <Select value={selectedCamera} onValueChange={setSelectedCamera}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select camera..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(currentCameraType === 'front' ? frontCameras : rearCameras).map((camera) => (
+                      <SelectItem key={camera.deviceId} value={camera.deviceId}>
+                        {camera.label || `Camera ${camera.deviceId.slice(0, 8)}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
 
           {/* Instructions */}
           <div className="bg-blue-50 p-4 rounded-lg">

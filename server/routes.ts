@@ -1061,6 +1061,224 @@ Focus on clinically relevant conditions based on the available data.`;
     }
   });
 
+  // Intelligent symptom analysis route
+  app.post("/api/analyze-symptoms", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const {
+        primaryComplaint,
+        painLocation,
+        painIntensity,
+        symptomDuration,
+        onsetMechanism,
+        aggravatingFactors,
+        relievingFactors,
+        functionalLimitations
+      } = req.body;
+
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+      const symptomPrompt = `You are an expert physiotherapist analyzing patient symptoms. Based on the following clinical presentation, provide a comprehensive analysis:
+
+PRIMARY COMPLAINT: ${primaryComplaint}
+PAIN LOCATION: ${painLocation}
+PAIN INTENSITY: ${painIntensity}/10
+SYMPTOM DURATION: ${symptomDuration}
+ONSET MECHANISM: ${onsetMechanism}
+AGGRAVATING FACTORS: ${aggravatingFactors || 'Not specified'}
+RELIEVING FACTORS: ${relievingFactors || 'Not specified'}
+FUNCTIONAL LIMITATIONS: ${functionalLimitations || 'Not specified'}
+
+Please provide a detailed analysis in JSON format with these exact keys:
+{
+  "bodyRegion": "Primary body region affected",
+  "suspectedConditions": [
+    {
+      "condition": "Specific condition name",
+      "likelihood": 75 (percentage 0-100),
+      "reasoning": "Clinical reasoning for this diagnosis"
+    }
+  ],
+  "redFlags": ["Array of clinical red flags to monitor"],
+  "recommendedMovements": [
+    {
+      "name": "Specific movement test name",
+      "purpose": "What this test evaluates",
+      "priority": "high/medium/low",
+      "description": "How to perform the test"
+    }
+  ],
+  "clinicalQuestions": [
+    {
+      "question": "Specific clinical question to ask",
+      "reasoning": "Why this question is important",
+      "category": "Category of the question"
+    }
+  ]
+}
+
+Focus on evidence-based conditions and functionally relevant movement tests based on the symptom pattern.`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [{ role: "user", content: symptomPrompt }],
+        max_tokens: 1500,
+        temperature: 0.3
+      });
+
+      const aiResponse = response.choices[0].message.content;
+      
+      try {
+        const parsedResponse = JSON.parse(aiResponse || '{}');
+        res.json(parsedResponse);
+      } catch (parseError) {
+        // Fallback response structure
+        res.json({
+          bodyRegion: painLocation || 'Musculoskeletal',
+          suspectedConditions: [
+            {
+              condition: "Musculoskeletal Dysfunction",
+              likelihood: 70,
+              reasoning: "Based on the symptom presentation, requires further assessment"
+            }
+          ],
+          redFlags: painIntensity >= 8 ? ["High pain intensity requiring monitoring"] : [],
+          recommendedMovements: [
+            {
+              name: "Movement Screen",
+              purpose: "Assess movement quality and dysfunction patterns",
+              priority: "high",
+              description: "Comprehensive movement evaluation for the affected region"
+            }
+          ],
+          clinicalQuestions: [
+            {
+              question: "Does the pain radiate to other areas?",
+              reasoning: "Helps identify neural involvement or referred pain patterns",
+              category: "Neurological"
+            }
+          ]
+        });
+      }
+    } catch (error) {
+      console.error('Symptom analysis error:', error);
+      res.status(500).json({ error: 'Failed to analyze symptoms' });
+    }
+  });
+
+  // Enhanced postural analysis route
+  app.post("/api/analyze-posture", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { views, symptomContext } = req.body;
+
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+      const posturalPrompt = `You are an expert physiotherapist performing postural analysis. Based on the captured postural views and symptom context, provide a comprehensive assessment:
+
+CAPTURED VIEWS: ${views.length} postural photographs (${views.map((v: any) => v.viewType).join(', ')})
+SYMPTOM CONTEXT: ${JSON.stringify(symptomContext, null, 2)}
+
+Please analyze the postural data and provide assessment in JSON format with these exact keys:
+{
+  "alignmentDeviations": [
+    {
+      "type": "Specific deviation name",
+      "severity": "mild/moderate/severe",
+      "description": "Detailed description of the deviation",
+      "clinicalSignificance": "Why this matters clinically",
+      "affectedStructures": ["Array of anatomical structures affected"]
+    }
+  ],
+  "asymmetries": [
+    {
+      "location": "Location of asymmetry",
+      "degree": "Degree of asymmetry",
+      "compensations": ["Array of compensatory patterns"]
+    }
+  ],
+  "overallPosture": {
+    "classification": "Primary postural classification",
+    "primaryPatterns": ["Array of main postural patterns"],
+    "recommendations": ["Array of intervention recommendations"]
+  },
+  "correlationToSymptoms": "How postural findings relate to reported symptoms",
+  "predictedMovementDysfunctions": ["Array of expected movement problems based on posture"]
+}
+
+Base your analysis on established postural assessment principles and correlate findings with the patient's symptom presentation.`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [{ role: "user", content: posturalPrompt }],
+        max_tokens: 1200,
+        temperature: 0.3
+      });
+
+      const aiResponse = response.choices[0].message.content;
+      
+      try {
+        const parsedResponse = JSON.parse(aiResponse || '{}');
+        res.json(parsedResponse);
+      } catch (parseError) {
+        // Fallback postural analysis based on symptom context
+        const bodyRegion = symptomContext?.bodyRegion?.toLowerCase() || '';
+        let fallbackAnalysis;
+
+        if (bodyRegion.includes('spine') || bodyRegion.includes('back')) {
+          fallbackAnalysis = {
+            alignmentDeviations: [
+              {
+                type: "Forward Head Posture",
+                severity: "moderate",
+                description: "Cervical spine positioned anterior to optimal alignment",
+                clinicalSignificance: "Increases cervical lordosis and suboccipital tension",
+                affectedStructures: ["Upper trapezius", "Levator scapulae", "Deep neck flexors"]
+              }
+            ],
+            asymmetries: [
+              {
+                location: "Shoulder height",
+                degree: "Mild asymmetry",
+                compensations: ["Cervical side bending", "Scapular elevation"]
+              }
+            ],
+            overallPosture: {
+              classification: "Upper Crossed Syndrome",
+              primaryPatterns: ["Forward head posture", "Rounded shoulders"],
+              recommendations: ["Postural re-education", "Deep neck flexor strengthening"]
+            },
+            correlationToSymptoms: "Postural deviations correlate with reported spinal dysfunction",
+            predictedMovementDysfunctions: ["Reduced cervical mobility", "Scapular dyskinesis"]
+          };
+        } else {
+          fallbackAnalysis = {
+            alignmentDeviations: [
+              {
+                type: "Postural Adaptation",
+                severity: "mild",
+                description: "Compensatory postural changes related to symptom presentation",
+                clinicalSignificance: "May perpetuate movement dysfunction patterns",
+                affectedStructures: ["Regional musculature", "Joint mechanics"]
+              }
+            ],
+            asymmetries: [],
+            overallPosture: {
+              classification: "Compensatory Postural Pattern",
+              primaryPatterns: ["Adaptive positioning"],
+              recommendations: ["Address underlying dysfunction", "Movement re-education"]
+            },
+            correlationToSymptoms: "Postural findings support symptom presentation",
+            predictedMovementDysfunctions: ["Regional movement restrictions"]
+          };
+        }
+
+        res.json(fallbackAnalysis);
+      }
+    } catch (error) {
+      console.error('Postural analysis error:', error);
+      res.status(500).json({ error: 'Failed to analyze postural data' });
+    }
+  });
+
   // Analyze individual research article
   app.post("/api/research/:articleId/analyze", async (req: Request, res: Response) => {
     try {

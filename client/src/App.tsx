@@ -17,6 +17,7 @@ import Skeleton3DTool from "@/pages/Skeleton3DTool";
 import MotionCapturePage from "@/pages/MotionCapturePage";
 import StaticPosturalAnalysisPage from "@/pages/StaticPosturalAnalysisPage";
 import IntegratedClinicalAssessment from "@/pages/IntegratedClinicalAssessment";
+import IntelligentAssessment from "@/pages/IntelligentAssessment";
 import ResearchHub from "@/pages/ResearchHub";
 import ResearchGaps from "@/pages/ResearchGaps";
 import CreateResearchProject from "@/pages/CreateResearchProject";
@@ -75,6 +76,7 @@ function Router() {
           <Route path="/motion-capture" element={<MotionCapturePage />} />
           <Route path="/static-postural-analysis" element={<StaticPosturalAnalysisPage />} />
           <Route path="/integrated-assessment" element={<IntegratedClinicalAssessment />} />
+          <Route path="/intelligent-assessment" element={<IntelligentAssessment />} />
           <Route
             path="/virtual-patients"
             element={<ProtectedRoute component={VirtualPatientPage} />}

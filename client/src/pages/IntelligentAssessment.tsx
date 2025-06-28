@@ -7,14 +7,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Brain, Camera, Activity, Target, CheckCircle, ChevronRight, ArrowLeft, Eye } from 'lucide-react';
 import SymptomAnalysisEngine from '@/components/intelligent/SymptomAnalysisEngine';
 import EnhancedPosturalAnalysis from '@/components/intelligent/EnhancedPosturalAnalysis';
+import MovementTestInput from '@/components/intelligent/MovementTestInput';
+import ClinicalQuestionsInput from '@/components/intelligent/ClinicalQuestionsInput';
 import ClinicalVisualizationEngine from '@/components/clinical/ClinicalVisualizationEngine';
 
-type AssessmentStep = 'symptoms' | 'posture' | 'movement' | 'visualization' | 'treatment';
+type AssessmentStep = 'symptoms' | 'posture' | 'movement' | 'questions' | 'visualization' | 'treatment';
 
 interface AssessmentData {
   symptomAnalysis?: any;
   posturalAnalysis?: any;
   movementAnalysis?: any;
+  movementTestResults?: any;
+  clinicalQuestions?: any;
+  clinicalQuestionResponses?: any;
   clinicalVisualization?: any;
   treatmentPlan?: any;
 }
@@ -42,10 +47,17 @@ const assessmentSteps = [
     completed: false
   },
   {
+    id: 'questions' as AssessmentStep,
+    title: 'Clinical Questions',
+    description: 'AI-generated clinical assessment questions',
+    icon: Target,
+    completed: false
+  },
+  {
     id: 'visualization' as AssessmentStep,
     title: 'Clinical Visualization',
     description: 'AI-generated anatomical illustrations',
-    icon: Target,
+    icon: Eye,
     completed: false
   },
   {
@@ -74,6 +86,16 @@ export default function IntelligentAssessment() {
   const handlePosturalAnalysisComplete = (analysis: any) => {
     setAssessmentData(prev => ({ ...prev, posturalAnalysis: analysis }));
     markStepComplete('posture');
+  };
+
+  const handleMovementTestsComplete = (results: any) => {
+    setAssessmentData(prev => ({ ...prev, movementTestResults: results }));
+    markStepComplete('movement');
+  };
+
+  const handleClinicalQuestionsComplete = (responses: any) => {
+    setAssessmentData(prev => ({ ...prev, clinicalQuestionResponses: responses }));
+    markStepComplete('questions');
   };
 
   const handleVisualizationComplete = (data: any) => {

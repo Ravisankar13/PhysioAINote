@@ -1077,52 +1077,73 @@ Focus on clinically relevant conditions based on the available data.`;
 
       const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-      const symptomPrompt = `You are an expert physiotherapist analyzing patient symptoms. Based on the following clinical presentation, provide a comprehensive analysis:
+      const symptomPrompt = `You are an expert physiotherapist conducting a differential diagnosis. Analyze this SPECIFIC clinical presentation and provide a location-specific, evidence-based assessment.
 
-PRIMARY COMPLAINT: ${primaryComplaint}
-PAIN LOCATION: ${painLocation}
+CLINICAL PRESENTATION:
+PRIMARY COMPLAINT: "${primaryComplaint}"
+SPECIFIC PAIN LOCATION: "${painLocation}" (BE VERY SPECIFIC TO THIS EXACT LOCATION)
 PAIN INTENSITY: ${painIntensity}/10
-SYMPTOM DURATION: ${symptomDuration}
-ONSET MECHANISM: ${onsetMechanism}
-AGGRAVATING FACTORS: ${aggravatingFactors || 'Not specified'}
-RELIEVING FACTORS: ${relievingFactors || 'Not specified'}
-FUNCTIONAL LIMITATIONS: ${functionalLimitations || 'Not specified'}
+SYMPTOM DURATION: "${symptomDuration}"
+ONSET MECHANISM: "${onsetMechanism}"
+AGGRAVATING FACTORS: "${aggravatingFactors || 'Not specified'}"
+RELIEVING FACTORS: "${relievingFactors || 'Not specified'}"
+FUNCTIONAL LIMITATIONS: "${functionalLimitations || 'Not specified'}"
 
-Please provide a detailed analysis in JSON format with these exact keys:
+CRITICAL INSTRUCTIONS:
+1. Base your analysis SPECIFICALLY on the pain location "${painLocation}" - different areas require completely different diagnoses
+2. Consider anatomical structures specific to this exact location
+3. Provide location-specific movement tests relevant to "${painLocation}"
+4. Give different suspected conditions based on the specific area described
+
+For example:
+- Front of knee vs back of knee = completely different conditions and tests
+- Lateral shoulder vs anterior shoulder = different impingement patterns
+- Lower back vs upper back = different spinal segments and conditions
+
+Provide analysis in JSON format with these exact keys:
 {
-  "bodyRegion": "Primary body region affected",
+  "bodyRegion": "Specific anatomical region based on exact location",
   "suspectedConditions": [
     {
-      "condition": "Specific condition name",
-      "likelihood": 75 (percentage 0-100),
-      "reasoning": "Clinical reasoning for this diagnosis"
+      "condition": "Location-specific condition name",
+      "likelihood": 75,
+      "reasoning": "Why this condition fits this SPECIFIC location and presentation"
     }
   ],
-  "redFlags": ["Array of clinical red flags to monitor"],
+  "redFlags": ["Location-specific red flags based on anatomy"],
   "recommendedMovements": [
     {
-      "name": "Specific movement test name",
-      "purpose": "What this test evaluates",
+      "name": "Location-specific movement test",
+      "purpose": "What this test evaluates for this specific area",
       "priority": "high/medium/low",
-      "description": "How to perform the test"
+      "description": "Detailed test procedure for this anatomical region"
     }
   ],
   "clinicalQuestions": [
     {
-      "question": "Specific clinical question to ask",
-      "reasoning": "Why this question is important",
-      "category": "Category of the question"
+      "question": "Location-specific clinical question",
+      "reasoning": "Why this question is crucial for this specific area",
+      "category": "Relevant category"
     }
   ]
 }
 
-Focus on evidence-based conditions and functionally relevant movement tests based on the symptom pattern.`;
+Remember: Your diagnosis must be completely different for different locations. Front knee pain ≠ Back knee pain. Be anatomically precise.`;
 
       const response = await openai.chat.completions.create({
         model: "gpt-4o",
-        messages: [{ role: "user", content: symptomPrompt }],
-        max_tokens: 1500,
-        temperature: 0.3
+        messages: [
+          {
+            role: "system",
+            content: "You are an expert physiotherapist with 20+ years of clinical experience. You excel at differential diagnosis based on specific anatomical locations and provide evidence-based assessments. Always give different responses for different symptom locations - your expertise allows you to distinguish between similar presentations in different anatomical areas."
+          },
+          { 
+            role: "user", 
+            content: symptomPrompt 
+          }
+        ],
+        max_tokens: 1800,
+        temperature: 0.1
       });
 
       const aiResponse = response.choices[0].message.content;

@@ -140,12 +140,79 @@ export default function SymptomAnalysisEngine({ onAnalysisComplete, onProceedToP
   const generateFallbackAnalysis = (): SymptomAnalysis => {
     const painLocation = symptomData.painLocation.toLowerCase();
     
-    // Determine body region and suspected conditions based on pain location
+    // Determine body region and suspected conditions based on SPECIFIC pain location
     let bodyRegion = '';
     let suspectedConditions: Array<{ condition: string; likelihood: number; reasoning: string }> = [];
     let recommendedMovements: Array<{ name: string; purpose: string; priority: 'high' | 'medium' | 'low'; description: string }> = [];
 
-    if (painLocation.includes('knee') || painLocation.includes('patella')) {
+    // KNEE - Location-specific analysis
+    if (painLocation.includes('front') && painLocation.includes('knee')) {
+      bodyRegion = 'Anterior Knee';
+      suspectedConditions = [
+        {
+          condition: 'Patellofemoral Pain Syndrome',
+          likelihood: 85,
+          reasoning: 'Anterior knee pain is highly indicative of PFPS, especially with stair climbing and prolonged sitting'
+        },
+        {
+          condition: 'Patellar Tendinopathy',
+          likelihood: 70,
+          reasoning: 'Front knee pain below patella suggests possible patellar tendon involvement'
+        },
+        {
+          condition: 'Quadriceps Weakness',
+          likelihood: 60,
+          reasoning: 'Anterior knee pain often correlates with quadriceps dysfunction and VMO weakness'
+        }
+      ];
+      recommendedMovements = [
+        {
+          name: 'Patellar Apprehension Test',
+          purpose: 'Assess patellar stability and anterior knee structures',
+          priority: 'high',
+          description: 'Evaluate patellofemoral joint integrity and tracking'
+        },
+        {
+          name: 'Clarke\'s Sign',
+          purpose: 'Test for patellofemoral dysfunction',
+          priority: 'high',
+          description: 'Compress patella against femur during quadriceps contraction'
+        }
+      ];
+    } else if (painLocation.includes('back') && painLocation.includes('knee')) {
+      bodyRegion = 'Posterior Knee';
+      suspectedConditions = [
+        {
+          condition: 'Baker\'s Cyst',
+          likelihood: 75,
+          reasoning: 'Posterior knee pain and swelling suggests popliteal cyst formation'
+        },
+        {
+          condition: 'Posterior Cruciate Ligament Injury',
+          likelihood: 65,
+          reasoning: 'Back knee pain with trauma history may indicate PCL involvement'
+        },
+        {
+          condition: 'Hamstring Strain/Tendinopathy',
+          likelihood: 70,
+          reasoning: 'Posterior knee pain often involves hamstring insertion points'
+        }
+      ];
+      recommendedMovements = [
+        {
+          name: 'Posterior Drawer Test',
+          purpose: 'Assess PCL integrity',
+          priority: 'high',
+          description: 'Test posterior translation of tibia on femur'
+        },
+        {
+          name: 'Popliteal Angle Test',
+          purpose: 'Evaluate hamstring flexibility',
+          priority: 'medium',
+          description: 'Assess hamstring tightness contributing to posterior knee symptoms'
+        }
+      ];
+    } else if (painLocation.includes('knee') || painLocation.includes('patella')) {
       bodyRegion = 'Knee';
       suspectedConditions = [
         {

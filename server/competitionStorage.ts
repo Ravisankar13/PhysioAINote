@@ -21,7 +21,7 @@ import {
   type TournamentBracket,
   type InsertTournamentBracket,
 } from "@shared/schema";
-import { eq, desc, asc, and, gte, lte, isNull, sql, inArray } from "drizzle-orm";
+import { eq, desc, asc, and, gte, lte, isNull, isNotNull, sql, inArray } from "drizzle-orm";
 
 export class CompetitionStorage {
   // Competition Management
@@ -377,7 +377,7 @@ export class CompetitionStorage {
       })
       .from(competitionParticipants)
       .leftJoin(users, eq(competitionParticipants.userId, users.id))
-      .where(eq(competitionParticipants.completedAt, sql`not null`))
+      .where(isNotNull(competitionParticipants.completedAt))
       .groupBy(competitionParticipants.userId, users.username, users.fullName)
       .orderBy(desc(sql`avg(${competitionParticipants.totalScore})`))
       .limit(limit);

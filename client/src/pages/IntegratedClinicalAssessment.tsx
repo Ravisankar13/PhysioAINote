@@ -13,6 +13,7 @@ import {
   Target, 
   CheckCircle, 
   ArrowRight,
+  ArrowLeft,
   User,
   FileText,
   Stethoscope,
@@ -102,6 +103,26 @@ const IntegratedClinicalAssessment: React.FC = () => {
     setCurrentStep(stepIndex);
   };
 
+  const goToNextStep = () => {
+    if (currentStep < steps.length - 1) {
+      setCurrentStep(currentStep + 1);
+    }
+  };
+
+  const goToPreviousStep = () => {
+    if (currentStep > 0) {
+      setCurrentStep(currentStep - 1);
+    }
+  };
+
+  const canGoNext = () => {
+    return currentStep < steps.length - 1 && canProceedToStep(currentStep + 1);
+  };
+
+  const canGoPrevious = () => {
+    return currentStep > 0;
+  };
+
   const calculateProgress = () => {
     let completedSteps = 0;
     if (assessmentData.staticPostural.frontal) completedSteps++;
@@ -178,11 +199,8 @@ const IntegratedClinicalAssessment: React.FC = () => {
         return (
           <ClinicalInterview
             onInterviewComplete={(data: any) => handleStepComplete('clinical-interview', data)}
-            previousData={assessmentData.clinicalInterview}
-            objectiveFindings={{
-              staticPostural: assessmentData.staticPostural,
-              motionCapture: assessmentData.motionCapture
-            }}
+            posturalFindings={assessmentData.staticPostural}
+            motionFindings={assessmentData.motionCapture}
           />
         );
         
@@ -303,7 +321,40 @@ const IntegratedClinicalAssessment: React.FC = () => {
                     </div>
                   </div>
                 ) : (
-                  renderCurrentStep()
+                  <div className="space-y-6">
+                    {renderCurrentStep()}
+                    
+                    {/* Navigation Buttons */}
+                    <div className="flex justify-between items-center pt-6 border-t border-gray-200">
+                      <Button
+                        variant="outline"
+                        onClick={goToPreviousStep}
+                        disabled={!canGoPrevious() || isProcessing}
+                        className="flex items-center gap-2"
+                      >
+                        <ArrowLeft className="h-4 w-4" />
+                        Previous
+                      </Button>
+                      
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-500">
+                          Step {currentStep + 1} of {steps.length}
+                        </span>
+                        {isStepCompleted(steps[currentStep].id) && (
+                          <CheckCircle className="h-4 w-4 text-green-600" />
+                        )}
+                      </div>
+                      
+                      <Button
+                        onClick={goToNextStep}
+                        disabled={!canGoNext() || isProcessing}
+                        className="flex items-center gap-2"
+                      >
+                        Next
+                        <ArrowRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
                 )}
               </CardContent>
             </Card>

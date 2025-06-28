@@ -66,6 +66,38 @@ export const studyDesignEnum = pgEnum("study_design", [
   "expert_opinion",
 ]);
 
+// Competition type enum
+export const competitionTypeEnum = pgEnum("competition_type", [
+  "daily_challenge",
+  "speed_challenge", 
+  "accuracy_contest",
+  "differential_race",
+  "treatment_planning",
+  "tournament",
+  "specialty_league",
+]);
+
+// Competition status enum
+export const competitionStatusEnum = pgEnum("competition_status", [
+  "upcoming",
+  "active", 
+  "completed",
+  "cancelled",
+]);
+
+// Achievement type enum
+export const achievementTypeEnum = pgEnum("achievement_type", [
+  "speed_demon",
+  "accuracy_master",
+  "streak_keeper",
+  "differential_expert",
+  "treatment_guru",
+  "case_crusher",
+  "specialty_champion",
+  "quick_thinker",
+  "research_master",
+]);
+
 // Session status enum for tracking recording and processing states
 export const sessionStatusEnum = pgEnum("session_status", [
   "draft",
@@ -1295,6 +1327,238 @@ export const caseStudyAttemptRelations = relations(
     }),
   })
 );
+
+// Competition System Tables
+
+// Competitions table
+export const competitions = pgTable("competitions", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  type: competitionTypeEnum("type").notNull(),
+  status: competitionStatusEnum("status").default("upcoming").notNull(),
+  bodyPart: bodyPartEnum("body_part"), // null for general competitions
+  difficulty: text("difficulty"), // beginner, intermediate, advanced
+  timeLimit: integer("time_limit_minutes"), // in minutes
+  maxParticipants: integer("max_participants"),
+  entryFee: integer("entry_fee_points").default(0), // using points system
+  prizePool: integer("prize_pool_points").default(0),
+  startTime: timestamp("start_time").notNull(),
+  endTime: timestamp("end_time").notNull(),
+  createdBy: integer("created_by").references(() => users.id),
+  caseStudyIds: json("case_study_ids").notNull().$type<number[]>(), // array of case study IDs
+  rules: json("rules").$type<{
+    scoringWeights: {
+      accuracy: number;
+      speed: number;
+      reasoning: number;
+      differential: number;
+      treatment: number;
+    };
+    allowedAttempts: number;
+    showLeaderboard: boolean;
+    revealAnswers: boolean;
+  }>(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Competition participants
+export const competitionParticipants = pgTable("competition_participants", {
+  id: serial("id").primaryKey(),
+  competitionId: integer("competition_id").notNull().references(() => competitions.id, { onDelete: "cascade" }),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  joinedAt: timestamp("joined_at").defaultNow().notNull(),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  totalScore: integer("total_score").default(0),
+  rank: integer("rank"),
+  timeSpent: integer("time_spent_seconds").default(0),
+  caseAttempts: json("case_attempts").notNull().$type<{
+    caseStudyId: number;
+    userDiagnosis: string;
+    userReasoning: string;
+    assessmentTests: string[];
+    proposedTreatment: string;
+    timeSpent: number;
+    scores: {
+      accuracy: number;
+      speed: number;
+      reasoning: number;
+      differential: number;
+      treatment: number;
+      total: number;
+    };
+    feedback?: string;
+  }[]>(),
+});
+
+// Daily challenges (special type of competition)
+export const dailyChallenges = pgTable("daily_challenges", {
+  id: serial("id").primaryKey(),
+  date: timestamp("date").notNull().unique(),
+  caseStudyId: integer("case_study_id").notNull().references(() => aiCaseStudies.id),
+  title: text("title").notNull(),
+  difficulty: text("difficulty").notNull(),
+  bodyPart: bodyPartEnum("body_part").notNull(),
+  participantCount: integer("participant_count").default(0),
+  averageScore: integer("average_score").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// User achievements
+export const userAchievements = pgTable("user_achievements", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  achievementType: achievementTypeEnum("achievement_type").notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  icon: text("icon"), // lucide icon name
+  progress: integer("progress").default(0),
+  target: integer("target").notNull(),
+  completed: boolean("completed").default(false),
+  completedAt: timestamp("completed_at"),
+  earnedAt: timestamp("earned_at").defaultNow().notNull(),
+});
+
+// Leaderboards (aggregate rankings)
+export const leaderboards = pgTable("leaderboards", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  category: text("category").notNull(), // "overall", "speed", "accuracy", etc.
+  bodyPart: bodyPartEnum("body_part"), // null for overall rankings
+  timeframe: text("timeframe").notNull(), // "daily", "weekly", "monthly", "all_time"
+  score: integer("score").notNull(),
+  rank: integer("rank").notNull(),
+  gamesPlayed: integer("games_played").default(0),
+  averageScore: integer("average_score").default(0),
+  winStreak: integer("win_streak").default(0),
+  lastUpdated: timestamp("last_updated").defaultNow().notNull(),
+});
+
+// Tournament brackets (for tournament-style competitions)
+export const tournamentBrackets = pgTable("tournament_brackets", {
+  id: serial("id").primaryKey(),
+  competitionId: integer("competition_id").notNull().references(() => competitions.id, { onDelete: "cascade" }),
+  round: integer("round").notNull(),
+  matchNumber: integer("match_number").notNull(),
+  participant1Id: integer("participant1_id").references(() => users.id),
+  participant2Id: integer("participant2_id").references(() => users.id),
+  winnerId: integer("winner_id").references(() => users.id),
+  participant1Score: integer("participant1_score").default(0),
+  participant2Score: integer("participant2_score").default(0),
+  caseStudyId: integer("case_study_id").references(() => aiCaseStudies.id),
+  completedAt: timestamp("completed_at"),
+});
+
+// Create insert schemas
+export const insertCompetitionSchema = createInsertSchema(competitions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCompetitionParticipantSchema = createInsertSchema(competitionParticipants).omit({
+  id: true,
+});
+
+export const insertDailyChallengeSchema = createInsertSchema(dailyChallenges).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertUserAchievementSchema = createInsertSchema(userAchievements).omit({
+  id: true,
+  earnedAt: true,
+});
+
+export const insertLeaderboardSchema = createInsertSchema(leaderboards).omit({
+  id: true,
+  lastUpdated: true,
+});
+
+export const insertTournamentBracketSchema = createInsertSchema(tournamentBrackets).omit({
+  id: true,
+});
+
+// Define types
+export type Competition = typeof competitions.$inferSelect;
+export type InsertCompetition = z.infer<typeof insertCompetitionSchema>;
+export type CompetitionParticipant = typeof competitionParticipants.$inferSelect;
+export type InsertCompetitionParticipant = z.infer<typeof insertCompetitionParticipantSchema>;
+export type DailyChallenge = typeof dailyChallenges.$inferSelect;
+export type InsertDailyChallenge = z.infer<typeof insertDailyChallengeSchema>;
+export type UserAchievement = typeof userAchievements.$inferSelect;
+export type InsertUserAchievement = z.infer<typeof insertUserAchievementSchema>;
+export type Leaderboard = typeof leaderboards.$inferSelect;
+export type InsertLeaderboard = z.infer<typeof insertLeaderboardSchema>;
+export type TournamentBracket = typeof tournamentBrackets.$inferSelect;
+export type InsertTournamentBracket = z.infer<typeof insertTournamentBracketSchema>;
+
+// Define relations
+export const competitionRelations = relations(competitions, ({ many, one }) => ({
+  participants: many(competitionParticipants),
+  creator: one(users, {
+    fields: [competitions.createdBy],
+    references: [users.id],
+  }),
+  brackets: many(tournamentBrackets),
+}));
+
+export const competitionParticipantRelations = relations(competitionParticipants, ({ one }) => ({
+  competition: one(competitions, {
+    fields: [competitionParticipants.competitionId],
+    references: [competitions.id],
+  }),
+  user: one(users, {
+    fields: [competitionParticipants.userId],
+    references: [users.id],
+  }),
+}));
+
+export const dailyChallengeRelations = relations(dailyChallenges, ({ one }) => ({
+  caseStudy: one(aiCaseStudies, {
+    fields: [dailyChallenges.caseStudyId],
+    references: [aiCaseStudies.id],
+  }),
+}));
+
+export const userAchievementRelations = relations(userAchievements, ({ one }) => ({
+  user: one(users, {
+    fields: [userAchievements.userId],
+    references: [users.id],
+  }),
+}));
+
+export const leaderboardRelations = relations(leaderboards, ({ one }) => ({
+  user: one(users, {
+    fields: [leaderboards.userId],
+    references: [users.id],
+  }),
+}));
+
+export const tournamentBracketRelations = relations(tournamentBrackets, ({ one }) => ({
+  competition: one(competitions, {
+    fields: [tournamentBrackets.competitionId],
+    references: [competitions.id],
+  }),
+  participant1: one(users, {
+    fields: [tournamentBrackets.participant1Id],
+    references: [users.id],
+  }),
+  participant2: one(users, {
+    fields: [tournamentBrackets.participant2Id],
+    references: [users.id],
+  }),
+  winner: one(users, {
+    fields: [tournamentBrackets.winnerId],
+    references: [users.id],
+  }),
+  caseStudy: one(aiCaseStudies, {
+    fields: [tournamentBrackets.caseStudyId],
+    references: [aiCaseStudies.id],
+  }),
+}));
 
 // PhysioGPT Chat Conversations Schema
 export const physioGptConversations = pgTable("physiogpt_conversations", {

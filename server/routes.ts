@@ -4701,5 +4701,331 @@ Base your analysis on established postural assessment principles and correlate f
 
   const httpServer = createServer(app);
 
+  // Competition System Routes
+  
+  // Get active competitions
+  app.get("/api/competitions/active", async (req, res) => {
+    try {
+      const competitions = await competitionStorage.getActiveCompetitions();
+      res.json(competitions);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get upcoming competitions
+  app.get("/api/competitions/upcoming", async (req, res) => {
+    try {
+      const competitions = await competitionStorage.getUpcomingCompetitions();
+      res.json(competitions);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get competition by ID
+  app.get("/api/competitions/:id", async (req, res) => {
+    try {
+      const competition = await competitionStorage.getCompetitionById(parseInt(req.params.id));
+      if (!competition) {
+        return res.status(404).json({ error: "Competition not found" });
+      }
+      res.json(competition);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Join competition
+  app.post("/api/competitions/:id/join", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const competitionId = parseInt(req.params.id);
+      const userId = req.user!.id;
+      
+      // Check if already joined
+      const existing = await competitionStorage.getParticipantByUserAndCompetition(userId, competitionId);
+      if (existing) {
+        return res.status(400).json({ error: "Already joined this competition" });
+      }
+      
+      const participant = await competitionStorage.joinCompetition({
+        competitionId,
+        userId,
+        caseAttempts: [],
+        totalScore: 0,
+        timeSpent: 0
+      });
+      
+      res.json(participant);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Submit competition attempt
+  app.post("/api/competitions/:id/submit", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const competitionId = parseInt(req.params.id);
+      const userId = req.user!.id;
+      const { attempts }: { attempts: CompetitionAttempt[] } = req.body;
+      
+      const competition = await competitionStorage.getCompetitionById(competitionId);
+      if (!competition) {
+        return res.status(404).json({ error: "Competition not found" });
+      }
+      
+      const participant = await competitionStorage.getParticipantByUserAndCompetition(userId, competitionId);
+      if (!participant) {
+        return res.status(400).json({ error: "Not registered for this competition" });
+      }
+      
+      // Process each case attempt
+      const caseResults = [];
+      let totalScore = 0;
+      let totalTime = 0;
+      
+      for (const attempt of attempts) {
+        const caseStudy = await competitionStorage.getCaseStudyWithCorrectAnswers(attempt.caseStudyId);
+        if (!caseStudy) continue;
+        
+        const result = await competitionService.scoreCompetitionAttempt(competition, caseStudy, attempt);
+        
+        caseResults.push({
+          caseStudyId: attempt.caseStudyId,
+          userDiagnosis: attempt.userDiagnosis,
+          userReasoning: attempt.userReasoning,
+          assessmentTests: attempt.assessmentTests,
+          proposedTreatment: attempt.proposedTreatment,
+          timeSpent: attempt.timeSpent,
+          scores: result.scores,
+          feedback: result.feedback
+        });
+        
+        totalScore += result.scores.total;
+        totalTime += attempt.timeSpent;
+      }
+      
+      // Update participant record
+      const updatedParticipant = await competitionStorage.updateParticipant(participant.id, {
+        caseAttempts: caseResults,
+        totalScore,
+        timeSpent: totalTime,
+        completedAt: new Date()
+      });
+      
+      // Update rankings
+      await competitionStorage.calculateAndUpdateRankings(competitionId);
+      
+      // Check for achievements
+      const competitionResult = {
+        participantId: participant.id,
+        totalScore,
+        rank: updatedParticipant.rank || 0,
+        caseResults: caseResults.map(r => ({
+          caseStudyId: r.caseStudyId,
+          scores: r.scores,
+          feedback: r.feedback
+        }))
+      };
+      
+      const achievements = await competitionService.checkAndAwardAchievements(userId, competitionResult);
+      
+      // Update leaderboards
+      await competitionService.updateLeaderboards(userId, competitionResult);
+      
+      res.json({
+        participant: updatedParticipant,
+        totalScore,
+        rank: updatedParticipant.rank,
+        caseResults,
+        achievements
+      });
+      
+    } catch (error: any) {
+      console.error("Competition submission error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get competition leaderboard
+  app.get("/api/competitions/:id/leaderboard", async (req, res) => {
+    try {
+      const competitionId = parseInt(req.params.id);
+      const participants = await competitionStorage.getCompetitionParticipants(competitionId);
+      res.json(participants);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Daily Challenge Routes
+  
+  // Get today's challenge
+  app.get("/api/daily-challenge", async (req, res) => {
+    try {
+      let challenge = await competitionStorage.getTodaysChallenge();
+      
+      // Create today's challenge if it doesn't exist
+      if (!challenge) {
+        challenge = await competitionService.createTodaysChallenge();
+      }
+      
+      if (!challenge) {
+        return res.status(404).json({ error: "No challenge available today" });
+      }
+      
+      // Get the case study details
+      const caseStudy = await competitionStorage.getCaseStudyWithCorrectAnswers(challenge.caseStudyId);
+      
+      res.json({
+        challenge,
+        caseStudy: caseStudy ? {
+          id: caseStudy.id,
+          title: caseStudy.title,
+          patientDescription: caseStudy.patientDescription,
+          history: caseStudy.history,
+          presentingSymptoms: caseStudy.presentingSymptoms,
+          vitalSigns: caseStudy.vitalSigns,
+          bodyPart: caseStudy.bodyPart,
+          complexity: caseStudy.complexity,
+          hiddenFindings: caseStudy.hiddenFindings
+        } : null
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Submit daily challenge attempt
+  app.post("/api/daily-challenge/submit", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const userId = req.user!.id;
+      const { attempt }: { attempt: CompetitionAttempt } = req.body;
+      
+      const challenge = await competitionStorage.getTodaysChallenge();
+      if (!challenge) {
+        return res.status(404).json({ error: "No daily challenge available" });
+      }
+      
+      const caseStudy = await competitionStorage.getCaseStudyWithCorrectAnswers(challenge.caseStudyId);
+      if (!caseStudy) {
+        return res.status(404).json({ error: "Case study not found" });
+      }
+      
+      // Create a mock competition for scoring
+      const mockCompetition = {
+        rules: {
+          scoringWeights: {
+            accuracy: 0.3,
+            speed: 0.2,
+            reasoning: 0.2,
+            differential: 0.15,
+            treatment: 0.15
+          }
+        },
+        timeLimit: 20 // 20 minutes for daily challenges
+      } as Competition;
+      
+      const result = await competitionService.scoreCompetitionAttempt(mockCompetition, caseStudy, attempt);
+      
+      // Update challenge stats
+      const newParticipantCount = challenge.participantCount + 1;
+      const newAverageScore = Math.round(
+        (challenge.averageScore * challenge.participantCount + result.scores.total) / newParticipantCount
+      );
+      
+      await competitionStorage.updateChallengeStats(challenge.id, newParticipantCount, newAverageScore);
+      
+      res.json({
+        score: result.scores.total,
+        feedback: result.feedback,
+        scores: result.scores,
+        correctDiagnosis: caseStudy.correctDiagnosis,
+        correctTreatment: caseStudy.correctTreatmentApproach,
+        rank: Math.ceil((100 - result.scores.total) / 10) // Rough ranking estimate
+      });
+      
+    } catch (error: any) {
+      console.error("Daily challenge submission error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Leaderboard Routes
+  
+  // Get global leaderboards
+  app.get("/api/leaderboards/:category/:timeframe", async (req, res) => {
+    try {
+      const { category, timeframe } = req.params;
+      const { bodyPart } = req.query;
+      
+      const leaderboard = await competitionStorage.getLeaderboard(
+        category, 
+        timeframe, 
+        bodyPart as string
+      );
+      
+      res.json(leaderboard);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // User achievement routes
+  
+  // Get user achievements
+  app.get("/api/achievements", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const achievements = await competitionStorage.getUserAchievements(req.user!.id);
+      res.json(achievements);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Competition analytics
+  
+  // Get competition stats
+  app.get("/api/competitions/:id/stats", async (req, res) => {
+    try {
+      const competitionId = parseInt(req.params.id);
+      const stats = await competitionStorage.getCompetitionStats(competitionId);
+      res.json(stats);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get user competition history
+  app.get("/api/competitions/user/history", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const history = await competitionStorage.getUserCompetitionHistory(req.user!.id);
+      res.json(history);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get top performers
+  app.get("/api/leaderboards/top-performers", async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 10;
+      const topPerformers = await competitionStorage.getTopPerformers(limit);
+      res.json(topPerformers);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   return httpServer;
 }

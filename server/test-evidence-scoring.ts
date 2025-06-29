@@ -100,8 +100,6 @@ async function testEvidenceBasedScoring() {
 }
 
 // Run the test
-if (require.main === module) {
-  testEvidenceBasedScoring().catch(console.error);
-}
+testEvidenceBasedScoring().catch(console.error);
 
 export { testEvidenceBasedScoring };

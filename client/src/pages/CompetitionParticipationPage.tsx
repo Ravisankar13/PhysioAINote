@@ -152,7 +152,7 @@ export default function CompetitionParticipationPage() {
       
       // Redirect to results page after a brief delay
       setTimeout(() => {
-        window.location.href = `/competitions/${competitionId}/results`;
+        window.location.assign(`/competitions/${competitionId}/results`);
       }, 1500);
     },
     onError: (error: any) => {

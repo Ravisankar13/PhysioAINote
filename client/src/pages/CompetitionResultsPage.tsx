@@ -113,7 +113,7 @@ export default function CompetitionResultsPage() {
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <Link href="/competitions">
+        <Link to="/competitions">
           <Button variant="ghost" size="sm">
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Competitions
@@ -280,12 +280,12 @@ export default function CompetitionResultsPage() {
 
       {/* Action Buttons */}
       <div className="flex gap-4 justify-center">
-        <Link href={`/competitions/${competitionId}`}>
+        <Link to={`/competitions/${competitionId}`}>
           <Button variant="outline">
             Try Another Case
           </Button>
         </Link>
-        <Link href="/competitions">
+        <Link to="/competitions">
           <Button>
             View All Competitions
           </Button>

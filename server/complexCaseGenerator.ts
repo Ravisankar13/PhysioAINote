@@ -127,8 +127,36 @@ Always respond with valid JSON containing all required fields. Never reveal the 
   return basePrompt + "\n\n" + typeSpecificPrompts[competitionType as keyof typeof typeSpecificPrompts];
 }
 
+function getBodyPartSpecifics(bodyPart: string): string {
+  const specifics = {
+    shoulder: "Create a case involving rotator cuff pathology, shoulder impingement, frozen shoulder, or instability. Include shoulder-specific tests like Hawkins-Kennedy, Neer's test, apprehension test. Focus on overhead activities, throwing mechanics, and scapular dyskinesis.",
+    knee: "Create a case involving meniscal tears, ACL injury, patellofemoral pain, or osteoarthritis. Include knee-specific tests like McMurray's, Lachman's, anterior drawer, patella apprehension. Focus on weight-bearing activities, stairs, and functional movements.",
+    back: "Create a case involving disc herniation, facet joint dysfunction, muscle strain, or stenosis. Include spinal tests like straight leg raise, slump test, neurological screening. Focus on bending, lifting, and daily activities.",
+    neck: "Create a case involving cervical radiculopathy, tension headaches, or whiplash. Include cervical tests like Spurling's, upper limb tension tests, cranio-cervical flexion test. Focus on neck movement, headaches, and arm symptoms.",
+    hip: "Create a case involving FAI, labral tears, hip osteoarthritis, or bursitis. Include hip-specific tests like FADIR, FABER, Thomas test, Trendelenburg. Focus on walking, stairs, and hip movement.",
+    ankle: "Create a case involving ankle sprains, Achilles tendinopathy, or impingement. Include ankle tests like anterior drawer, talar tilt, squeeze test. Focus on weight-bearing, walking, and sports activities.",
+    elbow: "Create a case involving tennis elbow, golfer's elbow, or ulnar nerve entrapment. Include elbow tests like Cozen's test, Mill's test, Tinel's sign. Focus on gripping, lifting, and repetitive arm movements.",
+    wrist: "Create a case involving carpal tunnel, De Quervain's, or wrist fracture. Include wrist tests like Phalen's, Finkelstein's, Watson's test. Focus on gripping, typing, and hand function.",
+    foot: "Create a case involving plantar fasciitis, Morton's neuroma, or stress fractures. Include foot tests like windlass test, squeeze test, Mulder's sign. Focus on walking, standing, and foot mechanics.",
+    general: "Create a complex multi-system case involving multiple body regions or systemic conditions affecting movement and function."
+  };
+  
+  return specifics[bodyPart] || specifics.general;
+}
+
 function buildComplexCasePrompt(input: ComplexCaseInput): string {
+  const bodyPartGuidance = getBodyPartSpecifics(input.bodyPart);
+  
   return `Create a comprehensive multi-stage physiotherapy case study with the following specifications:
+
+**CRITICAL: Body Part Specific Requirements for ${input.bodyPart.toUpperCase()}:**
+${bodyPartGuidance}
+
+**Competition Type Focus:**
+${input.competitionType === 'complete_clinician' ? 'Focus on comprehensive assessment and treatment planning from initial contact to discharge planning.' :
+  input.competitionType === 'diagnostic_detective' ? 'Emphasize complex differential diagnosis with multiple possible conditions and detailed clinical reasoning.' :
+  input.competitionType === 'treatment_strategist' ? 'Focus on evidence-based treatment planning with multiple intervention options and progression strategies.' :
+  'Focus on teaching and mentoring aspects, including patient education and clinical reasoning explanation.'}
 
 **Case Requirements:**
 - Body Part: ${input.bodyPart}

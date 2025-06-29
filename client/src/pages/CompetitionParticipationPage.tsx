@@ -29,22 +29,26 @@ export default function CompetitionParticipationPage() {
   const queryClient = useQueryClient();
 
   // Fetch competition details
-  const { data: competition, isLoading: loadingCompetition } = useQuery({
+  const { data: competition, isLoading: loadingCompetition, error: competitionError } = useQuery({
     queryKey: [`/api/competitions/${competitionId}`],
     enabled: !!competitionId
   });
 
   // Fetch user's participation status
-  const { data: participation, isLoading: loadingParticipation } = useQuery({
+  const { data: participation, isLoading: loadingParticipation, error: participationError } = useQuery({
     queryKey: [`/api/competitions/${competitionId}/participation`],
     enabled: !!competitionId
   });
 
   // Fetch case studies for this competition
-  const { data: caseStudies, isLoading: loadingCases } = useQuery({
+  const { data: caseStudies, isLoading: loadingCases, error: casesError } = useQuery({
     queryKey: [`/api/competitions/${competitionId}/cases`],
     enabled: !!competitionId
   });
+
+  // Debug logging
+  console.log('Competition data:', { competition, participation, caseStudies });
+  console.log('Errors:', { competitionError, participationError, casesError });
 
   // Start case study mutation
   const startCase = useMutation({
@@ -79,7 +83,7 @@ export default function CompetitionParticipationPage() {
   }
 
   // Handle data safely
-  if (!competition || !participation) {
+  if (!competition) {
     return (
       <div className="container mx-auto p-6">
         <Card>
@@ -87,7 +91,7 @@ export default function CompetitionParticipationPage() {
             <div className="text-center">
               <h3 className="text-lg font-semibold mb-2">Competition Not Found</h3>
               <p className="text-muted-foreground mb-4">
-                You may not have joined this competition yet.
+                The competition you're looking for doesn't exist.
               </p>
               <Link href="/competitions">
                 <Button>Back to Competitions</Button>

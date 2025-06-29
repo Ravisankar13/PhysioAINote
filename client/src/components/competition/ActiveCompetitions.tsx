@@ -61,7 +61,7 @@ export default function ActiveCompetitions() {
       setTimeout(() => {
         const targetUrl = `/competitions/${competitionId}`;
         console.log('Setting location to:', targetUrl);
-        setLocation(targetUrl);
+        window.location.href = targetUrl;
       }, 1000);
     },
     onError: (error: any) => {

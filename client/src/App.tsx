@@ -101,6 +101,9 @@ function Router() {
           <Route path="/competition/:id">
             <ProtectedRoute component={CompetitionParticipationPage} />
           </Route>
+          <Route path="/complex-case/:id">
+            <ProtectedRoute component={ComplexCasePage} />
+          </Route>
           <Route path="/competitions/:competitionId/cases/:caseId/diagnosis">
             <ProtectedRoute component={CompetitionDiagnosisPage} />
           </Route>

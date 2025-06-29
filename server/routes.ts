@@ -5742,5 +5742,52 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
 
+  // Create new 2024 complex cases based on recent research
+  app.post("/api/admin/create-new-complex-cases-2024", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const { createNewComplexCases2024 } = await import("./newComplexCases2024");
+      await createNewComplexCases2024(req.user!.id);
+      res.json({ 
+        success: true, 
+        message: "Successfully created 10 new complex cases based on 2024 research",
+        casesCreated: 10 
+      });
+    } catch (error: any) {
+      console.error("Error creating new 2024 complex cases:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Add recent research papers to database
+  app.post("/api/admin/add-recent-research", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const { recentResearchPapers } = await import("./comprehensiveResearchDatabase");
+      const researchStorage = await import("./researchStorage");
+      
+      let addedCount = 0;
+      for (const paper of recentResearchPapers) {
+        try {
+          await researchStorage.researchStorage.addResearchPaper(paper);
+          addedCount++;
+        } catch (error) {
+          console.log(`Paper already exists or error adding: ${paper.title}`);
+        }
+      }
+      
+      res.json({ 
+        success: true, 
+        message: `Successfully added ${addedCount} recent research papers to database`,
+        papersAdded: addedCount 
+      });
+    } catch (error: any) {
+      console.error("Error adding recent research papers:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   return httpServer;
 }

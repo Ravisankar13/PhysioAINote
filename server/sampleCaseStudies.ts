@@ -4,7 +4,7 @@ export const sampleCaseStudies: Omit<AICaseStudy, 'id' | 'createdAt'>[] = [
   // Shoulder cases - 6 cases covering different complexities
   {
     userId: 1,
-    title: "Rotator Cuff Tendinopathy with Impingement",
+    title: "Office Worker with Gradual Onset Shoulder Pain",
     patientDescription: "A 45-year-old office worker presents with right shoulder pain that has gradually worsened over the past 3 months.",
     history: "The patient reports no specific injury but has been working longer hours at the computer. Pain is worse when reaching overhead and when sleeping on the affected side. Has tried over-the-counter pain medication with minimal relief.",
     presentingSymptoms: "Dull ache in right shoulder that becomes sharp with certain movements, particularly overhead reaching and external rotation. Pain rated as 6/10 at worst, 3/10 at rest.",
@@ -37,7 +37,7 @@ export const sampleCaseStudies: Omit<AICaseStudy, 'id' | 'createdAt'>[] = [
   },
   {
     userId: 1,
-    title: "Acute Shoulder Dislocation in Young Athlete",
+    title: "Young Basketball Player with Acute Shoulder Injury",
     patientDescription: "A 19-year-old male basketball player presents with acute right shoulder pain after being fouled during a game.",
     history: "Patient reports that his arm was pulled backward while attempting to catch a ball. He felt a 'pop' and immediate pain. Teammates helped 'put it back in place' on the court before seeking medical attention.",
     presentingSymptoms: "Severe pain (8/10) and apprehension with any movement, especially external rotation. Holding arm close to body for protection.",
@@ -69,7 +69,7 @@ export const sampleCaseStudies: Omit<AICaseStudy, 'id' | 'createdAt'>[] = [
   },
   {
     userId: 1,
-    title: "Frozen Shoulder (Adhesive Capsulitis)",
+    title: "Middle-Aged Woman with Progressive Shoulder Stiffness",
     patientDescription: "A 52-year-old female with gradual onset of left shoulder pain and stiffness over 4 months.",
     history: "No specific injury. Symptoms began insidiously and have progressively worsened. Patient has Type 2 diabetes, well-controlled with medication. Previously very active but now limited in daily activities.",
     presentingSymptoms: "Constant aching pain (5/10) that worsens at night and with certain movements. Significant restriction in shoulder movement in all directions.",
@@ -101,7 +101,7 @@ export const sampleCaseStudies: Omit<AICaseStudy, 'id' | 'createdAt'>[] = [
   },
   {
     userId: 1,
-    title: "Knee Osteoarthritis with Acute Flare",
+    title: "Active Gardener with Worsening Knee Pain",
     patientDescription: "A 62-year-old female with long-standing bilateral knee pain presenting with acute worsening of right knee symptoms over the past week.",
     history: "10-year history of gradually progressive knee pain, previously diagnosed with moderate OA. Acute increase in pain after gardening over the weekend. Has tried OTC NSAIDs and resting with minimal improvement.",
     presentingSymptoms: "Severe, constant aching pain (8/10) in right knee, worst with initial weight-bearing after sitting. Reports increased stiffness, warmth, and swelling compared to baseline symptoms.",
@@ -134,7 +134,7 @@ export const sampleCaseStudies: Omit<AICaseStudy, 'id' | 'createdAt'>[] = [
   },
   {
     userId: 1,
-    title: "Cervical Radiculopathy C6-C7",
+    title: "Carpenter with Neck Pain and Arm Symptoms",
     patientDescription: "A 48-year-old carpenter presents with right-sided neck pain radiating into the arm and thumb.",
     history: "Gradual onset over 3 weeks without specific injury. Works overhead frequently and reports increased symptoms after long workdays. Has tried over-the-counter pain medications with minimal relief.",
     presentingSymptoms: "Sharp neck pain (5/10) with shooting pain and occasional tingling into the right arm, extending to the thumb and index finger. Reports weakness when using screwdriver.",

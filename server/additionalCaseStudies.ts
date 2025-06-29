@@ -4,7 +4,7 @@ export const additionalCaseStudies: Omit<AICaseStudy, 'id' | 'createdAt'>[] = [
   // SHOULDER - Additional cases
   {
     userId: 1,
-    title: "SLAP Tear in Competitive Swimmer",
+    title: "Competitive Swimmer with Deep Shoulder Pain",
     patientDescription: "A 22-year-old competitive freestyle swimmer presents with right shoulder pain that has gradually worsened over the past 2 months.",
     history: "Pain initially only present after intense training sessions but now occurs during swimming. Reports 'clicking' and 'catching' with certain movements. No improvement with rest or NSAIDs.",
     presentingSymptoms: "Deep-seated shoulder pain, worse with overhead activities and pressing movements. Reports occasional 'catching' sensation and loss of power during the pull phase of freestyle stroke.",
@@ -43,7 +43,7 @@ export const additionalCaseStudies: Omit<AICaseStudy, 'id' | 'createdAt'>[] = [
   },
   {
     userId: 1,
-    title: "Multidirectional Shoulder Instability in a Gymnast",
+    title: "Young Gymnast with Bilateral Shoulder 'Looseness'",
     patientDescription: "A 16-year-old female gymnast reports bilateral shoulder 'looseness' and intermittent pain during training, worse on the right.",
     history: "Long-standing history of shoulder hypermobility. Recent increase in training intensity for upcoming competition has exacerbated symptoms. No specific injury event. Has general joint hypermobility in other areas.",
     presentingSymptoms: "Describes sensation of shoulder 'slipping' during handstands and uneven bar routines. Intermittent pain (3-6/10) after training. Occasional night pain disrupting sleep.",

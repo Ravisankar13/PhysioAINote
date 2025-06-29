@@ -149,37 +149,71 @@ export class CompetitionService {
 
   private async calculateReasoningScore(caseStudy: AICaseStudy, attempt: CompetitionAttempt): Promise<number> {
     try {
-      console.log(`[REASONING] Using fast scoring algorithm (OpenAI bypassed for testing)`);
+      console.log(`[REASONING] Using OpenAI for advanced clinical reasoning analysis`);
       
-      // Fast text-based scoring algorithm
+      const openai = (await import('../openai')).default;
+      
+      const prompt = `You are an expert physiotherapy educator evaluating clinical reasoning. Score this student's clinical reasoning from 0-100 based on how well they demonstrate understanding of the case.
+
+**Case Information:**
+- Patient: ${caseStudy.patientDescription}
+- History: ${caseStudy.history}
+- Symptoms: ${caseStudy.presentingSymptoms}
+- Correct Diagnosis: ${caseStudy.correctDiagnosis}
+
+**Student's Clinical Reasoning:**
+"${attempt.userReasoning}"
+
+**Student's Diagnosis:**
+"${attempt.userDiagnosis}"
+
+**Evaluation Criteria:**
+1. Logical connection between symptoms and diagnosis (40%)
+2. Understanding of pathophysiology (30%)
+3. Clinical insight and professional reasoning (20%)
+4. Clarity and organization of thought (10%)
+
+Respond with ONLY a JSON object in this exact format:
+{
+  "score": 75,
+  "rationale": "Brief explanation of scoring"
+}`;
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.1,
+        max_tokens: 200,
+        response_format: { type: "json_object" }
+      });
+
+      const response = JSON.parse(completion.choices[0].message.content || '{"score": 50, "rationale": "Default score"}');
+      const score = Math.max(0, Math.min(100, response.score)) / 100;
+      
+      console.log(`[REASONING] OpenAI reasoning score: ${score} (${response.score}/100)`);
+      console.log(`[REASONING] Rationale: ${response.rationale}`);
+      
+      return score;
+    } catch (error) {
+      console.error("[REASONING] OpenAI error, using fallback:", error);
+      
+      // Fallback to quick text analysis if OpenAI fails
       const userText = (attempt.userReasoning || "").toLowerCase();
       const correctDiagnosis = caseStudy.correctDiagnosis.toLowerCase();
-      const history = caseStudy.history.toLowerCase();
-      const symptoms = caseStudy.presentingSymptoms.toLowerCase();
       
       let score = 0.3; // Base score
       
-      // Check if user mentions key terms from correct diagnosis
+      // Check diagnosis accuracy in reasoning
       if (userText.includes(correctDiagnosis) || this.calculateTextSimilarity(userText, correctDiagnosis) > 0.3) {
-        score += 0.3;
+        score += 0.4;
       }
       
-      // Check if user reasoning shows understanding of symptoms
-      const symptomWords = symptoms.split(' ').filter(word => word.length > 3);
-      const mentionedSymptoms = symptomWords.filter(word => userText.includes(word));
-      score += (mentionedSymptoms.length / Math.max(symptomWords.length, 1)) * 0.2;
-      
-      // Check for clinical reasoning keywords
-      const clinicalKeywords = ['assess', 'examine', 'treatment', 'therapy', 'rehabilitation', 'pain', 'function', 'mobility'];
+      // Check for clinical keywords
+      const clinicalKeywords = ['pain', 'assess', 'examine', 'treatment', 'function', 'mobility', 'strength', 'range'];
       const mentionedKeywords = clinicalKeywords.filter(keyword => userText.includes(keyword));
-      score += (mentionedKeywords.length / clinicalKeywords.length) * 0.2;
+      score += (mentionedKeywords.length / clinicalKeywords.length) * 0.3;
       
-      const finalScore = Math.max(0, Math.min(1, score));
-      console.log(`[REASONING] Fast score calculated: ${finalScore}`);
-      return finalScore;
-    } catch (error) {
-      console.error("[REASONING] Error calculating reasoning score:", error);
-      return 0.5; // Fallback score
+      return Math.max(0, Math.min(1, score));
     }
   }
 
@@ -230,40 +264,44 @@ export class CompetitionService {
     scores: any
   ): Promise<string> {
     try {
-      const prompt = `
-        Provide brief competitive feedback for this physiotherapy case attempt:
-        
-        Case: ${caseStudy.title}
-        Correct Diagnosis: ${caseStudy.correctDiagnosis}
-        User Diagnosis: ${attempt.userDiagnosis}
-        User Reasoning: ${attempt.userReasoning}
-        
-        Scores:
-        - Accuracy: ${scores.accuracy}/100
-        - Speed: ${scores.speed}/100  
-        - Reasoning: ${scores.reasoning}/100
-        - Differential: ${scores.differential}/100
-        - Treatment: ${scores.treatment}/100
-        - Total: ${scores.total}/100
-        
-        Provide motivational feedback focusing on:
-        1. What they did well
-        2. Key areas for improvement
-        3. Competitive insights for next time
-        
-        Keep it under 200 words and encouraging.
-      `;
+      console.log(`[FEEDBACK] Generating OpenAI competitive feedback`);
+      
+      const openai = (await import('../openai')).default;
+      
+      const prompt = `You are an expert physiotherapy educator providing competitive feedback. Be concise, encouraging, and specific.
+
+**Case:** ${caseStudy.title}
+**Correct Diagnosis:** ${caseStudy.correctDiagnosis}
+**Student Diagnosis:** ${attempt.userDiagnosis}
+**Student Reasoning:** ${attempt.userReasoning}
+
+**Performance Scores:**
+- Accuracy: ${scores.accuracy}/100
+- Speed: ${scores.speed}/100  
+- Reasoning: ${scores.reasoning}/100
+- Assessment: ${scores.differential}/100
+- Treatment: ${scores.treatment}/100
+- **Total: ${scores.total}/100**
+
+Provide feedback in exactly this format:
+**Strengths:** [What they did well]
+**Areas for Improvement:** [Key points to work on]
+**Competitive Tip:** [One specific insight for better performance]
+
+Keep total response under 150 words. Be encouraging but honest about areas needing work.`;
 
       const response = await openai.chat.completions.create({
         model: "gpt-4o",
         messages: [{ role: "user", content: prompt }],
-        max_tokens: 250,
-        temperature: 0.3,
+        max_tokens: 200,
+        temperature: 0.2,
       });
 
-      return response.choices[0].message.content || "Great effort! Keep practicing to improve your clinical reasoning skills.";
+      const feedback = response.choices[0].message.content || "Great effort! Keep practicing to improve your clinical reasoning skills.";
+      console.log(`[FEEDBACK] Generated feedback (${feedback.length} chars)`);
+      return feedback;
     } catch (error) {
-      console.error("Error generating feedback:", error);
+      console.error("[FEEDBACK] OpenAI error, using fallback:", error);
       return "Great effort! Keep practicing to improve your clinical reasoning skills.";
     }
   }

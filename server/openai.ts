@@ -177,3 +177,5 @@ Return the note in JSON format with the following structure:
 }
 `;
 }
+
+export default openai;

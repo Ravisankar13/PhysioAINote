@@ -23,6 +23,7 @@ import { researchGapAnalysisService } from "./researchGapAnalysis";
 import { researchStorage } from "./researchStorage";
 import { competitionStorage } from "./competitionStorage";
 import { competitionService, type CompetitionAttempt } from "./competitionService";
+import { complexCaseService } from "./complexCaseService";
 import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, exercises, users, researchDiscussions, researchDiscussionVotes } from "@shared/schema";
 import { ZodError, z } from "zod";
 import { fromZodError } from "zod-validation-error";

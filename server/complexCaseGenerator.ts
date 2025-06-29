@@ -453,10 +453,19 @@ Respond with JSON in this exact format:
       (analysis.categoryScores.communication * 0.1)
     );
 
+    // Ensure feedback has all required fields
+    const feedback = {
+      strengths: analysis.feedback?.strengths || ["Attempted all questions"],
+      improvementAreas: analysis.feedback?.improvementAreas || ["Continue developing skills"],
+      recommendedResources: analysis.feedback?.recommendedResources || ["Review evidence-based guidelines"],
+      nextSteps: analysis.feedback?.nextSteps || ["Practice more cases"],
+      evidenceReferences: analysis.feedback?.evidenceReferences || ["Consult recent systematic reviews"]
+    };
+
     return {
       totalScore,
       categoryScores: analysis.categoryScores,
-      feedback: analysis.feedback
+      feedback
     };
 
   } catch (error) {
@@ -476,7 +485,8 @@ Respond with JSON in this exact format:
         strengths: ["Attempted all questions", "Showed clinical thinking"],
         improvementAreas: ["Continue developing clinical reasoning skills"],
         recommendedResources: ["Review evidence-based practice guidelines"],
-        nextSteps: ["Practice more complex cases", "Seek mentorship opportunities"]
+        nextSteps: ["Practice more complex cases", "Seek mentorship opportunities"],
+        evidenceReferences: ["Consult recent systematic reviews for this condition", "Review latest clinical practice guidelines"]
       }
     };
   }

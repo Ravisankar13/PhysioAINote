@@ -4799,32 +4799,26 @@ Base your analysis on established postural assessment principles and correlate f
       
       const participation = await competitionStorage.getParticipantByUserAndCompetition(userId, competitionId);
       if (!participation) {
-        return res.status(404).json({ error: "Not participating in this competition" });
+        // Return a default structure indicating no participation
+        return res.json({
+          isParticipating: false,
+          totalScore: 0,
+          timeSpent: 0,
+          rank: null,
+          caseAttempts: []
+        });
       }
       
-      res.json(participation);
+      res.json({
+        ...participation,
+        isParticipating: true
+      });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });
 
-  // Get user participation status for a competition
-  app.get("/api/competitions/:id/participation", async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
-    
-    try {
-      const competitionId = parseInt(req.params.id);
-      const participation = await competitionStorage.getParticipantByUserAndCompetition(req.user!.id, competitionId);
-      
-      if (!participation) {
-        return res.status(404).json({ error: "Not participating in this competition" });
-      }
-      
-      res.json(participation);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
+
 
   // Get case studies for a competition
   app.get("/api/competitions/:id/cases", async (req, res) => {

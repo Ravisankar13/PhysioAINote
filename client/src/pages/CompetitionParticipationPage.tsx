@@ -141,11 +141,19 @@ export default function CompetitionParticipationPage() {
     onSuccess: (data) => {
       toast({
         title: "Diagnoses Submitted!",
-        description: "AI is analyzing your responses...",
+        description: "Redirecting to AI review and scores...",
       });
       
-      // Refresh the participation data
+      // Refresh the participation data and redirect to results
       queryClient.invalidateQueries({ queryKey: [`/api/competitions/${competitionId}/participation`] });
+      
+      // Store the results in sessionStorage for the results page
+      sessionStorage.setItem('competitionResults', JSON.stringify(data));
+      
+      // Redirect to results page after a brief delay
+      setTimeout(() => {
+        window.location.href = `/competitions/${competitionId}/results`;
+      }, 1500);
     },
     onError: (error: any) => {
       toast({

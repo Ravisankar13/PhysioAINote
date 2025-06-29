@@ -336,7 +336,7 @@ function createFallbackComplexCase(input: ComplexCaseInput, userId: number): Com
 }
 
 /**
- * Scores a complex case attempt using AI analysis
+ * Scores a complex case attempt using AI analysis with evidence-based references
  */
 export async function scoreComplexCaseAttempt(
   complexCase: ComplexCase,
@@ -355,40 +355,66 @@ export async function scoreComplexCaseAttempt(
     improvementAreas: string[];
     recommendedResources: string[];
     nextSteps: string[];
+    evidenceReferences: string[];
   };
 }> {
   try {
-    const prompt = `Analyze this complex physiotherapy case attempt and provide detailed scoring and feedback.
+    // Get relevant research articles for this body part
+    const { storage } = await import('./storage');
+    const researchResult = await storage.getResearchPapersByBodyPart(complexCase.bodyPart, 1, 10);
+    const relevantResearch = researchResult.papers;
+    
+    // Create evidence context from top research articles
+    const evidenceContext = relevantResearch
+      .filter((article: any) => article.qualityScore && article.qualityScore > 80)
+      .slice(0, 5) // Top 5 highest quality articles
+      .map((article: any) => ({
+        title: article.title,
+        keyFindings: article.keyFindings,
+        clinicalRelevance: article.clinicalRelevance,
+        authors: article.authors,
+        journal: article.journal
+      }));
+
+    const prompt = `Analyze this complex physiotherapy case attempt using current evidence-based practice standards and provide detailed scoring with specific research references.
 
 **Case Information:**
 Title: ${complexCase.title}
 Body Part: ${complexCase.bodyPart}
 Complexity: ${complexCase.complexity}
 
-**Correct Answers:**
+**Correct Evidence-Based Answers:**
 Differential Diagnoses: ${JSON.stringify(complexCase.correctDifferentials)}
 Assessments: ${JSON.stringify(complexCase.correctAssessments)}
 Treatment Plan: ${JSON.stringify(complexCase.correctTreatmentPlan)}
 
+**Current Evidence Base for ${complexCase.bodyPart.toUpperCase()}:**
+${evidenceContext.map((article: any, index: number) => `
+${index + 1}. "${article.title}" (${article.authors})
+   Published in: ${article.journal}
+   Key Findings: ${article.keyFindings}
+   Clinical Relevance: ${article.clinicalRelevance}
+`).join('\n')}
+
 **User Responses:**
 ${JSON.stringify(stageResponses, null, 2)}
 
-Please provide a comprehensive analysis with scores (0-100) for each category and detailed feedback.`;
+Please analyze the user responses against both the correct answers AND current evidence-based practice. Reference specific research findings when evaluating clinical reasoning, assessment choices, and treatment planning.`;
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
         {
           role: "system",
-          content: `You are an expert physiotherapy educator analyzing student performance on complex case studies. 
+          content: `You are an expert physiotherapy educator analyzing student performance against current evidence-based practice standards. 
 
 Score each category from 0-100 based on:
-- Clinical Reasoning (40%): Accuracy of diagnoses, logical thinking, evidence-based decisions
-- Assessment Skills (25%): Appropriate test selection, interpretation, clinical reasoning
-- Treatment Planning (25%): Evidence-based interventions, realistic goals, progression
+- Clinical Reasoning (40%): Accuracy of diagnoses compared to evidence-based criteria, logical thinking, evidence-based decisions
+- Assessment Skills (25%): Appropriate test selection based on current research, interpretation accuracy
+- Treatment Planning (25%): Evidence-based interventions, realistic goals, progression aligned with research
 - Communication (10%): Patient education quality, professional communication
 
-Provide constructive feedback focusing on learning and improvement.
+When evaluating responses, specifically compare against the provided evidence base and reference relevant research findings in your feedback. Include specific evidence citations when appropriate.
 
 Respond with JSON in this exact format:
 {
@@ -400,10 +426,11 @@ Respond with JSON in this exact format:
     "timeEfficiency": 75
   },
   "feedback": {
-    "strengths": ["specific strengths"],
-    "improvementAreas": ["areas for improvement"],
-    "recommendedResources": ["specific learning resources"],
-    "nextSteps": ["actionable next steps"]
+    "strengths": ["specific strengths with evidence references"],
+    "improvementAreas": ["areas for improvement with evidence-based recommendations"],
+    "recommendedResources": ["specific research papers and evidence-based resources"],
+    "nextSteps": ["actionable next steps based on current evidence"],
+    "evidenceReferences": ["specific citations to research that supports or contradicts the user's approach"]
   }
 }`
         },

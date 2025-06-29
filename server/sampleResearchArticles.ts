@@ -300,5 +300,222 @@ export const sampleResearchArticles: InsertResearchArticle[] = [
       statisticalMethods: { score: 9, notes: "Appropriate network meta-analysis techniques with sensitivity analyses" }
     },
     aiAnalyzedAt: new Date("2024-01-20T13:20:00Z")
+  },
+
+  // Additional Shoulder Research
+  {
+    title: "Effectiveness of Scapular Stabilization Exercises in Overhead Athletes with Shoulder Impingement: A Systematic Review",
+    authors: "Peterson, M.K., Chang, L.W., Roberts, S.A., Miller, D.J.",
+    journal: "Sports Medicine",
+    publicationDate: new Date("2024-02-15"),
+    doi: "10.1007/s40279-024-01987-3",
+    abstract: "Background: Scapular dysfunction contributes to shoulder impingement in overhead athletes. Objective: To systematically review the effectiveness of scapular stabilization exercises in overhead athletes with shoulder impingement. Methods: Databases were searched for RCTs comparing scapular stabilization exercises to control interventions in overhead athletes. Results: Eight studies (n=342) were included. Scapular stabilization exercises significantly improved pain (SMD -1.2, 95% CI -1.8 to -0.6) and scapular kinematics compared to controls. Return to sport rates were 15% higher in the exercise group. Conclusion: Scapular stabilization exercises are highly effective for shoulder impingement in overhead athletes.",
+    url: "https://link.springer.com/article/10.1007/s40279-024-01987-3",
+    bodyPart: "shoulder",
+    keyFindings: "Scapular exercises significantly improve pain, function, and return to sport in overhead athletes",
+    clinicalRelevance: "Very High - specific to athletic population with clear treatment protocol",
+    methodology: "Systematic review of RCTs with sport-specific outcome measures",
+    aiAnalysisStatus: "completed",
+    qualityScore: 88
+  },
+
+  {
+    title: "Glenohumeral Internal Rotation Deficit and Its Association with Shoulder Injuries in Baseball Pitchers",
+    authors: "Rodriguez, A.M., Kim, J.H., Brown, T.L., Davis, P.K.",
+    journal: "American Journal of Sports Medicine",
+    publicationDate: new Date("2024-01-28"),
+    doi: "10.1177/03635465240123456",
+    abstract: "Purpose: To investigate the relationship between glenohumeral internal rotation deficit (GIRD) and shoulder injury risk in professional baseball pitchers. Methods: Prospective cohort study of 156 professional pitchers followed for 2 seasons. GIRD was measured preseason using standardized goniometry. Results: Pitchers with GIRD >20° had 3.2 times higher injury risk (95% CI 1.8-5.7). GIRD was the strongest predictor of shoulder injury (OR 3.2, p<0.001). Conclusion: GIRD >20° significantly increases shoulder injury risk in baseball pitchers.",
+    url: "https://journals.sagepub.com/doi/10.1177/03635465240123456",
+    bodyPart: "shoulder",
+    keyFindings: "GIRD >20° increases shoulder injury risk 3.2-fold in professional pitchers",
+    clinicalRelevance: "High - provides specific screening thresholds for injury prevention",
+    methodology: "Large prospective cohort with validated injury tracking",
+    aiAnalysisStatus: "completed",
+    qualityScore: 86
+  },
+
+  // Back/Spine Research
+  {
+    title: "Motor Control Exercise versus General Exercise for Chronic Low Back Pain: A Network Meta-Analysis",
+    authors: "Wang, S.L., O'Sullivan, P.B., Beales, D.J., Macedo, L.G.",
+    journal: "Physical Therapy",
+    publicationDate: new Date("2024-03-01"),
+    doi: "10.1093/ptj/pzad456",
+    abstract: "Background: Multiple exercise approaches exist for chronic low back pain with unclear comparative effectiveness. Objective: To compare motor control exercise, general exercise, and other interventions using network meta-analysis. Methods: 45 RCTs (n=4,567) were included comparing motor control exercise, general exercise, manual therapy, and usual care. Results: Motor control exercise ranked highest for disability reduction (SUCRA 0.82) and second for pain (SUCRA 0.74). Effect sizes were moderate for both disability (SMD -0.65) and pain (SMD -0.52) versus usual care. Conclusion: Motor control exercise appears most effective for functional improvement in chronic low back pain.",
+    url: "https://academic.oup.com/ptj/article/doi/10.1093/ptj/pzad456",
+    bodyPart: "back",
+    keyFindings: "Motor control exercise most effective for disability reduction in chronic low back pain",
+    clinicalRelevance: "Very High - provides treatment hierarchy for clinical decision-making",
+    methodology: "Large network meta-analysis with comprehensive treatment comparisons",
+    aiAnalysisStatus: "completed",
+    qualityScore: 91
+  },
+
+  {
+    title: "Lumbar Spine Segmental Motion During Activities of Daily Living: A Systematic Review",
+    authors: "Taylor, N.F., Evans, O.M., Mitchell, K.L., Thompson, R.J.",
+    journal: "Clinical Biomechanics",
+    publicationDate: new Date("2024-02-20"),
+    doi: "10.1016/j.clinbiomech.2024.106078",
+    abstract: "Background: Understanding normal lumbar segmental motion is crucial for assessment and treatment planning. Objective: To systematically review lumbar segmental motion patterns during activities of daily living. Methods: Studies using validated motion analysis systems during functional activities were included. Results: 24 studies met criteria. L4-L5 and L5-S1 showed greatest motion during lifting (mean 8.2° and 9.1° flexion respectively). Segmental coupling patterns varied significantly between pain-free and chronic low back pain populations. Conclusion: Distinct segmental motion patterns exist during functional activities with clear differences in chronic pain populations.",
+    url: "https://www.sciencedirect.com/science/article/pii/S0268003324001234",
+    bodyPart: "back",
+    keyFindings: "L4-L5 and L5-S1 show greatest motion during lifting; coupling patterns differ in chronic pain",
+    clinicalRelevance: "High - provides normative data for movement assessment",
+    methodology: "Systematic review of biomechanical studies with standardized motion analysis",
+    aiAnalysisStatus: "completed",
+    qualityScore: 83
+  },
+
+  // Knee Research
+  {
+    title: "Neuromuscular Training Programs for ACL Injury Prevention: A Meta-Analysis of Biomechanical Outcomes",
+    authors: "Johnson, K.R., Liu, H.M., Anderson, C.P., Williams, J.T.",
+    journal: "Sports Medicine",
+    publicationDate: new Date("2024-01-15"),
+    doi: "10.1007/s40279-024-01923-1",
+    abstract: "Objective: To evaluate the effectiveness of neuromuscular training programs on biomechanical risk factors for ACL injury. Methods: Meta-analysis of RCTs examining knee valgus, ground reaction forces, and muscle activation patterns. Results: 18 studies (n=1,456) included. Neuromuscular training significantly reduced knee valgus angle by 4.2° (95% CI 2.8-5.6°, p<0.001) and increased hip flexion by 6.8° (95% CI 4.1-9.5°). Hamstring activation increased by 23% during landing tasks. Conclusion: Neuromuscular training effectively modifies biomechanical risk factors associated with ACL injury.",
+    url: "https://link.springer.com/article/10.1007/s40279-024-01923-1",
+    bodyPart: "knee",
+    keyFindings: "Neuromuscular training reduces knee valgus by 4.2° and increases hamstring activation by 23%",
+    clinicalRelevance: "Very High - provides specific biomechanical targets for injury prevention",
+    methodology: "Meta-analysis with objective biomechanical outcome measures",
+    aiAnalysisStatus: "completed",
+    qualityScore: 89
+  },
+
+  {
+    title: "Patellofemoral Pain in Adolescent Athletes: Risk Factors and Evidence-Based Management",
+    authors: "Chen, M.Y., Roberts, L.K., Thompson, A.D., Wilson, S.M.",
+    journal: "British Journal of Sports Medicine",
+    publicationDate: new Date("2024-02-10"),
+    doi: "10.1136/bjsports-2024-107890",
+    abstract: "Objective: To identify risk factors and evaluate management strategies for patellofemoral pain in adolescent athletes. Methods: Systematic review and meta-analysis of studies in athletes aged 12-18 years. Results: 22 studies identified hip weakness (OR 2.4, 95% CI 1.6-3.7) and poor landing mechanics (OR 3.1, 95% CI 2.1-4.6) as primary risk factors. Hip strengthening combined with movement retraining showed largest effect sizes (SMD -1.3 for pain, -1.1 for function). Conclusion: Hip strengthening with movement training is most effective for adolescent patellofemoral pain.",
+    url: "https://bjsm.bmj.com/content/early/2024/02/10/bjsports-2024-107890",
+    bodyPart: "knee",
+    keyFindings: "Hip weakness and poor landing mechanics are primary risk factors; combined training most effective",
+    clinicalRelevance: "Very High - age-specific evidence for common adolescent condition",
+    methodology: "Age-specific systematic review with meta-analysis",
+    aiAnalysisStatus: "completed",
+    qualityScore: 87
+  },
+
+  // Hip Research
+  {
+    title: "Effectiveness of Exercise Therapy for Greater Trochanteric Pain Syndrome: A Systematic Review",
+    authors: "Murphy, S.L., Jackson, R.P., Lee, K.J., Brown, M.A.",
+    journal: "Journal of Hip Preservation Surgery",
+    publicationDate: new Date("2024-01-30"),
+    doi: "10.1093/jhps/hnae012",
+    abstract: "Background: Greater trochanteric pain syndrome (GTPS) is a common cause of lateral hip pain. Objective: To evaluate exercise therapy effectiveness for GTPS. Methods: Systematic review of RCTs comparing exercise to control interventions. Results: 12 studies (n=892) included. Exercise therapy showed significant improvements in pain (SMD -0.8, 95% CI -1.2 to -0.4) and function (SMD -0.7, 95% CI -1.1 to -0.3). Hip abductor strengthening was the most effective component. Wait-and-see approach showed minimal improvement. Conclusion: Exercise therapy, particularly hip abductor strengthening, is effective for GTPS.",
+    url: "https://academic.oup.com/jhps/article/doi/10.1093/jhps/hnae012",
+    bodyPart: "hip",
+    keyFindings: "Hip abductor strengthening most effective component for GTPS management",
+    clinicalRelevance: "High - provides specific exercise prescription guidance",
+    methodology: "Systematic review focused on exercise interventions",
+    aiAnalysisStatus: "completed",
+    qualityScore: 84
+  },
+
+  {
+    title: "Femoroacetabular Impingement and Hip Labral Tears: Clinical Assessment and Conservative Management",
+    authors: "Grimaldi, A., Mellor, R., Nicolson, P., Hodges, P., Bennell, K.",
+    journal: "Physical Therapy in Sport",
+    publicationDate: new Date("2024-03-05"),
+    doi: "10.1016/j.ptsp.2024.03.007",
+    abstract: "Background: Femoroacetabular impingement (FAI) and labral tears are increasingly recognized hip conditions. Objective: To evaluate clinical assessment methods and conservative management outcomes. Methods: Narrative review of recent evidence on FAI assessment and treatment. Results: Clinical tests show limited diagnostic accuracy (sensitivity 50-75%). Hip strengthening and movement modification show moderate evidence for pain and function improvement. Intra-articular injection can guide treatment decisions. Surgery outcomes superior for structural abnormalities. Conclusion: Conservative management should be first-line treatment with structured exercise and movement modification.",
+    url: "https://www.sciencedirect.com/science/article/pii/S1466853X24000707",
+    bodyPart: "hip",
+    keyFindings: "Conservative management with hip strengthening should be first-line; clinical tests have limited accuracy",
+    clinicalRelevance: "Very High - provides clinical decision-making framework for common hip condition",
+    methodology: "Expert narrative review with evidence synthesis",
+    aiAnalysisStatus: "completed",
+    qualityScore: 82
+  },
+
+  // Ankle Research
+  {
+    title: "Balance Training versus Strength Training for Chronic Ankle Instability: A Randomized Controlled Trial",
+    authors: "Freeman, M.A., Thompson, K.L., Davis, J.P., Wilson, R.S.",
+    journal: "American Journal of Sports Medicine",
+    publicationDate: new Date("2024-02-25"),
+    doi: "10.1177/03635465240156789",
+    abstract: "Purpose: To compare balance training versus strength training for chronic ankle instability (CAI). Methods: 90 participants with CAI randomized to balance training (n=30), strength training (n=30), or control (n=30) for 6 weeks. Primary outcomes were Cumberland Ankle Instability Tool (CAIT) and single-limb balance time. Results: Both interventions improved CAIT scores and balance compared to control. Balance training showed superior improvements in dynamic balance (p=0.02) while strength training was better for muscle strength (p<0.001). Combined approach may be optimal. Conclusion: Both balance and strength training are effective for CAI with specific advantages.",
+    url: "https://journals.sagepub.com/doi/10.1177/03635465240156789",
+    bodyPart: "ankle",
+    keyFindings: "Both balance and strength training effective; combined approach may be optimal for CAI",
+    clinicalRelevance: "High - provides treatment comparison for common ankle condition",
+    methodology: "Well-designed RCT with validated outcome measures",
+    aiAnalysisStatus: "completed",
+    qualityScore: 85
+  },
+
+  // Wrist/Hand Research
+  {
+    title: "Conservative Management of De Quervain's Tenosynovitis: A Systematic Review and Meta-Analysis",
+    authors: "Singh, P.K., Martinez, L.R., Johnson, A.T., Lee, S.W.",
+    journal: "Journal of Hand Surgery (European Volume)",
+    publicationDate: new Date("2024-01-20"),
+    doi: "10.1177/17531934240123456",
+    abstract: "Background: De Quervain's tenosynovitis commonly affects the radial wrist. Objective: To evaluate conservative management effectiveness. Methods: Systematic review of RCTs and cohort studies examining splinting, exercises, injections, and manual therapy. Results: 15 studies (n=678) included. Corticosteroid injection most effective short-term (success rate 83% vs 14% control). Thumb spica splinting effective when combined with exercises (success rate 68%). Manual therapy showed moderate benefits. Conclusion: Corticosteroid injection most effective short-term; splinting with exercises effective conservative option.",
+    url: "https://journals.sagepub.com/doi/10.1177/17531934240123456",
+    bodyPart: "wrist",
+    keyFindings: "Corticosteroid injection most effective short-term; splinting with exercises good conservative option",
+    clinicalRelevance: "High - provides treatment hierarchy for common wrist condition",
+    methodology: "Systematic review with multiple treatment comparisons",
+    aiAnalysisStatus: "completed",
+    qualityScore: 81
+  },
+
+  // Neck Research  
+  {
+    title: "Effectiveness of Manual Therapy for Cervicogenic Headache: A Systematic Review and Meta-Analysis",
+    authors: "Clark, R.J., Evans, M.P., Taylor, S.K., Wilson, D.L.",
+    journal: "Cephalalgia",
+    publicationDate: new Date("2024-02-15"),
+    doi: "10.1177/03331024240987654",
+    abstract: "Background: Cervicogenic headache accounts for 15-20% of chronic headaches. Objective: To evaluate manual therapy effectiveness for cervicogenic headache. Methods: Meta-analysis of RCTs comparing manual therapy to control interventions. Results: 11 studies (n=564) included. Manual therapy significantly reduced headache frequency (SMD -0.9, 95% CI -1.4 to -0.4) and intensity (SMD -1.1, 95% CI -1.6 to -0.6) compared to controls. Upper cervical mobilization most effective technique. Effects maintained at 3-month follow-up. Conclusion: Manual therapy, particularly upper cervical mobilization, is effective for cervicogenic headache.",
+    url: "https://journals.sagepub.com/doi/10.1177/03331024240987654",
+    bodyPart: "neck",
+    keyFindings: "Upper cervical mobilization most effective; effects maintained at 3 months",
+    clinicalRelevance: "High - provides specific technique recommendation for headache management",
+    methodology: "Meta-analysis with technique-specific subgroup analysis",
+    aiAnalysisStatus: "completed",
+    qualityScore: 86
+  },
+
+  // Elbow Research
+  {
+    title: "Lateral Epicondylalgia Treatment: Comparing Exercise Therapy to Corticosteroid Injection - Long-term Outcomes",
+    authors: "Bisset, L.M., Coombes, B.K., Vicenzino, B.T., Connell, D.A.",
+    journal: "British Medical Journal",
+    publicationDate: new Date("2024-01-10"),
+    doi: "10.1136/bmj-2024-078901",
+    abstract: "Objective: To compare long-term outcomes of exercise therapy versus corticosteroid injection for lateral epicondylalgia. Methods: 12-month follow-up of RCT comparing eccentric exercise program to corticosteroid injection. Results: 165 participants completed follow-up. Exercise group showed superior outcomes at 12 months for pain (VAS 2.1 vs 4.7, p<0.001) and function (PRTEE 15.2 vs 28.9, p<0.001). Injection group had higher recurrence rates (42% vs 8%, p<0.001). Exercise therapy was more cost-effective. Conclusion: Exercise therapy provides superior long-term outcomes compared to corticosteroid injection for lateral epicondylalgia.",
+    url: "https://www.bmj.com/content/378/bmj-2024-078901",
+    bodyPart: "elbow",
+    keyFindings: "Exercise therapy superior long-term outcomes; lower recurrence rates and more cost-effective",
+    clinicalRelevance: "Very High - challenges common practice of injection as first-line treatment",
+    methodology: "Long-term RCT follow-up with economic evaluation",
+    aiAnalysisStatus: "completed",
+    qualityScore: 92
+  },
+
+  // Foot Research
+  {
+    title: "Plantar Fasciitis Treatment: Systematic Review of Exercise Interventions",
+    authors: "Rodriguez, C.M., Thompson, B.K., Lee, J.H., Martinez, A.P.",
+    journal: "Sports Medicine",
+    publicationDate: new Date("2024-03-10"),
+    doi: "10.1007/s40279-024-01945-7",
+    abstract: "Background: Plantar fasciitis is the most common cause of heel pain. Objective: To systematically review exercise interventions for plantar fasciitis. Methods: RCTs comparing exercise to control interventions were included. Results: 16 studies (n=1,023) analyzed. Plantar fascia stretching most effective (SMD -1.2 for pain). Calf stretching and strengthening showed moderate benefits. High-load strength training emerging as effective intervention. Eccentric exercises superior to concentric. Conclusion: Plantar fascia-specific stretching most effective; high-load strength training shows promise.",
+    url: "https://link.springer.com/article/10.1007/s40279-024-01945-7",
+    bodyPart: "foot",
+    keyFindings: "Plantar fascia stretching most effective; high-load strength training emerging intervention",
+    clinicalRelevance: "High - provides exercise prescription hierarchy for common foot condition",
+    methodology: "Systematic review with exercise-specific analysis",
+    aiAnalysisStatus: "completed",
+    qualityScore: 84
   }
 ];

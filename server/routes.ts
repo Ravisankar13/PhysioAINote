@@ -3649,6 +3649,10 @@ Base your analysis on established postural assessment principles and correlate f
           const { addAdditionalCaseStudies } = await import('./additionalCaseStudies');
           await addAdditionalCaseStudies(storage);
 
+          // Add additional knee case studies
+          const { addAdditionalKneeCases } = await import('./additionalKneeCases');
+          await addAdditionalKneeCases(storage);
+
           // Try to fetch again after adding samples
           const updatedResult = await storage.getAICaseStudies(
             bodyPart as string,
@@ -4826,7 +4830,23 @@ Base your analysis on established postural assessment principles and correlate f
       // Get random case studies filtered by the competition's body part and difficulty
       const bodyPartFilter = competition.bodyPart === 'general' ? undefined : competition.bodyPart;
       const difficultyFilter = competition.difficulty;
-      const caseStudyIds = await competitionStorage.getRandomCaseStudies(bodyPartFilter, difficultyFilter, 5);
+      
+      // First try with both body part and difficulty filters
+      let caseStudyIds = await competitionStorage.getRandomCaseStudies(bodyPartFilter, difficultyFilter, 5);
+      
+      // If not enough cases with difficulty filter, try just body part
+      if (caseStudyIds.length < 5 && bodyPartFilter) {
+        console.log(`[COMPETITION] Only ${caseStudyIds.length} cases found for ${bodyPartFilter}/${difficultyFilter}, trying just body part filter`);
+        caseStudyIds = await competitionStorage.getRandomCaseStudies(bodyPartFilter, undefined, 5);
+      }
+      
+      // If still not enough cases, fall back to general cases of the specified difficulty
+      if (caseStudyIds.length < 5) {
+        console.log(`[COMPETITION] Only ${caseStudyIds.length} cases found for ${bodyPartFilter}, falling back to general cases`);
+        const fallbackIds = await competitionStorage.getRandomCaseStudies(undefined, difficultyFilter, 5 - caseStudyIds.length);
+        caseStudyIds = [...caseStudyIds, ...fallbackIds];
+      }
+      
       const caseStudies = [];
       
       for (const id of caseStudyIds) {

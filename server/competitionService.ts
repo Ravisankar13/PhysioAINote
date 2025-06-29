@@ -494,6 +494,10 @@ Keep total response under 150 words. Be encouraging but honest about areas needi
 
   // Leaderboard Updates
   async updateLeaderboards(userId: number, competitionResult: CompetitionResult): Promise<void> {
+    // Get user information for leaderboard
+    const user = await storage.getUser(userId);
+    if (!user) return;
+    
     const categories = ['overall', 'speed', 'accuracy'];
     const timeframes = ['daily', 'weekly', 'monthly', 'all_time'];
     
@@ -503,6 +507,7 @@ Keep total response under 150 words. Be encouraging but honest about areas needi
         
         await competitionStorage.updateLeaderboard({
           userId,
+          username: user.username,
           category,
           bodyPart: null,
           timeframe,

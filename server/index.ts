@@ -1,6 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { createAdditionalComplexCases2024 } from "./additionalComplexCases2024";
 
 const app = express();
 app.use(express.json({ limit: '50mb' }));
@@ -66,8 +67,18 @@ app.use((req, res, next) => {
       host: "0.0.0.0",
       reusePort: true,
     },
-    () => {
+    async () => {
       log(`serving on port ${port}`);
+      
+      // Auto-seed complex cases in background
+      try {
+        // Use system user ID 1 for seeding
+        await createAdditionalComplexCases2024(1);
+        log('✓ Complex case studies automatically seeded');
+      } catch (error) {
+        // Silently handle - don't crash server if seeding fails
+        log('Complex case seeding skipped (already exists or error)');
+      }
     }
   );
 })();

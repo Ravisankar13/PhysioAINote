@@ -22,11 +22,25 @@ import { apiRequest } from "@/lib/queryClient";
 import { Link } from "wouter";
 
 export default function CompetitionParticipationPage() {
+  // Get ID from URL path directly as fallback
   const { id } = useParams();
-  const competitionId = parseInt(id as string);
+  let competitionId = parseInt(id as string);
+  
+  // Fallback: extract ID from window location if useParams fails
+  if (!competitionId || isNaN(competitionId)) {
+    const pathParts = window.location.pathname.split('/');
+    const idFromPath = pathParts[pathParts.length - 1];
+    competitionId = parseInt(idFromPath);
+  }
+  
   const [activeCase, setActiveCase] = useState<number | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  console.log('Raw ID from URL:', id);
+  console.log('Path parts:', window.location.pathname.split('/'));
+  console.log('Final competition ID:', competitionId);
+  console.log('Is valid ID?', !!competitionId && !isNaN(competitionId));
 
   // Fetch competition details
   const { data: competition, isLoading: loadingCompetition, error: competitionError } = useQuery({
@@ -47,8 +61,15 @@ export default function CompetitionParticipationPage() {
   });
 
   // Debug logging
+  console.log('Competition ID:', competitionId);
+  console.log('Query keys:', {
+    competition: `/api/competitions/${competitionId}`,
+    participation: `/api/competitions/${competitionId}/participation`,
+    cases: `/api/competitions/${competitionId}/cases`
+  });
   console.log('Competition data:', { competition, participation, caseStudies });
   console.log('Errors:', { competitionError, participationError, casesError });
+  console.log('Loading states:', { loadingCompetition, loadingParticipation, loadingCases });
 
   // Start case study mutation
   const startCase = useMutation({

@@ -252,7 +252,7 @@ export default function CompetitionParticipationPage() {
     );
   }
 
-  const completedCases = participationData?.caseAttempts?.length || 0;
+  const completedCases = Array.isArray(participationData?.caseAttempts) ? participationData.caseAttempts.length : 0;
   const totalCases = caseStudiesData?.length || 0;
   const progressPercentage = totalCases > 0 ? (completedCases / totalCases) * 100 : 0;
 
@@ -341,7 +341,8 @@ export default function CompetitionParticipationPage() {
         ) : (
           <div className="grid gap-4">
             {caseStudiesData.map((caseStudy: any, index: number) => {
-              const isCompleted = participationData?.caseAttempts?.some((attempt: any) => attempt.caseStudyId === caseStudy.id);
+              const isCompleted = Array.isArray(participationData?.caseAttempts) && 
+                participationData.caseAttempts.some((attempt: any) => attempt.caseStudyId === caseStudy.id);
               const isActive = activeCase === caseStudy.id;
               
               return (

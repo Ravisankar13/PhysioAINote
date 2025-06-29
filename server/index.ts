@@ -70,15 +70,15 @@ app.use((req, res, next) => {
     async () => {
       log(`serving on port ${port}`);
       
-      // Auto-seed complex cases in background
-      try {
-        // Use system user ID 1 for seeding
-        await createAdditionalComplexCases2024(1);
-        log('✓ Complex case studies automatically seeded');
-      } catch (error) {
-        // Silently handle - don't crash server if seeding fails
-        log('Complex case seeding skipped (already exists or error)');
-      }
+      // Auto-seed complex cases in background - temporarily disabled
+      // try {
+      //   // Use system user ID 1 for seeding
+      //   await createAdditionalComplexCases2024(1);
+      //   log('✓ Complex case studies automatically seeded');
+      // } catch (error) {
+      //   // Silently handle - don't crash server if seeding fails
+      //   log('Complex case seeding skipped (already exists or error)');
+      // }
     }
   );
 })();

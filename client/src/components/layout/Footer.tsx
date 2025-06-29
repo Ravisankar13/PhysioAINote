@@ -1,5 +1,5 @@
 import { Facebook, Instagram, Twitter } from "@/components/ui/icon";
-import { Link } from "react-router-dom";
+import { Link } from "wouter";
 
 const Footer = () => {
   const navItems = [
@@ -26,7 +26,7 @@ const Footer = () => {
         >
           {navItems.map((item) => (
             <div key={item.label} className="px-5 py-2">
-              <Link to={item.href}>
+              <Link href={item.href}>
                 <span className="text-base text-neutral-500 hover:text-neutral-900 cursor-pointer">
                   {item.label}
                 </span>

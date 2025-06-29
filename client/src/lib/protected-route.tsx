@@ -1,6 +1,6 @@
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
-import { Navigate } from "react-router-dom";
+import { Redirect } from "wouter";
 
 export function ProtectedRoute({
   component: Component,
@@ -19,7 +19,7 @@ export function ProtectedRoute({
   }
 
   if (!user) {
-    return <Navigate to="/auth" replace />;
+    return <Redirect to="/auth" />;
   }
 
   return <Component />;

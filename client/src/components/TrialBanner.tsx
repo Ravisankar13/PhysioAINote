@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -21,8 +21,7 @@ export default function TrialBanner() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
-  const location = useLocation();
+  const [location, setLocation] = useLocation();
 
   // Fetch trial status
   const { data: trialStatus, isLoading } = useQuery<TrialStatus>({
@@ -32,11 +31,11 @@ export default function TrialBanner() {
 
   // Auto-start trial after registration if user came from trial redirect
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
+    const params = new URLSearchParams(window.location.search);
     if (user && params.get('autoStartTrial') === 'true' && trialStatus && !trialStatus.hasUsedTrial) {
       startTrialMutation.mutate();
       // Clean up URL
-      navigate(location.pathname, { replace: true });
+      window.history.replaceState({}, '', location);
     }
   }, [user, trialStatus, location]);
 
@@ -67,7 +66,7 @@ export default function TrialBanner() {
   const handleStartTrial = () => {
     if (!user) {
       // Redirect to auth page with trial intent
-      navigate('/auth?autoStartTrial=true&returnTo=' + encodeURIComponent(location.pathname));
+      setLocation('/auth?autoStartTrial=true&returnTo=' + encodeURIComponent(location));
       return;
     }
     startTrialMutation.mutate();

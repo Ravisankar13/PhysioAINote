@@ -40,10 +40,19 @@ export default function ActiveCompetitions() {
     onSuccess: (data, competitionId) => {
       queryClient.invalidateQueries({ queryKey: ['/api/competitions/active'] });
       queryClient.invalidateQueries({ queryKey: ['/api/competitions/upcoming'] });
-      toast({
-        title: "Joined Competition!",
-        description: "Taking you to the competition dashboard...",
-      });
+      
+      if (data.alreadyJoined) {
+        toast({
+          title: "Already Participating",
+          description: "Taking you to the competition dashboard...",
+        });
+      } else {
+        toast({
+          title: "Joined Competition!",
+          description: "Taking you to the competition dashboard...",
+        });
+      }
+      
       // Navigate to competition participation page
       setTimeout(() => {
         setLocation(`/competitions/${competitionId}`);

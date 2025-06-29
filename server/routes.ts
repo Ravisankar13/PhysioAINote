@@ -4749,7 +4749,12 @@ Base your analysis on established postural assessment principles and correlate f
       // Check if already joined
       const existing = await competitionStorage.getParticipantByUserAndCompetition(userId, competitionId);
       if (existing) {
-        return res.status(400).json({ error: "Already joined this competition" });
+        // Return existing participation instead of error
+        return res.json({ 
+          ...existing, 
+          alreadyJoined: true,
+          message: "Already participating in this competition"
+        });
       }
       
       const participant = await competitionStorage.joinCompetition({
@@ -4760,7 +4765,11 @@ Base your analysis on established postural assessment principles and correlate f
         timeSpent: 0
       });
       
-      res.json(participant);
+      res.json({ 
+        ...participant, 
+        alreadyJoined: false,
+        message: "Successfully joined competition"
+      });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }

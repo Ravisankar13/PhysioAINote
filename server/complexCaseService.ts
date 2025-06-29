@@ -14,7 +14,7 @@ import {
   StageQuestion,
   ComplexCaseAttempt
 } from '@shared/schema';
-import { eq, and, desc, asc } from 'drizzle-orm';
+import { eq, and, desc, asc, inArray } from 'drizzle-orm';
 import { generateComplexCase, scoreComplexCaseAttempt, ComplexCaseInput } from './complexCaseGenerator';
 
 export class ComplexCaseService {
@@ -30,7 +30,7 @@ export class ComplexCaseService {
       
       // Insert the complex case
       const [insertedCase] = await db.insert(complexCases)
-        .values(generationResult.complexCase)
+        .values([generationResult.complexCase])
         .returning();
       
       // Insert stages

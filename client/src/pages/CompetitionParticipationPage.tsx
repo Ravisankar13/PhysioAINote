@@ -30,19 +30,19 @@ export default function CompetitionParticipationPage() {
 
   // Fetch competition details
   const { data: competition, isLoading: loadingCompetition } = useQuery({
-    queryKey: ['/api/competitions', competitionId],
+    queryKey: [`/api/competitions/${competitionId}`],
     enabled: !!competitionId
   });
 
   // Fetch user's participation status
   const { data: participation, isLoading: loadingParticipation } = useQuery({
-    queryKey: ['/api/competitions', competitionId, 'participation'],
+    queryKey: [`/api/competitions/${competitionId}/participation`],
     enabled: !!competitionId
   });
 
   // Fetch case studies for this competition
   const { data: caseStudies, isLoading: loadingCases } = useQuery({
-    queryKey: ['/api/competitions', competitionId, 'cases'],
+    queryKey: [`/api/competitions/${competitionId}/cases`],
     enabled: !!competitionId
   });
 
@@ -78,6 +78,11 @@ export default function CompetitionParticipationPage() {
     );
   }
 
+  // Type guards for data
+  const competitionData = competition as any;
+  const participationData = participation as any;
+  const caseStudiesData = (caseStudies as any) || [];
+
   if (!competition || !participation) {
     return (
       <div className="container mx-auto p-6">
@@ -100,8 +105,8 @@ export default function CompetitionParticipationPage() {
     );
   }
 
-  const completedCases = participation.caseAttempts?.length || 0;
-  const totalCases = caseStudies?.length || 0;
+  const completedCases = participationData?.caseAttempts?.length || 0;
+  const totalCases = caseStudiesData?.length || 0;
   const progressPercentage = totalCases > 0 ? (completedCases / totalCases) * 100 : 0;
 
   return (
@@ -114,8 +119,8 @@ export default function CompetitionParticipationPage() {
             Back to Competitions
           </Button>
         </Link>
-        <Badge variant={competition.status === 'active' ? 'default' : 'secondary'}>
-          {competition.status}
+        <Badge variant={competitionData?.status === 'active' ? 'default' : 'secondary'}>
+          {competitionData?.status}
         </Badge>
       </div>
 
@@ -126,18 +131,18 @@ export default function CompetitionParticipationPage() {
             <div>
               <CardTitle className="flex items-center gap-3">
                 <Trophy className="h-6 w-6 text-yellow-600" />
-                {competition.title}
+                {competitionData?.title}
               </CardTitle>
-              <CardDescription>{competition.description}</CardDescription>
+              <CardDescription>{competitionData?.description}</CardDescription>
             </div>
             <div className="text-right space-y-1">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Users className="h-4 w-4" />
-                {competition.maxParticipants} participants
+                {competitionData?.maxParticipants} participants
               </div>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Clock className="h-4 w-4" />
-                {competition.timeLimitMinutes} min limit
+                {competitionData?.timeLimitMinutes} min limit
               </div>
             </div>
           </div>

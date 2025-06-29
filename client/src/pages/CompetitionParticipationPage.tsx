@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { 
   Trophy, 
@@ -34,6 +35,11 @@ export default function CompetitionParticipationPage() {
   }
   
   const [activeCase, setActiveCase] = useState<number | null>(null);
+  const [expandedDiagnosis, setExpandedDiagnosis] = useState<number | null>(null);
+  const [diagnoses, setDiagnoses] = useState<Record<number, {
+    diagnosis: string;
+    treatment: string;
+  }>>({});
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -87,6 +93,52 @@ export default function CompetitionParticipationPage() {
     onError: (error: any) => {
       toast({
         title: "Failed to Start",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Handle diagnosis input changes
+  const updateDiagnosis = (caseId: number, field: 'diagnosis' | 'treatment', value: string) => {
+    setDiagnoses(prev => ({
+      ...prev,
+      [caseId]: {
+        ...prev[caseId],
+        [field]: value
+      }
+    }));
+  };
+
+  // Submit all diagnoses
+  const submitAllDiagnoses = useMutation({
+    mutationFn: async () => {
+      const submissions = Object.entries(diagnoses).map(([caseId, data]) => ({
+        caseStudyId: parseInt(caseId),
+        userDiagnosis: data.diagnosis,
+        userReasoning: data.treatment, // Using treatment as reasoning for simplicity
+        assessmentTests: [],
+        proposedTreatment: data.treatment,
+        timeSpent: 300 // Default 5 minutes per case
+      }));
+
+      const response = await apiRequest('POST', `/api/competitions/${competitionId}/submit-all`, {
+        attempts: submissions
+      });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Diagnoses Submitted!",
+        description: "AI is analyzing your responses...",
+      });
+      
+      // Refresh the participation data
+      queryClient.invalidateQueries({ queryKey: [`/api/competitions/${competitionId}/participation`] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Submission Failed",
         description: error.message,
         variant: "destructive",
       });
@@ -298,14 +350,46 @@ export default function CompetitionParticipationPage() {
                             size="sm" 
                             onClick={() => {
                               console.log('Begin Diagnosis clicked for case:', caseStudy.id);
-                              // Navigate to diagnosis page
-                              window.location.href = `/competitions/${competitionId}/cases/${caseStudy.id}/diagnosis`;
+                              setExpandedDiagnosis(expandedDiagnosis === caseStudy.id ? null : caseStudy.id);
                             }}
                           >
                             <Target className="h-4 w-4 mr-2" />
-                            Begin Diagnosis
+                            {expandedDiagnosis === caseStudy.id ? "Hide Diagnosis" : "Begin Diagnosis"}
                           </Button>
                         </div>
+                        
+                        {/* Expandable diagnosis form */}
+                        {expandedDiagnosis === caseStudy.id && (
+                          <div className="mt-4 p-4 bg-white rounded-lg border border-blue-200">
+                            <div className="space-y-4">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                  Clinical Diagnosis
+                                </label>
+                                <Textarea
+                                  placeholder="Enter your primary diagnosis..."
+                                  value={diagnoses[caseStudy.id]?.diagnosis || ''}
+                                  onChange={(e) => updateDiagnosis(caseStudy.id, 'diagnosis', e.target.value)}
+                                  rows={3}
+                                  className="w-full"
+                                />
+                              </div>
+                              
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                  Treatment Plan
+                                </label>
+                                <Textarea
+                                  placeholder="Enter your treatment approach..."
+                                  value={diagnoses[caseStudy.id]?.treatment || ''}
+                                  onChange={(e) => updateDiagnosis(caseStudy.id, 'treatment', e.target.value)}
+                                  rows={4}
+                                  className="w-full"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </CardContent>
@@ -315,6 +399,41 @@ export default function CompetitionParticipationPage() {
           </div>
         )}
       </div>
+
+      {/* Submit All Diagnoses Button */}
+      {Object.keys(diagnoses).length > 0 && (
+        <Card className="mt-6">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold">Ready to Submit?</h3>
+                <p className="text-sm text-muted-foreground">
+                  You have completed {Object.keys(diagnoses).length} diagnosis(es). 
+                  AI will analyze your responses and provide detailed scoring.
+                </p>
+              </div>
+              <Button
+                onClick={() => submitAllDiagnoses.mutate()}
+                disabled={submitAllDiagnoses.isPending}
+                size="lg"
+                className="bg-green-600 hover:bg-green-700"
+              >
+                {submitAllDiagnoses.isPending ? (
+                  <>
+                    <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2" />
+                    Analyzing...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    Submit All Diagnoses
+                  </>
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

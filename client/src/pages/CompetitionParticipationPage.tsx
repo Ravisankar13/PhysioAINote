@@ -78,6 +78,27 @@ export default function CompetitionParticipationPage() {
     );
   }
 
+  // Handle data safely
+  if (!competition || !participation) {
+    return (
+      <div className="container mx-auto p-6">
+        <Card>
+          <CardContent className="p-6">
+            <div className="text-center">
+              <h3 className="text-lg font-semibold mb-2">Competition Not Found</h3>
+              <p className="text-muted-foreground mb-4">
+                You may not have joined this competition yet.
+              </p>
+              <Link href="/competitions">
+                <Button>Back to Competitions</Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   // Type guards for data
   const competitionData = competition as any;
   const participationData = participation as any;
@@ -161,15 +182,15 @@ export default function CompetitionParticipationPage() {
             {/* Stats */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="text-center p-3 border rounded-lg">
-                <div className="text-2xl font-bold text-blue-600">{participation.totalScore || 0}</div>
+                <div className="text-2xl font-bold text-blue-600">{participationData?.totalScore || 0}</div>
                 <div className="text-sm text-muted-foreground">Current Score</div>
               </div>
               <div className="text-center p-3 border rounded-lg">
-                <div className="text-2xl font-bold text-green-600">{participation.rank || "—"}</div>
+                <div className="text-2xl font-bold text-green-600">{participationData?.rank || "—"}</div>
                 <div className="text-sm text-muted-foreground">Current Rank</div>
               </div>
               <div className="text-center p-3 border rounded-lg">
-                <div className="text-2xl font-bold text-purple-600">{Math.floor((participation.timeSpent || 0) / 60)}</div>
+                <div className="text-2xl font-bold text-purple-600">{Math.floor((participationData?.timeSpent || 0) / 60)}</div>
                 <div className="text-sm text-muted-foreground">Time (min)</div>
               </div>
             </div>
@@ -181,7 +202,7 @@ export default function CompetitionParticipationPage() {
       <div className="space-y-4">
         <h3 className="text-xl font-semibold">Competition Cases</h3>
         
-        {!caseStudies || caseStudies.length === 0 ? (
+        {!caseStudiesData || caseStudiesData.length === 0 ? (
           <Card>
             <CardContent className="text-center py-8">
               <Brain className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
@@ -193,8 +214,8 @@ export default function CompetitionParticipationPage() {
           </Card>
         ) : (
           <div className="grid gap-4">
-            {caseStudies.map((caseStudy: any, index: number) => {
-              const isCompleted = participation.caseAttempts?.some((attempt: any) => attempt.caseStudyId === caseStudy.id);
+            {caseStudiesData.map((caseStudy: any, index: number) => {
+              const isCompleted = participationData?.caseAttempts?.some((attempt: any) => attempt.caseStudyId === caseStudy.id);
               const isActive = activeCase === caseStudy.id;
               
               return (

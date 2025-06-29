@@ -20,7 +20,8 @@ import {
   Award,
   TrendingUp,
   Medal,
-  Crown
+  Crown,
+  GraduationCap
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
@@ -209,7 +210,8 @@ export default function CompetitionPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {/* Case 1: Shoulder Complete Clinician */}
                   <Card className="cursor-pointer hover:shadow-lg transition-shadow border-2 border-indigo-200 bg-indigo-50/30">
                     <CardContent className="p-4 space-y-3">
                       <div className="flex items-center gap-3">
@@ -217,7 +219,7 @@ export default function CompetitionPage() {
                           <Users className="h-5 w-5 text-indigo-600" />
                         </div>
                         <div>
-                          <h4 className="font-semibold text-indigo-700">Complete Clinician</h4>
+                          <h4 className="font-semibold text-indigo-700">Shoulder Complete Clinician</h4>
                           <p className="text-xs text-indigo-600">Full assessment to treatment</p>
                         </div>
                       </div>
@@ -232,12 +234,13 @@ export default function CompetitionPage() {
                           className="w-full border-indigo-300 text-indigo-700 hover:bg-indigo-100"
                           onClick={() => setLocation('/complex-case/1')}
                         >
-                          Start Case Study
+                          Start Competition
                         </Button>
                       </div>
                     </CardContent>
                   </Card>
 
+                  {/* Case 2: Knee Diagnostic Detective */}
                   <Card className="cursor-pointer hover:shadow-lg transition-shadow border-2 border-emerald-200 bg-emerald-50/30">
                     <CardContent className="p-4 space-y-3">
                       <div className="flex items-center gap-3">
@@ -245,7 +248,7 @@ export default function CompetitionPage() {
                           <Target className="h-5 w-5 text-emerald-600" />
                         </div>
                         <div>
-                          <h4 className="font-semibold text-emerald-700">Diagnostic Detective</h4>
+                          <h4 className="font-semibold text-emerald-700">Knee Diagnostic Detective</h4>
                           <p className="text-xs text-emerald-600">Complex differential diagnosis</p>
                         </div>
                       </div>
@@ -260,7 +263,239 @@ export default function CompetitionPage() {
                           className="w-full border-emerald-300 text-emerald-700 hover:bg-emerald-100"
                           onClick={() => setLocation('/complex-case/2')}
                         >
-                          Start Detective Case
+                          Start Competition
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Case 3: Back Treatment Strategist */}
+                  <Card className="cursor-pointer hover:shadow-lg transition-shadow border-2 border-purple-200 bg-purple-50/30">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-purple-100">
+                          <Brain className="h-5 w-5 text-purple-600" />
+                        </div>
+                        <div>
+                          <h4 className="font-semibold text-purple-700">Back Treatment Strategist</h4>
+                          <p className="text-xs text-purple-600">Advanced treatment planning</p>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-xs">
+                          <span>4 Stages</span>
+                          <span>50-65 min</span>
+                        </div>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          className="w-full border-purple-300 text-purple-700 hover:bg-purple-100"
+                          onClick={() => setLocation('/complex-case/3')}
+                        >
+                          Start Competition
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Case 4: Neck Clinical Educator */}
+                  <Card className="cursor-pointer hover:shadow-lg transition-shadow border-2 border-amber-200 bg-amber-50/30">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-amber-100">
+                          <GraduationCap className="h-5 w-5 text-amber-600" />
+                        </div>
+                        <div>
+                          <h4 className="font-semibold text-amber-700">Neck Clinical Educator</h4>
+                          <p className="text-xs text-amber-600">Teaching & mentoring focus</p>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-xs">
+                          <span>4 Stages</span>
+                          <span>40-55 min</span>
+                        </div>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          className="w-full border-amber-300 text-amber-700 hover:bg-amber-100"
+                          onClick={() => setLocation('/complex-case/4')}
+                        >
+                          Start Competition
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Case 5: Hip Complete Clinician */}
+                  <Card className="cursor-pointer hover:shadow-lg transition-shadow border-2 border-rose-200 bg-rose-50/30">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-rose-100">
+                          <Users className="h-5 w-5 text-rose-600" />
+                        </div>
+                        <div>
+                          <h4 className="font-semibold text-rose-700">Hip Complete Clinician</h4>
+                          <p className="text-xs text-rose-600">Comprehensive hip management</p>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-xs">
+                          <span>4 Stages</span>
+                          <span>45-60 min</span>
+                        </div>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          className="w-full border-rose-300 text-rose-700 hover:bg-rose-100"
+                          onClick={() => setLocation('/complex-case/5')}
+                        >
+                          Start Competition
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Case 6: Ankle Diagnostic Detective */}
+                  <Card className="cursor-pointer hover:shadow-lg transition-shadow border-2 border-teal-200 bg-teal-50/30">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-teal-100">
+                          <Target className="h-5 w-5 text-teal-600" />
+                        </div>
+                        <div>
+                          <h4 className="font-semibold text-teal-700">Ankle Diagnostic Detective</h4>
+                          <p className="text-xs text-teal-600">Complex ankle assessment</p>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-xs">
+                          <span>5 Stages</span>
+                          <span>35-50 min</span>
+                        </div>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          className="w-full border-teal-300 text-teal-700 hover:bg-teal-100"
+                          onClick={() => setLocation('/complex-case/6')}
+                        >
+                          Start Competition
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Case 7: Elbow Treatment Strategist */}
+                  <Card className="cursor-pointer hover:shadow-lg transition-shadow border-2 border-cyan-200 bg-cyan-50/30">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-cyan-100">
+                          <Brain className="h-5 w-5 text-cyan-600" />
+                        </div>
+                        <div>
+                          <h4 className="font-semibold text-cyan-700">Elbow Treatment Strategist</h4>
+                          <p className="text-xs text-cyan-600">Evidence-based treatment</p>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-xs">
+                          <span>4 Stages</span>
+                          <span>40-55 min</span>
+                        </div>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          className="w-full border-cyan-300 text-cyan-700 hover:bg-cyan-100"
+                          onClick={() => setLocation('/complex-case/7')}
+                        >
+                          Start Competition
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Case 8: Wrist Clinical Educator */}
+                  <Card className="cursor-pointer hover:shadow-lg transition-shadow border-2 border-orange-200 bg-orange-50/30">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-orange-100">
+                          <GraduationCap className="h-5 w-5 text-orange-600" />
+                        </div>
+                        <div>
+                          <h4 className="font-semibold text-orange-700">Wrist Clinical Educator</h4>
+                          <p className="text-xs text-orange-600">Hand therapy expertise</p>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-xs">
+                          <span>4 Stages</span>
+                          <span>35-50 min</span>
+                        </div>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          className="w-full border-orange-300 text-orange-700 hover:bg-orange-100"
+                          onClick={() => setLocation('/complex-case/8')}
+                        >
+                          Start Competition
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Case 9: General Complete Clinician */}
+                  <Card className="cursor-pointer hover:shadow-lg transition-shadow border-2 border-slate-200 bg-slate-50/30">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-slate-100">
+                          <Users className="h-5 w-5 text-slate-600" />
+                        </div>
+                        <div>
+                          <h4 className="font-semibold text-slate-700">General Complete Clinician</h4>
+                          <p className="text-xs text-slate-600">Multi-system approach</p>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-xs">
+                          <span>4 Stages</span>
+                          <span>50-65 min</span>
+                        </div>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          className="w-full border-slate-300 text-slate-700 hover:bg-slate-100"
+                          onClick={() => setLocation('/complex-case/9')}
+                        >
+                          Start Competition
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Case 10: Foot Diagnostic Detective */}
+                  <Card className="cursor-pointer hover:shadow-lg transition-shadow border-2 border-lime-200 bg-lime-50/30">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-lime-100">
+                          <Target className="h-5 w-5 text-lime-600" />
+                        </div>
+                        <div>
+                          <h4 className="font-semibold text-lime-700">Foot Diagnostic Detective</h4>
+                          <p className="text-xs text-lime-600">Complex podiatric assessment</p>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-xs">
+                          <span>5 Stages</span>
+                          <span>40-55 min</span>
+                        </div>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          className="w-full border-lime-300 text-lime-700 hover:bg-lime-100"
+                          onClick={() => setLocation('/complex-case/10')}
+                        >
+                          Start Competition
                         </Button>
                       </div>
                     </CardContent>

@@ -4817,8 +4817,16 @@ Base your analysis on established postural assessment principles and correlate f
     try {
       const competitionId = parseInt(req.params.id);
       
-      // Get random case studies for this competition
-      const caseStudyIds = await competitionStorage.getRandomCaseStudies(undefined, undefined, 5);
+      // Get the competition details to check body part filter
+      const competition = await competitionStorage.getCompetitionById(competitionId);
+      if (!competition) {
+        return res.status(404).json({ error: "Competition not found" });
+      }
+      
+      // Get random case studies filtered by the competition's body part and difficulty
+      const bodyPartFilter = competition.bodyPart === 'general' ? undefined : competition.bodyPart;
+      const difficultyFilter = competition.difficulty;
+      const caseStudyIds = await competitionStorage.getRandomCaseStudies(bodyPartFilter, difficultyFilter, 5);
       const caseStudies = [];
       
       for (const id of caseStudyIds) {

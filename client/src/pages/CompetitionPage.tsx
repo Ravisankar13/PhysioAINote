@@ -1,6 +1,8 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, queryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +32,30 @@ import CompetitionHistory from "@/components/competition/CompetitionHistory";
 export default function CompetitionPage() {
   const [activeTab, setActiveTab] = useState("overview");
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
+
+  // Mutation to create complex competitions
+  const createComplexCompetitionsMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/create-complex-competitions", {});
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Success!",
+        description: `Created ${data.casesCreated} complex cases and ${data.competitionsCreated} competitions`,
+      });
+      // Refresh competitions data
+      queryClient.invalidateQueries({ queryKey: ['/api/competitions'] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error creating competitions",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   // Fetch user stats and achievements
   const { data: achievements } = useQuery({
@@ -358,7 +384,33 @@ export default function CompetitionPage() {
 
           {/* Competitions Tab */}
           <TabsContent value="competitions">
-            <ActiveCompetitions />
+            <div className="space-y-6">
+              {/* Create Complex Competitions Button */}
+              <Card className="border-indigo-200 bg-indigo-50/30">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Brain className="h-5 w-5 text-indigo-600" />
+                    Multi-Stage Clinical Reasoning Competitions
+                  </CardTitle>
+                  <CardDescription>
+                    Create advanced competitions with complex case studies based on 2024 research
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button
+                    onClick={() => createComplexCompetitionsMutation.mutate()}
+                    disabled={createComplexCompetitionsMutation.isPending}
+                    className="bg-indigo-600 hover:bg-indigo-700"
+                  >
+                    {createComplexCompetitionsMutation.isPending 
+                      ? "Creating..." 
+                      : "Create 10 Advanced Complex Cases"}
+                  </Button>
+                </CardContent>
+              </Card>
+              
+              <ActiveCompetitions />
+            </div>
           </TabsContent>
 
           {/* Leaderboards Tab */}

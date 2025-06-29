@@ -5807,5 +5807,110 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
 
+  // Create 10 additional complex cases for competitions
+  app.post("/api/create-additional-complex-cases", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const { createAdditionalComplexCases2024 } = await import("./additionalComplexCases2024");
+      await createAdditionalComplexCases2024(req.user!.id);
+      res.json({ 
+        success: true, 
+        message: "Successfully created 10 additional multi-stage clinical reasoning cases",
+        casesCreated: 10 
+      });
+    } catch (error: any) {
+      console.error("Error creating additional complex cases:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Create complex competitions with multi-stage cases
+  app.post("/api/create-complex-competitions", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const userId = req.user!.id;
+      
+      // First create the complex cases
+      const { createAdditionalComplexCases2024 } = await import("./additionalComplexCases2024");
+      await createAdditionalComplexCases2024(userId);
+      
+      // Get the complex case service
+      const { complexCaseService } = await import("./complexCaseService");
+      const { competitionStorage } = await import("./competitionStorage");
+      
+      // Get recently created complex cases
+      const recentComplexCases = await complexCaseService.getUserComplexCaseAttempts(userId);
+      const complexCaseIds = recentComplexCases.slice(0, 10).map(attempt => attempt.complexCaseId);
+      
+      // Create several complex competitions
+      const competitions = [
+        {
+          title: "Advanced Clinical Reasoning Challenge 2024",
+          description: "Multi-stage competition featuring cutting-edge research cases with differential diagnosis, assessment planning, and treatment strategies",
+          competitionType: "complete_clinician",
+          bodyPart: "general",
+          difficulty: "advanced",
+          startTime: new Date(),
+          endTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+          maxParticipants: 100,
+          timeLimit: 45,
+          caseType: "complex",
+          complexCaseIds: complexCaseIds.slice(0, 3)
+        },
+        {
+          title: "Shoulder & Upper Extremity Reasoning Masters",
+          description: "Complex shoulder and elbow cases requiring advanced clinical reasoning and evidence-based treatment planning",
+          competitionType: "diagnostic_detective",
+          bodyPart: "shoulder",
+          difficulty: "advanced",
+          startTime: new Date(),
+          endTime: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000), // 5 days
+          maxParticipants: 50,
+          timeLimit: 30,
+          caseType: "complex",
+          complexCaseIds: complexCaseIds.slice(3, 6)
+        },
+        {
+          title: "Lower Extremity Treatment Strategist",
+          description: "Advanced hip, knee, and ankle cases focusing on treatment planning and progressive rehabilitation strategies",
+          competitionType: "treatment_strategist", 
+          bodyPart: "knee",
+          difficulty: "advanced",
+          startTime: new Date(),
+          endTime: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000), // 6 days
+          maxParticipants: 75,
+          timeLimit: 40,
+          caseType: "complex",
+          complexCaseIds: complexCaseIds.slice(6, 10)
+        }
+      ];
+      
+      const createdCompetitions = [];
+      for (const comp of competitions) {
+        const created = await competitionStorage.createCompetition(comp);
+        createdCompetitions.push(created);
+      }
+      
+      res.json({
+        success: true,
+        message: "Successfully created 10 complex cases and 3 complex competitions",
+        casesCreated: 10,
+        competitionsCreated: createdCompetitions.length,
+        competitions: createdCompetitions.map(c => ({
+          id: c.id,
+          title: c.title,
+          type: c.competitionType,
+          cases: c.complexCaseIds?.length || 0
+        }))
+      });
+      
+    } catch (error: any) {
+      console.error("Error creating complex competitions:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   return httpServer;
 }

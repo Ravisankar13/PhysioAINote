@@ -247,57 +247,126 @@ Create a realistic, challenging case that promotes deep clinical thinking and ev
 }
 
 function createFallbackComplexCase(input: ComplexCaseInput, userId: number): ComplexCaseGenerationResult {
-  // Create a basic fallback case if AI generation fails
+  // Body part specific case content
+  const shoulderCase = {
+    title: "Office Worker with Shoulder Pain",
+    patientDescription: "A 42-year-old office manager presents with progressive shoulder pain and difficulty with overhead activities.",
+    occupationalHistory: "Desk-based work for 15 years with frequent computer use.",
+    socialHistory: "Lives with spouse and two children, enjoys weekend activities.",
+    medicalHistory: "Previous wrist fracture (2018), mild hypertension controlled with medication.",
+    currentMedications: "Lisinopril 10mg daily, occasional ibuprofen for shoulder pain.",
+    mechanismOfInjury: "Insidious onset following increased computer work and poor posture.",
+    initialPresentation: {
+      chiefComplaint: "Right shoulder pain with overhead reaching",
+      painScale: 6,
+      functionalLimitations: ["overhead reaching", "sleeping on right side"],
+      patientGoals: ["return to pain-free activities", "improve sleep quality"]
+    },
+    detailedHistory: {
+      onsetDetails: "Gradual onset over 6 weeks",
+      progressionPattern: "Pain increased from 2/10 to current 6/10",
+      aggravatingFactors: ["overhead reaching", "prolonged computer work"],
+      easingFactors: ["rest", "heat application"],
+      previousTreatments: ["over-the-counter ibuprofen"],
+      redFlagScreening: ["no night pain", "no neurological symptoms"]
+    },
+    physicalFindings: {
+      observation: "Forward head posture, elevated right shoulder",
+      palpation: "Tenderness over subacromial space",
+      rangeOfMotion: "Active flexion 150°, abduction 140°",
+      strength: "4/5 shoulder abduction with pain",
+      neurological: "Normal sensation and reflexes",
+      specialTests: "Positive Hawkins-Kennedy test",
+      functional: "Unable to reach top shelf"
+    },
+    correctDifferentials: {
+      primary: "Subacromial impingement syndrome",
+      secondary: ["Rotator cuff tendinopathy", "Adhesive capsulitis"],
+      ruled_out: ["Rotator cuff tear", "Cervical radiculopathy"]
+    },
+    correctAssessments: ["DASH questionnaire", "ROM measurement", "Strength testing"],
+    correctTreatmentPlan: {
+      shortTerm: ["Reduce pain", "Improve ROM"],
+      longTerm: ["Restore function", "Prevent recurrence"],
+      patientEducation: ["Proper ergonomics", "Exercise program"],
+      expectedOutcome: "Good prognosis with treatment",
+      reassessmentPlan: "Re-evaluate in 2 weeks"
+    },
+    expertRationale: "Classic presentation requiring multimodal approach.",
+    researchEvidence: ["Exercise protocols (Lewis et al., 2015)"]
+  };
+
+  const backCase = {
+    title: "Construction Worker with Lower Back Pain",
+    patientDescription: "A 45-year-old construction worker presents with lower back pain after lifting.",
+    occupationalHistory: "Construction work for 20 years with heavy lifting.",
+    socialHistory: "Married with three children, enjoys fishing.",
+    medicalHistory: "Previous back strain (2019), mild obesity.",
+    currentMedications: "Naproxen 500mg twice daily for pain.",
+    mechanismOfInjury: "Lifting heavy concrete block with forward flexion.",
+    initialPresentation: {
+      chiefComplaint: "Lower back pain with leg radiation",
+      painScale: 7,
+      functionalLimitations: ["lifting", "bending"],
+      patientGoals: ["return to work", "eliminate pain"]
+    },
+    detailedHistory: {
+      onsetDetails: "Immediate onset while lifting",
+      progressionPattern: "Initial sharp pain, now constant ache",
+      aggravatingFactors: ["bending", "lifting", "sitting"],
+      easingFactors: ["lying down", "heat"],
+      previousTreatments: ["rest", "pain medication"],
+      redFlagScreening: ["no bowel/bladder dysfunction"]
+    },
+    physicalFindings: {
+      observation: "Antalgic gait, list to left",
+      palpation: "Muscle spasm in lumbar region",
+      rangeOfMotion: "Forward flexion 30° limited",
+      strength: "4/5 ankle dorsiflexion",
+      neurological: "Diminished L5 sensation",
+      specialTests: "Positive straight leg raise",
+      functional: "Unable to tie shoes"
+    },
+    correctDifferentials: {
+      primary: "Lumbar disc herniation with radiculopathy",
+      secondary: ["Muscle strain", "Facet dysfunction"],
+      ruled_out: ["Cauda equina", "Fracture"]
+    },
+    correctAssessments: ["Oswestry Index", "Neurological assessment"],
+    correctTreatmentPlan: {
+      shortTerm: ["Pain reduction", "Restore movement"],
+      longTerm: ["Return to work", "Strengthen core"],
+      patientEducation: ["Lifting mechanics", "Activity modification"],
+      expectedOutcome: "Good prognosis with care",
+      reassessmentPlan: "Re-evaluate in 1 week"
+    },
+    expertRationale: "Classic disc herniation requiring monitoring.",
+    researchEvidence: ["Conservative management (Lurie et al., 2014)"]
+  };
+
+  // Select appropriate case based on body part
+  const caseContent = input.bodyPart === 'back' ? backCase : shoulderCase;
+  
   const fallbackCase: InsertComplexCase = {
     userId,
-    title: `${input.complexity.charAt(0).toUpperCase() + input.complexity.slice(1)} ${input.bodyPart} Case Study`,
-    patientDescription: `A patient presenting with ${input.bodyPart} symptoms requiring comprehensive assessment and treatment planning.`,
-    occupationalHistory: "Standard occupational demands with moderate physical activity.",
-    socialHistory: "Independent living with good social support system.",
-    medicalHistory: `Medical history relevant to ${input.bodyPart} condition.`,
-    currentMedications: "No significant medications affecting treatment.",
-    mechanismOfInjury: `Mechanism of injury affecting the ${input.bodyPart}.`,
+    title: caseContent.title,
+    patientDescription: caseContent.patientDescription,
+    occupationalHistory: caseContent.occupationalHistory,
+    socialHistory: caseContent.socialHistory,
+    medicalHistory: caseContent.medicalHistory,
+    currentMedications: caseContent.currentMedications,
+    mechanismOfInjury: caseContent.mechanismOfInjury,
     bodyPart: input.bodyPart,
     complexity: input.complexity,
     estimatedTime: input.estimatedTime,
-    initialPresentation: {
-      chiefComplaint: `${input.bodyPart} pain and dysfunction`,
-      painScale: 6,
-      functionalLimitations: ["reduced range of motion", "pain with activity"],
-      patientGoals: ["return to normal activities", "reduce pain"]
-    },
-    detailedHistory: {
-      onsetDetails: "Gradual onset over several weeks",
-      progressionPattern: "Symptoms have been gradually worsening",
-      aggravatingFactors: ["activity", "prolonged positioning"],
-      easingFactors: ["rest", "heat/ice"],
-      previousTreatments: ["over-the-counter medication"],
-      redFlagScreening: ["no significant red flags identified"]
-    },
-    physicalFindings: {
-      observation: "Visible changes consistent with condition",
-      palpation: "Tenderness and tissue changes noted",
-      rangeOfMotion: "Limited range of motion in affected area",
-      strength: "Reduced strength in key muscle groups",
-      neurological: "Neurological examination within normal limits",
-      specialTests: "Positive special tests confirming diagnosis",
-      functional: "Functional limitations noted during assessment"
-    },
-    correctDifferentials: {
-      primary: `Primary ${input.bodyPart} condition`,
-      secondary: [`Secondary ${input.bodyPart} condition`, "Alternative diagnosis"],
-      ruled_out: ["More serious pathology ruled out through examination"]
-    },
-    correctAssessments: ["Range of motion assessment", "Strength testing", "Functional assessment"],
-    correctTreatmentPlan: {
-      shortTerm: ["Pain reduction", "Improve range of motion"],
-      longTerm: ["Return to full function", "Prevent recurrence"],
-      patientEducation: ["Condition explanation", "Home exercise program"],
-      expectedOutcome: "Good prognosis with appropriate treatment",
-      reassessmentPlan: "Reassess in 2-3 weeks to monitor progress"
-    },
-    expertRationale: "Standard clinical reasoning approach for this type of case.",
-    researchEvidence: ["Evidence-based treatment approaches for this condition"]
+    initialPresentation: caseContent.initialPresentation,
+    detailedHistory: caseContent.detailedHistory,
+    physicalFindings: caseContent.physicalFindings,
+    correctDifferentials: caseContent.correctDifferentials,
+    correctAssessments: caseContent.correctAssessments,
+    correctTreatmentPlan: caseContent.correctTreatmentPlan,
+    expertRationale: caseContent.expertRationale,
+    researchEvidence: caseContent.researchEvidence
   };
 
   // Create basic stages
@@ -306,32 +375,32 @@ function createFallbackComplexCase(input: ComplexCaseInput, userId: number): Com
       complexCaseId: 0,
       stageNumber: 1,
       title: "Initial Assessment",
-      description: "Gather initial clinical information and plan assessment",
-      providedInformation: { patientResponse: "Patient provides initial history" },
+      description: "Gather initial clinical information",
+      providedInformation: { patientResponse: "Patient history provided" },
       timeAllocation: Math.ceil(input.estimatedTime / 4)
     },
     {
       complexCaseId: 0,
       stageNumber: 2,
       title: "Physical Examination",
-      description: "Conduct physical examination and special tests",
-      providedInformation: { testResults: "Physical examination findings" },
+      description: "Conduct examination and tests",
+      providedInformation: { testResults: "Examination findings" },
       timeAllocation: Math.ceil(input.estimatedTime / 4)
     },
     {
       complexCaseId: 0,
       stageNumber: 3,
       title: "Diagnosis and Planning",
-      description: "Form diagnosis and create treatment plan",
-      providedInformation: { additionalHistory: "Additional clinical information" },
+      description: "Form diagnosis and plan",
+      providedInformation: { additionalHistory: "Additional information" },
       timeAllocation: Math.ceil(input.estimatedTime / 4)
     },
     {
       complexCaseId: 0,
       stageNumber: 4,
       title: "Treatment Implementation",
-      description: "Implement treatment and plan follow-up",
-      providedInformation: { observationFindings: "Treatment response observations" },
+      description: "Implement treatment plan",
+      providedInformation: { observationFindings: "Treatment observations" },
       timeAllocation: Math.ceil(input.estimatedTime / 4)
     }
   ];
@@ -341,22 +410,21 @@ function createFallbackComplexCase(input: ComplexCaseInput, userId: number): Com
     {
       stageId: 0,
       questionNumber: 1,
-      questionText: "What are the top 3 differential diagnoses for this presentation?",
+      questionText: "What are the top 3 differential diagnoses?",
       questionType: "list",
       options: [],
-      expectedAnswers: ["primary diagnosis", "secondary diagnosis", "alternative diagnosis"],
+      expectedAnswers: ["primary diagnosis", "secondary diagnosis"],
       scoringCriteria: {
         maxPoints: 15,
         partialCredit: true,
         keywordPoints: [
-          { keyword: "primary diagnosis", points: 7 },
-          { keyword: "secondary diagnosis", points: 4 },
-          { keyword: "alternative diagnosis", points: 4 }
+          { keyword: "primary", points: 7 },
+          { keyword: "secondary", points: 4 }
         ]
       },
-      correctAnswer: "Primary diagnosis, Secondary diagnosis, Alternative diagnosis",
-      rationale: "These are the most likely diagnoses based on the clinical presentation.",
-      learningPoints: ["Consider multiple diagnostic possibilities", "Use systematic approach to differential diagnosis"]
+      correctAnswer: "Primary and secondary diagnoses",
+      rationale: "Based on clinical presentation",
+      learningPoints: ["Consider multiple possibilities"]
     }
   ];
 

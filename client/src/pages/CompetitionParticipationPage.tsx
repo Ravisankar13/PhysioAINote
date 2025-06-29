@@ -200,7 +200,7 @@ export default function CompetitionParticipationPage() {
   const participationData = participation as any;
   const caseStudiesData = (caseStudies as any) || [];
 
-  if (!competition || !participation) {
+  if (!competition) {
     return (
       <div className="container mx-auto p-6">
         <Card>
@@ -208,7 +208,7 @@ export default function CompetitionParticipationPage() {
             <Trophy className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
             <h2 className="text-2xl font-bold mb-2">Competition Not Found</h2>
             <p className="text-muted-foreground mb-6">
-              This competition doesn't exist or you haven't joined it yet.
+              This competition doesn't exist.
             </p>
             <Link href="/competitions">
               <Button>
@@ -216,6 +216,34 @@ export default function CompetitionParticipationPage() {
                 Back to Competitions
               </Button>
             </Link>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // If user hasn't joined yet, show join prompt
+  if (participation && !participation.isParticipating) {
+    return (
+      <div className="container mx-auto p-6">
+        <Card>
+          <CardContent className="text-center py-12">
+            <Trophy className="h-16 w-16 text-blue-500 mx-auto mb-4" />
+            <h2 className="text-2xl font-bold mb-2">{competitionData?.title}</h2>
+            <p className="text-muted-foreground mb-6">
+              You need to join this competition to participate.
+            </p>
+            <div className="space-x-4">
+              <Link href="/competitions">
+                <Button variant="outline">
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Back to Competitions
+                </Button>
+              </Link>
+              <Button onClick={() => window.location.href = '/competitions'}>
+                Join Competition
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>

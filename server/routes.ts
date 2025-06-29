@@ -4917,6 +4917,67 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
 
+  // Submit all diagnoses for a competition
+  app.post("/api/competitions/:id/submit-all", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const competitionId = parseInt(req.params.id);
+      const userId = req.user!.id;
+      const { attempts } = req.body;
+      
+      // Verify user is participating in the competition
+      const participation = await competitionStorage.getParticipantByUserAndCompetition(userId, competitionId);
+      if (!participation) {
+        return res.status(403).json({ error: "Not participating in this competition" });
+      }
+      
+      // Get the competition
+      const competition = await competitionStorage.getCompetitionById(competitionId);
+      if (!competition) {
+        return res.status(404).json({ error: "Competition not found" });
+      }
+      
+      let totalScore = 0;
+      const caseResults = [];
+      
+      // Score each attempt
+      for (const attempt of attempts) {
+        const caseStudy = await competitionStorage.getCaseStudyWithCorrectAnswers(attempt.caseStudyId);
+        if (caseStudy) {
+          const result = await competitionService.scoreCompetitionAttempt(competition, caseStudy, attempt);
+          totalScore += result.scores.total;
+          caseResults.push({
+            caseStudyId: attempt.caseStudyId,
+            scores: result.scores,
+            feedback: result.feedback
+          });
+        }
+      }
+      
+      // Update participation with total score and case attempts
+      const updatedParticipation = await competitionStorage.updateParticipant(participation.id, {
+        totalScore: totalScore,
+        timeSpent: (participation.timeSpent || 0) + (attempts.length * 300), // Add time for all cases
+        caseAttempts: caseResults,
+        completedAt: new Date()
+      });
+      
+      // Update rankings
+      await competitionStorage.calculateAndUpdateRankings(competitionId);
+      
+      res.json({
+        success: true,
+        totalScore,
+        caseResults,
+        averageScore: totalScore / attempts.length,
+        updatedParticipation
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Submit diagnosis for a competition case
   app.post("/api/competitions/:id/submit-diagnosis", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);

@@ -366,12 +366,12 @@ export default function CompetitionParticipationPage() {
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
                                   Clinical Diagnosis
                                 </label>
-                                <Textarea
+                                <textarea
                                   placeholder="Enter your primary diagnosis..."
                                   value={diagnoses[caseStudy.id]?.diagnosis || ''}
-                                  onChange={(e) => updateDiagnosis(caseStudy.id, 'diagnosis', e.target.value)}
+                                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => updateDiagnosis(caseStudy.id, 'diagnosis', e.target.value)}
                                   rows={3}
-                                  className="w-full"
+                                  className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                 />
                               </div>
                               
@@ -379,12 +379,12 @@ export default function CompetitionParticipationPage() {
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
                                   Treatment Plan
                                 </label>
-                                <Textarea
+                                <textarea
                                   placeholder="Enter your treatment approach..."
                                   value={diagnoses[caseStudy.id]?.treatment || ''}
-                                  onChange={(e) => updateDiagnosis(caseStudy.id, 'treatment', e.target.value)}
+                                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => updateDiagnosis(caseStudy.id, 'treatment', e.target.value)}
                                   rows={4}
-                                  className="w-full"
+                                  className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                 />
                               </div>
                             </div>

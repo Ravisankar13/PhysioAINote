@@ -4719,6 +4719,16 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
 
+  // Get all competitions
+  app.get("/api/competitions", async (req, res) => {
+    try {
+      const competitions = await competitionStorage.getAllCompetitions();
+      res.json(competitions);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Get upcoming competitions
   app.get("/api/competitions/upcoming", async (req, res) => {
     try {

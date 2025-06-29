@@ -1663,6 +1663,7 @@ export const userAchievements = pgTable("user_achievements", {
 export const leaderboards = pgTable("leaderboards", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  username: text("username").notNull(),
   category: text("category").notNull(), // "overall", "speed", "accuracy", etc.
   bodyPart: bodyPartEnum("body_part"), // null for overall rankings
   timeframe: text("timeframe").notNull(), // "daily", "weekly", "monthly", "all_time"

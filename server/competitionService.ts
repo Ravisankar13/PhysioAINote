@@ -1,4 +1,5 @@
 import { competitionStorage } from './competitionStorage';
+import { storage } from './storage';
 import { generateDiagnosticFeedback } from './aiCaseStudyGenerator';
 import { 
   type Competition, 

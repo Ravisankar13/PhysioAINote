@@ -298,8 +298,8 @@ export default function CompetitionParticipationPage() {
                             size="sm" 
                             onClick={() => {
                               console.log('Begin Diagnosis clicked for case:', caseStudy.id);
-                              // Navigate to case studies page with this specific case
-                              window.location.href = `/case-studies?competitionId=${competitionId}&caseId=${caseStudy.id}`;
+                              // Navigate to diagnosis page
+                              window.location.href = `/competitions/${competitionId}/cases/${caseStudy.id}/diagnosis`;
                             }}
                           >
                             <Target className="h-4 w-4 mr-2" />

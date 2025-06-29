@@ -38,6 +38,7 @@ import PhysioGPT from "@/pages/PhysioGPT";
 import TrialWelcome from "@/pages/TrialWelcome";
 import CompetitionPage from "@/pages/CompetitionPage";
 import CompetitionParticipationPage from "@/pages/CompetitionParticipationPage";
+import CompetitionDiagnosisPage from "@/pages/CompetitionDiagnosisPage";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { ThemeProvider } from "next-themes";
@@ -108,6 +109,10 @@ function Router() {
           <Route
             path="/competitions/:id"
             element={<ProtectedRoute component={CompetitionParticipationPage} />}
+          />
+          <Route
+            path="/competitions/:competitionId/cases/:caseId/diagnosis"
+            element={<ProtectedRoute component={CompetitionDiagnosisPage} />}
           />
           <Route
             path="/physiogpt"

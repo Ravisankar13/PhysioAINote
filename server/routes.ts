@@ -4840,6 +4840,43 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
 
+  // Get individual case study details for competition
+  app.get("/api/competitions/:id/cases/:caseId", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const competitionId = parseInt(req.params.id);
+      const caseId = parseInt(req.params.caseId);
+      const userId = req.user!.id;
+      
+      // Verify user is participating in the competition
+      const participation = await competitionStorage.getParticipantByUserAndCompetition(userId, competitionId);
+      if (!participation) {
+        return res.status(403).json({ error: "Not participating in this competition" });
+      }
+      
+      // Get case study details
+      const caseStudy = await competitionStorage.getCaseStudyWithCorrectAnswers(caseId);
+      if (!caseStudy) {
+        return res.status(404).json({ error: "Case study not found" });
+      }
+      
+      res.json({
+        id: caseStudy.id,
+        title: caseStudy.title,
+        patientDescription: caseStudy.patientDescription,
+        history: caseStudy.history,
+        presentingSymptoms: caseStudy.presentingSymptoms,
+        vitalSigns: caseStudy.vitalSigns,
+        bodyPart: caseStudy.bodyPart,
+        complexity: caseStudy.complexity,
+        hiddenFindings: caseStudy.hiddenFindings
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Start a case study within a competition
   app.post("/api/competitions/:id/cases/:caseId/start", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
@@ -4874,6 +4911,63 @@ Base your analysis on established postural assessment principles and correlate f
           complexity: caseStudy.complexity,
           hiddenFindings: caseStudy.hiddenFindings
         }
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Submit diagnosis for a competition case
+  app.post("/api/competitions/:id/submit-diagnosis", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const competitionId = parseInt(req.params.id);
+      const userId = req.user!.id;
+      const { attempt } = req.body;
+      
+      // Verify user is participating in the competition
+      const participation = await competitionStorage.getParticipantByUserAndCompetition(userId, competitionId);
+      if (!participation) {
+        return res.status(403).json({ error: "Not participating in this competition" });
+      }
+      
+      // Get the case study to evaluate against
+      const caseStudy = await competitionStorage.getCaseStudyWithCorrectAnswers(attempt.caseStudyId);
+      if (!caseStudy) {
+        return res.status(404).json({ error: "Case study not found" });
+      }
+      
+      // Get the competition
+      const competition = await competitionStorage.getCompetitionById(competitionId);
+      if (!competition) {
+        return res.status(404).json({ error: "Competition not found" });
+      }
+      
+      // Score the attempt using the competition service
+      const result = await competitionService.scoreCompetitionAttempt(competition, caseStudy, attempt);
+      
+      // Update participation with the new score
+      const updatedParticipation = await competitionStorage.updateParticipant(participation.id, {
+        totalScore: (participation.totalScore || 0) + result.scores.total,
+        timeSpent: (participation.timeSpent || 0) + attempt.timeSpent,
+        caseAttempts: [...(participation.caseAttempts || []), {
+          caseStudyId: attempt.caseStudyId,
+          userDiagnosis: attempt.userDiagnosis,
+          scores: result.scores,
+          feedback: result.feedback,
+          timeSpent: attempt.timeSpent
+        }]
+      });
+      
+      // Update rankings
+      await competitionStorage.calculateAndUpdateRankings(competitionId);
+      
+      res.json({
+        success: true,
+        scores: result.scores,
+        feedback: result.feedback,
+        updatedParticipation
       });
     } catch (error: any) {
       res.status(500).json({ error: error.message });

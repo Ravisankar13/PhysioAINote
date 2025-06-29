@@ -5652,5 +5652,92 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
 
+  // Complex Case Routes
+  app.get("/api/complex-case/:id", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const { id } = req.params;
+      const complexCaseId = parseInt(id);
+      
+      // Get complex case with details
+      const caseDetails = await complexCaseService.getComplexCaseWithDetails(complexCaseId);
+      
+      if (!caseDetails) {
+        return res.status(404).json({ error: "Complex case not found" });
+      }
+      
+      res.json(caseDetails);
+    } catch (error: any) {
+      console.error("Error fetching complex case:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/complex-case/:id/start", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const { id } = req.params;
+      const complexCaseId = parseInt(id);
+      const userId = req.user!.id;
+      
+      const attempt = await complexCaseService.startComplexCaseAttempt(userId, complexCaseId);
+      res.json(attempt);
+    } catch (error: any) {
+      console.error("Error starting complex case attempt:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/complex-case-attempt/:attemptId/stage/:stageId/submit", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const { attemptId, stageId } = req.params;
+      const { responses, timeSpent } = req.body;
+      
+      const result = await complexCaseService.submitStageResponse(
+        parseInt(attemptId),
+        parseInt(stageId),
+        responses,
+        timeSpent
+      );
+      
+      res.json(result);
+    } catch (error: any) {
+      console.error("Error submitting stage response:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/complex-case-attempt/:attemptId/complete", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const { attemptId } = req.params;
+      
+      const completedAttempt = await complexCaseService.completeComplexCaseAttempt(parseInt(attemptId));
+      res.json(completedAttempt);
+    } catch (error: any) {
+      console.error("Error completing complex case attempt:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Initialize mock data endpoint
+  app.post("/api/admin/init-complex-cases", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const { createMockComplexCase } = await import("./scripts/createMockComplexCase");
+      const complexCase = await createMockComplexCase();
+      res.json({ success: true, complexCase });
+    } catch (error: any) {
+      console.error("Error creating mock complex case:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   return httpServer;
 }

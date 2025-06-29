@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +29,7 @@ import CompetitionHistory from "@/components/competition/CompetitionHistory";
 
 export default function CompetitionPage() {
   const [activeTab, setActiveTab] = useState("overview");
+  const [, setLocation] = useLocation();
 
   // Fetch user stats and achievements
   const { data: achievements } = useQuery({
@@ -190,6 +192,108 @@ export default function CompetitionPage() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Multi-Stage Clinical Reasoning */}
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Brain className="h-5 w-5 text-indigo-600" />
+                  Multi-Stage Clinical Reasoning
+                </CardTitle>
+                <CardDescription>
+                  Comprehensive case studies with progressive stages - from initial assessment to treatment planning
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Card className="cursor-pointer hover:shadow-lg transition-shadow border-2 border-indigo-200 bg-indigo-50/30">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-indigo-100">
+                          <Users className="h-5 w-5 text-indigo-600" />
+                        </div>
+                        <div>
+                          <h4 className="font-semibold text-indigo-700">Complete Clinician</h4>
+                          <p className="text-xs text-indigo-600">Full assessment to treatment</p>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-xs">
+                          <span>4 Stages</span>
+                          <span>45-60 min</span>
+                        </div>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          className="w-full border-indigo-300 text-indigo-700 hover:bg-indigo-100"
+                          onClick={() => setLocation('/complex-case/1')}
+                        >
+                          Start Case Study
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="cursor-pointer hover:shadow-lg transition-shadow border-2 border-emerald-200 bg-emerald-50/30">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-emerald-100">
+                          <Target className="h-5 w-5 text-emerald-600" />
+                        </div>
+                        <div>
+                          <h4 className="font-semibold text-emerald-700">Diagnostic Detective</h4>
+                          <p className="text-xs text-emerald-600">Complex differential diagnosis</p>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-xs">
+                          <span>5 Stages</span>
+                          <span>30-45 min</span>
+                        </div>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          className="w-full border-emerald-300 text-emerald-700 hover:bg-emerald-100"
+                          onClick={() => setLocation('/complex-case/2')}
+                        >
+                          Start Detective Case
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+                
+                <div className="mt-4 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-200">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="p-2 rounded-lg bg-blue-100">
+                      <Clock className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-blue-700">How Multi-Stage Cases Work</h4>
+                      <p className="text-sm text-blue-600">Progressive clinical reasoning through realistic scenarios</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                    <div className="text-center p-2 bg-white/50 rounded">
+                      <div className="font-medium text-blue-700">Stage 1</div>
+                      <div className="text-blue-600">History & Assessment</div>
+                    </div>
+                    <div className="text-center p-2 bg-white/50 rounded">
+                      <div className="font-medium text-green-700">Stage 2</div>
+                      <div className="text-green-600">Physical Examination</div>
+                    </div>
+                    <div className="text-center p-2 bg-white/50 rounded">
+                      <div className="font-medium text-purple-700">Stage 3</div>
+                      <div className="text-purple-600">Diagnosis & Planning</div>
+                    </div>
+                    <div className="text-center p-2 bg-white/50 rounded">
+                      <div className="font-medium text-orange-700">Stage 4</div>
+                      <div className="text-orange-600">Patient Education</div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
             {/* Quick Actions */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

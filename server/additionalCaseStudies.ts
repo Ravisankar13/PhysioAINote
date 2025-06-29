@@ -83,7 +83,7 @@ export const additionalCaseStudies: Omit<AICaseStudy, 'id' | 'createdAt'>[] = [
   // KNEE - Additional cases
   {
     userId: 1,
-    title: "Patellofemoral Pain Syndrome in a Runner",
+    title: "Recreational Runner with Bilateral Anterior Knee Pain",
     patientDescription: "A 28-year-old female recreational runner presents with bilateral anterior knee pain, worse on the left, that has developed over the past 6 weeks.",
     history: "Recently increased running mileage in preparation for a half marathon. Pain began after changing to new running shoes. Pain is worse when running downhill or descending stairs. Minimal pain at rest but significant after runs.",
     presentingSymptoms: "Diffuse anterior knee pain described as 'achy' around and behind kneecap (4/10 at rest, 7/10 with activity). Reports occasional giving way sensation when descending stairs.",
@@ -122,7 +122,7 @@ export const additionalCaseStudies: Omit<AICaseStudy, 'id' | 'createdAt'>[] = [
   },
   {
     userId: 1,
-    title: "Acute ACL Rupture in Soccer Player",
+    title: "Soccer Player with Severe Knee Injury",
     patientDescription: "A 19-year-old male soccer player presents with acute right knee injury sustained during a match 2 days ago.",
     history: "Injured while changing direction and being tackled simultaneously. Heard a 'pop' and immediate pain. Unable to continue playing. Significant swelling developed within hours. Currently using crutches for ambulation.",
     presentingSymptoms: "Severe pain (7/10) around the knee, particularly with any movement. Significant swelling limiting motion. Reports sensation of instability and fear of bearing weight.",
@@ -162,7 +162,7 @@ export const additionalCaseStudies: Omit<AICaseStudy, 'id' | 'createdAt'>[] = [
   // NECK - Additional cases
   {
     userId: 1,
-    title: "Whiplash Associated Disorder Following MVA",
+    title: "Woman with Neck Pain Following Motor Vehicle Accident",
     patientDescription: "A 34-year-old female presenting with neck, headache, and shoulder pain following a rear-end motor vehicle accident 10 days ago.",
     history: "Was stopped at traffic light when hit from behind at moderate speed. Immediate neck pain that worsened over subsequent 24-48 hours. Visited emergency department where X-rays showed no fractures. Pain has not improved since accident.",
     presentingSymptoms: "Constant neck pain (6/10) with intermittent shooting pain into shoulders bilaterally. Headaches at base of skull. Dizziness with quick head movements. Difficulty sleeping due to pain.",
@@ -201,7 +201,7 @@ export const additionalCaseStudies: Omit<AICaseStudy, 'id' | 'createdAt'>[] = [
   },
   {
     userId: 1,
-    title: "Cervicogenic Headache with Upper Cervical Dysfunction",
+    title: "Executive with Right-Sided Headaches and Neck Stiffness",
     patientDescription: "A 42-year-old female executive with a 6-month history of progressive unilateral headaches and neck stiffness.",
     history: "Works long hours at computer. Headaches initially infrequent but now occurring 4-5 days/week. Always start at the base of the skull on right side and progress forward. Minimal response to OTC pain medications. Reports increased stress at work.",
     presentingSymptoms: "Right-sided headache radiating from occiput to temple and behind eye (5-8/10). Associated neck stiffness and occasional dizziness with quick head turns. Symptoms worsen throughout workday.",
@@ -241,7 +241,7 @@ export const additionalCaseStudies: Omit<AICaseStudy, 'id' | 'createdAt'>[] = [
   // BACK - Additional cases
   {
     userId: 1,
-    title: "Lumbar Disc Herniation with Radiculopathy",
+    title: "Warehouse Worker with Severe Low Back and Leg Pain",
     patientDescription: "A 38-year-old male warehouse worker presents with acute low back pain radiating to the left leg after lifting a heavy box 5 days ago.",
     history: "Felt immediate 'pop' in lower back while lifting and twisting. Initially just back pain, but leg symptoms developed the following day. Symptoms worsen with sitting, bending, and coughing. Unable to work since injury.",
     presentingSymptoms: "Severe low back pain (7/10) with sharp, shooting pain radiating down left posterior thigh and lateral calf to the foot (8/10). Reports tingling in left lateral foot and difficulty finding comfortable positions.",
@@ -280,7 +280,7 @@ export const additionalCaseStudies: Omit<AICaseStudy, 'id' | 'createdAt'>[] = [
   },
   {
     userId: 1,
-    title: "Chronic Low Back Pain with Movement Control Impairment",
+    title: "Office Manager with Persistent Low Back Pain",
     patientDescription: "A 45-year-old female office worker with recurrent low back pain episodes over 3 years, current exacerbation began 2 weeks ago.",
     history: "Original injury occurred while gardening. Has had 5-6 episodes since then, each lasting 2-3 weeks. Current episode began without clear trigger. Previous treatments include massage, heat, and general exercises with temporary relief.",
     presentingSymptoms: "Dull, aching pain across lower back (5/10), worse on right side. Increases with prolonged sitting and bending activities. Morning stiffness lasting 30-45 minutes. No leg symptoms.",
@@ -320,7 +320,7 @@ export const additionalCaseStudies: Omit<AICaseStudy, 'id' | 'createdAt'>[] = [
   // ANKLE - Additional cases
   {
     userId: 1,
-    title: "Chronic Ankle Instability Following Repeated Sprains",
+    title: "Basketball Player with Recurring Ankle Problems",
     patientDescription: "A 22-year-old male basketball player with history of multiple right ankle sprains over the past 3 years, most recent occurring 2 months ago.",
     history: "Initial sprain occurred during high school basketball. Has had 5-6 subsequent sprains, each with incomplete rehabilitation. Reports ankle 'giving way' during cutting maneuvers and occasional instability even during daily activities.",
     presentingSymptoms: "Persistent lateral ankle discomfort (3/10) that worsens during sports. Feelings of instability and lack of confidence in the ankle. Occasional swelling after activities.",

@@ -359,7 +359,7 @@ export const additionalCaseStudies: Omit<AICaseStudy, 'id' | 'createdAt'>[] = [
   },
   {
     userId: 1,
-    title: "Achilles Tendinopathy in a Recreational Runner",
+    title: "Recreational Runner with Posterior Heel Pain",
     patientDescription: "A 40-year-old male recreational runner presents with progressive right heel and posterior ankle pain over the past 8 weeks.",
     history: "Increased running volume (20 to 35 miles/week) while preparing for a marathon. Initially experienced morning stiffness that resolved with activity. Now has pain during and after running. Has tried rest, ice, and OTC anti-inflammatories with minimal relief.",
     presentingSymptoms: "Pain and stiffness 2-4cm above calcaneal insertion (4/10 at rest, 7/10 during running). Morning stiffness lasting 30+ minutes. Pain decreases during warm-up but returns after prolonged activity.",
@@ -399,7 +399,7 @@ export const additionalCaseStudies: Omit<AICaseStudy, 'id' | 'createdAt'>[] = [
   // HIP - Additional cases
   {
     userId: 1,
-    title: "Femoroacetabular Impingement Syndrome in Young Adult",
+    title: "Young Adult with Deep Hip Pain and Stiffness",
     patientDescription: "A 26-year-old male recreational soccer player presents with right groin pain that has been gradually worsening over 8 months.",
     history: "Pain initially only present after soccer, now occurs during activity and occasionally with prolonged sitting. Describes 'catching' sensation with certain movements. Previously diagnosed with 'groin strain' but failed to improve with rest.",
     presentingSymptoms: "Deep anterior hip/groin pain (4/10 at rest, 7/10 with activity). Pain with prolonged sitting and when getting up after sitting. Occasional 'catching' sensation with rotation movements.",
@@ -438,7 +438,7 @@ export const additionalCaseStudies: Omit<AICaseStudy, 'id' | 'createdAt'>[] = [
   },
   {
     userId: 1,
-    title: "Gluteal Tendinopathy/Greater Trochanteric Pain Syndrome",
+    title: "Middle-Aged Woman with Lateral Hip Pain",
     patientDescription: "A 52-year-old female presents with right lateral hip pain that has been present for approximately 4 months.",
     history: "Pain developed insidiously without specific injury. Gradually worsening despite rest from her usual walking routine. Reports pain when lying on affected side and when climbing stairs. Previously tried massage and stretching without relief.",
     presentingSymptoms: "Sharp pain over lateral hip (6/10), worse with weight-bearing activities, particularly single-leg stance and stair climbing. Pain with lying on affected side at night, disrupting sleep.",
@@ -478,7 +478,7 @@ export const additionalCaseStudies: Omit<AICaseStudy, 'id' | 'createdAt'>[] = [
   // ELBOW - Additional cases
   {
     userId: 1,
-    title: "Lateral Epicondylalgia in Office Worker",
+    title: "Office Worker with Persistent Elbow Pain",
     patientDescription: "A 38-year-old female office worker presents with right lateral elbow pain that has been present for approximately 3 months.",
     history: "Works in data entry requiring repetitive mouse use. Pain began gradually and has progressively worsened. Recently renovated home which involved painting and gardening. Previous treatment included rest, over-the-counter NSAIDs, and a compression band with minimal relief.",
     presentingSymptoms: "Sharp pain over lateral epicondyle (5/10 at rest, 8/10 with activity). Pain with gripping activities and lifting even light objects. Morning stiffness lasting approximately 30 minutes.",
@@ -517,7 +517,7 @@ export const additionalCaseStudies: Omit<AICaseStudy, 'id' | 'createdAt'>[] = [
   },
   {
     userId: 1,
-    title: "Ulnar Collateral Ligament Sprain in Throwing Athlete",
+    title: "Baseball Pitcher with Medial Elbow Pain",
     patientDescription: "A 17-year-old male high school baseball pitcher presents with medial elbow pain that developed during a game 2 weeks ago.",
     history: "Felt a 'pop' followed by sharp pain while throwing a curveball. Has continued to feel pain with throwing attempts since injury. Recently increased pitching volume in preparation for playoffs. No previous elbow injuries.",
     presentingSymptoms: "Pain along medial elbow (3/10 at rest, 8/10 with throwing). Reports feeling of instability during the acceleration phase of throwing. Pain worse during the late cocking and acceleration phases.",
@@ -557,7 +557,7 @@ export const additionalCaseStudies: Omit<AICaseStudy, 'id' | 'createdAt'>[] = [
   // FOOT - Additional cases
   {
     userId: 1,
-    title: "Plantar Fasciitis in a Runner",
+    title: "Runner with Heel Pain on First Steps",
     patientDescription: "A 36-year-old female recreational runner presents with right heel pain that has been present for approximately 6 weeks.",
     history: "Recently increased running mileage and switched to minimalist running shoes. Pain worst with first steps in the morning and after periods of rest. Has been self-treating with ice and rolling foot on a ball with temporary relief.",
     presentingSymptoms: "Sharp pain at medial calcaneal tuberosity (3/10 at rest, 7/10 with first steps in morning). Pain improves with walking but returns after prolonged activity or long periods of rest.",
@@ -596,7 +596,7 @@ export const additionalCaseStudies: Omit<AICaseStudy, 'id' | 'createdAt'>[] = [
   },
   {
     userId: 1,
-    title: "Metatarsalgia with Morton's Neuroma",
+    title: "Office Worker with Burning Forefoot Pain",
     patientDescription: "A 45-year-old female presents with pain in the ball of the right foot that has been gradually worsening over the past 4 months.",
     history: "Works as a retail salesperson requiring prolonged standing. Recently started wearing new high-heeled shoes for work. Reports burning and shooting pain between 3rd and 4th toes. Removes shoes whenever possible for relief.",
     presentingSymptoms: "Sharp, burning pain in the right forefoot (4/10 at rest, 8/10 after prolonged standing). Describes sensation of 'walking on a pebble' and occasional electric shocks radiating to toes.",
@@ -636,7 +636,7 @@ export const additionalCaseStudies: Omit<AICaseStudy, 'id' | 'createdAt'>[] = [
   // WRIST - Additional cases
   {
     userId: 1,
-    title: "De Quervain's Tenosynovitis in New Mother",
+    title: "New Mother with Thumb and Wrist Pain",
     patientDescription: "A 32-year-old female presents with right wrist pain 2 months after giving birth to her first child.",
     history: "Pain began gradually and has progressively worsened. Reports increased pain with lifting and holding baby, particularly during feeding and changing. No prior history of wrist problems.",
     presentingSymptoms: "Sharp pain over radial aspect of wrist (6/10) with activities, particularly thumb and wrist movements. Occasional 'catching' sensation with thumb movements.",
@@ -675,7 +675,7 @@ export const additionalCaseStudies: Omit<AICaseStudy, 'id' | 'createdAt'>[] = [
   },
   {
     userId: 1,
-    title: "Scapholunate Ligament Injury in a Fall",
+    title: "Cyclist with Wrist Pain After Fall",
     patientDescription: "A 29-year-old male construction worker presents with right wrist pain following a fall onto an outstretched hand 3 weeks ago.",
     history: "Fell from approximately 4 feet landing on extended wrist. Initial swelling and pain, self-treated with rest and ice. Attempted to return to work after 1 week but pain persisted with loading activities. No previous wrist injuries.",
     presentingSymptoms: "Dorsal wrist pain centered over the scapholunate interval (3/10 at rest, 7/10 with loading). Reports clicking sensation and weakness with gripping activities.",

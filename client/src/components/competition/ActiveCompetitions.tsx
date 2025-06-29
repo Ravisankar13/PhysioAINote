@@ -16,12 +16,12 @@ import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { useNavigate } from "react-router-dom";
+import { useLocation } from "wouter";
 
 export default function ActiveCompetitions() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
+  const [, setLocation] = useLocation();
   
   const { data: activeCompetitions, isLoading: loadingActive } = useQuery({
     queryKey: ['/api/competitions/active']

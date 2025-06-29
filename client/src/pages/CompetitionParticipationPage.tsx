@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams } from "react-router-dom";
+import { useRoute } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,14 +20,14 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Link } from "react-router-dom";
+import { Link } from "wouter";
 
 export default function CompetitionParticipationPage() {
-  // Get ID from URL path directly as fallback
-  const { id } = useParams();
-  let competitionId = parseInt(id as string);
+  // Use wouter's useRoute to get the competition ID
+  const [match, params] = useRoute("/competition/:id");
+  let competitionId = params?.id ? parseInt(params.id) : null;
   
-  // Fallback: extract ID from window location if useParams fails
+  // Fallback: extract ID from window location if useRoute fails
   if (!competitionId || isNaN(competitionId)) {
     const pathParts = window.location.pathname.split('/');
     const idFromPath = pathParts[pathParts.length - 1];
@@ -43,7 +43,7 @@ export default function CompetitionParticipationPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  console.log('Raw ID from URL:', id);
+  console.log('Raw ID from URL params:', params?.id);
   console.log('Path parts:', window.location.pathname.split('/'));
   console.log('Final competition ID:', competitionId);
   console.log('Is valid ID?', !!competitionId && !isNaN(competitionId));

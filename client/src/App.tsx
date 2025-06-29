@@ -1,4 +1,4 @@
-import { Route, Routes, BrowserRouter } from "react-router-dom";
+import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -52,98 +52,79 @@ function Router() {
     <div className="flex flex-col min-h-screen">
       <main className="flex-grow">
         <Header />
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route
-            path="/clinical-notes"
-            element={<ProtectedRoute component={NotesClinical} />}
-          />
-          <Route path={"/notes-clinical"} element={<NotesClinical />} />
-          <Route path="/shared-notes" element={<SharedNotes />} />
-          <Route path="/research" element={<ResearchHub />} />
-          <Route path="/research/gaps" element={<ResearchGaps />} />
-          <Route 
-            path="/research/projects/create" 
-            element={<ProtectedRoute component={CreateResearchProject} />} 
-          />
-          <Route
-            path="/my-notes"
-            element={<ProtectedRoute component={MyNotes} />}
-          />
-          <Route
-            path="/notes/:id?"
-            element={<ProtectedRoute component={SessionsPage} />}
-          />
-          <Route path="/exercises" element={<ExercisePage />} />
-          <Route path="/manual-therapy" element={<ManualTherapyPage />} />
-          <Route path="/skeleton-3d-tool" element={<Skeleton3DTool />} />
-          <Route path="/motion-capture" element={<MotionCapturePage />} />
-          <Route path="/static-postural-analysis" element={<StaticPosturalAnalysisPage />} />
-          <Route path="/integrated-assessment" element={<IntegratedClinicalAssessment />} />
-          <Route path="/intelligent-assessment" element={<IntelligentAssessment />} />
-          <Route
-            path="/virtual-patients"
-            element={<ProtectedRoute component={VirtualPatientPage} />}
-          />
-          <Route
-            path="/virtual-patient"
-            element={<ProtectedRoute component={VirtualPatientPage} />}
-          />
-          <Route
-            path="/shared-cases/new"
-            element={<ProtectedRoute component={SharedCaseFormPage} />}
-          />
-          <Route
-            path="/shared-cases/:id/edit"
-            element={<ProtectedRoute component={SharedCaseFormPage} />}
-          />
-          <Route path="/shared-cases/:id" element={<SharedCaseDetailPage />} />
-          <Route path="/shared-cases" element={<SharedCasesPage />} />
-          <Route
-            path="/case-studies"
-            element={<ProtectedRoute component={CaseStudyPage} />}
-          />
-          <Route
-            path="/competitions"
-            element={<ProtectedRoute component={CompetitionPage} />}
-          />
-          <Route
-            path="/competitions/:id"
-            element={<ProtectedRoute component={CompetitionParticipationPage} />}
-          />
-          <Route
-            path="/competitions/:competitionId/cases/:caseId/diagnosis"
-            element={<ProtectedRoute component={CompetitionDiagnosisPage} />}
-          />
-          <Route
-            path="/competitions/:id/results"
-            element={<ProtectedRoute component={CompetitionResultsPage} />}
-          />
-          <Route
-            path="/physiogpt"
-            element={<ProtectedRoute component={PhysioGPT} />}
-          />
-          <Route path="/membership" element={<Membership />} />
-          <Route path="/about" element={<About />} />
-          <Route path="/contact" element={<Contact />} />
-          <Route path="/terms" element={<Terms />} />
-          <Route path="/auth" element={<AuthPage />} />
-          <Route
-            path="/trial-welcome"
-            element={<ProtectedRoute component={TrialWelcome} />}
-          />
-          <Route
-            path="/admin"
-            element={<ProtectedRoute component={AdminDashboard} />}
-          />
-          <Route
-            path="/test-audio-transcription"
-            element={<TestAudioTranscription />}
-          />
-          <Route path="/test-note-generator" element={<TestNoteGenerator />} />
-          <Route path="/test-case-studies" element={<TestCaseStudiesPage />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <Switch>
+          <Route path="/" component={Home} />
+          <Route path="/clinical-notes">
+            <ProtectedRoute component={NotesClinical} />
+          </Route>
+          <Route path="/notes-clinical" component={NotesClinical} />
+          <Route path="/shared-notes" component={SharedNotes} />
+          <Route path="/research" component={ResearchHub} />
+          <Route path="/research/gaps" component={ResearchGaps} />
+          <Route path="/research/projects/create">
+            <ProtectedRoute component={CreateResearchProject} />
+          </Route>
+          <Route path="/my-notes">
+            <ProtectedRoute component={MyNotes} />
+          </Route>
+          <Route path="/notes/:id?">
+            <ProtectedRoute component={SessionsPage} />
+          </Route>
+          <Route path="/exercises" component={ExercisePage} />
+          <Route path="/manual-therapy" component={ManualTherapyPage} />
+          <Route path="/skeleton-3d-tool" component={Skeleton3DTool} />
+          <Route path="/motion-capture" component={MotionCapturePage} />
+          <Route path="/static-postural-analysis" component={StaticPosturalAnalysisPage} />
+          <Route path="/integrated-assessment" component={IntegratedClinicalAssessment} />
+          <Route path="/intelligent-assessment" component={IntelligentAssessment} />
+          <Route path="/virtual-patients">
+            <ProtectedRoute component={VirtualPatientPage} />
+          </Route>
+          <Route path="/virtual-patient">
+            <ProtectedRoute component={VirtualPatientPage} />
+          </Route>
+          <Route path="/shared-cases/new">
+            <ProtectedRoute component={SharedCaseFormPage} />
+          </Route>
+          <Route path="/shared-cases/:id/edit">
+            <ProtectedRoute component={SharedCaseFormPage} />
+          </Route>
+          <Route path="/shared-cases/:id" component={SharedCaseDetailPage} />
+          <Route path="/shared-cases" component={SharedCasesPage} />
+          <Route path="/case-studies">
+            <ProtectedRoute component={CaseStudyPage} />
+          </Route>
+          <Route path="/competitions">
+            <ProtectedRoute component={CompetitionPage} />
+          </Route>
+          <Route path="/competition/:id">
+            <ProtectedRoute component={CompetitionParticipationPage} />
+          </Route>
+          <Route path="/competitions/:competitionId/cases/:caseId/diagnosis">
+            <ProtectedRoute component={CompetitionDiagnosisPage} />
+          </Route>
+          <Route path="/competitions/:id/results">
+            <ProtectedRoute component={CompetitionResultsPage} />
+          </Route>
+          <Route path="/physiogpt">
+            <ProtectedRoute component={PhysioGPT} />
+          </Route>
+          <Route path="/membership" component={Membership} />
+          <Route path="/about" component={About} />
+          <Route path="/contact" component={Contact} />
+          <Route path="/terms" component={Terms} />
+          <Route path="/auth" component={AuthPage} />
+          <Route path="/trial-welcome">
+            <ProtectedRoute component={TrialWelcome} />
+          </Route>
+          <Route path="/admin">
+            <ProtectedRoute component={AdminDashboard} />
+          </Route>
+          <Route path="/test-audio-transcription" component={TestAudioTranscription} />
+          <Route path="/test-note-generator" component={TestNoteGenerator} />
+          <Route path="/test-case-studies" component={TestCaseStudiesPage} />
+          <Route component={NotFound} />
+        </Switch>
       </main>
       <Footer />
     </div>
@@ -152,18 +133,16 @@ function Router() {
 
 function App() {
   return (
-    <BrowserRouter>
-      <QueryClientProvider client={queryClient}>
-        <ThemeProvider attribute="class" defaultTheme="light">
-          <TooltipProvider>
-            <AuthProvider>
-              <Toaster />
-              <Router />
-            </AuthProvider>
-          </TooltipProvider>
-        </ThemeProvider>
-      </QueryClientProvider>
-    </BrowserRouter>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider attribute="class" defaultTheme="light">
+        <TooltipProvider>
+          <AuthProvider>
+            <Toaster />
+            <Router />
+          </AuthProvider>
+        </TooltipProvider>
+      </ThemeProvider>
+    </QueryClientProvider>
   );
 }
 

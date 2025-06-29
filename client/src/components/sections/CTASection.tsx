@@ -33,7 +33,7 @@ const CTASection = () => {
                   </span>
                 </Button>
               </Link>
-              <Link to="/clinical-notes">
+              <Link href="/clinical-notes">
                 <Button
                   size="lg"
                   variant="outline"

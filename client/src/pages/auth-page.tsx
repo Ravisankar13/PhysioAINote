@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Helmet } from "react-helmet";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -62,12 +62,11 @@ type RegisterFormValues = z.infer<typeof registerSchema>;
 
 const AuthPage = () => {
   const [activeTab, setActiveTab] = useState<string>("login");
-  const navigate = useNavigate();
-  const location = useLocation();
+  const [currentLocation, setLocation] = useLocation();
   const { user, loginMutation, registerMutation } = useAuth();
   
   // Check if user is coming from trial banner
-  const params = new URLSearchParams(location.search);
+  const params = new URLSearchParams(window.location.search);
   const isTrialFlow = params.get('autoStartTrial') === 'true';
   
   // Set default tab to register if coming from trial flow
@@ -117,14 +116,14 @@ const AuthPage = () => {
     loginMutation.mutate(loginPayload, {
       onSuccess: () => {
         console.log("Login success - redirecting");
-        navigate("/");
+        setLocation("/");
       },
     });
   }
 
   // Handle registration form submission
   function onRegisterSubmit(data: RegisterFormValues) {
-    const params = new URLSearchParams(location.search);
+    const params = new URLSearchParams(window.location.search);
     const autoStartTrial = params.get('autoStartTrial') === 'true';
     const returnTo = params.get('returnTo') || '/';
 

@@ -75,6 +75,10 @@ export const competitionTypeEnum = pgEnum("competition_type", [
   "treatment_planning",
   "tournament",
   "specialty_league",
+  "complete_clinician",
+  "diagnostic_detective",
+  "treatment_strategist",
+  "clinical_educator",
 ]);
 
 // Competition status enum
@@ -1328,6 +1332,238 @@ export const caseStudyAttemptRelations = relations(
   })
 );
 
+// Complex Case Study System for Multi-Stage Competitions
+
+// Complex cases with detailed patient presentations and multiple stages
+export const complexCases = pgTable("complex_cases", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  title: text("title").notNull(),
+  patientDescription: text("patient_description").notNull(), // detailed patient background
+  occupationalHistory: text("occupational_history"),
+  socialHistory: text("social_history"),
+  medicalHistory: text("medical_history").notNull(),
+  currentMedications: text("current_medications"),
+  mechanismOfInjury: text("mechanism_of_injury"),
+  bodyPart: bodyPartEnum("body_part").notNull(),
+  complexity: text("complexity").notNull(), // beginner, intermediate, advanced
+  estimatedTime: integer("estimated_time_minutes").default(45), // expected completion time
+  
+  // Progressive Information Release
+  initialPresentation: json("initial_presentation").notNull().$type<{
+    chiefComplaint: string;
+    painScale: number;
+    functionalLimitations: string[];
+    patientGoals: string[];
+  }>(),
+  
+  // Detailed case content
+  detailedHistory: json("detailed_history").notNull().$type<{
+    onsetDetails: string;
+    progressionPattern: string;
+    aggravatingFactors: string[];
+    easingFactors: string[];
+    previousTreatments: string[];
+    redFlagScreening: string[];
+  }>(),
+  
+  physicalFindings: json("physical_findings").notNull().$type<{
+    observation: string;
+    palpation: string;
+    rangeOfMotion: string;
+    strength: string;
+    neurological: string;
+    specialTests: string;
+    functional: string;
+  }>(),
+  
+  // Correct answers for scoring
+  correctDifferentials: json("correct_differentials").notNull().$type<{
+    primary: string;
+    secondary: string[];
+    ruled_out: string[];
+  }>(),
+  
+  correctAssessments: json("correct_assessments").notNull().$type<string[]>(),
+  correctTreatmentPlan: json("correct_treatment_plan").notNull().$type<{
+    shortTerm: string[];
+    longTerm: string[];
+    patientEducation: string[];
+    expectedOutcome: string;
+    reassessmentPlan: string;
+  }>(),
+  
+  expertRationale: text("expert_rationale").notNull(),
+  researchEvidence: json("research_evidence").$type<string[]>(),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Stages within each complex case (sequential questions)
+export const caseStages = pgTable("case_stages", {
+  id: serial("id").primaryKey(),
+  complexCaseId: integer("complex_case_id").notNull().references(() => complexCases.id, { onDelete: "cascade" }),
+  stageNumber: integer("stage_number").notNull(), // 1, 2, 3, etc.
+  title: text("title").notNull(), // "Initial Assessment", "Physical Examination Planning"
+  description: text("description").notNull(),
+  
+  // Information provided at this stage
+  providedInformation: json("provided_information").$type<{
+    patientResponse?: string;
+    testResults?: string;
+    additionalHistory?: string;
+    observationFindings?: string;
+  }>(),
+  
+  // Time allocation for this stage
+  timeAllocation: integer("time_allocation_minutes").default(8),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Questions within each stage
+export const stageQuestions = pgTable("stage_questions", {
+  id: serial("id").primaryKey(),
+  stageId: integer("stage_id").notNull().references(() => caseStages.id, { onDelete: "cascade" }),
+  questionNumber: integer("question_number").notNull(),
+  questionText: text("question_text").notNull(),
+  questionType: text("question_type").notNull(), // "multiple_choice", "short_answer", "list", "essay"
+  
+  // Question configuration
+  options: json("options").$type<string[]>(), // for multiple choice
+  expectedAnswers: json("expected_answers").notNull().$type<string[]>(),
+  scoringCriteria: json("scoring_criteria").notNull().$type<{
+    maxPoints: number;
+    partialCredit: boolean;
+    keywordPoints: Array<{ keyword: string; points: number }>;
+  }>(),
+  
+  // Feedback and learning
+  correctAnswer: text("correct_answer").notNull(),
+  rationale: text("rationale").notNull(),
+  learningPoints: json("learning_points").$type<string[]>(),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// User attempts at complex cases
+export const complexCaseAttempts = pgTable("complex_case_attempts", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  complexCaseId: integer("complex_case_id").notNull().references(() => complexCases.id),
+  competitionId: integer("competition_id").references(() => competitions.id), // if part of competition
+  
+  startedAt: timestamp("started_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"),
+  totalTimeSpent: integer("total_time_spent_seconds").default(0),
+  
+  // Overall scoring
+  totalScore: integer("total_score").default(0),
+  maxPossibleScore: integer("max_possible_score").default(100),
+  clinicalReasoningScore: integer("clinical_reasoning_score").default(0),
+  assessmentSkillsScore: integer("assessment_skills_score").default(0),
+  treatmentPlanningScore: integer("treatment_planning_score").default(0),
+  communicationScore: integer("communication_score").default(0),
+  timeEfficiencyScore: integer("time_efficiency_score").default(0),
+  
+  // Detailed attempt data
+  stageResponses: json("stage_responses").notNull().$type<Array<{
+    stageId: number;
+    startTime: string;
+    endTime: string;
+    responses: Array<{
+      questionId: number;
+      answer: string;
+      timeSpent: number;
+      score: number;
+      feedback: string;
+    }>;
+  }>>(),
+  
+  // Overall feedback
+  overallFeedback: json("overall_feedback").$type<{
+    strengths: string[];
+    improvementAreas: string[];
+    recommendedResources: string[];
+    nextSteps: string[];
+  }>(),
+  
+  completed: boolean("completed").default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertComplexCaseSchema = createInsertSchema(complexCases).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCaseStageSchema = createInsertSchema(caseStages).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertStageQuestionSchema = createInsertSchema(stageQuestions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertComplexCaseAttemptSchema = createInsertSchema(complexCaseAttempts).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertComplexCase = z.infer<typeof insertComplexCaseSchema>;
+export type InsertCaseStage = z.infer<typeof insertCaseStageSchema>;
+export type InsertStageQuestion = z.infer<typeof insertStageQuestionSchema>;
+export type InsertComplexCaseAttempt = z.infer<typeof insertComplexCaseAttemptSchema>;
+
+export type ComplexCase = typeof complexCases.$inferSelect;
+export type CaseStage = typeof caseStages.$inferSelect;
+export type StageQuestion = typeof stageQuestions.$inferSelect;
+export type ComplexCaseAttempt = typeof complexCaseAttempts.$inferSelect;
+
+// Relations for complex cases
+export const complexCaseRelations = relations(complexCases, ({ one, many }) => ({
+  user: one(users, {
+    fields: [complexCases.userId],
+    references: [users.id],
+  }),
+  stages: many(caseStages),
+  attempts: many(complexCaseAttempts),
+}));
+
+export const caseStageRelations = relations(caseStages, ({ one, many }) => ({
+  complexCase: one(complexCases, {
+    fields: [caseStages.complexCaseId],
+    references: [complexCases.id],
+  }),
+  questions: many(stageQuestions),
+}));
+
+export const stageQuestionRelations = relations(stageQuestions, ({ one }) => ({
+  stage: one(caseStages, {
+    fields: [stageQuestions.stageId],
+    references: [caseStages.id],
+  }),
+}));
+
+export const complexCaseAttemptRelations = relations(complexCaseAttempts, ({ one }) => ({
+  user: one(users, {
+    fields: [complexCaseAttempts.userId],
+    references: [users.id],
+  }),
+  complexCase: one(complexCases, {
+    fields: [complexCaseAttempts.complexCaseId],
+    references: [complexCases.id],
+  }),
+  competition: one(competitions, {
+    fields: [complexCaseAttempts.competitionId],
+    references: [competitions.id],
+  }),
+}));
+
 // Competition System Tables
 
 // Competitions table
@@ -1347,6 +1583,8 @@ export const competitions = pgTable("competitions", {
   endTime: timestamp("end_time").notNull(),
   createdBy: integer("created_by").references(() => users.id),
   caseStudyIds: json("case_study_ids").notNull().$type<number[]>(), // array of case study IDs
+  complexCaseIds: json("complex_case_ids").$type<number[]>(), // array of complex case IDs
+  caseType: text("case_type").default("simple").notNull(), // "simple" or "complex"
   rules: json("rules").$type<{
     scoringWeights: {
       accuracy: number;

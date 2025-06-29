@@ -1,0 +1,451 @@
+import { db } from './db';
+import { 
+  complexCases, 
+  caseStages, 
+  stageQuestions, 
+  complexCaseAttempts,
+  competitions,
+  InsertComplexCase, 
+  InsertCaseStage, 
+  InsertStageQuestion, 
+  InsertComplexCaseAttempt,
+  ComplexCase,
+  CaseStage,
+  StageQuestion,
+  ComplexCaseAttempt
+} from '@shared/schema';
+import { eq, and, desc, asc } from 'drizzle-orm';
+import { generateComplexCase, scoreComplexCaseAttempt, ComplexCaseInput } from './complexCaseGenerator';
+
+export class ComplexCaseService {
+  
+  /**
+   * Creates a new complex case with stages and questions
+   */
+  async createComplexCase(input: ComplexCaseInput, userId: number): Promise<ComplexCase> {
+    console.log(`Creating complex case for user ${userId}`);
+    
+    try {
+      const generationResult = await generateComplexCase(input, userId);
+      
+      // Insert the complex case
+      const [insertedCase] = await db.insert(complexCases)
+        .values(generationResult.complexCase)
+        .returning();
+      
+      // Insert stages
+      const stagesWithCaseId = generationResult.stages.map(stage => ({
+        ...stage,
+        complexCaseId: insertedCase.id
+      }));
+      
+      const insertedStages = await db.insert(caseStages)
+        .values(stagesWithCaseId)
+        .returning();
+      
+      // Insert questions with correct stage IDs
+      const questionsWithStageIds: InsertStageQuestion[] = [];
+      let questionIndex = 0;
+      
+      generationResult.stages.forEach((_, stageIndex) => {
+        const stageId = insertedStages[stageIndex].id;
+        const questionsForStage = generationResult.questions.filter(
+          (_, qIndex) => Math.floor(qIndex / 2) === stageIndex // Assuming 2 questions per stage
+        );
+        
+        questionsForStage.forEach(question => {
+          questionsWithStageIds.push({
+            ...question,
+            stageId: stageId
+          });
+        });
+      });
+      
+      if (questionsWithStageIds.length > 0) {
+        await db.insert(stageQuestions).values(questionsWithStageIds);
+      }
+      
+      console.log(`Complex case created with ID: ${insertedCase.id}`);
+      return insertedCase;
+      
+    } catch (error) {
+      console.error('Error creating complex case:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Gets a complex case with all its stages and questions
+   */
+  async getComplexCaseWithDetails(caseId: number): Promise<{
+    case: ComplexCase;
+    stages: (CaseStage & { questions: StageQuestion[] })[];
+  } | null> {
+    try {
+      // Get the case
+      const [complexCase] = await db.select()
+        .from(complexCases)
+        .where(eq(complexCases.id, caseId));
+      
+      if (!complexCase) return null;
+      
+      // Get stages
+      const stages = await db.select()
+        .from(caseStages)
+        .where(eq(caseStages.complexCaseId, caseId))
+        .orderBy(asc(caseStages.stageNumber));
+      
+      // Get questions for each stage
+      const stagesWithQuestions = await Promise.all(
+        stages.map(async (stage) => {
+          const questions = await db.select()
+            .from(stageQuestions)
+            .where(eq(stageQuestions.stageId, stage.id))
+            .orderBy(asc(stageQuestions.questionNumber));
+          
+          return { ...stage, questions };
+        })
+      );
+      
+      return {
+        case: complexCase,
+        stages: stagesWithQuestions
+      };
+    } catch (error) {
+      console.error('Error getting complex case details:', error);
+      return null;
+    }
+  }
+  
+  /**
+   * Starts a complex case attempt
+   */
+  async startComplexCaseAttempt(
+    userId: number, 
+    complexCaseId: number, 
+    competitionId?: number
+  ): Promise<ComplexCaseAttempt> {
+    try {
+      const attemptData: InsertComplexCaseAttempt = {
+        userId,
+        complexCaseId,
+        competitionId,
+        totalTimeSpent: 0,
+        stageResponses: [],
+        completed: false
+      };
+      
+      const [attempt] = await db.insert(complexCaseAttempts)
+        .values(attemptData)
+        .returning();
+      
+      console.log(`Started complex case attempt ${attempt.id} for user ${userId}`);
+      return attempt;
+    } catch (error) {
+      console.error('Error starting complex case attempt:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Submits responses for a stage
+   */
+  async submitStageResponse(
+    attemptId: number,
+    stageId: number,
+    responses: Array<{
+      questionId: number;
+      answer: string;
+      timeSpent: number;
+    }>
+  ): Promise<ComplexCaseAttempt> {
+    try {
+      // Get current attempt
+      const [currentAttempt] = await db.select()
+        .from(complexCaseAttempts)
+        .where(eq(complexCaseAttempts.id, attemptId));
+      
+      if (!currentAttempt) {
+        throw new Error('Attempt not found');
+      }
+      
+      // Get questions for scoring
+      const questionIds = responses.map(r => r.questionId);
+      const questions = await db.select()
+        .from(stageQuestions)
+        .where(eq(stageQuestions.stageId, stageId));
+      
+      // Score responses
+      const scoredResponses = responses.map(response => {
+        const question = questions.find(q => q.id === response.questionId);
+        if (!question) return { ...response, score: 0, feedback: 'Question not found' };
+        
+        const score = this.scoreResponse(response.answer, question);
+        const feedback = this.generateResponseFeedback(response.answer, question);
+        
+        return { ...response, score, feedback };
+      });
+      
+      // Update stage responses
+      const stageResponse = {
+        stageId,
+        startTime: new Date().toISOString(),
+        endTime: new Date().toISOString(),
+        responses: scoredResponses
+      };
+      
+      const updatedStageResponses = [...currentAttempt.stageResponses, stageResponse];
+      
+      // Update attempt
+      const [updatedAttempt] = await db.update(complexCaseAttempts)
+        .set({
+          stageResponses: updatedStageResponses,
+          totalTimeSpent: currentAttempt.totalTimeSpent + responses.reduce((sum, r) => sum + r.timeSpent, 0)
+        })
+        .where(eq(complexCaseAttempts.id, attemptId))
+        .returning();
+      
+      return updatedAttempt;
+    } catch (error) {
+      console.error('Error submitting stage response:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Completes a complex case attempt and generates final scores
+   */
+  async completeComplexCaseAttempt(attemptId: number): Promise<ComplexCaseAttempt> {
+    try {
+      // Get the attempt with all data
+      const [attempt] = await db.select()
+        .from(complexCaseAttempts)
+        .where(eq(complexCaseAttempts.id, attemptId));
+      
+      if (!attempt) {
+        throw new Error('Attempt not found');
+      }
+      
+      // Get the complex case for scoring
+      const [complexCase] = await db.select()
+        .from(complexCases)
+        .where(eq(complexCases.id, attempt.complexCaseId));
+      
+      if (!complexCase) {
+        throw new Error('Complex case not found');
+      }
+      
+      // Score the attempt using AI
+      const scoringResult = await scoreComplexCaseAttempt(complexCase, attempt.stageResponses);
+      
+      // Calculate time efficiency score
+      const timeEfficiencyScore = this.calculateTimeEfficiencyScore(
+        attempt.totalTimeSpent, 
+        complexCase.estimatedTime * 60 // Convert to seconds
+      );
+      
+      // Update attempt with final scores
+      const [completedAttempt] = await db.update(complexCaseAttempts)
+        .set({
+          completed: true,
+          completedAt: new Date(),
+          totalScore: scoringResult.totalScore,
+          clinicalReasoningScore: scoringResult.categoryScores.clinicalReasoning,
+          assessmentSkillsScore: scoringResult.categoryScores.assessmentSkills,
+          treatmentPlanningScore: scoringResult.categoryScores.treatmentPlanning,
+          communicationScore: scoringResult.categoryScores.communication,
+          timeEfficiencyScore: timeEfficiencyScore,
+          overallFeedback: scoringResult.feedback
+        })
+        .where(eq(complexCaseAttempts.id, attemptId))
+        .returning();
+      
+      console.log(`Completed complex case attempt ${attemptId} with score ${scoringResult.totalScore}`);
+      return completedAttempt;
+      
+    } catch (error) {
+      console.error('Error completing complex case attempt:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Gets user's attempts for a complex case
+   */
+  async getUserComplexCaseAttempts(userId: number, complexCaseId?: number): Promise<ComplexCaseAttempt[]> {
+    try {
+      let query = db.select()
+        .from(complexCaseAttempts)
+        .where(eq(complexCaseAttempts.userId, userId));
+      
+      if (complexCaseId) {
+        query = query.where(eq(complexCaseAttempts.complexCaseId, complexCaseId));
+      }
+      
+      const attempts = await query.orderBy(desc(complexCaseAttempts.createdAt));
+      return attempts;
+    } catch (error) {
+      console.error('Error getting user complex case attempts:', error);
+      return [];
+    }
+  }
+  
+  /**
+   * Gets complex cases for a competition
+   */
+  async getComplexCasesForCompetition(competitionId: number): Promise<ComplexCase[]> {
+    try {
+      // Get competition to check case type and IDs
+      const [competition] = await db.select()
+        .from(competitions)
+        .where(eq(competitions.id, competitionId));
+      
+      if (!competition || competition.caseType !== 'complex' || !competition.complexCaseIds) {
+        return [];
+      }
+      
+      // Get complex cases
+      const cases = await db.select()
+        .from(complexCases)
+        .where(
+          complexCases.id.in(competition.complexCaseIds as number[])
+        );
+      
+      return cases;
+    } catch (error) {
+      console.error('Error getting complex cases for competition:', error);
+      return [];
+    }
+  }
+  
+  /**
+   * Creates a complex competition with generated cases
+   */
+  async createComplexCompetition(
+    title: string,
+    description: string,
+    competitionType: "complete_clinician" | "diagnostic_detective" | "treatment_strategist" | "clinical_educator",
+    bodyPart: string,
+    difficulty: string,
+    numberOfCases: number = 5,
+    timeLimit: number = 180, // minutes
+    userId: number
+  ): Promise<{ competitionId: number; caseIds: number[] }> {
+    try {
+      console.log(`Creating complex competition: ${title}`);
+      
+      // Generate complex cases
+      const casePromises = Array.from({ length: numberOfCases }, () => 
+        this.createComplexCase({
+          bodyPart: bodyPart as any,
+          complexity: difficulty as any,
+          competitionType,
+          estimatedTime: Math.ceil(timeLimit / numberOfCases)
+        }, userId)
+      );
+      
+      const generatedCases = await Promise.all(casePromises);
+      const caseIds = generatedCases.map(c => c.id);
+      
+      // Create competition
+      const [competition] = await db.insert(competitions)
+        .values({
+          title,
+          description,
+          type: competitionType,
+          status: 'upcoming',
+          bodyPart: bodyPart as any,
+          difficulty,
+          timeLimit,
+          maxParticipants: 50,
+          startTime: new Date(),
+          endTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
+          createdBy: userId,
+          caseStudyIds: [], // Empty for complex competitions
+          complexCaseIds: caseIds,
+          caseType: 'complex',
+          rules: {
+            scoringWeights: {
+              accuracy: 0.3,
+              speed: 0.15,
+              reasoning: 0.3,
+              differential: 0.15,
+              treatment: 0.1
+            },
+            allowedAttempts: 1,
+            showLeaderboard: true,
+            revealAnswers: true
+          }
+        })
+        .returning();
+      
+      console.log(`Created complex competition ${competition.id} with ${numberOfCases} cases`);
+      return { competitionId: competition.id, caseIds };
+      
+    } catch (error) {
+      console.error('Error creating complex competition:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Scores an individual response
+   */
+  private scoreResponse(userAnswer: string, question: StageQuestion): number {
+    if (!question.scoringCriteria || !question.expectedAnswers) return 0;
+    
+    const { maxPoints, partialCredit, keywordPoints } = question.scoringCriteria;
+    let score = 0;
+    
+    // Check for keyword matches
+    if (keywordPoints && Array.isArray(keywordPoints)) {
+      keywordPoints.forEach(({ keyword, points }) => {
+        if (userAnswer.toLowerCase().includes(keyword.toLowerCase())) {
+          score += points;
+        }
+      });
+    }
+    
+    // Check for expected answers
+    const foundExpected = question.expectedAnswers.some(expected =>
+      userAnswer.toLowerCase().includes(expected.toLowerCase())
+    );
+    
+    if (foundExpected && !keywordPoints?.length) {
+      score = maxPoints;
+    }
+    
+    return Math.min(score, maxPoints);
+  }
+  
+  /**
+   * Generates feedback for a response
+   */
+  private generateResponseFeedback(userAnswer: string, question: StageQuestion): string {
+    const score = this.scoreResponse(userAnswer, question);
+    const maxPoints = question.scoringCriteria?.maxPoints || 0;
+    const percentage = maxPoints > 0 ? (score / maxPoints) * 100 : 0;
+    
+    if (percentage >= 80) {
+      return "Excellent response! " + question.rationale;
+    } else if (percentage >= 60) {
+      return "Good response with room for improvement. " + question.rationale;
+    } else {
+      return "Consider reviewing this topic. " + question.rationale;
+    }
+  }
+  
+  /**
+   * Calculates time efficiency score
+   */
+  private calculateTimeEfficiencyScore(actualSeconds: number, expectedSeconds: number): number {
+    if (actualSeconds <= expectedSeconds) {
+      return 100;
+    }
+    
+    const ratio = expectedSeconds / actualSeconds;
+    return Math.max(0, Math.round(ratio * 100));
+  }
+}
+
+export const complexCaseService = new ComplexCaseService();

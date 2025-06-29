@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { MessageSquareText, ArrowRight } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link } from "wouter";
 
 const CTASection = () => {
   return (
@@ -22,7 +22,7 @@ const CTASection = () => {
             </p>
 
             <div className="mt-10 flex flex-col sm:flex-row gap-5">
-              <Link to="/membership">
+              <Link href="/membership">
                 <Button
                   size="lg"
                   className="bg-white text-primary hover:bg-white/90 shadow-md flex items-center gap-2 w-full sm:w-auto"

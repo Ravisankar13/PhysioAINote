@@ -62,7 +62,7 @@ const HeroSection = () => {
               </div>
             </div>
             <div className="mt-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-              <Link to="/clinical-notes">
+              <Link href="/clinical-notes">
                 <Button
                   size="lg"
                   className="w-full bg-white text-primary hover:bg-white/90 shadow-md flex items-center justify-center gap-2"
@@ -71,7 +71,7 @@ const HeroSection = () => {
                   <span className="font-semibold">Try AI Notes</span>
                 </Button>
               </Link>
-              <Link to="/virtual-patients">
+              <Link href="/virtual-patients">
                 <Button
                   size="lg"
                   className="w-full bg-secondary/90 text-white hover:bg-secondary shadow-md flex items-center justify-center gap-2"
@@ -80,7 +80,7 @@ const HeroSection = () => {
                   <span className="font-semibold">Virtual Patients</span>
                 </Button>
               </Link>
-              <Link to="/physiogpt">
+              <Link href="/physiogpt">
                 <Button
                   size="lg"
                   className="w-full bg-green-500 text-white hover:bg-green-600 shadow-md flex items-center justify-center gap-2"
@@ -89,7 +89,7 @@ const HeroSection = () => {
                   <span className="font-semibold">PhysioGPT</span>
                 </Button>
               </Link>
-              <Link to="/shared-cases">
+              <Link href="/shared-cases">
                 <Button
                   size="lg"
                   variant="outline"
@@ -99,7 +99,7 @@ const HeroSection = () => {
                   <span>Peer Exchange</span>
                 </Button>
               </Link>
-              <Link to="/membership">
+              <Link href="/membership">
                 <Button
                   size="lg"
                   variant="ghost"

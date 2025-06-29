@@ -17,7 +17,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Link } from "react-router-dom";
+import { Link } from "wouter";
 
 interface FeatureCardProps {
   icon: React.ReactNode;
@@ -54,7 +54,7 @@ const FeatureCard = ({
         </CardDescription>
       </CardContent>
       <CardFooter className="pt-0">
-        <Link to={linkHref}>
+        <Link href={linkHref}>
           <Button
             variant="ghost"
             className="p-0 hover:bg-transparent hover:text-primary flex items-center gap-1"

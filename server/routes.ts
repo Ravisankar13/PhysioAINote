@@ -4926,6 +4926,9 @@ Base your analysis on established postural assessment principles and correlate f
       const userId = req.user!.id;
       const { attempts } = req.body;
       
+      console.log(`[SUBMIT-ALL] User ${userId} submitting to competition ${competitionId}`);
+      console.log(`[SUBMIT-ALL] Attempts received:`, attempts);
+      
       // Verify user is participating in the competition
       const participation = await competitionStorage.getParticipantByUserAndCompetition(userId, competitionId);
       if (!participation) {
@@ -4942,16 +4945,22 @@ Base your analysis on established postural assessment principles and correlate f
       const caseResults = [];
       
       // Score each attempt
+      console.log(`[SUBMIT-ALL] Starting to score ${attempts.length} attempts`);
       for (const attempt of attempts) {
+        console.log(`[SUBMIT-ALL] Processing attempt for case ${attempt.caseStudyId}`);
         const caseStudy = await competitionStorage.getCaseStudyWithCorrectAnswers(attempt.caseStudyId);
         if (caseStudy) {
+          console.log(`[SUBMIT-ALL] Found case study, calling AI scoring...`);
           const result = await competitionService.scoreCompetitionAttempt(competition, caseStudy, attempt);
+          console.log(`[SUBMIT-ALL] AI scoring complete for case ${attempt.caseStudyId}:`, result.scores);
           totalScore += result.scores.total;
           caseResults.push({
             caseStudyId: attempt.caseStudyId,
             scores: result.scores,
             feedback: result.feedback
           });
+        } else {
+          console.log(`[SUBMIT-ALL] Case study not found for ID ${attempt.caseStudyId}`);
         }
       }
       

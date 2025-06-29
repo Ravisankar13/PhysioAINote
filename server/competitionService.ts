@@ -56,6 +56,7 @@ export class CompetitionService {
     };
     feedback: string;
   }> {
+    console.log(`[SCORING] Starting to score attempt for case ${caseStudy.id}`);
     
     const weights = competition.rules?.scoringWeights || {
       accuracy: 0.3,
@@ -66,11 +67,25 @@ export class CompetitionService {
     };
 
     // Calculate individual scores
+    console.log(`[SCORING] Calculating accuracy score...`);
     const accuracyScore = this.calculateAccuracyScore(caseStudy, attempt);
+    console.log(`[SCORING] Accuracy score: ${accuracyScore}`);
+    
+    console.log(`[SCORING] Calculating speed score...`);
     const speedScore = this.calculateSpeedScore(attempt.timeSpent, competition.timeLimit || 30);
+    console.log(`[SCORING] Speed score: ${speedScore}`);
+    
+    console.log(`[SCORING] Calculating reasoning score (AI call)...`);
     const reasoningScore = await this.calculateReasoningScore(caseStudy, attempt);
+    console.log(`[SCORING] Reasoning score: ${reasoningScore}`);
+    
+    console.log(`[SCORING] Calculating differential score...`);
     const differentialScore = this.calculateDifferentialScore(caseStudy, attempt);
+    console.log(`[SCORING] Differential score: ${differentialScore}`);
+    
+    console.log(`[SCORING] Calculating treatment score...`);
     const treatmentScore = this.calculateTreatmentScore(caseStudy, attempt);
+    console.log(`[SCORING] Treatment score: ${treatmentScore}`);
 
     // Calculate weighted total
     const totalScore = Math.round(
@@ -134,6 +149,7 @@ export class CompetitionService {
 
   private async calculateReasoningScore(caseStudy: AICaseStudy, attempt: CompetitionAttempt): Promise<number> {
     try {
+      console.log(`[REASONING] Starting OpenAI call for reasoning score...`);
       const prompt = `
         Evaluate the clinical reasoning quality for this physiotherapy case on a scale of 0-1:
         
@@ -160,10 +176,12 @@ export class CompetitionService {
         temperature: 0.1,
       });
 
+      console.log(`[REASONING] OpenAI response received:`, response.choices[0].message.content);
       const score = parseFloat(response.choices[0].message.content?.trim() || "0.5");
+      console.log(`[REASONING] Parsed score: ${score}`);
       return Math.max(0, Math.min(1, score));
     } catch (error) {
-      console.error("Error calculating reasoning score:", error);
+      console.error("[REASONING] Error calculating reasoning score:", error);
       return 0.5; // Fallback score
     }
   }

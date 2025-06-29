@@ -223,7 +223,7 @@ export default function CompetitionParticipationPage() {
   }
 
   // If user hasn't joined yet, show join prompt
-  if (participation && !participation.isParticipating) {
+  if (participationData && participationData.isParticipating === false) {
     return (
       <div className="container mx-auto p-6">
         <Card>
@@ -234,15 +234,17 @@ export default function CompetitionParticipationPage() {
               You need to join this competition to participate.
             </p>
             <div className="space-x-4">
-              <Link href="/competitions">
+              <Link to="/competitions">
                 <Button variant="outline">
                   <ArrowLeft className="h-4 w-4 mr-2" />
                   Back to Competitions
                 </Button>
               </Link>
-              <Button onClick={() => window.location.href = '/competitions'}>
-                Join Competition
-              </Button>
+              <Link to="/competitions">
+                <Button>
+                  Join Competition
+                </Button>
+              </Link>
             </div>
           </CardContent>
         </Card>
@@ -258,7 +260,7 @@ export default function CompetitionParticipationPage() {
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <Link href="/competitions">
+        <Link to="/competitions">
           <Button variant="ghost" size="sm">
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Competitions

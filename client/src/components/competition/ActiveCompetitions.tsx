@@ -60,8 +60,8 @@ export default function ActiveCompetitions() {
       console.log('Navigating to competition:', competitionId);
       setTimeout(() => {
         const targetUrl = `/competitions/${competitionId}`;
-        console.log('Setting location to:', targetUrl);
-        window.location.href = targetUrl;
+        console.log('Navigating to:', targetUrl);
+        navigate(targetUrl);
       }, 1000);
     },
     onError: (error: any) => {

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams } from "wouter";
+import { useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Link } from "wouter";
+import { Link } from "react-router-dom";
 
 export default function CompetitionParticipationPage() {
   // Get ID from URL path directly as fallback
@@ -185,7 +185,7 @@ export default function CompetitionParticipationPage() {
               <p className="text-muted-foreground mb-4">
                 The competition you're looking for doesn't exist.
               </p>
-              <Link href="/competitions">
+              <Link to="/competitions">
                 <Button>Back to Competitions</Button>
               </Link>
             </div>
@@ -210,7 +210,7 @@ export default function CompetitionParticipationPage() {
             <p className="text-muted-foreground mb-6">
               This competition doesn't exist.
             </p>
-            <Link href="/competitions">
+            <Link to="/competitions">
               <Button>
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Back to Competitions

@@ -59,9 +59,9 @@ export default function ActiveCompetitions() {
       // Navigate to competition participation page
       console.log('Navigating to competition:', competitionId);
       setTimeout(() => {
-        const targetUrl = `/competitions/${competitionId}`;
+        const targetUrl = `/competition/${competitionId}`;
         console.log('Navigating to:', targetUrl);
-        navigate(targetUrl);
+        setLocation(targetUrl);
       }, 1000);
     },
     onError: (error: any) => {

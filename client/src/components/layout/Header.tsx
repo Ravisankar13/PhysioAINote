@@ -29,12 +29,12 @@ import {
   Scan,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation } from "wouter";
 
 const Header = () => {
   const [open, setOpen] = useState(false);
   const { user, logoutMutation } = useAuth();
-  const location = useLocation().pathname;
+  const [location] = useLocation();
 
   // Check if user is admin
   const adminUsernames = ["Fateofjustice"];

@@ -131,9 +131,9 @@ const AuthPage = () => {
       onSuccess: () => {
         if (autoStartTrial) {
           // Redirect to return page with trial activation parameter
-          navigate(`${returnTo}?autoStartTrial=true`);
+          setLocation(`${returnTo}?autoStartTrial=true`);
         } else {
-          navigate("/");
+          setLocation("/");
         }
       },
     });
@@ -142,9 +142,9 @@ const AuthPage = () => {
   // Redirect if user is already logged in
   useEffect(() => {
     if (user) {
-      navigate("/");
+      setLocation("/");
     }
-  }, [user, navigate]);
+  }, [user, setLocation]);
 
   // If user is already logged in, don't render the component
   if (user) {

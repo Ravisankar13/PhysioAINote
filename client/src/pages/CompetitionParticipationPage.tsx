@@ -273,12 +273,16 @@ export default function CompetitionParticipationPage() {
                           </Badge>
                         ) : (
                           <Button 
-                            onClick={() => startCase.mutate(caseStudy.id)}
+                            onClick={() => {
+                              console.log('Start Case clicked for:', caseStudy.id);
+                              console.log('Competition ID:', competitionId);
+                              startCase.mutate(caseStudy.id);
+                            }}
                             disabled={startCase.isPending || isActive}
                             size="sm"
                           >
                             <Play className="h-4 w-4 mr-2" />
-                            {isActive ? "Active" : "Start Case"}
+                            {startCase.isPending ? "Starting..." : isActive ? "Active" : "Start Case"}
                           </Button>
                         )}
                       </div>
@@ -290,12 +294,17 @@ export default function CompetitionParticipationPage() {
                           <strong>Patient Description:</strong> {caseStudy.patientDescription}
                         </p>
                         <div className="mt-3">
-                          <Link href={`/competitions/${competitionId}/cases/${caseStudy.id}`}>
-                            <Button size="sm">
-                              <Target className="h-4 w-4 mr-2" />
-                              Begin Diagnosis
-                            </Button>
-                          </Link>
+                          <Button 
+                            size="sm" 
+                            onClick={() => {
+                              console.log('Begin Diagnosis clicked for case:', caseStudy.id);
+                              // Navigate to case studies page with this specific case
+                              window.location.href = `/case-studies?competitionId=${competitionId}&caseId=${caseStudy.id}`;
+                            }}
+                          >
+                            <Target className="h-4 w-4 mr-2" />
+                            Begin Diagnosis
+                          </Button>
                         </div>
                       </div>
                     )}

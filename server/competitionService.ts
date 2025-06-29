@@ -8,6 +8,7 @@ import {
 } from '@shared/schema';
 import OpenAI from 'openai';
 
+// Initialize OpenAI client
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 export interface CompetitionAttempt {
@@ -151,8 +152,6 @@ export class CompetitionService {
     try {
       console.log(`[REASONING] Using OpenAI for advanced clinical reasoning analysis`);
       
-      const openai = (await import('../openai')).default;
-      
       const prompt = `You are an expert physiotherapy educator evaluating clinical reasoning. Score this student's clinical reasoning from 0-100 based on how well they demonstrate understanding of the case.
 
 **Case Information:**
@@ -265,8 +264,6 @@ Respond with ONLY a JSON object in this exact format:
   ): Promise<string> {
     try {
       console.log(`[FEEDBACK] Generating OpenAI competitive feedback`);
-      
-      const openai = (await import('../openai')).default;
       
       const prompt = `You are an expert physiotherapy educator providing competitive feedback. Be concise, encouraging, and specific.
 

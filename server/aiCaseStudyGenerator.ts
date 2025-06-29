@@ -130,9 +130,12 @@ export async function generateAICaseStudy(
     const prompt = `Generate a detailed physiotherapy case study for a patient with a ${input.bodyPart} issue. 
       This should be a ${input.complexity} level case appropriate for physiotherapy students or practitioners.
       
+      IMPORTANT: The case title should focus on patient symptoms and demographics (e.g., "Office Worker with Persistent Shoulder Pain") 
+      rather than revealing the diagnosis (e.g., avoid "Rotator Cuff Tendinopathy in Office Worker").
+      
       Please structure your response as a JSON object with the following format:
       {
-        "title": "Brief but descriptive title for the case",
+        "title": "Symptom-based title focusing on patient presentation (avoid revealing the diagnosis)",
         "patientDescription": "Brief demographic information and relevant background",
         "history": "Detailed patient history of present condition",
         "presentingSymptoms": "Current symptoms and patient complaints",

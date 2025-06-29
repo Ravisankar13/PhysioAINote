@@ -167,7 +167,7 @@ export const sampleCaseStudies: Omit<AICaseStudy, 'id' | 'createdAt'>[] = [
   },
   {
     userId: 1,
-    title: "Lumbar Disc Herniation with Radiculopathy",
+    title: "Construction Worker with Severe Back and Leg Pain",
     patientDescription: "A 41-year-old male construction worker with low back pain and right leg pain for 2 weeks.",
     history: "Pain began after lifting a heavy object at work. Initially just back pain, but leg symptoms developed 3 days later. Pain not improving despite rest and over-the-counter medication. Unable to work due to pain.",
     presentingSymptoms: "Moderate low back pain (5/10) with severe shooting pain down right posterior thigh and lateral calf to the foot (8/10). Reports pins and needles sensation in right lateral foot and difficulty walking due to pain.",

@@ -149,37 +149,34 @@ export class CompetitionService {
 
   private async calculateReasoningScore(caseStudy: AICaseStudy, attempt: CompetitionAttempt): Promise<number> {
     try {
-      console.log(`[REASONING] Starting OpenAI call for reasoning score...`);
-      const prompt = `
-        Evaluate the clinical reasoning quality for this physiotherapy case on a scale of 0-1:
-        
-        Correct Diagnosis: ${caseStudy.correctDiagnosis}
-        Patient History: ${caseStudy.history}
-        Presenting Symptoms: ${caseStudy.presentingSymptoms}
-        
-        User's Reasoning: ${attempt.userReasoning}
-        
-        Score the reasoning based on:
-        1. Logical flow and clinical thinking process
-        2. Use of relevant clinical knowledge
-        3. Consideration of patient factors
-        4. Evidence-based rationale
-        5. Professional communication
-        
-        Return only a decimal number between 0 and 1.
-      `;
-
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [{ role: "user", content: prompt }],
-        max_tokens: 50,
-        temperature: 0.1,
-      });
-
-      console.log(`[REASONING] OpenAI response received:`, response.choices[0].message.content);
-      const score = parseFloat(response.choices[0].message.content?.trim() || "0.5");
-      console.log(`[REASONING] Parsed score: ${score}`);
-      return Math.max(0, Math.min(1, score));
+      console.log(`[REASONING] Using fast scoring algorithm (OpenAI bypassed for testing)`);
+      
+      // Fast text-based scoring algorithm
+      const userText = (attempt.userReasoning || "").toLowerCase();
+      const correctDiagnosis = caseStudy.correctDiagnosis.toLowerCase();
+      const history = caseStudy.history.toLowerCase();
+      const symptoms = caseStudy.presentingSymptoms.toLowerCase();
+      
+      let score = 0.3; // Base score
+      
+      // Check if user mentions key terms from correct diagnosis
+      if (userText.includes(correctDiagnosis) || this.calculateTextSimilarity(userText, correctDiagnosis) > 0.3) {
+        score += 0.3;
+      }
+      
+      // Check if user reasoning shows understanding of symptoms
+      const symptomWords = symptoms.split(' ').filter(word => word.length > 3);
+      const mentionedSymptoms = symptomWords.filter(word => userText.includes(word));
+      score += (mentionedSymptoms.length / Math.max(symptomWords.length, 1)) * 0.2;
+      
+      // Check for clinical reasoning keywords
+      const clinicalKeywords = ['assess', 'examine', 'treatment', 'therapy', 'rehabilitation', 'pain', 'function', 'mobility'];
+      const mentionedKeywords = clinicalKeywords.filter(keyword => userText.includes(keyword));
+      score += (mentionedKeywords.length / clinicalKeywords.length) * 0.2;
+      
+      const finalScore = Math.max(0, Math.min(1, score));
+      console.log(`[REASONING] Fast score calculated: ${finalScore}`);
+      return finalScore;
     } catch (error) {
       console.error("[REASONING] Error calculating reasoning score:", error);
       return 0.5; // Fallback score

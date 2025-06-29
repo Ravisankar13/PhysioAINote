@@ -4919,7 +4919,10 @@ Base your analysis on established postural assessment principles and correlate f
 
   // Submit all diagnoses for a competition
   app.post("/api/competitions/:id/submit-all", async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
+    if (!req.isAuthenticated()) {
+      console.log(`[SUBMIT-ALL] Authentication failed - user not logged in`);
+      return res.sendStatus(401);
+    }
     
     try {
       const competitionId = parseInt(req.params.id);

@@ -113,6 +113,8 @@ export default function CompetitionParticipationPage() {
   // Submit all diagnoses
   const submitAllDiagnoses = useMutation({
     mutationFn: async () => {
+      console.log('[FRONTEND] Starting diagnosis submission...', diagnoses);
+      
       const submissions = Object.entries(diagnoses).map(([caseId, data]) => ({
         caseStudyId: parseInt(caseId),
         userDiagnosis: data.diagnosis,
@@ -122,10 +124,19 @@ export default function CompetitionParticipationPage() {
         timeSpent: 300 // Default 5 minutes per case
       }));
 
+      console.log('[FRONTEND] Submitting data:', submissions);
+
       const response = await apiRequest('POST', `/api/competitions/${competitionId}/submit-all`, {
         attempts: submissions
       });
-      return response.json();
+      
+      if (!response.ok) {
+        throw new Error(`Server responded with status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      console.log('[FRONTEND] Received response:', result);
+      return result;
     },
     onSuccess: (data) => {
       toast({

@@ -33,6 +33,13 @@ export class CompetitionStorage {
     return newCompetition;
   }
 
+  async getAllCompetitions(): Promise<Competition[]> {
+    return await db
+      .select()
+      .from(competitions)
+      .orderBy(desc(competitions.createdAt));
+  }
+
   async getActiveCompetitions(): Promise<Competition[]> {
     return await db
       .select()

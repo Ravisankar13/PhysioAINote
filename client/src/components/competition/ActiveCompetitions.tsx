@@ -34,8 +34,11 @@ export default function ActiveCompetitions() {
   // Join competition mutation
   const joinCompetition = useMutation({
     mutationFn: async (competitionId: number) => {
+      console.log('Making API request to join competition:', competitionId);
       const response = await apiRequest('POST', `/api/competitions/${competitionId}/join`);
-      return response.json();
+      const data = await response.json();
+      console.log('Join competition response:', data);
+      return data;
     },
     onSuccess: (data, competitionId) => {
       queryClient.invalidateQueries({ queryKey: ['/api/competitions/active'] });
@@ -54,8 +57,11 @@ export default function ActiveCompetitions() {
       }
       
       // Navigate to competition participation page
+      console.log('Navigating to competition:', competitionId);
       setTimeout(() => {
-        setLocation(`/competitions/${competitionId}`);
+        const targetUrl = `/competitions/${competitionId}`;
+        console.log('Setting location to:', targetUrl);
+        setLocation(targetUrl);
       }, 1000);
     },
     onError: (error: any) => {
@@ -205,7 +211,10 @@ export default function ActiveCompetitions() {
                       </Button>
                       <Button 
                         size="sm"
-                        onClick={() => joinCompetition.mutate(competition.id)}
+                        onClick={() => {
+                          console.log('Join button clicked for competition:', competition.id);
+                          joinCompetition.mutate(competition.id);
+                        }}
                         disabled={joinCompetition.isPending}
                       >
                         {joinCompetition.isPending ? "Joining..." : "Join Competition"}

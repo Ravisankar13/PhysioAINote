@@ -5789,5 +5789,23 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
 
+  // Test endpoint to create new complex cases (temporary for testing)
+  app.post("/api/test/create-complex-cases", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const { createNewComplexCases2024 } = await import("./newComplexCases2024");
+      await createNewComplexCases2024(req.user!.id);
+      res.json({ 
+        success: true, 
+        message: "Successfully created 10 new complex cases based on 2024 research",
+        casesCreated: 10 
+      });
+    } catch (error: any) {
+      console.error("Error creating new 2024 complex cases:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   return httpServer;
 }

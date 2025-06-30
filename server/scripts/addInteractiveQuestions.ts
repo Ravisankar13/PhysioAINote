@@ -8,11 +8,11 @@ export async function addInteractiveQuestionsToComplexCases() {
     console.log('Starting to add interactive questions to complex cases...');
     
     // Get all existing complex cases
-    const complexCases = await db.query('SELECT * FROM complex_cases ORDER BY id');
+    const complexCases = await pool.query('SELECT * FROM complex_cases ORDER BY id');
     console.log(`Found ${complexCases.rows.length} existing complex cases`);
 
     // Check if stages already exist for these cases
-    const existingStages = await db.query('SELECT complex_case_id FROM case_stages GROUP BY complex_case_id');
+    const existingStages = await pool.query('SELECT complex_case_id FROM case_stages GROUP BY complex_case_id');
     const casesWithStages = new Set(existingStages.rows.map(row => row.complex_case_id));
 
     for (const complexCase of complexCases.rows) {
@@ -28,7 +28,7 @@ export async function addInteractiveQuestionsToComplexCases() {
       
       // Insert stages and get their IDs
       for (const stage of stages) {
-        const insertStageResult = await db.query(`
+        const insertStageResult = await pool.query(`
           INSERT INTO case_stages (complex_case_id, stage_number, title, description, stage_type, information_revealed, expected_time_minutes)
           VALUES ($1, $2, $3, $4, $5, $6, $7)
           RETURNING id
@@ -49,7 +49,7 @@ export async function addInteractiveQuestionsToComplexCases() {
         const questions = createQuestionsForStage(stageId, stage.stage_number, complexCase);
         
         for (const question of questions) {
-          await db.query(`
+          await pool.query(`
             INSERT INTO stage_questions (stage_id, question_number, question_text, question_type, correct_answer, answer_explanation, scoring_criteria, points_available)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
           `, [

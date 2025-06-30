@@ -1407,9 +1407,10 @@ export const caseStages = pgTable("case_stages", {
   stageNumber: integer("stage_number").notNull(), // 1, 2, 3, etc.
   title: text("title").notNull(), // "Initial Assessment", "Physical Examination Planning"
   description: text("description").notNull(),
+  stageType: text("stage_type"), // "assessment", "examination", "diagnosis", "treatment"
   
   // Information provided at this stage
-  providedInformation: json("provided_information").$type<{
+  informationRevealed: json("information_revealed").$type<{
     patientResponse?: string;
     testResults?: string;
     additionalHistory?: string;
@@ -1417,7 +1418,7 @@ export const caseStages = pgTable("case_stages", {
   }>(),
   
   // Time allocation for this stage
-  timeAllocation: integer("time_allocation_minutes").default(8),
+  expectedTimeMinutes: integer("expected_time_minutes").default(8),
   
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -1430,19 +1431,15 @@ export const stageQuestions = pgTable("stage_questions", {
   questionText: text("question_text").notNull(),
   questionType: text("question_type").notNull(), // "multiple_choice", "short_answer", "list", "essay"
   
-  // Question configuration
-  options: json("options").$type<string[]>(), // for multiple choice
-  expectedAnswers: json("expected_answers").notNull().$type<string[]>(),
+  // Feedback and learning
+  correctAnswer: text("correct_answer").notNull(),
+  answerExplanation: text("answer_explanation").notNull(),
   scoringCriteria: json("scoring_criteria").notNull().$type<{
     maxPoints: number;
     partialCredit: boolean;
     keywordPoints: Array<{ keyword: string; points: number }>;
   }>(),
-  
-  // Feedback and learning
-  correctAnswer: text("correct_answer").notNull(),
-  rationale: text("rationale").notNull(),
-  learningPoints: json("learning_points").$type<string[]>(),
+  pointsAvailable: integer("points_available").notNull(),
   
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

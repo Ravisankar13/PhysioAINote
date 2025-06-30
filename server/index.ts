@@ -38,14 +38,24 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  const server = await registerRoutes(app);
+  try {
+    log("Starting route registration...");
+    const server = await registerRoutes(app);
+    log("Routes registered successfully");
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
 
-    res.status(status).json({ message });
-    throw err;
+    // Log the error for debugging
+    console.error(`Error on ${req.method} ${req.path}:`, err);
+    
+    // Only send response if not already sent
+    if (!res.headersSent) {
+      res.status(status).json({ message });
+    }
+    
+    // Don't re-throw the error to prevent server crash
   });
 
   // importantly only setup vite in development and after
@@ -90,4 +100,11 @@ app.use((req, res, next) => {
       }
     }
   );
-})();
+  } catch (startupError) {
+    console.error("Fatal server startup error:", startupError);
+    process.exit(1);
+  }
+})().catch(err => {
+  console.error("Unhandled server startup error:", err);
+  process.exit(1);
+});

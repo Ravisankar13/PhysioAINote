@@ -5387,148 +5387,20 @@ Base your analysis on established postural assessment principles and correlate f
     try {
       const caseId = parseInt(req.params.id);
       
-      // Mock complex case data for demo
-      const mockComplexCase = {
-        id: caseId,
-        title: "35-Year-Old Construction Worker with Lower Back Pain",
-        patientDescription: "A 35-year-old male construction worker presents with acute lower back pain that began 3 days ago while lifting heavy materials at a job site. He reports significant functional limitations and is unable to work.",
-        occupationalHistory: "15 years in construction with regular heavy lifting, bending, and prolonged standing. Works 50-60 hours per week on commercial building projects.",
-        socialHistory: "Lives with wife and two children. Enjoys weekend hiking and recreational basketball. Non-smoker, occasional alcohol use.",
-        medicalHistory: "Previous episode of back pain 2 years ago that resolved with conservative treatment. No surgeries, diabetes, or cardiovascular disease.",
-        currentMedications: "Ibuprofen 400mg TID for current pain. No other regular medications.",
-        mechanismOfInjury: "Sharp pain onset while lifting a 40kg concrete form. Felt 'something pop' in lower back with immediate onset of severe pain and muscle spasm.",
-        bodyPart: "back",
-        complexity: "intermediate",
-        estimatedTime: 45,
-        initialPresentation: {
-          chiefComplaint: "Severe lower back pain preventing work and daily activities",
-          painScale: 8,
-          functionalLimitations: ["Unable to bend forward", "Difficulty sitting >15 minutes", "Cannot lift >5kg", "Sleep disruption"],
-          patientGoals: ["Return to work", "Resume recreational activities", "Improve sleep quality"]
-        },
-        stages: [
-          {
-            id: 1,
-            stageNumber: 1,
-            title: "Initial Assessment & History",
-            description: "Gather comprehensive history and identify red flags",
-            timeAllocation: 10,
-            providedInformation: {
-              patientResponse: "Patient reports pain is constant, worse with movement, some numbness in right leg"
-            },
-            questions: [
-              {
-                id: 1,
-                questionNumber: 1,
-                questionText: "Based on the history provided, what are your top 3 differential diagnoses? List them in order of likelihood.",
-                questionType: "list",
-                expectedAnswers: ["Lumbar disc herniation", "Lumbar strain", "Facet joint irritation"],
-                correctAnswer: "1. Lumbar disc herniation (most likely given mechanism and leg symptoms), 2. Lumbar strain/sprain, 3. Facet joint irritation",
-                rationale: "The mechanism of injury (lifting with rotation), age, occupation, and presence of leg symptoms strongly suggest disc involvement.",
-                maxPoints: 15
-              },
-              {
-                id: 2,
-                questionNumber: 2,
-                questionText: "What specific red flag questions would you ask to rule out serious pathology?",
-                questionType: "list", 
-                expectedAnswers: ["Bowel/bladder dysfunction", "Progressive neurological deficit", "Night pain", "Recent infection", "Cancer history"],
-                correctAnswer: "Bowel/bladder function, progressive weakness, fever/infection, night pain, recent trauma, cancer history, unexplained weight loss",
-                rationale: "These questions help identify cauda equina syndrome, infection, fracture, or malignancy.",
-                maxPoints: 10
-              }
-            ]
-          },
-          {
-            id: 2,
-            stageNumber: 2,
-            title: "Physical Examination Planning",
-            description: "Design and interpret physical examination findings",
-            timeAllocation: 12,
-            providedInformation: {
-              testResults: "Positive straight leg raise at 45° on right, limited lumbar flexion, muscle spasm in right paravertebral muscles"
-            },
-            questions: [
-              {
-                id: 3,
-                questionNumber: 1,
-                questionText: "Interpret the positive straight leg raise test. What does this finding suggest?",
-                questionType: "short_answer",
-                expectedAnswers: ["Neural tension", "Disc herniation", "Nerve root irritation"],
-                correctAnswer: "Positive SLR suggests neural tension, likely from disc herniation affecting L5 or S1 nerve root, given the early reproduction of symptoms",
-                rationale: "SLR positive at 45° indicates significant neural tension, highly suggestive of disc herniation with nerve root involvement.",
-                maxPoints: 12
-              },
-              {
-                id: 4,
-                questionNumber: 2,
-                questionText: "What additional neurological tests would you perform to confirm nerve root involvement?",
-                questionType: "list",
-                expectedAnswers: ["Reflexes", "Sensation testing", "Muscle strength", "Crossed SLR"],
-                correctAnswer: "Deep tendon reflexes (Achilles, patellar), dermatomal sensation testing, myotomal strength testing, crossed straight leg raise",
-                rationale: "These tests help identify specific nerve root involvement and differentiate between disc herniation levels.",
-                maxPoints: 10
-              }
-            ]
-          },
-          {
-            id: 3,
-            stageNumber: 3,
-            title: "Diagnosis & Treatment Planning",
-            description: "Formulate diagnosis and create evidence-based treatment plan",
-            timeAllocation: 15,
-            providedInformation: {
-              additionalHistory: "Reflexes: Diminished right Achilles reflex. Sensation: Reduced in lateral foot. Strength: Weak plantar flexion"
-            },
-            questions: [
-              {
-                id: 5,
-                questionNumber: 1,
-                questionText: "Based on all findings, what is your primary diagnosis and which nerve root is affected?",
-                questionType: "short_answer",
-                expectedAnswers: ["L5-S1 disc herniation", "S1 radiculopathy"],
-                correctAnswer: "L5-S1 disc herniation with S1 radiculopathy",
-                rationale: "Diminished Achilles reflex, lateral foot numbness, and weak plantar flexion all indicate S1 nerve root involvement.",
-                maxPoints: 15
-              },
-              {
-                id: 6,
-                questionNumber: 2,
-                questionText: "Outline your initial 2-week treatment plan including specific interventions and goals.",
-                questionType: "essay",
-                expectedAnswers: ["Pain management", "Activity modification", "Gentle mobilization", "Education"],
-                correctAnswer: "Pain management (NSAIDs, activity modification), gentle spinal mobilization, neural mobilization exercises, patient education on posture and movement, gradual return to activities with proper body mechanics",
-                rationale: "Early intervention focuses on pain reduction and preventing chronicity while maintaining function.",
-                maxPoints: 20
-              }
-            ]
-          },
-          {
-            id: 4,
-            stageNumber: 4,
-            title: "Patient Education & Prognosis",
-            description: "Develop patient education strategy and realistic expectations",
-            timeAllocation: 8,
-            providedInformation: {
-              observationFindings: "Patient demonstrates fear avoidance behaviors and asks about surgery"
-            },
-            questions: [
-              {
-                id: 7,
-                questionNumber: 1,
-                questionText: "How would you explain this condition to the patient in simple terms?",
-                questionType: "essay",
-                expectedAnswers: ["Disc explanation", "Natural healing", "Movement benefits"],
-                correctAnswer: "The disc between your lower back bones is putting pressure on a nerve, causing pain down your leg. Most disc problems heal naturally with proper treatment and gradual return to activity. Movement is medicine - staying active within limits helps healing.",
-                rationale: "Clear, non-threatening explanation reduces fear and promotes active participation in recovery.",
-                maxPoints: 15
-              }
-            ]
-          }
-        ]
-      };
-
-      res.json(mockComplexCase);
+      // Get actual complex case from database
+      const { db } = await import("./db");
+      const { complexCases } = await import("@shared/schema");
+      const { eq } = await import("drizzle-orm");
+      
+      const [complexCase] = await db.select()
+        .from(complexCases)
+        .where(eq(complexCases.id, caseId));
+      
+      if (!complexCase) {
+        return res.status(404).json({ error: "Complex case not found" });
+      }
+      
+      res.json(complexCase);
     } catch (error) {
       console.error('Error getting complex case:', error);
       res.status(500).json({ message: 'Failed to get complex case' });

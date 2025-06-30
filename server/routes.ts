@@ -5383,6 +5383,23 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
 
+  // Get all complex cases
+  app.get("/api/complex-cases", async (req, res) => {
+    try {
+      const { db } = await import("./db");
+      const { complexCases } = await import("@shared/schema");
+      
+      const allComplexCases = await db.select()
+        .from(complexCases)
+        .orderBy(complexCases.id);
+      
+      res.json(allComplexCases);
+    } catch (error) {
+      console.error('Error getting complex cases:', error);
+      res.status(500).json({ message: 'Failed to get complex cases' });
+    }
+  });
+
   app.get("/api/complex-cases/:id", async (req, res) => {
     try {
       const caseId = parseInt(req.params.id);

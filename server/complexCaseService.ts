@@ -138,21 +138,18 @@ export class ComplexCaseService {
     userId: number, 
     complexCaseId: number, 
     competitionId?: number
-  ): Promise<ComplexCaseAttempt> {
+  ): Promise<any> {
     try {
-      const attemptData: InsertComplexCaseAttempt = {
-        userId,
-        complexCaseId,
-        competitionId,
-        totalTimeSpent: 0,
-        stageResponses: [],
-        completed: false
-      };
+      // Use pool query to insert with correct column names
+      const result = await pool.query(
+        `INSERT INTO complex_case_attempts 
+         (user_id, complex_case_id, competition_id, started_at, total_time_spent_seconds, stage_responses) 
+         VALUES ($1, $2, $3, NOW(), 0, '[]'::jsonb) 
+         RETURNING *`,
+        [userId, complexCaseId, competitionId || null]
+      );
       
-      const [attempt] = await db.insert(complexCaseAttempts)
-        .values(attemptData)
-        .returning();
-      
+      const attempt = result.rows[0];
       console.log(`Started complex case attempt ${attempt.id} for user ${userId}`);
       return attempt;
     } catch (error) {
@@ -174,14 +171,17 @@ export class ComplexCaseService {
     }>
   ): Promise<ComplexCaseAttempt> {
     try {
-      // Get current attempt
-      const [currentAttempt] = await db.select()
-        .from(complexCaseAttempts)
-        .where(eq(complexCaseAttempts.id, attemptId));
+      // Get current attempt using pool query
+      const attemptResult = await pool.query(
+        'SELECT * FROM complex_case_attempts WHERE id = $1',
+        [attemptId]
+      );
       
-      if (!currentAttempt) {
+      if (attemptResult.rows.length === 0) {
         throw new Error('Attempt not found');
       }
+      
+      const currentAttempt = attemptResult.rows[0];
       
       // Get questions for scoring
       const questionIds = responses.map(r => r.questionId);
@@ -208,18 +208,25 @@ export class ComplexCaseService {
         responses: scoredResponses
       };
       
-      const updatedStageResponses = [...currentAttempt.stageResponses, stageResponse];
+      const currentStageResponses = Array.isArray(currentAttempt.stage_responses) ? 
+        currentAttempt.stage_responses : [];
+      const updatedStageResponses = [...currentStageResponses, stageResponse];
       
-      // Update attempt
-      const [updatedAttempt] = await db.update(complexCaseAttempts)
-        .set({
-          stageResponses: updatedStageResponses,
-          totalTimeSpent: currentAttempt.totalTimeSpent + responses.reduce((sum, r) => sum + r.timeSpent, 0)
-        })
-        .where(eq(complexCaseAttempts.id, attemptId))
-        .returning();
+      // Update attempt using pool query
+      const updateResult = await pool.query(
+        `UPDATE complex_case_attempts 
+         SET stage_responses = $1, 
+             total_time_spent_seconds = $2 
+         WHERE id = $3 
+         RETURNING *`,
+        [
+          JSON.stringify(updatedStageResponses),
+          currentAttempt.total_time_spent_seconds + responses.reduce((sum, r) => sum + r.timeSpent, 0),
+          attemptId
+        ]
+      );
       
-      return updatedAttempt;
+      return updateResult.rows[0];
     } catch (error) {
       console.error('Error submitting stage response:', error);
       throw error;

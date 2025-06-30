@@ -121,6 +121,20 @@ export default function ComplexCasePage() {
     enabled: !!id
   });
 
+  // Debug logging
+  useEffect(() => {
+    if (caseDetails) {
+      console.log('Case details loaded:', caseDetails);
+      console.log('Stages:', caseDetails.stages);
+      console.log('Current stage:', currentStage);
+      const currentStageData = caseDetails.stages.find(s => s.stageNumber === currentStage);
+      console.log('Current stage data:', currentStageData);
+      if (currentStageData) {
+        console.log('Questions for current stage:', currentStageData.questions);
+      }
+    }
+  }, [caseDetails, currentStage]);
+
   // Start case attempt when component loads
   useEffect(() => {
     if (caseDetails && !attempt) {

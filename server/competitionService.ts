@@ -347,6 +347,7 @@ Keep total response under 150 words. Be encouraging but honest about areas needi
       date: new Date(),
       caseStudyId: selectedCaseId,
       title: `Daily Challenge: ${caseStudy.title}`,
+      description: `Test your clinical skills with today's case: ${caseStudy.patientDescription.substring(0, 100)}...`,
       difficulty: caseStudy.complexity,
       bodyPart: caseStudy.bodyPart,
       participantCount: 0,

@@ -4,6 +4,7 @@ import {
   serial,
   integer,
   timestamp,
+  date,
   json,
   boolean,
   pgEnum,
@@ -1631,14 +1632,15 @@ export const competitionParticipants = pgTable("competition_participants", {
 // Daily challenges (special type of competition)
 export const dailyChallenges = pgTable("daily_challenges", {
   id: serial("id").primaryKey(),
-  date: timestamp("date").notNull().unique(),
-  caseStudyId: integer("case_study_id").notNull().references(() => aiCaseStudies.id),
   title: text("title").notNull(),
-  difficulty: text("difficulty").notNull(),
-  bodyPart: bodyPartEnum("body_part").notNull(),
+  description: text("description").notNull(),
+  caseStudyId: integer("case_study_id").notNull().references(() => aiCaseStudies.id),
+  difficulty: text("difficulty"),
+  bodyPart: bodyPartEnum("body_part"),
+  date: date("date").notNull().unique(),
   participantCount: integer("participant_count").default(0),
   averageScore: integer("average_score").default(0),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // User achievements

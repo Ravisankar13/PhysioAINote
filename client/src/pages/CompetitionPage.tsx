@@ -56,7 +56,7 @@ function ComplexCasesView() {
   }
 
   const handleStartCase = (caseId: number) => {
-    setLocation(`/competition/${caseId}`);
+    setLocation(`/complex-case/${caseId}`);
   };
 
   return (

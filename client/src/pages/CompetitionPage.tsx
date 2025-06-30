@@ -31,6 +31,104 @@ import LeaderboardView from "@/components/competition/LeaderboardView";
 import AchievementsPanel from "@/components/competition/AchievementsPanel";
 import CompetitionHistory from "@/components/competition/CompetitionHistory";
 
+// ComplexCasesView component
+function ComplexCasesView() {
+  const [, setLocation] = useLocation();
+  const { data: complexCases, isLoading } = useQuery({
+    queryKey: ['/api/complex-cases']
+  });
+
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        <Card className="p-6">
+          <div className="animate-pulse">
+            <div className="h-4 bg-gray-300 rounded w-1/4 mb-2"></div>
+            <div className="h-3 bg-gray-200 rounded w-1/2 mb-4"></div>
+            <div className="space-y-2">
+              <div className="h-3 bg-gray-200 rounded"></div>
+              <div className="h-3 bg-gray-200 rounded w-5/6"></div>
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  const handleStartCase = (caseId: number) => {
+    setLocation(`/competition/${caseId}`);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="text-center mb-8">
+        <h2 className="text-3xl font-bold mb-4">Complex Clinical Cases</h2>
+        <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+          Advanced multi-stage clinical reasoning challenges designed to test your diagnostic skills 
+          and clinical decision-making through progressive questioning.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {complexCases?.map((complexCase: any) => (
+          <Card key={complexCase.id} className="hover:shadow-lg transition-shadow">
+            <CardHeader>
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <CardTitle className="text-lg mb-2">{complexCase.title}</CardTitle>
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    <Badge variant="secondary" className="text-xs">
+                      {complexCase.bodyPart || 'General'}
+                    </Badge>
+                    <Badge 
+                      variant={complexCase.difficulty === 'advanced' ? 'destructive' : 'default'}
+                      className="text-xs"
+                    >
+                      {complexCase.difficulty || 'Intermediate'}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+              <CardDescription className="text-sm line-clamp-3">
+                {complexCase.patientDescription}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                <div className="flex items-center text-sm text-muted-foreground">
+                  <Clock className="h-4 w-4 mr-2" />
+                  {complexCase.estimatedTime} minutes
+                </div>
+                <div className="flex items-center text-sm text-muted-foreground">
+                  <Brain className="h-4 w-4 mr-2" />
+                  {complexCase.stages?.length || 3} stages
+                </div>
+                <Button 
+                  onClick={() => handleStartCase(complexCase.id)}
+                  className="w-full"
+                  variant="default"
+                >
+                  Start Case Study
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {(!complexCases || complexCases.length === 0) && (
+        <Card className="p-8 text-center">
+          <Brain className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+          <h3 className="text-lg font-semibold mb-2">No Complex Cases Available</h3>
+          <p className="text-muted-foreground mb-4">
+            Complex cases are being set up. Please check back soon or contact support.
+          </p>
+        </Card>
+      )}
+    </div>
+  );
+}
+
 export default function CompetitionPage() {
   const [activeTab, setActiveTab] = useState("overview");
   const [, setLocation] = useLocation();
@@ -113,10 +211,14 @@ export default function CompetitionPage() {
 
         {/* Main Content Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5 lg:w-fit lg:grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6 lg:w-fit lg:grid-cols-6">
             <TabsTrigger value="overview" className="flex items-center gap-2">
               <Target className="h-4 w-4" />
               Overview
+            </TabsTrigger>
+            <TabsTrigger value="complex-cases" className="flex items-center gap-2">
+              <Brain className="h-4 w-4" />
+              Complex Cases
             </TabsTrigger>
             <TabsTrigger value="daily" className="flex items-center gap-2">
               <Calendar className="h-4 w-4" />
@@ -256,6 +358,11 @@ export default function CompetitionPage() {
             </Card>
 
 
+          </TabsContent>
+
+          {/* Complex Cases Tab */}
+          <TabsContent value="complex-cases">
+            <ComplexCasesView />
           </TabsContent>
 
           {/* Daily Challenge Tab */}

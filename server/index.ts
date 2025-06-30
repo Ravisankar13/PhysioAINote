@@ -43,64 +43,65 @@ app.use((req, res, next) => {
     const server = await registerRoutes(app);
     log("Routes registered successfully");
 
-  app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
+    app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
+      const status = err.status || err.statusCode || 500;
+      const message = err.message || "Internal Server Error";
 
-    // Log the error for debugging
-    console.error(`Error on ${req.method} ${req.path}:`, err);
-    
-    // Only send response if not already sent
-    if (!res.headersSent) {
-      res.status(status).json({ message });
-    }
-    
-    // Don't re-throw the error to prevent server crash
-  });
-
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
-  if (app.get("env") === "development") {
-    await setupVite(app, server);
-  } else {
-    serveStatic(app);
-  }
-
-  // ALWAYS serve the app on port 5000
-  // this serves both the API and the client.
-  // Port 5000 is forwarded to external port 80 in production
-  const port = 5000;
-  server.listen(
-    {
-      port,
-      host: "0.0.0.0",
-      reusePort: true,
-    },
-    async () => {
-      log(`serving on port ${port}`);
+      // Log the error for debugging
+      console.error(`Error on ${req.method} ${req.path}:`, err);
       
-      // Auto-seed complex cases in background - temporarily disabled
-      // try {
-      //   // Use system user ID 1 for seeding
-      //   await createAdditionalComplexCases2024(1);
-      //   log('✓ Complex case studies automatically seeded');
-      // } catch (error) {
-      //   // Silently handle - don't crash server if seeding fails
-      //   log('Complex case seeding skipped (already exists or error)');
-      // }
-      
-      // Add interactive questions to existing complex cases
-      try {
-        const { addInteractiveQuestionsToComplexCases } = await import('./scripts/addInteractiveQuestions');
-        await addInteractiveQuestionsToComplexCases();
-        log('✓ Interactive questions added to complex cases');
-      } catch (error) {
-        log('Interactive questions setup skipped (already exists or error)');
+      // Only send response if not already sent
+      if (!res.headersSent) {
+        res.status(status).json({ message });
       }
+      
+      // Don't re-throw the error to prevent server crash
+    });
+
+    // importantly only setup vite in development and after
+    // setting up all the other routes so the catch-all route
+    // doesn't interfere with the other routes
+    if (app.get("env") === "development") {
+      await setupVite(app, server);
+    } else {
+      serveStatic(app);
     }
-  );
-})().catch(err => {
-  console.error("Unhandled server startup error:", err);
-  process.exit(1);
-});
+
+    // ALWAYS serve the app on port 5000
+    // this serves both the API and the client.
+    // Port 5000 is forwarded to external port 80 in production
+    const port = 5000;
+    server.listen(
+      {
+        port,
+        host: "0.0.0.0",
+        reusePort: true,
+      },
+      async () => {
+        log(`serving on port ${port}`);
+        
+        // Auto-seed complex cases in background - temporarily disabled
+        // try {
+        //   // Use system user ID 1 for seeding
+        //   await createAdditionalComplexCases2024(1);
+        //   log('✓ Complex case studies automatically seeded');
+        // } catch (error) {
+        //   // Silently handle - don't crash server if seeding fails
+        //   log('Complex case seeding skipped (already exists or error)');
+        // }
+        
+        // Add interactive questions to existing complex cases
+        try {
+          const { addInteractiveQuestionsToComplexCases } = await import('./scripts/addInteractiveQuestions');
+          await addInteractiveQuestionsToComplexCases();
+          log('✓ Interactive questions added to complex cases');
+        } catch (error) {
+          log('Interactive questions setup skipped (already exists or error)');
+        }
+      }
+    );
+  } catch (err) {
+    console.error("Server startup error:", err);
+    process.exit(1);
+  }
+})();

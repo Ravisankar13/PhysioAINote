@@ -1,4 +1,4 @@
-import { db } from './db';
+import { db, pool } from './db';
 import { 
   complexCases, 
   caseStages, 
@@ -77,39 +77,53 @@ export class ComplexCaseService {
   /**
    * Gets a complex case with all its stages and questions
    */
-  async getComplexCaseWithDetails(caseId: number): Promise<{
-    case: ComplexCase;
-    stages: (CaseStage & { questions: StageQuestion[] })[];
-  } | null> {
+  async getComplexCaseWithDetails(caseId: number): Promise<any> {
     try {
-      // Get the case
-      const [complexCase] = await db.select()
-        .from(complexCases)
-        .where(eq(complexCases.id, caseId));
+      // Get the case using pool directly due to schema mismatch
+      const caseResult = await pool.query('SELECT * FROM complex_cases WHERE id = $1', [caseId]);
+      if (caseResult.rows.length === 0) return null;
       
-      if (!complexCase) return null;
+      const complexCase = caseResult.rows[0];
       
-      // Get stages
-      const stages = await db.select()
-        .from(caseStages)
-        .where(eq(caseStages.complexCaseId, caseId))
-        .orderBy(asc(caseStages.stageNumber));
+      // Get stages using pool directly
+      const stagesResult = await pool.query(
+        'SELECT * FROM case_stages WHERE complex_case_id = $1 ORDER BY stage_number',
+        [caseId]
+      );
       
       // Get questions for each stage
       const stagesWithQuestions = await Promise.all(
-        stages.map(async (stage) => {
-          const questions = await db.select()
-            .from(stageQuestions)
-            .where(eq(stageQuestions.stageId, stage.id))
-            .orderBy(asc(stageQuestions.questionNumber));
+        stagesResult.rows.map(async (stage) => {
+          const questionsResult = await pool.query(
+            'SELECT * FROM stage_questions WHERE stage_id = $1 ORDER BY question_number',
+            [stage.id]
+          );
           
-          return { ...stage, questions };
+          return { 
+            ...stage, 
+            questions: questionsResult.rows.map(q => ({
+              ...q,
+              scoringCriteria: typeof q.scoring_criteria === 'string' ? JSON.parse(q.scoring_criteria) : q.scoring_criteria
+            }))
+          };
         })
       );
       
       return {
-        case: complexCase,
-        stages: stagesWithQuestions
+        case: {
+          ...complexCase,
+          initialPresentation: typeof complexCase.initial_presentation === 'string' ? 
+            JSON.parse(complexCase.initial_presentation) : complexCase.initial_presentation,
+          detailedHistory: typeof complexCase.detailed_history === 'string' ? 
+            JSON.parse(complexCase.detailed_history) : complexCase.detailed_history,
+          physicalFindings: typeof complexCase.physical_findings === 'string' ? 
+            JSON.parse(complexCase.physical_findings) : complexCase.physical_findings
+        },
+        stages: stagesWithQuestions.map(stage => ({
+          ...stage,
+          informationRevealed: typeof stage.information_revealed === 'string' ? 
+            JSON.parse(stage.information_revealed) : stage.information_revealed
+        }))
       };
     } catch (error) {
       console.error('Error getting complex case details:', error);

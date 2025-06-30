@@ -100,10 +100,6 @@ app.use((req, res, next) => {
       }
     }
   );
-  } catch (startupError) {
-    console.error("Fatal server startup error:", startupError);
-    process.exit(1);
-  }
 })().catch(err => {
   console.error("Unhandled server startup error:", err);
   process.exit(1);

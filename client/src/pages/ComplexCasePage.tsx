@@ -1,10 +1,18 @@
+import { useState, useEffect } from 'react';
 import { useParams, useLocation } from 'wouter';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Clock, User, Stethoscope, Brain, ArrowLeft, AlertCircle, XCircle } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Progress } from '@/components/ui/progress';
+import { Clock, User, Stethoscope, Brain, ArrowLeft, AlertCircle, XCircle, CheckCircle, Play, Send, ChevronRight, ChevronLeft } from 'lucide-react';
+import { apiRequest } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
 
 interface ComplexCase {
   id: number;
@@ -41,15 +49,182 @@ interface ComplexCase {
   };
 }
 
+interface StageQuestion {
+  id: number;
+  questionNumber: number;
+  questionText: string;
+  questionType: string;
+  options?: string[];
+  expectedAnswers: string[];
+  scoringCriteria: {
+    maxPoints: number;
+    partialCredit: boolean;
+    keywordPoints: Array<{ keyword: string; points: number }>;
+  };
+  correctAnswer: string;
+  rationale: string;
+  learningPoints?: string[];
+}
+
+interface CaseStage {
+  id: number;
+  stageNumber: number;
+  title: string;
+  description: string;
+  providedInformation?: {
+    patientResponse?: string;
+    testResults?: string;
+    additionalHistory?: string;
+    observationFindings?: string;
+  };
+  timeAllocation: number;
+  questions: StageQuestion[];
+}
+
+interface CaseDetails {
+  case: ComplexCase;
+  stages: CaseStage[];
+}
+
+interface CaseAttempt {
+  id: number;
+  userId: number;
+  complexCaseId: number;
+  competitionId?: number;
+  startedAt: string;
+  totalTimeSpent: number;
+  currentStage: number;
+  completed: boolean;
+}
+
 export default function ComplexCasePage() {
   const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
-  // Get case data
-  const { data: complexCase, isLoading: loadingCase, error } = useQuery<ComplexCase>({
-    queryKey: [`/api/complex-cases/${id}`],
+  // State management
+  const [currentStage, setCurrentStage] = useState(1);
+  const [responses, setResponses] = useState<{ [key: number]: string }>({});
+  const [stageStartTime, setStageStartTime] = useState<number>(Date.now());
+  const [totalTimeSpent, setTotalTimeSpent] = useState(0);
+  const [attempt, setAttempt] = useState<CaseAttempt | null>(null);
+  const [completedStages, setCompletedStages] = useState<number[]>([]);
+  const [stageScores, setStageScores] = useState<{ [key: number]: number }>({});
+  const [isSubmittingStage, setIsSubmittingStage] = useState(false);
+  const [finalResults, setFinalResults] = useState<any>(null);
+  const [showingResults, setShowingResults] = useState<{ [key: number]: boolean }>({});
+
+  // Get case data with stages and questions
+  const { data: caseDetails, isLoading: loadingCase, error } = useQuery<CaseDetails>({
+    queryKey: [`/api/complex-case/${id}`],
     enabled: !!id
   });
+
+  // Start case attempt when component loads
+  useEffect(() => {
+    if (caseDetails && !attempt) {
+      startAttempt();
+    }
+  }, [caseDetails]);
+
+  const startAttempt = async () => {
+    try {
+      const response = await apiRequest('POST', `/api/complex-case/${id}/start`, {
+        competitionId: null
+      });
+      const attemptData = await response.json();
+      setAttempt(attemptData);
+      setStageStartTime(Date.now());
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to start case attempt",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const submitStage = async () => {
+    if (!attempt || !caseDetails || !currentStageData) return;
+
+    setIsSubmittingStage(true);
+    try {
+      const stageTimeSpent = Date.now() - stageStartTime;
+      const stageResponses = currentStageData.questions.map(q => ({
+        questionId: q.id,
+        answer: responses[q.id] || '',
+        timeSpent: Math.floor(stageTimeSpent / currentStageData.questions.length)
+      }));
+
+      const response = await apiRequest('POST', `/api/complex-case-attempt/${attempt.id}/stage/${currentStageData.id}/submit`, {
+        responses: stageResponses,
+        timeSpent: stageTimeSpent
+      });
+      
+      const result = await response.json();
+      
+      // Update state
+      setCompletedStages([...completedStages, currentStage]);
+      setStageScores({ ...stageScores, [currentStage]: result.stageScore });
+      setTotalTimeSpent(totalTimeSpent + stageTimeSpent);
+      
+      // Show results for this stage
+      setShowingResults({ ...showingResults, [currentStage]: true });
+      
+      toast({
+        title: "Stage Complete",
+        description: `Stage ${currentStage} submitted successfully. Score: ${result.stageScore}%`,
+      });
+
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to submit stage response",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmittingStage(false);
+    }
+  };
+
+  const nextStage = () => {
+    if (caseDetails && currentStage < caseDetails.stages.length) {
+      setCurrentStage(currentStage + 1);
+      setStageStartTime(Date.now());
+      setShowingResults({ ...showingResults, [currentStage]: false });
+    } else {
+      completeAttempt();
+    }
+  };
+
+  const completeAttempt = async () => {
+    if (!attempt) return;
+
+    try {
+      const response = await apiRequest('POST', `/api/complex-case-attempt/${attempt.id}/complete`);
+      const results = await response.json();
+      setFinalResults(results);
+      
+      toast({
+        title: "Case Complete",
+        description: `Case completed with overall score: ${results.overallScore}%`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to complete case attempt",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleResponseChange = (questionId: number, answer: string) => {
+    setResponses({ ...responses, [questionId]: answer });
+  };
+
+  const currentStageData = caseDetails?.stages.find(s => s.stageNumber === currentStage);
+  const progress = caseDetails ? (currentStage / caseDetails.stages.length) * 100 : 0;
 
   if (loadingCase) {
     return (
@@ -71,18 +246,84 @@ export default function ComplexCasePage() {
     );
   }
 
-  if (error || !complexCase) {
+  if (error || !caseDetails) {
     return (
       <div className="container mx-auto p-6">
         <Card>
           <CardContent className="p-8 text-center">
             <XCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold mb-2">Case Not Found</h2>
-            <p className="text-gray-600 mb-4">The requested complex case could not be found.</p>
+            <h2 className="text-xl font-semibold mb-2">Case Not Found or No Interactive Content</h2>
+            <p className="text-gray-600 mb-4">
+              This complex case doesn't have interactive stages and questions yet.
+            </p>
             <Button onClick={() => setLocation('/competitions')} className="mt-4">
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back to Competitions
             </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Show final results
+  if (finalResults) {
+    return (
+      <div className="container mx-auto p-6 max-w-4xl">
+        <Card>
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl">Case Completed!</CardTitle>
+            <CardDescription>
+              {caseDetails.case.title} - Overall Score: {finalResults.overallScore}%
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card>
+                <CardContent className="p-4 text-center">
+                  <h3 className="font-semibold">Total Time</h3>
+                  <p className="text-2xl text-blue-600">{Math.floor(finalResults.totalTimeSpent / 60)}m</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4 text-center">
+                  <h3 className="font-semibold">Stages Completed</h3>
+                  <p className="text-2xl text-green-600">{completedStages.length}/{caseDetails.stages.length}</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4 text-center">
+                  <h3 className="font-semibold">Overall Score</h3>
+                  <p className="text-2xl text-purple-600">{finalResults.overallScore}%</p>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold">Stage Breakdown</h3>
+              {caseDetails.stages.map((stage, index) => (
+                <Card key={stage.id}>
+                  <CardContent className="p-4">
+                    <div className="flex justify-between items-center">
+                      <span className="font-medium">{stage.title}</span>
+                      <Badge variant={stageScores[stage.stageNumber] >= 70 ? "default" : "destructive"}>
+                        {stageScores[stage.stageNumber] || 0}%
+                      </Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            <div className="flex gap-4 justify-center">
+              <Button onClick={() => setLocation('/competitions')} variant="outline">
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back to Competitions
+              </Button>
+              <Button onClick={() => window.location.reload()}>
+                Try Again
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -96,19 +337,19 @@ export default function ComplexCasePage() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-2xl">{complexCase.title}</CardTitle>
+              <CardTitle className="text-2xl">{caseDetails.case.title}</CardTitle>
               <CardDescription className="flex items-center gap-4 mt-3">
                 <Badge variant="outline" className="flex items-center gap-1">
                   <Stethoscope className="h-3 w-3" />
-                  {complexCase.bodyPart}
+                  {caseDetails.case.bodyPart}
                 </Badge>
                 <Badge variant="outline" className="flex items-center gap-1">
                   <Brain className="h-3 w-3" />
-                  {complexCase.complexity}
+                  {caseDetails.case.complexity}
                 </Badge>
                 <Badge variant="outline" className="flex items-center gap-1">
                   <Clock className="h-3 w-3" />
-                  {complexCase.estimatedTime} min
+                  {caseDetails.case.estimatedTime} min
                 </Badge>
               </CardDescription>
             </div>
@@ -117,218 +358,197 @@ export default function ComplexCasePage() {
               Back to Competitions
             </Button>
           </div>
+          
+          {/* Progress Bar */}
+          <div className="mt-4">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-sm font-medium">Progress</span>
+              <span className="text-sm text-gray-600">
+                Stage {currentStage} of {caseDetails.stages.length}
+              </span>
+            </div>
+            <Progress value={progress} className="w-full" />
+          </div>
         </CardHeader>
       </Card>
 
-      {/* Case Overview */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <User className="h-5 w-5" />
-              Patient Description
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-gray-700">{complexCase.patientDescription}</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Medical History</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-gray-700">{complexCase.medicalHistory}</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Initial Presentation */}
-      {complexCase.initialPresentation && (
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Initial Presentation</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <h4 className="font-semibold mb-2">Chief Complaint</h4>
-              <p className="text-gray-700">{complexCase.initialPresentation.chiefComplaint}</p>
-            </div>
-            
-            <div>
-              <h4 className="font-semibold mb-2">Pain Scale</h4>
-              <div className="flex items-center gap-2">
-                <span className="text-2xl font-bold text-red-600">
-                  {complexCase.initialPresentation.painScale}/10
-                </span>
-                <span className="text-gray-600">Pain intensity</span>
-              </div>
-            </div>
-
-            {complexCase.initialPresentation.functionalLimitations?.length > 0 && (
-              <div>
-                <h4 className="font-semibold mb-2">Functional Limitations</h4>
-                <ul className="list-disc list-inside space-y-1">
-                  {complexCase.initialPresentation.functionalLimitations.map((limitation, index) => (
-                    <li key={index} className="text-gray-700">{limitation}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {complexCase.initialPresentation.patientGoals?.length > 0 && (
-              <div>
-                <h4 className="font-semibold mb-2">Patient Goals</h4>
-                <ul className="list-disc list-inside space-y-1">
-                  {complexCase.initialPresentation.patientGoals.map((goal, index) => (
-                    <li key={index} className="text-gray-700">{goal}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Additional Information */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        {complexCase.occupationalHistory && (
+      {/* Current Stage */}
+      {currentStageData && (
+        <div className="space-y-6">
+          {/* Stage Header */}
           <Card>
             <CardHeader>
-              <CardTitle>Occupational History</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <Badge variant="secondary">Stage {currentStage}</Badge>
+                {currentStageData.title}
+              </CardTitle>
+              <CardDescription>{currentStageData.description}</CardDescription>
+              {currentStageData.timeAllocation && (
+                <Badge variant="outline" className="w-fit">
+                  <Clock className="h-3 w-3 mr-1" />
+                  {currentStageData.timeAllocation} minutes
+                </Badge>
+              )}
             </CardHeader>
-            <CardContent>
-              <p className="text-gray-700">{complexCase.occupationalHistory}</p>
-            </CardContent>
           </Card>
-        )}
 
-        {complexCase.socialHistory && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Social History</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-700">{complexCase.socialHistory}</p>
-            </CardContent>
-          </Card>
-        )}
+          {/* Provided Information */}
+          {currentStageData.providedInformation && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Clinical Information</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {currentStageData.providedInformation.patientResponse && (
+                  <div>
+                    <h4 className="font-semibold mb-2">Patient Response</h4>
+                    <p className="text-gray-700 bg-blue-50 p-3 rounded">
+                      {currentStageData.providedInformation.patientResponse}
+                    </p>
+                  </div>
+                )}
+                {currentStageData.providedInformation.testResults && (
+                  <div>
+                    <h4 className="font-semibold mb-2">Test Results</h4>
+                    <p className="text-gray-700 bg-green-50 p-3 rounded">
+                      {currentStageData.providedInformation.testResults}
+                    </p>
+                  </div>
+                )}
+                {currentStageData.providedInformation.additionalHistory && (
+                  <div>
+                    <h4 className="font-semibold mb-2">Additional History</h4>
+                    <p className="text-gray-700 bg-yellow-50 p-3 rounded">
+                      {currentStageData.providedInformation.additionalHistory}
+                    </p>
+                  </div>
+                )}
+                {currentStageData.providedInformation.observationFindings && (
+                  <div>
+                    <h4 className="font-semibold mb-2">Observation Findings</h4>
+                    <p className="text-gray-700 bg-purple-50 p-3 rounded">
+                      {currentStageData.providedInformation.observationFindings}
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
-        {complexCase.currentMedications && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Current Medications</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-700">{complexCase.currentMedications}</p>
-            </CardContent>
-          </Card>
-        )}
+          {/* Questions */}
+          <div className="space-y-4">
+            {currentStageData.questions.map((question, questionIndex) => (
+              <Card key={question.id}>
+                <CardHeader>
+                  <CardTitle className="text-lg">
+                    Question {question.questionNumber}: {question.questionText}
+                  </CardTitle>
+                  <CardDescription>
+                    Points: {question.scoringCriteria.maxPoints} | Type: {question.questionType}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {/* Answer Input */}
+                  {question.questionType === 'multiple_choice' && question.options ? (
+                    <RadioGroup
+                      value={responses[question.id] || ''}
+                      onValueChange={(value) => handleResponseChange(question.id, value)}
+                    >
+                      {question.options.map((option, optionIndex) => (
+                        <div key={optionIndex} className="flex items-center space-x-2">
+                          <RadioGroupItem value={option} id={`${question.id}-${optionIndex}`} />
+                          <Label htmlFor={`${question.id}-${optionIndex}`}>{option}</Label>
+                        </div>
+                      ))}
+                    </RadioGroup>
+                  ) : question.questionType === 'short_answer' ? (
+                    <Input
+                      placeholder="Enter your answer..."
+                      value={responses[question.id] || ''}
+                      onChange={(e) => handleResponseChange(question.id, e.target.value)}
+                    />
+                  ) : (
+                    <Textarea
+                      placeholder="Enter your detailed response..."
+                      value={responses[question.id] || ''}
+                      onChange={(e) => handleResponseChange(question.id, e.target.value)}
+                      rows={4}
+                    />
+                  )}
 
-        {complexCase.mechanismOfInjury && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Mechanism of Injury</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-700">{complexCase.mechanismOfInjury}</p>
-            </CardContent>
-          </Card>
-        )}
-      </div>
+                  {/* Show results if stage is completed */}
+                  {showingResults[currentStage] && (
+                    <div className="mt-4 p-4 bg-gray-50 rounded">
+                      <h4 className="font-semibold text-green-700 mb-2">Correct Answer:</h4>
+                      <p className="text-gray-700 mb-3">{question.correctAnswer}</p>
+                      
+                      <h4 className="font-semibold text-blue-700 mb-2">Rationale:</h4>
+                      <p className="text-gray-700 mb-3">{question.rationale}</p>
+                      
+                      {question.learningPoints && question.learningPoints.length > 0 && (
+                        <>
+                          <h4 className="font-semibold text-purple-700 mb-2">Learning Points:</h4>
+                          <ul className="list-disc list-inside space-y-1">
+                            {question.learningPoints.map((point, index) => (
+                              <li key={index} className="text-gray-700">{point}</li>
+                            ))}
+                          </ul>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
 
-      {/* Detailed History */}
-      {complexCase.detailedHistory && (
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Detailed History</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <h4 className="font-semibold mb-2">Onset Details</h4>
-              <p className="text-gray-700">{complexCase.detailedHistory.onsetDetails}</p>
-            </div>
-            
-            <div>
-              <h4 className="font-semibold mb-2">Progression Pattern</h4>
-              <p className="text-gray-700">{complexCase.detailedHistory.progressionPattern}</p>
-            </div>
+          {/* Action Buttons */}
+          <div className="flex justify-between items-center">
+            <Button
+              onClick={() => setCurrentStage(Math.max(1, currentStage - 1))}
+              disabled={currentStage === 1}
+              variant="outline"
+            >
+              <ChevronLeft className="h-4 w-4 mr-2" />
+              Previous Stage
+            </Button>
 
-            {complexCase.detailedHistory.aggravatingFactors?.length > 0 && (
-              <div>
-                <h4 className="font-semibold mb-2">Aggravating Factors</h4>
-                <ul className="list-disc list-inside space-y-1">
-                  {complexCase.detailedHistory.aggravatingFactors.map((factor, index) => (
-                    <li key={index} className="text-gray-700">{factor}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            <div className="flex gap-4">
+              {!completedStages.includes(currentStage) && !showingResults[currentStage] && (
+                <Button 
+                  onClick={submitStage} 
+                  disabled={isSubmittingStage || currentStageData.questions.some(q => !responses[q.id])}
+                >
+                  {isSubmittingStage ? (
+                    "Submitting..."
+                  ) : (
+                    <>
+                      <Send className="h-4 w-4 mr-2" />
+                      Submit Stage
+                    </>
+                  )}
+                </Button>
+              )}
 
-            {complexCase.detailedHistory.easingFactors?.length > 0 && (
-              <div>
-                <h4 className="font-semibold mb-2">Easing Factors</h4>
-                <ul className="list-disc list-inside space-y-1">
-                  {complexCase.detailedHistory.easingFactors.map((factor, index) => (
-                    <li key={index} className="text-gray-700">{factor}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Physical Findings */}
-      {complexCase.physicalFindings && (
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Physical Examination Findings</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <h4 className="font-semibold mb-2">Observation</h4>
-              <p className="text-gray-700">{complexCase.physicalFindings.observation}</p>
-            </div>
-            
-            <div>
-              <h4 className="font-semibold mb-2">Palpation</h4>
-              <p className="text-gray-700">{complexCase.physicalFindings.palpation}</p>
-            </div>
-
-            <div>
-              <h4 className="font-semibold mb-2">Range of Motion</h4>
-              <p className="text-gray-700">{complexCase.physicalFindings.rangeOfMotion}</p>
-            </div>
-
-            <div>
-              <h4 className="font-semibold mb-2">Strength Assessment</h4>
-              <p className="text-gray-700">{complexCase.physicalFindings.strength}</p>
-            </div>
-
-            <div>
-              <h4 className="font-semibold mb-2">Neurological Assessment</h4>
-              <p className="text-gray-700">{complexCase.physicalFindings.neurological}</p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Notice about upcoming functionality */}
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex items-center gap-3 text-amber-700">
-            <AlertCircle className="h-5 w-5" />
-            <div>
-              <h3 className="font-semibold">Complex Case Study Interface</h3>
-              <p className="text-sm text-amber-600 mt-1">
-                This is a detailed case presentation. Interactive multi-stage assessment functionality will be available soon.
-              </p>
+              {(completedStages.includes(currentStage) || showingResults[currentStage]) && (
+                <Button onClick={nextStage}>
+                  {currentStage === caseDetails.stages.length ? (
+                    <>
+                      <CheckCircle className="h-4 w-4 mr-2" />
+                      Complete Case
+                    </>
+                  ) : (
+                    <>
+                      <ChevronRight className="h-4 w-4 mr-2" />
+                      Next Stage
+                    </>
+                  )}
+                </Button>
+              )}
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      )}
     </div>
   );
 }

@@ -5564,6 +5564,20 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
 
+  // Add interactive questions to existing complex cases
+  app.post("/api/admin/add-interactive-questions", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const { addInteractiveQuestionsToComplexCases } = await import('./scripts/addInteractiveQuestions');
+      await addInteractiveQuestionsToComplexCases();
+      res.json({ message: "Successfully added interactive questions to all complex cases" });
+    } catch (error: any) {
+      console.error("Error adding interactive questions:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.post("/api/complex-case/:id/start", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     

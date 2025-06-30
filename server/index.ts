@@ -79,6 +79,15 @@ app.use((req, res, next) => {
       //   // Silently handle - don't crash server if seeding fails
       //   log('Complex case seeding skipped (already exists or error)');
       // }
+      
+      // Add interactive questions to existing complex cases
+      try {
+        const { addInteractiveQuestionsToComplexCases } = await import('./scripts/addInteractiveQuestions');
+        await addInteractiveQuestionsToComplexCases();
+        log('✓ Interactive questions added to complex cases');
+      } catch (error) {
+        log('Interactive questions setup skipped (already exists or error)');
+      }
     }
   );
 })();

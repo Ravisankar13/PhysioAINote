@@ -10,7 +10,7 @@ import {
   type InsertCompetitionParticipant,
   type ComplexCase
 } from '@shared/schema';
-import { eq, and, gte, lte, lt, desc, asc, count, isNull } from 'drizzle-orm';
+import { eq, and, gte, lte, lt, desc, asc, count, isNull, sql, inArray } from 'drizzle-orm';
 
 export interface ComplexCaseCompetitionConfig {
   title: string;
@@ -261,35 +261,37 @@ export class ComplexCaseCompetitionService {
    * Gets all competitions a user is registered for
    */
   async getUserRegisteredCompetitions(userId: number): Promise<any[]> {
-    return await db
-      .select({
-        id: competitions.id,
-        title: competitions.title,
-        description: competitions.description,
-        type: competitions.type,
-        status: competitions.status,
-        bodyPart: competitions.bodyPart,
-        difficulty: competitions.difficulty,
-        timeLimit: competitions.timeLimit,
-        maxParticipants: competitions.maxParticipants,
-        currentParticipants: competitions.currentParticipants,
-        startTime: competitions.startTime,
-        endTime: competitions.endTime,
-        registrationDeadline: competitions.registrationDeadline,
-        complexCaseIds: competitions.complexCaseIds,
-        registeredAt: competitionParticipants.createdAt,
-        participantId: competitionParticipants.id
-      })
+    // First get user's participations
+    const userParticipations = await db
+      .select()
+      .from(competitionParticipants)
+      .where(eq(competitionParticipants.userId, userId));
+
+    if (userParticipations.length === 0) {
+      return [];
+    }
+
+    const competitionIds = userParticipations.map(p => p.competitionId);
+    
+    // Then get the competition details
+    const userCompetitions = await db
+      .select()
       .from(competitions)
-      .innerJoin(
-        competitionParticipants,
-        eq(competitions.id, competitionParticipants.competitionId)
-      )
       .where(and(
-        eq(competitionParticipants.userId, userId),
+        sql`${competitions.id} = ANY(${competitionIds})`,
         eq(competitions.caseType, 'complex')
       ))
       .orderBy(asc(competitions.startTime));
+
+    // Add participant info to each competition
+    return userCompetitions.map(comp => {
+      const participation = userParticipations.find(p => p.competitionId === comp.id);
+      return {
+        ...comp,
+        registeredAt: participation?.joinedAt,
+        participantId: participation?.id
+      };
+    });
   }
 
   /**

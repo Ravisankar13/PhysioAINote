@@ -335,7 +335,7 @@ export default function ComplexCaseCompetitionsPage() {
 
       {/* Competition Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="upcoming" className="flex items-center gap-2">
             <Calendar className="h-4 w-4" />
             Upcoming ({upcomingCompetitions.length})
@@ -343,6 +343,10 @@ export default function ComplexCaseCompetitionsPage() {
           <TabsTrigger value="active" className="flex items-center gap-2">
             <Play className="h-4 w-4" />
             Live ({activeCompetitions.length})
+          </TabsTrigger>
+          <TabsTrigger value="registrations" className="flex items-center gap-2">
+            <User className="h-4 w-4" />
+            My Registrations ({myRegistrations.length})
           </TabsTrigger>
           <TabsTrigger value="leaderboard" className="flex items-center gap-2">
             <Crown className="h-4 w-4" />

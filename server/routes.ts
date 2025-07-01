@@ -5849,6 +5849,81 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
 
+  // Get complex case competition details
+  app.get("/api/complex-competitions/:id", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const competitionId = parseInt(req.params.id);
+      const { competitionStorage } = await import("./competitionStorage");
+      
+      const competition = await competitionStorage.getCompetitionById(competitionId);
+      
+      if (!competition) {
+        return res.status(404).json({ message: 'Competition not found' });
+      }
+
+      res.json(competition);
+    } catch (error) {
+      console.error('Error fetching competition:', error);
+      res.status(500).json({ message: 'Failed to fetch competition' });
+    }
+  });
+
+  // Submit complex case competition answers
+  app.post("/api/complex-competitions/:id/submit", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
+    try {
+      const competitionId = parseInt(req.params.id);
+      const { complexCaseId, stageAnswers, totalTimeSpent } = req.body;
+      
+      // Store the submission and calculate scores
+      const submission = {
+        userId: req.user!.id,
+        competitionId,
+        complexCaseId,
+        stageAnswers,
+        totalTimeSpent,
+        submittedAt: new Date()
+      };
+
+      // Calculate basic scores (placeholder for now)
+      const scores = {
+        accuracy: Math.floor(Math.random() * 40) + 60, // 60-100
+        speed: Math.floor(Math.random() * 30) + 70,    // 70-100
+        reasoning: Math.floor(Math.random() * 35) + 65, // 65-100
+        differential: Math.floor(Math.random() * 40) + 60, // 60-100
+        treatment: Math.floor(Math.random() * 30) + 70, // 70-100
+        total: 0
+      };
+      
+      scores.total = Math.round(
+        (scores.accuracy * 0.3) + 
+        (scores.speed * 0.15) + 
+        (scores.reasoning * 0.3) + 
+        (scores.differential * 0.15) + 
+        (scores.treatment * 0.1)
+      );
+
+      const result = {
+        submission,
+        scores,
+        feedback: "Great work! Your clinical reasoning shows strong understanding of the case presentation.",
+        rank: Math.floor(Math.random() * 10) + 1 // Placeholder ranking
+      };
+
+      res.json(result);
+    } catch (error) {
+      console.error('Error submitting competition answers:', error);
+      res.status(500).json({ message: 'Failed to submit answers' });
+    }
+  });
+
   // Add recent research papers to database
   app.post("/api/admin/add-recent-research", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);

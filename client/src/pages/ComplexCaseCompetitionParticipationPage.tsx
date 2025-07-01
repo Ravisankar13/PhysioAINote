@@ -1,0 +1,356 @@
+import { useState, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useRoute, Link } from "wouter";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
+import { 
+  ArrowLeft, 
+  Clock, 
+  Users, 
+  Trophy, 
+  Brain, 
+  CheckCircle,
+  Play,
+  ChevronRight,
+  ChevronLeft
+} from "lucide-react";
+import { apiRequest } from "@/lib/queryClient";
+
+interface ComplexCase {
+  id: number;
+  title: string;
+  patientDescription: string;
+  bodyPart: string;
+  complexity: string;
+  estimatedTimeMinutes: number;
+}
+
+interface ComplexCaseStage {
+  id: number;
+  stageNumber: number;
+  title: string;
+  question: string;
+  type: 'multiple_choice' | 'short_answer' | 'clinical_reasoning';
+  options?: string[];
+  correctAnswer?: string;
+  points: number;
+}
+
+interface Competition {
+  id: number;
+  title: string;
+  description: string;
+  status: string;
+  timeLimit: number;
+  maxParticipants: number;
+  complexCaseIds: number[];
+}
+
+function ComplexCaseCompetitionParticipationPage() {
+  const [match, params] = useRoute("/complex-competition/:id");
+  const competitionId = params?.id ? parseInt(params.id) : null;
+  
+  const [currentStage, setCurrentStage] = useState(0);
+  const [answers, setAnswers] = useState<Record<number, string>>({});
+  const [timeStarted, setTimeStarted] = useState<Date | null>(null);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  // Fetch competition details
+  const { data: competition, isLoading: loadingCompetition } = useQuery({
+    queryKey: [`/api/complex-competitions/${competitionId}`],
+    enabled: !!competitionId
+  });
+
+  // Fetch complex case details
+  const { data: complexCaseData, isLoading: loadingCase } = useQuery({
+    queryKey: [`/api/complex-cases/${competition?.complexCaseIds?.[0]}`],
+    enabled: !!competition?.complexCaseIds?.[0]
+  });
+
+  // Start timer when component mounts
+  useEffect(() => {
+    if (competition && !timeStarted) {
+      setTimeStarted(new Date());
+    }
+  }, [competition, timeStarted]);
+
+  // Submit answers mutation
+  const submitAnswers = useMutation({
+    mutationFn: async () => {
+      const timeSpent = timeStarted ? Math.floor((Date.now() - timeStarted.getTime()) / 1000) : 0;
+      
+      const submission = {
+        competitionId,
+        complexCaseId: competition?.complexCaseIds?.[0],
+        stageAnswers: Object.entries(answers).map(([stageId, answer]) => ({
+          stageId: parseInt(stageId),
+          answer,
+          timeSpent: Math.floor(timeSpent / Object.keys(answers).length) // Distribute time evenly
+        })),
+        totalTimeSpent: timeSpent
+      };
+
+      const response = await apiRequest('POST', `/api/complex-competitions/${competitionId}/submit`, submission);
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Submission Successful!",
+        description: "Your answers have been submitted and scored.",
+      });
+      
+      // Redirect to results page
+      window.location.href = `/complex-competition/${competitionId}/results`;
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Submission Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  if (loadingCompetition || loadingCase) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="flex items-center justify-center h-96">
+          <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!competition || !complexCaseData) {
+    return (
+      <div className="container mx-auto p-6">
+        <Card>
+          <CardContent className="text-center py-12">
+            <Trophy className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+            <h2 className="text-2xl font-bold mb-2">Competition Not Found</h2>
+            <p className="text-muted-foreground mb-6">
+              This competition doesn't exist or is no longer available.
+            </p>
+            <Link to="/competitions">
+              <Button>
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back to Competitions
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const stages = complexCaseData?.stages || [];
+  const currentStageData = stages[currentStage];
+  const progressPercentage = stages.length > 0 ? ((currentStage + 1) / stages.length) * 100 : 0;
+  const timeElapsed = timeStarted ? Math.floor((Date.now() - timeStarted.getTime()) / 1000) : 0;
+  const timeRemaining = Math.max(0, (competition.timeLimit * 60) - timeElapsed);
+
+  const handleAnswer = (value: string) => {
+    if (currentStageData) {
+      setAnswers(prev => ({
+        ...prev,
+        [currentStageData.id]: value
+      }));
+    }
+  };
+
+  const handleNext = () => {
+    if (currentStage < stages.length - 1) {
+      setCurrentStage(prev => prev + 1);
+    }
+  };
+
+  const handlePrevious = () => {
+    if (currentStage > 0) {
+      setCurrentStage(prev => prev - 1);
+    }
+  };
+
+  const handleSubmit = () => {
+    submitAnswers.mutate();
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <div className="container mx-auto p-6 space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <Link to="/competitions">
+          <Button variant="ghost" size="sm">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Competitions
+          </Button>
+        </Link>
+        <div className="flex items-center gap-4">
+          <Badge variant="secondary">
+            <Clock className="h-3 w-3 mr-1" />
+            {formatTime(timeRemaining)} remaining
+          </Badge>
+          <Badge variant="default">
+            Stage {currentStage + 1} of {stages.length}
+          </Badge>
+        </div>
+      </div>
+
+      {/* Competition Overview */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-3">
+            <Trophy className="h-6 w-6 text-yellow-600" />
+            {competition.title}
+          </CardTitle>
+          <CardDescription>{competition.description}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {/* Progress */}
+            <div>
+              <div className="flex justify-between text-sm mb-2">
+                <span>Progress</span>
+                <span>{currentStage + 1}/{stages.length} stages completed</span>
+              </div>
+              <Progress value={progressPercentage} className="h-2" />
+            </div>
+
+            {/* Case Information */}
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <h4 className="font-semibold text-blue-800">Case: {complexCaseData?.case?.title}</h4>
+              <p className="text-blue-700 mt-1">{complexCaseData?.case?.patientDescription}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Current Stage */}
+      {currentStageData && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Brain className="h-5 w-5" />
+              {currentStageData.title}
+            </CardTitle>
+            <CardDescription>
+              Answer the following question based on the case information
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="p-4 border rounded-lg bg-gray-50">
+              <p className="font-medium">{currentStageData.question}</p>
+            </div>
+
+            {/* Answer Input */}
+            <div className="space-y-3">
+              {currentStageData.type === 'multiple_choice' && currentStageData.options ? (
+                <div className="space-y-2">
+                  {currentStageData.options.map((option, index) => (
+                    <label key={index} className="flex items-center space-x-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                      <input
+                        type="radio"
+                        name="answer"
+                        value={option}
+                        checked={answers[currentStageData.id] === option}
+                        onChange={(e) => handleAnswer(e.target.value)}
+                        className="text-primary"
+                      />
+                      <span>{option}</span>
+                    </label>
+                  ))}
+                </div>
+              ) : (
+                <Textarea
+                  placeholder="Enter your answer..."
+                  value={answers[currentStageData.id] || ''}
+                  onChange={(e) => handleAnswer(e.target.value)}
+                  rows={4}
+                />
+              )}
+            </div>
+
+            {/* Navigation */}
+            <div className="flex justify-between">
+              <Button
+                variant="outline"
+                onClick={handlePrevious}
+                disabled={currentStage === 0}
+              >
+                <ChevronLeft className="h-4 w-4 mr-2" />
+                Previous
+              </Button>
+
+              {currentStage === stages.length - 1 ? (
+                <Button
+                  onClick={handleSubmit}
+                  disabled={!answers[currentStageData.id] || submitAnswers.isPending}
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  {submitAnswers.isPending ? "Submitting..." : "Submit Answers"}
+                  <CheckCircle className="h-4 w-4 ml-2" />
+                </Button>
+              ) : (
+                <Button
+                  onClick={handleNext}
+                  disabled={!answers[currentStageData.id]}
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4 ml-2" />
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Stage Overview */}
+      <Card>
+        <CardHeader>
+          <CardTitle>All Stages</CardTitle>
+          <CardDescription>Track your progress through each stage</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-2">
+            {stages.map((stage: any, index: number) => (
+              <div
+                key={stage.id}
+                className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer transition-colors ${
+                  index === currentStage
+                    ? 'border-primary bg-primary/5'
+                    : answers[stage.id]
+                    ? 'border-green-500 bg-green-50'
+                    : 'border-border hover:border-primary/50'
+                }`}
+                onClick={() => setCurrentStage(index)}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${
+                    answers[stage.id] ? 'bg-green-500 text-white' : 
+                    index === currentStage ? 'bg-primary text-white' : 'bg-gray-200'
+                  }`}>
+                    {answers[stage.id] ? <CheckCircle className="h-3 w-3" /> : index + 1}
+                  </div>
+                  <span className="font-medium">{stage.title}</span>
+                </div>
+                <Badge variant="outline">{stage.points} pts</Badge>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+export default ComplexCaseCompetitionParticipationPage;

@@ -178,6 +178,20 @@ export default function ComplexCaseCompetitionsPage() {
     joinCompetitionMutation.mutate(competitionId);
   };
 
+  const handleEnterCompetition = (competitionId: number) => {
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to enter competitions.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Navigate to the complex case competition participation page
+    window.location.href = `/complex-competition/${competitionId}`;
+  };
+
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty?.toLowerCase()) {
       case 'beginner': return 'bg-green-100 text-green-800';
@@ -314,7 +328,10 @@ export default function ComplexCaseCompetitionsPage() {
         )}
         
         {competition.status === 'active' && (
-          <Button className="w-full">
+          <Button 
+            className="w-full"
+            onClick={() => handleEnterCompetition(competition.id)}
+          >
             <Play className="h-4 w-4 mr-2" />
             Enter Competition
           </Button>

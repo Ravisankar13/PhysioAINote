@@ -40,6 +40,7 @@ import CompetitionPage from "@/pages/CompetitionPage";
 import CompetitionParticipationPage from "@/pages/CompetitionParticipationPage";
 import ComplexCasePage from "@/pages/ComplexCasePage";
 import ComplexCaseCompetitionsPage from "@/pages/ComplexCaseCompetitionsPage";
+import ComplexCaseCompetitionParticipationPage from "@/pages/ComplexCaseCompetitionParticipationPage";
 import CompetitionDiagnosisPage from "@/pages/CompetitionDiagnosisPage";
 import CompetitionResultsPage from "@/pages/CompetitionResultsPage";
 import Header from "@/components/layout/Header";

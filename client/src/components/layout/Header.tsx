@@ -27,6 +27,7 @@ import {
   BookOpen,
   Camera,
   Scan,
+  Trophy,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Link, useLocation } from "wouter";
@@ -124,6 +125,15 @@ const Header = () => {
               <Button className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold shadow-sm flex items-center gap-2">
                 <Brain className="h-4 w-4" />
                 <span>Smart Assessment</span>
+              </Button>
+            </Link>
+            <Link to="/competitions">
+              <Button className="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white font-semibold shadow-sm flex items-center gap-2 relative">
+                <Trophy className="h-4 w-4" />
+                <span>Competitions</span>
+                <span className="absolute -top-1 -right-1 bg-yellow-400 text-yellow-900 text-xs font-bold px-1.5 py-0.5 rounded-full">
+                  NEW
+                </span>
               </Button>
             </Link>
 

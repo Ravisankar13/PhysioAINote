@@ -5995,6 +5995,165 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
 
+  // Create 10 advanced clinical diagnosis competitions (admin only)
+  app.post("/api/admin/create-diagnosis-competitions", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    // Check if user is admin
+    const adminUsernames = ["Fateofjustice"];
+    if (!adminUsernames.includes(req.user!.username)) {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+    
+    try {
+      const { generateComplexCase } = await import("./complexCaseGenerator");
+      const { competitionStorage } = await import("./competitionStorage");
+      
+      // Create 10 challenging clinical diagnosis cases
+      const diagnosticCases = [
+        {
+          title: "Chronic Shoulder Pain with Neurological Symptoms",
+          bodyPart: "shoulder" as const,
+          complexity: "advanced" as const,
+          competitionType: "diagnostic_detective" as const,
+          description: "Complex shoulder presentation with referred pain patterns and neurological involvement requiring systematic differential diagnosis"
+        },
+        {
+          title: "Persistent Low Back Pain with Red Flags",
+          bodyPart: "back" as const,
+          complexity: "advanced" as const,
+          competitionType: "diagnostic_detective" as const,
+          description: "Challenging lumbar spine case with potential serious pathology requiring careful clinical reasoning and red flag assessment"
+        },
+        {
+          title: "Recurrent Ankle Instability vs Subtalar Dysfunction",
+          bodyPart: "ankle" as const,
+          complexity: "advanced" as const,
+          competitionType: "diagnostic_detective" as const,
+          description: "Complex ankle case requiring differentiation between multiple potential causes of chronic instability"
+        },
+        {
+          title: "Hip Pain in Young Athlete - FAI vs Labral Pathology",
+          bodyPart: "hip" as const,
+          complexity: "advanced" as const,
+          competitionType: "diagnostic_detective" as const,
+          description: "Challenging hip case in athletic population requiring advanced diagnostic reasoning for structural vs functional causes"
+        },
+        {
+          title: "Chronic Neck Pain with Headaches and Dizziness",
+          bodyPart: "neck" as const,
+          complexity: "advanced" as const,
+          competitionType: "diagnostic_detective" as const,
+          description: "Complex cervical spine presentation with multiple symptom clusters requiring systematic assessment approach"
+        },
+        {
+          title: "Knee Pain with Locking - Meniscal vs Loose Body",
+          bodyPart: "knee" as const,
+          complexity: "advanced" as const,
+          competitionType: "diagnostic_detective" as const,
+          description: "Challenging knee case with mechanical symptoms requiring precise differential diagnosis between structural causes"
+        },
+        {
+          title: "Elbow Pain in Tennis Player - Multiple Differential Diagnoses",
+          bodyPart: "elbow" as const,
+          complexity: "advanced" as const,
+          competitionType: "diagnostic_detective" as const,
+          description: "Complex elbow case in athlete with overlapping symptoms requiring systematic elimination of multiple potential diagnoses"
+        },
+        {
+          title: "Wrist Pain with Numbness - Carpal Tunnel vs Thoracic Outlet",
+          bodyPart: "wrist" as const,
+          complexity: "advanced" as const,
+          competitionType: "diagnostic_detective" as const,
+          description: "Challenging upper extremity case requiring differentiation between local and proximal causes of symptoms"
+        },
+        {
+          title: "Foot Pain with Gait Abnormalities - Biomechanical Analysis",
+          bodyPart: "foot" as const,
+          complexity: "advanced" as const,
+          competitionType: "diagnostic_detective" as const,
+          description: "Complex foot case requiring integration of biomechanical assessment with pathological findings"
+        },
+        {
+          title: "Post-Surgical Complications - Ongoing Pain and Dysfunction",
+          bodyPart: "knee" as const,
+          complexity: "advanced" as const,
+          competitionType: "diagnostic_detective" as const,
+          description: "Challenging post-operative case requiring assessment of surgical complications vs new pathology"
+        }
+      ];
+      
+      const createdCases = [];
+      const createdCompetitions = [];
+      
+      // Generate each complex case
+      for (const caseData of diagnosticCases) {
+        const caseInput = {
+          bodyPart: caseData.bodyPart,
+          complexity: caseData.complexity,
+          competitionType: caseData.competitionType,
+          estimatedTime: 45 // 45 minutes for advanced cases
+        };
+        
+        const caseResult = await generateComplexCase(caseInput, req.user!.id);
+        createdCases.push(caseResult.complexCase);
+        
+        // Create competition for this case
+        const competition = {
+          title: caseData.title,
+          description: caseData.description,
+          competitionType: "diagnostic_challenge",
+          status: "active",
+          bodyPart: caseData.bodyPart,
+          difficulty: "advanced",
+          timeLimit: 45,
+          maxParticipants: 100,
+          entryFee: 0,
+          prizePool: 0,
+          startTime: new Date(),
+          endTime: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+          createdBy: req.user!.id,
+          caseStudyIds: [],
+          complexCaseIds: [caseResult.complexCase.id!],
+          caseType: "complex",
+          rules: {
+            scoringWeights: {
+              accuracy: 0.35,
+              speed: 0.10,
+              reasoning: 0.35,
+              differential: 0.15,
+              treatment: 0.05
+            },
+            allowedAttempts: 3,
+            showLeaderboard: true,
+            revealAnswers: true
+          }
+        };
+        
+        const createdCompetition = await competitionStorage.createCompetition(competition);
+        createdCompetitions.push(createdCompetition);
+      }
+      
+      res.json({
+        success: true,
+        message: "Successfully created 10 advanced clinical diagnosis competitions",
+        casesCreated: createdCases.length,
+        competitionsCreated: createdCompetitions.length,
+        competitions: createdCompetitions.map(c => ({
+          id: c.id,
+          title: c.title,
+          bodyPart: c.bodyPart,
+          difficulty: c.difficulty,
+          caseType: c.caseType
+        }))
+      });
+      
+    } catch (error: any) {
+      console.error("Error creating diagnosis competitions:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Create complex competitions with multi-stage cases
   app.post("/api/create-complex-competitions", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);

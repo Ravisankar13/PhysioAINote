@@ -64,6 +64,53 @@ interface Participant {
   timeSpent: number;
 }
 
+// Component to create diagnosis competitions
+function CreateDiagnosisCompetitionsButton() {
+  const { toast } = useToast();
+  
+  const createDiagnosisCompetitions = useMutation({
+    mutationFn: () => apiRequest('/api/admin/create-diagnosis-competitions', {
+      method: 'POST'
+    }),
+    onSuccess: (data) => {
+      toast({
+        title: "Success!",
+        description: `Created ${data.competitionsCreated} advanced clinical diagnosis competitions`,
+      });
+      // Refresh the competitions list
+      queryClient.invalidateQueries({ queryKey: ['/api/complex-competitions/upcoming'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/complex-competitions/active'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create diagnosis competitions",
+        variant: "destructive"
+      });
+    }
+  });
+
+  return (
+    <Button 
+      onClick={() => createDiagnosisCompetitions.mutate()}
+      disabled={createDiagnosisCompetitions.isPending}
+      className="bg-green-600 hover:bg-green-700"
+    >
+      {createDiagnosisCompetitions.isPending ? (
+        <>
+          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+          Creating...
+        </>
+      ) : (
+        <>
+          <Brain className="h-4 w-4 mr-2" />
+          Create 10 Diagnosis Competitions
+        </>
+      )}
+    </Button>
+  );
+}
+
 export default function ComplexCaseCompetitionsPage() {
   const [activeTab, setActiveTab] = useState('upcoming');
   const [selectedCompetition, setSelectedCompetition] = useState<Competition | null>(null);
@@ -491,9 +538,12 @@ export default function ComplexCaseCompetitionsPage() {
                     Test and preview competition questions before they go live
                   </p>
                 </div>
-                <Badge variant="destructive" className="text-xs">
-                  ADMIN ONLY
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <CreateDiagnosisCompetitionsButton />
+                  <Badge variant="destructive" className="text-xs">
+                    ADMIN ONLY
+                  </Badge>
+                </div>
               </div>
 
               {/* Competition Selection */}

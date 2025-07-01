@@ -10,7 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useAuth } from "@/hooks/use-auth";
-import { Link } from "react-router-dom";
+import { Link } from "wouter";
 
 type MembershipRequiredProps = {
   feature: "aiNotes" | "research" | "skeletonTools";

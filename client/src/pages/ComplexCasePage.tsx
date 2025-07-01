@@ -116,6 +116,11 @@ export default function ComplexCasePage() {
   const [isSubmittingStage, setIsSubmittingStage] = useState(false);
   const [finalResults, setFinalResults] = useState<any>(null);
   const [showingResults, setShowingResults] = useState<{ [key: number]: boolean }>({});
+  
+  // AI Scoring state
+  const [questionScores, setQuestionScores] = useState<{ [key: number]: any }>({});
+  const [scoringQuestion, setScoringQuestion] = useState<number | null>(null);
+  const [completedQuestions, setCompletedQuestions] = useState<number[]>([]);
 
   // Get case data with stages and questions
   const { data: caseDetails, isLoading: loadingCase, error } = useQuery<CaseDetails>({
@@ -201,6 +206,51 @@ export default function ComplexCasePage() {
       });
     } finally {
       setIsSubmittingStage(false);
+    }
+  };
+
+  // AI-powered question scoring
+  const scoreQuestion = async (questionId: number, userAnswer: string) => {
+    if (!caseDetails || !attempt) return;
+    
+    setScoringQuestion(questionId);
+    
+    try {
+      const response = await fetch('/api/complex-case-question/score', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          questionId,
+          userAnswer,
+          complexCaseId: caseDetails.case.id,
+          stageId: caseDetails.stages.find(s => s.stageNumber === currentStage)?.id
+        })
+      });
+      
+      if (!response.ok) throw new Error('Failed to score question');
+      
+      const scoringResult = await response.json();
+      
+      setQuestionScores({
+        ...questionScores,
+        [questionId]: scoringResult
+      });
+      
+      setCompletedQuestions([...completedQuestions, questionId]);
+      
+      toast({
+        title: "Question Scored!",
+        description: `Score: ${scoringResult.score}/${scoringResult.maxScore} points`,
+      });
+      
+    } catch (error) {
+      toast({
+        title: "Scoring Error",
+        description: "Failed to score question. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setScoringQuestion(null);
     }
   };
 
@@ -492,25 +542,104 @@ export default function ComplexCasePage() {
                     />
                   )}
 
+                  {/* AI Scoring Button */}
+                  <div className="mt-4 flex justify-between items-center">
+                    <Button
+                      onClick={() => scoreQuestion(question.id, responses[question.id] || '')}
+                      disabled={!responses[question.id] || scoringQuestion === question.id || completedQuestions.includes(question.id)}
+                      size="sm"
+                      className="flex items-center gap-2"
+                    >
+                      {scoringQuestion === question.id ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          Scoring...
+                        </>
+                      ) : completedQuestions.includes(question.id) ? (
+                        <>
+                          <CheckCircle className="h-4 w-4" />
+                          Scored
+                        </>
+                      ) : (
+                        <>
+                          <Brain className="h-4 w-4" />
+                          Get AI Feedback
+                        </>
+                      )}
+                    </Button>
+                    
+                    {completedQuestions.includes(question.id) && questionScores[question.id] && (
+                      <Badge variant="outline" className="text-sm">
+                        Score: {questionScores[question.id].score}/{questionScores[question.id].maxScore}
+                      </Badge>
+                    )}
+                  </div>
+
+                  {/* AI Feedback Results */}
+                  {completedQuestions.includes(question.id) && questionScores[question.id] && (
+                    <div className="mt-4 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-semibold text-blue-700 flex items-center gap-2">
+                          <Brain className="h-4 w-4" />
+                          AI Feedback
+                        </h4>
+                        <Badge variant="secondary">
+                          {questionScores[question.id].score}/{questionScores[question.id].maxScore} points
+                        </Badge>
+                      </div>
+                      
+                      <div className="space-y-3">
+                        <div>
+                          <h5 className="font-medium text-gray-700 mb-1">Overall Feedback:</h5>
+                          <p className="text-gray-600 text-sm">{questionScores[question.id].feedback}</p>
+                        </div>
+                        
+                        {questionScores[question.id].strengths.length > 0 && (
+                          <div>
+                            <h5 className="font-medium text-green-700 mb-1">Strengths:</h5>
+                            <ul className="list-disc list-inside text-sm text-green-600 space-y-1">
+                              {questionScores[question.id].strengths.map((strength: string, index: number) => (
+                                <li key={index}>{strength}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        
+                        {questionScores[question.id].improvements.length > 0 && (
+                          <div>
+                            <h5 className="font-medium text-orange-700 mb-1">Areas for Improvement:</h5>
+                            <ul className="list-disc list-inside text-sm text-orange-600 space-y-1">
+                              {questionScores[question.id].improvements.map((improvement: string, index: number) => (
+                                <li key={index}>{improvement}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        
+                        {questionScores[question.id].keywordMatches.length > 0 && (
+                          <div>
+                            <h5 className="font-medium text-purple-700 mb-1">Key Terms Identified:</h5>
+                            <div className="flex flex-wrap gap-1">
+                              {questionScores[question.id].keywordMatches.map((match: any, index: number) => (
+                                <Badge key={index} variant="outline" className="text-xs">
+                                  {match.keyword} (+{match.points})
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Show results if stage is completed */}
                   {showingResults[currentStage] && (
                     <div className="mt-4 p-4 bg-gray-50 rounded">
-                      <h4 className="font-semibold text-green-700 mb-2">Correct Answer:</h4>
+                      <h4 className="font-semibold text-green-700 mb-2">Model Answer:</h4>
                       <p className="text-gray-700 mb-3">{question.correctAnswer}</p>
                       
-                      <h4 className="font-semibold text-blue-700 mb-2">Rationale:</h4>
-                      <p className="text-gray-700 mb-3">{question.rationale}</p>
-                      
-                      {question.learningPoints && question.learningPoints.length > 0 && (
-                        <>
-                          <h4 className="font-semibold text-purple-700 mb-2">Learning Points:</h4>
-                          <ul className="list-disc list-inside space-y-1">
-                            {question.learningPoints.map((point, index) => (
-                              <li key={index} className="text-gray-700">{point}</li>
-                            ))}
-                          </ul>
-                        </>
-                      )}
+                      <h4 className="font-semibold text-blue-700 mb-2">Explanation:</h4>
+                      <p className="text-gray-700 mb-3">{question.answerExplanation}</p>
                     </div>
                   )}
                 </CardContent>

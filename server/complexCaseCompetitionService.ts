@@ -271,27 +271,31 @@ export class ComplexCaseCompetitionService {
       return [];
     }
 
-    const competitionIds = userParticipations.map(p => p.competitionId);
-    
-    // Then get the competition details
-    const userCompetitions = await db
-      .select()
-      .from(competitions)
-      .where(and(
-        sql`${competitions.id} = ANY(${competitionIds})`,
-        eq(competitions.caseType, 'complex')
-      ))
-      .orderBy(asc(competitions.startTime));
+    // Get competitions one by one to avoid array issues
+    const userCompetitions = [];
+    for (const participation of userParticipations) {
+      const competition = await db
+        .select()
+        .from(competitions)
+        .where(and(
+          eq(competitions.id, participation.competitionId),
+          eq(competitions.caseType, 'complex')
+        ))
+        .limit(1);
 
-    // Add participant info to each competition
-    return userCompetitions.map(comp => {
-      const participation = userParticipations.find(p => p.competitionId === comp.id);
-      return {
-        ...comp,
-        registeredAt: participation?.joinedAt,
-        participantId: participation?.id
-      };
-    });
+      if (competition.length > 0) {
+        userCompetitions.push({
+          ...competition[0],
+          registeredAt: participation.joinedAt,
+          participantId: participation.id
+        });
+      }
+    }
+
+    // Sort by start time
+    return userCompetitions.sort((a, b) => 
+      new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+    );
   }
 
   /**

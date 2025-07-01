@@ -21,7 +21,8 @@ import {
   CheckCircle,
   ArrowRight,
   Play,
-  Crown
+  Crown,
+  AlertCircle
 } from 'lucide-react';
 
 interface Competition {
@@ -72,7 +73,7 @@ export default function ComplexCaseCompetitionsPage() {
   });
 
   // Fetch user's registered competitions
-  const { data: myRegistrations = [], isLoading: loadingRegistrations } = useQuery({
+  const { data: myRegistrations = [], isLoading: loadingRegistrations, error: registrationError } = useQuery({
     queryKey: ['/api/complex-competitions/my-registrations'],
     refetchInterval: 30000,
   });
@@ -344,9 +345,9 @@ export default function ComplexCaseCompetitionsPage() {
             <Play className="h-4 w-4" />
             Live ({activeCompetitions.length})
           </TabsTrigger>
-          <TabsTrigger value="registrations" className="flex items-center gap-2">
+          <TabsTrigger value="my-registrations" className="flex items-center gap-2">
             <User className="h-4 w-4" />
-            My Registrations ({myRegistrations.length})
+            My Registrations ({myRegistrations?.length || 0})
           </TabsTrigger>
           <TabsTrigger value="leaderboard" className="flex items-center gap-2">
             <Crown className="h-4 w-4" />
@@ -398,6 +399,44 @@ export default function ComplexCaseCompetitionsPage() {
               ))}
             </div>
           )}
+        </TabsContent>
+
+        <TabsContent value="my-registrations" className="space-y-6">
+          <div className="text-center py-12">
+            {isLoading ? (
+              <div>
+                <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
+                <p className="text-muted-foreground">Loading your registrations...</p>
+              </div>
+            ) : registrationError ? (
+              <div>
+                <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
+                <h3 className="text-xl font-semibold mb-2">Error Loading Registrations</h3>
+                <p className="text-muted-foreground">
+                  Unable to load your competition registrations. Please try again.
+                </p>
+              </div>
+            ) : (myRegistrations && myRegistrations.length > 0) ? (
+              <div className="space-y-4">
+                <h3 className="text-xl font-semibold mb-4">My Competition Registrations</h3>
+                {myRegistrations.map((competition: Competition) => (
+                  <CompetitionCard 
+                    key={competition.id} 
+                    competition={competition}
+                    showUnregister={true}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div>
+                <Calendar className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-xl font-semibold mb-2">No Registrations</h3>
+                <p className="text-muted-foreground">
+                  You haven't registered for any competitions yet. Check out the upcoming competitions to join one!
+                </p>
+              </div>
+            )}
+          </div>
         </TabsContent>
 
         <TabsContent value="leaderboard" className="space-y-6">

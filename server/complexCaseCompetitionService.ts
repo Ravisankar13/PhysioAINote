@@ -153,7 +153,7 @@ export class ComplexCaseCompetitionService {
     }
 
     // Check if competition is full
-    if (competition.currentParticipants >= (competition.maxParticipants || 20)) {
+    if ((competition.currentParticipants || 0) >= (competition.maxParticipants || 20)) {
       return { success: false, message: 'Competition is full' };
     }
 
@@ -186,7 +186,7 @@ export class ComplexCaseCompetitionService {
     await db
       .update(competitions)
       .set({ 
-        currentParticipants: competition.currentParticipants + 1,
+        currentParticipants: (competition.currentParticipants || 0) + 1,
         updatedAt: new Date()
       })
       .where(eq(competitions.id, competitionId));

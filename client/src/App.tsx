@@ -39,6 +39,7 @@ import TrialWelcome from "@/pages/TrialWelcome";
 import CompetitionPage from "@/pages/CompetitionPage";
 import CompetitionParticipationPage from "@/pages/CompetitionParticipationPage";
 import ComplexCasePage from "@/pages/ComplexCasePage";
+import ComplexCaseCompetitionsPage from "@/pages/ComplexCaseCompetitionsPage";
 import CompetitionDiagnosisPage from "@/pages/CompetitionDiagnosisPage";
 import CompetitionResultsPage from "@/pages/CompetitionResultsPage";
 import Header from "@/components/layout/Header";
@@ -97,6 +98,9 @@ function Router() {
           </Route>
           <Route path="/competitions">
             <ProtectedRoute component={CompetitionPage} />
+          </Route>
+          <Route path="/complex-competitions">
+            <ProtectedRoute component={ComplexCaseCompetitionsPage} />
           </Route>
           <Route path="/competition/:id">
             <ProtectedRoute component={CompetitionParticipationPage} />

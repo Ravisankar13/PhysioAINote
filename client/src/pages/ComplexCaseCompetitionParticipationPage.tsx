@@ -55,7 +55,8 @@ function ComplexCaseCompetitionParticipationPage() {
   const competitionId = params?.id ? parseInt(params.id) : null;
   
   const [currentStage, setCurrentStage] = useState(0);
-  const [answers, setAnswers] = useState<Record<number, string>>({});
+  const [currentQuestion, setCurrentQuestion] = useState(0);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
   const [timeStarted, setTimeStarted] = useState<Date | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -150,28 +151,50 @@ function ComplexCaseCompetitionParticipationPage() {
 
   const stages = complexCaseData?.stages || [];
   const currentStageData = stages[currentStage];
-  const progressPercentage = stages.length > 0 ? ((currentStage + 1) / stages.length) * 100 : 0;
+  const currentQuestionData = currentStageData?.questions?.[currentQuestion];
+  
+  // Calculate total questions across all stages
+  const totalQuestions = stages.reduce((total, stage) => total + (stage.questions?.length || 0), 0);
+  const currentQuestionIndex = stages.slice(0, currentStage).reduce((total, stage) => total + (stage.questions?.length || 0), 0) + currentQuestion;
+  const progressPercentage = totalQuestions > 0 ? ((currentQuestionIndex + 1) / totalQuestions) * 100 : 0;
+  
   const timeElapsed = timeStarted ? Math.floor((Date.now() - timeStarted.getTime()) / 1000) : 0;
   const timeRemaining = Math.max(0, (competition.timeLimit * 60) - timeElapsed);
 
   const handleAnswer = (value: string) => {
-    if (currentStageData) {
+    if (currentQuestionData) {
+      const questionKey = `${currentStageData.id}-${currentQuestionData.id}`;
       setAnswers(prev => ({
         ...prev,
-        [currentStageData.id]: value
+        [questionKey]: value
       }));
     }
   };
 
   const handleNext = () => {
-    if (currentStage < stages.length - 1) {
+    const currentStageQuestions = currentStageData?.questions || [];
+    
+    // If there are more questions in current stage
+    if (currentQuestion < currentStageQuestions.length - 1) {
+      setCurrentQuestion(prev => prev + 1);
+    }
+    // Move to next stage if available
+    else if (currentStage < stages.length - 1) {
       setCurrentStage(prev => prev + 1);
+      setCurrentQuestion(0);
     }
   };
 
   const handlePrevious = () => {
-    if (currentStage > 0) {
+    // If not at first question of current stage
+    if (currentQuestion > 0) {
+      setCurrentQuestion(prev => prev - 1);
+    }
+    // Move to previous stage if available
+    else if (currentStage > 0) {
       setCurrentStage(prev => prev - 1);
+      const prevStageQuestions = stages[currentStage - 1]?.questions || [];
+      setCurrentQuestion(Math.max(0, prevStageQuestions.length - 1));
     }
   };
 
@@ -235,8 +258,8 @@ function ComplexCaseCompetitionParticipationPage() {
         </CardContent>
       </Card>
 
-      {/* Current Stage */}
-      {currentStageData && (
+      {/* Current Question */}
+      {currentStageData && currentQuestionData && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -244,25 +267,49 @@ function ComplexCaseCompetitionParticipationPage() {
               {currentStageData.title}
             </CardTitle>
             <CardDescription>
-              Answer the following question based on the case information
+              Question {currentQuestion + 1} of {currentStageData.questions?.length || 0} in this stage
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
+            {/* Stage Information */}
+            {currentQuestion === 0 && (
+              <div className="p-4 border rounded-lg bg-blue-50 border-blue-200">
+                <h4 className="font-semibold text-blue-800 mb-2">Stage Context</h4>
+                <p className="text-blue-700">{currentStageData.description}</p>
+                {currentStageData.informationRevealed && (
+                  <div className="mt-3 text-sm text-blue-600">
+                    <strong>Additional Information:</strong>
+                    <div className="mt-1">
+                      {Object.entries(currentStageData.informationRevealed).map(([key, value]) => (
+                        <div key={key} className="mb-1">
+                          <span className="font-medium">{key}:</span> {value}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Current Question */}
             <div className="p-4 border rounded-lg bg-gray-50">
-              <p className="font-medium">{currentStageData.question}</p>
+              <p className="font-medium">{currentQuestionData.questionText}</p>
+              <div className="mt-2 text-sm text-gray-600">
+                Points available: {currentQuestionData.pointsAvailable}
+              </div>
             </div>
 
             {/* Answer Input */}
             <div className="space-y-3">
-              {currentStageData.type === 'multiple_choice' && currentStageData.options ? (
+              {currentQuestionData.questionType === 'multiple_choice' && currentQuestionData.options ? (
                 <div className="space-y-2">
-                  {currentStageData.options.map((option, index) => (
+                  {currentQuestionData.options.map((option: any, index: any) => (
                     <label key={index} className="flex items-center space-x-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
                       <input
                         type="radio"
                         name="answer"
                         value={option}
-                        checked={answers[currentStageData.id] === option}
+                        checked={answers[`${currentStageData.id}-${currentQuestionData.id}`] === option}
                         onChange={(e) => handleAnswer(e.target.value)}
                         className="text-primary"
                       />
@@ -273,7 +320,7 @@ function ComplexCaseCompetitionParticipationPage() {
               ) : (
                 <Textarea
                   placeholder="Enter your answer..."
-                  value={answers[currentStageData.id] || ''}
+                  value={answers[`${currentStageData.id}-${currentQuestionData.id}`] || ''}
                   onChange={(e) => handleAnswer(e.target.value)}
                   rows={4}
                 />

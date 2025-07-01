@@ -5227,6 +5227,43 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
 
+  // Unregister from a complex case competition
+  app.post("/api/complex-competitions/:id/unregister", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const competitionId = parseInt(req.params.id);
+      const userId = req.user!.id;
+      
+      const { complexCaseCompetitionService } = await import("./complexCaseCompetitionService");
+      const result = await complexCaseCompetitionService.unregisterFromComplexCaseCompetition(competitionId, userId);
+      
+      if (result.success) {
+        res.json(result);
+      } else {
+        res.status(400).json(result);
+      }
+    } catch (error: any) {
+      console.error("Error unregistering from complex competition:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get user's registered competitions
+  app.get("/api/complex-competitions/my-registrations", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const userId = req.user!.id;
+      const { complexCaseCompetitionService } = await import("./complexCaseCompetitionService");
+      const registrations = await complexCaseCompetitionService.getUserRegisteredCompetitions(userId);
+      res.json(registrations);
+    } catch (error: any) {
+      console.error("Error fetching user registrations:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Get complex competition participants
   app.get("/api/complex-competitions/:id/participants", async (req, res) => {
     try {

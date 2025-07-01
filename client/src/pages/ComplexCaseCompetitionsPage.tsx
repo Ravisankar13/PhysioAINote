@@ -71,6 +71,12 @@ export default function ComplexCaseCompetitionsPage() {
     refetchInterval: 10000 // Refresh every 10 seconds for active competitions
   });
 
+  // Fetch user's registered competitions
+  const { data: myRegistrations = [], isLoading: loadingRegistrations } = useQuery({
+    queryKey: ['/api/complex-competitions/my-registrations'],
+    refetchInterval: 30000,
+  });
+
   // Join competition mutation
   const joinCompetitionMutation = useMutation({
     mutationFn: async (competitionId: number) => {
@@ -109,6 +115,49 @@ export default function ComplexCaseCompetitionsPage() {
       toast({
         title: "Error",
         description: error.message || "Failed to join competition. Please try again.",
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Unregister from competition mutation
+  const unregisterMutation = useMutation({
+    mutationFn: async (competitionId: number) => {
+      const response = await fetch(`/api/complex-competitions/${competitionId}/unregister`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include'
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to unregister from competition');
+      }
+      
+      return response.json();
+    },
+    onSuccess: (data: any) => {
+      if (data.success) {
+        toast({
+          title: "Unregistered Successfully!",
+          description: data.message,
+        });
+        // Refresh competitions data
+        queryClient.invalidateQueries({ queryKey: ['/api/complex-competitions'] });
+      } else {
+        toast({
+          title: "Unregistration Failed",
+          description: data.message,
+          variant: "destructive"
+        });
+      }
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to unregister from competition. Please try again.",
         variant: "destructive"
       });
     }

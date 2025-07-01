@@ -199,6 +199,100 @@ export class ComplexCaseCompetitionService {
   }
 
   /**
+   * Unregisters a user from a complex case competition
+   */
+  async unregisterFromComplexCaseCompetition(
+    competitionId: number,
+    userId: number
+  ): Promise<{ success: boolean; message: string }> {
+    // Check if competition exists and is still upcoming
+    const competition = await db
+      .select()
+      .from(competitions)
+      .where(eq(competitions.id, competitionId))
+      .limit(1);
+
+    if (competition.length === 0) {
+      return { success: false, message: 'Competition not found' };
+    }
+
+    if (competition[0].status !== 'upcoming') {
+      return { success: false, message: 'Cannot unregister from active or completed competitions' };
+    }
+
+    // Check if user is registered
+    const participant = await db
+      .select()
+      .from(competitionParticipants)
+      .where(and(
+        eq(competitionParticipants.competitionId, competitionId),
+        eq(competitionParticipants.userId, userId)
+      ))
+      .limit(1);
+
+    if (participant.length === 0) {
+      return { success: false, message: 'You are not registered for this competition' };
+    }
+
+    // Remove the participant
+    await db
+      .delete(competitionParticipants)
+      .where(and(
+        eq(competitionParticipants.competitionId, competitionId),
+        eq(competitionParticipants.userId, userId)
+      ));
+
+    // Decrease participant count
+    await db
+      .update(competitions)
+      .set({
+        currentParticipants: sql`${competitions.currentParticipants} - 1`,
+        updatedAt: new Date()
+      })
+      .where(eq(competitions.id, competitionId));
+
+    return { 
+      success: true, 
+      message: 'Successfully unregistered from competition'
+    };
+  }
+
+  /**
+   * Gets all competitions a user is registered for
+   */
+  async getUserRegisteredCompetitions(userId: number): Promise<any[]> {
+    return await db
+      .select({
+        id: competitions.id,
+        title: competitions.title,
+        description: competitions.description,
+        type: competitions.type,
+        status: competitions.status,
+        bodyPart: competitions.bodyPart,
+        difficulty: competitions.difficulty,
+        timeLimit: competitions.timeLimit,
+        maxParticipants: competitions.maxParticipants,
+        currentParticipants: competitions.currentParticipants,
+        startTime: competitions.startTime,
+        endTime: competitions.endTime,
+        registrationDeadline: competitions.registrationDeadline,
+        complexCaseIds: competitions.complexCaseIds,
+        registeredAt: competitionParticipants.createdAt,
+        participantId: competitionParticipants.id
+      })
+      .from(competitions)
+      .innerJoin(
+        competitionParticipants,
+        eq(competitions.id, competitionParticipants.competitionId)
+      )
+      .where(and(
+        eq(competitionParticipants.userId, userId),
+        eq(competitions.caseType, 'complex')
+      ))
+      .orderBy(asc(competitions.startTime));
+  }
+
+  /**
    * Gets upcoming complex case competitions
    */
   async getUpcomingComplexCompetitions(limit: number = 10): Promise<Competition[]> {

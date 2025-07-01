@@ -497,6 +497,101 @@ export class ComplexCaseService {
     const ratio = expectedSeconds / actualSeconds;
     return Math.max(0, Math.round(ratio * 100));
   }
+
+  /**
+   * Gets detailed complex case information with stages and questions
+   */
+  async getComplexCaseDetails(complexCaseId: number): Promise<any> {
+    try {
+      // Get the complex case
+      const complexCaseResult = await pool.query(
+        'SELECT * FROM complex_cases WHERE id = $1',
+        [complexCaseId]
+      );
+
+      if (complexCaseResult.rows.length === 0) {
+        return null;
+      }
+
+      const complexCase = complexCaseResult.rows[0];
+
+      // Get stages with questions
+      const stagesResult = await pool.query(
+        `SELECT s.*, q.id as question_id, q.stage_id, q.question_number, 
+                q.question_text, q.question_type, q.correct_answer, 
+                q.answer_explanation, q.scoring_criteria, q.points_available
+         FROM case_stages s
+         LEFT JOIN stage_questions q ON s.id = q.stage_id
+         WHERE s.complex_case_id = $1
+         ORDER BY s.stage_number, q.question_number`,
+        [complexCaseId]
+      );
+
+      // Group questions by stage
+      const stagesMap = new Map();
+      
+      stagesResult.rows.forEach(row => {
+        const stageId = row.id;
+        
+        if (!stagesMap.has(stageId)) {
+          stagesMap.set(stageId, {
+            id: row.id,
+            complexCaseId: row.complex_case_id,
+            stageNumber: row.stage_number,
+            title: row.title,
+            description: row.description,
+            stageType: row.stage_type,
+            expectedTimeMinutes: row.expected_time_minutes,
+            informationRevealed: typeof row.information_revealed === 'string' ? 
+              JSON.parse(row.information_revealed) : row.information_revealed,
+            questions: []
+          });
+        }
+
+        if (row.question_id) {
+          stagesMap.get(stageId).questions.push({
+            id: row.question_id,
+            stageId: row.stage_id,
+            questionNumber: row.question_number,
+            questionText: row.question_text,
+            questionType: row.question_type,
+            correctAnswer: row.correct_answer,
+            answerExplanation: row.answer_explanation,
+            scoringCriteria: typeof row.scoring_criteria === 'string' ? 
+              JSON.parse(row.scoring_criteria) : row.scoring_criteria,
+            pointsAvailable: row.points_available
+          });
+        }
+      });
+
+      return {
+        case: {
+          id: complexCase.id,
+          userId: complexCase.user_id,
+          title: complexCase.title,
+          patientDescription: complexCase.patient_description,
+          occupationalHistory: complexCase.occupational_history,
+          socialHistory: complexCase.social_history,
+          medicalHistory: complexCase.medical_history,
+          currentMedications: complexCase.current_medications,
+          mechanismOfInjury: complexCase.mechanism_of_injury,
+          bodyPart: complexCase.body_part,
+          complexity: complexCase.complexity,
+          estimatedTime: complexCase.estimated_time_minutes,
+          initialPresentation: typeof complexCase.initial_presentation === 'string' ? 
+            JSON.parse(complexCase.initial_presentation) : complexCase.initial_presentation,
+          detailedHistory: typeof complexCase.detailed_history === 'string' ? 
+            JSON.parse(complexCase.detailed_history) : complexCase.detailed_history,
+          physicalFindings: typeof complexCase.physical_findings === 'string' ? 
+            JSON.parse(complexCase.physical_findings) : complexCase.physical_findings
+        },
+        stages: Array.from(stagesMap.values()).sort((a, b) => a.stageNumber - b.stageNumber)
+      };
+    } catch (error) {
+      console.error('Error getting complex case details:', error);
+      throw error;
+    }
+  }
 }
 
 export const complexCaseService = new ComplexCaseService();

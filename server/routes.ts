@@ -5178,6 +5178,112 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
 
+  // Complex Case Competition Routes
+  
+  // Get upcoming complex case competitions
+  app.get("/api/complex-competitions/upcoming", async (req, res) => {
+    try {
+      const { complexCaseCompetitionService } = await import("./complexCaseCompetitionService");
+      const limit = parseInt(req.query.limit as string) || 10;
+      const competitions = await complexCaseCompetitionService.getUpcomingComplexCompetitions(limit);
+      res.json(competitions);
+    } catch (error: any) {
+      console.error("Error fetching upcoming complex competitions:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get active complex case competitions
+  app.get("/api/complex-competitions/active", async (req, res) => {
+    try {
+      const { complexCaseCompetitionService } = await import("./complexCaseCompetitionService");
+      const competitions = await complexCaseCompetitionService.getActiveComplexCompetitions();
+      res.json(competitions);
+    } catch (error: any) {
+      console.error("Error fetching active complex competitions:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Join a complex case competition
+  app.post("/api/complex-competitions/:id/join", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const competitionId = parseInt(req.params.id);
+      const userId = req.user!.id;
+      
+      const { complexCaseCompetitionService } = await import("./complexCaseCompetitionService");
+      const result = await complexCaseCompetitionService.joinComplexCaseCompetition(competitionId, userId);
+      
+      if (result.success) {
+        res.json(result);
+      } else {
+        res.status(400).json(result);
+      }
+    } catch (error: any) {
+      console.error("Error joining complex competition:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get complex competition participants
+  app.get("/api/complex-competitions/:id/participants", async (req, res) => {
+    try {
+      const competitionId = parseInt(req.params.id);
+      const { complexCaseCompetitionService } = await import("./complexCaseCompetitionService");
+      const participants = await complexCaseCompetitionService.getCompetitionParticipants(competitionId);
+      res.json(participants);
+    } catch (error: any) {
+      console.error("Error fetching competition participants:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Manual competition management (admin only)
+  app.post("/api/complex-competitions/manage", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    // Check if user is admin
+    const adminUsernames = ["Fateofjustice"];
+    if (!adminUsernames.includes(req.user!.username)) {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+    
+    try {
+      const { complexCaseCompetitionService } = await import("./complexCaseCompetitionService");
+      await complexCaseCompetitionService.manageCompetitions();
+      res.json({ success: true, message: "Competition management completed" });
+    } catch (error: any) {
+      console.error("Error managing competitions:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Schedule new complex competitions (admin only)
+  app.post("/api/complex-competitions/schedule", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    // Check if user is admin
+    const adminUsernames = ["Fateofjustice"];
+    if (!adminUsernames.includes(req.user!.username)) {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+    
+    try {
+      const { complexCaseCompetitionService } = await import("./complexCaseCompetitionService");
+      const competitions = await complexCaseCompetitionService.scheduleDailyComplexCompetitions();
+      res.json({
+        success: true,
+        message: `Scheduled ${competitions.length} new competitions`,
+        competitions
+      });
+    } catch (error: any) {
+      console.error("Error scheduling competitions:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Daily Challenge Routes
   
   // Get today's challenge

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useDebugValue } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation } from "wouter";
 import axios from "axios";
 import * as lame from "@breezystack/lamejs";
 import "./NotesClinical.css"; // Import the CSS file
@@ -110,7 +110,7 @@ function NotesClinical(): React.ReactElement {
     Record<string, { isStreaming: boolean; isComplete: boolean }>
   >({});
 
-  const navigate = useNavigate();
+  const [location, setLocation] = useLocation();
   const soap_note_streaming_api_base_url = 'https://api.physioconversation.stackaisolutions.com'
 
   useEffect(() => {

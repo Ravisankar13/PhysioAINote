@@ -119,18 +119,7 @@ const Header = () => {
                 <span>Motion Capture</span>
               </Button>
             </Link>
-            <Link to="/static-postural-analysis">
-              <Button className="bg-purple-600 hover:bg-purple-700 text-white font-semibold shadow-sm flex items-center gap-2">
-                <Scan className="h-4 w-4" />
-                <span>Static Analysis</span>
-              </Button>
-            </Link>
-            <Link to="/integrated-assessment">
-              <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold shadow-sm flex items-center gap-2">
-                <Stethoscope className="h-4 w-4" />
-                <span>Full Assessment</span>
-              </Button>
-            </Link>
+
             <Link to="/intelligent-assessment">
               <Button className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold shadow-sm flex items-center gap-2">
                 <Brain className="h-4 w-4" />

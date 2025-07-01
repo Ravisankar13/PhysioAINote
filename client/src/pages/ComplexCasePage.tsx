@@ -68,16 +68,16 @@ interface StageQuestion {
 
 interface CaseStage {
   id: number;
-  stageNumber: number;
+  stage_number: number;
   title: string;
   description: string;
-  informationRevealed?: {
+  information_revealed?: {
     patientResponse?: string;
     testResults?: string;
     additionalHistory?: string;
     observationFindings?: string;
   };
-  expectedTimeMinutes: number;
+  expected_time_minutes: number;
   questions: StageQuestion[];
 }
 
@@ -127,7 +127,7 @@ export default function ComplexCasePage() {
       console.log('Case details loaded:', caseDetails);
       console.log('Stages:', caseDetails.stages);
       console.log('Current stage:', currentStage);
-      const currentStageData = caseDetails.stages.find(s => s.stageNumber === currentStage);
+      const currentStageData = caseDetails.stages.find(s => s.stage_number === currentStage);
       console.log('Current stage data:', currentStageData);
       if (currentStageData) {
         console.log('Questions for current stage:', currentStageData.questions);
@@ -237,7 +237,7 @@ export default function ComplexCasePage() {
     setResponses({ ...responses, [questionId]: answer });
   };
 
-  const currentStageData = caseDetails?.stages.find(s => s.stageNumber === currentStage);
+  const currentStageData = caseDetails?.stages.find(s => s.stage_number === currentStage);
   const progress = caseDetails ? (currentStage / caseDetails.stages.length) * 100 : 0;
 
   if (loadingCase) {
@@ -320,8 +320,8 @@ export default function ComplexCasePage() {
                   <CardContent className="p-4">
                     <div className="flex justify-between items-center">
                       <span className="font-medium">{stage.title}</span>
-                      <Badge variant={stageScores[stage.stageNumber] >= 70 ? "default" : "destructive"}>
-                        {stageScores[stage.stageNumber] || 0}%
+                      <Badge variant={stageScores[stage.stage_number] >= 70 ? "default" : "destructive"}>
+                        {stageScores[stage.stage_number] || 0}%
                       </Badge>
                     </div>
                   </CardContent>
@@ -397,51 +397,51 @@ export default function ComplexCasePage() {
                 {currentStageData.title}
               </CardTitle>
               <CardDescription>{currentStageData.description}</CardDescription>
-              {currentStageData.expectedTimeMinutes && (
+              {currentStageData.expected_time_minutes && (
                 <Badge variant="outline" className="w-fit">
                   <Clock className="h-3 w-3 mr-1" />
-                  {currentStageData.expectedTimeMinutes} minutes
+                  {currentStageData.expected_time_minutes} minutes
                 </Badge>
               )}
             </CardHeader>
           </Card>
 
           {/* Provided Information */}
-          {currentStageData.informationRevealed && (
+          {currentStageData.information_revealed && (
             <Card>
               <CardHeader>
                 <CardTitle>Clinical Information</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {currentStageData.informationRevealed.patientResponse && (
+                {currentStageData.information_revealed.patientResponse && (
                   <div>
                     <h4 className="font-semibold mb-2">Patient Response</h4>
                     <p className="text-gray-700 bg-blue-50 p-3 rounded">
-                      {currentStageData.informationRevealed.patientResponse}
+                      {currentStageData.information_revealed.patientResponse}
                     </p>
                   </div>
                 )}
-                {currentStageData.informationRevealed.testResults && (
+                {currentStageData.information_revealed.testResults && (
                   <div>
                     <h4 className="font-semibold mb-2">Test Results</h4>
                     <p className="text-gray-700 bg-green-50 p-3 rounded">
-                      {currentStageData.informationRevealed.testResults}
+                      {currentStageData.information_revealed.testResults}
                     </p>
                   </div>
                 )}
-                {currentStageData.informationRevealed.additionalHistory && (
+                {currentStageData.information_revealed.additionalHistory && (
                   <div>
                     <h4 className="font-semibold mb-2">Additional History</h4>
                     <p className="text-gray-700 bg-yellow-50 p-3 rounded">
-                      {currentStageData.informationRevealed.additionalHistory}
+                      {currentStageData.information_revealed.additionalHistory}
                     </p>
                   </div>
                 )}
-                {currentStageData.informationRevealed.observationFindings && (
+                {currentStageData.information_revealed.observationFindings && (
                   <div>
                     <h4 className="font-semibold mb-2">Observation Findings</h4>
                     <p className="text-gray-700 bg-purple-50 p-3 rounded">
-                      {currentStageData.informationRevealed.observationFindings}
+                      {currentStageData.information_revealed.observationFindings}
                     </p>
                   </div>
                 )}

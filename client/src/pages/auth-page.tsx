@@ -51,9 +51,8 @@ const registerSchema = z.object({
     .min(6, { message: "Password must be at least 6 characters" }),
   email: z
     .string()
-    .email({ message: "Please enter a valid email address" })
-    .optional()
-    .or(z.literal("")),
+    .min(1, { message: "Email is required" })
+    .email({ message: "Please enter a valid email address" }),
   fullName: z.string().optional().or(z.literal("")),
 });
 
@@ -367,7 +366,7 @@ const AuthPage = () => {
                           name="email"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Email (Optional)</FormLabel>
+                              <FormLabel>Email</FormLabel>
                               <FormControl>
                                 <div className="relative">
                                   <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />

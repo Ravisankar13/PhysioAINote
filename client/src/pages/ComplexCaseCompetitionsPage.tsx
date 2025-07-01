@@ -629,8 +629,8 @@ function AdminCompetitionPreview({ competition }: { competition: Competition }) 
         <CardContent className="space-y-6">
           <div className="grid gap-4">
             <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-              <h4 className="font-semibold text-green-800">Case Study: {actualComplexCase?.title}</h4>
-              <p className="text-green-700 mt-1">{actualComplexCase?.patient_description}</p>
+              <h4 className="font-semibold text-green-800">Case Study: {caseData?.title}</h4>
+              <p className="text-green-700 mt-1">{caseData?.patientDescription}</p>
             </div>
             
             {stages.map((stage: any, index: number) => (
@@ -700,7 +700,7 @@ function AdminCompetitionPreview({ competition }: { competition: Competition }) 
           <div>
             <CardTitle className="flex items-center gap-2">
               <Clipboard className="h-5 w-5" />
-              {actualComplexCase?.title}
+              {caseData?.title}
             </CardTitle>
             <CardDescription>
               Stage {currentStage + 1} of {stages.length}

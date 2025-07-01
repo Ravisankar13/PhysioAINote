@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
+import { useAuth } from '@/hooks/use-auth';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -22,7 +23,14 @@ import {
   ArrowRight,
   Play,
   Crown,
-  AlertCircle
+  AlertCircle,
+  Settings,
+  ChevronRight,
+  Search,
+  FileText,
+  Brain,
+  Clipboard,
+  Send
 } from 'lucide-react';
 
 interface Competition {
@@ -58,7 +66,9 @@ interface Participant {
 
 export default function ComplexCaseCompetitionsPage() {
   const [activeTab, setActiveTab] = useState('upcoming');
+  const [selectedCompetition, setSelectedCompetition] = useState<Competition | null>(null);
   const { toast } = useToast();
+  const { user } = useAuth();
 
   // Fetch upcoming competitions
   const { data: upcomingCompetitions = [], isLoading: loadingUpcoming } = useQuery<Competition[]>({
@@ -336,7 +346,7 @@ export default function ComplexCaseCompetitionsPage() {
 
       {/* Competition Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className={`grid w-full ${user?.username === 'Fateofjustice' ? 'grid-cols-5' : 'grid-cols-4'}`}>
           <TabsTrigger value="upcoming" className="flex items-center gap-2">
             <Calendar className="h-4 w-4" />
             Upcoming ({upcomingCompetitions.length})
@@ -353,6 +363,12 @@ export default function ComplexCaseCompetitionsPage() {
             <Crown className="h-4 w-4" />
             Leaderboard
           </TabsTrigger>
+          {user?.username === 'Fateofjustice' && (
+            <TabsTrigger value="admin-preview" className="flex items-center gap-2">
+              <Settings className="h-4 w-4" />
+              Admin Preview
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="upcoming" className="space-y-6">
@@ -447,7 +463,309 @@ export default function ComplexCaseCompetitionsPage() {
             </p>
           </div>
         </TabsContent>
+
+        {user?.username === 'Fateofjustice' && (
+          <TabsContent value="admin-preview" className="space-y-6">
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold">Admin Competition Preview</h2>
+                  <p className="text-muted-foreground">
+                    Test and preview competition questions before they go live
+                  </p>
+                </div>
+                <Badge variant="destructive" className="text-xs">
+                  ADMIN ONLY
+                </Badge>
+              </div>
+
+              {/* Competition Selection */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Search className="h-5 w-5" />
+                    Select Competition to Preview
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid gap-4">
+                    {upcomingCompetitions.map((competition: Competition) => (
+                      <div
+                        key={competition.id}
+                        className={`p-4 border rounded-lg cursor-pointer transition-colors ${
+                          selectedCompetition?.id === competition.id
+                            ? 'border-primary bg-primary/5'
+                            : 'border-border hover:border-primary/50'
+                        }`}
+                        onClick={() => setSelectedCompetition(competition)}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="font-semibold">{competition.title}</h3>
+                            <p className="text-sm text-muted-foreground">
+                              {competition.description}
+                            </p>
+                            <div className="flex items-center gap-4 mt-2">
+                              <Badge variant="outline">
+                                {competition.difficulty}
+                              </Badge>
+                              <span className="text-xs text-muted-foreground">
+                                {competition.bodyPart}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                {competition.timeLimit}min
+                              </span>
+                            </div>
+                          </div>
+                          <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Competition Preview */}
+              {selectedCompetition && (
+                <AdminCompetitionPreview competition={selectedCompetition} />
+              )}
+            </div>
+          </TabsContent>
+        )}
       </Tabs>
     </div>
+  );
+}
+
+// Admin Competition Preview Component
+function AdminCompetitionPreview({ competition }: { competition: Competition }) {
+  const [currentStage, setCurrentStage] = useState(0);
+  const [answers, setAnswers] = useState<Record<number, string>>({});
+  const [showResults, setShowResults] = useState(false);
+  const { toast } = useToast();
+
+  // Fetch complex case details
+  const { data: complexCase, isLoading } = useQuery({
+    queryKey: ['/api/complex-cases', competition.complexCaseIds?.[0]],
+    enabled: competition.complexCaseIds && competition.complexCaseIds.length > 0
+  });
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="py-12">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+            <p className="mt-2 text-muted-foreground">Loading case study...</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!complexCase) {
+    return (
+      <Card>
+        <CardContent className="py-12">
+          <div className="text-center">
+            <AlertCircle className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-xl font-semibold mb-2">No Case Study Found</h3>
+            <p className="text-muted-foreground">
+              This competition doesn't have an associated complex case study.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const stages = complexCase.stages || [];
+  const currentStageData = stages[currentStage];
+
+  const handleAnswer = (value: string) => {
+    setAnswers(prev => ({
+      ...prev,
+      [currentStage]: value
+    }));
+  };
+
+  const nextStage = () => {
+    if (currentStage < stages.length - 1) {
+      setCurrentStage(prev => prev + 1);
+    } else {
+      setShowResults(true);
+    }
+  };
+
+  const prevStage = () => {
+    if (currentStage > 0) {
+      setCurrentStage(prev => prev - 1);
+    }
+  };
+
+  const resetPreview = () => {
+    setCurrentStage(0);
+    setAnswers({});
+    setShowResults(false);
+  };
+
+  if (showResults) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Brain className="h-5 w-5" />
+            Admin Preview Results
+          </CardTitle>
+          <CardDescription>
+            Review the complete case study and provided answers
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="grid gap-4">
+            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+              <h4 className="font-semibold text-green-800">Case Study: {complexCase.title}</h4>
+              <p className="text-green-700 mt-1">{complexCase.description}</p>
+            </div>
+            
+            {stages.map((stage: any, index: number) => (
+              <div key={index} className="p-4 border rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <Badge variant="outline">Stage {index + 1}</Badge>
+                  <span className="font-medium">{stage.title}</span>
+                </div>
+                <p className="text-sm text-muted-foreground mb-3">{stage.content}</p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm font-medium mb-2">Your Answer:</p>
+                    <div className="p-2 bg-gray-50 border rounded">
+                      {answers[index] || 'No answer provided'}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium mb-2">Correct Answer:</p>
+                    <div className="p-2 bg-green-50 border border-green-200 rounded">
+                      {stage.correctAnswer}
+                    </div>
+                  </div>
+                </div>
+                
+                {stage.explanation && (
+                  <div className="mt-3">
+                    <p className="text-sm font-medium mb-1">Explanation:</p>
+                    <p className="text-sm text-muted-foreground">{stage.explanation}</p>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          
+          <div className="flex gap-2">
+            <Button onClick={resetPreview} variant="outline">
+              <ArrowRight className="h-4 w-4 mr-2" />
+              Try Again
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!currentStageData) {
+    return (
+      <Card>
+        <CardContent className="py-12">
+          <div className="text-center">
+            <FileText className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-xl font-semibold mb-2">No Stages Available</h3>
+            <p className="text-muted-foreground">
+              This case study doesn't have any stages configured.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Clipboard className="h-5 w-5" />
+              {complexCase.title}
+            </CardTitle>
+            <CardDescription>
+              Stage {currentStage + 1} of {stages.length}
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge variant="secondary">
+              Admin Preview Mode
+            </Badge>
+            <Badge variant="outline">
+              {competition.timeLimit}min
+            </Badge>
+          </div>
+        </div>
+        <Progress value={((currentStage + 1) / stages.length) * 100} className="mt-2" />
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="space-y-4">
+          <div>
+            <h3 className="text-lg font-semibold mb-2">{currentStageData.title}</h3>
+            <div className="p-4 bg-gray-50 border rounded-lg">
+              <p className="text-sm whitespace-pre-line">{currentStageData.content}</p>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <label className="text-sm font-medium">Your Response:</label>
+            <textarea
+              value={answers[currentStage] || ''}
+              onChange={(e) => handleAnswer(e.target.value)}
+              placeholder="Enter your clinical reasoning and analysis..."
+              className="w-full p-3 border rounded-lg min-h-[120px] resize-none"
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between pt-4 border-t">
+          <div className="flex gap-2">
+            <Button
+              onClick={prevStage}
+              disabled={currentStage === 0}
+              variant="outline"
+              size="sm"
+            >
+              Previous
+            </Button>
+            <Button onClick={resetPreview} variant="ghost" size="sm">
+              Reset
+            </Button>
+          </div>
+          
+          <Button 
+            onClick={nextStage}
+            disabled={!answers[currentStage]?.trim()}
+            className="flex items-center gap-2"
+          >
+            {currentStage === stages.length - 1 ? (
+              <>
+                <Send className="h-4 w-4" />
+                View Results
+              </>
+            ) : (
+              <>
+                Next Stage
+                <ArrowRight className="h-4 w-4" />
+              </>
+            )}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

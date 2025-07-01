@@ -5383,17 +5383,28 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
 
-  // Get all complex cases
+  // Get all complex cases with stage count
   app.get("/api/complex-cases", async (req, res) => {
     try {
-      const { db } = await import("./db");
-      const { complexCases } = await import("@shared/schema");
+      const { pool } = await import("./db");
       
-      const allComplexCases = await db.select()
-        .from(complexCases)
-        .orderBy(complexCases.id);
+      // Get complex cases with stage count using raw SQL
+      const result = await pool.query(`
+        SELECT 
+          cc.*,
+          COUNT(cs.id) as stage_count
+        FROM complex_cases cc
+        LEFT JOIN case_stages cs ON cc.id = cs.complex_case_id
+        GROUP BY cc.id
+        ORDER BY cc.id
+      `);
       
-      res.json(allComplexCases);
+      const complexCasesWithStages = result.rows.map(row => ({
+        ...row,
+        stages: { length: parseInt(row.stage_count) || 0 }
+      }));
+      
+      res.json(complexCasesWithStages);
     } catch (error) {
       console.error('Error getting complex cases:', error);
       res.status(500).json({ message: 'Failed to get complex cases' });

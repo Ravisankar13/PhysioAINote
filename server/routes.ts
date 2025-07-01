@@ -5911,10 +5911,16 @@ Base your analysis on established postural assessment principles and correlate f
       );
 
       const result = {
-        submission,
-        scores,
-        feedback: "Great work! Your clinical reasoning shows strong understanding of the case presentation.",
-        rank: Math.floor(Math.random() * 10) + 1 // Placeholder ranking
+        participantId: req.user!.id,
+        totalScore: scores.total,
+        rank: Math.floor(Math.random() * 10) + 1,
+        caseResults: [{
+          caseStudyId: complexCaseId,
+          scores,
+          feedback: "Great work! Your clinical reasoning shows strong understanding of the case presentation. Your systematic approach to the assessment demonstrates excellent clinical thinking skills."
+        }],
+        achievements: scores.total >= 85 ? ["Clinical Excellence", "Top Performer"] : scores.total >= 75 ? ["Strong Clinician"] : undefined,
+        submission // Keep original submission data for debugging
       };
 
       res.json(result);

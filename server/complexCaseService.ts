@@ -111,7 +111,18 @@ export class ComplexCaseService {
       
       return {
         case: {
-          ...complexCase,
+          id: complexCase.id,
+          userId: complexCase.user_id,
+          title: complexCase.title,
+          patientDescription: complexCase.patient_description,
+          occupationalHistory: complexCase.occupational_history,
+          socialHistory: complexCase.social_history,
+          medicalHistory: complexCase.medical_history,
+          currentMedications: complexCase.current_medications,
+          mechanismOfInjury: complexCase.mechanism_of_injury,
+          bodyPart: complexCase.body_part,
+          complexity: complexCase.complexity,
+          estimatedTime: complexCase.estimated_time_minutes,
           initialPresentation: typeof complexCase.initial_presentation === 'string' ? 
             JSON.parse(complexCase.initial_presentation) : complexCase.initial_presentation,
           detailedHistory: typeof complexCase.detailed_history === 'string' ? 
@@ -120,9 +131,28 @@ export class ComplexCaseService {
             JSON.parse(complexCase.physical_findings) : complexCase.physical_findings
         },
         stages: stagesWithQuestions.map(stage => ({
-          ...stage,
+          id: stage.id,
+          complexCaseId: stage.complex_case_id,
+          stageNumber: stage.stage_number,
+          title: stage.title,
+          description: stage.description,
+          stageType: stage.stage_type,
+          expectedTimeMinutes: stage.expected_time_minutes,
           informationRevealed: typeof stage.information_revealed === 'string' ? 
-            JSON.parse(stage.information_revealed) : stage.information_revealed
+            JSON.parse(stage.information_revealed) : stage.information_revealed,
+          questions: stage.questions.map(q => ({
+            id: q.id,
+            stageId: q.stage_id,
+            questionNumber: q.question_number,
+            questionText: q.question_text,
+            questionType: q.question_type,
+            options: q.options,
+            expectedAnswers: q.expected_answers,
+            correctAnswer: q.correct_answer,
+            answerExplanation: q.answer_explanation,
+            scoringCriteria: q.scoringCriteria,
+            pointsAvailable: q.points_available
+          }))
         }))
       };
     } catch (error) {

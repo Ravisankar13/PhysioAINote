@@ -71,13 +71,13 @@ interface CaseStage {
   stageNumber: number;
   title: string;
   description: string;
-  providedInformation?: {
+  informationRevealed?: {
     patientResponse?: string;
     testResults?: string;
     additionalHistory?: string;
     observationFindings?: string;
   };
-  timeAllocation: number;
+  expectedTimeMinutes: number;
   questions: StageQuestion[];
 }
 
@@ -397,51 +397,51 @@ export default function ComplexCasePage() {
                 {currentStageData.title}
               </CardTitle>
               <CardDescription>{currentStageData.description}</CardDescription>
-              {currentStageData.timeAllocation && (
+              {currentStageData.expectedTimeMinutes && (
                 <Badge variant="outline" className="w-fit">
                   <Clock className="h-3 w-3 mr-1" />
-                  {currentStageData.timeAllocation} minutes
+                  {currentStageData.expectedTimeMinutes} minutes
                 </Badge>
               )}
             </CardHeader>
           </Card>
 
           {/* Provided Information */}
-          {currentStageData.providedInformation && (
+          {currentStageData.informationRevealed && (
             <Card>
               <CardHeader>
                 <CardTitle>Clinical Information</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {currentStageData.providedInformation.patientResponse && (
+                {currentStageData.informationRevealed.patientResponse && (
                   <div>
                     <h4 className="font-semibold mb-2">Patient Response</h4>
                     <p className="text-gray-700 bg-blue-50 p-3 rounded">
-                      {currentStageData.providedInformation.patientResponse}
+                      {currentStageData.informationRevealed.patientResponse}
                     </p>
                   </div>
                 )}
-                {currentStageData.providedInformation.testResults && (
+                {currentStageData.informationRevealed.testResults && (
                   <div>
                     <h4 className="font-semibold mb-2">Test Results</h4>
                     <p className="text-gray-700 bg-green-50 p-3 rounded">
-                      {currentStageData.providedInformation.testResults}
+                      {currentStageData.informationRevealed.testResults}
                     </p>
                   </div>
                 )}
-                {currentStageData.providedInformation.additionalHistory && (
+                {currentStageData.informationRevealed.additionalHistory && (
                   <div>
                     <h4 className="font-semibold mb-2">Additional History</h4>
                     <p className="text-gray-700 bg-yellow-50 p-3 rounded">
-                      {currentStageData.providedInformation.additionalHistory}
+                      {currentStageData.informationRevealed.additionalHistory}
                     </p>
                   </div>
                 )}
-                {currentStageData.providedInformation.observationFindings && (
+                {currentStageData.informationRevealed.observationFindings && (
                   <div>
                     <h4 className="font-semibold mb-2">Observation Findings</h4>
                     <p className="text-gray-700 bg-purple-50 p-3 rounded">
-                      {currentStageData.providedInformation.observationFindings}
+                      {currentStageData.informationRevealed.observationFindings}
                     </p>
                   </div>
                 )}

@@ -550,6 +550,9 @@ function AdminCompetitionPreview({ competition }: { competition: Competition }) 
     enabled: competition.complexCaseIds && competition.complexCaseIds.length > 0
   });
 
+  console.log('Complex case data:', complexCase);
+  console.log('Competition:', competition);
+
   if (isLoading) {
     return (
       <Card>
@@ -579,7 +582,9 @@ function AdminCompetitionPreview({ competition }: { competition: Competition }) 
     );
   }
 
-  const stages = complexCase.stages || [];
+  // Handle the complex case service response structure
+  const caseData = complexCase?.case || complexCase;
+  const stages = complexCase?.stages || [];
   const currentStageData = stages[currentStage];
 
   const handleAnswer = (value: string) => {
@@ -624,8 +629,8 @@ function AdminCompetitionPreview({ competition }: { competition: Competition }) 
         <CardContent className="space-y-6">
           <div className="grid gap-4">
             <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-              <h4 className="font-semibold text-green-800">Case Study: {complexCase.title}</h4>
-              <p className="text-green-700 mt-1">{complexCase.description}</p>
+              <h4 className="font-semibold text-green-800">Case Study: {actualComplexCase?.title}</h4>
+              <p className="text-green-700 mt-1">{actualComplexCase?.patient_description}</p>
             </div>
             
             {stages.map((stage: any, index: number) => (
@@ -695,7 +700,7 @@ function AdminCompetitionPreview({ competition }: { competition: Competition }) 
           <div>
             <CardTitle className="flex items-center gap-2">
               <Clipboard className="h-5 w-5" />
-              {complexCase.title}
+              {actualComplexCase?.title}
             </CardTitle>
             <CardDescription>
               Stage {currentStage + 1} of {stages.length}

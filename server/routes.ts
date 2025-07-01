@@ -5558,20 +5558,15 @@ Base your analysis on established postural assessment principles and correlate f
     try {
       const caseId = parseInt(req.params.id);
       
-      // Get actual complex case from database
-      const { db } = await import("./db");
-      const { complexCases } = await import("@shared/schema");
-      const { eq } = await import("drizzle-orm");
+      // Use complexCaseService to get case with stages
+      const { complexCaseService } = await import("./complexCaseService");
+      const caseDetails = await complexCaseService.getComplexCaseDetails(caseId);
       
-      const [complexCase] = await db.select()
-        .from(complexCases)
-        .where(eq(complexCases.id, caseId));
-      
-      if (!complexCase) {
+      if (!caseDetails) {
         return res.status(404).json({ error: "Complex case not found" });
       }
       
-      res.json(complexCase);
+      res.json(caseDetails);
     } catch (error) {
       console.error('Error getting complex case:', error);
       res.status(500).json({ message: 'Failed to get complex case' });

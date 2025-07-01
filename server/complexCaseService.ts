@@ -539,6 +539,9 @@ export class ComplexCaseService {
             complexCaseId: row.complex_case_id,
             stageNumber: row.stage_number,
             title: row.title,
+            question: row.description, // Map description to question for frontend
+            type: row.stage_type === 'assessment' ? 'short_answer' : 'clinical_reasoning', // Default type
+            points: 20, // Default points
             description: row.description,
             stageType: row.stage_type,
             expectedTimeMinutes: row.expected_time_minutes,

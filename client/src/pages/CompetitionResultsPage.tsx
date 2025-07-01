@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useRoute, Link } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -38,8 +38,8 @@ interface CompetitionResult {
 }
 
 export default function CompetitionResultsPage() {
-  const { id } = useParams();
-  const competitionId = parseInt(id as string);
+  const [match, params] = useRoute("/complex-competition/:id/results");
+  const competitionId = params?.id ? parseInt(params.id) : null;
   const [results, setResults] = useState<CompetitionResult | null>(null);
   const [loading, setLoading] = useState(true);
 

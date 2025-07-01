@@ -100,6 +100,9 @@ function ComplexCaseCompetitionParticipationPage() {
       return response.json();
     },
     onSuccess: (data) => {
+      // Store results in sessionStorage for the results page
+      sessionStorage.setItem('competitionResults', JSON.stringify(data));
+      
       toast({
         title: "Submission Successful!",
         description: "Your answers have been submitted and scored.",

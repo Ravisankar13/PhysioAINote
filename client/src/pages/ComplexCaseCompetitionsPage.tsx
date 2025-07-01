@@ -61,19 +61,19 @@ export default function ComplexCaseCompetitionsPage() {
   const { toast } = useToast();
 
   // Fetch upcoming competitions
-  const { data: upcomingCompetitions = [], isLoading: loadingUpcoming } = useQuery({
+  const { data: upcomingCompetitions = [], isLoading: loadingUpcoming } = useQuery<Competition[]>({
     queryKey: ['/api/complex-competitions/upcoming'],
     refetchInterval: 30000 // Refresh every 30 seconds
   });
 
   // Fetch active competitions
-  const { data: activeCompetitions = [], isLoading: loadingActive } = useQuery({
+  const { data: activeCompetitions = [], isLoading: loadingActive } = useQuery<Competition[]>({
     queryKey: ['/api/complex-competitions/active'],
     refetchInterval: 10000 // Refresh every 10 seconds for active competitions
   });
 
   // Fetch user's registered competitions
-  const { data: myRegistrations = [], isLoading: loadingRegistrations, error: registrationError } = useQuery({
+  const { data: myRegistrations = [], isLoading: loadingRegistrations, error: registrationError } = useQuery<Competition[]>({
     queryKey: ['/api/complex-competitions/my-registrations'],
     refetchInterval: 30000,
   });
@@ -403,7 +403,7 @@ export default function ComplexCaseCompetitionsPage() {
 
         <TabsContent value="my-registrations" className="space-y-6">
           <div className="text-center py-12">
-            {isLoading ? (
+            {loadingRegistrations ? (
               <div>
                 <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
                 <p className="text-muted-foreground">Loading your registrations...</p>
@@ -423,7 +423,6 @@ export default function ComplexCaseCompetitionsPage() {
                   <CompetitionCard 
                     key={competition.id} 
                     competition={competition}
-                    showUnregister={true}
                   />
                 ))}
               </div>

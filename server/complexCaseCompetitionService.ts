@@ -73,7 +73,7 @@ export class ComplexCaseCompetitionService {
 
     const [newCompetition] = await db
       .insert(competitions)
-      .values(competition)
+      .values([competition])
       .returning();
 
     return newCompetition;
@@ -179,7 +179,7 @@ export class ComplexCaseCompetitionService {
 
     const [participant] = await db
       .insert(competitionParticipants)
-      .values(participantData)
+      .values([participantData])
       .returning();
 
     // Update participant count

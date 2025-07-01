@@ -147,7 +147,7 @@ function getBodyPartSpecifics(bodyPart: string): string {
 function buildComplexCasePrompt(input: ComplexCaseInput): string {
   const bodyPartGuidance = getBodyPartSpecifics(input.bodyPart);
   
-  return `Create a comprehensive multi-stage physiotherapy case study with the following specifications:
+  return `Create a comprehensive multi-stage physiotherapy case study with detailed clinical progression and the following specifications:
 
 **CRITICAL: Body Part Specific Requirements for ${input.bodyPart.toUpperCase()}:**
 ${bodyPartGuidance}
@@ -164,6 +164,8 @@ ${input.competitionType === 'complete_clinician' ? 'Focus on comprehensive asses
 - Competition Type: ${input.competitionType}
 - Estimated Completion Time: ${input.estimatedTime} minutes
 - Target: 4-6 progressive stages with 2-3 questions per stage
+- Each stage must reveal NEW and DETAILED clinical information
+- Include specific objective findings, special test results, and measurement data
 
 **Required JSON Structure:**
 {
@@ -214,29 +216,102 @@ ${input.competitionType === 'complete_clinician' ? 'Focus on comprehensive asses
   "researchEvidence": ["relevant research citations"],
   "stages": [
     {
-      "title": "Stage title",
-      "description": "What happens in this stage",
-      "providedInformation": {
-        "patientResponse": "Patient's response to questions",
-        "testResults": "Any test results revealed",
-        "additionalHistory": "Additional history uncovered",
-        "observationFindings": "Observation findings"
+      "title": "Initial Assessment & History Taking",
+      "description": "Gather comprehensive patient history and perform initial clinical assessment",
+      "stageType": "assessment",
+      "expectedTimeMinutes": 6,
+      "informationRevealed": {
+        "patientResponse": "Detailed patient response to history questions including onset, location, quality, radiation, timing, exacerbating/alleviating factors",
+        "additionalHistory": "Additional relevant history including red flag screening, previous treatments, medications",
+        "observationFindings": "Initial observation findings including posture, gait, obvious deformities, functional movements"
       },
-      "timeAllocation": "minutes for this stage",
       "questions": [
         {
-          "questionText": "The question to ask",
-          "questionType": "multiple_choice | short_answer | list | essay",
-          "options": ["option1", "option2"] // for multiple choice only,
-          "expectedAnswers": ["expected answer keywords"],
+          "questionText": "Based on the patient's history, what are your top 3 differential diagnoses?",
+          "questionType": "essay",
+          "correctAnswer": "Should include most likely diagnoses based on mechanism, patient age, and presentation",
+          "answerExplanation": "Differential diagnosis should be systematic based on anatomy, pathophysiology, and clinical presentation patterns",
           "scoringCriteria": {
-            "maxPoints": "maximum points possible",
-            "partialCredit": "true/false",
-            "keywordPoints": [{"keyword": "term", "points": "points for this term"}]
+            "maxPoints": 20,
+            "partialCredit": true,
+            "keywordPoints": [{"keyword": "differential", "points": 5}, {"keyword": "diagnosis", "points": 5}]
           },
-          "correctAnswer": "The correct/best answer",
-          "rationale": "Why this is the correct answer",
-          "learningPoints": ["key learning points from this question"]
+          "pointsAvailable": 20
+        }
+      ]
+    },
+    {
+      "title": "Physical Examination & Special Tests",
+      "description": "Conduct systematic physical examination and appropriate special tests",
+      "stageType": "examination", 
+      "expectedTimeMinutes": 8,
+      "informationRevealed": {
+        "testResults": "Specific physical examination findings including range of motion measurements, strength grades, palpation findings",
+        "additionalHistory": "Additional examination findings and patient responses during testing",
+        "observationFindings": "Detailed movement analysis and functional testing results"
+      },
+      "questions": [
+        {
+          "questionText": "What are the most important special tests to perform for this presentation?",
+          "questionType": "list",
+          "correctAnswer": "Should include body-part specific special tests with proven diagnostic accuracy",
+          "answerExplanation": "Special tests should be selected based on differential diagnosis and have strong sensitivity/specificity",
+          "scoringCriteria": {
+            "maxPoints": 18,
+            "partialCredit": true,
+            "keywordPoints": [{"keyword": "test", "points": 3}, {"keyword": "special", "points": 3}]
+          },
+          "pointsAvailable": 18
+        }
+      ]
+    },
+    {
+      "title": "Test Results & Diagnostic Findings",
+      "description": "Review special test results and imaging/lab findings if indicated",
+      "stageType": "diagnostic",
+      "expectedTimeMinutes": 5,
+      "informationRevealed": {
+        "testResults": "Specific special test results (positive/negative) with exact findings, imaging results if ordered",
+        "additionalHistory": "Patient response to testing, pain provocation patterns",
+        "observationFindings": "Functional movement patterns and compensatory strategies observed"
+      },
+      "questions": [
+        {
+          "questionText": "Based on all examination findings, what is your working diagnosis?",
+          "questionType": "short_answer",
+          "correctAnswer": "Should reflect most likely diagnosis based on all available evidence",
+          "answerExplanation": "Diagnosis should integrate history, examination, and test findings using clinical reasoning",
+          "scoringCriteria": {
+            "maxPoints": 25,
+            "partialCredit": true,
+            "keywordPoints": [{"keyword": "diagnosis", "points": 10}, {"keyword": "evidence", "points": 5}]
+          },
+          "pointsAvailable": 25
+        }
+      ]
+    },
+    {
+      "title": "Treatment Planning & Goal Setting",
+      "description": "Develop evidence-based treatment plan with appropriate goals and interventions",
+      "stageType": "treatment",
+      "expectedTimeMinutes": 7,
+      "informationRevealed": {
+        "patientResponse": "Patient's treatment preferences, goals, and concerns discussed",
+        "additionalHistory": "Patient's previous treatment experiences and outcomes",
+        "observationFindings": "Baseline functional measurements and outcome measure scores"
+      },
+      "questions": [
+        {
+          "questionText": "What are your primary treatment interventions for this patient?",
+          "questionType": "essay",
+          "correctAnswer": "Should include evidence-based interventions appropriate for the diagnosis and patient factors",
+          "answerExplanation": "Treatment should be based on best available evidence, patient preferences, and clinical expertise",
+          "scoringCriteria": {
+            "maxPoints": 22,
+            "partialCredit": true,
+            "keywordPoints": [{"keyword": "treatment", "points": 5}, {"keyword": "evidence", "points": 5}]
+          },
+          "pointsAvailable": 22
         }
       ]
     }
@@ -429,6 +504,101 @@ function createFallbackComplexCase(input: ComplexCaseInput, userId: number): Com
   ];
 
   return { complexCase: fallbackCase, stages, questions };
+}
+
+/**
+ * Scores individual question response using AI analysis with immediate feedback
+ */
+export async function scoreQuestionResponse(
+  question: any,
+  userAnswer: string,
+  complexCase: any,
+  stage: any
+): Promise<{
+  score: number;
+  maxScore: number;
+  feedback: string;
+  strengths: string[];
+  improvements: string[];
+  keywordMatches: { keyword: string; points: number }[];
+}> {
+  try {
+    const openai = await import('./openai');
+    
+    const prompt = `You are an expert physiotherapy educator providing immediate scoring and feedback for a student's answer to a clinical case question.
+
+CASE CONTEXT:
+- Patient: ${complexCase.title}
+- Stage: ${stage.title} - ${stage.description}
+- Body Part: ${complexCase.bodyPart}
+
+QUESTION DETAILS:
+- Question: ${question.questionText}
+- Question Type: ${question.questionType}
+- Max Points: ${question.pointsAvailable}
+- Expected Answer: ${question.correctAnswer}
+
+STUDENT'S ANSWER:
+"${userAnswer}"
+
+SCORING CRITERIA:
+${JSON.stringify(question.scoringCriteria, null, 2)}
+
+Please provide detailed scoring and feedback in JSON format:
+{
+  "score": number (0 to ${question.pointsAvailable}),
+  "feedback": "Detailed feedback explaining the score with specific clinical reasoning",
+  "strengths": ["specific strengths in the answer"],
+  "improvements": ["specific areas for improvement"],
+  "keywordMatches": [{"keyword": "term", "points": number}],
+  "clinicalReasoning": "Assessment of clinical reasoning quality",
+  "evidenceBase": "Comments on evidence-based thinking demonstrated"
+}
+
+Focus on constructive feedback that helps the student learn. Be specific about what was good and what could be improved.`;
+
+    const response = await openai.default.chat.completions.create({
+      model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+      messages: [{ role: "user", content: prompt }],
+      response_format: { type: "json_object" },
+      temperature: 0.3,
+    });
+
+    const result = JSON.parse(response.choices[0].message.content || '{}');
+    
+    return {
+      score: Math.min(result.score || 0, question.pointsAvailable),
+      maxScore: question.pointsAvailable,
+      feedback: result.feedback || "Answer received and reviewed.",
+      strengths: result.strengths || [],
+      improvements: result.improvements || [],
+      keywordMatches: result.keywordMatches || []
+    };
+
+  } catch (error) {
+    console.error('Error scoring question response:', error);
+    
+    // Fallback scoring based on keyword matching
+    const keywords = question.scoringCriteria?.keywordPoints || [];
+    let fallbackScore = 0;
+    const matchedKeywords: { keyword: string; points: number }[] = [];
+    
+    keywords.forEach((kw: any) => {
+      if (userAnswer.toLowerCase().includes(kw.keyword.toLowerCase())) {
+        fallbackScore += kw.points;
+        matchedKeywords.push({ keyword: kw.keyword, points: kw.points });
+      }
+    });
+    
+    return {
+      score: Math.min(fallbackScore, question.pointsAvailable),
+      maxScore: question.pointsAvailable,
+      feedback: `Answer reviewed. Key terms identified: ${matchedKeywords.map(k => k.keyword).join(', ')}`,
+      strengths: ["Response submitted successfully"],
+      improvements: ["Consider more detailed clinical reasoning"],
+      keywordMatches: matchedKeywords
+    };
+  }
 }
 
 /**

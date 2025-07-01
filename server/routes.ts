@@ -5640,7 +5640,44 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
 
-
+  // AI-powered immediate question scoring
+  app.post("/api/complex-case-question/score", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const { questionId, userAnswer, complexCaseId, stageId } = req.body;
+      
+      // Get the question, case, and stage details
+      const caseDetails = await complexCaseService.getComplexCaseDetails(complexCaseId);
+      if (!caseDetails) {
+        return res.status(404).json({ error: "Case not found" });
+      }
+      
+      const stage = caseDetails.stages.find((s: any) => s.id === stageId);
+      if (!stage) {
+        return res.status(404).json({ error: "Stage not found" });
+      }
+      
+      const question = stage.questions.find((q: any) => q.id === questionId);
+      if (!question) {
+        return res.status(404).json({ error: "Question not found" });
+      }
+      
+      // Score the response using AI
+      const { scoreQuestionResponse } = await import('./complexCaseGenerator');
+      const scoringResult = await scoreQuestionResponse(
+        question,
+        userAnswer,
+        caseDetails.case,
+        stage
+      );
+      
+      res.json(scoringResult);
+    } catch (error: any) {
+      console.error("Error scoring question response:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
 
   // Initialize mock data endpoint
   app.post("/api/admin/init-complex-cases", async (req, res) => {

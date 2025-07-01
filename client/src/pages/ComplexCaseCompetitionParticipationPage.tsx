@@ -244,9 +244,12 @@ function ComplexCaseCompetitionParticipationPage() {
             <div>
               <div className="flex justify-between text-sm mb-2">
                 <span>Progress</span>
-                <span>{currentStage + 1}/{stages.length} stages completed</span>
+                <span>{currentQuestionIndex + 1}/{totalQuestions} questions completed</span>
               </div>
               <Progress value={progressPercentage} className="h-2" />
+              <div className="text-xs text-gray-500 mt-1">
+                Stage {currentStage + 1}/{stages.length}: {currentStageData?.title} (Question {currentQuestion + 1}/{currentStageData?.questions?.length || 0})
+              </div>
             </div>
 
             {/* Case Information */}
@@ -332,16 +335,17 @@ function ComplexCaseCompetitionParticipationPage() {
               <Button
                 variant="outline"
                 onClick={handlePrevious}
-                disabled={currentStage === 0}
+                disabled={currentStage === 0 && currentQuestion === 0}
               >
                 <ChevronLeft className="h-4 w-4 mr-2" />
                 Previous
               </Button>
 
-              {currentStage === stages.length - 1 ? (
+              {/* Check if this is the last question of the last stage */}
+              {currentStage === stages.length - 1 && currentQuestion === (currentStageData?.questions?.length || 1) - 1 ? (
                 <Button
                   onClick={handleSubmit}
-                  disabled={!answers[currentStageData.id] || submitAnswers.isPending}
+                  disabled={!answers[`${currentStageData.id}-${currentQuestionData.id}`] || submitAnswers.isPending}
                   className="bg-green-600 hover:bg-green-700"
                 >
                   {submitAnswers.isPending ? "Submitting..." : "Submit Answers"}
@@ -350,7 +354,7 @@ function ComplexCaseCompetitionParticipationPage() {
               ) : (
                 <Button
                   onClick={handleNext}
-                  disabled={!answers[currentStageData.id]}
+                  disabled={!answers[`${currentStageData.id}-${currentQuestionData.id}`]}
                 >
                   Next
                   <ChevronRight className="h-4 w-4 ml-2" />

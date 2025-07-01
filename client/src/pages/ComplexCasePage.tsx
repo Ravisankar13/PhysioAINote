@@ -51,33 +51,35 @@ interface ComplexCase {
 
 interface StageQuestion {
   id: number;
+  stageId: number;
   questionNumber: number;
   questionText: string;
   questionType: string;
   options?: string[];
-  expectedAnswers: string[];
+  correctAnswer: string;
+  answerExplanation: string;
   scoringCriteria: {
     maxPoints: number;
     partialCredit: boolean;
     keywordPoints: Array<{ keyword: string; points: number }>;
   };
-  correctAnswer: string;
-  rationale: string;
-  learningPoints?: string[];
+  pointsAvailable: number;
 }
 
 interface CaseStage {
   id: number;
-  stage_number: number;
+  complexCaseId: number;
+  stageNumber: number;
   title: string;
   description: string;
-  information_revealed?: {
+  stageType: string;
+  expectedTimeMinutes: number;
+  informationRevealed?: {
     patientResponse?: string;
     testResults?: string;
     additionalHistory?: string;
     observationFindings?: string;
   };
-  expected_time_minutes: number;
   questions: StageQuestion[];
 }
 
@@ -127,7 +129,7 @@ export default function ComplexCasePage() {
       console.log('Case details loaded:', caseDetails);
       console.log('Stages:', caseDetails.stages);
       console.log('Current stage:', currentStage);
-      const currentStageData = caseDetails.stages.find(s => s.stage_number === currentStage);
+      const currentStageData = caseDetails.stages.find(s => s.stageNumber === currentStage);
       console.log('Current stage data:', currentStageData);
       if (currentStageData) {
         console.log('Questions for current stage:', currentStageData.questions);
@@ -237,7 +239,7 @@ export default function ComplexCasePage() {
     setResponses({ ...responses, [questionId]: answer });
   };
 
-  const currentStageData = caseDetails?.stages.find(s => s.stage_number === currentStage);
+  const currentStageData = caseDetails?.stages.find(s => s.stageNumber === currentStage);
   const progress = caseDetails ? (currentStage / caseDetails.stages.length) * 100 : 0;
 
   if (loadingCase) {
@@ -320,8 +322,8 @@ export default function ComplexCasePage() {
                   <CardContent className="p-4">
                     <div className="flex justify-between items-center">
                       <span className="font-medium">{stage.title}</span>
-                      <Badge variant={stageScores[stage.stage_number] >= 70 ? "default" : "destructive"}>
-                        {stageScores[stage.stage_number] || 0}%
+                      <Badge variant={stageScores[stage.stageNumber] >= 70 ? "default" : "destructive"}>
+                        {stageScores[stage.stageNumber] || 0}%
                       </Badge>
                     </div>
                   </CardContent>
@@ -397,51 +399,51 @@ export default function ComplexCasePage() {
                 {currentStageData.title}
               </CardTitle>
               <CardDescription>{currentStageData.description}</CardDescription>
-              {currentStageData.expected_time_minutes && (
+              {currentStageData.expectedTimeMinutes && (
                 <Badge variant="outline" className="w-fit">
                   <Clock className="h-3 w-3 mr-1" />
-                  {currentStageData.expected_time_minutes} minutes
+                  {currentStageData.expectedTimeMinutes} minutes
                 </Badge>
               )}
             </CardHeader>
           </Card>
 
           {/* Provided Information */}
-          {currentStageData.information_revealed && (
+          {currentStageData.informationRevealed && (
             <Card>
               <CardHeader>
                 <CardTitle>Clinical Information</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {currentStageData.information_revealed.patientResponse && (
+                {currentStageData.informationRevealed.patientResponse && (
                   <div>
                     <h4 className="font-semibold mb-2">Patient Response</h4>
                     <p className="text-gray-700 bg-blue-50 p-3 rounded">
-                      {currentStageData.information_revealed.patientResponse}
+                      {currentStageData.informationRevealed.patientResponse}
                     </p>
                   </div>
                 )}
-                {currentStageData.information_revealed.testResults && (
+                {currentStageData.informationRevealed.testResults && (
                   <div>
                     <h4 className="font-semibold mb-2">Test Results</h4>
                     <p className="text-gray-700 bg-green-50 p-3 rounded">
-                      {currentStageData.information_revealed.testResults}
+                      {currentStageData.informationRevealed.testResults}
                     </p>
                   </div>
                 )}
-                {currentStageData.information_revealed.additionalHistory && (
+                {currentStageData.informationRevealed.additionalHistory && (
                   <div>
                     <h4 className="font-semibold mb-2">Additional History</h4>
                     <p className="text-gray-700 bg-yellow-50 p-3 rounded">
-                      {currentStageData.information_revealed.additionalHistory}
+                      {currentStageData.informationRevealed.additionalHistory}
                     </p>
                   </div>
                 )}
-                {currentStageData.information_revealed.observationFindings && (
+                {currentStageData.informationRevealed.observationFindings && (
                   <div>
                     <h4 className="font-semibold mb-2">Observation Findings</h4>
                     <p className="text-gray-700 bg-purple-50 p-3 rounded">
-                      {currentStageData.information_revealed.observationFindings}
+                      {currentStageData.informationRevealed.observationFindings}
                     </p>
                   </div>
                 )}

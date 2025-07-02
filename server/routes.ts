@@ -5266,7 +5266,7 @@ Base your analysis on established postural assessment principles and correlate f
 
   // Get user's complex competition history with detailed results
   app.get("/api/complex-competitions/history", async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
+    if (!req.isAuthenticated()) return res.status(401).json({ error: "Not authenticated" });
     
     try {
       const userId = req.user!.id;
@@ -5274,6 +5274,11 @@ Base your analysis on established postural assessment principles and correlate f
       
       // Get all user's complex case attempts with detailed feedback
       const attempts = await complexCaseService.getUserComplexCaseAttempts(userId);
+      
+      // If no attempts found, return empty array
+      if (!attempts || attempts.length === 0) {
+        return res.json([]);
+      }
       
       // Format the data for the history view
       const historyData = attempts.map(attempt => ({

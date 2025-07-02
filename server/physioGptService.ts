@@ -46,6 +46,58 @@ export interface PhysioGptResponse {
   confidenceLevel?: 'High' | 'Moderate' | 'Low' | 'Very Low';
 }
 
+function getExpertFrameworkGuidance(framework: string): string {
+  const frameworkGuidance: Record<string, string> = {
+    'jo-gibson': `
+- Focus on movement system approach to shoulder dysfunction
+- Assess scapular kinematics and motor control
+- Consider sensorimotor training and movement retraining
+- Evaluate movement patterns and compensatory strategies
+- Apply evidence-based exercise prescription for shoulder rehabilitation`,
+    
+    'grimaldi': `
+- Apply Alison Grimaldi's hip and pelvic pain approach
+- Focus on load management and capacity building
+- Consider biomechanical factors and movement patterns
+- Assess hip strength, endurance, and motor control
+- Implement graduated loading and exercise progression`,
+    
+    'bisset': `
+- Apply Leanne Bisset's evidence-based approach to elbow tendinopathy
+- Focus on tendon loading principles and capacity
+- Consider education about tendon healing and load management
+- Implement progressive loading exercises
+- Assess and address contributing factors`,
+    
+    'clinical-edge': `
+- Apply Clinical Edge's evidence-based practice approach
+- Use latest research evidence to guide assessment and treatment
+- Consider systematic reviews and clinical guidelines
+- Apply clinical prediction rules where appropriate
+- Focus on outcome measurement and evidence-based decision making`,
+    
+    'physio-network': `
+- Apply comprehensive biopsychosocial assessment
+- Focus on pain education and mechanisms
+- Consider movement confidence and fear avoidance
+- Address psychological factors affecting recovery
+- Implement graded exposure and movement-based interventions`,
+    
+    'sports-map': `
+- Apply sport-specific movement analysis
+- Focus on return-to-sport criteria and progressions
+- Consider injury prevention strategies
+- Assess movement quality and performance demands
+- Implement sport-specific rehabilitation protocols`
+  };
+  
+  return frameworkGuidance[framework] || `
+- Apply evidence-based assessment and treatment approaches
+- Consider individual patient factors and preferences
+- Focus on functional outcomes and goal achievement
+- Implement progressive rehabilitation strategies`;
+}
+
 export class PhysioGptService {
   private buildSystemPrompt(evidenceSummary?: EvidenceSummary, virtualPatient?: PhysioGptRequest['virtualPatient']): string {
     let evidenceContext = "";
@@ -92,6 +144,8 @@ ANALYSIS FOCUS:
     return `You are PhysioGPT, an expert physiotherapy AI assistant with real-time access to current research evidence. Provide evidence-based guidance to physiotherapists.
 
 ${evidenceContext}
+
+${virtualPatientContext}
 
 FOCUS AREAS:
 - Assessment and treatment advice backed by current research
@@ -286,8 +340,8 @@ Keep responses concise, practical, and directly applicable to clinical practice.
         content: request.message
       });
       
-      // Prepare messages for OpenAI with evidence context
-      const systemPrompt = this.buildSystemPrompt(evidenceSummary);
+      // Prepare messages for OpenAI with evidence context and virtual patient
+      const systemPrompt = this.buildSystemPrompt(evidenceSummary, request.virtualPatient);
       const openaiMessages = [
         { role: 'system', content: systemPrompt },
         ...previousMessages,

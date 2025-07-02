@@ -255,10 +255,118 @@ function ComplexCaseCompetitionParticipationPage() {
               </div>
             </div>
 
-            {/* Case Information */}
-            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <h4 className="font-semibold text-blue-800">Case: {complexCaseData?.case?.title}</h4>
-              <p className="text-blue-700 mt-1">{complexCaseData?.case?.patientDescription}</p>
+            {/* Progressive Case Information */}
+            <div className="space-y-4">
+              {/* Initial Case Information */}
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <h4 className="font-semibold text-blue-800">Case: {complexCaseData?.case?.title}</h4>
+                <p className="text-blue-700 mt-1">{complexCaseData?.case?.patientDescription}</p>
+                
+                {/* Initial Presentation - Always shown */}
+                {complexCaseData?.case?.initialPresentation && (
+                  <div className="mt-3 text-sm">
+                    <h5 className="font-medium text-blue-800">Chief Complaint:</h5>
+                    <p className="text-blue-700">{typeof complexCaseData.case.initialPresentation === 'string' 
+                      ? complexCaseData.case.initialPresentation 
+                      : complexCaseData.case.initialPresentation.chiefComplaint || 'Patient presents with symptoms requiring evaluation'}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Progressive Information Revelation */}
+              {stages.slice(0, currentStage + 1).map((stage: any, index: number) => (
+                <div key={stage.id} className="p-4 border rounded-lg bg-gradient-to-r from-emerald-50 to-teal-50 border-emerald-200">
+                  <div className="flex items-center gap-2 mb-2">
+                    <CheckCircle className="h-4 w-4 text-emerald-600" />
+                    <h5 className="font-semibold text-emerald-800">
+                      Stage {index + 1} Information Revealed
+                    </h5>
+                  </div>
+                  
+                  {/* Stage Description */}
+                  <p className="text-emerald-700 text-sm mb-3">{stage.description}</p>
+                  
+                  {/* Provided Information */}
+                  {stage.providedInformation && (
+                    <div className="space-y-2">
+                      {typeof stage.providedInformation === 'string' ? (
+                        <div>
+                          <span className="font-medium text-emerald-800">Additional Information:</span>
+                          <p className="text-emerald-700 text-sm mt-1">{stage.providedInformation}</p>
+                        </div>
+                      ) : typeof stage.providedInformation === 'object' && stage.providedInformation !== null ? (
+                        Object.entries(stage.providedInformation).map(([key, value]) => (
+                          <div key={key}>
+                            <span className="font-medium text-emerald-800 capitalize">
+                              {key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}:
+                            </span>
+                            <p className="text-emerald-700 text-sm mt-1">{value as string}</p>
+                          </div>
+                        ))
+                      ) : null}
+                    </div>
+                  )}
+
+                  {/* Show detailed case information progressively */}
+                  {index === 0 && complexCaseData?.case?.occupationalHistory && (
+                    <div className="mt-3">
+                      <span className="font-medium text-emerald-800">Occupational History:</span>
+                      <p className="text-emerald-700 text-sm mt-1">{complexCaseData.case.occupationalHistory}</p>
+                    </div>
+                  )}
+
+                  {index === 1 && complexCaseData?.case?.medicalHistory && (
+                    <div className="mt-3">
+                      <span className="font-medium text-emerald-800">Medical History:</span>
+                      <p className="text-emerald-700 text-sm mt-1">{complexCaseData.case.medicalHistory}</p>
+                    </div>
+                  )}
+
+                  {index === 2 && complexCaseData?.case?.physicalFindings && (
+                    <div className="mt-3">
+                      <span className="font-medium text-emerald-800">Physical Examination Findings:</span>
+                      {typeof complexCaseData.case.physicalFindings === 'string' ? (
+                        <p className="text-emerald-700 text-sm mt-1">{complexCaseData.case.physicalFindings}</p>
+                      ) : typeof complexCaseData.case.physicalFindings === 'object' && complexCaseData.case.physicalFindings !== null ? (
+                        <div className="space-y-1 mt-1">
+                          {Object.entries(complexCaseData.case.physicalFindings).map(([key, value]) => (
+                            <div key={key} className="text-sm">
+                              <span className="font-medium">{key.charAt(0).toUpperCase() + key.slice(1)}:</span>
+                              <span className="text-emerald-700 ml-1">{value as string}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
+
+                  {index === 3 && complexCaseData?.case?.currentMedications && (
+                    <div className="mt-3">
+                      <span className="font-medium text-emerald-800">Current Medications:</span>
+                      <p className="text-emerald-700 text-sm mt-1">{complexCaseData.case.currentMedications}</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {/* Future Stages Preview */}
+              {currentStage < stages.length - 1 && (
+                <div className="p-4 border border-gray-200 rounded-lg bg-gray-50">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Clock className="h-4 w-4 text-gray-500" />
+                    <h5 className="font-semibold text-gray-600">
+                      Information Available in Future Stages
+                    </h5>
+                  </div>
+                  <div className="space-y-1">
+                    {stages.slice(currentStage + 1).map((stage: any, index: number) => (
+                      <div key={stage.id} className="text-sm text-gray-500">
+                        • Stage {currentStage + index + 2}: {stage.title} - Additional clinical information will be revealed
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </CardContent>

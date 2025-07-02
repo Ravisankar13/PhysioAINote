@@ -221,9 +221,9 @@ ${input.competitionType === 'complete_clinician' ? 'Focus on comprehensive asses
       "stageType": "assessment",
       "expectedTimeMinutes": 6,
       "informationRevealed": {
-        "patientResponse": "Detailed patient response to history questions including onset, location, quality, radiation, timing, exacerbating/alleviating factors",
-        "additionalHistory": "Additional relevant history including red flag screening, previous treatments, medications",
-        "observationFindings": "Initial observation findings including posture, gait, obvious deformities, functional movements"
+        "patientResponse": "Based on history taking: Patient reports [specific onset, mechanism, progression of symptoms]. Pain rated [X/10] at worst, [Y/10] currently. Location: [specific anatomical areas]. Quality: [descriptive terms]. Timing: [when symptoms occur/worsen].",
+        "additionalHistory": "Previous treatments attempted: [list]. Current medications: [list]. Red flag screening: [negative/positive findings]. Work demands: [relevant occupational factors].",
+        "observationFindings": "Posture: [specific findings]. Gait: [observed abnormalities]. Functional movements: [specific limitations observed]. Protective behaviors: [guarding, compensations]."
       },
       "questions": [
         {
@@ -246,9 +246,9 @@ ${input.competitionType === 'complete_clinician' ? 'Focus on comprehensive asses
       "stageType": "examination", 
       "expectedTimeMinutes": 8,
       "informationRevealed": {
-        "testResults": "Specific physical examination findings including range of motion measurements, strength grades, palpation findings",
-        "additionalHistory": "Additional examination findings and patient responses during testing",
-        "observationFindings": "Detailed movement analysis and functional testing results"
+        "testResults": "Physical examination findings: ROM - [specific measurements in degrees]. Strength - [specific muscle groups and grades]. Palpation - [areas of tenderness, swelling, temperature changes]. Pain provocation - [specific movements/positions that reproduce symptoms].",
+        "additionalHistory": "Patient reports [pain behavior during testing]. Functional limitations identified: [specific activities affected]. Notable compensatory patterns: [movement compensations observed].",
+        "observationFindings": "Movement quality: [observed deficits]. Balance/proprioception: [findings]. Neurological screening: [reflexes, sensation, motor function]. Protective mechanisms: [muscle guarding, splinting]."
       },
       "questions": [
         {
@@ -271,9 +271,9 @@ ${input.competitionType === 'complete_clinician' ? 'Focus on comprehensive asses
       "stageType": "diagnostic",
       "expectedTimeMinutes": 5,
       "informationRevealed": {
-        "testResults": "Specific special test results (positive/negative) with exact findings, imaging results if ordered",
-        "additionalHistory": "Patient response to testing, pain provocation patterns",
-        "observationFindings": "Functional movement patterns and compensatory strategies observed"
+        "testResults": "Special test results: [Test 1: positive/negative with specific findings]. [Test 2: positive/negative with specific findings]. Imaging findings: [if ordered - specific abnormalities or normal findings]. Laboratory results: [if ordered - specific values].",
+        "additionalHistory": "Pain provocation testing: [specific movements/positions that reproduce symptoms]. Patient's pain response: [behavior during testing, pain levels]. Functional testing results: [specific functional movement limitations identified].",
+        "observationFindings": "Movement patterns: [compensatory strategies, movement quality]. Functional capacity: [specific activity limitations]. Patient's understanding: [comprehension of condition, compliance indicators]."
       },
       "questions": [
         {

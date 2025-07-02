@@ -20,6 +20,19 @@ export interface PhysioGptRequest {
     sessionId?: number;
     caseStudyId?: number;
   };
+  virtualPatient?: {
+    id: number;
+    patientName: string;
+    age: number;
+    gender: string;
+    bodyPart: string;
+    condition: string;
+    chiefComplaint: string;
+    presentingSymptoms: string;
+    medicalHistory: string;
+    expertFramework: string;
+    complexity: string;
+  };
   userId: number;
 }
 
@@ -34,7 +47,7 @@ export interface PhysioGptResponse {
 }
 
 export class PhysioGptService {
-  private buildSystemPrompt(evidenceSummary?: EvidenceSummary): string {
+  private buildSystemPrompt(evidenceSummary?: EvidenceSummary, virtualPatient?: PhysioGptRequest['virtualPatient']): string {
     let evidenceContext = "";
     
     if (evidenceSummary) {
@@ -48,6 +61,31 @@ CURRENT EVIDENCE SUMMARY:
 
 CLINICAL CONSIDERATIONS:
 ${evidenceSummary.clinicalConsiderations.map(c => `- ${c}`).join('\n')}
+`;
+    }
+
+    let virtualPatientContext = "";
+    if (virtualPatient) {
+      const frameworkGuidance = getExpertFrameworkGuidance(virtualPatient.expertFramework);
+      virtualPatientContext = `
+VIRTUAL PATIENT CASE ANALYSIS:
+Patient: ${virtualPatient.patientName}
+Age: ${virtualPatient.age} years, Gender: ${virtualPatient.gender}
+Body Part: ${virtualPatient.bodyPart}
+Condition: ${virtualPatient.condition}
+Chief Complaint: ${virtualPatient.chiefComplaint}
+Presenting Symptoms: ${virtualPatient.presentingSymptoms}
+Medical History: ${virtualPatient.medicalHistory}
+Case Complexity: ${virtualPatient.complexity}
+
+EXPERT FRAMEWORK: ${virtualPatient.expertFramework}
+${frameworkGuidance}
+
+ANALYSIS FOCUS:
+- Apply ${virtualPatient.expertFramework} methodology and principles
+- Consider the specific expertise and approach of this framework
+- Provide assessment and treatment recommendations consistent with this expert's approach
+- Reference evidence and reasoning specific to this methodology
 `;
     }
 

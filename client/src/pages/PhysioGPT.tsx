@@ -295,6 +295,19 @@ Please provide assessment recommendations following ${patient.expertFramework} a
         } : selectedBodyRegion ? {
           bodyRegion: selectedBodyRegion,
           regionName: selectedBodyRegionName
+        } : undefined,
+        virtualPatient: selectedVirtualPatient ? {
+          id: selectedVirtualPatient.id,
+          patientName: selectedVirtualPatient.patientName,
+          age: selectedVirtualPatient.age,
+          gender: selectedVirtualPatient.gender,
+          bodyPart: selectedVirtualPatient.bodyPart,
+          condition: selectedVirtualPatient.condition,
+          chiefComplaint: selectedVirtualPatient.chiefComplaint,
+          presentingSymptoms: selectedVirtualPatient.presentingSymptoms,
+          medicalHistory: selectedVirtualPatient.medicalHistory,
+          expertFramework: selectedVirtualPatient.expertFramework,
+          complexity: selectedVirtualPatient.complexity
         } : undefined
       });
       const result = await response.json();
@@ -549,7 +562,15 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
           </div>
 
           {/* Main Interface with Tabs */}
-          <div className={`${show3DPanel ? 'lg:col-span-2' : 'lg:col-span-3'} transition-all flex-1 lg:flex-initial`}>
+          <div className={`${
+            showVirtualPatients 
+              ? show3DPanel 
+                ? 'lg:col-span-2' 
+                : 'lg:col-span-2'
+              : show3DPanel 
+                ? 'lg:col-span-2' 
+                : 'lg:col-span-2'
+          } transition-all flex-1 lg:flex-initial`}>
             <Card className="h-full flex flex-col">
               <CardHeader className="flex-shrink-0 p-3 sm:p-6">
                 <div className="flex items-center justify-between">
@@ -581,6 +602,16 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
                         Context: {selectedBodyRegionName}
                       </Badge>
                     )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowVirtualPatients(!showVirtualPatients)}
+                      className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm h-7 sm:h-8"
+                    >
+                      <User className="h-3 w-3 sm:h-4 sm:w-4" />
+                      <span className="hidden sm:inline">{showVirtualPatients ? 'Hide' : 'Show'} Patients</span>
+                      <span className="sm:hidden">VP</span>
+                    </Button>
                     <Button
                       variant="outline"
                       size="sm"
@@ -837,6 +868,18 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
               </CardContent>
             </Card>
           </div>
+
+          {/* Virtual Patient Sidebar */}
+          {showVirtualPatients && (
+            <div className="lg:col-span-1 h-64 sm:h-80 lg:h-full">
+              <VirtualPatientSidebar
+                onPatientSelect={handleVirtualPatientSelect}
+                selectedPatientId={selectedVirtualPatient?.id}
+                isCollapsed={virtualPatientCollapsed}
+                onToggleCollapse={() => setVirtualPatientCollapsed(!virtualPatientCollapsed)}
+              />
+            </div>
+          )}
 
           {/* 3D Skeleton Panel */}
           {show3DPanel && (

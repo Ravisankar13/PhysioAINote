@@ -5882,51 +5882,76 @@ Base your analysis on established postural assessment principles and correlate f
       const competitionId = parseInt(req.params.id);
       const { complexCaseId, stageAnswers, totalTimeSpent } = req.body;
       
-      // Store the submission and calculate scores
+      console.log(`[COMPLEX-SUBMIT] User ${req.user!.id} submitting to competition ${competitionId}`);
+      console.log(`[COMPLEX-SUBMIT] Complex Case ID: ${complexCaseId}`);
+      console.log(`[COMPLEX-SUBMIT] Stage Answers:`, stageAnswers);
+
+      // Get complex case service and storage
+      const { complexCaseService } = await import("./complexCaseService");
+      const { scoreComplexCaseAttempt } = await import("./complexCaseGenerator");
+      const { competitionStorage } = await import("./competitionStorage");
+      
+      // Get the complex case details
+      const complexCase = await complexCaseService.getComplexCase(complexCaseId);
+      if (!complexCase) {
+        return res.status(404).json({ message: 'Complex case not found' });
+      }
+
+      console.log(`[COMPLEX-SUBMIT] Found complex case: ${complexCase.title}`);
+
+      // Transform stage answers to the expected format for scoring
+      const stageResponses = stageAnswers.map((answer: any) => ({
+        stageId: answer.stageId,
+        answer: answer.answer,
+        timeSpent: answer.timeSpent
+      }));
+
+      // Use AI-powered scoring system
+      const analysisResult = await scoreComplexCaseAttempt(complexCase, stageResponses);
+      
+      console.log(`[COMPLEX-SUBMIT] Analysis result:`, analysisResult);
+
+      // Store the submission
       const submission = {
         userId: req.user!.id,
         competitionId,
         complexCaseId,
         stageAnswers,
         totalTimeSpent,
-        submittedAt: new Date()
+        submittedAt: new Date(),
+        analysisResult
       };
 
-      // Calculate basic scores (placeholder for now)
-      const scores = {
-        accuracy: Math.floor(Math.random() * 40) + 60, // 60-100
-        speed: Math.floor(Math.random() * 30) + 70,    // 70-100
-        reasoning: Math.floor(Math.random() * 35) + 65, // 65-100
-        differential: Math.floor(Math.random() * 40) + 60, // 60-100
-        treatment: Math.floor(Math.random() * 30) + 70, // 70-100
-        total: 0
-      };
-      
-      scores.total = Math.round(
-        (scores.accuracy * 0.3) + 
-        (scores.speed * 0.15) + 
-        (scores.reasoning * 0.3) + 
-        (scores.differential * 0.15) + 
-        (scores.treatment * 0.1)
-      );
+      // Calculate time efficiency bonus (if completed under time limit)
+      const competition = await competitionStorage.getCompetitionById(competitionId);
+      const timeLimit = competition?.timeLimit || 45; // Default 45 minutes
+      const timeEfficiencyBonus = totalTimeSpent < (timeLimit * 60 * 0.8) ? 5 : 0; // 5% bonus if under 80% of time limit
 
       const result = {
         participantId: req.user!.id,
-        totalScore: scores.total,
-        rank: Math.floor(Math.random() * 10) + 1,
-        caseResults: [{
-          caseStudyId: complexCaseId,
-          scores,
-          feedback: "Great work! Your clinical reasoning shows strong understanding of the case presentation. Your systematic approach to the assessment demonstrates excellent clinical thinking skills."
-        }],
-        achievements: scores.total >= 85 ? ["Clinical Excellence", "Top Performer"] : scores.total >= 75 ? ["Strong Clinician"] : undefined,
+        totalScore: Math.min(100, analysisResult.totalScore + timeEfficiencyBonus),
+        categoryScores: {
+          ...analysisResult.categoryScores,
+          timeEfficiency: timeEfficiencyBonus > 0 ? 85 : 70
+        },
+        feedback: analysisResult.feedback,
+        timeSpent: totalTimeSpent,
+        timeLimit: timeLimit * 60,
+        achievements: analysisResult.totalScore >= 90 ? ["Clinical Excellence", "Expert Clinician"] : 
+                     analysisResult.totalScore >= 80 ? ["Strong Clinical Reasoning"] : 
+                     analysisResult.totalScore >= 70 ? ["Competent Clinician"] : undefined,
         submission // Keep original submission data for debugging
       };
 
+      console.log(`[COMPLEX-SUBMIT] Final result:`, result);
       res.json(result);
+      
     } catch (error) {
-      console.error('Error submitting competition answers:', error);
-      res.status(500).json({ message: 'Failed to submit answers' });
+      console.error('Error submitting complex competition answers:', error);
+      res.status(500).json({ 
+        message: 'Failed to submit answers',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
   });
 

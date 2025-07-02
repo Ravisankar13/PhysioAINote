@@ -6209,7 +6209,7 @@ Base your analysis on established postural assessment principles and correlate f
           startTime: new Date(),
           endTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
           maxParticipants: 100,
-          timeLimit: 45,
+          timeLimit: 10,
           caseType: "complex",
           complexCaseIds: complexCaseIds.slice(0, 3)
         },
@@ -6222,7 +6222,7 @@ Base your analysis on established postural assessment principles and correlate f
           startTime: new Date(),
           endTime: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000), // 5 days
           maxParticipants: 50,
-          timeLimit: 30,
+          timeLimit: 10,
           caseType: "complex",
           complexCaseIds: complexCaseIds.slice(3, 6)
         },
@@ -6235,7 +6235,7 @@ Base your analysis on established postural assessment principles and correlate f
           startTime: new Date(),
           endTime: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000), // 6 days
           maxParticipants: 75,
-          timeLimit: 40,
+          timeLimit: 10,
           caseType: "complex",
           complexCaseIds: complexCaseIds.slice(6, 10)
         }

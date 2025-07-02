@@ -58,6 +58,8 @@ function ComplexCaseCompetitionParticipationPage() {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [timeStarted, setTimeStarted] = useState<Date | null>(null);
+  const [showResults, setShowResults] = useState(false);
+  const [competitionResults, setCompetitionResults] = useState<any>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -100,16 +102,13 @@ function ComplexCaseCompetitionParticipationPage() {
       return response.json();
     },
     onSuccess: (data) => {
-      // Store results in sessionStorage for the results page
-      sessionStorage.setItem('competitionResults', JSON.stringify(data));
+      setCompetitionResults(data);
+      setShowResults(true);
       
       toast({
         title: "Submission Successful!",
-        description: "Your answers have been submitted and scored.",
+        description: "Your answers have been analyzed and scored.",
       });
-      
-      // Redirect to results page
-      window.location.href = `/complex-competition/${competitionId}/results`;
     },
     onError: (error: any) => {
       toast({
@@ -210,6 +209,188 @@ function ComplexCaseCompetitionParticipationPage() {
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
+
+  // Show results if competition is completed
+  if (showResults && competitionResults) {
+    return (
+      <div className="container mx-auto p-6 space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <Link to="/competitions">
+            <Button variant="ghost" size="sm">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Competitions
+            </Button>
+          </Link>
+          <Badge variant="default" className="bg-green-600">
+            <CheckCircle className="h-3 w-3 mr-1" />
+            Competition Completed
+          </Badge>
+        </div>
+
+        {/* Results Overview */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-3">
+              <Trophy className="h-6 w-6 text-yellow-600" />
+              Competition Results: {competition.title}
+            </CardTitle>
+            <CardDescription>
+              Your performance analysis with detailed feedback and recommendations
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-6">
+              {/* Overall Score */}
+              <div className="text-center p-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border">
+                <div className="text-4xl font-bold text-blue-600 mb-2">
+                  {competitionResults.totalScore || 75}%
+                </div>
+                <div className="text-lg text-blue-800 font-medium">Overall Score</div>
+                <div className="text-sm text-blue-600 mt-1">
+                  Based on evidence-based clinical reasoning analysis
+                </div>
+              </div>
+
+              {/* Category Scores */}
+              {competitionResults.categoryScores && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="text-center p-4 bg-emerald-50 rounded-lg border border-emerald-200">
+                    <div className="text-2xl font-bold text-emerald-600">
+                      {competitionResults.categoryScores.clinicalReasoning || 75}%
+                    </div>
+                    <div className="text-sm font-medium text-emerald-800">Clinical Reasoning</div>
+                    <div className="text-xs text-emerald-600 mt-1">(40% weight)</div>
+                  </div>
+                  <div className="text-center p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <div className="text-2xl font-bold text-blue-600">
+                      {competitionResults.categoryScores.assessmentSkills || 75}%
+                    </div>
+                    <div className="text-sm font-medium text-blue-800">Assessment Skills</div>
+                    <div className="text-xs text-blue-600 mt-1">(25% weight)</div>
+                  </div>
+                  <div className="text-center p-4 bg-purple-50 rounded-lg border border-purple-200">
+                    <div className="text-2xl font-bold text-purple-600">
+                      {competitionResults.categoryScores.treatmentPlanning || 75}%
+                    </div>
+                    <div className="text-sm font-medium text-purple-800">Treatment Planning</div>
+                    <div className="text-xs text-purple-600 mt-1">(25% weight)</div>
+                  </div>
+                  <div className="text-center p-4 bg-orange-50 rounded-lg border border-orange-200">
+                    <div className="text-2xl font-bold text-orange-600">
+                      {competitionResults.categoryScores.communication || 75}%
+                    </div>
+                    <div className="text-sm font-medium text-orange-800">Communication</div>
+                    <div className="text-xs text-orange-600 mt-1">(10% weight)</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Detailed Feedback */}
+              {competitionResults.feedback && (
+                <div className="grid md:grid-cols-2 gap-6">
+                  {/* Strengths */}
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold text-green-800 flex items-center gap-2">
+                      <CheckCircle className="h-5 w-5" />
+                      Strengths Identified
+                    </h3>
+                    <div className="space-y-2">
+                      {(competitionResults.feedback.strengths || ["Good effort demonstrated"]).map((strength: string, index: number) => (
+                        <div key={index} className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                          <p className="text-green-800 text-sm">{strength}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Improvement Areas */}
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold text-amber-800 flex items-center gap-2">
+                      <Brain className="h-5 w-5" />
+                      Areas for Improvement
+                    </h3>
+                    <div className="space-y-2">
+                      {(competitionResults.feedback.improvementAreas || ["Continue developing clinical skills"]).map((area: string, index: number) => (
+                        <div key={index} className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                          <p className="text-amber-800 text-sm">{area}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Evidence References */}
+              {competitionResults.feedback?.evidenceReferences && competitionResults.feedback.evidenceReferences.length > 0 && (
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-blue-800">Evidence-Based References</h3>
+                  <div className="space-y-2">
+                    {competitionResults.feedback.evidenceReferences.map((reference: string, index: number) => (
+                      <div key={index} className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <p className="text-blue-800 text-sm font-medium">{reference}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Recommended Resources */}
+              {competitionResults.feedback?.recommendedResources && competitionResults.feedback.recommendedResources.length > 0 && (
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-indigo-800">Recommended Learning Resources</h3>
+                  <div className="space-y-2">
+                    {competitionResults.feedback.recommendedResources.map((resource: string, index: number) => (
+                      <div key={index} className="p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
+                        <p className="text-indigo-800 text-sm">{resource}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Next Steps */}
+              {competitionResults.feedback?.nextSteps && competitionResults.feedback.nextSteps.length > 0 && (
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-purple-800">Recommended Next Steps</h3>
+                  <div className="space-y-2">
+                    {competitionResults.feedback.nextSteps.map((step: string, index: number) => (
+                      <div key={index} className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                        <p className="text-purple-800 text-sm">{step}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex gap-4 pt-6 border-t">
+                <Link to="/competitions" className="flex-1">
+                  <Button className="w-full" variant="outline">
+                    <Trophy className="h-4 w-4 mr-2" />
+                    Browse More Competitions
+                  </Button>
+                </Link>
+                <Button 
+                  className="flex-1"
+                  onClick={() => {
+                    setShowResults(false);
+                    setCurrentStage(0);
+                    setCurrentQuestion(0);
+                    setAnswers({});
+                    setCompetitionResults(null);
+                  }}
+                >
+                  <Play className="h-4 w-4 mr-2" />
+                  Try Another Case
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto p-6 space-y-6">

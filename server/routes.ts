@@ -5892,7 +5892,7 @@ Base your analysis on established postural assessment principles and correlate f
       const { competitionStorage } = await import("./competitionStorage");
       
       // Get the complex case details
-      const complexCase = await complexCaseService.getComplexCase(complexCaseId);
+      const complexCase = await complexCaseService.getComplexCaseDetails(complexCaseId);
       if (!complexCase) {
         return res.status(404).json({ message: 'Complex case not found' });
       }

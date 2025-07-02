@@ -664,7 +664,7 @@ export default function CompetitionPage() {
             </TabsTrigger>
             <TabsTrigger value="complex-cases" className="flex items-center gap-2">
               <Brain className="h-4 w-4" />
-              Complex Cases
+              Practice Case Studies
             </TabsTrigger>
             <TabsTrigger value="daily" className="flex items-center gap-2">
               <Calendar className="h-4 w-4" />

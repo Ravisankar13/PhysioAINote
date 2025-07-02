@@ -796,7 +796,7 @@ export default function CompetitionPage() {
                           </div>
                           <Button
                             size="sm"
-                            onClick={() => setLocation(`/competition/${competition.id}`)}
+                            onClick={() => setLocation(`/complex-competition/${competition.id}`)}
                             className="w-full"
                           >
                             Join Competition

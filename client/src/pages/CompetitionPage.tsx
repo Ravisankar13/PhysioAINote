@@ -322,7 +322,7 @@ function ComplexCaseCompetitionsView() {
       </div>
 
       <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
-        <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-5' : 'grid-cols-4'}`}>
+        <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-6' : 'grid-cols-5'}`}>
           <TabsTrigger value="active" className="flex items-center gap-2">
             <Play className="h-4 w-4" />
             Live ({activeCompetitions.length})
@@ -334,6 +334,10 @@ function ComplexCaseCompetitionsView() {
           <TabsTrigger value="my-registrations" className="flex items-center gap-2">
             <User className="h-4 w-4" />
             My Registrations ({myRegistrations?.length || 0})
+          </TabsTrigger>
+          <TabsTrigger value="history" className="flex items-center gap-2">
+            <FileText className="h-4 w-4" />
+            History
           </TabsTrigger>
           <TabsTrigger value="leaderboard" className="flex items-center gap-2">
             <Crown className="h-4 w-4" />
@@ -416,6 +420,10 @@ function ComplexCaseCompetitionsView() {
           )}
         </TabsContent>
 
+        <TabsContent value="history" className="space-y-6">
+          <CompetitionHistoryView />
+        </TabsContent>
+
         <TabsContent value="leaderboard" className="space-y-6">
           <div className="text-center py-12">
             <Crown className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
@@ -470,6 +478,215 @@ function ComplexCaseCompetitionsView() {
         )}
       </Tabs>
     </div>
+  );
+}
+
+// CompetitionHistoryView component
+function CompetitionHistoryView() {
+  const { user } = useAuth();
+  
+  // Fetch user's competition history with detailed results
+  const { data: competitionHistory = [], isLoading: loadingHistory } = useQuery<any[]>({
+    queryKey: ['/api/complex-competitions/history'],
+    refetchInterval: 30000,
+  });
+
+  if (loadingHistory) {
+    return (
+      <div className="text-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+        <p className="mt-2 text-muted-foreground">Loading competition history...</p>
+      </div>
+    );
+  }
+
+  if (competitionHistory.length === 0) {
+    return (
+      <div className="text-center py-12">
+        <FileText className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+        <h3 className="text-xl font-semibold mb-2">No Competition History</h3>
+        <p className="text-muted-foreground">
+          Complete some competitions to see your detailed results and progress here.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">Competition History</h2>
+          <p className="text-muted-foreground">
+            Review your detailed competition results and performance analytics
+          </p>
+        </div>
+        <Badge variant="secondary" className="text-sm">
+          {competitionHistory.length} Competition{competitionHistory.length !== 1 ? 's' : ''} Completed
+        </Badge>
+      </div>
+
+      <div className="space-y-4">
+        {competitionHistory.map((attempt: any, index: number) => (
+          <CompetitionHistoryCard key={`${attempt.competitionId}-${index}`} attempt={attempt} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// CompetitionHistoryCard component
+function CompetitionHistoryCard({ attempt }: { attempt: any }) {
+  const [expanded, setExpanded] = useState(false);
+
+  const getScoreColor = (score: number) => {
+    if (score >= 80) return 'text-green-600';
+    if (score >= 60) return 'text-yellow-600';
+    return 'text-red-600';
+  };
+
+  const getBadgeVariant = (score: number) => {
+    if (score >= 80) return 'default';
+    if (score >= 60) return 'secondary';
+    return 'destructive';
+  };
+
+  return (
+    <Card className="border-l-4 border-l-primary">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <CardTitle className="text-lg">{attempt.competitionTitle}</CardTitle>
+            <CardDescription className="flex items-center gap-2">
+              <Calendar className="h-4 w-4" />
+              {new Date(attempt.completedAt).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              })}
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-3">
+            <Badge variant={getBadgeVariant(attempt.totalScore)} className="text-sm font-bold">
+              {attempt.totalScore}% Score
+            </Badge>
+            <Badge variant="outline" className="text-sm">
+              Rank #{attempt.rank || 'N/A'}
+            </Badge>
+          </div>
+        </div>
+      </CardHeader>
+
+      <CardContent className="space-y-4">
+        {/* Overall Performance Metrics */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="text-center p-3 bg-secondary/20 rounded-lg">
+            <div className="text-sm text-muted-foreground">Time Spent</div>
+            <div className="text-lg font-semibold">{attempt.timeSpent}min</div>
+          </div>
+          <div className="text-center p-3 bg-secondary/20 rounded-lg">
+            <div className="text-sm text-muted-foreground">Questions</div>
+            <div className="text-lg font-semibold">{attempt.totalQuestions}</div>
+          </div>
+          <div className="text-center p-3 bg-secondary/20 rounded-lg">
+            <div className="text-sm text-muted-foreground">Avg Score</div>
+            <div className={`text-lg font-semibold ${getScoreColor(attempt.averageScore)}`}>
+              {attempt.averageScore}%
+            </div>
+          </div>
+          <div className="text-center p-3 bg-secondary/20 rounded-lg">
+            <div className="text-sm text-muted-foreground">Participants</div>
+            <div className="text-lg font-semibold">{attempt.totalParticipants}</div>
+          </div>
+        </div>
+
+        {/* Category Breakdown */}
+        {attempt.categoryScores && (
+          <div className="space-y-3">
+            <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
+              Performance Breakdown
+            </h4>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex justify-between items-center p-2 bg-background rounded border">
+                <span className="text-sm">Clinical Reasoning</span>
+                <Badge variant="outline" className={getScoreColor(attempt.categoryScores.clinicalReasoning)}>
+                  {attempt.categoryScores.clinicalReasoning}%
+                </Badge>
+              </div>
+              <div className="flex justify-between items-center p-2 bg-background rounded border">
+                <span className="text-sm">Assessment Skills</span>
+                <Badge variant="outline" className={getScoreColor(attempt.categoryScores.assessmentSkills)}>
+                  {attempt.categoryScores.assessmentSkills}%
+                </Badge>
+              </div>
+              <div className="flex justify-between items-center p-2 bg-background rounded border">
+                <span className="text-sm">Treatment Planning</span>
+                <Badge variant="outline" className={getScoreColor(attempt.categoryScores.treatmentPlanning)}>
+                  {attempt.categoryScores.treatmentPlanning}%
+                </Badge>
+              </div>
+              <div className="flex justify-between items-center p-2 bg-background rounded border">
+                <span className="text-sm">Communication</span>
+                <Badge variant="outline" className={getScoreColor(attempt.categoryScores.communication)}>
+                  {attempt.categoryScores.communication}%
+                </Badge>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Detailed Analysis Toggle */}
+        <div className="pt-4 border-t">
+          <Button
+            variant="ghost"
+            onClick={() => setExpanded(!expanded)}
+            className="w-full justify-between"
+          >
+            <span>Detailed Question Analysis</span>
+            <ChevronRight className={`h-4 w-4 transition-transform ${expanded ? 'rotate-90' : ''}`} />
+          </Button>
+
+          {expanded && attempt.questionFeedback && (
+            <div className="mt-4 space-y-4 animate-in slide-in-from-top-2">
+              {attempt.questionFeedback.map((feedback: any, idx: number) => (
+                <Card key={idx} className="border-l-2 border-l-muted">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-base">Question {idx + 1}</CardTitle>
+                      <Badge variant={getBadgeVariant(feedback.score)} className="text-xs">
+                        {feedback.score}%
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="prose prose-sm max-w-none">
+                      <div className="text-sm leading-relaxed text-muted-foreground">
+                        {feedback.analysis}
+                      </div>
+                    </div>
+                    {feedback.learningPoints && feedback.learningPoints.length > 0 && (
+                      <div className="space-y-2">
+                        <h5 className="text-sm font-semibold text-primary">Key Learning Points:</h5>
+                        <ul className="text-sm space-y-1">
+                          {feedback.learningPoints.map((point: string, pointIdx: number) => (
+                            <li key={pointIdx} className="flex items-start gap-2">
+                              <div className="w-1.5 h-1.5 bg-primary rounded-full mt-2 flex-shrink-0" />
+                              <span className="text-muted-foreground">{point}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

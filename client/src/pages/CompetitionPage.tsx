@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { 
   Trophy, 
   Target, 
@@ -588,6 +589,11 @@ export default function CompetitionPage() {
     queryKey: ['/api/leaderboards/top-performers']
   });
 
+  // Fetch active complex case competitions for overview
+  const { data: activeComplexCompetitions } = useQuery({
+    queryKey: ['/api/complex-competitions/active']
+  });
+
   const completedCompetitions = Array.isArray(userHistory) ? userHistory.filter((h: any) => h.completedAt)?.length || 0 : 0;
   const totalAchievements = Array.isArray(achievements) ? achievements.filter((a: any) => a.completed)?.length || 0 : 0;
   const averageScore = Array.isArray(userHistory) && userHistory.length > 0 
@@ -752,7 +758,60 @@ export default function CompetitionPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <ActiveCompetitions />
+                {/* Show active complex case competitions */}
+                <div className="space-y-4">
+                  {Array.isArray(activeComplexCompetitions) && activeComplexCompetitions.length > 0 ? (
+                    activeComplexCompetitions.slice(0, 3).map((competition: any) => (
+                      <Card key={competition.id} className="hover:shadow-lg transition-shadow">
+                        <CardHeader className="pb-3">
+                          <div className="flex items-start justify-between">
+                            <div className="space-y-1">
+                              <CardTitle className="text-lg flex items-center gap-2">
+                                <Brain className="h-4 w-4 text-indigo-600" />
+                                {competition.title}
+                              </CardTitle>
+                              <CardDescription className="text-sm">
+                                {competition.description}
+                              </CardDescription>
+                            </div>
+                            <Badge variant="default" className="bg-green-100 text-green-700 text-xs">
+                              {competition.status === 'active' ? 'Active' : 'Available'}
+                            </Badge>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="pt-0">
+                          <div className="flex items-center gap-4 text-sm text-muted-foreground mb-3">
+                            <div className="flex items-center gap-1">
+                              <Clock className="h-4 w-4" />
+                              {competition.timeLimit}min
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Users className="h-4 w-4" />
+                              {competition.currentParticipants || 0}/{competition.maxParticipants}
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Target className="h-4 w-4" />
+                              {competition.difficulty}
+                            </div>
+                          </div>
+                          <Button
+                            size="sm"
+                            onClick={() => setLocation(`/competition/${competition.id}`)}
+                            className="w-full"
+                          >
+                            Join Competition
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    ))
+                  ) : (
+                    <Alert>
+                      <AlertDescription>
+                        No active competitions at the moment. Check back soon!
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </div>
                 <div className="mt-4 text-center">
                   <Button 
                     variant="outline"

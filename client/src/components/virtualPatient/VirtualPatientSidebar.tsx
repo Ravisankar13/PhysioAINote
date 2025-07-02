@@ -25,6 +25,26 @@ import { useToast } from "@/hooks/use-toast";
 
 interface VirtualPatient {
   id: number;
+  patient_name: string;
+  age: number;
+  gender: string;
+  body_part: string;
+  chief_complaint: string;
+  symptoms_description: string;
+  past_medical_history: string;
+  diagnosis?: string;
+  createdAt: string;
+  // Analysis result fields if present
+  analysisResult?: {
+    diagnosis?: string;
+    treatmentPlan?: string;
+    expertInsights?: string;
+  };
+}
+
+// This interface should match what PhysioGPT expects
+interface PhysioGPTVirtualPatient {
+  id: number;
   patientName: string;
   age: number;
   gender: string;
@@ -35,16 +55,10 @@ interface VirtualPatient {
   medicalHistory: string;
   expertFramework: string;
   complexity: string;
-  createdAt: string;
-  analysisResult?: {
-    diagnosis?: string;
-    treatmentPlan?: string;
-    expertInsights?: string;
-  };
 }
 
 interface VirtualPatientSidebarProps {
-  onPatientSelect: (patient: VirtualPatient) => void;
+  onPatientSelect: (patient: PhysioGPTVirtualPatient) => void;
   selectedPatientId?: number | null;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
@@ -104,36 +118,66 @@ export default function VirtualPatientSidebar({
 
   const filteredPatients = patients.filter(patient => {
     const matchesSearch = !searchTerm || 
-      patient.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      patient.condition.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      patient.bodyPart.toLowerCase().includes(searchTerm.toLowerCase());
+      patient.patient_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      patient.chief_complaint.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      patient.body_part.toLowerCase().includes(searchTerm.toLowerCase());
     
-    const matchesFramework = selectedFramework === "all" || 
-      patient.expertFramework === selectedFramework;
+    const matchesFramework = selectedFramework === "all";
     
     return matchesSearch && matchesFramework;
   });
 
+  // Group patients by body part instead of framework
   const groupedPatients = filteredPatients.reduce((acc, patient) => {
-    const framework = patient.expertFramework || 'general';
-    if (!acc[framework]) acc[framework] = [];
-    acc[framework].push(patient);
+    const bodyPart = patient.body_part || 'general';
+    if (!acc[bodyPart]) acc[bodyPart] = [];
+    acc[bodyPart].push(patient);
     return acc;
   }, {} as Record<string, VirtualPatient[]>);
 
-  const toggleFramework = (framework: string) => {
+  const toggleBodyPart = (bodyPart: string) => {
     const newExpanded = new Set(expandedFrameworks);
-    if (newExpanded.has(framework)) {
-      newExpanded.delete(framework);
+    if (newExpanded.has(bodyPart)) {
+      newExpanded.delete(bodyPart);
     } else {
-      newExpanded.add(framework);
+      newExpanded.add(bodyPart);
     }
     setExpandedFrameworks(newExpanded);
   };
 
-  const getFrameworkInfo = (frameworkId: string) => {
-    return expertFrameworks.find(f => f.id === frameworkId) || 
-           { id: frameworkId, name: frameworkId.replace('-', ' '), specialty: 'General' };
+  const getBodyPartInfo = (bodyPart: string) => {
+    return { id: bodyPart, name: bodyPart.charAt(0).toUpperCase() + bodyPart.slice(1), specialty: 'General' };
+  };
+
+  // Convert database patient to PhysioGPT format
+  const convertToPhysioGPTFormat = (patient: VirtualPatient): PhysioGPTVirtualPatient => {
+    // Map body part to appropriate expert framework
+    const frameworkMapping: Record<string, string> = {
+      'shoulder': 'jo-gibson',
+      'hip': 'grimaldi', 
+      'elbow': 'bisset',
+      'knee': 'clinical-edge',
+      'back': 'physio-network',
+      'neck': 'physio-network',
+      'ankle': 'sports-map',
+      'foot': 'sports-map',
+      'wrist': 'clinical-edge',
+      'hand': 'clinical-edge'
+    };
+
+    return {
+      id: patient.id,
+      patientName: patient.patient_name,
+      age: patient.age,
+      gender: patient.gender,
+      bodyPart: patient.body_part,
+      condition: patient.diagnosis || patient.chief_complaint,
+      chiefComplaint: patient.chief_complaint,
+      presentingSymptoms: patient.symptoms_description,
+      medicalHistory: patient.past_medical_history || 'No significant medical history',
+      expertFramework: frameworkMapping[patient.body_part] || 'clinical-edge',
+      complexity: 'intermediate' // Default complexity
+    };
   };
 
   if (isCollapsed) {
@@ -213,22 +257,22 @@ export default function VirtualPatientSidebar({
             </div>
           ) : (
             <div className="space-y-3">
-              {Object.entries(groupedPatients).map(([frameworkId, frameworkPatients]) => {
-                const frameworkInfo = getFrameworkInfo(frameworkId);
-                const isExpanded = expandedFrameworks.has(frameworkId);
+              {Object.entries(groupedPatients).map(([bodyPartId, bodyPartPatients]) => {
+                const bodyPartInfo = getBodyPartInfo(bodyPartId);
+                const isExpanded = expandedFrameworks.has(bodyPartId);
                 
                 return (
-                  <div key={frameworkId} className="space-y-1">
+                  <div key={bodyPartId} className="space-y-1">
                     <Button
                       variant="ghost"
-                      onClick={() => toggleFramework(frameworkId)}
+                      onClick={() => toggleBodyPart(bodyPartId)}
                       className="w-full justify-between h-8 px-2 text-xs font-medium"
                     >
                       <div className="flex items-center gap-2">
-                        <Brain className="h-3 w-3" />
-                        <span>{frameworkInfo.name}</span>
+                        <Activity className="h-3 w-3" />
+                        <span>{bodyPartInfo.name}</span>
                         <Badge variant="outline" className="text-xs px-1 py-0">
-                          {frameworkPatients.length}
+                          {bodyPartPatients.length}
                         </Badge>
                       </div>
                       {isExpanded ? (
@@ -240,7 +284,7 @@ export default function VirtualPatientSidebar({
 
                     {isExpanded && (
                       <div className="space-y-1 ml-2">
-                        {frameworkPatients.map((patient) => (
+                        {bodyPartPatients.map((patient) => (
                           <Card
                             key={patient.id}
                             className={`cursor-pointer transition-all hover:shadow-sm border-l-4 ${
@@ -248,26 +292,26 @@ export default function VirtualPatientSidebar({
                                 ? 'ring-2 ring-blue-500 bg-blue-50 border-l-blue-500' 
                                 : 'hover:bg-muted/50 border-l-transparent'
                             }`}
-                            onClick={() => onPatientSelect(patient)}
+                            onClick={() => onPatientSelect(convertToPhysioGPTFormat(patient))}
                           >
                             <CardContent className="p-3">
                               <div className="flex items-start justify-between mb-2">
                                 <div className="flex-1 min-w-0">
                                   <h4 className="font-semibold text-sm truncate text-blue-900">
-                                    {patient.patientName}
+                                    {patient.patient_name}
                                   </h4>
                                   <h5 className="font-medium text-xs text-orange-700 truncate mb-1">
-                                    {patient.condition}
+                                    {patient.diagnosis || patient.chief_complaint}
                                   </h5>
                                   <p className="text-xs text-muted-foreground">
-                                    {patient.age}y • {patient.gender} • {patient.bodyPart}
+                                    {patient.age}y • {patient.gender} • {patient.body_part}
                                   </p>
                                 </div>
                                 <Badge 
                                   variant="outline" 
-                                  className={`text-xs ${complexityColors[patient.complexity as keyof typeof complexityColors] || 'bg-gray-100'}`}
+                                  className="text-xs bg-blue-50 text-blue-700 border-blue-200"
                                 >
-                                  {patient.complexity}
+                                  Patient
                                 </Badge>
                               </div>
 
@@ -275,7 +319,7 @@ export default function VirtualPatientSidebar({
                                 <div className="flex items-center gap-1">
                                   <FileText className="h-3 w-3 text-muted-foreground" />
                                   <span className="text-xs text-muted-foreground truncate">
-                                    {patient.chiefComplaint}
+                                    {patient.chief_complaint}
                                   </span>
                                 </div>
                               </div>

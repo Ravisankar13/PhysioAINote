@@ -60,6 +60,7 @@ function ComplexCaseCompetitionParticipationPage() {
   const [timeStarted, setTimeStarted] = useState<Date | null>(null);
   const [showResults, setShowResults] = useState(false);
   const [competitionResults, setCompetitionResults] = useState<any>(null);
+  const [currentTime, setCurrentTime] = useState(Date.now()); // Add timer state for real-time updates
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -119,12 +120,15 @@ function ComplexCaseCompetitionParticipationPage() {
     },
   });
 
-  // Timer countdown and auto-submission effect
+  // Timer countdown and real-time updates
   useEffect(() => {
     if (!timeStarted || showResults) return;
 
     const interval = setInterval(() => {
-      const elapsed = Math.floor((Date.now() - timeStarted.getTime()) / 1000);
+      const now = Date.now();
+      setCurrentTime(now); // Update current time to trigger re-render
+      
+      const elapsed = Math.floor((now - timeStarted.getTime()) / 1000);
       const timeLimit = 10 * 60; // 10 minutes
       const remaining = Math.max(0, timeLimit - elapsed);
       
@@ -184,7 +188,7 @@ function ComplexCaseCompetitionParticipationPage() {
   const currentQuestionIndex = stages.slice(0, currentStage).reduce((total, stage) => total + (stage.questions?.length || 0), 0) + currentQuestion;
   const progressPercentage = totalQuestions > 0 ? ((currentQuestionIndex + 1) / totalQuestions) * 100 : 0;
   
-  const timeElapsed = timeStarted ? Math.floor((Date.now() - timeStarted.getTime()) / 1000) : 0;
+  const timeElapsed = timeStarted ? Math.floor((currentTime - timeStarted.getTime()) / 1000) : 0;
   const timeLimit = 10 * 60; // Fixed 10 minutes for all competitions
   const timeRemaining = Math.max(0, timeLimit - timeElapsed);
 

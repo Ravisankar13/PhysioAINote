@@ -114,6 +114,238 @@ function CreateDiagnosisCompetitionsButton() {
   );
 }
 
+function CompetitionHistoryView() {
+  const { user } = useAuth();
+  
+  // Fetch user's competition history with detailed results
+  const { data: competitionHistory = [], isLoading: loadingHistory } = useQuery<any[]>({
+    queryKey: ['/api/complex-competitions/history'],
+    refetchInterval: 30000,
+  });
+
+  if (loadingHistory) {
+    return (
+      <div className="text-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+        <p className="mt-2 text-muted-foreground">Loading competition history...</p>
+      </div>
+    );
+  }
+
+  if (competitionHistory.length === 0) {
+    return (
+      <div className="text-center py-12">
+        <FileText className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+        <h3 className="text-xl font-semibold mb-2">No Competition History</h3>
+        <p className="text-muted-foreground">
+          Complete some competitions to see your detailed results and progress here.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">Competition History</h2>
+          <p className="text-muted-foreground">
+            Review your detailed competition results and performance analytics
+          </p>
+        </div>
+        <Badge variant="secondary" className="text-sm">
+          {competitionHistory.length} Competition{competitionHistory.length !== 1 ? 's' : ''} Completed
+        </Badge>
+      </div>
+
+      <div className="space-y-4">
+        {competitionHistory.map((attempt: any, index: number) => (
+          <CompetitionHistoryCard key={`${attempt.competitionId}-${index}`} attempt={attempt} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CompetitionHistoryCard({ attempt }: { attempt: any }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <Card className="hover:shadow-lg transition-shadow">
+      <CardHeader>
+        <div className="flex items-start justify-between">
+          <div className="space-y-1">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Brain className="h-4 w-4 text-indigo-600" />
+              {attempt.competitionTitle || 'Complex Case Competition'}
+            </CardTitle>
+            <CardDescription className="text-sm">
+              Completed on {format(new Date(attempt.completedAt || attempt.createdAt), 'PPp')}
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="text-right">
+              <div className="text-2xl font-bold text-primary">
+                {Math.round(attempt.totalScore || 0)}%
+              </div>
+              <div className="text-xs text-muted-foreground">Final Score</div>
+            </div>
+            <Badge 
+              variant={attempt.totalScore >= 80 ? "default" : attempt.totalScore >= 60 ? "secondary" : "destructive"}
+              className="text-xs"
+            >
+              {attempt.totalScore >= 80 ? "Excellent" : attempt.totalScore >= 60 ? "Good" : "Needs Practice"}
+            </Badge>
+          </div>
+        </div>
+      </CardHeader>
+
+      <CardContent>
+        <div className="space-y-4">
+          {/* Score Breakdown */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="text-center p-3 bg-blue-50 rounded-lg">
+              <div className="text-lg font-semibold text-blue-700">
+                {Math.round(attempt.categoryScores?.clinicalReasoning || 0)}%
+              </div>
+              <div className="text-xs text-blue-600">Clinical Reasoning</div>
+            </div>
+            <div className="text-center p-3 bg-green-50 rounded-lg">
+              <div className="text-lg font-semibold text-green-700">
+                {Math.round(attempt.categoryScores?.assessmentSkills || 0)}%
+              </div>
+              <div className="text-xs text-green-600">Assessment Skills</div>
+            </div>
+            <div className="text-center p-3 bg-purple-50 rounded-lg">
+              <div className="text-lg font-semibold text-purple-700">
+                {Math.round(attempt.categoryScores?.treatmentPlanning || 0)}%
+              </div>
+              <div className="text-xs text-purple-600">Treatment Planning</div>
+            </div>
+            <div className="text-center p-3 bg-orange-50 rounded-lg">
+              <div className="text-lg font-semibold text-orange-700">
+                {Math.round(attempt.categoryScores?.communication || 0)}%
+              </div>
+              <div className="text-xs text-orange-600">Communication</div>
+            </div>
+          </div>
+
+          {/* Quick Stats */}
+          <div className="flex items-center gap-6 text-sm text-muted-foreground">
+            <div className="flex items-center gap-1">
+              <Timer className="h-4 w-4" />
+              Time: {Math.round((attempt.timeSpent || 0) / 60)} minutes
+            </div>
+            <div className="flex items-center gap-1">
+              <Target className="h-4 w-4" />
+              Rank: #{attempt.rank || 'N/A'}
+            </div>
+            <div className="flex items-center gap-1">
+              <Users className="h-4 w-4" />
+              {attempt.totalParticipants || 0} participants
+            </div>
+          </div>
+
+          {/* Expand/Collapse Button */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setExpanded(!expanded)}
+            className="w-full flex items-center gap-2"
+          >
+            <ChevronRight className={`h-4 w-4 transition-transform ${expanded ? 'rotate-90' : ''}`} />
+            {expanded ? 'Hide' : 'Show'} Detailed Feedback
+          </Button>
+
+          {/* Detailed Feedback */}
+          {expanded && attempt.feedback && (
+            <div className="space-y-4 pt-4 border-t">
+              {/* Strengths */}
+              {attempt.feedback.strengths && attempt.feedback.strengths.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="font-semibold text-green-700 flex items-center gap-2">
+                    <CheckCircle className="h-4 w-4" />
+                    Strengths
+                  </h4>
+                  <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground ml-6">
+                    {attempt.feedback.strengths.map((strength: string, idx: number) => (
+                      <li key={idx}>{strength}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Improvement Areas */}
+              {attempt.feedback.improvementAreas && attempt.feedback.improvementAreas.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="font-semibold text-amber-700 flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4" />
+                    Areas for Improvement
+                  </h4>
+                  <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground ml-6">
+                    {attempt.feedback.improvementAreas.map((area: string, idx: number) => (
+                      <li key={idx}>{area}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Question-by-Question Feedback */}
+              {attempt.questionFeedback && attempt.questionFeedback.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="font-semibold text-blue-700 flex items-center gap-2">
+                    <Brain className="h-4 w-4" />
+                    Question Analysis
+                  </h4>
+                  <div className="space-y-3">
+                    {attempt.questionFeedback.map((qFeedback: any, idx: number) => (
+                      <div key={idx} className="border rounded-lg p-4 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <h5 className="font-medium">Stage {idx + 1}</h5>
+                          <Badge 
+                            variant={qFeedback.score >= 80 ? "default" : qFeedback.score >= 60 ? "secondary" : "destructive"}
+                            className="text-xs"
+                          >
+                            {Math.round(qFeedback.score || 0)}%
+                          </Badge>
+                        </div>
+                        {qFeedback.feedback && (
+                          <p className="text-sm text-muted-foreground">{qFeedback.feedback}</p>
+                        )}
+                        {qFeedback.expectedAnswer && (
+                          <div className="mt-2 p-2 bg-green-50 rounded text-sm">
+                            <span className="font-medium text-green-700">Expected approach: </span>
+                            <span className="text-green-600">{qFeedback.expectedAnswer}</span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Next Steps */}
+              {attempt.feedback.nextSteps && attempt.feedback.nextSteps.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="font-semibold text-purple-700 flex items-center gap-2">
+                    <ArrowRight className="h-4 w-4" />
+                    Recommended Next Steps
+                  </h4>
+                  <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground ml-6">
+                    {attempt.feedback.nextSteps.map((step: string, idx: number) => (
+                      <li key={idx}>{step}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function ComplexCaseCompetitionsPage() {
   const [activeTab, setActiveTab] = useState('upcoming');
   const [selectedCompetition, setSelectedCompetition] = useState<Competition | null>(null);

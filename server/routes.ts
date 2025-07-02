@@ -5264,6 +5264,54 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
 
+  // Get user's complex competition history with detailed results
+  app.get("/api/complex-competitions/history", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const userId = req.user!.id;
+      const { complexCaseService } = await import("./complexCaseService");
+      
+      // Get all user's complex case attempts with detailed feedback
+      const attempts = await complexCaseService.getUserComplexCaseAttempts(userId);
+      
+      // Format the data for the history view
+      const historyData = attempts.map(attempt => ({
+        competitionId: attempt.competitionId,
+        competitionTitle: attempt.competitionTitle || "Complex Case Competition",
+        complexCaseId: attempt.complexCaseId,
+        completedAt: attempt.completedAt || attempt.createdAt,
+        totalScore: attempt.overallScore || 0,
+        rank: attempt.rank || null,
+        timeSpent: attempt.timeSpent || 0,
+        totalParticipants: attempt.totalParticipants || 0,
+        categoryScores: {
+          clinicalReasoning: attempt.clinicalReasoningScore || 0,
+          assessmentSkills: attempt.assessmentSkillsScore || 0,
+          treatmentPlanning: attempt.treatmentPlanningScore || 0,
+          communication: attempt.communicationScore || 0,
+          timeEfficiency: attempt.timeEfficiencyScore || 0
+        },
+        feedback: {
+          strengths: attempt.strengths || [],
+          improvementAreas: attempt.improvementAreas || [],
+          recommendedResources: attempt.recommendedResources || [],
+          nextSteps: attempt.nextSteps || [],
+          evidenceReferences: attempt.evidenceReferences || []
+        },
+        questionFeedback: attempt.questionFeedback || []
+      }));
+      
+      // Sort by completion date, most recent first
+      historyData.sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime());
+      
+      res.json(historyData);
+    } catch (error: any) {
+      console.error("Error fetching complex competition history:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Get complex competition participants
   app.get("/api/complex-competitions/:id/participants", async (req, res) => {
     try {

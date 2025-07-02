@@ -38,6 +38,7 @@ import EvidenceBasedProtocols from "@/components/clinical/EvidenceBasedProtocols
 import EvidenceDisplay from "@/components/clinical/EvidenceDisplay";
 import ColorCodedContent from "@/components/clinical/ColorCodedContent";
 import ColorCodeLegend from "@/components/clinical/ColorCodeLegend";
+import VirtualPatientSidebar from "@/components/virtualPatient/VirtualPatientSidebar";
 
 interface ChatMessage extends PhysioGptMessage {
   suggestions?: string[];
@@ -98,6 +99,9 @@ export default function PhysioGPT() {
   } | null>(null);
   const [selectedAssessmentTemplate, setSelectedAssessmentTemplate] = useState<any | null>(null);
   const [assessmentResults, setAssessmentResults] = useState<any | null>(null);
+  const [showVirtualPatients, setShowVirtualPatients] = useState(false);
+  const [selectedVirtualPatient, setSelectedVirtualPatient] = useState<any | null>(null);
+  const [virtualPatientCollapsed, setVirtualPatientCollapsed] = useState(false);
   const [evidenceData, setEvidenceData] = useState<Map<number, PhysioGptResponse>>(new Map());
   const [showColorLegend, setShowColorLegend] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -192,6 +196,92 @@ export default function PhysioGPT() {
       fetchPatientData();
     }
   }, [location, toast]);
+
+  // Virtual patient selection handler
+  const handleVirtualPatientSelect = (patient: any) => {
+    console.log("Virtual patient selected:", patient);
+    setSelectedVirtualPatient(patient);
+    
+    // Set patient context for chat
+    setPatientContext({
+      patientId: patient.id,
+      patientName: patient.patientName,
+      bodyPart: patient.bodyPart,
+    });
+
+    // Create a new conversation for this patient analysis
+    handleNewConversation();
+
+    // Set initial message with comprehensive patient context
+    const contextMessage = `Analyze virtual patient case using ${patient.expertFramework} methodology:
+
+Patient: ${patient.patientName}
+Age: ${patient.age} years, Gender: ${patient.gender}
+Body Part: ${patient.bodyPart}
+Condition: ${patient.condition}
+Chief Complaint: ${patient.chiefComplaint}
+
+Presenting Symptoms: ${patient.presentingSymptoms}
+Medical History: ${patient.medicalHistory}
+
+Please provide assessment recommendations following ${patient.expertFramework} approach.`;
+
+    setMessage(contextMessage);
+
+    // Set relevant suggestions based on the expert framework
+    const frameworkSuggestions = {
+      'jo-gibson': [
+        "What shoulder assessment tests would Jo Gibson recommend?",
+        "How should I apply Jo Gibson's movement system approach?",
+        "What are the key differential diagnoses to consider?",
+        "What treatment principles should guide rehabilitation?"
+      ],
+      'grimaldi': [
+        "What hip assessment approach would Alison Grimaldi recommend?",
+        "How should I evaluate hip and pelvic biomechanics?",
+        "What are the key loading considerations?",
+        "What exercise progression would be most appropriate?"
+      ],
+      'bisset': [
+        "What elbow assessment tests would Leanne Bisset recommend?",
+        "How should I evaluate tendon loading capacity?",
+        "What are the evidence-based treatment options?",
+        "What exercise prescription would be most effective?"
+      ],
+      'clinical-edge': [
+        "What evidence-based assessment approach should I use?",
+        "What are the latest research findings for this condition?",
+        "How should I apply clinical prediction rules?",
+        "What outcome measures would be most appropriate?"
+      ],
+      'physio-network': [
+        "How should I assess pain mechanisms in this case?",
+        "What biopsychosocial factors should I consider?",
+        "What pain education strategies would be appropriate?",
+        "How should I address movement fears and beliefs?"
+      ],
+      'sports-map': [
+        "What sport-specific assessment should I perform?",
+        "How should I evaluate movement patterns?",
+        "What return-to-sport criteria should I use?",
+        "What injury prevention strategies should I implement?"
+      ]
+    };
+
+    setSuggestions(
+      frameworkSuggestions[patient.expertFramework as keyof typeof frameworkSuggestions] || [
+        "What assessment tests would you recommend?",
+        "What are the potential differential diagnoses?",
+        "What treatment approaches would be most effective?",
+        "What outcome measures should I use?"
+      ]
+    );
+
+    toast({
+      title: "Virtual Patient Selected",
+      description: `Analyzing ${patient.patientName} using ${patient.expertFramework} methodology`,
+    });
+  };
 
   // Send message mutation
   const sendMessageMutation = useMutation({
@@ -371,7 +461,15 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="container mx-auto p-2 sm:p-4 lg:p-6">
-        <div className="flex flex-col lg:grid lg:grid-cols-4 gap-2 sm:gap-4 lg:gap-6 h-[calc(100vh-2rem)] sm:h-[calc(100vh-4rem)] lg:h-[calc(100vh-6rem)]">
+        <div className={`flex flex-col lg:grid gap-2 sm:gap-4 lg:gap-6 h-[calc(100vh-2rem)] sm:h-[calc(100vh-4rem)] lg:h-[calc(100vh-6rem)] ${
+          showVirtualPatients 
+            ? show3DPanel 
+              ? 'lg:grid-cols-5' 
+              : 'lg:grid-cols-4'
+            : show3DPanel 
+              ? 'lg:grid-cols-4' 
+              : 'lg:grid-cols-3'
+        }`}>
           {/* Sidebar - Conversations */}
           <div className="lg:col-span-1 h-48 lg:h-full">
             <Card className="h-full flex flex-col">

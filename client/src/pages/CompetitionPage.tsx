@@ -504,7 +504,7 @@ function ComplexCasesView() {
   return (
     <div className="space-y-6">
       <div className="text-center mb-8">
-        <h2 className="text-3xl font-bold mb-4">Complex Clinical Cases</h2>
+        <h2 className="text-3xl font-bold mb-4">Practice Case Studies</h2>
         <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
           Advanced multi-stage clinical reasoning challenges designed to test your diagnostic skills 
           and clinical decision-making through progressive questioning.

@@ -4,7 +4,8 @@ import { queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useAuth } from "@/hooks/use-auth";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -21,15 +22,455 @@ import {
   TrendingUp,
   Medal,
   Crown,
-  GraduationCap
+  GraduationCap,
+  BookOpen,
+  Timer,
+  User,
+  CheckCircle,
+  ArrowRight,
+  Play,
+  AlertCircle,
+  Settings,
+  ChevronRight,
+  Search,
+  FileText,
+  Clipboard,
+  Send
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { formatDistanceToNow, format } from 'date-fns';
 import DailyChallengeCard from "@/components/competition/DailyChallengeCard";
 import ActiveCompetitions from "@/components/competition/ActiveCompetitions";
 import LeaderboardView from "@/components/competition/LeaderboardView";
 import AchievementsPanel from "@/components/competition/AchievementsPanel";
 import CompetitionHistory from "@/components/competition/CompetitionHistory";
+
+// Interface for complex case competitions
+interface ComplexCompetition {
+  id: number;
+  title: string;
+  description: string;
+  type: string;
+  status: string;
+  bodyPart: string;
+  difficulty: string;
+  timeLimit: number;
+  maxParticipants: number;
+  currentParticipants: number;
+  registrationDeadline: string;
+  startTime: string;
+  endTime: string;
+  complexCaseIds: number[];
+  rules: {
+    stageTimeLimit: number;
+    showLeaderboard: boolean;
+  };
+}
+
+// ComplexCaseCompetitionsView component
+function ComplexCaseCompetitionsView() {
+  const [selectedTab, setSelectedTab] = useState('upcoming');
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const [, setLocation] = useLocation();
+
+  // Fetch upcoming complex competitions
+  const { data: upcomingCompetitions = [], isLoading: loadingUpcoming } = useQuery<ComplexCompetition[]>({
+    queryKey: ['/api/complex-competitions/upcoming'],
+    refetchInterval: 30000
+  });
+
+  // Fetch active complex competitions
+  const { data: activeCompetitions = [], isLoading: loadingActive } = useQuery<ComplexCompetition[]>({
+    queryKey: ['/api/complex-competitions/active'],
+    refetchInterval: 10000
+  });
+
+  // Fetch user's registered competitions
+  const { data: myRegistrations = [], isLoading: loadingRegistrations } = useQuery<ComplexCompetition[]>({
+    queryKey: ['/api/complex-competitions/my-registrations'],
+    refetchInterval: 30000,
+  });
+
+  // Join competition mutation
+  const joinCompetitionMutation = useMutation({
+    mutationFn: async (competitionId: number) => {
+      const response = await fetch(`/api/complex-competitions/${competitionId}/join`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include'
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to join competition');
+      }
+      
+      return response.json();
+    },
+    onSuccess: (data: any) => {
+      if (data.success) {
+        toast({
+          title: "Registration Successful!",
+          description: data.message,
+        });
+        queryClient.invalidateQueries({ queryKey: ['/api/complex-competitions'] });
+      } else {
+        toast({
+          title: "Registration Failed",
+          description: data.message,
+          variant: "destructive"
+        });
+      }
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to join competition. Please try again.",
+        variant: "destructive"
+      });
+    }
+  });
+
+  const handleJoinCompetition = (competitionId: number) => {
+    joinCompetitionMutation.mutate(competitionId);
+  };
+
+  const handleEnterCompetition = (competitionId: number) => {
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to enter competitions.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setLocation(`/complex-competition/${competitionId}`);
+  };
+
+  const getDifficultyColor = (difficulty: string) => {
+    switch (difficulty?.toLowerCase()) {
+      case 'beginner': return 'bg-green-100 text-green-800';
+      case 'intermediate': return 'bg-yellow-100 text-yellow-800';
+      case 'advanced': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case 'upcoming': return 'bg-blue-100 text-blue-800';
+      case 'active': return 'bg-green-100 text-green-800';
+      case 'completed': return 'bg-gray-100 text-gray-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const formatTimeRemaining = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    
+    if (date <= now) return 'Started';
+    
+    return formatDistanceToNow(date, { addSuffix: true });
+  };
+
+  const canJoinCompetition = (competition: ComplexCompetition) => {
+    const now = new Date();
+    const registrationDeadline = new Date(competition.registrationDeadline);
+    const isRegistrationOpen = now < registrationDeadline;
+    const hasSpace = competition.currentParticipants < competition.maxParticipants;
+    
+    return isRegistrationOpen && hasSpace && competition.status === 'upcoming';
+  };
+
+  const CompetitionCard = ({ competition }: { competition: ComplexCompetition }) => (
+    <Card className="hover:shadow-lg transition-shadow">
+      <CardHeader>
+        <div className="flex items-start justify-between">
+          <div className="space-y-2">
+            <CardTitle className="text-lg">{competition.title}</CardTitle>
+            <CardDescription className="text-sm">
+              {competition.description}
+            </CardDescription>
+          </div>
+          <div className="flex flex-col gap-2">
+            <Badge className={getStatusColor(competition.status)}>
+              {competition.status}
+            </Badge>
+            <Badge className={getDifficultyColor(competition.difficulty)}>
+              {competition.difficulty}
+            </Badge>
+          </div>
+        </div>
+      </CardHeader>
+
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 gap-4 text-sm">
+          <div className="flex items-center gap-2">
+            <BookOpen className="h-4 w-4 text-muted-foreground" />
+            <span className="capitalize">{competition.bodyPart}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Timer className="h-4 w-4 text-muted-foreground" />
+            <span>{competition.timeLimit} minutes</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Target className="h-4 w-4 text-muted-foreground" />
+            <span>{competition.rules?.stageTimeLimit || 5} min/stage</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Users className="h-4 w-4 text-muted-foreground" />
+            <span>{competition.currentParticipants}/{competition.maxParticipants}</span>
+          </div>
+        </div>
+
+        <div>
+          <div className="flex justify-between text-sm mb-2">
+            <span>Participants</span>
+            <span>{competition.currentParticipants}/{competition.maxParticipants}</span>
+          </div>
+          <Progress 
+            value={(competition.currentParticipants / competition.maxParticipants) * 100} 
+            className="h-2"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-sm">
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+            <span>Starts: {format(new Date(competition.startTime), 'MMM d, yyyy - h:mm a')}</span>
+          </div>
+          <div className="flex items-center gap-2 text-sm">
+            <Clock className="h-4 w-4 text-muted-foreground" />
+            <span className="font-medium">
+              {competition.status === 'upcoming' 
+                ? `Registration closes ${formatTimeRemaining(competition.registrationDeadline)}`
+                : `Started ${formatTimeRemaining(competition.startTime)}`
+              }
+            </span>
+          </div>
+        </div>
+      </CardContent>
+
+      <CardFooter>
+        {competition.status === 'upcoming' && (
+          canJoinCompetition(competition) ? (
+            <Button 
+              onClick={() => handleJoinCompetition(competition.id)}
+              disabled={joinCompetitionMutation.isPending}
+              className="w-full"
+            >
+              {joinCompetitionMutation.isPending ? (
+                "Joining..."
+              ) : (
+                <>
+                  <User className="h-4 w-4 mr-2" />
+                  Join Competition
+                </>
+              )}
+            </Button>
+          ) : (
+            <Button disabled className="w-full">
+              {competition.currentParticipants >= competition.maxParticipants 
+                ? "Competition Full" 
+                : "Registration Closed"
+              }
+            </Button>
+          )
+        )}
+        
+        {competition.status === 'active' && (
+          <Button 
+            className="w-full"
+            onClick={() => handleEnterCompetition(competition.id)}
+          >
+            <Play className="h-4 w-4 mr-2" />
+            Enter Competition
+          </Button>
+        )}
+
+        {competition.status === 'completed' && (
+          <Button variant="outline" className="w-full">
+            <Trophy className="h-4 w-4 mr-2" />
+            View Results
+          </Button>
+        )}
+      </CardFooter>
+    </Card>
+  );
+
+  // Check if user is admin
+  const isAdmin = user && ["Fateofjustice"].includes(user.username);
+
+  return (
+    <div className="space-y-6">
+      <div className="text-center space-y-4">
+        <div className="flex items-center justify-center gap-2">
+          <Trophy className="h-8 w-8 text-primary" />
+          <h2 className="text-3xl font-bold">Complex Case Competitions</h2>
+        </div>
+        <p className="text-muted-foreground max-w-2xl mx-auto">
+          Test your clinical reasoning skills in time-limited competitions featuring multi-stage complex cases. 
+          Compete with fellow healthcare professionals and climb the leaderboards!
+        </p>
+      </div>
+
+      <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
+        <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-5' : 'grid-cols-4'}`}>
+          <TabsTrigger value="upcoming" className="flex items-center gap-2">
+            <Calendar className="h-4 w-4" />
+            Upcoming ({upcomingCompetitions.length})
+          </TabsTrigger>
+          <TabsTrigger value="active" className="flex items-center gap-2">
+            <Play className="h-4 w-4" />
+            Live ({activeCompetitions.length})
+          </TabsTrigger>
+          <TabsTrigger value="my-registrations" className="flex items-center gap-2">
+            <User className="h-4 w-4" />
+            My Registrations ({myRegistrations?.length || 0})
+          </TabsTrigger>
+          <TabsTrigger value="leaderboard" className="flex items-center gap-2">
+            <Crown className="h-4 w-4" />
+            Leaderboard
+          </TabsTrigger>
+          {isAdmin && (
+            <TabsTrigger value="admin-preview" className="flex items-center gap-2">
+              <Settings className="h-4 w-4" />
+              Admin Preview
+            </TabsTrigger>
+          )}
+        </TabsList>
+
+        <TabsContent value="upcoming" className="space-y-6">
+          {loadingUpcoming ? (
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+              <p className="mt-2 text-muted-foreground">Loading upcoming competitions...</p>
+            </div>
+          ) : upcomingCompetitions.length === 0 ? (
+            <div className="text-center py-12">
+              <Calendar className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-xl font-semibold mb-2">No Upcoming Competitions</h3>
+              <p className="text-muted-foreground">
+                New competitions are scheduled regularly. Check back soon!
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {upcomingCompetitions.map((competition: ComplexCompetition) => (
+                <CompetitionCard key={competition.id} competition={competition} />
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="active" className="space-y-6">
+          {loadingActive ? (
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+              <p className="mt-2 text-muted-foreground">Loading live competitions...</p>
+            </div>
+          ) : activeCompetitions.length === 0 ? (
+            <div className="text-center py-12">
+              <Play className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-xl font-semibold mb-2">No Live Competitions</h3>
+              <p className="text-muted-foreground">
+                Active competitions will appear here when they start.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {activeCompetitions.map((competition: ComplexCompetition) => (
+                <CompetitionCard key={competition.id} competition={competition} />
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="my-registrations" className="space-y-6">
+          {loadingRegistrations ? (
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+              <p className="mt-2 text-muted-foreground">Loading your registrations...</p>
+            </div>
+          ) : myRegistrations.length === 0 ? (
+            <div className="text-center py-12">
+              <User className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-xl font-semibold mb-2">No Registrations</h3>
+              <p className="text-muted-foreground">
+                You haven't registered for any competitions yet. Check the upcoming tab to join!
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {myRegistrations.map((competition: ComplexCompetition) => (
+                <CompetitionCard key={competition.id} competition={competition} />
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="leaderboard" className="space-y-6">
+          <div className="text-center py-12">
+            <Crown className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-xl font-semibold mb-2">Coming Soon</h3>
+            <p className="text-muted-foreground">
+              Leaderboards will be available once competitions start.
+            </p>
+          </div>
+        </TabsContent>
+
+        {isAdmin && (
+          <TabsContent value="admin-preview" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Settings className="h-5 w-5" />
+                  Admin Preview
+                </CardTitle>
+                <CardDescription>
+                  Preview and test complex case competitions
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {[...upcomingCompetitions, ...activeCompetitions].map((competition) => (
+                      <Card key={`admin-${competition.id}`} className="border-dashed">
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-base">{competition.title}</CardTitle>
+                          <CardDescription className="text-sm">
+                            {competition.bodyPart} • {competition.difficulty}
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent className="pt-0">
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            className="w-full"
+                            onClick={() => handleEnterCompetition(competition.id)}
+                          >
+                            <Play className="h-4 w-4 mr-2" />
+                            Preview Competition
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
+      </Tabs>
+    </div>
+  );
+}
 
 // ComplexCasesView component
 function ComplexCasesView() {
@@ -134,7 +575,7 @@ export default function CompetitionPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
-  // Fetch user stats and achievements
+  // Fetch user stats and achievements  
   const { data: achievements } = useQuery({
     queryKey: ['/api/achievements']
   });
@@ -144,14 +585,13 @@ export default function CompetitionPage() {
   });
 
   const { data: topPerformers } = useQuery({
-    queryKey: ['/api/leaderboards/top-performers'],
-    queryParams: { limit: 5 }
+    queryKey: ['/api/leaderboards/top-performers']
   });
 
-  const completedCompetitions = userHistory?.filter(h => h.completedAt)?.length || 0;
-  const totalAchievements = achievements?.filter(a => a.completed)?.length || 0;
-  const averageScore = userHistory?.length > 0 
-    ? Math.round(userHistory.reduce((sum, h) => sum + (h.totalScore || 0), 0) / userHistory.length)
+  const completedCompetitions = Array.isArray(userHistory) ? userHistory.filter((h: any) => h.completedAt)?.length || 0 : 0;
+  const totalAchievements = Array.isArray(achievements) ? achievements.filter((a: any) => a.completed)?.length || 0 : 0;
+  const averageScore = Array.isArray(userHistory) && userHistory.length > 0 
+    ? Math.round(userHistory.reduce((sum: number, h: any) => sum + (h.totalScore || 0), 0) / userHistory.length)
     : 0;
 
   return (
@@ -372,7 +812,7 @@ export default function CompetitionPage() {
 
           {/* Competitions Tab */}
           <TabsContent value="competitions">
-            <ActiveCompetitions />
+            <ComplexCaseCompetitionsView />
           </TabsContent>
 
           {/* Leaderboards Tab */}

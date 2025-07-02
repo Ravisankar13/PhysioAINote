@@ -662,6 +662,10 @@ export default function CompetitionPage() {
               <Target className="h-4 w-4" />
               Overview
             </TabsTrigger>
+            <TabsTrigger value="competitions" className="flex items-center gap-2">
+              <Trophy className="h-4 w-4" />
+              Competitions
+            </TabsTrigger>
             <TabsTrigger value="complex-cases" className="flex items-center gap-2">
               <Brain className="h-4 w-4" />
               Practice Case Studies
@@ -669,10 +673,6 @@ export default function CompetitionPage() {
             <TabsTrigger value="daily" className="flex items-center gap-2">
               <Calendar className="h-4 w-4" />
               Daily Challenge
-            </TabsTrigger>
-            <TabsTrigger value="competitions" className="flex items-center gap-2">
-              <Trophy className="h-4 w-4" />
-              Competitions
             </TabsTrigger>
             <TabsTrigger value="leaderboards" className="flex items-center gap-2">
               <Medal className="h-4 w-4" />

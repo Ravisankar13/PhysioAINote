@@ -152,8 +152,8 @@ export default function VirtualPatientSidebar({
   }
 
   return (
-    <div className="w-80 h-full border-r bg-muted/50 flex flex-col">
-      <div className="p-4 border-b">
+    <div className="w-80 h-full border-r bg-muted/50 flex flex-col max-h-screen">
+      <div className="p-4 border-b flex-shrink-0">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-semibold text-sm">Virtual Patients</h3>
           {onToggleCollapse && (
@@ -194,8 +194,8 @@ export default function VirtualPatientSidebar({
         </select>
       </div>
 
-      <ScrollArea className="flex-1">
-        <div className="p-2">
+      <ScrollArea className="flex-1 overflow-y-auto">
+        <div className="p-2 space-y-1">
           {isLoading ? (
             <div className="space-y-2">
               {[1, 2, 3].map((i) => (
@@ -243,19 +243,22 @@ export default function VirtualPatientSidebar({
                         {frameworkPatients.map((patient) => (
                           <Card
                             key={patient.id}
-                            className={`cursor-pointer transition-all hover:shadow-sm ${
+                            className={`cursor-pointer transition-all hover:shadow-sm border-l-4 ${
                               selectedPatientId === patient.id 
-                                ? 'ring-2 ring-blue-500 bg-blue-50' 
-                                : 'hover:bg-muted/50'
+                                ? 'ring-2 ring-blue-500 bg-blue-50 border-l-blue-500' 
+                                : 'hover:bg-muted/50 border-l-transparent'
                             }`}
                             onClick={() => onPatientSelect(patient)}
                           >
                             <CardContent className="p-3">
                               <div className="flex items-start justify-between mb-2">
                                 <div className="flex-1 min-w-0">
-                                  <h4 className="font-medium text-sm truncate">
+                                  <h4 className="font-semibold text-sm truncate text-blue-900">
                                     {patient.patientName}
                                   </h4>
+                                  <h5 className="font-medium text-xs text-orange-700 truncate mb-1">
+                                    {patient.condition}
+                                  </h5>
                                   <p className="text-xs text-muted-foreground">
                                     {patient.age}y • {patient.gender} • {patient.bodyPart}
                                   </p>
@@ -270,39 +273,25 @@ export default function VirtualPatientSidebar({
 
                               <div className="space-y-1">
                                 <div className="flex items-center gap-1">
-                                  <Stethoscope className="h-3 w-3 text-muted-foreground" />
-                                  <span className="text-xs text-muted-foreground truncate">
-                                    {patient.condition}
-                                  </span>
-                                </div>
-                                
-                                <div className="flex items-center gap-1">
                                   <FileText className="h-3 w-3 text-muted-foreground" />
                                   <span className="text-xs text-muted-foreground truncate">
                                     {patient.chiefComplaint}
                                   </span>
                                 </div>
-
-                                {patient.analysisResult?.diagnosis && (
-                                  <div className="flex items-center gap-1">
-                                    <Target className="h-3 w-3 text-green-600" />
-                                    <span className="text-xs text-green-600 font-medium">
-                                      Analyzed
-                                    </span>
-                                  </div>
-                                )}
                               </div>
 
                               <div className="flex items-center justify-between mt-2 pt-2 border-t">
-                                <span className="text-xs text-muted-foreground">
-                                  {new Date(patient.createdAt).toLocaleDateString()}
-                                </span>
                                 <div className="flex items-center gap-1">
                                   <Calendar className="h-3 w-3 text-muted-foreground" />
                                   <span className="text-xs text-muted-foreground">
                                     {new Date(patient.createdAt).toLocaleDateString()}
                                   </span>
                                 </div>
+                                {patient.analysisResult?.diagnosis && (
+                                  <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                                    Analyzed
+                                  </Badge>
+                                )}
                               </div>
                             </CardContent>
                           </Card>
@@ -317,7 +306,7 @@ export default function VirtualPatientSidebar({
         </div>
       </ScrollArea>
 
-      <div className="p-3 border-t">
+      <div className="p-2 border-t flex-shrink-0">
         <p className="text-xs text-muted-foreground text-center">
           Select a patient to analyze with PhysioGPT
         </p>

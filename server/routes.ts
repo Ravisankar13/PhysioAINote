@@ -6241,5 +6241,32 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
 
+  // Add endpoint to create additional difficult cases
+  app.post("/api/create-additional-difficult-cases", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      console.log('[DIFFICULT CASES] Starting creation of 10 additional challenging cases...');
+      
+      // Import the function dynamically
+      const { createAdditionalDifficultCases2025 } = await import('./additionalDifficultCases2025');
+      
+      await createAdditionalDifficultCases2025(userId);
+      
+      res.json({
+        success: true,
+        message: "Successfully created 10 additional challenging complex case competitions",
+        casesCreated: 10
+      });
+      
+    } catch (error: any) {
+      console.error("Error creating additional difficult cases:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   return httpServer;
 }

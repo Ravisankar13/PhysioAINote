@@ -842,13 +842,49 @@ export default function CompetitionPage() {
                     Complex case studies are integrated into our competition system. Navigate to the 
                     Competitions tab to join multi-stage clinical reasoning challenges.
                   </p>
-                  <Button 
-                    variant="outline"
-                    onClick={() => setActiveTab("competitions")}
-                    className="w-full"
-                  >
-                    View Complex Case Competitions
-                  </Button>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <Button 
+                      variant="outline"
+                      onClick={() => setActiveTab("competitions")}
+                    >
+                      View Complex Case Competitions
+                    </Button>
+                    <Button 
+                      variant="outline"
+                      onClick={async () => {
+                        try {
+                          const response = await fetch('/api/create-additional-difficult-cases', {
+                            method: 'POST',
+                            headers: {
+                              'Content-Type': 'application/json',
+                            },
+                          });
+                          const result = await response.json();
+                          if (result.success) {
+                            toast({
+                              title: "Success",
+                              description: "Created 10 additional challenging cases!",
+                            });
+                          } else {
+                            toast({
+                              title: "Error",
+                              description: result.error || "Failed to create cases",
+                              variant: "destructive",
+                            });
+                          }
+                        } catch (error) {
+                          toast({
+                            title: "Error",
+                            description: "Failed to create additional cases",
+                            variant: "destructive",
+                          });
+                        }
+                      }}
+                      className="text-xs"
+                    >
+                      + 10 Difficult Cases
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>

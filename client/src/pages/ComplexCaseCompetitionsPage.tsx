@@ -410,7 +410,7 @@ export default function ComplexCaseCompetitionsPage() {
 
       {/* Competition Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className={`grid w-full ${user?.username === 'Fateofjustice' ? 'grid-cols-5' : 'grid-cols-4'}`}>
+        <TabsList className={`grid w-full ${user?.username === 'Fateofjustice' ? 'grid-cols-6' : 'grid-cols-5'}`}>
           <TabsTrigger value="upcoming" className="flex items-center gap-2">
             <Calendar className="h-4 w-4" />
             Upcoming ({upcomingCompetitions.length})
@@ -422,6 +422,10 @@ export default function ComplexCaseCompetitionsPage() {
           <TabsTrigger value="my-registrations" className="flex items-center gap-2">
             <User className="h-4 w-4" />
             My Registrations ({myRegistrations?.length || 0})
+          </TabsTrigger>
+          <TabsTrigger value="history" className="flex items-center gap-2">
+            <FileText className="h-4 w-4" />
+            History
           </TabsTrigger>
           <TabsTrigger value="leaderboard" className="flex items-center gap-2">
             <Crown className="h-4 w-4" />

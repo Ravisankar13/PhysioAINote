@@ -119,6 +119,30 @@ function ComplexCaseCompetitionParticipationPage() {
     },
   });
 
+  // Timer countdown and auto-submission effect
+  useEffect(() => {
+    if (!timeStarted || showResults) return;
+
+    const interval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - timeStarted.getTime()) / 1000);
+      const timeLimit = 10 * 60; // 10 minutes
+      const remaining = Math.max(0, timeLimit - elapsed);
+      
+      // Auto-submit when time runs out
+      if (remaining === 0 && !submitAnswers.isPending) {
+        clearInterval(interval);
+        toast({
+          title: "Time's Up!",
+          description: "Competition time has ended. Submitting your answers...",
+          variant: "destructive",
+        });
+        submitAnswers.mutate();
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [timeStarted, showResults, submitAnswers, toast]);
+
   if (loadingCompetition || loadingCase) {
     return (
       <div className="container mx-auto p-6">
@@ -161,7 +185,8 @@ function ComplexCaseCompetitionParticipationPage() {
   const progressPercentage = totalQuestions > 0 ? ((currentQuestionIndex + 1) / totalQuestions) * 100 : 0;
   
   const timeElapsed = timeStarted ? Math.floor((Date.now() - timeStarted.getTime()) / 1000) : 0;
-  const timeRemaining = Math.max(0, (competition.timeLimit * 60) - timeElapsed);
+  const timeLimit = 10 * 60; // Fixed 10 minutes for all competitions
+  const timeRemaining = Math.max(0, timeLimit - timeElapsed);
 
   const handleAnswer = (value: string) => {
     if (currentQuestionData) {
@@ -403,11 +428,16 @@ function ComplexCaseCompetitionParticipationPage() {
           </Button>
         </Link>
         <div className="flex items-center gap-4">
-          <Badge variant="secondary">
-            <Clock className="h-3 w-3 mr-1" />
-            {formatTime(timeRemaining)} remaining
-          </Badge>
-          <Badge variant="default">
+          <div className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-lg ${
+            timeRemaining <= 120 ? 'bg-red-100 text-red-800 border border-red-300' : 
+            timeRemaining <= 300 ? 'bg-yellow-100 text-yellow-800 border border-yellow-300' : 
+            'bg-green-100 text-green-800 border border-green-300'
+          }`}>
+            <Clock className={`h-5 w-5 ${timeRemaining <= 120 ? 'animate-pulse' : ''}`} />
+            <span className="font-mono tracking-wider">{formatTime(timeRemaining)}</span>
+            <span className="text-sm font-normal">remaining</span>
+          </div>
+          <Badge variant="default" className="text-base px-3 py-1">
             Stage {currentStage + 1} of {stages.length}
           </Badge>
         </div>

@@ -117,8 +117,8 @@ export class ComplexCaseCompetitionService {
         bodyPart: randomCase.bodyPart,
         difficulty: randomCase.complexity as 'beginner' | 'intermediate' | 'advanced',
         maxParticipants: 20,
-        timeLimit: 45,
-        stageTimeLimit: 5,
+        timeLimit: 10,
+        stageTimeLimit: 2,
         complexCaseId: randomCase.id,
         registrationWindow: 10
       };

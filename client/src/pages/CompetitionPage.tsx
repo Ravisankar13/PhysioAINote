@@ -323,13 +323,13 @@ function ComplexCaseCompetitionsView() {
 
       <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
         <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-5' : 'grid-cols-4'}`}>
-          <TabsTrigger value="upcoming" className="flex items-center gap-2">
-            <Calendar className="h-4 w-4" />
-            Upcoming ({upcomingCompetitions.length})
-          </TabsTrigger>
           <TabsTrigger value="active" className="flex items-center gap-2">
             <Play className="h-4 w-4" />
             Live ({activeCompetitions.length})
+          </TabsTrigger>
+          <TabsTrigger value="upcoming" className="flex items-center gap-2">
+            <Calendar className="h-4 w-4" />
+            Upcoming ({upcomingCompetitions.length})
           </TabsTrigger>
           <TabsTrigger value="my-registrations" className="flex items-center gap-2">
             <User className="h-4 w-4" />

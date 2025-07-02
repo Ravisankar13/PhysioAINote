@@ -511,7 +511,7 @@ function ComplexCasesView() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {complexCases?.map((complexCase: any) => (
+        {Array.isArray(complexCases) && complexCases.map((complexCase: any) => (
           <Card key={complexCase.id} className="hover:shadow-lg transition-shadow">
             <CardHeader>
               <div className="flex items-start justify-between">
@@ -557,7 +557,7 @@ function ComplexCasesView() {
         ))}
       </div>
 
-      {(!complexCases || complexCases.length === 0) && (
+      {(!Array.isArray(complexCases) || complexCases.length === 0) && (
         <Card className="p-8 text-center">
           <Brain className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
           <h3 className="text-lg font-semibold mb-2">No Complex Cases Available</h3>
@@ -642,7 +642,7 @@ export default function CompetitionPage() {
             <CardContent className="p-4 text-center">
               <Crown className="h-8 w-8 text-blue-600 mx-auto mb-2" />
               <div className="text-2xl font-bold text-blue-700">
-                {userHistory?.[0]?.rank || "—"}
+                {Array.isArray(userHistory) && userHistory.length > 0 ? (userHistory as any[])[0]?.rank || "—" : "—"}
               </div>
               <div className="text-sm text-blue-600">Best Rank</div>
             </CardContent>
@@ -711,7 +711,7 @@ export default function CompetitionPage() {
                   <CardDescription>This week's leaders</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {topPerformers?.slice(0, 5).map((performer, index) => (
+                  {Array.isArray(topPerformers) && topPerformers.slice(0, 5).map((performer: any, index: number) => (
                     <div key={performer.userId} className="flex items-center gap-3">
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
                         index === 0 ? 'bg-yellow-100 text-yellow-700' :
@@ -752,10 +752,7 @@ export default function CompetitionPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <ActiveCompetitions 
-                  onJoinCompetition={(competitionId) => setLocation(`/competition/${competitionId}`)}
-                  preview={true}
-                />
+                <ActiveCompetitions />
                 <div className="mt-4 text-center">
                   <Button 
                     variant="outline"

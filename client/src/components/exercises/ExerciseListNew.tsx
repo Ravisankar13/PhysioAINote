@@ -56,7 +56,7 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import { jsPDF } from "jspdf";
-import { useNavigate } from "react-router-dom";
+import { useLocation } from "wouter";
 
 // Exercise type matching database schema
 interface Exercise {
@@ -433,7 +433,7 @@ export default function ExerciseList() {
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
-  const navigate = useNavigate();
+  const [, setLocation] = useLocation();
 
   // State for filters
   const [bodyPart, setBodyPart] = useState<string>("");
@@ -676,7 +676,7 @@ export default function ExerciseList() {
         description: "You need to be logged in to generate exercises.",
         variant: "destructive",
       });
-      navigate("/auth");
+      setLocation("/auth");
       return;
     }
 
@@ -1173,7 +1173,7 @@ export default function ExerciseList() {
               {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Exercises
             </Button>
           ) : (
-            <Button onClick={() => navigate("/auth")}>
+            <Button onClick={() => setLocation("/auth")}>
               Log in to generate exercises
             </Button>
           )}

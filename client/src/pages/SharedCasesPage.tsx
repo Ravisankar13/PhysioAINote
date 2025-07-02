@@ -427,7 +427,7 @@ export default function SharedCasesPage() {
                 You haven't shared any cases yet.
               </p>
               <Button
-                onClick={() => navigate("/shared-cases/new")}
+                onClick={() => setLocation("/shared-cases/new")}
                 className="mt-4"
               >
                 Share Your First Case

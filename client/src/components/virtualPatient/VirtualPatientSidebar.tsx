@@ -88,8 +88,7 @@ export default function VirtualPatientSidebar({
   const { user } = useAuth();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedFramework, setSelectedFramework] = useState<string>("all");
-  const [expandedFrameworks, setExpandedFrameworks] = useState<Set<string>>(new Set());
+  const [expandedBodyParts, setExpandedBodyParts] = useState<Set<string>>(new Set());
 
   const { 
     data: patients = [], 
@@ -117,14 +116,10 @@ export default function VirtualPatientSidebar({
   });
 
   const filteredPatients = patients.filter(patient => {
-    const matchesSearch = !searchTerm || 
+    return !searchTerm || 
       patient.patient_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       patient.chief_complaint.toLowerCase().includes(searchTerm.toLowerCase()) ||
       patient.body_part.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesFramework = selectedFramework === "all";
-    
-    return matchesSearch && matchesFramework;
   });
 
   // Group patients by body part instead of framework
@@ -136,13 +131,13 @@ export default function VirtualPatientSidebar({
   }, {} as Record<string, VirtualPatient[]>);
 
   const toggleBodyPart = (bodyPart: string) => {
-    const newExpanded = new Set(expandedFrameworks);
+    const newExpanded = new Set(expandedBodyParts);
     if (newExpanded.has(bodyPart)) {
       newExpanded.delete(bodyPart);
     } else {
       newExpanded.add(bodyPart);
     }
-    setExpandedFrameworks(newExpanded);
+    setExpandedBodyParts(newExpanded);
   };
 
   const getBodyPartInfo = (bodyPart: string) => {
@@ -223,19 +218,7 @@ export default function VirtualPatientSidebar({
           />
         </div>
 
-        {/* Framework Filter */}
-        <select
-          value={selectedFramework}
-          onChange={(e) => setSelectedFramework(e.target.value)}
-          className="w-full p-2 text-sm border rounded-md bg-background"
-        >
-          <option value="all">All Frameworks</option>
-          {expertFrameworks.map((framework) => (
-            <option key={framework.id} value={framework.id}>
-              {framework.name}
-            </option>
-          ))}
-        </select>
+
       </div>
 
       <ScrollArea className="flex-1 overflow-y-auto">
@@ -250,8 +233,8 @@ export default function VirtualPatientSidebar({
             <div className="text-center py-8">
               <User className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
               <p className="text-sm text-muted-foreground">
-                {searchTerm || selectedFramework !== "all" 
-                  ? "No patients match your filters" 
+                {searchTerm 
+                  ? "No patients match your search" 
                   : "No virtual patients yet"}
               </p>
             </div>
@@ -259,7 +242,7 @@ export default function VirtualPatientSidebar({
             <div className="space-y-3">
               {Object.entries(groupedPatients).map(([bodyPartId, bodyPartPatients]) => {
                 const bodyPartInfo = getBodyPartInfo(bodyPartId);
-                const isExpanded = expandedFrameworks.has(bodyPartId);
+                const isExpanded = expandedBodyParts.has(bodyPartId);
                 
                 return (
                   <div key={bodyPartId} className="space-y-1">

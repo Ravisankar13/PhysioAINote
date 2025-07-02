@@ -5897,7 +5897,7 @@ Base your analysis on established postural assessment principles and correlate f
         return res.status(404).json({ message: 'Complex case not found' });
       }
 
-      console.log(`[COMPLEX-SUBMIT] Found complex case: ${complexCase.title}`);
+      console.log(`[COMPLEX-SUBMIT] Found complex case: ${complexCase.case.title}`);
 
       // Transform stage answers to the expected format for scoring
       const stageResponses = stageAnswers.map((answer: any) => ({
@@ -5907,7 +5907,7 @@ Base your analysis on established postural assessment principles and correlate f
       }));
 
       // Use AI-powered scoring system
-      const analysisResult = await scoreComplexCaseAttempt(complexCase, stageResponses);
+      const analysisResult = await scoreComplexCaseAttempt(complexCase.case, stageResponses);
       
       console.log(`[COMPLEX-SUBMIT] Analysis result:`, analysisResult);
 

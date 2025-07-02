@@ -1956,6 +1956,18 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
 
+  // Update exercise images
+  app.post("/api/exercises/update-images", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { updateExerciseImages } = await import('./scripts/updateExerciseImages.js');
+      await updateExerciseImages();
+      res.json({ success: true, message: 'Exercise images updated successfully' });
+    } catch (error) {
+      console.error('Error updating exercise images:', error);
+      res.status(500).json({ error: 'Failed to update exercise images' });
+    }
+  });
+
   app.post("/api/exercises/generate", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const userId = req.user?.id;

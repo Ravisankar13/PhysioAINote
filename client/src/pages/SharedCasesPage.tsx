@@ -40,7 +40,7 @@ import {
   Search,
 } from "lucide-react";
 import { queryClient } from "@/lib/queryClient";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "wouter";
 
 // Types
 interface SharedCase {
@@ -98,7 +98,7 @@ const COMPLEXITY_LEVELS = [
 
 export default function SharedCasesPage() {
   const { user } = useAuth();
-  const navigate = useNavigate();
+  const [, setLocation] = useLocation();
 
   // Filter states
   const [bodyPart, setBodyPart] = useState<string>("");
@@ -207,7 +207,7 @@ export default function SharedCasesPage() {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">Peer Knowledge Exchange</h1>
         {user && (
-          <Button onClick={() => navigate("/shared-cases/new")}>
+          <Button onClick={() => setLocation("/shared-cases/new")}>
             Share a Case
           </Button>
         )}
@@ -411,7 +411,7 @@ export default function SharedCasesPage() {
               </p>
               <Button
                 variant="outline"
-                onClick={() => navigate("/auth")}
+                onClick={() => setLocation("/auth")}
                 className="mt-4"
               >
                 Log In

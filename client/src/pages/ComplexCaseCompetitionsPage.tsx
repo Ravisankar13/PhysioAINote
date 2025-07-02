@@ -30,7 +30,10 @@ import {
   FileText,
   Brain,
   Clipboard,
-  Send
+  Send,
+  Star,
+  TrendingUp,
+  Award
 } from 'lucide-react';
 
 interface Competition {
@@ -520,6 +523,10 @@ export default function ComplexCaseCompetitionsPage() {
               </div>
             )}
           </div>
+        </TabsContent>
+
+        <TabsContent value="history" className="space-y-6">
+          <CompetitionHistoryView />
         </TabsContent>
 
         <TabsContent value="leaderboard" className="space-y-6">

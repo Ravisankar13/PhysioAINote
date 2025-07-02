@@ -659,7 +659,16 @@ Stage ${response.stageId} Response ${index + 1}: "${response.answer}"
 - Does it make clinical sense?
 - Is it professional and coherent?
 
-**BE HARSH:** If responses are clearly random text (like "WAEFSWB", "awfaw", etc.), give them 0-20% scores. Only give high scores for genuinely good clinical responses.`;
+**BE HARSH:** If responses are clearly random text (like "WAEFSWB", "awfaw", etc.), give them 0-20% scores. Only give high scores for genuinely good clinical responses.
+
+**PROVIDE DETAILED FEEDBACK FOR EACH RESPONSE:**
+For each user response, provide:
+1. What they wrote
+2. What was wrong with their answer
+3. What a good answer should include
+4. Specific learning points
+
+This will help them understand exactly where they went wrong and how to improve.`;
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
@@ -699,7 +708,17 @@ Respond with JSON in this exact format:
     "recommendedResources": ["specific learning resources"],
     "nextSteps": ["actionable next steps"],
     "evidenceReferences": ["relevant clinical guidelines"]
-  }
+  },
+  "questionFeedback": [
+    {
+      "questionNumber": 1,
+      "userAnswer": "what they actually wrote",
+      "score": 10,
+      "whatWentWrong": "specific issues with their answer",
+      "expectedAnswer": "what a good answer should include",
+      "learningPoints": ["key concepts they need to understand"]
+    }
+  ]
 }`
         },
         {
@@ -730,10 +749,21 @@ Respond with JSON in this exact format:
       evidenceReferences: analysis.feedback?.evidenceReferences || ["Consult recent systematic reviews"]
     };
 
+    // Include detailed question feedback
+    const questionFeedback = analysis.questionFeedback || stageResponses.map((response, index) => ({
+      questionNumber: index + 1,
+      userAnswer: response.answer,
+      score: 20,
+      whatWentWrong: "Unable to analyze specific issues",
+      expectedAnswer: "A clinical response relevant to the case",
+      learningPoints: ["Study basic physiotherapy principles"]
+    }));
+
     return {
       totalScore,
       categoryScores: analysis.categoryScores,
-      feedback
+      feedback,
+      questionFeedback
     };
 
   } catch (error) {
@@ -749,6 +779,15 @@ Respond with JSON in this exact format:
     
     if (isGibberish) {
       // Very low scores for gibberish/random text
+      const questionFeedback = stageResponses.map((response, index) => ({
+        questionNumber: index + 1,
+        userAnswer: response.answer,
+        score: 5,
+        whatWentWrong: "Answer appears to be random text or gibberish - not related to physiotherapy",
+        expectedAnswer: `A clinical response relevant to ${complexCase.bodyPart} assessment or treatment`,
+        learningPoints: ["Use proper medical terminology", "Provide evidence-based clinical reasoning", "Address the specific clinical question asked"]
+      }));
+
       return {
         totalScore: 15,
         categoryScores: {
@@ -764,11 +803,21 @@ Respond with JSON in this exact format:
           recommendedResources: ["Basic physiotherapy assessment textbook", "Clinical reasoning in physiotherapy course", "Evidence-based practice guidelines"],
           nextSteps: ["Study fundamental physiotherapy concepts", "Practice writing clinical assessments", "Review case study examples"],
           evidenceReferences: ["Review basic clinical assessment principles", "Study physiotherapy examination techniques"]
-        }
+        },
+        questionFeedback
       };
     }
     
     // Moderate fallback for unclear responses
+    const questionFeedback = stageResponses.map((response, index) => ({
+      questionNumber: index + 1,
+      userAnswer: response.answer,
+      score: 45,
+      whatWentWrong: "Response could be more specific and evidence-based",
+      expectedAnswer: `A detailed clinical response addressing ${complexCase.bodyPart} assessment or treatment with specific techniques and reasoning`,
+      learningPoints: ["Include specific assessment tests", "Provide evidence-based rationale", "Use precise clinical terminology"]
+    }));
+
     return {
       totalScore: 45,
       categoryScores: {
@@ -784,7 +833,8 @@ Respond with JSON in this exact format:
         recommendedResources: ["Evidence-based physiotherapy guidelines", "Clinical assessment textbooks"],
         nextSteps: ["Practice more complex cases", "Study clinical reasoning frameworks"],
         evidenceReferences: ["Review systematic reviews for this condition", "Consult clinical practice guidelines"]
-      }
+      },
+      questionFeedback
     };
   }
 }

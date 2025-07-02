@@ -16,7 +16,8 @@ import {
   CheckCircle,
   Play,
   ChevronRight,
-  ChevronLeft
+  ChevronLeft,
+  MessageSquare
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -358,6 +359,69 @@ function ComplexCaseCompetitionParticipationPage() {
                     {competitionResults.feedback.evidenceReferences.map((reference: string, index: number) => (
                       <div key={index} className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                         <p className="text-blue-800 text-sm font-medium">{reference}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Detailed Question-by-Question Feedback */}
+              {competitionResults.questionFeedback && competitionResults.questionFeedback.length > 0 && (
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                    <MessageSquare className="h-5 w-5" />
+                    Detailed Question Analysis
+                  </h3>
+                  <p className="text-sm text-gray-600 mb-4">
+                    See exactly where you went wrong and what was expected for each question:
+                  </p>
+                  <div className="space-y-4">
+                    {competitionResults.questionFeedback.map((qf: any, index: number) => (
+                      <div key={index} className="border rounded-lg p-4 bg-gray-50">
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="font-semibold text-gray-900">Question {qf.questionNumber}</h4>
+                          <Badge 
+                            variant={qf.score >= 70 ? "default" : qf.score >= 40 ? "secondary" : "destructive"}
+                            className="px-2 py-1"
+                          >
+                            {qf.score}% score
+                          </Badge>
+                        </div>
+                        
+                        <div className="space-y-3">
+                          {/* Your Answer */}
+                          <div className="p-3 bg-red-50 border border-red-200 rounded">
+                            <p className="text-sm font-medium text-red-800 mb-1">Your Answer:</p>
+                            <p className="text-sm text-red-700">"{qf.userAnswer}"</p>
+                          </div>
+                          
+                          {/* What Went Wrong */}
+                          <div className="p-3 bg-orange-50 border border-orange-200 rounded">
+                            <p className="text-sm font-medium text-orange-800 mb-1">What Went Wrong:</p>
+                            <p className="text-sm text-orange-700">{qf.whatWentWrong}</p>
+                          </div>
+                          
+                          {/* Expected Answer */}
+                          <div className="p-3 bg-green-50 border border-green-200 rounded">
+                            <p className="text-sm font-medium text-green-800 mb-1">Expected Answer:</p>
+                            <p className="text-sm text-green-700">{qf.expectedAnswer}</p>
+                          </div>
+                          
+                          {/* Learning Points */}
+                          {qf.learningPoints && qf.learningPoints.length > 0 && (
+                            <div className="p-3 bg-blue-50 border border-blue-200 rounded">
+                              <p className="text-sm font-medium text-blue-800 mb-2">Key Learning Points:</p>
+                              <ul className="text-sm text-blue-700 space-y-1">
+                                {qf.learningPoints.map((point: string, pointIndex: number) => (
+                                  <li key={pointIndex} className="flex items-start gap-2">
+                                    <span className="text-blue-500 mt-1">•</span>
+                                    <span>{point}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>

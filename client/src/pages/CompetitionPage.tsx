@@ -72,7 +72,7 @@ interface ComplexCompetition {
 
 // ComplexCaseCompetitionsView component
 function ComplexCaseCompetitionsView() {
-  const [selectedTab, setSelectedTab] = useState('upcoming');
+  const [selectedTab, setSelectedTab] = useState('active');
   const { toast } = useToast();
   const { user } = useAuth();
   const [, setLocation] = useLocation();

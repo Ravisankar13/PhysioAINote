@@ -1486,9 +1486,6 @@ export const complexCaseAttempts = pgTable("complex_case_attempts", {
     recommendedResources: string[];
     nextSteps: string[];
   }>(),
-  
-  completed: boolean("completed").default(false),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const insertComplexCaseSchema = createInsertSchema(complexCases).omit({
@@ -1509,7 +1506,6 @@ export const insertStageQuestionSchema = createInsertSchema(stageQuestions).omit
 
 export const insertComplexCaseAttemptSchema = createInsertSchema(complexCaseAttempts).omit({
   id: true,
-  createdAt: true,
 });
 
 export type InsertComplexCase = z.infer<typeof insertComplexCaseSchema>;

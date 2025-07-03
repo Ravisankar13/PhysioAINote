@@ -615,8 +615,7 @@ export class ComplexCaseService {
           totalTimeSpent: attemptData.totalTimeSpentSeconds,
           stageResponses: attemptData.stageResponses,
           overallFeedback: attemptData.overallFeedback,
-          completedAt: attemptData.completedAt,
-          startedAt: attemptData.startedAt
+          completedAt: attemptData.completedAt
         })
         .returning();
       

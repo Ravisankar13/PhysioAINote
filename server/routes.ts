@@ -5209,6 +5209,11 @@ Base your analysis on established postural assessment principles and correlate f
   app.get("/api/complex-competitions/active", async (req, res) => {
     try {
       const { complexCaseCompetitionService } = await import("./complexCaseCompetitionService");
+      
+      // Update competition statuses first
+      await complexCaseCompetitionService.startScheduledCompetitions();
+      await complexCaseCompetitionService.endFinishedCompetitions();
+      
       const competitions = await complexCaseCompetitionService.getActiveComplexCompetitions();
       res.json(competitions);
     } catch (error: any) {
@@ -5989,7 +5994,7 @@ Base your analysis on established postural assessment principles and correlate f
 
       // Calculate time efficiency bonus (if completed under time limit)
       const competition = await competitionStorage.getCompetitionById(competitionId);
-      const timeLimit = competition?.timeLimit || 45; // Default 45 minutes
+      const timeLimit = competition?.timeLimit || 10; // Default 10 minutes
       const timeEfficiencyBonus = totalTimeSpent < (timeLimit * 60 * 0.8) ? 5 : 0; // 5% bonus if under 80% of time limit
 
       const result = {
@@ -6182,7 +6187,7 @@ Base your analysis on established postural assessment principles and correlate f
           bodyPart: caseData.bodyPart,
           complexity: caseData.complexity,
           competitionType: caseData.competitionType,
-          estimatedTime: 45 // 45 minutes for advanced cases
+          estimatedTime: 10 // 10 minutes for advanced cases
         };
         
         const caseResult = await generateComplexCase(caseInput, req.user!.id);
@@ -6196,7 +6201,7 @@ Base your analysis on established postural assessment principles and correlate f
           status: "active",
           bodyPart: caseData.bodyPart,
           difficulty: "advanced",
-          timeLimit: 45,
+          timeLimit: 10,
           maxParticipants: 100,
           entryFee: 0,
           prizePool: 0,

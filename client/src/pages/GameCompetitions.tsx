@@ -5,8 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Zap, Clock, Heart, AlertTriangle, Target, BookOpen, Award, Search, Play, Trophy, Users, Timer } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { Zap, Clock, Heart, AlertTriangle, Target, BookOpen, Award, Search, Play, Trophy, Users, Timer, ChevronRight, ExternalLink } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
+import { useLocation } from 'wouter';
 
 interface GameCompetition {
   id: number;
@@ -63,13 +65,59 @@ const gameTypeDescriptions: Record<string, string> = {
   mystery_patient: 'Solve complex cases with gradually revealed clues',
 };
 
-export default function GameCompetitions() {
+// Component to display formatted game content
+function GameContentDisplay({ gameType, content }: { gameType: string, content: any }) {
+  const gameContent = content[gameType];
+  
+  if (!gameContent) {
+    return (
+      <div className="text-center py-8 text-muted-foreground">
+        <p>No content available for this game type.</p>
+      </div>
+    );
+  }
+
+  // Simple formatted display for all game types
+  return (
+    <div className="space-y-4">
+      <h4 className="font-semibold capitalize">
+        {gameTypeNames[gameType] || gameType.replace(/_/g, ' ')}
+      </h4>
+      <div className="text-sm space-y-3">
+        {Object.entries(gameContent).map(([key, value]) => (
+          <div key={key} className="bg-muted/30 p-3 rounded-lg">
+            <div className="font-medium capitalize text-primary mb-2">
+              {key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ')}
+            </div>
+            <div className="text-muted-foreground">
+              {Array.isArray(value) 
+                ? `${value.length} ${key === 'cases' ? 'clinical cases' : key === 'patients' ? 'patients' : 'items'} available`
+                : typeof value === 'object' && value !== null && !Array.isArray(value)
+                ? `${Object.keys(value as Record<string, any>).length} elements configured`
+                : String(value).slice(0, 150) + (String(value).length > 150 ? '...' : '')
+              }
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="text-xs text-muted-foreground bg-blue-50 dark:bg-blue-950/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
+        <Trophy className="h-4 w-4 inline mr-1" />
+        Join this competition to access the full interactive content and start playing!
+      </div>
+    </div>
+  );
+}
+
+function GameCompetitions() {
   const [competitions, setCompetitions] = useState<GameCompetition[]>([]);
   const [selectedGameType, setSelectedGameType] = useState<string>('all');
   const [selectedBodyPart, setSelectedBodyPart] = useState<string>('all');
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [selectedCompetition, setSelectedCompetition] = useState<GameContent | null>(null);
+  const [joiningCompetition, setJoiningCompetition] = useState<number | null>(null);
+  const { toast } = useToast();
+  const [, setLocation] = useLocation();
 
   useEffect(() => {
     fetchCompetitions();
@@ -115,27 +163,67 @@ export default function GameCompetitions() {
   };
 
   const joinCompetition = async (competitionId: number) => {
+    if (joiningCompetition) return; // Prevent multiple clicks
+    
+    setJoiningCompetition(competitionId);
     try {
       const response = await fetch(`/api/game-competitions/${competitionId}/join`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include'
       });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to join competition');
+      }
+      
       const data = await response.json();
-      console.log('Joined competition:', data);
-    } catch (error) {
+      
+      toast({
+        title: "Competition Joined!",
+        description: "You've successfully joined the game competition. Redirecting to competition page...",
+      });
+      
+      // Navigate to game competition page
+      setTimeout(() => {
+        setLocation(`/game-competition/${competitionId}`);
+      }, 1000);
+      
+    } catch (error: any) {
       console.error('Error joining competition:', error);
+      toast({
+        title: "Join Failed",
+        description: error.message || "Failed to join competition. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setJoiningCompetition(null);
     }
   };
 
   const viewCompetitionDetails = async (competitionId: number) => {
     try {
-      const response = await fetch(`/api/game-competitions/${competitionId}`);
+      const response = await fetch(`/api/game-competitions/${competitionId}`, {
+        credentials: 'include'
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to fetch competition details');
+      }
+      
       const data = await response.json();
       setSelectedCompetition(data);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching competition details:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to load competition details",
+        variant: "destructive",
+      });
     }
   };
 
@@ -265,14 +353,23 @@ export default function GameCompetitions() {
                         size="sm"
                         className="flex-1"
                       >
+                        <ExternalLink className="h-4 w-4 mr-1" />
                         View Details
                       </Button>
                       <Button 
                         onClick={() => joinCompetition(competition.id)}
                         size="sm"
                         className="flex-1"
+                        disabled={joiningCompetition === competition.id}
                       >
-                        Join
+                        {joiningCompetition === competition.id ? (
+                          <>Loading...</>
+                        ) : (
+                          <>
+                            <ChevronRight className="h-4 w-4 mr-1" />
+                            Join
+                          </>
+                        )}
                       </Button>
                     </div>
                   </CardContent>
@@ -388,9 +485,10 @@ export default function GameCompetitions() {
                     <CardTitle>Game Content Preview</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <pre className="bg-muted p-4 rounded-lg text-sm overflow-x-auto">
-                      {JSON.stringify(selectedCompetition.content, null, 2)}
-                    </pre>
+                    <GameContentDisplay 
+                      gameType={selectedCompetition.competition.gameType} 
+                      content={selectedCompetition.content} 
+                    />
                   </CardContent>
                 </Card>
               )}
@@ -417,3 +515,5 @@ export default function GameCompetitions() {
     </div>
   );
 }
+
+export default GameCompetitions;

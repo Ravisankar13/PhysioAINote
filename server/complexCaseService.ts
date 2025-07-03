@@ -595,6 +595,92 @@ export class ComplexCaseService {
       throw error;
     }
   }
+
+  /**
+   * Stores a complex case attempt to the database
+   */
+  async storeComplexCaseAttempt(attemptData: any): Promise<ComplexCaseAttempt> {
+    try {
+      const [insertedAttempt] = await db.insert(complexCaseAttempts)
+        .values({
+          user_id: attemptData.userId,
+          competition_id: attemptData.competitionId,
+          complex_case_id: attemptData.complexCaseId,
+          total_score: attemptData.totalScore,
+          clinical_reasoning_score: attemptData.clinicalReasoningScore,
+          assessment_skills_score: attemptData.assessmentSkillsScore,
+          treatment_planning_score: attemptData.treatmentPlanningScore,
+          communication_score: attemptData.communicationScore,
+          time_efficiency_score: attemptData.timeEfficiencyScore,
+          total_time_spent_seconds: attemptData.totalTimeSpentSeconds,
+          stage_responses: attemptData.stageResponses,
+          overall_feedback: attemptData.overallFeedback,
+          completed_at: attemptData.completedAt,
+          started_at: attemptData.startedAt
+        })
+        .returning();
+      
+      return insertedAttempt;
+    } catch (error) {
+      console.error('Error storing complex case attempt:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Gets all complex case attempts for a user
+   */
+  async getUserComplexCaseAttempts(userId: number): Promise<any[]> {
+    try {
+      const attempts = await db
+        .select({
+          id: complexCaseAttempts.id,
+          competitionId: complexCaseAttempts.competition_id,
+          complexCaseId: complexCaseAttempts.complex_case_id,
+          totalScore: complexCaseAttempts.total_score,
+          clinicalReasoningScore: complexCaseAttempts.clinical_reasoning_score,
+          assessmentSkillsScore: complexCaseAttempts.assessment_skills_score,
+          treatmentPlanningScore: complexCaseAttempts.treatment_planning_score,
+          communicationScore: complexCaseAttempts.communication_score,
+          timeEfficiencyScore: complexCaseAttempts.time_efficiency_score,
+          totalTimeSpentSeconds: complexCaseAttempts.total_time_spent_seconds,
+          stageResponses: complexCaseAttempts.stage_responses,
+          overallFeedback: complexCaseAttempts.overall_feedback,
+          completedAt: complexCaseAttempts.completed_at,
+          startedAt: complexCaseAttempts.started_at,
+          competitionTitle: competitions.title,
+          competitionBodyPart: competitions.bodyPart
+        })
+        .from(complexCaseAttempts)
+        .leftJoin(competitions, eq(complexCaseAttempts.competition_id, competitions.id))
+        .where(eq(complexCaseAttempts.user_id, userId))
+        .orderBy(desc(complexCaseAttempts.completed_at));
+
+      // Transform the data to match the expected format for the history view
+      return attempts.map(attempt => ({
+        competitionId: attempt.competitionId,
+        competitionTitle: attempt.competitionTitle || "Complex Case Competition",
+        complexCaseId: attempt.complexCaseId,
+        completedAt: attempt.completedAt,
+        overallScore: attempt.totalScore,
+        timeSpent: Math.round(attempt.totalTimeSpentSeconds / 60), // Convert to minutes
+        categoryScores: {
+          clinicalReasoning: attempt.clinicalReasoningScore || 0,
+          assessmentSkills: attempt.assessmentSkillsScore || 0,
+          treatmentPlanning: attempt.treatmentPlanningScore || 0,
+          communication: attempt.communicationScore || 0
+        },
+        questionFeedback: attempt.overallFeedback?.questionFeedback || [],
+        totalQuestions: attempt.stageResponses ? (Array.isArray(attempt.stageResponses) ? attempt.stageResponses.length : 0) : 0,
+        averageScore: attempt.totalScore || 0,
+        totalParticipants: 1, // Default for now
+        rank: 1 // Default for now
+      }));
+    } catch (error) {
+      console.error('Error getting user complex case attempts:', error);
+      return [];
+    }
+  }
 }
 
 export const complexCaseService = new ComplexCaseService();

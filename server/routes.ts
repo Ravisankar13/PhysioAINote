@@ -5981,25 +5981,37 @@ Base your analysis on established postural assessment principles and correlate f
       
       console.log(`[COMPLEX-SUBMIT] Analysis result:`, analysisResult);
 
-      // Store the submission
-      const submission = {
-        userId: req.user!.id,
-        competitionId,
-        complexCaseId,
-        stageAnswers,
-        totalTimeSpent,
-        submittedAt: new Date(),
-        analysisResult
-      };
-
       // Calculate time efficiency bonus (if completed under time limit)
       const competition = await competitionStorage.getCompetitionById(competitionId);
       const timeLimit = competition?.timeLimit || 10; // Default 10 minutes
       const timeEfficiencyBonus = totalTimeSpent < (timeLimit * 60 * 0.8) ? 5 : 0; // 5% bonus if under 80% of time limit
 
+      const finalScore = Math.min(100, analysisResult.totalScore + timeEfficiencyBonus);
+
+      // Store the competition attempt in the database
+      const attemptData = {
+        userId: req.user!.id,
+        competitionId,
+        complexCaseId,
+        totalScore: finalScore,
+        clinicalReasoningScore: analysisResult.categoryScores.clinicalReasoning || 0,
+        assessmentSkillsScore: analysisResult.categoryScores.assessmentSkills || 0,
+        treatmentPlanningScore: analysisResult.categoryScores.treatmentPlanning || 0,
+        communicationScore: analysisResult.categoryScores.communication || 0,
+        timeEfficiencyScore: timeEfficiencyBonus,
+        totalTimeSpentSeconds: totalTimeSpent,
+        stageResponses: stageAnswers,
+        overallFeedback: analysisResult.feedback,
+        completedAt: new Date(),
+        startedAt: new Date(Date.now() - (totalTimeSpent * 1000)) // Calculate start time
+      };
+
+      // Save to database using complexCaseService
+      const savedAttempt = await complexCaseService.storeComplexCaseAttempt(attemptData);
+
       const result = {
         participantId: req.user!.id,
-        totalScore: Math.min(100, analysisResult.totalScore + timeEfficiencyBonus),
+        totalScore: finalScore,
         categoryScores: {
           ...analysisResult.categoryScores,
           timeEfficiency: timeEfficiencyBonus > 0 ? 85 : 70
@@ -6010,7 +6022,7 @@ Base your analysis on established postural assessment principles and correlate f
         achievements: analysisResult.totalScore >= 90 ? ["Clinical Excellence", "Expert Clinician"] : 
                      analysisResult.totalScore >= 80 ? ["Strong Clinical Reasoning"] : 
                      analysisResult.totalScore >= 70 ? ["Competent Clinician"] : undefined,
-        submission // Keep original submission data for debugging
+        submission: savedAttempt // Return the saved attempt data
       };
 
       console.log(`[COMPLEX-SUBMIT] Final result:`, result);

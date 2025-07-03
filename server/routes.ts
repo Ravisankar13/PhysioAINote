@@ -6021,6 +6021,7 @@ Base your analysis on established postural assessment principles and correlate f
           timeEfficiency: timeEfficiencyBonus > 0 ? 85 : 70
         },
         feedback: analysisResult.feedback,
+        questionFeedback: analysisResult.questionFeedback || [], // Add individual question feedback
         timeSpent: totalTimeSpent,
         timeLimit: timeLimit * 60,
         achievements: analysisResult.totalScore >= 90 ? ["Clinical Excellence", "Expert Clinician"] : 

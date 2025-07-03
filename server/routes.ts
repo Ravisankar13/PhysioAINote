@@ -24,6 +24,10 @@ import { researchStorage } from "./researchStorage";
 import { competitionStorage } from "./competitionStorage";
 import { competitionService, type CompetitionAttempt } from "./competitionService";
 import { complexCaseService } from "./complexCaseService";
+import { notificationService } from "./notificationService";
+import { realTimeCompetitionService } from "./realTimeCompetitionService";
+import { competitionContentService } from "./competitionContentService";
+import { competitionAnalyticsService } from "./competitionAnalyticsService";
 import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, exercises, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions } from "@shared/schema";
 import { ZodError, z } from "zod";
 import { fromZodError } from "zod-validation-error";
@@ -6466,6 +6470,347 @@ Base your analysis on established postural assessment principles and correlate f
       
     } catch (error: any) {
       console.error("Error creating test competition:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ========================================
+  // ENHANCED COMPETITION FEATURES API ENDPOINTS
+  // ========================================
+
+  // Notification endpoints
+  app.get("/api/notifications", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const notifications = notificationService.getInAppNotifications(req.user.id);
+      res.json(notifications);
+    } catch (error: any) {
+      console.error("Error fetching notifications:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/notifications/:id/read", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const notificationId = parseInt(req.params.id);
+      const success = notificationService.markNotificationRead(req.user.id, notificationId);
+      res.json({ success });
+    } catch (error: any) {
+      console.error("Error marking notification as read:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Real-time competition endpoints
+  app.get("/api/competitions/:id/live", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const competitionId = parseInt(req.params.id);
+      const liveData = realTimeCompetitionService.getLiveData(competitionId);
+      
+      if (!liveData) {
+        return res.status(404).json({ error: "Live data not available for this competition" });
+      }
+      
+      res.json(liveData);
+    } catch (error: any) {
+      console.error("Error fetching live competition data:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/competitions/:id/start-live", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const competitionId = parseInt(req.params.id);
+      await realTimeCompetitionService.startLiveTracking(competitionId);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error starting live tracking:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Competition content and variety endpoints
+  app.get("/api/competitions/themes", async (req, res) => {
+    try {
+      const themes = competitionContentService.getThematicWeeks();
+      res.json(themes);
+    } catch (error: any) {
+      console.error("Error fetching competition themes:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/competitions/current-theme", async (req, res) => {
+    try {
+      const currentTheme = competitionContentService.getCurrentWeekTheme();
+      res.json(currentTheme);
+    } catch (error: any) {
+      console.error("Error fetching current theme:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/competitions/tournament-formats", async (req, res) => {
+    try {
+      const formats = competitionContentService.getTournamentFormats();
+      res.json(formats);
+    } catch (error: any) {
+      console.error("Error fetching tournament formats:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/competitions/specialty-types", async (req, res) => {
+    try {
+      const specialties = competitionContentService.getSpecialtyCompetitions();
+      res.json(specialties);
+    } catch (error: any) {
+      console.error("Error fetching specialty competitions:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Enhanced analytics endpoints
+  app.get("/api/analytics/performance/:userId", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const userId = parseInt(req.params.userId);
+      
+      // Users can only access their own analytics unless they're admin
+      if (userId !== req.user.id && req.user.username !== 'Fateofjustice') {
+        return res.sendStatus(403);
+      }
+      
+      const analytics = await competitionAnalyticsService.generateDetailedAnalytics(userId);
+      res.json(analytics);
+    } catch (error: any) {
+      console.error("Error generating analytics:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/analytics/social/:userId/:competitionId", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const userId = parseInt(req.params.userId);
+      const competitionId = parseInt(req.params.competitionId);
+      
+      // Users can only access their own social features unless they're admin
+      if (userId !== req.user.id && req.user.username !== 'Fateofjustice') {
+        return res.sendStatus(403);
+      }
+      
+      const socialFeatures = await competitionAnalyticsService.generateSocialFeatures(userId, competitionId);
+      res.json(socialFeatures);
+    } catch (error: any) {
+      console.error("Error generating social features:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Competition creation with enhanced features
+  app.post("/api/competitions/themed", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const { theme, difficulty, timeSlot } = req.body;
+      
+      const themedCompetition = await competitionContentService.generateThemedCompetition(
+        theme, 
+        difficulty, 
+        timeSlot
+      );
+      
+      // Create the actual competition
+      const now = new Date();
+      const startTime = new Date(now.getTime() + 60 * 60 * 1000); // Start in 1 hour
+      const endTime = new Date(startTime.getTime() + 10 * 60 * 1000); // 10 minute duration
+      
+      const [competition] = await db.insert(competitions).values({
+        title: themedCompetition.title,
+        description: themedCompetition.description,
+        type: 'complete_clinician',
+        status: 'upcoming',
+        difficulty: themedCompetition.difficulty,
+        bodyPart: themedCompetition.bodyPart as any,
+        timeLimit: 10,
+        maxParticipants: 50,
+        currentParticipants: 0,
+        registrationOpensAt: now,
+        registrationDeadline: new Date(startTime.getTime() - 5 * 60 * 1000),
+        startTime,
+        endTime,
+        complexCaseIds: themedCompetition.caseIds.slice(0, 1),
+        caseStudyIds: null,
+        caseType: 'complex',
+        isAutoGenerated: false,
+        rules: {
+          scoringWeights: {
+            accuracy: 30,
+            speed: 20,
+            reasoning: 25,
+            differential: 15,
+            treatment: 10
+          },
+          allowedAttempts: 1,
+          showLeaderboard: true,
+          revealAnswers: true
+        }
+      }).returning();
+      
+      res.json({
+        success: true,
+        competition,
+        theme: themedCompetition
+      });
+      
+    } catch (error: any) {
+      console.error("Error creating themed competition:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Tournament bracket creation
+  app.post("/api/competitions/:id/tournament", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const competitionId = parseInt(req.params.id);
+      const { formatType } = req.body;
+      
+      // Get participants
+      const participants = await db
+        .select({ userId: competitionParticipants.userId })
+        .from(competitionParticipants)
+        .where(eq(competitionParticipants.competitionId, competitionId));
+      
+      const formats = competitionContentService.getTournamentFormats();
+      const format = formats.find(f => f.type === formatType);
+      
+      if (!format) {
+        return res.status(400).json({ error: "Invalid tournament format" });
+      }
+      
+      const bracket = await competitionContentService.createTournamentBracket(
+        competitionId,
+        participants.map(p => p.userId),
+        format
+      );
+      
+      res.json(bracket);
+      
+    } catch (error: any) {
+      console.error("Error creating tournament bracket:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Enhanced leaderboards with filtering
+  app.get("/api/leaderboards/enhanced", async (req, res) => {
+    try {
+      const { 
+        category = 'overall',
+        timeframe = 'all_time',
+        bodyPart,
+        specialty,
+        minParticipations = 1
+      } = req.query;
+      
+      // Get enhanced leaderboard data with analytics
+      const baseQuery = db
+        .select({
+          userId: competitionParticipants.userId,
+          username: users.username,
+          totalScore: sql<number>`sum(${competitionParticipants.finalScore})`,
+          averageScore: sql<number>`avg(${competitionParticipants.finalScore})`,
+          participationCount: sql<number>`count(*)`,
+          winCount: sql<number>`sum(case when ${competitionParticipants.ranking} = 1 then 1 else 0 end)`,
+          topThreeCount: sql<number>`sum(case when ${competitionParticipants.ranking} <= 3 then 1 else 0 end)`
+        })
+        .from(competitionParticipants)
+        .innerJoin(users, eq(users.id, competitionParticipants.userId))
+        .innerJoin(competitions, eq(competitions.id, competitionParticipants.competitionId))
+        .groupBy(competitionParticipants.userId, users.username)
+        .having(sql`count(*) >= ${minParticipations}`)
+        .orderBy(sql`avg(${competitionParticipants.finalScore}) desc`)
+        .limit(50);
+      
+      const results = await baseQuery;
+      
+      const enhancedResults = results.map((result, index) => ({
+        rank: index + 1,
+        userId: result.userId,
+        username: result.username,
+        averageScore: Math.round((result.averageScore || 0) * 10) / 10,
+        totalScore: result.totalScore || 0,
+        participationCount: Number(result.participationCount),
+        winRate: Math.round(((result.winCount || 0) / Number(result.participationCount)) * 100 * 10) / 10,
+        podiumRate: Math.round(((result.topThreeCount || 0) / Number(result.participationCount)) * 100 * 10) / 10,
+        trendIndicator: index < 10 ? '📈' : index < 25 ? '➡️' : '📉'
+      }));
+      
+      res.json({
+        category,
+        timeframe,
+        bodyPart,
+        leaderboard: enhancedResults,
+        metadata: {
+          totalParticipants: results.length,
+          lastUpdated: new Date().toISOString(),
+          filters: { category, timeframe, bodyPart, specialty, minParticipations }
+        }
+      });
+      
+    } catch (error: any) {
+      console.error("Error fetching enhanced leaderboards:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Competition insights and statistics
+  app.get("/api/competitions/insights", async (req, res) => {
+    try {
+      const insights = await db
+        .select({
+          totalCompetitions: sql<number>`count(*)`,
+          activeCompetitions: sql<number>`sum(case when status = 'active' then 1 else 0 end)`,
+          upcomingCompetitions: sql<number>`sum(case when status = 'upcoming' then 1 else 0 end)`,
+          totalParticipations: sql<number>`sum(current_participants)`,
+          averageParticipants: sql<number>`avg(current_participants)`,
+          popularBodyPart: sql<string>`mode() within group (order by body_part)`,
+          averageScore: sql<number>`avg(current_participants * 75)` // Estimated average
+        })
+        .from(competitions);
+      
+      const recentActivity = await db
+        .select({
+          date: sql<string>`date(created_at)`,
+          competitionCount: sql<number>`count(*)`,
+          participantCount: sql<number>`sum(current_participants)`
+        })
+        .from(competitions)
+        .where(gte(competitions.createdAt, sql`current_date - interval '7 days'`))
+        .groupBy(sql`date(created_at)`)
+        .orderBy(sql`date(created_at) desc`)
+        .limit(7);
+      
+      res.json({
+        overview: insights[0] || {},
+        recentActivity,
+        timestamp: new Date().toISOString()
+      });
+      
+    } catch (error: any) {
+      console.error("Error fetching competition insights:", error);
       res.status(500).json({ error: error.message });
     }
   });

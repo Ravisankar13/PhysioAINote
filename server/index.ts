@@ -3,6 +3,8 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { createAdditionalComplexCases2024 } from "./additionalComplexCases2024";
 import { competitionScheduler } from "./competitionScheduler";
+import { notificationService } from "./notificationService";
+import { realTimeCompetitionService } from "./realTimeCompetitionService";
 
 const app = express();
 app.use(express.json({ limit: '50mb' }));
@@ -100,13 +102,20 @@ app.use((req, res, next) => {
         //   log('Interactive questions setup skipped (already exists or error)');
         // }
 
-        // Start competition scheduler
+        // Start competition scheduler (temporarily disabled due to array schema issues)
         try {
-          const { competitionScheduler } = await import('./competitionScheduler');
-          competitionScheduler.startScheduler();
-          log('✓ Competition scheduler started successfully');
+          // competitionScheduler.startScheduler();
+          log('✓ Competition scheduler temporarily disabled');
         } catch (error) {
           log('Competition scheduler failed to start:', error);
+        }
+
+        // Setup real-time WebSocket server
+        try {
+          realTimeCompetitionService.setupWebSocket(server);
+          log('✓ Real-time competition WebSocket server started');
+        } catch (error) {
+          log('Real-time WebSocket setup failed:', error);
         }
       }
     );

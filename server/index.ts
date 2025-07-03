@@ -42,85 +42,129 @@ app.use((req, res, next) => {
 
 (async () => {
   try {
-    log("Starting route registration...");
-    const server = await registerRoutes(app);
+    log("Starting PhysioGPT server initialization...");
+    
+    // Register routes with error handling
+    const server = await registerRoutes(app).catch(err => {
+      console.error("Failed to register routes:", err);
+      throw new Error(`Route registration failed: ${err.message}`);
+    });
     log("Routes registered successfully");
 
+    // Global error handler
     app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
       const status = err.status || err.statusCode || 500;
       const message = err.message || "Internal Server Error";
 
-      // Log the error for debugging
-      console.error(`Error on ${req.method} ${req.path}:`, err);
+      // Enhanced error logging
+      console.error(`[${new Date().toISOString()}] Error on ${req.method} ${req.path}:`, {
+        error: err.message,
+        stack: err.stack,
+        status
+      });
       
       // Only send response if not already sent
       if (!res.headersSent) {
-        res.status(status).json({ message });
+        res.status(status).json({ 
+          message,
+          timestamp: new Date().toISOString(),
+          path: req.path
+        });
       }
-      
-      // Don't re-throw the error to prevent server crash
     });
 
-    // importantly only setup vite in development and after
-    // setting up all the other routes so the catch-all route
-    // doesn't interfere with the other routes
-    if (app.get("env") === "development") {
-      await setupVite(app, server);
-    } else {
-      serveStatic(app);
+    // Setup Vite or static serving with enhanced error handling
+    try {
+      if (app.get("env") === "development" || process.env.NODE_ENV === "development") {
+        log("Setting up Vite development server...");
+        await setupVite(app, server);
+        log("Vite development server ready");
+      } else {
+        log("Setting up static file serving for production...");
+        serveStatic(app);
+        log("Static file serving configured");
+      }
+    } catch (err) {
+      console.error("Failed to setup file serving:", err);
+      // In production, if static files fail, try to continue anyway
+      if (process.env.NODE_ENV === "production") {
+        console.warn("Static file serving failed, server will continue without client files");
+      } else {
+        throw err;
+      }
     }
 
-    // ALWAYS serve the app on port 5000
-    // this serves both the API and the client.
-    // Port 5000 is forwarded to external port 80 in production
+    // Start server with enhanced error handling
     const port = 5000;
-    server.listen(
-      {
-        port,
-        host: "0.0.0.0",
-        reusePort: true,
-      },
-      async () => {
-        log(`serving on port ${port}`);
-        
-        // Auto-seed complex cases in background - temporarily disabled
-        // try {
-        //   // Use system user ID 1 for seeding
-        //   await createAdditionalComplexCases2024(1);
-        //   log('✓ Complex case studies automatically seeded');
-        // } catch (error) {
-        //   // Silently handle - don't crash server if seeding fails
-        //   log('Complex case seeding skipped (already exists or error)');
-        // }
-        
-        // Add interactive questions to existing complex cases - temporarily disabled
-        // try {
-        //   const { addInteractiveQuestionsToComplexCases } = await import('./scripts/addInteractiveQuestions');
-        //   await addInteractiveQuestionsToComplexCases();
-        //   log('✓ Interactive questions added to complex cases');
-        // } catch (error) {
-        //   log('Interactive questions setup skipped (already exists or error)');
-        // }
-
-        // Start competition scheduler (temporarily disabled due to array schema issues)
-        try {
-          // competitionScheduler.startScheduler();
-          log('✓ Competition scheduler temporarily disabled');
-        } catch (error) {
-          log('Competition scheduler failed to start:', error);
+    const startServer = () => new Promise((resolve, reject) => {
+      const serverInstance = server.listen(
+        {
+          port,
+          host: "0.0.0.0",
+          reusePort: true,
+        },
+        (err?: Error) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          resolve(serverInstance);
         }
+      );
 
-        // Setup real-time WebSocket server
-        try {
-          realTimeCompetitionService.setupWebSocket(server);
-          log('✓ Real-time competition WebSocket server started');
-        } catch (error) {
-          log('Real-time WebSocket setup failed:', error);
+      serverInstance.on('error', (err: any) => {
+        if (err.code === 'EADDRINUSE') {
+          console.error(`Port ${port} is already in use`);
         }
+        reject(err);
+      });
+    });
+
+    await startServer();
+    log(`PhysioGPT server running on port ${port}`);
+    
+    // Initialize background services with individual error handling
+    const initializeBackgroundServices = async () => {
+      // Auto-seed complex cases - temporarily disabled
+      try {
+        // await createAdditionalComplexCases2024(1);
+        log('✓ Complex case seeding temporarily disabled');
+      } catch (error) {
+        log('Complex case seeding skipped:', error instanceof Error ? error.message : 'Unknown error');
       }
-    );
+      
+      // Competition scheduler - temporarily disabled
+      try {
+        // competitionScheduler.startScheduler();
+        log('✓ Competition scheduler temporarily disabled');
+      } catch (error) {
+        log('Competition scheduler failed to start:', error instanceof Error ? error.message : 'Unknown error');
+      }
+
+      // Real-time WebSocket server
+      try {
+        realTimeCompetitionService.setupWebSocket(server);
+        log('✓ Real-time competition WebSocket server started');
+      } catch (error) {
+        log('Real-time WebSocket setup failed:', error instanceof Error ? error.message : 'Unknown error');
+      }
+    };
+
+    // Initialize background services without blocking server startup
+    setImmediate(initializeBackgroundServices);
+    
   } catch (err) {
-    console.error("Server startup error:", err);
+    console.error("[FATAL] Server startup error:", err);
+    console.error("Stack trace:", err instanceof Error ? err.stack : 'No stack trace available');
+    
+    // Attempt graceful shutdown
+    try {
+      // Close any open connections/resources here if needed
+      log("Attempting graceful shutdown...");
+    } catch (shutdownErr) {
+      console.error("Error during shutdown:", shutdownErr);
+    }
+    
     process.exit(1);
   }
 })();

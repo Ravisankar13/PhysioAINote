@@ -320,26 +320,7 @@ export class ComplexCaseService {
     }
   }
   
-  /**
-   * Gets user's attempts for a complex case
-   */
-  async getUserComplexCaseAttempts(userId: number, complexCaseId?: number): Promise<ComplexCaseAttempt[]> {
-    try {
-      let query = db.select()
-        .from(complexCaseAttempts)
-        .where(eq(complexCaseAttempts.userId, userId));
-      
-      if (complexCaseId) {
-        query = query.where(eq(complexCaseAttempts.complexCaseId, complexCaseId));
-      }
-      
-      const attempts = await query.orderBy(desc(complexCaseAttempts.createdAt));
-      return attempts;
-    } catch (error) {
-      console.error('Error getting user complex case attempts:', error);
-      return [];
-    }
-  }
+
   
   /**
    * Gets complex cases for a competition

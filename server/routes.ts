@@ -28,7 +28,8 @@ import { notificationService } from "./notificationService";
 import { realTimeCompetitionService } from "./realTimeCompetitionService";
 import { competitionContentService } from "./competitionContentService";
 import { competitionAnalyticsService } from "./competitionAnalyticsService";
-import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, exercises, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions } from "@shared/schema";
+import { soapNotesService } from "./soapNotesService";
+import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, exercises, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, insertSoapNoteSchema } from "@shared/schema";
 import { ZodError, z } from "zod";
 import { fromZodError } from "zod-validation-error";
 import multer from "multer";
@@ -6812,6 +6813,138 @@ Base your analysis on established postural assessment principles and correlate f
       
     } catch (error: any) {
       console.error("Error fetching competition insights:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ============================================================================
+  // SOAP NOTES API ROUTES (Separate from Clinical Notes)
+  // ============================================================================
+
+  // Create new SOAP notes session
+  app.post("/api/soap-notes/sessions", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const session = await soapNotesService.createSession(userId);
+      res.status(201).json(session);
+    } catch (error: any) {
+      console.error("Error creating SOAP notes session:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get active SOAP notes session
+  app.get("/api/soap-notes/sessions/active", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const session = await soapNotesService.getOrCreateActiveSession(userId);
+      res.json(session);
+    } catch (error: any) {
+      console.error("Error getting active SOAP notes session:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Upload audio for SOAP notes processing
+  app.post("/api/soap-notes/sessions/:sessionId/audio", ensureAuthenticated, upload.single('audio'), async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { sessionId } = req.params;
+      const audioFile = req.file;
+
+      if (!audioFile) {
+        return res.status(400).json({ error: 'Audio file is required' });
+      }
+
+      // Verify session belongs to user
+      const existingSession = await soapNotesService.getSoapNote(parseInt(sessionId));
+      if (!existingSession || existingSession.userId !== userId) {
+        return res.status(404).json({ error: 'Session not found' });
+      }
+
+      const updatedSession = await soapNotesService.processAudioForSession(
+        existingSession.sessionId,
+        audioFile.buffer,
+        audioFile.originalname
+      );
+
+      res.json(updatedSession);
+    } catch (error: any) {
+      console.error("Error processing audio for SOAP notes:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get all SOAP notes for user
+  app.get("/api/soap-notes", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const notes = await soapNotesService.getUserSoapNotes(userId);
+      res.json(notes);
+    } catch (error: any) {
+      console.error("Error getting SOAP notes:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get specific SOAP note
+  app.get("/api/soap-notes/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { id } = req.params;
+      const note = await soapNotesService.getSoapNote(parseInt(id));
+
+      if (!note || note.userId !== userId) {
+        return res.status(404).json({ error: 'SOAP note not found' });
+      }
+
+      res.json(note);
+    } catch (error: any) {
+      console.error("Error getting SOAP note:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Mark patient switch for session
+  app.post("/api/soap-notes/sessions/:sessionId/patient-switch", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { sessionId } = req.params;
+
+      // Verify session belongs to user
+      const existingSession = await storage.getSoapNoteBySessionId(sessionId);
+      if (!existingSession || existingSession.userId !== userId) {
+        return res.status(404).json({ error: 'Session not found' });
+      }
+
+      const updatedSession = await soapNotesService.markPatientSwitch(sessionId);
+      res.json(updatedSession);
+    } catch (error: any) {
+      console.error("Error marking patient switch:", error);
       res.status(500).json({ error: error.message });
     }
   });

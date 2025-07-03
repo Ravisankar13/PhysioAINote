@@ -6,6 +6,9 @@ import {
   type ClinicalNote,
   type InsertClinicalNote,
   type UpdateNoteVisibility,
+  soapNotes,
+  type SoapNote,
+  type InsertSoapNote,
   comments,
   type Comment,
   type InsertComment,
@@ -107,6 +110,15 @@ export interface IStorage {
     noteId: number,
     updateData: UpdateNoteVisibility
   ): Promise<ClinicalNote>;
+
+  // SOAP Notes Operations
+  getSoapNote(id: number): Promise<SoapNote | undefined>;
+  getSoapNoteBySessionId(sessionId: string): Promise<SoapNote | undefined>;
+  getSoapNotes(userId: number): Promise<SoapNote[]>;
+  createSoapNote(note: InsertSoapNote): Promise<SoapNote>;
+  updateSoapNote(id: number, note: Partial<InsertSoapNote>): Promise<SoapNote>;
+  getActiveSoapSession(userId: number): Promise<SoapNote | undefined>;
+  markPatientSwitch(sessionId: string): Promise<SoapNote>;
 
   // Comments Operations
   createComment(comment: InsertComment): Promise<Comment>;
@@ -1974,6 +1986,123 @@ export class DatabaseStorage implements IStorage {
         );
     } catch (error) {
       console.error("Error removing case tag:", error);
+    }
+  }
+
+  // SOAP Notes Operations
+  async getSoapNote(id: number): Promise<SoapNote | undefined> {
+    try {
+      const result = await db
+        .select()
+        .from(soapNotes)
+        .where(eq(soapNotes.id, id))
+        .limit(1);
+      
+      return result[0];
+    } catch (error) {
+      console.error("Error getting SOAP note:", error);
+      throw error;
+    }
+  }
+
+  async getSoapNoteBySessionId(sessionId: string): Promise<SoapNote | undefined> {
+    try {
+      const result = await db
+        .select()
+        .from(soapNotes)
+        .where(eq(soapNotes.sessionId, sessionId))
+        .limit(1);
+      
+      return result[0];
+    } catch (error) {
+      console.error("Error getting SOAP note by session ID:", error);
+      throw error;
+    }
+  }
+
+  async getSoapNotes(userId: number): Promise<SoapNote[]> {
+    try {
+      const result = await db
+        .select()
+        .from(soapNotes)
+        .where(eq(soapNotes.userId, userId))
+        .orderBy(desc(soapNotes.createdAt));
+      
+      return result;
+    } catch (error) {
+      console.error("Error getting SOAP notes:", error);
+      throw error;
+    }
+  }
+
+  async createSoapNote(note: InsertSoapNote): Promise<SoapNote> {
+    try {
+      const result = await db
+        .insert(soapNotes)
+        .values(note)
+        .returning();
+      
+      return result[0];
+    } catch (error) {
+      console.error("Error creating SOAP note:", error);
+      throw error;
+    }
+  }
+
+  async updateSoapNote(id: number, note: Partial<InsertSoapNote>): Promise<SoapNote> {
+    try {
+      const result = await db
+        .update(soapNotes)
+        .set({
+          ...note,
+          updatedAt: new Date(),
+        })
+        .where(eq(soapNotes.id, id))
+        .returning();
+      
+      return result[0];
+    } catch (error) {
+      console.error("Error updating SOAP note:", error);
+      throw error;
+    }
+  }
+
+  async getActiveSoapSession(userId: number): Promise<SoapNote | undefined> {
+    try {
+      const result = await db
+        .select()
+        .from(soapNotes)
+        .where(
+          and(
+            eq(soapNotes.userId, userId),
+            ne(soapNotes.sessionStatus, "completed")
+          )
+        )
+        .orderBy(desc(soapNotes.createdAt))
+        .limit(1);
+      
+      return result[0];
+    } catch (error) {
+      console.error("Error getting active SOAP session:", error);
+      throw error;
+    }
+  }
+
+  async markPatientSwitch(sessionId: string): Promise<SoapNote> {
+    try {
+      const result = await db
+        .update(soapNotes)
+        .set({
+          patientSwitchDetected: true,
+          updatedAt: new Date(),
+        })
+        .where(eq(soapNotes.sessionId, sessionId))
+        .returning();
+      
+      return result[0];
+    } catch (error) {
+      console.error("Error marking patient switch:", error);
+      throw error;
     }
   }
 }

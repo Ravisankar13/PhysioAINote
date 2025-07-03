@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
 import ClinicalNotes from "@/pages/ClinicalNotes";
+import SoapNotes from "@/pages/SoapNotes";
 import About from "@/pages/About";
 import Contact from "@/pages/Contact";
 import Terms from "@/pages/Terms";
@@ -61,6 +62,9 @@ function Router() {
             <ProtectedRoute component={NotesClinical} />
           </Route>
           <Route path="/notes-clinical" component={NotesClinical} />
+          <Route path="/soap-notes">
+            <ProtectedRoute component={SoapNotes} />
+          </Route>
           <Route path="/shared-notes" component={SharedNotes} />
           <Route path="/research" component={ResearchHub} />
           <Route path="/research/gaps" component={ResearchGaps} />

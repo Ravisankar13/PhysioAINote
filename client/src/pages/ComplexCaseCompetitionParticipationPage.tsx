@@ -22,6 +22,30 @@ import {
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 
+// Submission progress stages with messages
+const SUBMISSION_STAGES = [
+  {
+    message: "Submitting your answers...",
+    educationalFact: "Did you know? Our AI analyzes over 500 clinical reasoning patterns to provide accurate feedback."
+  },
+  {
+    message: "AI analyzing clinical reasoning...",
+    educationalFact: "Expert physiotherapists typically take 12-15 minutes to thoroughly analyze complex cases like this."
+  },
+  {
+    message: "Generating personalized feedback...",
+    educationalFact: "The AI compares your responses against evidence-based clinical guidelines from leading research."
+  },
+  {
+    message: "Creating perfect answer comparisons...",
+    educationalFact: "Perfect answers help identify specific improvement areas for enhanced clinical decision-making."
+  },
+  {
+    message: "Finalizing results and scores...",
+    educationalFact: "Your performance is evaluated across 5 dimensions: accuracy, reasoning, assessment, treatment, and speed."
+  }
+];
+
 interface ComplexCase {
   id: number;
   title: string;
@@ -63,6 +87,8 @@ function ComplexCaseCompetitionParticipationPage() {
   const [showResults, setShowResults] = useState(false);
   const [competitionResults, setCompetitionResults] = useState<any>(null);
   const [currentTime, setCurrentTime] = useState(Date.now()); // Add timer state for real-time updates
+  const [submissionStage, setSubmissionStage] = useState<number>(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -85,9 +111,28 @@ function ComplexCaseCompetitionParticipationPage() {
     }
   }, [competition, timeStarted]);
 
+  // Progress timer for submission stages
+  useEffect(() => {
+    if (!isSubmitting) return;
+
+    const timer = setInterval(() => {
+      setSubmissionStage(prev => {
+        if (prev < SUBMISSION_STAGES.length - 1) {
+          return prev + 1;
+        }
+        return prev;
+      });
+    }, 3000); // Progress every 3 seconds
+
+    return () => clearInterval(timer);
+  }, [isSubmitting]);
+
   // Submit answers mutation
   const submitAnswers = useMutation({
     mutationFn: async () => {
+      setIsSubmitting(true);
+      setSubmissionStage(0);
+      
       const timeSpent = timeStarted ? Math.floor((Date.now() - timeStarted.getTime()) / 1000) : 0;
       
       const submission = {
@@ -105,6 +150,7 @@ function ComplexCaseCompetitionParticipationPage() {
       return response.json();
     },
     onSuccess: (data) => {
+      setIsSubmitting(false);
       setCompetitionResults(data);
       setShowResults(true);
       
@@ -114,6 +160,9 @@ function ComplexCaseCompetitionParticipationPage() {
       });
     },
     onError: (error: any) => {
+      setIsSubmitting(false);
+      setSubmissionStage(0);
+      
       toast({
         title: "Submission Failed",
         description: error.message,
@@ -232,6 +281,7 @@ function ComplexCaseCompetitionParticipationPage() {
   };
 
   const handleSubmit = () => {
+    if (isSubmitting) return; // Prevent multiple submissions
     submitAnswers.mutate();
   };
 
@@ -555,7 +605,51 @@ function ComplexCaseCompetitionParticipationPage() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="container mx-auto p-6 space-y-6 relative">
+      {/* Submission Loading Overlay */}
+      {isSubmitting && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <Card className="w-full max-w-md mx-4">
+            <CardContent className="p-8 text-center space-y-6">
+              {/* Loading Spinner */}
+              <div className="flex justify-center">
+                <div className="animate-spin w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full"></div>
+              </div>
+              
+              {/* Progress Message */}
+              <div className="space-y-3">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {SUBMISSION_STAGES[submissionStage]?.message || "Processing..."}
+                </h3>
+                <div className="text-sm text-gray-600 bg-blue-50 p-3 rounded-lg border-l-4 border-blue-500">
+                  <p className="font-medium text-blue-800">
+                    {SUBMISSION_STAGES[submissionStage]?.educationalFact || "Please wait while we analyze your submission."}
+                  </p>
+                </div>
+              </div>
+              
+              {/* Progress Indicator */}
+              <div className="space-y-2">
+                <div className="flex justify-between text-xs text-gray-500">
+                  <span>Processing stage {submissionStage + 1} of {SUBMISSION_STAGES.length}</span>
+                  <span>Expected time: 10-15 seconds</span>
+                </div>
+                <Progress 
+                  value={(submissionStage + 1) / SUBMISSION_STAGES.length * 100} 
+                  className="h-2"
+                />
+              </div>
+              
+              {/* Important Notice */}
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                <p className="text-xs text-yellow-800 font-medium">
+                  ⚠️ Please wait - do not refresh the page or navigate away
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-center justify-between">
         <Link to="/competitions">
@@ -804,11 +898,20 @@ function ComplexCaseCompetitionParticipationPage() {
               {currentStage === stages.length - 1 && currentQuestion === (currentStageData?.questions?.length || 1) - 1 ? (
                 <Button
                   onClick={handleSubmit}
-                  disabled={!answers[`${currentStageData.id}-${currentQuestionData.id}`] || submitAnswers.isPending}
-                  className="bg-green-600 hover:bg-green-700"
+                  disabled={!answers[`${currentStageData.id}-${currentQuestionData.id}`] || isSubmitting}
+                  className="bg-green-600 hover:bg-green-700 disabled:opacity-50"
                 >
-                  {submitAnswers.isPending ? "Submitting..." : "Submit Answers"}
-                  <CheckCircle className="h-4 w-4 ml-2" />
+                  {isSubmitting ? (
+                    <>
+                      <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      Submit Answers
+                      <CheckCircle className="h-4 w-4 ml-2" />
+                    </>
+                  )}
                 </Button>
               ) : (
                 <Button

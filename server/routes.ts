@@ -29,7 +29,8 @@ import { realTimeCompetitionService } from "./realTimeCompetitionService";
 import { competitionContentService } from "./competitionContentService";
 import { competitionAnalyticsService } from "./competitionAnalyticsService";
 import { soapNotesService } from "./soapNotesService";
-import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, exercises, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, insertSoapNoteSchema } from "@shared/schema";
+import { bodyScannerService, SymptomData } from "./bodyScannerService";
+import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, exercises, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, insertSoapNoteSchema, bodyScans, insertBodyScanSchema } from "@shared/schema";
 import { ZodError, z } from "zod";
 import { fromZodError } from "zod-validation-error";
 import multer from "multer";
@@ -7454,6 +7455,151 @@ Base your analysis on established postural assessment principles and correlate f
 
     return totalScore;
   }
+
+  // Body Scanner API Routes
+  app.post("/api/body-scanner/analyze", ensureAuthenticated, upload.single('image'), async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: 'No image file provided' });
+      }
+
+      const { bodyPart, symptoms } = req.body;
+      
+      if (!bodyPart || !symptoms) {
+        return res.status(400).json({ message: 'Body part and symptoms are required' });
+      }
+
+      // Parse symptoms JSON
+      let parsedSymptoms: SymptomData;
+      try {
+        parsedSymptoms = JSON.parse(symptoms);
+      } catch (error) {
+        return res.status(400).json({ message: 'Invalid symptoms format' });
+      }
+
+      // Validate symptoms
+      const validationErrors = bodyScannerService.validateSymptoms(parsedSymptoms);
+      if (validationErrors.length > 0) {
+        return res.status(400).json({ message: 'Invalid symptoms data', errors: validationErrors });
+      }
+
+      // Convert image to base64
+      const imageBuffer = req.file.buffer;
+      const imageBase64 = imageBuffer.toString('base64');
+
+      // Analyze with AI
+      const analysis = await bodyScannerService.analyzeBodyPart(
+        imageBase64,
+        bodyPart,
+        parsedSymptoms
+      );
+
+      // Upload image to S3 for storage
+      let imageUrl = '';
+      try {
+        imageUrl = await uploadToS3(req.file, 'body-scans');
+      } catch (error) {
+        console.error('Failed to upload to S3:', error);
+        // Continue without S3 upload - image is still analyzed
+      }
+
+      // Save to database
+      const bodyScanData = {
+        userId: req.user!.id,
+        bodyPart,
+        imageUrl,
+        symptoms: parsedSymptoms,
+        analysisResults: analysis,
+        differentialDiagnoses: analysis.differentialDiagnoses,
+        recommendations: analysis.recommendations,
+        redFlags: analysis.redFlags,
+        confidenceScore: analysis.confidenceScore,
+        reviewedByProfessional: false
+      };
+
+      const [savedScan] = await db.insert(bodyScans).values(bodyScanData).returning();
+
+      res.json({
+        scanId: savedScan.id,
+        analysis,
+        imageUrl
+      });
+
+    } catch (error) {
+      console.error('Error in body scanner analysis:', error);
+      res.status(500).json({ message: 'Failed to analyze body part' });
+    }
+  });
+
+  app.get("/api/body-scanner/guidance/:bodyPart", async (req: Request, res: Response) => {
+    try {
+      const { bodyPart } = req.params;
+      const guidance = bodyScannerService.getImageCaptureGuidance(bodyPart);
+      res.json(guidance);
+    } catch (error) {
+      console.error('Error getting capture guidance:', error);
+      res.status(500).json({ message: 'Failed to get capture guidance' });
+    }
+  });
+
+  app.get("/api/body-scanner/scans", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userScans = await db
+        .select()
+        .from(bodyScans)
+        .where(eq(bodyScans.userId, req.user!.id))
+        .orderBy(sql`${bodyScans.createdAt} DESC`);
+
+      res.json(userScans);
+    } catch (error) {
+      console.error('Error getting body scans:', error);
+      res.status(500).json({ message: 'Failed to get body scans' });
+    }
+  });
+
+  app.get("/api/body-scanner/scans/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const scanId = parseInt(req.params.id);
+      const [scan] = await db
+        .select()
+        .from(bodyScans)
+        .where(eq(bodyScans.id, scanId));
+
+      if (!scan) {
+        return res.status(404).json({ message: 'Body scan not found' });
+      }
+
+      // Check if user owns this scan
+      if (scan.userId !== req.user!.id) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+
+      res.json(scan);
+    } catch (error) {
+      console.error('Error getting body scan:', error);
+      res.status(500).json({ message: 'Failed to get body scan' });
+    }
+  });
+
+  app.patch("/api/body-scanner/scans/:id/review", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const scanId = parseInt(req.params.id);
+      const { reviewed } = req.body;
+
+      await db
+        .update(bodyScans)
+        .set({ 
+          reviewedByProfessional: reviewed,
+          updatedAt: new Date()
+        })
+        .where(eq(bodyScans.id, scanId));
+
+      res.json({ message: 'Review status updated' });
+    } catch (error) {
+      console.error('Error updating review status:', error);
+      res.status(500).json({ message: 'Failed to update review status' });
+    }
+  });
 
   return httpServer;
 }

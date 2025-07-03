@@ -46,6 +46,7 @@ import ComplexCaseCompetitionParticipationPage from "@/pages/ComplexCaseCompetit
 import CompetitionDiagnosisPage from "@/pages/CompetitionDiagnosisPage";
 import CompetitionResultsPage from "@/pages/CompetitionResultsPage";
 import GameCompetitions from "@/pages/GameCompetitions";
+import BodyScanner from "@/pages/BodyScanner";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { ThemeProvider } from "next-themes";
@@ -108,6 +109,9 @@ function Router() {
           </Route>
           <Route path="/game-competitions">
             <ProtectedRoute component={GameCompetitions} />
+          </Route>
+          <Route path="/body-scanner">
+            <ProtectedRoute component={BodyScanner} />
           </Route>
           <Route path="/complex-competitions">
             <ProtectedRoute component={ComplexCaseCompetitionsPage} />

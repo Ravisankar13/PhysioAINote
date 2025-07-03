@@ -2171,3 +2171,39 @@ export const physioGptMessageRelations = relations(
     }),
   })
 );
+
+// Body Scanner table for diagnostic imaging analysis
+export const bodyScans = pgTable("body_scans", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  bodyPart: bodyPartEnum("body_part").notNull(),
+  imageUrl: text("image_url").notNull(),
+  symptoms: json("symptoms").notNull(), // Patient symptoms and pain details
+  analysisResults: json("analysis_results"), // AI diagnostic analysis
+  differentialDiagnoses: json("differential_diagnoses"), // Potential diagnoses with confidence scores
+  recommendations: json("recommendations"), // Treatment and next steps
+  redFlags: json("red_flags"), // Warning signs requiring immediate attention
+  confidenceScore: integer("confidence_score"), // AI confidence 1-100
+  reviewedByProfessional: boolean("reviewed_by_professional").default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertBodyScanSchema = createInsertSchema(bodyScans).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertBodyScan = z.infer<typeof insertBodyScanSchema>;
+export type BodyScan = typeof bodyScans.$inferSelect;
+
+// Body Scanner Relations
+export const bodyScanRelations = relations(bodyScans, ({ one }) => ({
+  user: one(users, {
+    fields: [bodyScans.userId],
+    references: [users.id],
+  }),
+}));

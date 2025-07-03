@@ -368,7 +368,10 @@ export class CompetitionStorage {
       .select()
       .from(competitionParticipants)
       .where(eq(competitionParticipants.userId, userId))
-      .orderBy(desc(competitionParticipants.joinedAt));
+      .orderBy(
+        sql`${competitionParticipants.completedAt} DESC NULLS LAST`,
+        desc(competitionParticipants.joinedAt)
+      );
   }
 
   async getTopPerformers(limit: number = 10): Promise<any[]> {

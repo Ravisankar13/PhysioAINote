@@ -603,20 +603,20 @@ export class ComplexCaseService {
     try {
       const [insertedAttempt] = await db.insert(complexCaseAttempts)
         .values({
-          user_id: attemptData.userId,
-          competition_id: attemptData.competitionId,
-          complex_case_id: attemptData.complexCaseId,
-          total_score: attemptData.totalScore,
-          clinical_reasoning_score: attemptData.clinicalReasoningScore,
-          assessment_skills_score: attemptData.assessmentSkillsScore,
-          treatment_planning_score: attemptData.treatmentPlanningScore,
-          communication_score: attemptData.communicationScore,
-          time_efficiency_score: attemptData.timeEfficiencyScore,
-          total_time_spent_seconds: attemptData.totalTimeSpentSeconds,
-          stage_responses: attemptData.stageResponses,
-          overall_feedback: attemptData.overallFeedback,
-          completed_at: attemptData.completedAt,
-          started_at: attemptData.startedAt
+          userId: attemptData.userId,
+          competitionId: attemptData.competitionId,
+          complexCaseId: attemptData.complexCaseId,
+          totalScore: attemptData.totalScore,
+          clinicalReasoningScore: attemptData.clinicalReasoningScore,
+          assessmentSkillsScore: attemptData.assessmentSkillsScore,
+          treatmentPlanningScore: attemptData.treatmentPlanningScore,
+          communicationScore: attemptData.communicationScore,
+          timeEfficiencyScore: attemptData.timeEfficiencyScore,
+          totalTimeSpent: attemptData.totalTimeSpentSeconds,
+          stageResponses: attemptData.stageResponses,
+          overallFeedback: attemptData.overallFeedback,
+          completedAt: attemptData.completedAt,
+          startedAt: attemptData.startedAt
         })
         .returning();
       
@@ -635,26 +635,26 @@ export class ComplexCaseService {
       const attempts = await db
         .select({
           id: complexCaseAttempts.id,
-          competitionId: complexCaseAttempts.competition_id,
-          complexCaseId: complexCaseAttempts.complex_case_id,
-          totalScore: complexCaseAttempts.total_score,
-          clinicalReasoningScore: complexCaseAttempts.clinical_reasoning_score,
-          assessmentSkillsScore: complexCaseAttempts.assessment_skills_score,
-          treatmentPlanningScore: complexCaseAttempts.treatment_planning_score,
-          communicationScore: complexCaseAttempts.communication_score,
-          timeEfficiencyScore: complexCaseAttempts.time_efficiency_score,
-          totalTimeSpentSeconds: complexCaseAttempts.total_time_spent_seconds,
-          stageResponses: complexCaseAttempts.stage_responses,
-          overallFeedback: complexCaseAttempts.overall_feedback,
-          completedAt: complexCaseAttempts.completed_at,
-          startedAt: complexCaseAttempts.started_at,
+          competitionId: complexCaseAttempts.competitionId,
+          complexCaseId: complexCaseAttempts.complexCaseId,
+          totalScore: complexCaseAttempts.totalScore,
+          clinicalReasoningScore: complexCaseAttempts.clinicalReasoningScore,
+          assessmentSkillsScore: complexCaseAttempts.assessmentSkillsScore,
+          treatmentPlanningScore: complexCaseAttempts.treatmentPlanningScore,
+          communicationScore: complexCaseAttempts.communicationScore,
+          timeEfficiencyScore: complexCaseAttempts.timeEfficiencyScore,
+          totalTimeSpentSeconds: complexCaseAttempts.totalTimeSpent,
+          stageResponses: complexCaseAttempts.stageResponses,
+          overallFeedback: complexCaseAttempts.overallFeedback,
+          completedAt: complexCaseAttempts.completedAt,
+          startedAt: complexCaseAttempts.startedAt,
           competitionTitle: competitions.title,
           competitionBodyPart: competitions.bodyPart
         })
         .from(complexCaseAttempts)
-        .leftJoin(competitions, eq(complexCaseAttempts.competition_id, competitions.id))
-        .where(eq(complexCaseAttempts.user_id, userId))
-        .orderBy(desc(complexCaseAttempts.completed_at));
+        .leftJoin(competitions, eq(complexCaseAttempts.competitionId, competitions.id))
+        .where(eq(complexCaseAttempts.userId, userId))
+        .orderBy(desc(complexCaseAttempts.completedAt));
 
       // Transform the data to match the expected format for the history view
       return attempts.map(attempt => ({

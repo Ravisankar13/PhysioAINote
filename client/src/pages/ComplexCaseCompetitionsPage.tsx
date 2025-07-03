@@ -347,7 +347,7 @@ function CompetitionHistoryCard({ attempt }: { attempt: any }) {
 }
 
 export default function ComplexCaseCompetitionsPage() {
-  const [activeTab, setActiveTab] = useState('upcoming');
+  const [activeTab, setActiveTab] = useState('active');
   const [selectedCompetition, setSelectedCompetition] = useState<Competition | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();

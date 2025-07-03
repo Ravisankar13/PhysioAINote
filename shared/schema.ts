@@ -84,9 +84,13 @@ export const competitionTypeEnum = pgEnum("competition_type", [
 
 // Competition status enum
 export const competitionStatusEnum = pgEnum("competition_status", [
+  "scheduled",
+  "registration_open",
+  "registration_closed", 
   "upcoming",
   "active", 
   "completed",
+  "archived",
   "cancelled",
 ]);
 
@@ -1574,9 +1578,10 @@ export const competitions = pgTable("competitions", {
   currentParticipants: integer("current_participants").default(0), // Track current count
   entryFee: integer("entry_fee_points").default(0), // using points system
   prizePool: integer("prize_pool_points").default(0),
+  registrationOpensAt: timestamp("registration_opens_at"), // When registration opens
+  registrationDeadline: timestamp("registration_deadline"), // When registration closes
   startTime: timestamp("start_time").notNull(),
   endTime: timestamp("end_time").notNull(),
-  registrationDeadline: timestamp("registration_deadline"), // When registration closes
   createdBy: integer("created_by").references(() => users.id),
   caseStudyIds: json("case_study_ids").notNull().$type<number[]>(), // array of case study IDs
   complexCaseIds: json("complex_case_ids").$type<number[]>(), // array of complex case IDs

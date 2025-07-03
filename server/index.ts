@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { createAdditionalComplexCases2024 } from "./additionalComplexCases2024";
+import { competitionScheduler } from "./competitionScheduler";
 
 const app = express();
 app.use(express.json({ limit: '50mb' }));
@@ -98,6 +99,15 @@ app.use((req, res, next) => {
         // } catch (error) {
         //   log('Interactive questions setup skipped (already exists or error)');
         // }
+
+        // Start competition scheduler
+        try {
+          const { competitionScheduler } = await import('./competitionScheduler');
+          competitionScheduler.startScheduler();
+          log('✓ Competition scheduler started successfully');
+        } catch (error) {
+          log('Competition scheduler failed to start:', error);
+        }
       }
     );
   } catch (err) {

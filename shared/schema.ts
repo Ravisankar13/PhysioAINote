@@ -249,6 +249,10 @@ export const soapNotes = pgTable("soap_notes", {
   paperworkGenerated: boolean("paperwork_generated").default(false).notNull(),
   paperworkGeneratedAt: timestamp("paperwork_generated_at"),
   
+  // Virtual Patient Creation
+  virtualPatientGenerated: boolean("virtual_patient_generated").default(false).notNull(),
+  virtualPatientGeneratedAt: timestamp("virtual_patient_generated_at"),
+  
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   completedAt: timestamp("completed_at"),
@@ -262,6 +266,97 @@ export const insertSoapNoteSchema = createInsertSchema(soapNotes).omit({
 
 export type InsertSoapNote = z.infer<typeof insertSoapNoteSchema>;
 export type SoapNote = typeof soapNotes.$inferSelect;
+
+// Virtual Patients from SOAP Notes Schema
+export const soapVirtualPatients = pgTable("soap_virtual_patients", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  soapNoteId: integer("soap_note_id")
+    .notNull()
+    .references(() => soapNotes.id, { onDelete: "cascade" }),
+  
+  // Core Patient Information
+  patientProfile: json("patient_profile").$type<{
+    name: string;
+    age: number;
+    gender: string;
+    occupation: string;
+    lifestyle: string;
+    medicalHistory: string[];
+    currentMedications: string[];
+    familyHistory: string;
+  }>().notNull(),
+  
+  // Clinical Presentation
+  clinicalPresentation: json("clinical_presentation").$type<{
+    chiefComplaint: string;
+    historyOfPresentIllness: string;
+    painScale: number;
+    functionalLimitations: string[];
+    symptomsTimeline: string;
+    aggravatingFactors: string[];
+    relievingFactors: string[];
+  }>().notNull(),
+  
+  // Physical Examination
+  physicalFindings: json("physical_findings").$type<{
+    inspection: string;
+    palpation: string;
+    rangeOfMotion: string;
+    strengthTesting: string;
+    specialTests: string[];
+    neurologicalAssessment: string;
+    functionalTests: string[];
+  }>().notNull(),
+  
+  // Patient Communication Style
+  communicationStyle: json("communication_style").$type<{
+    personality: string;
+    communicationPreferences: string;
+    concerns: string[];
+    expectations: string[];
+    motivationLevel: string;
+    complianceHistory: string;
+  }>().notNull(),
+  
+  // Clinical Context
+  bodyPart: bodyPartEnum("body_part").notNull(),
+  complexity: text("complexity").notNull(), // beginner, intermediate, advanced
+  estimatedDuration: text("estimated_duration"), // e.g., "6-8 weeks"
+  prognosis: text("prognosis"),
+  
+  // AI Generation Metadata
+  aiGeneratedAt: timestamp("ai_generated_at").defaultNow().notNull(),
+  generationPrompt: text("generation_prompt"),
+  generationModel: text("generation_model").default("gpt-4o").notNull(),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertSoapVirtualPatientSchema = createInsertSchema(soapVirtualPatients).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  aiGeneratedAt: true,
+});
+
+export type InsertSoapVirtualPatient = z.infer<typeof insertSoapVirtualPatientSchema>;
+export type SoapVirtualPatient = typeof soapVirtualPatients.$inferSelect;
+
+// Add relation to SOAP notes
+export const soapVirtualPatientRelations = relations(soapVirtualPatients, ({ one }) => ({
+  user: one(users, {
+    fields: [soapVirtualPatients.userId],
+    references: [users.id],
+  }),
+  soapNote: one(soapNotes, {
+    fields: [soapVirtualPatients.soapNoteId],
+    references: [soapNotes.id],
+  }),
+}));
 
 // Comments on clinical notes
 export const comments = pgTable("comments", {

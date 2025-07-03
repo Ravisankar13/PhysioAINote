@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Mic, MicOff, Upload, Users, User, FileAudio, Clock, Brain, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Mic, MicOff, Upload, Users, User, FileAudio, Clock, Brain, AlertCircle, CheckCircle2, UserPlus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { SoapNote } from "@shared/schema";
 
@@ -606,6 +606,33 @@ function AIPaperworkTab({ activeSession }: { activeSession: SoapNote | null }) {
     },
   });
 
+  // Create virtual patient mutation
+  const createVirtualPatientMutation = useMutation({
+    mutationFn: async (soapNoteId: number) => {
+      const response = await fetch(`/api/soap-notes/${soapNoteId}/create-virtual-patient`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to create virtual patient");
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Virtual Patient Created",
+        description: data.message || "Virtual patient has been created successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/soap-notes"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/virtual-patients"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   if (!activeSession || activeSession.sessionStatus !== "completed") {
     return (
       <Card>
@@ -659,7 +686,7 @@ function AIPaperworkTab({ activeSession }: { activeSession: SoapNote | null }) {
           <CardTitle>Generate AI Paperwork</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <Button
               onClick={() => generatePaperworkMutation.mutate(activeSession.id)}
               disabled={generatePaperworkMutation.isPending}
@@ -694,6 +721,16 @@ function AIPaperworkTab({ activeSession }: { activeSession: SoapNote | null }) {
               disabled={generateReferralMutation.isPending}
             >
               Generate Referral
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={() => createVirtualPatientMutation.mutate(activeSession.id)}
+              disabled={createVirtualPatientMutation.isPending}
+              className="flex items-center gap-2 bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200 hover:from-blue-100 hover:to-purple-100"
+            >
+              <UserPlus className="h-4 w-4 text-blue-600" />
+              <span className="text-blue-700">Create Virtual Patient</span>
             </Button>
           </div>
         </CardContent>
@@ -849,6 +886,40 @@ function AIPaperworkTab({ activeSession }: { activeSession: SoapNote | null }) {
           )}
         </div>
       )}
+
+      {/* Virtual Patient Status */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <UserPlus className="h-5 w-5 text-blue-600" />
+            Virtual Patient
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-4">
+            {activeSession.virtualPatientGenerated ? (
+              <>
+                <CheckCircle2 className="h-5 w-5 text-green-600" />
+                <span className="text-green-700">Virtual Patient Created</span>
+                <span className="text-sm text-gray-500">
+                  {activeSession.virtualPatientGeneratedAt 
+                    ? new Date(activeSession.virtualPatientGeneratedAt).toLocaleString()
+                    : ''
+                  }
+                </span>
+              </>
+            ) : (
+              <>
+                <AlertCircle className="h-5 w-5 text-blue-600" />
+                <span className="text-blue-700">No Virtual Patient Created</span>
+                <span className="text-sm text-gray-500 ml-2">
+                  Click "Create Virtual Patient" to generate an anonymized patient profile for simulation
+                </span>
+              </>
+            )}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

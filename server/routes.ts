@@ -7091,5 +7091,159 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
 
+  // ============================================================================
+  // VIRTUAL PATIENT API ROUTES (From SOAP Notes)
+  // ============================================================================
+
+  // Import virtual patient service
+  const { soapVirtualPatientService } = await import('./soapVirtualPatientService');
+
+  // Create virtual patient from SOAP note
+  app.post("/api/soap-notes/:id/create-virtual-patient", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const soapNoteId = parseInt(req.params.id);
+      if (isNaN(soapNoteId)) {
+        return res.status(400).json({ error: 'Invalid SOAP note ID' });
+      }
+
+      const result = await soapVirtualPatientService.createVirtualPatientFromSoapNote(soapNoteId, userId);
+      
+      if (result.success) {
+        res.status(201).json(result);
+      } else {
+        res.status(400).json(result);
+      }
+    } catch (error: any) {
+      console.error("Error creating virtual patient:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get virtual patient by SOAP note ID
+  app.get("/api/soap-notes/:id/virtual-patient", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const soapNoteId = parseInt(req.params.id);
+      if (isNaN(soapNoteId)) {
+        return res.status(400).json({ error: 'Invalid SOAP note ID' });
+      }
+
+      const virtualPatient = await soapVirtualPatientService.getVirtualPatientBySoapNote(soapNoteId, userId);
+      
+      if (!virtualPatient) {
+        return res.status(404).json({ error: 'Virtual patient not found' });
+      }
+
+      res.json(virtualPatient);
+    } catch (error: any) {
+      console.error("Error getting virtual patient:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get all virtual patients for user
+  app.get("/api/virtual-patients", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const virtualPatients = await soapVirtualPatientService.getUserVirtualPatients(userId);
+      res.json(virtualPatients);
+    } catch (error: any) {
+      console.error("Error getting virtual patients:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get specific virtual patient
+  app.get("/api/virtual-patients/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const virtualPatientId = parseInt(req.params.id);
+      if (isNaN(virtualPatientId)) {
+        return res.status(400).json({ error: 'Invalid virtual patient ID' });
+      }
+
+      const virtualPatient = await soapVirtualPatientService.getVirtualPatient(virtualPatientId, userId);
+      
+      if (!virtualPatient) {
+        return res.status(404).json({ error: 'Virtual patient not found' });
+      }
+
+      res.json(virtualPatient);
+    } catch (error: any) {
+      console.error("Error getting virtual patient:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Update virtual patient
+  app.put("/api/virtual-patients/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const virtualPatientId = parseInt(req.params.id);
+      if (isNaN(virtualPatientId)) {
+        return res.status(400).json({ error: 'Invalid virtual patient ID' });
+      }
+
+      const updates = req.body;
+      const updatedVirtualPatient = await soapVirtualPatientService.updateVirtualPatient(virtualPatientId, userId, updates);
+      
+      if (!updatedVirtualPatient) {
+        return res.status(404).json({ error: 'Virtual patient not found' });
+      }
+
+      res.json(updatedVirtualPatient);
+    } catch (error: any) {
+      console.error("Error updating virtual patient:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Delete virtual patient
+  app.delete("/api/virtual-patients/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const virtualPatientId = parseInt(req.params.id);
+      if (isNaN(virtualPatientId)) {
+        return res.status(400).json({ error: 'Invalid virtual patient ID' });
+      }
+
+      const deleted = await soapVirtualPatientService.deleteVirtualPatient(virtualPatientId, userId);
+      
+      if (!deleted) {
+        return res.status(404).json({ error: 'Virtual patient not found' });
+      }
+
+      res.json({ message: 'Virtual patient deleted successfully' });
+    } catch (error: any) {
+      console.error("Error deleting virtual patient:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   return httpServer;
 }

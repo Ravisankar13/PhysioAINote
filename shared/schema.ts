@@ -82,6 +82,20 @@ export const competitionTypeEnum = pgEnum("competition_type", [
   "clinical_educator",
 ]);
 
+// Game type enum for new competition formats
+export const gameTypeEnum = pgEnum("game_type", [
+  "standard_case",
+  "lightning_diagnosis",
+  "treatment_speed_run",
+  "choose_your_adventure",
+  "emergency_room_simulator",
+  "red_flag_detective",
+  "differential_diagnosis_duel",
+  "journal_club_race",
+  "cpg_quiz_master",
+  "mystery_patient",
+]);
+
 // Competition status enum
 export const competitionStatusEnum = pgEnum("competition_status", [
   "scheduled",
@@ -1717,6 +1731,7 @@ export const competitions = pgTable("competitions", {
   title: text("title").notNull(),
   description: text("description").notNull(),
   type: competitionTypeEnum("type").notNull(),
+  gameType: gameTypeEnum("game_type").default("standard_case").notNull(),
   status: competitionStatusEnum("status").default("upcoming").notNull(),
   bodyPart: bodyPartEnum("body_part"), // null for general competitions
   difficulty: text("difficulty"), // beginner, intermediate, advanced
@@ -1748,6 +1763,134 @@ export const competitions = pgTable("competitions", {
     revealAnswers: boolean;
     stageTimeLimit: number; // Time limit per stage in minutes
     enableAntiCheat: boolean; // Enable anti-cheating measures
+  }>(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Game content for different competition types
+export const gameContent = pgTable("game_content", {
+  id: serial("id").primaryKey(),
+  competitionId: integer("competition_id").notNull().references(() => competitions.id, { onDelete: "cascade" }),
+  gameType: gameTypeEnum("game_type").notNull(),
+  content: json("content").$type<{
+    // Lightning Diagnosis
+    lightningDiagnosis?: {
+      cases: Array<{
+        id: string;
+        presentation: string;
+        timeLimit: number; // seconds
+        correctDiagnosis: string;
+        redHerrings: string[];
+      }>;
+    };
+    // Treatment Speed Run  
+    treatmentSpeedRun?: {
+      cases: Array<{
+        id: string;
+        diagnosis: string;
+        patientProfile: string;
+        timeLimit: number;
+        requiredComponents: string[];
+        scoringCriteria: string[];
+      }>;
+    };
+    // Choose Your Adventure
+    chooseYourAdventure?: {
+      storyline: Array<{
+        id: string;
+        scene: string;
+        choices: Array<{
+          text: string;
+          nextScene: string;
+          consequences: string;
+          points: number;
+        }>;
+        isEnding: boolean;
+      }>;
+    };
+    // Emergency Room Simulator
+    emergencyRoomSimulator?: {
+      patients: Array<{
+        id: string;
+        name: string;
+        urgency: 'critical' | 'urgent' | 'semi-urgent' | 'non-urgent';
+        presentation: string;
+        vitalSigns: Record<string, string>;
+        arrivalTime: number;
+        expectedTreatmentTime: number;
+      }>;
+      resources: {
+        beds: number;
+        staff: number;
+        equipment: string[];
+      };
+    };
+    // Red Flag Detective
+    redFlagDetective?: {
+      cases: Array<{
+        id: string;
+        patientStory: string;
+        hiddenRedFlags: string[];
+        distractors: string[];
+        severity: 'low' | 'medium' | 'high' | 'critical';
+        timeToIdentify: number;
+      }>;
+    };
+    // Differential Diagnosis Duel
+    differentialDiagnosisDuel?: {
+      rounds: Array<{
+        casePresentation: string;
+        correctDifferentials: string[];
+        commonMistakes: string[];
+        pointsPerCorrect: number;
+        timeLimit: number;
+      }>;
+    };
+    // Journal Club Race
+    journalClubRace?: {
+      papers: Array<{
+        id: string;
+        title: string;
+        abstract: string;
+        methodology: string;
+        results: string;
+        questions: Array<{
+          question: string;
+          options: string[];
+          correctAnswer: number;
+          explanation: string;
+        }>;
+      }>;
+    };
+    // CPG Quiz Master
+    cpgQuizMaster?: {
+      guidelines: Array<{
+        organization: string;
+        topic: string;
+        questions: Array<{
+          question: string;
+          options: string[];
+          correctAnswer: number;
+          evidenceLevel: string;
+          guidanceStrength: string;
+        }>;
+      }>;
+    };
+    // Mystery Patient
+    mysteryPatient?: {
+      clues: Array<{
+        stage: number;
+        clueType: 'history' | 'examination' | 'investigation' | 'observation';
+        content: string;
+        significance: 'low' | 'medium' | 'high';
+      }>;
+      solution: {
+        diagnosis: string;
+        explanation: string;
+        keyClues: string[];
+      };
+    };
   }>(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -1996,6 +2139,16 @@ export const insertPhysioGptMessageSchema = createInsertSchema(physioGptMessages
 
 export type InsertPhysioGptMessage = z.infer<typeof insertPhysioGptMessageSchema>;
 export type PhysioGptMessage = typeof physioGptMessages.$inferSelect;
+
+// Game Content Types
+export const insertGameContentSchema = createInsertSchema(gameContent).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertGameContent = z.infer<typeof insertGameContentSchema>;
+export type GameContent = typeof gameContent.$inferSelect;
 
 // Relations for PhysioGPT
 export const physioGptConversationRelations = relations(

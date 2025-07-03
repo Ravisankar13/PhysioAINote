@@ -45,6 +45,7 @@ import ComplexCaseCompetitionsPage from "@/pages/ComplexCaseCompetitionsPage";
 import ComplexCaseCompetitionParticipationPage from "@/pages/ComplexCaseCompetitionParticipationPage";
 import CompetitionDiagnosisPage from "@/pages/CompetitionDiagnosisPage";
 import CompetitionResultsPage from "@/pages/CompetitionResultsPage";
+import GameCompetitions from "@/pages/GameCompetitions";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { ThemeProvider } from "next-themes";
@@ -104,6 +105,9 @@ function Router() {
           </Route>
           <Route path="/competitions">
             <ProtectedRoute component={CompetitionPage} />
+          </Route>
+          <Route path="/game-competitions">
+            <ProtectedRoute component={GameCompetitions} />
           </Route>
           <Route path="/complex-competitions">
             <ProtectedRoute component={ComplexCaseCompetitionsPage} />

@@ -7245,5 +7245,215 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
 
+  // Game Competition Routes
+
+  // Create a new game competition
+  app.post("/api/game-competitions", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { gameType, title, description, bodyPart, difficulty, timeLimit } = req.body;
+      
+      // Import game content generator
+      const { gameContentGenerator } = await import("./gameContentGenerator");
+      
+      // Generate game content
+      const generatedContent = await gameContentGenerator.generateGameContent({
+        gameType,
+        bodyPart,
+        difficulty
+      });
+
+      // Create competition
+      const { db } = await import("./db");
+      const { competitions, gameContent: gameContentTable } = await import("@shared/schema");
+      
+      const [competition] = await db.insert(competitions).values({
+        title,
+        description,
+        type: "specialty_league",
+        gameType,
+        bodyPart,
+        difficulty,
+        timeLimit,
+        status: "upcoming",
+        startTime: new Date(Date.now() + 60 * 60 * 1000), // 1 hour from now
+        endTime: new Date(Date.now() + 2 * 60 * 60 * 1000), // 2 hours from now
+        caseStudyIds: [],
+        maxParticipants: 50
+      }).returning();
+
+      // Store game content
+      await db.insert(gameContentTable).values({
+        competitionId: competition.id,
+        gameType,
+        content: { [gameType]: generatedContent }
+      });
+
+      res.json({ competition, gameContent: generatedContent });
+    } catch (error) {
+      console.error('Error creating game competition:', error);
+      res.status(500).json({ message: 'Failed to create game competition' });
+    }
+  });
+
+  // Get game competition with content
+  app.get("/api/game-competitions/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const competitionId = parseInt(req.params.id);
+      const { db } = await import("./db");
+      const { competitions, gameContent } = await import("@shared/schema");
+      const { eq } = await import("drizzle-orm");
+
+      const [competition] = await db
+        .select()
+        .from(competitions)
+        .where(eq(competitions.id, competitionId));
+
+      if (!competition) {
+        return res.status(404).json({ message: 'Competition not found' });
+      }
+
+      const [content] = await db
+        .select()
+        .from(gameContent)
+        .where(eq(gameContent.competitionId, competitionId));
+
+      res.json({ competition, content: content?.content || {} });
+    } catch (error) {
+      console.error('Error getting game competition:', error);
+      res.status(500).json({ message: 'Failed to get game competition' });
+    }
+  });
+
+  // Get all game competitions
+  app.get("/api/game-competitions", async (req: Request, res: Response) => {
+    try {
+      const { db } = await import("./db");
+      const { competitions } = await import("@shared/schema");
+      const { ne, desc } = await import("drizzle-orm");
+
+      const gameCompetitions = await db
+        .select()
+        .from(competitions)
+        .where(ne(competitions.gameType, "standard_case"))
+        .orderBy(desc(competitions.createdAt));
+
+      res.json(gameCompetitions);
+    } catch (error) {
+      console.error('Error getting game competitions:', error);
+      res.status(500).json({ message: 'Failed to get game competitions' });
+    }
+  });
+
+  // Join a game competition
+  app.post("/api/game-competitions/:id/join", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const competitionId = parseInt(req.params.id);
+      const userId = req.user!.id;
+
+      const { db } = await import("./db");
+      const { competitionParticipants } = await import("@shared/schema");
+
+      const [participant] = await db.insert(competitionParticipants).values({
+        competitionId,
+        userId,
+        caseAttempts: []
+      }).returning();
+
+      res.json(participant);
+    } catch (error) {
+      console.error('Error joining game competition:', error);
+      res.status(500).json({ message: 'Failed to join game competition' });
+    }
+  });
+
+  // Submit game competition response
+  app.post("/api/game-competitions/:id/submit", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const competitionId = parseInt(req.params.id);
+      const userId = req.user!.id;
+      const { responses, timeSpent } = req.body;
+
+      const { db } = await import("./db");
+      const { competitionParticipants } = await import("@shared/schema");
+      const { eq, and } = await import("drizzle-orm");
+
+      // Calculate score based on game type and responses
+      const totalScore = calculateGameScore(responses);
+
+      // Update participant with results
+      await db
+        .update(competitionParticipants)
+        .set({
+          completedAt: new Date(),
+          totalScore,
+          timeSpent,
+          caseAttempts: responses
+        })
+        .where(and(
+          eq(competitionParticipants.competitionId, competitionId),
+          eq(competitionParticipants.userId, userId)
+        ));
+
+      res.json({ score: totalScore, timeSpent });
+    } catch (error) {
+      console.error('Error submitting game competition:', error);
+      res.status(500).json({ message: 'Failed to submit game competition' });
+    }
+  });
+
+  // Generate specific game type content (for testing)
+  app.post("/api/generate-game-content", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { gameType, bodyPart, difficulty } = req.body;
+      
+      const { gameContentGenerator } = await import("./gameContentGenerator");
+      
+      const content = await gameContentGenerator.generateGameContent({
+        gameType,
+        bodyPart,
+        difficulty
+      });
+
+      res.json(content);
+    } catch (error) {
+      console.error('Error generating game content:', error);
+      res.status(500).json({ message: 'Failed to generate game content' });
+    }
+  });
+
+  // Helper function to calculate scores for different game types
+  function calculateGameScore(responses: any[]): number {
+    let totalScore = 0;
+    
+    responses.forEach(response => {
+      if (response.type === 'lightning_diagnosis') {
+        totalScore += response.correct ? 10 : 0;
+        totalScore += Math.max(0, 5 - response.timeUsed / 6); // Bonus for speed
+      } else if (response.type === 'treatment_speed_run') {
+        totalScore += response.completeness * 20;
+        totalScore += response.evidenceBased ? 10 : 0;
+      } else if (response.type === 'red_flag_detective') {
+        totalScore += response.redFlagsFound * 5;
+        totalScore -= response.falsePositives * 2;
+      } else if (response.type === 'differential_diagnosis_duel') {
+        totalScore += response.correctDifferentials * 8;
+      } else if (response.type === 'journal_club_race') {
+        totalScore += response.correctAnswers * 6;
+      } else if (response.type === 'cpg_quiz_master') {
+        totalScore += response.correctAnswers * 7;
+      } else if (response.type === 'mystery_patient') {
+        totalScore += response.correctDiagnosis ? 25 : 0;
+        totalScore += response.keyCluesIdentified * 3;
+      } else if (response.type === 'choose_your_adventure') {
+        totalScore += response.totalPoints;
+      } else if (response.type === 'emergency_room_simulator') {
+        totalScore += response.triageAccuracy * 15;
+        totalScore += response.resourceUtilization * 10;
+      }
+    });
+
+    return totalScore;
+  }
+
   return httpServer;
 }

@@ -57,6 +57,12 @@ export class CompetitionService {
       total: number;
     };
     feedback: string;
+    perfectAnswers: {
+      diagnosis: string;
+      reasoning: string;
+      assessmentTests: string | string[];
+      treatmentPlan: string;
+    };
   }> {
     console.log(`[SCORING] Starting to score attempt for case ${caseStudy.id}`);
     
@@ -115,6 +121,9 @@ export class CompetitionService {
         total: totalScore
       });
 
+      // Generate 100% perfect answers for educational comparison
+      const perfectAnswers = await this.generatePerfectAnswers(caseStudy);
+
       return {
         scores: {
           accuracy: Math.round(accuracyScore * 100),
@@ -124,7 +133,8 @@ export class CompetitionService {
           treatment: Math.round(treatmentScore * 100),
           total: totalScore
         },
-        feedback
+        feedback,
+        perfectAnswers
       };
     } catch (error) {
       console.error("[SCORING] Error in scoreCompetitionAttempt:", error);
@@ -139,9 +149,18 @@ export class CompetitionService {
         total: 60
       };
       
+      // Generate fallback perfect answers without OpenAI
+      const fallbackPerfectAnswers = {
+        diagnosis: caseStudy.correctDiagnosis,
+        reasoning: caseStudy.correctAssessmentApproach.join('. '),
+        assessmentTests: caseStudy.correctAssessmentApproach,
+        treatmentPlan: caseStudy.correctTreatmentApproach
+      };
+
       return {
         scores: fallbackScores,
-        feedback: "Assessment completed. Keep practicing to improve your clinical reasoning skills!"
+        feedback: "Assessment completed. Keep practicing to improve your clinical reasoning skills!",
+        perfectAnswers: fallbackPerfectAnswers
       };
     }
   }
@@ -281,6 +300,74 @@ Respond with ONLY a JSON object in this exact format:
     ).length;
     
     return commonWords / Math.max(words1.length, words2.length);
+  }
+
+  private async generatePerfectAnswers(caseStudy: AICaseStudy): Promise<any> {
+    try {
+      console.log(`[PERFECT_ANSWERS] Generating 100% correct answers using OpenAI`);
+      
+      const prompt = `You are an expert physiotherapy educator providing the perfect 100% answers for a competitive clinical case. Be comprehensive, evidence-based, and demonstrate expert-level clinical reasoning.
+
+**Case Details:**
+- **Title:** ${caseStudy.title}
+- **Patient Description:** ${caseStudy.patientDescription}
+- **History:** ${caseStudy.history}
+- **Presenting Symptoms:** ${caseStudy.presentingSymptoms}
+- **Body Part:** ${caseStudy.bodyPart}
+- **Correct Diagnosis:** ${caseStudy.correctDiagnosis}
+
+Provide the perfect 100% answers that would achieve maximum points in each category:
+
+**PERFECT DIAGNOSIS (100% Answer):**
+[Provide the exact correct diagnosis with proper terminology]
+
+**PERFECT CLINICAL REASONING (100% Answer):**
+[Provide comprehensive, step-by-step clinical reasoning that demonstrates expert-level thinking, including pathophysiology, red flags consideration, and differential diagnosis process]
+
+**PERFECT ASSESSMENT APPROACH (100% Answer):**
+[Provide the complete list of assessment tests, examination techniques, and evaluation methods an expert would use, with rationale for each]
+
+**PERFECT TREATMENT PLAN (100% Answer):**
+[Provide a comprehensive, evidence-based treatment plan including immediate management, progressive rehabilitation, patient education, and outcome measures]
+
+Make each answer comprehensive, professional, and demonstrate the highest level of clinical expertise. Include specific techniques, timeframes, and evidence-based rationale.`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 1500,
+        temperature: 0.1,
+      });
+
+      const content = response.choices[0].message.content || "";
+      console.log(`[PERFECT_ANSWERS] Generated perfect answers (${content.length} chars)`);
+      
+      // Parse the response to extract each section
+      const sections = content.split('**PERFECT');
+      return {
+        diagnosis: this.extractSection(content, 'PERFECT DIAGNOSIS'),
+        reasoning: this.extractSection(content, 'PERFECT CLINICAL REASONING'),
+        assessmentTests: this.extractSection(content, 'PERFECT ASSESSMENT APPROACH'),
+        treatmentPlan: this.extractSection(content, 'PERFECT TREATMENT PLAN')
+      };
+      
+    } catch (error) {
+      console.error("[PERFECT_ANSWERS] OpenAI error, using fallback:", error);
+      
+      // Fallback to using the case study's built-in correct answers
+      return {
+        diagnosis: caseStudy.correctDiagnosis,
+        reasoning: `Expert clinical reasoning: ${caseStudy.correctDiagnosis} is diagnosed based on the presenting symptoms and history. Key indicators include the patient's ${caseStudy.bodyPart} symptoms and clinical presentation. A systematic approach considering differential diagnoses leads to this conclusion.`,
+        assessmentTests: caseStudy.correctAssessmentApproach,
+        treatmentPlan: caseStudy.correctTreatmentApproach
+      };
+    }
+  }
+
+  private extractSection(content: string, sectionTitle: string): string {
+    const regex = new RegExp(`\\*\\*${sectionTitle}[^:]*:\\*\\*\\s*([^*]+?)(?=\\*\\*|$)`, 'i');
+    const match = content.match(regex);
+    return match ? match[1].trim() : "Perfect answer not available";
   }
 
   private async generateCompetitionFeedback(

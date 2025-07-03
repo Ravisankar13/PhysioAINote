@@ -17,7 +17,8 @@ import {
   Play,
   ChevronRight,
   ChevronLeft,
-  MessageSquare
+  MessageSquare,
+  Star
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -361,6 +362,74 @@ function ComplexCaseCompetitionParticipationPage() {
                         <p className="text-blue-800 text-sm font-medium">{reference}</p>
                       </div>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Perfect 100% Answers Section */}
+              {competitionResults.perfectAnswers && (
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-emerald-800 flex items-center gap-2">
+                    <Star className="h-5 w-5" />
+                    Perfect 100% Answers (Educational Reference)
+                  </h3>
+                  <p className="text-sm text-emerald-600 mb-4">
+                    See what a perfect response would look like to understand exactly what was expected:
+                  </p>
+                  
+                  <div className="space-y-4">
+                    {/* Perfect Diagnosis */}
+                    <div className="border-l-4 border-emerald-500 bg-emerald-50 p-4 rounded-r-lg">
+                      <h4 className="font-semibold text-emerald-900 mb-2">Perfect Diagnosis (100%)</h4>
+                      <p className="text-emerald-800 text-sm leading-relaxed">
+                        {competitionResults.perfectAnswers.diagnosis}
+                      </p>
+                    </div>
+
+                    {/* Perfect Clinical Reasoning */}
+                    <div className="border-l-4 border-emerald-500 bg-emerald-50 p-4 rounded-r-lg">
+                      <h4 className="font-semibold text-emerald-900 mb-2">Perfect Clinical Reasoning (100%)</h4>
+                      <p className="text-emerald-800 text-sm leading-relaxed">
+                        {competitionResults.perfectAnswers.reasoning}
+                      </p>
+                    </div>
+
+                    {/* Perfect Assessment Approach */}
+                    <div className="border-l-4 border-emerald-500 bg-emerald-50 p-4 rounded-r-lg">
+                      <h4 className="font-semibold text-emerald-900 mb-2">Perfect Assessment Approach (100%)</h4>
+                      <div className="text-emerald-800 text-sm leading-relaxed">
+                        {Array.isArray(competitionResults.perfectAnswers.assessmentTests) ? (
+                          <ul className="list-disc list-inside space-y-1">
+                            {competitionResults.perfectAnswers.assessmentTests.map((test: string, index: number) => (
+                              <li key={index}>{test}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p>{competitionResults.perfectAnswers.assessmentTests}</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Perfect Treatment Plan */}
+                    <div className="border-l-4 border-emerald-500 bg-emerald-50 p-4 rounded-r-lg">
+                      <h4 className="font-semibold text-emerald-900 mb-2">Perfect Treatment Plan (100%)</h4>
+                      <p className="text-emerald-800 text-sm leading-relaxed">
+                        {competitionResults.perfectAnswers.treatmentPlan}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-emerald-100 border border-emerald-300 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <Star className="h-5 w-5 text-emerald-600 mt-0.5" />
+                      <div>
+                        <h4 className="font-medium text-emerald-900 mb-1">Study Tip</h4>
+                        <p className="text-sm text-emerald-800">
+                          Compare your answers with these perfect responses to identify specific areas for improvement. 
+                          These model answers demonstrate the depth and specificity expected for maximum scores.
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}

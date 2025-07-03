@@ -1,6 +1,7 @@
 import { OpenAI } from "openai";
 import { storage } from "./storage";
 import { nanoid } from "nanoid";
+import { aiPaperworkService, type PaperworkGenerationResult } from "./aiPaperworkService";
 import type { SoapNote, InsertSoapNote } from "../shared/schema";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -355,6 +356,176 @@ Respond with JSON in this format:
    */
   async markPatientSwitch(sessionId: string): Promise<SoapNote> {
     return await storage.markPatientSwitch(sessionId);
+  }
+
+  /**
+   * Generates automatic paperwork for a SOAP note using AI
+   */
+  async generateAutomaticPaperwork(soapNoteId: number): Promise<SoapNote> {
+    const soapNote = await storage.getSoapNote(soapNoteId);
+    if (!soapNote) {
+      throw new Error("SOAP note not found");
+    }
+
+    if (soapNote.paperworkGenerated) {
+      console.log("Paperwork already generated for this SOAP note");
+      return soapNote;
+    }
+
+    try {
+      // Generate comprehensive paperwork using AI
+      const paperwork = await aiPaperworkService.generateAutomaticPaperwork(soapNote);
+
+      // Update the SOAP note with generated paperwork
+      const updatedSoapNote = await storage.updateSoapNote(soapNoteId, {
+        treatmentSummary: paperwork.treatmentSummary,
+        progressNotes: paperwork.progressNotes,
+        dischargeInstructions: paperwork.dischargeInstructions,
+        referralLetter: paperwork.referralLetter,
+        insuranceDocumentation: paperwork.insuranceDocumentation,
+        billingCodes: paperwork.billingCodes,
+        followUpRecommendations: paperwork.followUpRecommendations,
+        homeExerciseProgram: paperwork.homeExerciseProgram,
+        workCapacityAssessment: paperwork.workCapacityAssessment,
+        functionalOutcomes: paperwork.functionalOutcomes,
+        paperworkGenerated: true,
+        paperworkGeneratedAt: new Date(),
+      });
+
+      return updatedSoapNote;
+    } catch (error) {
+      console.error("Error generating automatic paperwork:", error);
+      throw new Error("Failed to generate automatic paperwork");
+    }
+  }
+
+  /**
+   * Generates a referral letter for a patient
+   */
+  async generateReferralLetter(
+    soapNoteId: number, 
+    specialtyType: string, 
+    reason: string, 
+    urgency: 'routine' | 'urgent' | 'stat',
+    clinicalFindings: string
+  ): Promise<SoapNote> {
+    const soapNote = await storage.getSoapNote(soapNoteId);
+    if (!soapNote) {
+      throw new Error("SOAP note not found");
+    }
+
+    try {
+      const referralLetter = await aiPaperworkService.generateReferralLetter(soapNote, {
+        specialtyType,
+        reason,
+        urgency,
+        clinicalFindings
+      });
+
+      const updatedSoapNote = await storage.updateSoapNote(soapNoteId, {
+        referralLetter: referralLetter,
+      });
+
+      return updatedSoapNote;
+    } catch (error) {
+      console.error("Error generating referral letter:", error);
+      throw new Error("Failed to generate referral letter");
+    }
+  }
+
+  /**
+   * Generates insurance documentation for a patient
+   */
+  async generateInsuranceDocumentation(
+    soapNoteId: number,
+    sessionCount: number = 1
+  ): Promise<SoapNote> {
+    const soapNote = await storage.getSoapNote(soapNoteId);
+    if (!soapNote) {
+      throw new Error("SOAP note not found");
+    }
+
+    try {
+      const insuranceData = await aiPaperworkService.generateInsuranceDocumentation(soapNote, sessionCount);
+
+      const updatedSoapNote = await storage.updateSoapNote(soapNoteId, {
+        insuranceDocumentation: `Primary Diagnosis: ${insuranceData.primaryDiagnosis}\n\nSecondary Diagnoses: ${insuranceData.secondaryDiagnoses.join(', ')}\n\nTreatment Codes: ${insuranceData.treatmentCodes.join(', ')}\n\nFunctional Improvements: ${insuranceData.functionalImprovements.join(', ')}\n\nMedical Necessity: ${insuranceData.medicalNecessity}`,
+        billingCodes: insuranceData.treatmentCodes,
+      });
+
+      return updatedSoapNote;
+    } catch (error) {
+      console.error("Error generating insurance documentation:", error);
+      throw new Error("Failed to generate insurance documentation");
+    }
+  }
+
+  /**
+   * Generates discharge summary for a patient
+   */
+  async generateDischargeSummary(userId: number, patientName?: string): Promise<string> {
+    const allNotes = await storage.getSoapNotes(userId);
+    const patientNotes = patientName 
+      ? allNotes.filter(note => note.patientName === patientName)
+      : allNotes;
+
+    if (patientNotes.length === 0) {
+      throw new Error("No SOAP notes found for discharge summary");
+    }
+
+    try {
+      return await aiPaperworkService.generateDischargeSummary(patientNotes);
+    } catch (error) {
+      console.error("Error generating discharge summary:", error);
+      throw new Error("Failed to generate discharge summary");
+    }
+  }
+
+  /**
+   * Generates progress report for a patient
+   */
+  async generateProgressReport(
+    userId: number,
+    reportingPeriod: { start: string; end: string },
+    patientName?: string
+  ): Promise<string> {
+    const allNotes = await storage.getSoapNotes(userId);
+    const patientNotes = patientName 
+      ? allNotes.filter(note => note.patientName === patientName)
+      : allNotes;
+
+    if (patientNotes.length === 0) {
+      throw new Error("No SOAP notes found for progress report");
+    }
+
+    try {
+      return await aiPaperworkService.generateProgressReport(patientNotes, reportingPeriod);
+    } catch (error) {
+      console.error("Error generating progress report:", error);
+      throw new Error("Failed to generate progress report");
+    }
+  }
+
+  /**
+   * Automatically generates paperwork for completed SOAP notes
+   */
+  async autoGeneratePaperworkForCompletedNotes(userId: number): Promise<void> {
+    const soapNotes = await storage.getSoapNotes(userId);
+    const completedNotes = soapNotes.filter(note => 
+      note.sessionStatus === 'completed' && 
+      !note.paperworkGenerated &&
+      note.subjective && 
+      note.assessment
+    );
+
+    for (const note of completedNotes) {
+      try {
+        await this.generateAutomaticPaperwork(note.id);
+        console.log(`Auto-generated paperwork for SOAP note ${note.id}`);
+      } catch (error) {
+        console.error(`Failed to auto-generate paperwork for SOAP note ${note.id}:`, error);
+      }
+    }
   }
 }
 

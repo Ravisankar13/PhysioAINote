@@ -234,6 +234,21 @@ export const soapNotes = pgTable("soap_notes", {
   patientSwitchDetected: boolean("patient_switch_detected").default(false).notNull(),
   recordingDuration: integer("recording_duration"), // Duration in seconds
   confidence: integer("confidence"), // AI confidence in transcription/generation (0-100)
+  
+  // AI Automatic Paperwork Fields
+  treatmentSummary: text("treatment_summary"),
+  progressNotes: text("progress_notes"),
+  dischargeInstructions: text("discharge_instructions"),
+  referralLetter: text("referral_letter"),
+  insuranceDocumentation: text("insurance_documentation"),
+  billingCodes: json("billing_codes").$type<string[]>(),
+  followUpRecommendations: text("follow_up_recommendations"),
+  homeExerciseProgram: text("home_exercise_program"),
+  workCapacityAssessment: text("work_capacity_assessment"),
+  functionalOutcomes: text("functional_outcomes"),
+  paperworkGenerated: boolean("paperwork_generated").default(false).notNull(),
+  paperworkGeneratedAt: timestamp("paperwork_generated_at"),
+  
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   completedAt: timestamp("completed_at"),

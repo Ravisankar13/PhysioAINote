@@ -227,9 +227,10 @@ export default function SoapNotesPage() {
       </div>
 
       <Tabs defaultValue="recording" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="recording">Recording</TabsTrigger>
           <TabsTrigger value="current">Current Session</TabsTrigger>
+          <TabsTrigger value="paperwork">AI Paperwork</TabsTrigger>
           <TabsTrigger value="history">History</TabsTrigger>
         </TabsList>
 
@@ -435,6 +436,11 @@ export default function SoapNotesPage() {
           )}
         </TabsContent>
 
+        {/* AI Paperwork Tab */}
+        <TabsContent value="paperwork">
+          <AIPaperworkTab activeSession={activeSession} />
+        </TabsContent>
+
         {/* History Tab */}
         <TabsContent value="history">
           <div className="space-y-4">
@@ -503,6 +509,346 @@ export default function SoapNotesPage() {
           </div>
         </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+// AI Paperwork Tab Component
+function AIPaperworkTab({ activeSession }: { activeSession: SoapNote | null }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  // Generate automatic paperwork mutation
+  const generatePaperworkMutation = useMutation({
+    mutationFn: async (soapNoteId: number) => {
+      const response = await fetch(`/api/soap-notes/${soapNoteId}/generate-paperwork`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to generate paperwork");
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Paperwork Generated",
+        description: "AI automatic paperwork has been generated successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/soap-notes"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Generate referral letter mutation
+  const generateReferralMutation = useMutation({
+    mutationFn: async ({ 
+      soapNoteId, 
+      data 
+    }: { 
+      soapNoteId: number; 
+      data: { specialtyType: string; reason: string; urgency: string; clinicalFindings: string } 
+    }) => {
+      const response = await fetch(`/api/soap-notes/${soapNoteId}/generate-referral`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) throw new Error("Failed to generate referral letter");
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Referral Letter Generated",
+        description: "Referral letter has been generated successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/soap-notes"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Generate insurance documentation mutation
+  const generateInsuranceMutation = useMutation({
+    mutationFn: async ({ soapNoteId, sessionCount }: { soapNoteId: number; sessionCount: number }) => {
+      const response = await fetch(`/api/soap-notes/${soapNoteId}/generate-insurance`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ sessionCount }),
+      });
+      if (!response.ok) throw new Error("Failed to generate insurance documentation");
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Insurance Documentation Generated",
+        description: "Insurance documentation has been generated successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/soap-notes"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  if (!activeSession || activeSession.sessionStatus !== "completed") {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center">
+          <Brain className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+          <p className="text-gray-500 mb-4">Complete a SOAP note session first</p>
+          <p className="text-sm text-gray-400">
+            AI paperwork generation is available for completed sessions
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Paperwork Status */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Brain className="h-5 w-5" />
+            AI Paperwork Status
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-4">
+            {activeSession.paperworkGenerated ? (
+              <>
+                <CheckCircle2 className="h-5 w-5 text-green-600" />
+                <span className="text-green-700">Paperwork Generated</span>
+                <span className="text-sm text-gray-500">
+                  {activeSession.paperworkGeneratedAt 
+                    ? new Date(activeSession.paperworkGeneratedAt).toLocaleString()
+                    : ''
+                  }
+                </span>
+              </>
+            ) : (
+              <>
+                <AlertCircle className="h-5 w-5 text-orange-600" />
+                <span className="text-orange-700">Paperwork Not Generated</span>
+              </>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Generate Actions */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Generate AI Paperwork</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Button
+              onClick={() => generatePaperworkMutation.mutate(activeSession.id)}
+              disabled={generatePaperworkMutation.isPending}
+              className="flex items-center gap-2"
+            >
+              <Brain className="h-4 w-4" />
+              Generate All Paperwork
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={() => generateInsuranceMutation.mutate({ 
+                soapNoteId: activeSession.id, 
+                sessionCount: 1 
+              })}
+              disabled={generateInsuranceMutation.isPending}
+            >
+              Insurance Documentation
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={() => generateReferralMutation.mutate({
+                soapNoteId: activeSession.id,
+                data: {
+                  specialtyType: "Orthopedic Specialist",
+                  reason: "Further evaluation and treatment",
+                  urgency: "routine",
+                  clinicalFindings: activeSession.assessment || "Clinical findings from assessment"
+                }
+              })}
+              disabled={generateReferralMutation.isPending}
+            >
+              Generate Referral
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Display Generated Paperwork */}
+      {activeSession.paperworkGenerated && (
+        <div className="space-y-4">
+          {/* Treatment Summary */}
+          {activeSession.treatmentSummary && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Treatment Summary</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="p-4 bg-blue-50 rounded-lg">
+                  <p className="text-gray-700 whitespace-pre-wrap">
+                    {activeSession.treatmentSummary}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Progress Notes */}
+          {activeSession.progressNotes && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Progress Notes</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="p-4 bg-green-50 rounded-lg">
+                  <p className="text-gray-700 whitespace-pre-wrap">
+                    {activeSession.progressNotes}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Billing Codes */}
+          {activeSession.billingCodes && activeSession.billingCodes.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Billing Codes</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-2">
+                  {activeSession.billingCodes.map((code, index) => (
+                    <Badge key={index} variant="outline">
+                      {code}
+                    </Badge>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Follow-up Recommendations */}
+          {activeSession.followUpRecommendations && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Follow-up Recommendations</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="p-4 bg-yellow-50 rounded-lg">
+                  <p className="text-gray-700 whitespace-pre-wrap">
+                    {activeSession.followUpRecommendations}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Home Exercise Program */}
+          {activeSession.homeExerciseProgram && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Home Exercise Program</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="p-4 bg-purple-50 rounded-lg">
+                  <p className="text-gray-700 whitespace-pre-wrap">
+                    {activeSession.homeExerciseProgram}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Insurance Documentation */}
+          {activeSession.insuranceDocumentation && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Insurance Documentation</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="p-4 bg-orange-50 rounded-lg">
+                  <p className="text-gray-700 whitespace-pre-wrap">
+                    {activeSession.insuranceDocumentation}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Referral Letter */}
+          {activeSession.referralLetter && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Referral Letter</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="p-4 bg-red-50 rounded-lg">
+                  <p className="text-gray-700 whitespace-pre-wrap">
+                    {activeSession.referralLetter}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Functional Outcomes */}
+          {activeSession.functionalOutcomes && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Functional Outcomes</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="p-4 bg-teal-50 rounded-lg">
+                  <p className="text-gray-700 whitespace-pre-wrap">
+                    {activeSession.functionalOutcomes}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Discharge Instructions */}
+          {activeSession.dischargeInstructions && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Discharge Instructions</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="p-4 bg-gray-50 rounded-lg">
+                  <p className="text-gray-700 whitespace-pre-wrap">
+                    {activeSession.dischargeInstructions}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
     </div>
   );
 }

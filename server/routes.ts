@@ -6949,5 +6949,147 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
 
+  // ============================================================================
+  // AI AUTOMATIC PAPERWORK API ROUTES
+  // ============================================================================
+
+  // Generate automatic paperwork for a SOAP note
+  app.post("/api/soap-notes/:id/generate-paperwork", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { id } = req.params;
+      const soapNote = await soapNotesService.getSoapNote(parseInt(id));
+
+      if (!soapNote || soapNote.userId !== userId) {
+        return res.status(404).json({ error: 'SOAP note not found' });
+      }
+
+      const updatedNote = await soapNotesService.generateAutomaticPaperwork(parseInt(id));
+      res.json(updatedNote);
+    } catch (error: any) {
+      console.error("Error generating automatic paperwork:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Generate referral letter
+  app.post("/api/soap-notes/:id/generate-referral", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { id } = req.params;
+      const { specialtyType, reason, urgency, clinicalFindings } = req.body;
+
+      if (!specialtyType || !reason || !urgency || !clinicalFindings) {
+        return res.status(400).json({ error: 'Missing required fields for referral letter' });
+      }
+
+      const soapNote = await soapNotesService.getSoapNote(parseInt(id));
+      if (!soapNote || soapNote.userId !== userId) {
+        return res.status(404).json({ error: 'SOAP note not found' });
+      }
+
+      const updatedNote = await soapNotesService.generateReferralLetter(
+        parseInt(id),
+        specialtyType,
+        reason,
+        urgency,
+        clinicalFindings
+      );
+
+      res.json(updatedNote);
+    } catch (error: any) {
+      console.error("Error generating referral letter:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Generate insurance documentation
+  app.post("/api/soap-notes/:id/generate-insurance", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { id } = req.params;
+      const { sessionCount = 1 } = req.body;
+
+      const soapNote = await soapNotesService.getSoapNote(parseInt(id));
+      if (!soapNote || soapNote.userId !== userId) {
+        return res.status(404).json({ error: 'SOAP note not found' });
+      }
+
+      const updatedNote = await soapNotesService.generateInsuranceDocumentation(parseInt(id), sessionCount);
+      res.json(updatedNote);
+    } catch (error: any) {
+      console.error("Error generating insurance documentation:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Generate discharge summary
+  app.post("/api/soap-notes/generate-discharge-summary", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { patientName } = req.body;
+
+      const dischargeSummary = await soapNotesService.generateDischargeSummary(userId, patientName);
+      res.json({ dischargeSummary });
+    } catch (error: any) {
+      console.error("Error generating discharge summary:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Generate progress report
+  app.post("/api/soap-notes/generate-progress-report", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { reportingPeriod, patientName } = req.body;
+
+      if (!reportingPeriod || !reportingPeriod.start || !reportingPeriod.end) {
+        return res.status(400).json({ error: 'Reporting period with start and end dates is required' });
+      }
+
+      const progressReport = await soapNotesService.generateProgressReport(userId, reportingPeriod, patientName);
+      res.json({ progressReport });
+    } catch (error: any) {
+      console.error("Error generating progress report:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Auto-generate paperwork for all completed notes
+  app.post("/api/soap-notes/auto-generate-paperwork", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      await soapNotesService.autoGeneratePaperworkForCompletedNotes(userId);
+      res.json({ message: 'Auto-generation of paperwork completed' });
+    } catch (error: any) {
+      console.error("Error auto-generating paperwork:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   return httpServer;
 }

@@ -7325,20 +7325,34 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
 
-  // Get all game competitions
+  // Get all game competitions - only Lightning Diagnosis challenges
   app.get("/api/game-competitions", async (req: Request, res: Response) => {
     try {
       const { db } = await import("./db");
       const { competitions } = await import("@shared/schema");
-      const { ne, desc } = await import("drizzle-orm");
+      const { eq, desc } = await import("drizzle-orm");
 
       const gameCompetitions = await db
         .select()
         .from(competitions)
-        .where(ne(competitions.gameType, "standard_case"))
+        .where(eq(competitions.gameType, "lightning_diagnosis"))
         .orderBy(desc(competitions.createdAt));
 
-      res.json(gameCompetitions);
+      // Remove duplicates based on title
+      const uniqueCompetitions = gameCompetitions.reduce((acc, current) => {
+        const existingIndex = acc.findIndex(comp => comp.title === current.title);
+        if (existingIndex === -1) {
+          acc.push(current);
+        } else {
+          // Keep the most recent one (higher ID or more recent createdAt)
+          if (current.id > acc[existingIndex].id) {
+            acc[existingIndex] = current;
+          }
+        }
+        return acc;
+      }, [] as typeof gameCompetitions);
+
+      res.json(uniqueCompetitions);
     } catch (error) {
       console.error('Error getting game competitions:', error);
       res.status(500).json({ message: 'Failed to get game competitions' });

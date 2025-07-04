@@ -110,7 +110,6 @@ function GameContentDisplay({ gameType, content }: { gameType: string, content: 
 
 function GameCompetitions() {
   const [competitions, setCompetitions] = useState<GameCompetition[]>([]);
-  const [selectedGameType, setSelectedGameType] = useState<string>('all');
   const [selectedBodyPart, setSelectedBodyPart] = useState<string>('all');
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>('all');
   const [loading, setLoading] = useState(true);
@@ -236,7 +235,6 @@ function GameCompetitions() {
 
   const filteredCompetitions = competitions.filter(comp => {
     return (
-      (selectedGameType === 'all' || comp.gameType === selectedGameType) &&
       (selectedBodyPart === 'all' || comp.bodyPart === selectedBodyPart) &&
       (selectedDifficulty === 'all' || comp.difficulty === selectedDifficulty)
     );
@@ -255,18 +253,18 @@ function GameCompetitions() {
   return (
     <div className="container mx-auto py-8 space-y-8">
       <div className="text-center space-y-4">
-        <h1 className="text-4xl font-bold">Game-Based Competitions</h1>
+        <h1 className="text-4xl font-bold">Lightning Diagnosis Challenges</h1>
         <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
-          Experience clinical learning through innovative game formats. Each competition type offers unique challenges 
-          designed to test different aspects of physiotherapy expertise.
+          Test your diagnostic skills with rapid-fire clinical challenges. Each Lightning Diagnosis competition presents 
+          fast-paced scenarios requiring quick thinking and accurate diagnosis under time pressure.
         </p>
       </div>
 
       <Tabs defaultValue="browse" className="w-full">
         <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="browse">Browse Games</TabsTrigger>
-          <TabsTrigger value="active">Active Competitions</TabsTrigger>
-          <TabsTrigger value="create">Create New</TabsTrigger>
+          <TabsTrigger value="browse">Browse Challenges</TabsTrigger>
+          <TabsTrigger value="active">Active Challenges</TabsTrigger>
+          <TabsTrigger value="create">Create Lightning Challenge</TabsTrigger>
         </TabsList>
 
         <TabsContent value="browse" className="space-y-6">
@@ -276,17 +274,6 @@ function GameCompetitions() {
               <CardTitle>Filter Competitions</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-4">
-              <Select value={selectedGameType} onValueChange={setSelectedGameType}>
-                <SelectTrigger className="w-48">
-                  <SelectValue placeholder="Game Type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Game Types</SelectItem>
-                  {Object.entries(gameTypeNames).map(([key, name]) => (
-                    <SelectItem key={key} value={key}>{name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
 
               <Select value={selectedBodyPart} onValueChange={setSelectedBodyPart}>
                 <SelectTrigger className="w-48">
@@ -414,33 +401,28 @@ function GameCompetitions() {
         <TabsContent value="create" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Create New Game Competition</CardTitle>
-              <CardDescription>Choose a game format to create a new competition</CardDescription>
+              <CardTitle>Create Lightning Diagnosis Challenge</CardTitle>
+              <CardDescription>Create a new rapid-fire diagnostic challenge for competitive learning</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {Object.entries(gameTypeNames).map(([gameType, name]) => {
-                  const IconComponent = gameTypeIcons[gameType] || Trophy;
-                  return (
-                    <Card key={gameType} className="hover:shadow-md transition-shadow cursor-pointer">
-                      <CardContent className="p-6">
-                        <div className="flex flex-col items-center space-y-4">
-                          <IconComponent className="h-12 w-12 text-primary" />
-                          <h3 className="text-lg font-semibold text-center">{name}</h3>
-                          <p className="text-sm text-muted-foreground text-center">
-                            {gameTypeDescriptions[gameType]}
-                          </p>
-                          <Button 
-                            onClick={() => createNewCompetition(gameType)}
-                            className="w-full"
-                          >
-                            Create Competition
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
+              <div className="grid grid-cols-1 max-w-md mx-auto">
+                <Card className="hover:shadow-md transition-shadow cursor-pointer">
+                  <CardContent className="p-6">
+                    <div className="flex flex-col items-center space-y-4">
+                      <Zap className="h-12 w-12 text-primary" />
+                      <h3 className="text-lg font-semibold text-center">Lightning Diagnosis</h3>
+                      <p className="text-sm text-muted-foreground text-center">
+                        Fast-paced 30-second diagnostic challenges testing rapid clinical reasoning and pattern recognition
+                      </p>
+                      <Button 
+                        onClick={() => createNewCompetition('lightning_diagnosis')}
+                        className="w-full"
+                      >
+                        Create Lightning Challenge
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
             </CardContent>
           </Card>

@@ -676,10 +676,10 @@ export default function GameCompetitionPage() {
   };
 
   const renderProgressiveDiagnosticChallenge = (content: any) => {
-    const cases = content.cases || [];
-    const currentCase = cases[currentStage] || cases[0];
+    // Progressive Diagnostic Challenge content is stored directly in content.progressiveDiagnosticChallenge
+    const progressiveContent = content.progressiveDiagnosticChallenge;
     
-    if (!currentCase) {
+    if (!progressiveContent) {
       return <div className="text-center py-4 text-muted-foreground">No diagnostic challenge cases available.</div>;
     }
 
@@ -698,21 +698,43 @@ export default function GameCompetitionPage() {
         <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
           <h4 className="font-semibold text-blue-800 mb-2 flex items-center gap-2">
             <Brain className="h-4 w-4" />
-            Diagnostic Challenge: Case {currentStage + 1} of {cases.length}
+            Progressive Diagnostic Challenge
           </h4>
-          <p className="text-blue-700 mb-3">{currentCase.initialPresentation}</p>
+          
+          {/* Patient Presentation */}
+          <div className="bg-white p-3 rounded-lg mb-3">
+            <h5 className="font-medium mb-2">Patient Presentation</h5>
+            <div className="text-sm space-y-1">
+              <p><strong>Age:</strong> {progressiveContent.patientPresentation?.age} years old</p>
+              <p><strong>Gender:</strong> {progressiveContent.patientPresentation?.gender}</p>
+              <p><strong>Occupation:</strong> {progressiveContent.patientPresentation?.occupation}</p>
+              <p><strong>Chief Complaint:</strong> {progressiveContent.patientPresentation?.chiefComplaint}</p>
+            </div>
+            
+            {progressiveContent.patientPresentation?.initialSymptoms && (
+              <div className="mt-2">
+                <strong className="text-sm">Initial Symptoms:</strong>
+                <ul className="text-sm ml-4 mt-1">
+                  {progressiveContent.patientPresentation.initialSymptoms.map((symptom: string, idx: number) => (
+                    <li key={idx} className="list-disc">{symptom}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+          
           <div className="grid md:grid-cols-3 gap-3 text-sm">
             <div className="flex items-center gap-2">
               <Clock className="h-4 w-4 text-blue-600" />
-              <span>Time Limit: {currentCase.timeLimit} min</span>
+              <span>Time Limit: {progressiveContent.timeLimit} min</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-blue-600">💬</span>
-              <span>Questions: {usedQuestionCredits}/{currentCase.maxQuestionCredits}</span>
+              <span>Questions: {usedQuestionCredits}/{progressiveContent.resourceBudget}</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-blue-600">🔬</span>
-              <span>Tests: {usedTestCredits}/{currentCase.maxTestCredits}</span>
+              <span>Tests: {usedTestCredits}/{progressiveContent.resourceBudget}</span>
             </div>
           </div>
         </div>
@@ -724,16 +746,16 @@ export default function GameCompetitionPage() {
             <div className="space-y-4">
               <h5 className="font-medium text-lg">Ask Strategic Questions</h5>
               <div className="space-y-2 max-h-60 overflow-y-auto">
-                {currentCase.availableQuestions?.map((q: any) => (
+                {progressiveContent.availableQuestions?.map((q: any) => (
                   <div key={q.id} className={`p-3 border rounded-lg cursor-pointer transition-colors ${
                     askedQuestions.includes(q.id) 
                       ? 'bg-green-50 border-green-300' 
-                      : usedQuestionCredits + q.cost > currentCase.maxQuestionCredits
+                      : usedQuestionCredits + q.cost > progressiveContent.resourceBudget
                       ? 'bg-gray-100 border-gray-300 cursor-not-allowed opacity-60'
                       : 'bg-white border-gray-200 hover:bg-blue-50'
                   }`}
                   onClick={() => {
-                    if (!askedQuestions.includes(q.id) && usedQuestionCredits + q.cost <= currentCase.maxQuestionCredits) {
+                    if (!askedQuestions.includes(q.id) && usedQuestionCredits + q.cost <= progressiveContent.resourceBudget) {
                       setAskedQuestions([...askedQuestions, q.id]);
                       setUsedQuestionCredits(prev => prev + q.cost);
                       handleResponse('questions', [...askedQuestions, q.id].join(', '));
@@ -747,7 +769,7 @@ export default function GameCompetitionPage() {
                     </div>
                     {askedQuestions.includes(q.id) && (
                       <div className="mt-2 p-2 bg-green-100 rounded text-sm text-green-800">
-                        <strong>Answer:</strong> {q.answer}
+                        <strong>Information Revealed:</strong> {progressiveContent.hiddenInformation?.[q.reveals?.[0]] || 'Additional clinical details revealed'}
                         {q.revealsRedFlag && <span className="ml-2 text-red-600 font-medium">⚠️ Red Flag</span>}
                       </div>
                     )}
@@ -760,16 +782,16 @@ export default function GameCompetitionPage() {
             <div className="space-y-4">
               <h5 className="font-medium text-lg">Order Assessment Tests</h5>
               <div className="space-y-2 max-h-60 overflow-y-auto">
-                {currentCase.availableTests?.map((test: any) => (
+                {progressiveContent.availableTests?.map((test: any) => (
                   <div key={test.id} className={`p-3 border rounded-lg cursor-pointer transition-colors ${
                     performedTests.includes(test.id) 
                       ? 'bg-green-50 border-green-300' 
-                      : usedTestCredits + test.cost > currentCase.maxTestCredits
+                      : usedTestCredits + test.cost > progressiveContent.resourceBudget
                       ? 'bg-gray-100 border-gray-300 cursor-not-allowed opacity-60'
                       : 'bg-white border-gray-200 hover:bg-purple-50'
                   }`}
                   onClick={() => {
-                    if (!performedTests.includes(test.id) && usedTestCredits + test.cost <= currentCase.maxTestCredits) {
+                    if (!performedTests.includes(test.id) && usedTestCredits + test.cost <= progressiveContent.resourceBudget) {
                       setPerformedTests([...performedTests, test.id]);
                       setUsedTestCredits(prev => prev + test.cost);
                       handleResponse('tests', [...performedTests, test.id].join(', '));
@@ -777,20 +799,18 @@ export default function GameCompetitionPage() {
                   }}>
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
-                        <p className="text-sm font-medium">{test.testName}</p>
+                        <p className="text-sm font-medium">{test.test}</p>
                         <p className="text-xs text-gray-600 capitalize">{test.category}</p>
                       </div>
                       <div className="text-xs space-y-1">
                         <span className="block bg-purple-100 text-purple-700 px-2 py-1 rounded">
                           {test.cost} credits
                         </span>
-                        <span className="block text-gray-500">{test.timeRequired} min</span>
                       </div>
                     </div>
                     {performedTests.includes(test.id) && (
                       <div className="mt-2 p-2 bg-green-100 rounded text-sm text-green-800">
-                        <strong>Result:</strong> {test.result}
-                        <div className="text-xs text-gray-600 mt-1">Accuracy: {test.accuracy}%</div>
+                        <strong>Test Results:</strong> {progressiveContent.hiddenInformation?.[test.reveals?.[0]] || 'Positive findings revealed'}
                       </div>
                     )}
                   </div>
@@ -853,29 +873,34 @@ export default function GameCompetitionPage() {
           </div>
         )}
 
-        {/* Case Navigation */}
-        {currentStage < cases.length - 1 && (
-          <Button onClick={() => setCurrentStage((prev: number) => prev + 1)}>
-            Next Diagnostic Challenge
-          </Button>
-        )}
-
         {/* Scoring Information */}
         <div className="bg-gray-50 p-4 rounded-lg">
           <h5 className="font-medium mb-2">Scoring Weights</h5>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
             <div>
-              <span className="font-medium">Efficiency:</span> {currentCase.scoringWeights?.efficiency || 25}%
+              <span className="font-medium">Efficiency:</span> {progressiveContent.scoringCriteria?.efficiency || 25}%
             </div>
             <div>
-              <span className="font-medium">Thoroughness:</span> {currentCase.scoringWeights?.thoroughness || 25}%
+              <span className="font-medium">Thoroughness:</span> {progressiveContent.scoringCriteria?.thoroughness || 25}%
             </div>
             <div>
-              <span className="font-medium">Safety:</span> {currentCase.scoringWeights?.safety || 30}%
+              <span className="font-medium">Safety:</span> {progressiveContent.scoringCriteria?.safety || 30}%
             </div>
             <div>
-              <span className="font-medium">Accuracy:</span> {currentCase.scoringWeights?.accuracy || 20}%
+              <span className="font-medium">Accuracy:</span> {progressiveContent.scoringCriteria?.accuracy || 20}%
             </div>
+          </div>
+        </div>
+        
+        {/* Clinical Information Panel */}
+        <div className="bg-emerald-50 p-4 rounded-lg border border-emerald-200">
+          <h5 className="font-medium mb-2 text-emerald-800">Differential Diagnoses to Consider</h5>
+          <div className="text-sm text-emerald-700">
+            {progressiveContent.differentialDiagnoses?.map((diagnosis: string, idx: number) => (
+              <span key={idx} className="inline-block bg-emerald-100 px-2 py-1 rounded mr-2 mb-1">
+                {diagnosis}
+              </span>
+            ))}
           </div>
         </div>
       </div>

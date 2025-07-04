@@ -7348,22 +7348,68 @@ Base your analysis on established postural assessment principles and correlate f
   // Join a game competition
   app.post("/api/game-competitions/:id/join", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
+      console.log('Game competition join request received for ID:', req.params.id);
       const competitionId = parseInt(req.params.id);
       const userId = req.user!.id;
+      console.log('User ID:', userId, 'Competition ID:', competitionId);
 
       const { db } = await import("./db");
-      const { competitionParticipants } = await import("@shared/schema");
+      const { competitionParticipants, competitions } = await import("@shared/schema");
+      const { eq, and } = await import("drizzle-orm");
 
+      // Check if user already joined
+      console.log('Checking for existing participation...');
+      const existingParticipant = await db
+        .select()
+        .from(competitionParticipants)
+        .where(and(
+          eq(competitionParticipants.competitionId, competitionId),
+          eq(competitionParticipants.userId, userId)
+        ))
+        .limit(1);
+
+      if (existingParticipant.length > 0) {
+        console.log('User already participating in competition');
+        return res.json({ 
+          ...existingParticipant[0], 
+          alreadyJoined: true,
+          message: "Already participating in this competition"
+        });
+      }
+
+      // Verify competition exists
+      console.log('Verifying competition exists...');
+      const competition = await db
+        .select()
+        .from(competitions)
+        .where(eq(competitions.id, competitionId))
+        .limit(1);
+
+      if (competition.length === 0) {
+        console.log('Competition not found');
+        return res.status(404).json({ message: 'Competition not found' });
+      }
+
+      // Insert new participant with all required fields
+      console.log('Creating new participant...');
       const [participant] = await db.insert(competitionParticipants).values({
         competitionId,
         userId,
-        caseAttempts: []
+        caseAttempts: [],
+        totalScore: 0,
+        timeSpent: 0
       }).returning();
 
-      res.json(participant);
-    } catch (error) {
+      console.log('Successfully created participant:', participant.id);
+      res.json({ 
+        ...participant, 
+        alreadyJoined: false,
+        message: "Successfully joined competition"
+      });
+    } catch (error: any) {
       console.error('Error joining game competition:', error);
-      res.status(500).json({ message: 'Failed to join game competition' });
+      console.error('Error stack:', error.stack);
+      res.status(500).json({ message: 'Failed to join game competition', error: error.message });
     }
   });
 

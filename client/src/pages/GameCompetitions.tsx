@@ -182,10 +182,17 @@ function GameCompetitions() {
       
       const data = await response.json();
       
-      toast({
-        title: "Competition Joined!",
-        description: "You've successfully joined the game competition. Redirecting to competition page...",
-      });
+      if (data.alreadyJoined) {
+        toast({
+          title: "Already Participating",
+          description: "Taking you to the competition page...",
+        });
+      } else {
+        toast({
+          title: "Competition Joined!",
+          description: "You've successfully joined the game competition. Redirecting to competition page...",
+        });
+      }
       
       // Navigate to game competition page
       setTimeout(() => {

@@ -107,10 +107,10 @@ export class GameAIFeedbackService {
       const userResponse = responses[responseKey] || '';
 
       if (caseData && userResponse) {
-        const feedback = await this.analyzeIndividualCase(
+        const feedback = await this.analyzeLightningDiagnosisCase(
           caseData,
           userResponse,
-          `Lightning Case ${i + 1}`,
+          `Lightning Case ${i + 1}: ${caseData.presentation?.substring(0, 50)}...`,
           responseKey
         );
         feedbacks.push(feedback);
@@ -118,6 +118,102 @@ export class GameAIFeedbackService {
     }
 
     return feedbacks;
+  }
+
+  /**
+   * Analyze Lightning Diagnosis case - simplified scoring focusing only on diagnosis accuracy
+   */
+  private async analyzeLightningDiagnosisCase(
+    caseData: any,
+    userResponse: string,
+    questionText: string,
+    questionId: string
+  ): Promise<QuestionFeedback> {
+    const correctDiagnosis = caseData.correctDiagnosis || '';
+    const userDiagnosis = userResponse.trim();
+
+    // Simple diagnosis matching - if diagnosis is correct, award 100%
+    const isCorrectDiagnosis = this.isMatchingDiagnosis(userDiagnosis, correctDiagnosis);
+    
+    const prompt = `Analyze this lightning diagnosis response focusing only on the diagnosis accuracy:
+
+Case Presentation: ${caseData.presentation || 'Case information provided'}
+Correct Diagnosis: ${correctDiagnosis}
+User's Diagnosis: ${userDiagnosis}
+Time Limit: ${caseData.timeLimit || 30} seconds
+
+The user provided "${userDiagnosis}" and the correct answer is "${correctDiagnosis}".
+Score: ${isCorrectDiagnosis ? 100 : 25} (100 for correct diagnosis, 25 for incorrect)
+
+Provide analysis in JSON format:
+{
+  "score": ${isCorrectDiagnosis ? 100 : 25},
+  "aiAnalysis": "Brief analysis focusing on diagnosis accuracy",
+  "strengths": ["List strengths if correct, or partial credit areas if incorrect"],
+  "improvements": ["Areas for improvement, especially if diagnosis was wrong"], 
+  "clinicalReasoning": "Brief assessment of the diagnostic approach",
+  "correctAnswer": "${correctDiagnosis}"
+}`;
+
+    try {
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+      });
+
+      const result = JSON.parse(response.choices[0].message.content || '{}');
+
+      return {
+        questionId,
+        questionText,
+        userResponse,
+        correctAnswer: correctDiagnosis,
+        aiAnalysis: result.aiAnalysis || (isCorrectDiagnosis ? 'Correct diagnosis!' : 'Diagnosis needs review'),
+        score: isCorrectDiagnosis ? 100 : 25,
+        strengths: result.strengths || (isCorrectDiagnosis ? ['Accurate rapid diagnosis'] : []),
+        improvements: result.improvements || (isCorrectDiagnosis ? [] : ['Review differential diagnosis for this presentation']),
+        clinicalReasoning: result.clinicalReasoning || 'Rapid diagnosis attempt'
+      };
+    } catch (error) {
+      console.error('Error analyzing lightning diagnosis case:', error);
+      // Fallback with simple scoring
+      return {
+        questionId,
+        questionText,
+        userResponse,
+        correctAnswer: correctDiagnosis,
+        aiAnalysis: isCorrectDiagnosis ? 'Correct diagnosis!' : 'Diagnosis incorrect - review needed',
+        score: isCorrectDiagnosis ? 100 : 25,
+        strengths: isCorrectDiagnosis ? ['Accurate rapid diagnosis'] : [],
+        improvements: isCorrectDiagnosis ? [] : ['Review differential diagnosis'],
+        clinicalReasoning: 'Rapid diagnosis attempt under time pressure'
+      };
+    }
+  }
+
+  /**
+   * Check if user diagnosis matches correct diagnosis (flexible matching)
+   */
+  private isMatchingDiagnosis(userDiagnosis: string, correctDiagnosis: string): boolean {
+    const normalize = (text: string) => text.toLowerCase().trim().replace(/[^\w\s]/g, '');
+    const userNorm = normalize(userDiagnosis);
+    const correctNorm = normalize(correctDiagnosis);
+    
+    // Exact match
+    if (userNorm === correctNorm) return true;
+    
+    // Check if user diagnosis contains the key terms from correct diagnosis
+    const correctWords = correctNorm.split(/\s+/).filter(word => word.length > 2);
+    const userWords = userNorm.split(/\s+/);
+    
+    // If most key words from correct diagnosis are present in user response
+    const matchedWords = correctWords.filter(word => 
+      userWords.some(userWord => userWord.includes(word) || word.includes(userWord))
+    );
+    
+    // Consider it correct if at least 70% of key words match
+    return matchedWords.length >= Math.ceil(correctWords.length * 0.7);
   }
 
   /**

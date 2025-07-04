@@ -510,7 +510,7 @@ export default function GameCompetitionPage() {
     
     setSubmitting(true);
     try {
-      const timeSpent = competition?.timeLimit - timeRemaining;
+      const timeSpent = (competition?.timeLimit || 0) - timeRemaining;
       
       const response = await fetch(`/api/game-competitions/${id}/submit`, {
         method: 'POST',
@@ -554,13 +554,125 @@ export default function GameCompetitionPage() {
   };
 
   const handleResponse = (key: string, value: any) => {
-    setResponses(prev => ({ ...prev, [key]: value }));
+    setResponses((prev: any) => ({ ...prev, [key]: value }));
   };
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const renderTreatmentSpeedRun = (content: any) => {
+    const treatmentContent = content.treatmentSpeedRun || {};
+    const cases = treatmentContent.cases || [];
+    const currentCase = cases[currentStage] || cases[0];
+    
+    if (!currentCase) return null;
+
+    return (
+      <div className="space-y-4">
+        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+          <h4 className="font-semibold mb-2 text-blue-800">🏃‍♂️ Treatment Speed Run</h4>
+          <div className="space-y-2">
+            <div className="text-sm">
+              <span className="font-medium">Diagnosis:</span> {currentCase.diagnosis}
+            </div>
+            <div className="text-sm">
+              <span className="font-medium">Patient Profile:</span> {currentCase.patientProfile}
+            </div>
+            <div className="text-sm">
+              <span className="font-medium">Time Limit:</span> {Math.floor(currentCase.timeLimit / 60)} minutes
+            </div>
+          </div>
+        </div>
+
+        {currentCase.requiredComponents && (
+          <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+            <h5 className="font-medium mb-2 text-green-800">Required Treatment Components:</h5>
+            <ul className="text-sm space-y-1">
+              {currentCase.requiredComponents.map((component: string, index: number) => (
+                <li key={index} className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  {component}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label>Immediate Assessment Plan:</Label>
+            <Textarea
+              placeholder="Describe your immediate assessment approach and key tests..."
+              value={responses[`assessment_${currentStage}`] || ''}
+              onChange={(e) => handleResponse(`assessment_${currentStage}`, e.target.value)}
+              rows={3}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Treatment Protocol:</Label>
+            <Textarea
+              placeholder="Detail your comprehensive treatment plan including manual therapy, exercises, and interventions..."
+              value={responses[`treatment_${currentStage}`] || ''}
+              onChange={(e) => handleResponse(`treatment_${currentStage}`, e.target.value)}
+              rows={4}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Exercise Prescription:</Label>
+            <Textarea
+              placeholder="Provide specific exercises with sets, reps, progression criteria..."
+              value={responses[`exercises_${currentStage}`] || ''}
+              onChange={(e) => handleResponse(`exercises_${currentStage}`, e.target.value)}
+              rows={3}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Patient Education & Home Program:</Label>
+            <Textarea
+              placeholder="Describe patient education points and home management strategies..."
+              value={responses[`education_${currentStage}`] || ''}
+              onChange={(e) => handleResponse(`education_${currentStage}`, e.target.value)}
+              rows={3}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Follow-up Plan:</Label>
+            <Input
+              placeholder="Outline follow-up schedule and outcome measures..."
+              value={responses[`followup_${currentStage}`] || ''}
+              onChange={(e) => handleResponse(`followup_${currentStage}`, e.target.value)}
+            />
+          </div>
+        </div>
+
+        {currentCase.scoringCriteria && (
+          <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+            <h5 className="font-medium mb-2 text-yellow-800">Scoring Criteria:</h5>
+            <ul className="text-sm space-y-1">
+              {currentCase.scoringCriteria.map((criteria: string, index: number) => (
+                <li key={index} className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                  {criteria}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        
+        {currentStage < cases.length - 1 && (
+          <Button onClick={() => setCurrentStage((prev: number) => prev + 1)}>
+            Next Case
+          </Button>
+        )}
+      </div>
+    );
   };
 
   const renderGameContent = () => {
@@ -603,6 +715,8 @@ export default function GameCompetitionPage() {
         return renderMysteryPatient(content);
       case 'lightning_diagnosis':
         return renderLightningDiagnosis(content);
+      case 'treatment_speed_run':
+        return renderTreatmentSpeedRun(content);
       case 'red_flag_detective':
         return renderRedFlagDetective(content);
       case 'differential_diagnosis_duel':
@@ -740,6 +854,8 @@ export default function GameCompetitionPage() {
       </div>
     );
   };
+
+
 
   const renderRedFlagDetective = (content: any) => {
     const cases = content.cases || [];

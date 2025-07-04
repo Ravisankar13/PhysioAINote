@@ -8,8 +8,10 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Clock, Users, Trophy, Timer, CheckCircle } from 'lucide-react';
+import { Clock, Users, Trophy, Timer, CheckCircle, XCircle, Brain, TrendingUp, BookOpen, ArrowRight, Lightbulb, Target } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Separator } from '@/components/ui/separator';
 
 interface Competition {
   id: number;
@@ -37,6 +39,292 @@ interface LeaderboardEntry {
   timeSpent: number;
   completedAt: string;
   rank: number;
+}
+
+interface QuestionFeedback {
+  questionId: string;
+  questionText: string;
+  userResponse: string;
+  correctAnswer?: string;
+  aiAnalysis: string;
+  score: number;
+  strengths: string[];
+  improvements: string[];
+  clinicalReasoning: string;
+  timeSpent?: number;
+}
+
+interface SubmissionResult {
+  totalScore: number;
+  timeSpent: number;
+  feedback: string;
+  scores: {
+    accuracy: number;
+    speed: number;
+    reasoning: number;
+    differential: number;
+    treatment: number;
+    total: number;
+  };
+  questionFeedbacks?: QuestionFeedback[];
+  recommendedLearning?: string[];
+  nextSteps?: string[];
+}
+
+function AIFeedbackModal({ 
+  isOpen, 
+  onClose, 
+  submissionResult 
+}: { 
+  isOpen: boolean; 
+  onClose: () => void; 
+  submissionResult: SubmissionResult | null; 
+}) {
+  if (!submissionResult) return null;
+
+  const getScoreColor = (score: number) => {
+    if (score >= 80) return "text-green-600";
+    if (score >= 60) return "text-yellow-600";
+    return "text-red-600";
+  };
+
+  const getScoreIcon = (score: number) => {
+    if (score >= 80) return <CheckCircle className="h-5 w-5 text-green-600" />;
+    if (score >= 60) return <Target className="h-5 w-5 text-yellow-600" />;
+    return <XCircle className="h-5 w-5 text-red-600" />;
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Brain className="h-6 w-6 text-blue-600" />
+            AI-Powered Clinical Feedback
+          </DialogTitle>
+          <DialogDescription>
+            Detailed analysis of your performance with personalized learning recommendations
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-6">
+          {/* Overall Score Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Trophy className="h-5 w-5 text-yellow-500" />
+                Overall Performance
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
+                <div className="text-center">
+                  <div className={`text-3xl font-bold ${getScoreColor(submissionResult.totalScore)}`}>
+                    {submissionResult.totalScore}
+                  </div>
+                  <div className="text-sm text-muted-foreground">Total Score</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-semibold text-blue-600">
+                    {Math.floor(submissionResult.timeSpent / 60)}:{(submissionResult.timeSpent % 60).toString().padStart(2, '0')}
+                  </div>
+                  <div className="text-sm text-muted-foreground">Time Taken</div>
+                </div>
+                <div className="text-center">
+                  <div className={`text-2xl font-semibold ${getScoreColor(submissionResult.scores.accuracy)}`}>
+                    {submissionResult.scores.accuracy}%
+                  </div>
+                  <div className="text-sm text-muted-foreground">Accuracy</div>
+                </div>
+              </div>
+
+              {/* Category Scores */}
+              <div className="space-y-3">
+                <h4 className="font-semibold">Category Breakdown</h4>
+                {Object.entries(submissionResult.scores).map(([category, score]) => {
+                  if (category === 'total') return null;
+                  return (
+                    <div key={category} className="flex items-center justify-between">
+                      <span className="capitalize">{category.replace('_', ' ')}</span>
+                      <div className="flex items-center gap-2">
+                        <Progress value={score} className="w-24" />
+                        <span className={`text-sm font-medium ${getScoreColor(score)}`}>
+                          {score}%
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Overall Feedback */}
+              <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+                <h4 className="font-semibold mb-2 text-blue-800">AI Analysis</h4>
+                <p className="text-sm text-blue-700">{submissionResult.feedback}</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Question-by-Question Feedback */}
+          {submissionResult.questionFeedbacks && submissionResult.questionFeedbacks.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Target className="h-5 w-5 text-purple-600" />
+                  Question-by-Question Analysis
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {submissionResult.questionFeedbacks.map((questionFeedback, index) => (
+                    <div key={questionFeedback.questionId} className="border rounded-lg p-4">
+                      <div className="flex items-start justify-between mb-3">
+                        <h4 className="font-semibold text-lg">
+                          {questionFeedback.questionText}
+                        </h4>
+                        <div className="flex items-center gap-1">
+                          {getScoreIcon(questionFeedback.score)}
+                          <span className={`font-bold ${getScoreColor(questionFeedback.score)}`}>
+                            {questionFeedback.score}/100
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="grid md:grid-cols-2 gap-4">
+                        {/* Your Response */}
+                        <div>
+                          <h5 className="font-medium mb-2 text-gray-700">Your Response:</h5>
+                          <div className="p-3 bg-gray-50 rounded border">
+                            <p className="text-sm">{questionFeedback.userResponse}</p>
+                          </div>
+                        </div>
+
+                        {/* Correct Answer */}
+                        {questionFeedback.correctAnswer && (
+                          <div>
+                            <h5 className="font-medium mb-2 text-green-700">Ideal Response:</h5>
+                            <div className="p-3 bg-green-50 rounded border border-green-200">
+                              <p className="text-sm text-green-800">{questionFeedback.correctAnswer}</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* AI Analysis */}
+                      <div className="mt-4 p-3 bg-blue-50 rounded border border-blue-200">
+                        <h5 className="font-medium mb-2 text-blue-800 flex items-center gap-2">
+                          <Brain className="h-4 w-4" />
+                          AI Clinical Analysis
+                        </h5>
+                        <p className="text-sm text-blue-700 mb-3">{questionFeedback.aiAnalysis}</p>
+                        <p className="text-sm text-blue-600"><strong>Clinical Reasoning:</strong> {questionFeedback.clinicalReasoning}</p>
+                      </div>
+
+                      {/* Strengths and Improvements */}
+                      <div className="grid md:grid-cols-2 gap-4 mt-4">
+                        {questionFeedback.strengths.length > 0 && (
+                          <div>
+                            <h5 className="font-medium mb-2 text-green-700 flex items-center gap-2">
+                              <CheckCircle className="h-4 w-4" />
+                              Strengths
+                            </h5>
+                            <ul className="text-sm space-y-1">
+                              {questionFeedback.strengths.map((strength, idx) => (
+                                <li key={idx} className="flex items-start gap-2">
+                                  <span className="text-green-600">•</span>
+                                  <span className="text-green-700">{strength}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {questionFeedback.improvements.length > 0 && (
+                          <div>
+                            <h5 className="font-medium mb-2 text-orange-700 flex items-center gap-2">
+                              <TrendingUp className="h-4 w-4" />
+                              Areas for Improvement
+                            </h5>
+                            <ul className="text-sm space-y-1">
+                              {questionFeedback.improvements.map((improvement, idx) => (
+                                <li key={idx} className="flex items-start gap-2">
+                                  <span className="text-orange-600">•</span>
+                                  <span className="text-orange-700">{improvement}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+
+                      {index < submissionResult.questionFeedbacks!.length - 1 && (
+                        <Separator className="mt-4" />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Learning Recommendations */}
+          {(submissionResult.recommendedLearning || submissionResult.nextSteps) && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Lightbulb className="h-5 w-5 text-yellow-600" />
+                  Personalized Learning Path
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid md:grid-cols-2 gap-6">
+                  {submissionResult.recommendedLearning && submissionResult.recommendedLearning.length > 0 && (
+                    <div>
+                      <h4 className="font-semibold mb-3 flex items-center gap-2">
+                        <BookOpen className="h-4 w-4 text-blue-600" />
+                        Recommended Learning Resources
+                      </h4>
+                      <ul className="space-y-2">
+                        {submissionResult.recommendedLearning.map((resource, index) => (
+                          <li key={index} className="flex items-start gap-2">
+                            <span className="text-blue-600">•</span>
+                            <span className="text-sm">{resource}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {submissionResult.nextSteps && submissionResult.nextSteps.length > 0 && (
+                    <div>
+                      <h4 className="font-semibold mb-3 flex items-center gap-2">
+                        <ArrowRight className="h-4 w-4 text-green-600" />
+                        Next Steps
+                      </h4>
+                      <ul className="space-y-2">
+                        {submissionResult.nextSteps.map((step, index) => (
+                          <li key={index} className="flex items-start gap-2">
+                            <span className="text-green-600">•</span>
+                            <span className="text-sm">{step}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        <div className="flex justify-center pt-4">
+          <Button onClick={onClose} className="px-8">
+            Continue Learning
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 function GameResults({ competitionId }: { competitionId: string }) {
@@ -164,6 +452,8 @@ export default function GameCompetitionPage() {
   const [currentStage, setCurrentStage] = useState(0);
   const [responses, setResponses] = useState<any>({});
   const [submitting, setSubmitting] = useState(false);
+  const [submissionResult, setSubmissionResult] = useState<any>(null);
+  const [showResults, setShowResults] = useState(false);
 
   useEffect(() => {
     fetchCompetitionData();
@@ -240,6 +530,10 @@ export default function GameCompetitionPage() {
       }
 
       const result = await response.json();
+      
+      // Store submission results with detailed feedback
+      setSubmissionResult(result);
+      setShowResults(true);
       
       toast({
         title: "Game Completed!",
@@ -608,7 +902,33 @@ export default function GameCompetitionPage() {
                 </Button>
               </div>
             ) : gameCompleted ? (
-              <GameResults competitionId={id!} />
+              <div className="text-center py-8">
+                <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
+                <h3 className="text-2xl font-bold mb-2">Game Completed!</h3>
+                <p className="text-muted-foreground mb-6">
+                  Your responses have been analyzed with AI feedback.
+                </p>
+                {submissionResult && (
+                  <div className="space-y-4">
+                    <div className="text-3xl font-bold text-green-600">
+                      Score: {submissionResult.totalScore}/100
+                    </div>
+                    <Button 
+                      onClick={() => setShowResults(true)}
+                      size="lg"
+                      className="bg-blue-600 hover:bg-blue-700"
+                    >
+                      <Brain className="h-5 w-5 mr-2" />
+                      View Detailed AI Feedback
+                    </Button>
+                  </div>
+                )}
+                <div className="mt-4">
+                  <Button variant="outline" asChild>
+                    <a href="/game-competitions">Return to Competitions</a>
+                  </Button>
+                </div>
+              </div>
             ) : (
               <div className="space-y-6">
                 {renderGameContent()}
@@ -630,6 +950,13 @@ export default function GameCompetitionPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* AI Feedback Modal */}
+      <AIFeedbackModal 
+        isOpen={showResults}
+        onClose={() => setShowResults(false)}
+        submissionResult={submissionResult}
+      />
     </div>
   );
 }

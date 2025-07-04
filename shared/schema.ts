@@ -1923,6 +1923,20 @@ export const competitionParticipants = pgTable("competition_participants", {
       total: number;
     };
     feedback?: string;
+    questionFeedbacks?: {
+      questionId: string;
+      questionText: string;
+      userResponse: string;
+      correctAnswer?: string;
+      aiAnalysis: string;
+      score: number;
+      strengths: string[];
+      improvements: string[];
+      clinicalReasoning: string;
+      timeSpent?: number;
+    }[];
+    recommendedLearning?: string[];
+    nextSteps?: string[];
   }[]>(),
 });
 

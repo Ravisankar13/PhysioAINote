@@ -7441,26 +7441,35 @@ Base your analysis on established postural assessment principles and correlate f
         .from(gameContent)
         .where(eq(gameContent.competitionId, competitionId));
 
-      // Calculate score with AI analysis
-      const scoringResult = await calculateGameScoreWithAI(gameType, responses, content?.content || {});
+      // Generate detailed AI feedback for each question
+      const { gameAIFeedbackService } = await import("./gameAIFeedbackService");
+      const detailedFeedback = await gameAIFeedbackService.generateDetailedGameFeedback(
+        gameType,
+        responses,
+        content?.content || {},
+        timeSpent || 0
+      );
 
-      // Create case attempts in the expected format
+      // Create case attempts with detailed question-by-question feedback
       const caseAttempts = [{
         caseStudyId: competitionId,
-        userDiagnosis: scoringResult.primaryResponse || 'No diagnosis provided',
-        userReasoning: scoringResult.reasoning || 'No reasoning provided',
-        assessmentTests: scoringResult.assessmentTests || [],
-        proposedTreatment: scoringResult.treatment || 'No treatment provided',
+        userDiagnosis: detailedFeedback.questionFeedbacks[0]?.userResponse || 'No diagnosis provided',
+        userReasoning: 'Multiple questions analyzed with AI feedback',
+        assessmentTests: [],
+        proposedTreatment: 'Various responses across game questions',
         timeSpent: timeSpent || 0,
         scores: {
-          accuracy: scoringResult.accuracyScore || 70,
-          speed: scoringResult.speedScore || 80,
-          reasoning: scoringResult.reasoningScore || 75,
-          differential: scoringResult.differentialScore || 70,
-          treatment: scoringResult.treatmentScore || 75,
-          total: scoringResult.totalScore || 70
+          accuracy: detailedFeedback.categoryScores.accuracy,
+          speed: detailedFeedback.categoryScores.speed,
+          reasoning: detailedFeedback.categoryScores.reasoning,
+          differential: detailedFeedback.categoryScores.differential,
+          treatment: detailedFeedback.categoryScores.treatment,
+          total: detailedFeedback.overallScore
         },
-        feedback: scoringResult.feedback || 'Good effort! Continue practicing clinical reasoning skills.'
+        feedback: detailedFeedback.overallFeedback,
+        questionFeedbacks: detailedFeedback.questionFeedbacks,
+        recommendedLearning: detailedFeedback.recommendedLearning,
+        nextSteps: detailedFeedback.nextSteps
       }];
 
       // Update participant with results
@@ -7468,7 +7477,7 @@ Base your analysis on established postural assessment principles and correlate f
         .update(competitionParticipants)
         .set({
           completedAt: new Date(),
-          totalScore: scoringResult.totalScore,
+          totalScore: detailedFeedback.overallScore,
           timeSpent: timeSpent || 0,
           caseAttempts: caseAttempts
         })
@@ -7477,13 +7486,16 @@ Base your analysis on established postural assessment principles and correlate f
           eq(competitionParticipants.userId, userId)
         ));
 
-      console.log('Game submission completed with score:', scoringResult.totalScore);
+      console.log('Game submission completed with detailed AI feedback. Overall score:', detailedFeedback.overallScore);
 
       res.json({ 
-        totalScore: scoringResult.totalScore,
+        totalScore: detailedFeedback.overallScore,
         timeSpent: timeSpent || 0,
-        feedback: scoringResult.feedback,
-        scores: caseAttempts[0].scores
+        feedback: detailedFeedback.overallFeedback,
+        scores: caseAttempts[0].scores,
+        questionFeedbacks: detailedFeedback.questionFeedbacks,
+        recommendedLearning: detailedFeedback.recommendedLearning,
+        nextSteps: detailedFeedback.nextSteps
       });
     } catch (error: any) {
       console.error('Error submitting game competition:', error);

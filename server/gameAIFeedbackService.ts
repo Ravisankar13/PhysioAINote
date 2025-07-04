@@ -48,53 +48,48 @@ export class GameAIFeedbackService {
       const overallAnalysis = await this.generateOverallAnalysis(gameType, questionAnalyses, timeSpent);
 
       return {
-        overallScore: overallAnalysis.totalScore,
+        overallScore: overallAnalysis.overallScore,
         overallFeedback: overallAnalysis.overallFeedback,
         questionFeedbacks: questionAnalyses,
         categoryScores: overallAnalysis.categoryScores,
         recommendedLearning: overallAnalysis.recommendedLearning,
         nextSteps: overallAnalysis.nextSteps
       };
-
     } catch (error) {
-      console.error('Error generating detailed feedback:', error);
+      console.error('Error generating game feedback:', error);
+      // Fallback response
       return this.createFallbackFeedback(gameType, responses);
     }
   }
 
   /**
-   * Analyze individual questions based on game type
+   * Analyze game-specific questions and responses
    */
   private async analyzeGameQuestions(
     gameType: string,
     responses: any,
     gameContent: any
   ): Promise<QuestionFeedback[]> {
-    const questionFeedbacks: QuestionFeedback[] = [];
-
     switch (gameType) {
       case 'lightning_diagnosis':
         return await this.analyzeLightningDiagnosis(responses, gameContent);
-      
+      case 'treatment_speed_run':
+        return await this.analyzeTreatmentSpeedRun(responses, gameContent);
       case 'mystery_patient':
         return await this.analyzeMysteryPatient(responses, gameContent);
-      
       case 'red_flag_detective':
         return await this.analyzeRedFlagDetective(responses, gameContent);
-      
       case 'differential_diagnosis_duel':
         return await this.analyzeDifferentialDiagnosis(responses, gameContent);
-      
       case 'choose_your_adventure':
         return await this.analyzeChooseYourAdventure(responses, gameContent);
-      
       default:
-        return await this.analyzeGeneralGame(responses, gameContent);
+        return await this.analyzeGenericGame(responses, gameContent);
     }
   }
 
   /**
-   * Analyze Lightning Diagnosis responses
+   * Analyze Lightning Diagnosis responses - SIMPLIFIED: Only diagnosis accuracy matters
    */
   private async analyzeLightningDiagnosis(responses: any, gameContent: any): Promise<QuestionFeedback[]> {
     const lightningContent = gameContent.lightningDiagnosis || {};
@@ -121,7 +116,7 @@ export class GameAIFeedbackService {
   }
 
   /**
-   * Analyze Lightning Diagnosis case - simplified scoring focusing only on diagnosis accuracy
+   * Analyze Lightning Diagnosis case - ONLY focusing on diagnosis accuracy, no justification required
    */
   private async analyzeLightningDiagnosisCase(
     caseData: any,
@@ -132,62 +127,34 @@ export class GameAIFeedbackService {
     const correctDiagnosis = caseData.correctDiagnosis || '';
     const userDiagnosis = userResponse.trim();
 
-    // Simple diagnosis matching - if diagnosis is correct, award 100%
+    // Simple diagnosis matching - if diagnosis is correct, award 100%, no justification required
     const isCorrectDiagnosis = this.isMatchingDiagnosis(userDiagnosis, correctDiagnosis);
     
-    const prompt = `Analyze this lightning diagnosis response focusing only on the diagnosis accuracy:
-
-Case Presentation: ${caseData.presentation || 'Case information provided'}
-Correct Diagnosis: ${correctDiagnosis}
-User's Diagnosis: ${userDiagnosis}
-Time Limit: ${caseData.timeLimit || 30} seconds
-
-The user provided "${userDiagnosis}" and the correct answer is "${correctDiagnosis}".
-Score: ${isCorrectDiagnosis ? 100 : 25} (100 for correct diagnosis, 25 for incorrect)
-
-Provide analysis in JSON format:
-{
-  "score": ${isCorrectDiagnosis ? 100 : 25},
-  "aiAnalysis": "Brief analysis focusing on diagnosis accuracy",
-  "strengths": ["List strengths if correct, or partial credit areas if incorrect"],
-  "improvements": ["Areas for improvement, especially if diagnosis was wrong"], 
-  "clinicalReasoning": "Brief assessment of the diagnostic approach",
-  "correctAnswer": "${correctDiagnosis}"
-}`;
-
-    try {
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
-        messages: [{ role: "user", content: prompt }],
-        response_format: { type: "json_object" },
-      });
-
-      const result = JSON.parse(response.choices[0].message.content || '{}');
-
+    // For Lightning Diagnosis, we only evaluate the diagnosis itself, not the reasoning
+    // This provides immediate, clear feedback focused on diagnostic accuracy
+    if (isCorrectDiagnosis) {
       return {
         questionId,
         questionText,
-        userResponse,
+        userResponse: userDiagnosis,
         correctAnswer: correctDiagnosis,
-        aiAnalysis: result.aiAnalysis || (isCorrectDiagnosis ? 'Correct diagnosis!' : 'Diagnosis needs review'),
-        score: isCorrectDiagnosis ? 100 : 25,
-        strengths: result.strengths || (isCorrectDiagnosis ? ['Accurate rapid diagnosis'] : []),
-        improvements: result.improvements || (isCorrectDiagnosis ? [] : ['Review differential diagnosis for this presentation']),
-        clinicalReasoning: result.clinicalReasoning || 'Rapid diagnosis attempt'
+        aiAnalysis: `Correct! ${correctDiagnosis} is the accurate diagnosis for this presentation.`,
+        score: 100,
+        strengths: ['Accurate rapid diagnosis', 'Correct clinical pattern recognition'],
+        improvements: [],
+        clinicalReasoning: 'Successful diagnostic reasoning under time pressure'
       };
-    } catch (error) {
-      console.error('Error analyzing lightning diagnosis case:', error);
-      // Fallback with simple scoring
+    } else {
       return {
         questionId,
         questionText,
-        userResponse,
+        userResponse: userDiagnosis,
         correctAnswer: correctDiagnosis,
-        aiAnalysis: isCorrectDiagnosis ? 'Correct diagnosis!' : 'Diagnosis incorrect - review needed',
-        score: isCorrectDiagnosis ? 100 : 25,
-        strengths: isCorrectDiagnosis ? ['Accurate rapid diagnosis'] : [],
-        improvements: isCorrectDiagnosis ? [] : ['Review differential diagnosis'],
-        clinicalReasoning: 'Rapid diagnosis attempt under time pressure'
+        aiAnalysis: `Incorrect. The correct diagnosis is ${correctDiagnosis}. Your answer "${userDiagnosis}" doesn't match the expected diagnosis for this clinical presentation.`,
+        score: 0,
+        strengths: ['Attempted rapid diagnosis under time pressure'],
+        improvements: [`Review ${correctDiagnosis} presentation and key features`, 'Practice pattern recognition for similar cases'],
+        clinicalReasoning: 'Consider reviewing differential diagnosis approach for this presentation'
       };
     }
   }
@@ -217,106 +184,35 @@ Provide analysis in JSON format:
   }
 
   /**
-   * Analyze Mystery Patient responses
+   * Analyze Treatment Speed Run responses
    */
-  private async analyzeMysteryPatient(responses: any, gameContent: any): Promise<QuestionFeedback[]> {
-    const mysteryContent = gameContent.mysteryPatient || {};
-    const stages = mysteryContent.stages || [];
-    const feedbacks: QuestionFeedback[] = [];
-
-    // Analyze clue interpretation
-    for (let i = 0; i < stages.length; i++) {
-      const stage = stages[i];
-      const responseKey = `hypothesis_${i}`;
-      const userResponse = responses[responseKey] || '';
-
-      if (stage && userResponse) {
-        const feedback = await this.analyzeMysteryStage(
-          stage,
-          userResponse,
-          `Mystery Stage ${i + 1}`,
-          responseKey
-        );
-        feedbacks.push(feedback);
-      }
-    }
-
-    // Analyze final diagnosis
-    if (responses.diagnosis) {
-      const finalFeedback = await this.analyzeFinalDiagnosis(
-        responses.diagnosis,
-        mysteryContent.correctDiagnosis || 'Unknown',
-        'Final Diagnosis'
-      );
-      feedbacks.push(finalFeedback);
-    }
-
-    return feedbacks;
-  }
-
-  /**
-   * Analyze Red Flag Detective responses
-   */
-  private async analyzeRedFlagDetective(responses: any, gameContent: any): Promise<QuestionFeedback[]> {
-    const redFlagContent = gameContent.redFlagDetective || {};
-    const cases = redFlagContent.cases || [];
+  private async analyzeTreatmentSpeedRun(responses: any, gameContent: any): Promise<QuestionFeedback[]> {
+    const treatmentContent = gameContent.treatmentSpeedRun || {};
+    const cases = treatmentContent.cases || [];
     const feedbacks: QuestionFeedback[] = [];
 
     for (let i = 0; i < cases.length; i++) {
       const caseData = cases[i];
-      const redFlagsKey = `redflags_${i}`;
-      const actionKey = `action_${i}`;
       
-      const userRedFlags = responses[redFlagsKey] || '';
-      const userAction = responses[actionKey] || '';
+      // Check for treatment planning responses
+      const assessmentResponse = responses[`assessment_${i}`] || '';
+      const treatmentResponse = responses[`treatment_${i}`] || '';
+      const exercisesResponse = responses[`exercises_${i}`] || '';
+      const educationResponse = responses[`education_${i}`] || '';
+      const followupResponse = responses[`followup_${i}`] || '';
 
-      if (caseData && (userRedFlags || userAction)) {
-        // Analyze red flag identification
-        if (userRedFlags) {
-          const redFlagFeedback = await this.analyzeRedFlagIdentification(
-            caseData,
-            userRedFlags,
-            `Red Flag Case ${i + 1} - Identification`,
-            redFlagsKey
-          );
-          feedbacks.push(redFlagFeedback);
-        }
-
-        // Analyze action planning
-        if (userAction) {
-          const actionFeedback = await this.analyzeActionPlanning(
-            caseData,
-            userAction,
-            `Red Flag Case ${i + 1} - Action`,
-            actionKey
-          );
-          feedbacks.push(actionFeedback);
-        }
-      }
-    }
-
-    return feedbacks;
-  }
-
-  /**
-   * Analyze Differential Diagnosis responses
-   */
-  private async analyzeDifferentialDiagnosis(responses: any, gameContent: any): Promise<QuestionFeedback[]> {
-    const differentialContent = gameContent.differentialDiagnosisDuel || {};
-    const rounds = differentialContent.rounds || [];
-    const feedbacks: QuestionFeedback[] = [];
-
-    for (let i = 0; i < rounds.length; i++) {
-      const round = rounds[i];
-      const responseKey = `differentials_${i}`;
-      const userResponse = responses[responseKey] || '';
-
-      if (round && userResponse) {
-        const feedback = await this.analyzeDifferentialRound(
-          round,
-          userResponse,
-          `Differential Round ${i + 1}`,
-          responseKey
+      if (caseData && (assessmentResponse || treatmentResponse || exercisesResponse)) {
+        const feedback = await this.analyzeTreatmentCase(
+          caseData,
+          {
+            assessment: assessmentResponse,
+            treatment: treatmentResponse,
+            exercises: exercisesResponse,
+            education: educationResponse,
+            followup: followupResponse
+          },
+          `Treatment Case ${i + 1}: ${caseData.diagnosis}`,
+          `treatment_${i}`
         );
         feedbacks.push(feedback);
       }
@@ -326,60 +222,44 @@ Provide analysis in JSON format:
   }
 
   /**
-   * Analyze Choose Your Adventure responses
+   * Analyze individual treatment planning case
    */
-  private async analyzeChooseYourAdventure(responses: any, gameContent: any): Promise<QuestionFeedback[]> {
-    const adventureContent = gameContent.chooseYourAdventure || {};
-    const scenarios = adventureContent.scenarios || [];
-    const feedbacks: QuestionFeedback[] = [];
-
-    // Analyze decision-making pattern
-    const choicePattern = Object.entries(responses)
-      .filter(([key]) => key.startsWith('choice_'))
-      .map(([key, value]) => ({ key, value }));
-
-    if (choicePattern.length > 0) {
-      const feedback = await this.analyzeDecisionPattern(
-        choicePattern,
-        scenarios,
-        'Clinical Decision Making',
-        'choice_pattern'
-      );
-      feedbacks.push(feedback);
-    }
-
-    return feedbacks;
-  }
-
-  /**
-   * Individual analysis methods for each question type
-   */
-  private async analyzeIndividualCase(
+  private async analyzeTreatmentCase(
     caseData: any,
-    userResponse: string,
+    responses: any,
     questionText: string,
     questionId: string
   ): Promise<QuestionFeedback> {
-    const prompt = `Analyze this lightning diagnosis case response:
+    const prompt = `Analyze this treatment planning response for a ${caseData.diagnosis} case:
 
-Case Presentation: ${caseData.presentation || 'Case information provided'}
-Correct Diagnosis: ${caseData.correctDiagnosis || 'Not specified'}
-User's Response: ${userResponse}
-Time Limit: ${caseData.timeLimit || 30} seconds
+Patient: ${caseData.patientProfile}
+Required Components: ${caseData.requiredComponents?.join(', ') || 'General treatment approach'}
 
-Provide detailed analysis in JSON format:
+Assessment Plan: ${responses.assessment}
+Treatment Protocol: ${responses.treatment}
+Exercise Prescription: ${responses.exercises}
+Patient Education: ${responses.education}
+Follow-up Plan: ${responses.followup}
+
+Rate this treatment plan from 0-100 based on:
+- Completeness and appropriateness of assessment
+- Evidence-based treatment interventions
+- Specific and progressive exercise prescription
+- Comprehensive patient education
+- Appropriate follow-up planning
+
+Provide analysis in JSON format:
 {
-  "score": 85,
-  "aiAnalysis": "Detailed analysis of the response quality and clinical reasoning",
-  "strengths": ["Strength 1", "Strength 2"],
-  "improvements": ["Improvement 1", "Improvement 2"], 
-  "clinicalReasoning": "Assessment of clinical thinking process",
-  "correctAnswer": "What the ideal response should have been"
+  "score": number,
+  "aiAnalysis": "Comprehensive analysis of the treatment plan",
+  "strengths": ["List specific strengths"],
+  "improvements": ["Areas needing improvement"],
+  "clinicalReasoning": "Assessment of clinical decision-making"
 }`;
 
     try {
       const response = await openai.chat.completions.create({
-        model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+        model: "gpt-4o",
         messages: [{ role: "user", content: prompt }],
         response_format: { type: "json_object" },
       });
@@ -389,229 +269,89 @@ Provide detailed analysis in JSON format:
       return {
         questionId,
         questionText,
-        userResponse,
-        correctAnswer: result.correctAnswer || 'Not specified',
-        aiAnalysis: result.aiAnalysis || 'Good attempt at rapid diagnosis',
-        score: result.score || 70,
-        strengths: result.strengths || ['Attempted diagnosis under time pressure'],
-        improvements: result.improvements || ['Consider differential diagnoses'],
-        clinicalReasoning: result.clinicalReasoning || 'Shows clinical thinking'
+        userResponse: `Assessment: ${responses.assessment} | Treatment: ${responses.treatment}`,
+        correctAnswer: `Comprehensive treatment for ${caseData.diagnosis}`,
+        aiAnalysis: result.aiAnalysis || 'Treatment plan analysis completed',
+        score: Math.max(0, Math.min(100, result.score || 50)),
+        strengths: result.strengths || ['Treatment planning attempted'],
+        improvements: result.improvements || ['Consider more evidence-based approaches'],
+        clinicalReasoning: result.clinicalReasoning || 'Treatment planning approach'
       };
     } catch (error) {
-      console.error('Error analyzing individual case:', error);
-      return this.createFallbackQuestionFeedback(questionId, questionText, userResponse);
+      console.error('Error analyzing treatment case:', error);
+      return {
+        questionId,
+        questionText,
+        userResponse: `Assessment: ${responses.assessment} | Treatment: ${responses.treatment}`,
+        correctAnswer: `Comprehensive treatment for ${caseData.diagnosis}`,
+        aiAnalysis: 'Treatment plan submitted for review',
+        score: 75,
+        strengths: ['Comprehensive treatment planning attempted'],
+        improvements: ['Consider evidence-based protocol refinements'],
+        clinicalReasoning: 'Treatment planning under time pressure'
+      };
     }
   }
 
   /**
-   * Additional analysis methods for other game types...
+   * Analyze generic game responses
    */
-  private async analyzeMysteryStage(
-    stage: any,
-    userResponse: string,
-    questionText: string,
-    questionId: string
-  ): Promise<QuestionFeedback> {
-    const prompt = `Analyze this mystery patient stage response:
-
-Stage Clue: ${stage.clue || 'Clue provided'}
-User's Hypothesis: ${userResponse}
-
-Evaluate the clinical reasoning and hypothesis formation:
-{
-  "score": 85,
-  "aiAnalysis": "Analysis of hypothesis quality based on available clues",
-  "strengths": ["Strength 1", "Strength 2"],
-  "improvements": ["Improvement 1", "Improvement 2"],
-  "clinicalReasoning": "Assessment of clinical reasoning process",
-  "correctAnswer": "Ideal hypothesis at this stage"
-}`;
-
-    try {
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
-        messages: [{ role: "user", content: prompt }],
-        response_format: { type: "json_object" },
-      });
-
-      const result = JSON.parse(response.choices[0].message.content || '{}');
-
-      return {
-        questionId,
-        questionText,
-        userResponse,
-        correctAnswer: result.correctAnswer || 'Progressive hypothesis',
-        aiAnalysis: result.aiAnalysis || 'Good hypothesis formation',
-        score: result.score || 75,
-        strengths: result.strengths || ['Progressive clinical thinking'],
-        improvements: result.improvements || ['Consider additional differential diagnoses'],
-        clinicalReasoning: result.clinicalReasoning || 'Shows systematic approach'
-      };
-    } catch (error) {
-      console.error('Error analyzing mystery stage:', error);
-      return this.createFallbackQuestionFeedback(questionId, questionText, userResponse);
-    }
-  }
-
-  private async analyzeRedFlagIdentification(
-    caseData: any,
-    userResponse: string,
-    questionText: string,
-    questionId: string
-  ): Promise<QuestionFeedback> {
-    const prompt = `Analyze red flag identification:
-
-Patient Story: ${caseData.patientStory || 'Case presented'}
-Actual Red Flags: ${JSON.stringify(caseData.redFlags || [])}
-User Identified: ${userResponse}
-
-Evaluate red flag detection accuracy:
-{
-  "score": 85,
-  "aiAnalysis": "Analysis of red flag identification accuracy",
-  "strengths": ["Identified key red flags", "Safety awareness"],
-  "improvements": ["Missed important red flags", "Consider additional warnings"],
-  "clinicalReasoning": "Assessment of safety-first thinking",
-  "correctAnswer": "Complete list of red flags that should be identified"
-}`;
-
-    try {
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
-        messages: [{ role: "user", content: prompt }],
-        response_format: { type: "json_object" },
-      });
-
-      const result = JSON.parse(response.choices[0].message.content || '{}');
-
-      return {
-        questionId,
-        questionText,
-        userResponse,
-        correctAnswer: result.correctAnswer || 'Red flag identification',
-        aiAnalysis: result.aiAnalysis || 'Good safety awareness',
-        score: result.score || 75,
-        strengths: result.strengths || ['Safety-focused approach'],
-        improvements: result.improvements || ['Consider additional red flags'],
-        clinicalReasoning: result.clinicalReasoning || 'Shows clinical safety awareness'
-      };
-    } catch (error) {
-      console.error('Error analyzing red flag identification:', error);
-      return this.createFallbackQuestionFeedback(questionId, questionText, userResponse);
-    }
-  }
-
-  private async analyzeActionPlanning(
-    caseData: any,
-    userResponse: string,
-    questionText: string,
-    questionId: string
-  ): Promise<QuestionFeedback> {
-    // Similar structure to other analysis methods
-    try {
-      const prompt = `Analyze immediate action planning for red flags:
-
-Case Context: ${caseData.patientStory || 'Case presented'}
-User's Action Plan: ${userResponse}
-Appropriate Actions: ${JSON.stringify(caseData.immediateActions || [])}
-
-Evaluate action appropriateness and urgency:
-{
-  "score": 85,
-  "aiAnalysis": "Analysis of action planning appropriateness and timing",
-  "strengths": ["Appropriate urgency", "Correct action priorities"],
-  "improvements": ["Consider additional actions", "Improve action sequencing"],
-  "clinicalReasoning": "Assessment of emergency response thinking",
-  "correctAnswer": "Ideal immediate action plan"
-}`;
-
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
-        messages: [{ role: "user", content: prompt }],
-        response_format: { type: "json_object" },
-      });
-
-      const result = JSON.parse(response.choices[0].message.content || '{}');
-
-      return {
-        questionId,
-        questionText,
-        userResponse,
-        correctAnswer: result.correctAnswer || 'Immediate action planning',
-        aiAnalysis: result.aiAnalysis || 'Good action planning',
-        score: result.score || 75,
-        strengths: result.strengths || ['Appropriate action planning'],
-        improvements: result.improvements || ['Consider action prioritization'],
-        clinicalReasoning: result.clinicalReasoning || 'Shows emergency response thinking'
-      };
-    } catch (error) {
-      console.error('Error analyzing action planning:', error);
-      return this.createFallbackQuestionFeedback(questionId, questionText, userResponse);
-    }
-  }
-
-  // Additional methods for other game types (abbreviated for space)
-  private async analyzeDifferentialRound(round: any, userResponse: string, questionText: string, questionId: string): Promise<QuestionFeedback> {
-    return this.createFallbackQuestionFeedback(questionId, questionText, userResponse);
-  }
-
-  private async analyzeDecisionPattern(choices: any[], scenarios: any[], questionText: string, questionId: string): Promise<QuestionFeedback> {
-    return this.createFallbackQuestionFeedback(questionId, questionText, JSON.stringify(choices));
-  }
-
-  private async analyzeFinalDiagnosis(userDiagnosis: string, correctDiagnosis: string, questionText: string): Promise<QuestionFeedback> {
-    return this.createFallbackQuestionFeedback('final_diagnosis', questionText, userDiagnosis);
-  }
-
-  private async analyzeGeneralGame(responses: any, gameContent: any): Promise<QuestionFeedback[]> {
+  private async analyzeGenericGame(responses: any, gameContent: any): Promise<QuestionFeedback[]> {
     const feedbacks: QuestionFeedback[] = [];
     
-    Object.entries(responses).forEach(([key, value]) => {
-      feedbacks.push(this.createFallbackQuestionFeedback(key, `Question: ${key}`, value as string));
+    Object.keys(responses).forEach((key, index) => {
+      feedbacks.push({
+        questionId: key,
+        questionText: `Question ${index + 1}`,
+        userResponse: responses[key],
+        aiAnalysis: 'Response submitted successfully',
+        score: 75,
+        strengths: ['Participation in challenge'],
+        improvements: ['Continue practicing clinical scenarios'],
+        clinicalReasoning: 'Active engagement in clinical learning'
+      });
     });
 
     return feedbacks;
   }
 
   /**
-   * Generate overall analysis combining all question feedbacks
+   * Generate overall analysis and scoring
    */
   private async generateOverallAnalysis(
     gameType: string,
     questionFeedbacks: QuestionFeedback[],
     timeSpent: number
   ): Promise<any> {
-    const averageScore = questionFeedbacks.reduce((sum, q) => sum + q.score, 0) / questionFeedbacks.length || 70;
+    const averageScore = questionFeedbacks.reduce((sum, q) => sum + q.score, 0) / questionFeedbacks.length;
     
-    const prompt = `Generate overall game analysis:
+    const prompt = `Analyze overall performance in ${gameType} competition:
 
-Game Type: ${gameType}
-Individual Question Scores: ${questionFeedbacks.map(q => q.score).join(', ')}
-Average Score: ${averageScore}
-Time Spent: ${timeSpent} seconds
-Question Count: ${questionFeedbacks.length}
+Questions answered: ${questionFeedbacks.length}
+Average score: ${averageScore}
+Time spent: ${timeSpent} seconds
+Individual scores: ${questionFeedbacks.map(q => q.score).join(', ')}
+Strengths shown: ${questionFeedbacks.flatMap(q => q.strengths).join(', ')}
+Areas for improvement: ${questionFeedbacks.flatMap(q => q.improvements).join(', ')}
 
-Strengths Identified: ${questionFeedbacks.flatMap(q => q.strengths).join(', ')}
-Improvements Needed: ${questionFeedbacks.flatMap(q => q.improvements).join(', ')}
-
-Provide comprehensive analysis:
+Provide overall assessment in JSON format:
 {
-  "totalScore": 85,
-  "overallFeedback": "Comprehensive feedback about overall performance (200-300 words)",
+  "overallScore": ${Math.round(averageScore)},
+  "overallFeedback": "Comprehensive feedback paragraph",
   "categoryScores": {
-    "accuracy": 85,
-    "speed": 90,
-    "reasoning": 80,
-    "differential": 75,
-    "treatment": 85
+    "accuracy": ${Math.round(averageScore)},
+    "speed": ${Math.max(60, 100 - (timeSpent / 60))},
+    "reasoning": ${Math.round(averageScore * 0.9)},
+    "differential": ${Math.round(averageScore * 0.8)},
+    "treatment": ${Math.round(averageScore * 0.85)}
   },
-  "recommendedLearning": ["Learning resource 1", "Learning resource 2"],
-  "nextSteps": ["Next step 1", "Next step 2"]
+  "recommendedLearning": ["Specific learning recommendations"],
+  "nextSteps": ["Actionable next steps"]
 }`;
 
     try {
       const response = await openai.chat.completions.create({
-        model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+        model: "gpt-4o",
         messages: [{ role: "user", content: prompt }],
         response_format: { type: "json_object" },
       });
@@ -619,67 +359,66 @@ Provide comprehensive analysis:
       const result = JSON.parse(response.choices[0].message.content || '{}');
 
       return {
-        totalScore: result.totalScore || averageScore,
-        overallFeedback: result.overallFeedback || 'Good performance overall. Continue practicing to improve clinical reasoning skills.',
+        overallScore: result.overallScore || Math.round(averageScore),
+        overallFeedback: result.overallFeedback || 'Competition completed successfully',
         categoryScores: result.categoryScores || {
-          accuracy: averageScore,
-          speed: 80,
-          reasoning: averageScore,
-          differential: 75,
-          treatment: averageScore
+          accuracy: Math.round(averageScore),
+          speed: Math.max(60, 100 - (timeSpent / 60)),
+          reasoning: Math.round(averageScore * 0.9),
+          differential: Math.round(averageScore * 0.8),
+          treatment: Math.round(averageScore * 0.85)
         },
-        recommendedLearning: result.recommendedLearning || ['Practice more clinical cases', 'Review differential diagnosis'],
-        nextSteps: result.nextSteps || ['Continue competing', 'Focus on weak areas']
+        recommendedLearning: result.recommendedLearning || ['Continue clinical practice'],
+        nextSteps: result.nextSteps || ['Practice more scenarios']
       };
     } catch (error) {
       console.error('Error generating overall analysis:', error);
       return {
-        totalScore: averageScore,
-        overallFeedback: 'Thank you for participating! Your responses demonstrate clinical thinking. Continue practicing to enhance your skills.',
+        overallScore: Math.round(averageScore),
+        overallFeedback: 'Competition completed with good effort',
         categoryScores: {
-          accuracy: averageScore,
-          speed: 80,
-          reasoning: averageScore,
-          differential: 75,
-          treatment: averageScore
+          accuracy: Math.round(averageScore),
+          speed: Math.max(60, 100 - (timeSpent / 60)),
+          reasoning: Math.round(averageScore * 0.9),
+          differential: Math.round(averageScore * 0.8),
+          treatment: Math.round(averageScore * 0.85)
         },
-        recommendedLearning: ['Practice clinical reasoning', 'Study case studies'],
-        nextSteps: ['Continue practicing', 'Try different game types']
+        recommendedLearning: ['Continue clinical skill development'],
+        nextSteps: ['Participate in more competitions']
       };
     }
   }
 
   /**
-   * Create fallback feedback for error cases
+   * Create fallback feedback when AI analysis fails
    */
-  private createFallbackQuestionFeedback(questionId: string, questionText: string, userResponse: string): QuestionFeedback {
-    return {
-      questionId,
-      questionText,
-      userResponse,
-      correctAnswer: 'Analysis not available',
-      aiAnalysis: 'Your response shows clinical thinking. Continue practicing to improve accuracy and reasoning.',
-      score: 75,
-      strengths: ['Provided clinical response', 'Engaged with the question'],
-      improvements: ['Continue practicing', 'Review clinical guidelines'],
-      clinicalReasoning: 'Shows clinical engagement'
-    };
-  }
-
   private createFallbackFeedback(gameType: string, responses: any): GameFeedbackResult {
+    const questionFeedbacks: QuestionFeedback[] = Object.keys(responses).map((key, index) => ({
+      questionId: key,
+      questionText: `Question ${index + 1}`,
+      userResponse: responses[key],
+      aiAnalysis: 'Response recorded successfully',
+      score: 75,
+      strengths: ['Participation in competition'],
+      improvements: ['Continue practicing'],
+      clinicalReasoning: 'Active engagement'
+    }));
+
+    const averageScore = 75;
+
     return {
-      overallScore: 75,
-      overallFeedback: 'Thank you for participating! Your responses show clinical thinking skills. Continue practicing to improve accuracy and reasoning.',
-      questionFeedbacks: [],
+      overallScore: averageScore,
+      overallFeedback: 'Competition completed successfully. Thank you for participating!',
+      questionFeedbacks,
       categoryScores: {
-        accuracy: 75,
+        accuracy: averageScore,
         speed: 80,
-        reasoning: 75,
-        differential: 70,
+        reasoning: 70,
+        differential: 75,
         treatment: 75
       },
-      recommendedLearning: ['Practice more clinical cases', 'Review clinical guidelines'],
-      nextSteps: ['Continue competing', 'Try different game types']
+      recommendedLearning: ['Continue clinical practice', 'Review competition materials'],
+      nextSteps: ['Participate in more competitions', 'Practice specific areas for improvement']
     };
   }
 }

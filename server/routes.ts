@@ -7418,33 +7418,112 @@ Base your analysis on established postural assessment principles and correlate f
     try {
       const competitionId = parseInt(req.params.id);
       const userId = req.user!.id;
-      const { responses, timeSpent } = req.body;
+      const { responses, timeSpent, gameType } = req.body;
+
+      console.log('Game submission received:', { competitionId, userId, gameType, responsesCount: Object.keys(responses).length });
 
       const { db } = await import("./db");
-      const { competitionParticipants } = await import("@shared/schema");
+      const { competitionParticipants, competitions, gameContent } = await import("@shared/schema");
       const { eq, and } = await import("drizzle-orm");
 
-      // Calculate score based on game type and responses
-      const totalScore = calculateGameScore(responses);
+      // Get competition and game content for scoring
+      const [competition] = await db
+        .select()
+        .from(competitions)
+        .where(eq(competitions.id, competitionId));
+
+      if (!competition) {
+        return res.status(404).json({ message: 'Competition not found' });
+      }
+
+      const [content] = await db
+        .select()
+        .from(gameContent)
+        .where(eq(gameContent.competitionId, competitionId));
+
+      // Calculate score with AI analysis
+      const scoringResult = await calculateGameScoreWithAI(gameType, responses, content?.content || {});
+
+      // Create case attempts in the expected format
+      const caseAttempts = [{
+        caseStudyId: competitionId,
+        userDiagnosis: scoringResult.primaryResponse || 'No diagnosis provided',
+        userReasoning: scoringResult.reasoning || 'No reasoning provided',
+        assessmentTests: scoringResult.assessmentTests || [],
+        proposedTreatment: scoringResult.treatment || 'No treatment provided',
+        timeSpent: timeSpent || 0,
+        scores: {
+          accuracy: scoringResult.accuracyScore || 70,
+          speed: scoringResult.speedScore || 80,
+          reasoning: scoringResult.reasoningScore || 75,
+          differential: scoringResult.differentialScore || 70,
+          treatment: scoringResult.treatmentScore || 75,
+          total: scoringResult.totalScore || 70
+        },
+        feedback: scoringResult.feedback || 'Good effort! Continue practicing clinical reasoning skills.'
+      }];
 
       // Update participant with results
       await db
         .update(competitionParticipants)
         .set({
           completedAt: new Date(),
-          totalScore,
-          timeSpent,
-          caseAttempts: responses
+          totalScore: scoringResult.totalScore,
+          timeSpent: timeSpent || 0,
+          caseAttempts: caseAttempts
         })
         .where(and(
           eq(competitionParticipants.competitionId, competitionId),
           eq(competitionParticipants.userId, userId)
         ));
 
-      res.json({ score: totalScore, timeSpent });
-    } catch (error) {
+      console.log('Game submission completed with score:', scoringResult.totalScore);
+
+      res.json({ 
+        totalScore: scoringResult.totalScore,
+        timeSpent: timeSpent || 0,
+        feedback: scoringResult.feedback,
+        scores: caseAttempts[0].scores
+      });
+    } catch (error: any) {
       console.error('Error submitting game competition:', error);
-      res.status(500).json({ message: 'Failed to submit game competition' });
+      res.status(500).json({ message: 'Failed to submit game competition', error: error.message });
+    }
+  });
+
+  // Get game competition leaderboard
+  app.get("/api/game-competitions/:id/leaderboard", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const competitionId = parseInt(req.params.id);
+      
+      const { db } = await import("./db");
+      const { competitionParticipants, users } = await import("@shared/schema");
+      const { eq, desc } = await import("drizzle-orm");
+
+      const leaderboard = await db
+        .select({
+          userId: competitionParticipants.userId,
+          username: users.username,
+          totalScore: competitionParticipants.totalScore,
+          timeSpent: competitionParticipants.timeSpent,
+          completedAt: competitionParticipants.completedAt,
+          rank: competitionParticipants.rank
+        })
+        .from(competitionParticipants)
+        .innerJoin(users, eq(competitionParticipants.userId, users.id))
+        .where(eq(competitionParticipants.competitionId, competitionId))
+        .orderBy(desc(competitionParticipants.totalScore), competitionParticipants.timeSpent);
+
+      // Calculate ranks
+      const rankedLeaderboard = leaderboard.map((entry, index) => ({
+        ...entry,
+        rank: index + 1
+      }));
+
+      res.json(rankedLeaderboard);
+    } catch (error) {
+      console.error('Error getting game competition leaderboard:', error);
+      res.status(500).json({ message: 'Failed to get leaderboard' });
     }
   });
 
@@ -7467,6 +7546,133 @@ Base your analysis on established postural assessment principles and correlate f
       res.status(500).json({ message: 'Failed to generate game content' });
     }
   });
+
+  // AI-powered scoring function for game competitions
+  async function calculateGameScoreWithAI(gameType: string, responses: any, gameContent: any): Promise<any> {
+    try {
+      const openai = new (await import("openai")).default({ apiKey: process.env.OPENAI_API_KEY });
+
+      // Extract key responses based on game type
+      let primaryResponse = '';
+      let reasoning = '';
+      let assessmentTests: string[] = [];
+      let treatment = '';
+
+      // Parse responses based on game type
+      switch (gameType) {
+        case 'choose_your_adventure':
+          primaryResponse = `Choice pattern: ${JSON.stringify(responses)}`;
+          reasoning = `User made interactive clinical decisions throughout the scenario`;
+          break;
+        case 'mystery_patient':
+          primaryResponse = responses.diagnosis || 'No diagnosis provided';
+          reasoning = `Diagnosis hypothesis based on progressive clue analysis`;
+          break;
+        case 'lightning_diagnosis':
+          const diagnosisResponses = Object.keys(responses)
+            .filter(key => key.startsWith('case_'))
+            .map(key => responses[key]);
+          primaryResponse = diagnosisResponses.join(', ') || 'No diagnoses provided';
+          reasoning = `Rapid diagnostic responses under time pressure`;
+          break;
+        case 'red_flag_detective':
+          const redFlags = Object.keys(responses)
+            .filter(key => key.startsWith('redflags_'))
+            .map(key => responses[key]);
+          const actions = Object.keys(responses)
+            .filter(key => key.startsWith('action_'))
+            .map(key => responses[key]);
+          primaryResponse = redFlags.join('; ') || 'No red flags identified';
+          treatment = actions.join('; ') || 'No actions specified';
+          reasoning = `Red flag identification and immediate action planning`;
+          break;
+        case 'differential_diagnosis_duel':
+          const differentials = Object.keys(responses)
+            .filter(key => key.startsWith('differentials_'))
+            .map(key => responses[key]);
+          primaryResponse = differentials.join('; ') || 'No differentials provided';
+          reasoning = `Comprehensive differential diagnosis generation`;
+          break;
+        default:
+          primaryResponse = responses.general || 'General response provided';
+          reasoning = `Clinical response to specialized game scenario`;
+      }
+
+      const prompt = `Analyze this physiotherapy game competition response for "${gameType}":
+
+User's Primary Response: ${primaryResponse}
+Clinical Reasoning: ${reasoning}
+Assessment/Treatment: ${treatment || 'Not provided'}
+
+Game Type: ${gameType}
+Game Content Context: ${JSON.stringify(gameContent, null, 2)}
+
+Provide detailed scoring (0-100 for each category) and feedback:
+1. Clinical Accuracy (0-100): How correct are the clinical decisions?
+2. Speed Efficiency (0-100): Appropriate speed for game type
+3. Clinical Reasoning (0-100): Quality of clinical thinking
+4. Differential Skills (0-100): Ability to consider multiple diagnoses
+5. Treatment Planning (0-100): Quality of intervention strategies
+
+Respond in JSON format:
+{
+  "accuracyScore": 85,
+  "speedScore": 90,
+  "reasoningScore": 80,
+  "differentialScore": 75,
+  "treatmentScore": 85,
+  "totalScore": 83,
+  "feedback": "Detailed feedback about performance, strengths, and areas for improvement (150-300 words)",
+  "primaryResponse": "Summary of main response",
+  "reasoning": "Clinical reasoning summary",
+  "assessmentTests": ["List", "Of", "Relevant", "Tests"],
+  "treatment": "Treatment summary"
+}`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+      });
+
+      const result = JSON.parse(response.choices[0].message.content || '{}');
+      
+      // Ensure we have valid scores
+      const finalResult = {
+        accuracyScore: result.accuracyScore || 70,
+        speedScore: result.speedScore || 80,
+        reasoningScore: result.reasoningScore || 75,
+        differentialScore: result.differentialScore || 70,
+        treatmentScore: result.treatmentScore || 75,
+        totalScore: result.totalScore || 73,
+        feedback: result.feedback || 'Good effort! Continue practicing clinical reasoning skills.',
+        primaryResponse: result.primaryResponse || primaryResponse,
+        reasoning: result.reasoning || reasoning,
+        assessmentTests: result.assessmentTests || [],
+        treatment: result.treatment || treatment
+      };
+
+      return finalResult;
+
+    } catch (error) {
+      console.error('Error in AI scoring:', error);
+      
+      // Fallback scoring
+      return {
+        accuracyScore: 70,
+        speedScore: 80,
+        reasoningScore: 75,
+        differentialScore: 70,
+        treatmentScore: 75,
+        totalScore: 74,
+        feedback: 'Thank you for participating! Your responses show clinical thinking skills. Continue practicing to improve accuracy and reasoning.',
+        primaryResponse: 'Clinical response provided',
+        reasoning: 'Clinical reasoning demonstrated',
+        assessmentTests: [],
+        treatment: 'Treatment approach considered'
+      };
+    }
+  }
 
   // Helper function to calculate scores for different game types
   function calculateGameScore(responses: any[]): number {

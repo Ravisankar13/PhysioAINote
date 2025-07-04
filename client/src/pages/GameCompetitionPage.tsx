@@ -272,8 +272,35 @@ export default function GameCompetitionPage() {
   const renderGameContent = () => {
     if (!gameContent || !competition) return null;
 
-    const content = gameContent[competition.gameType];
-    if (!content) return null;
+    // Map snake_case game types to camelCase content keys
+    const contentKeyMap: { [key: string]: string } = {
+      'choose_your_adventure': 'chooseYourAdventure',
+      'mystery_patient': 'mysteryPatient',
+      'lightning_diagnosis': 'lightningDiagnosis',
+      'red_flag_detective': 'redFlagDetective',
+      'differential_diagnosis_duel': 'differentialDiagnosisDuel',
+      'emergency_room_simulator': 'emergencyRoomSimulator',
+      'treatment_speed_run': 'treatmentSpeedRun',
+      'journal_club_race': 'journalClubRace',
+      'cpg_quiz_master': 'cpgQuizMaster'
+    };
+
+    const contentKey = contentKeyMap[competition.gameType] || competition.gameType;
+    const content = gameContent[contentKey];
+    
+    if (!content) {
+      return (
+        <div className="bg-muted p-4 rounded-lg">
+          <h4 className="font-semibold mb-2">Game Type: {competition.gameType}</h4>
+          <p className="text-sm text-muted-foreground mb-4">
+            No content available for this game type. Content key: {contentKey}
+          </p>
+          <pre className="text-xs bg-muted-foreground/10 p-2 rounded">
+            Available keys: {Object.keys(gameContent).join(', ')}
+          </pre>
+        </div>
+      );
+    }
 
     switch (competition.gameType) {
       case 'choose_your_adventure':

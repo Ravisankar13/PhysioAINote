@@ -7337,7 +7337,8 @@ Base your analysis on established postural assessment principles and correlate f
         .from(competitions)
         .where(or(
           eq(competitions.gameType, "lightning_diagnosis"),
-          eq(competitions.gameType, "treatment_speed_run")
+          eq(competitions.gameType, "treatment_speed_run"),
+          eq(competitions.gameType, "progressive_diagnostic_challenge")
         ))
         .orderBy(desc(competitions.createdAt));
 

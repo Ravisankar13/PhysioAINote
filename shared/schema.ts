@@ -87,6 +87,7 @@ export const gameTypeEnum = pgEnum("game_type", [
   "standard_case",
   "lightning_diagnosis",
   "treatment_speed_run",
+  "progressive_diagnostic_challenge",
   "choose_your_adventure",
   "emergency_room_simulator",
   "red_flag_detective",
@@ -1793,6 +1794,51 @@ export const gameContent = pgTable("game_content", {
         timeLimit: number;
         requiredComponents: string[];
         scoringCriteria: string[];
+      }>;
+    };
+    // Progressive Diagnostic Challenge
+    progressiveDiagnosticChallenge?: {
+      cases: Array<{
+        id: string;
+        initialPresentation: string;
+        patientAge: number;
+        patientGender: string;
+        availableQuestions: Array<{
+          id: string;
+          question: string;
+          cost: number;
+          category: 'history' | 'symptoms' | 'behavior' | 'lifestyle' | 'family_history';
+          answer: string;
+          revealsRedFlag?: boolean;
+        }>;
+        availableTests: Array<{
+          id: string;
+          testName: string;
+          cost: number;
+          timeRequired: number; // minutes
+          category: 'orthopedic' | 'neurological' | 'imaging' | 'lab' | 'special';
+          result: string;
+          accuracy: number; // 0-100%
+          contraindications?: string[];
+        }>;
+        correctDiagnosis: string;
+        differentialDiagnoses: string[];
+        redFlags: string[];
+        timeEvolution?: Array<{
+          timePoint: number; // minutes
+          newSymptoms?: string[];
+          changingVitals?: Record<string, string>;
+          complications?: string[];
+        }>;
+        scoringWeights: {
+          efficiency: number; // % weight for using minimal resources
+          thoroughness: number; // % weight for ruling out differentials  
+          safety: number; // % weight for identifying red flags
+          accuracy: number; // % weight for correct diagnosis
+        };
+        maxQuestionCredits: number;
+        maxTestCredits: number;
+        timeLimit: number; // minutes for entire case
       }>;
     };
     // Choose Your Adventure

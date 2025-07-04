@@ -675,6 +675,213 @@ export default function GameCompetitionPage() {
     );
   };
 
+  const renderProgressiveDiagnosticChallenge = (content: any) => {
+    const cases = content.cases || [];
+    const currentCase = cases[currentStage] || cases[0];
+    
+    if (!currentCase) {
+      return <div className="text-center py-4 text-muted-foreground">No diagnostic challenge cases available.</div>;
+    }
+
+    const [askedQuestions, setAskedQuestions] = useState<string[]>([]);
+    const [performedTests, setPerformedTests] = useState<string[]>([]);
+    const [usedQuestionCredits, setUsedQuestionCredits] = useState<number>(0);
+    const [usedTestCredits, setUsedTestCredits] = useState<number>(0);
+    const [currentTime, setCurrentTime] = useState<number>(0);
+    const [selectedQuestion, setSelectedQuestion] = useState<string>('');
+    const [selectedTest, setSelectedTest] = useState<string>('');
+    const [showDiagnosisInput, setShowDiagnosisInput] = useState<boolean>(false);
+
+    return (
+      <div className="space-y-6">
+        {/* Case Information */}
+        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+          <h4 className="font-semibold text-blue-800 mb-2 flex items-center gap-2">
+            <Brain className="h-4 w-4" />
+            Diagnostic Challenge: Case {currentStage + 1} of {cases.length}
+          </h4>
+          <p className="text-blue-700 mb-3">{currentCase.initialPresentation}</p>
+          <div className="grid md:grid-cols-3 gap-3 text-sm">
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-blue-600" />
+              <span>Time Limit: {currentCase.timeLimit} min</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-blue-600">💬</span>
+              <span>Questions: {usedQuestionCredits}/{currentCase.maxQuestionCredits}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-blue-600">🔬</span>
+              <span>Tests: {usedTestCredits}/{currentCase.maxTestCredits}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Investigation Phase */}
+        {!showDiagnosisInput && (
+          <div className="grid md:grid-cols-2 gap-6">
+            {/* Questions Panel */}
+            <div className="space-y-4">
+              <h5 className="font-medium text-lg">Ask Strategic Questions</h5>
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {currentCase.availableQuestions?.map((q: any) => (
+                  <div key={q.id} className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                    askedQuestions.includes(q.id) 
+                      ? 'bg-green-50 border-green-300' 
+                      : usedQuestionCredits + q.cost > currentCase.maxQuestionCredits
+                      ? 'bg-gray-100 border-gray-300 cursor-not-allowed opacity-60'
+                      : 'bg-white border-gray-200 hover:bg-blue-50'
+                  }`}
+                  onClick={() => {
+                    if (!askedQuestions.includes(q.id) && usedQuestionCredits + q.cost <= currentCase.maxQuestionCredits) {
+                      setAskedQuestions([...askedQuestions, q.id]);
+                      setUsedQuestionCredits(prev => prev + q.cost);
+                      handleResponse('questions', [...askedQuestions, q.id].join(', '));
+                    }
+                  }}>
+                    <div className="flex justify-between items-start">
+                      <p className="text-sm flex-1">{q.question}</p>
+                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded ml-2">
+                        {q.cost} credit{q.cost > 1 ? 's' : ''}
+                      </span>
+                    </div>
+                    {askedQuestions.includes(q.id) && (
+                      <div className="mt-2 p-2 bg-green-100 rounded text-sm text-green-800">
+                        <strong>Answer:</strong> {q.answer}
+                        {q.revealsRedFlag && <span className="ml-2 text-red-600 font-medium">⚠️ Red Flag</span>}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Tests Panel */}
+            <div className="space-y-4">
+              <h5 className="font-medium text-lg">Order Assessment Tests</h5>
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {currentCase.availableTests?.map((test: any) => (
+                  <div key={test.id} className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                    performedTests.includes(test.id) 
+                      ? 'bg-green-50 border-green-300' 
+                      : usedTestCredits + test.cost > currentCase.maxTestCredits
+                      ? 'bg-gray-100 border-gray-300 cursor-not-allowed opacity-60'
+                      : 'bg-white border-gray-200 hover:bg-purple-50'
+                  }`}
+                  onClick={() => {
+                    if (!performedTests.includes(test.id) && usedTestCredits + test.cost <= currentCase.maxTestCredits) {
+                      setPerformedTests([...performedTests, test.id]);
+                      setUsedTestCredits(prev => prev + test.cost);
+                      handleResponse('tests', [...performedTests, test.id].join(', '));
+                    }
+                  }}>
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">{test.testName}</p>
+                        <p className="text-xs text-gray-600 capitalize">{test.category}</p>
+                      </div>
+                      <div className="text-xs space-y-1">
+                        <span className="block bg-purple-100 text-purple-700 px-2 py-1 rounded">
+                          {test.cost} credits
+                        </span>
+                        <span className="block text-gray-500">{test.timeRequired} min</span>
+                      </div>
+                    </div>
+                    {performedTests.includes(test.id) && (
+                      <div className="mt-2 p-2 bg-green-100 rounded text-sm text-green-800">
+                        <strong>Result:</strong> {test.result}
+                        <div className="text-xs text-gray-600 mt-1">Accuracy: {test.accuracy}%</div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Action Buttons */}
+        <div className="flex gap-3">
+          <Button 
+            onClick={() => setShowDiagnosisInput(true)}
+            disabled={askedQuestions.length === 0 && performedTests.length === 0}
+          >
+            Submit Diagnosis
+          </Button>
+          {showDiagnosisInput && (
+            <Button 
+              variant="outline"
+              onClick={() => setShowDiagnosisInput(false)}
+            >
+              Continue Investigation
+            </Button>
+          )}
+        </div>
+
+        {/* Diagnosis Input */}
+        {showDiagnosisInput && (
+          <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+            <h5 className="font-medium mb-3 text-yellow-800">Final Diagnosis & Clinical Reasoning</h5>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium mb-1">Primary Diagnosis:</label>
+                <Input
+                  placeholder="Enter your primary diagnosis..."
+                  value={responses.diagnosis || ''}
+                  onChange={(e) => handleResponse('diagnosis', e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Clinical Reasoning:</label>
+                <Textarea
+                  placeholder="Explain your clinical reasoning, key findings that led to this diagnosis, and ruled out differentials..."
+                  value={responses.reasoning || ''}
+                  onChange={(e) => handleResponse('reasoning', e.target.value)}
+                  rows={4}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Differential Diagnoses Considered:</label>
+                <Textarea
+                  placeholder="List other diagnoses you considered and why you ruled them out..."
+                  value={responses.differentials || ''}
+                  onChange={(e) => handleResponse('differentials', e.target.value)}
+                  rows={3}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Case Navigation */}
+        {currentStage < cases.length - 1 && (
+          <Button onClick={() => setCurrentStage((prev: number) => prev + 1)}>
+            Next Diagnostic Challenge
+          </Button>
+        )}
+
+        {/* Scoring Information */}
+        <div className="bg-gray-50 p-4 rounded-lg">
+          <h5 className="font-medium mb-2">Scoring Weights</h5>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+            <div>
+              <span className="font-medium">Efficiency:</span> {currentCase.scoringWeights?.efficiency || 25}%
+            </div>
+            <div>
+              <span className="font-medium">Thoroughness:</span> {currentCase.scoringWeights?.thoroughness || 25}%
+            </div>
+            <div>
+              <span className="font-medium">Safety:</span> {currentCase.scoringWeights?.safety || 30}%
+            </div>
+            <div>
+              <span className="font-medium">Accuracy:</span> {currentCase.scoringWeights?.accuracy || 20}%
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderGameContent = () => {
     if (!gameContent || !competition) return null;
 
@@ -683,6 +890,7 @@ export default function GameCompetitionPage() {
       'choose_your_adventure': 'chooseYourAdventure',
       'mystery_patient': 'mysteryPatient',
       'lightning_diagnosis': 'lightningDiagnosis',
+      'progressive_diagnostic_challenge': 'progressiveDiagnosticChallenge',
       'red_flag_detective': 'redFlagDetective',
       'differential_diagnosis_duel': 'differentialDiagnosisDuel',
       'emergency_room_simulator': 'emergencyRoomSimulator',
@@ -717,6 +925,8 @@ export default function GameCompetitionPage() {
         return renderLightningDiagnosis(content);
       case 'treatment_speed_run':
         return renderTreatmentSpeedRun(content);
+      case 'progressive_diagnostic_challenge':
+        return renderProgressiveDiagnosticChallenge(content);
       case 'red_flag_detective':
         return renderRedFlagDetective(content);
       case 'differential_diagnosis_duel':

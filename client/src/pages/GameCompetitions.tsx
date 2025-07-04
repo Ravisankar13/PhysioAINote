@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Zap, Clock, Heart, AlertTriangle, Target, BookOpen, Award, Search, Play, Trophy, Users, Timer, ChevronRight, ExternalLink } from 'lucide-react';
+import { Zap, Clock, Heart, AlertTriangle, Target, BookOpen, Award, Search, Play, Trophy, Users, Timer, ChevronRight, ExternalLink, Brain } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import { useLocation } from 'wouter';
 
@@ -32,6 +32,7 @@ interface GameContent {
 const gameTypeIcons: Record<string, any> = {
   lightning_diagnosis: Zap,
   treatment_speed_run: Clock,
+  progressive_diagnostic_challenge: Brain,
   choose_your_adventure: Play,
   emergency_room_simulator: Heart,
   red_flag_detective: AlertTriangle,
@@ -44,6 +45,7 @@ const gameTypeIcons: Record<string, any> = {
 const gameTypeNames: Record<string, string> = {
   lightning_diagnosis: 'Lightning Diagnosis',
   treatment_speed_run: 'Treatment Speed Run',
+  progressive_diagnostic_challenge: 'Progressive Diagnostic Challenge',
   choose_your_adventure: 'Choose Your Adventure',
   emergency_room_simulator: 'Emergency Room Simulator',
   red_flag_detective: 'Red Flag Detective',

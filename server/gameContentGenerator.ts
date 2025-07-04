@@ -84,6 +84,103 @@ Format as JSON:
   }
 
   /**
+   * Generate Progressive Diagnostic Challenge content
+   */
+  async generateProgressiveDiagnosticChallenge(request: GameContentRequest) {
+    const prompt = `Create 3 progressive diagnostic challenge cases for ${request.bodyPart || 'general'} physiotherapy.
+
+Each case should be a detective-style diagnostic challenge where players must work strategically to uncover the diagnosis:
+
+- Start with minimal information (age, gender, basic complaint)
+- Provide 15-20 strategic questions that cost "credits" to ask
+- Include 10-15 assessment tests with varying costs, time requirements, and accuracy
+- Have realistic time evolution where condition may worsen if key questions aren't asked
+- Include red flags that emerge through targeted questioning
+- Correct diagnosis should require strategic thinking, not just pattern matching
+- ${request.difficulty || 'intermediate'} difficulty level
+
+Format as JSON:
+{
+  "cases": [
+    {
+      "id": "pdc_001",
+      "initialPresentation": "45-year-old reports shoulder pain",
+      "patientAge": 45,
+      "patientGender": "female",
+      "availableQuestions": [
+        {
+          "id": "q1",
+          "question": "When did the pain start?",
+          "cost": 1,
+          "category": "history",
+          "answer": "Gradual onset over 6 months, worsening recently",
+          "revealsRedFlag": false
+        },
+        {
+          "id": "q2", 
+          "question": "Does pain wake you at night?",
+          "cost": 1,
+          "category": "symptoms",
+          "answer": "Yes, consistently wakes patient around 3 AM",
+          "revealsRedFlag": true
+        }
+      ],
+      "availableTests": [
+        {
+          "id": "t1",
+          "testName": "Impingement test",
+          "cost": 2,
+          "timeRequired": 2,
+          "category": "orthopedic",
+          "result": "Negative - no pain with impingement maneuvers",
+          "accuracy": 85,
+          "contraindications": []
+        },
+        {
+          "id": "t2",
+          "testName": "X-ray shoulder",
+          "cost": 5,
+          "timeRequired": 15,
+          "category": "imaging", 
+          "result": "Lytic lesion visible in humeral head",
+          "accuracy": 95,
+          "contraindications": ["pregnancy"]
+        }
+      ],
+      "correctDiagnosis": "Metastatic bone disease",
+      "differentialDiagnoses": ["Rotator cuff tear", "Frozen shoulder", "Impingement syndrome"],
+      "redFlags": ["Night pain", "Progressive worsening", "Age >40", "Unexplained weight loss"],
+      "timeEvolution": [
+        {
+          "timePoint": 10,
+          "newSymptoms": ["Patient mentions fatigue, 10lb weight loss"],
+          "changingVitals": {},
+          "complications": []
+        }
+      ],
+      "scoringWeights": {
+        "efficiency": 25,
+        "thoroughness": 25,
+        "safety": 30,
+        "accuracy": 20
+      },
+      "maxQuestionCredits": 12,
+      "maxTestCredits": 15,
+      "timeLimit": 20
+    }
+  ]
+}`;
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+      messages: [{ role: "user", content: prompt }],
+      response_format: { type: "json_object" },
+    });
+
+    return JSON.parse(response.choices[0].message.content || '{}');
+  }
+
+  /**
    * Generate Choose Your Adventure content
    */
   async generateChooseYourAdventure(request: GameContentRequest) {
@@ -385,6 +482,8 @@ Format as JSON:
         return await this.generateLightningDiagnosis(request);
       case 'treatment_speed_run':
         return await this.generateTreatmentSpeedRun(request);
+      case 'progressive_diagnostic_challenge':
+        return await this.generateProgressiveDiagnosticChallenge(request);
       case 'choose_your_adventure':
         return await this.generateChooseYourAdventure(request);
       case 'emergency_room_simulator':

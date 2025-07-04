@@ -112,6 +112,7 @@ function GameCompetitions() {
   const [competitions, setCompetitions] = useState<GameCompetition[]>([]);
   const [selectedBodyPart, setSelectedBodyPart] = useState<string>('all');
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>('all');
+  const [selectedGameType, setSelectedGameType] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [selectedCompetition, setSelectedCompetition] = useState<GameContent | null>(null);
   const [joiningCompetition, setJoiningCompetition] = useState<number | null>(null);
@@ -236,7 +237,8 @@ function GameCompetitions() {
   const filteredCompetitions = competitions.filter(comp => {
     return (
       (selectedBodyPart === 'all' || comp.bodyPart === selectedBodyPart) &&
-      (selectedDifficulty === 'all' || comp.difficulty === selectedDifficulty)
+      (selectedDifficulty === 'all' || comp.difficulty === selectedDifficulty) &&
+      (selectedGameType === 'all' || comp.gameType === selectedGameType)
     );
   });
 
@@ -253,10 +255,10 @@ function GameCompetitions() {
   return (
     <div className="container mx-auto py-8 space-y-8">
       <div className="text-center space-y-4">
-        <h1 className="text-4xl font-bold">Lightning Diagnosis Challenges</h1>
+        <h1 className="text-4xl font-bold">Clinical Challenges</h1>
         <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
-          Test your diagnostic skills with rapid-fire clinical challenges. Each Lightning Diagnosis competition presents 
-          fast-paced scenarios requiring quick thinking and accurate diagnosis under time pressure.
+          Test your clinical skills with Lightning Diagnosis and Treatment Speed Run challenges. 
+          Master rapid diagnostic decisions and comprehensive treatment planning under time pressure.
         </p>
       </div>
 
@@ -264,7 +266,7 @@ function GameCompetitions() {
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="browse">Browse Challenges</TabsTrigger>
           <TabsTrigger value="active">Active Challenges</TabsTrigger>
-          <TabsTrigger value="create">Create Lightning Challenge</TabsTrigger>
+          <TabsTrigger value="create">Create Challenge</TabsTrigger>
         </TabsList>
 
         <TabsContent value="browse" className="space-y-6">
@@ -298,6 +300,17 @@ function GameCompetitions() {
                   <SelectItem value="beginner">Beginner</SelectItem>
                   <SelectItem value="intermediate">Intermediate</SelectItem>
                   <SelectItem value="advanced">Advanced</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={selectedGameType} onValueChange={setSelectedGameType}>
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="Challenge Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Challenge Types</SelectItem>
+                  <SelectItem value="lightning_diagnosis">Lightning Diagnosis</SelectItem>
+                  <SelectItem value="treatment_speed_run">Treatment Speed Run</SelectItem>
                 </SelectContent>
               </Select>
             </CardContent>

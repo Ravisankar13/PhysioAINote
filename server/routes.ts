@@ -7325,17 +7325,20 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
 
-  // Get all game competitions - only Lightning Diagnosis challenges
+  // Get all game competitions - Lightning Diagnosis and Treatment Speed Run challenges
   app.get("/api/game-competitions", async (req: Request, res: Response) => {
     try {
       const { db } = await import("./db");
       const { competitions } = await import("@shared/schema");
-      const { eq, desc } = await import("drizzle-orm");
+      const { or, eq, desc } = await import("drizzle-orm");
 
       const gameCompetitions = await db
         .select()
         .from(competitions)
-        .where(eq(competitions.gameType, "lightning_diagnosis"))
+        .where(or(
+          eq(competitions.gameType, "lightning_diagnosis"),
+          eq(competitions.gameType, "treatment_speed_run")
+        ))
         .orderBy(desc(competitions.createdAt));
 
       // Remove duplicates based on title

@@ -7297,7 +7297,7 @@ Base your analysis on established postural assessment principles and correlate f
   });
 
   // Get game competition with content
-  app.get("/api/game-competitions/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+  app.get("/api/game-competitions/:id", async (req: Request, res: Response) => {
     try {
       const competitionId = parseInt(req.params.id);
       const { db } = await import("./db");

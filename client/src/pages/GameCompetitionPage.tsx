@@ -440,6 +440,79 @@ function GameResults({ competitionId }: { competitionId: string }) {
   );
 }
 
+function CompetitionOverview({ competition, onStart }: { competition: Competition; onStart: () => void }) {
+  return (
+    <div className="max-w-4xl mx-auto space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Brain className="h-6 w-6 text-blue-600" />
+            {competition.title}
+          </CardTitle>
+          <CardDescription>{competition.description}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Target className="h-5 w-5 text-gray-500" />
+                <span className="font-medium">Body Part:</span>
+                <Badge variant="secondary">{competition.bodyPart}</Badge>
+              </div>
+              <div className="flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-gray-500" />
+                <span className="font-medium">Difficulty:</span>
+                <Badge variant={competition.difficulty === 'beginner' ? 'default' : competition.difficulty === 'intermediate' ? 'secondary' : 'destructive'}>
+                  {competition.difficulty}
+                </Badge>
+              </div>
+              <div className="flex items-center gap-2">
+                <Clock className="h-5 w-5 text-gray-500" />
+                <span className="font-medium">Time Limit:</span>
+                <span>{Math.floor(competition.timeLimit / 60)} minutes</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Users className="h-5 w-5 text-gray-500" />
+                <span className="font-medium">Participants:</span>
+                <span>{competition.currentParticipants} / {competition.maxParticipants}</span>
+              </div>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <h4 className="font-medium mb-2">Competition Status</h4>
+                <Badge variant={competition.status === 'active' ? 'default' : 'secondary'}>
+                  {competition.status}
+                </Badge>
+              </div>
+              <div>
+                <h4 className="font-medium mb-2">Game Type</h4>
+                <p className="text-sm text-muted-foreground">
+                  {competition.gameType === 'progressive_diagnostic_challenge' && 'Progressive Diagnostic Challenge - Work as a clinical detective'}
+                  {competition.gameType === 'treatment_speed_run' && 'Treatment Speed Run - Fast-track treatment planning'}
+                  {competition.gameType === 'lightning_diagnosis' && 'Lightning Diagnosis - Rapid clinical decision making'}
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="mt-6 pt-6 border-t">
+            <div className="flex justify-center">
+              <Button 
+                onClick={onStart} 
+                size="lg" 
+                className="px-8 py-3"
+                disabled={competition.status !== 'active'}
+              >
+                {competition.status === 'active' ? 'Start Competition' : 'Competition Not Available'}
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export default function GameCompetitionPage() {
   const { id } = useParams();
   const { toast } = useToast();
@@ -952,8 +1025,7 @@ export default function GameCompetitionPage() {
         />
       ) : showResults ? (
         <GameResults 
-          result={submissionResult}
-          competition={competition}
+          competitionId={id!}
         />
       ) : (
         <div className="space-y-6">

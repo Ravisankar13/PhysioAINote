@@ -945,8 +945,7 @@ export default function GameCompetitionPage() {
       patientPresentation, 
       availableQuestions = [], 
       availableTests = [],
-      resourceBudget = 15,
-      timeLimit = 20
+      resourceBudget = 15
     } = challengeContent;
 
     const remainingQuestionCredits = resourceBudget - usedQuestionCredits;

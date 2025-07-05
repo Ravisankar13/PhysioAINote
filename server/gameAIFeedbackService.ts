@@ -94,14 +94,28 @@ export class GameAIFeedbackService {
    * Analyze Lightning Diagnosis responses - SIMPLIFIED: Only diagnosis accuracy matters
    */
   private async analyzeLightningDiagnosis(responses: any, gameContent: any): Promise<QuestionFeedback[]> {
-    const lightningContent = gameContent.lightningDiagnosis || {};
+    // Check both possible keys for Lightning Diagnosis content
+    const lightningContent = gameContent.lightningDiagnosis || gameContent.lightning_diagnosis || {};
     const cases = lightningContent.cases || [];
     const feedbacks: QuestionFeedback[] = [];
+
+    console.log('Lightning Diagnosis Analysis Debug:', {
+      casesLength: cases.length,
+      responsesKeys: Object.keys(responses),
+      lightningContentKeys: Object.keys(lightningContent)
+    });
 
     for (let i = 0; i < cases.length; i++) {
       const caseData = cases[i];
       const responseKey = `case_${i}`;
       const userResponse = responses[responseKey] || '';
+
+      console.log(`Case ${i}:`, {
+        hasCaseData: !!caseData,
+        hasUserResponse: !!userResponse,
+        userResponse: userResponse,
+        caseId: caseData?.id
+      });
 
       if (caseData && userResponse) {
         const feedback = await this.analyzeLightningDiagnosisCase(
@@ -114,6 +128,7 @@ export class GameAIFeedbackService {
       }
     }
 
+    console.log('Lightning Diagnosis feedbacks generated:', feedbacks.length);
     return feedbacks;
   }
 
@@ -325,7 +340,9 @@ Provide analysis in JSON format:
     questionFeedbacks: QuestionFeedback[],
     timeSpent: number
   ): Promise<any> {
-    const averageScore = questionFeedbacks.reduce((sum, q) => sum + q.score, 0) / questionFeedbacks.length;
+    const averageScore = questionFeedbacks.length > 0 
+      ? questionFeedbacks.reduce((sum, q) => sum + q.score, 0) / questionFeedbacks.length 
+      : 0;
     
     const prompt = `Analyze overall performance in ${gameType} competition:
 

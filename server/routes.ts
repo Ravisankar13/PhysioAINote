@@ -7468,6 +7468,21 @@ Base your analysis on established postural assessment principles and correlate f
         timeSpent || 0
       );
 
+      // Debug the feedback result to find NaN values
+      console.log('DetailedFeedback debug:', {
+        overallScore: detailedFeedback.overallScore,
+        overallScoreType: typeof detailedFeedback.overallScore,
+        isNaN: isNaN(detailedFeedback.overallScore),
+        categoryScores: detailedFeedback.categoryScores,
+        questionFeedbacksLength: detailedFeedback.questionFeedbacks?.length || 0
+      });
+
+      // Debug and fix any NaN values before database insertion
+      const safeScore = (value: any) => {
+        if (typeof value === 'number' && !isNaN(value)) return value;
+        return 0; // Default to 0 for any NaN values
+      };
+
       // Create case attempts with detailed question-by-question feedback
       const caseAttempts = [{
         caseStudyId: competitionId,
@@ -7477,12 +7492,12 @@ Base your analysis on established postural assessment principles and correlate f
         proposedTreatment: 'Various responses across game questions',
         timeSpent: timeSpent || 0,
         scores: {
-          accuracy: detailedFeedback.categoryScores.accuracy,
-          speed: detailedFeedback.categoryScores.speed,
-          reasoning: detailedFeedback.categoryScores.reasoning,
-          differential: detailedFeedback.categoryScores.differential,
-          treatment: detailedFeedback.categoryScores.treatment,
-          total: detailedFeedback.overallScore
+          accuracy: safeScore(detailedFeedback.categoryScores.accuracy),
+          speed: safeScore(detailedFeedback.categoryScores.speed),
+          reasoning: safeScore(detailedFeedback.categoryScores.reasoning),
+          differential: safeScore(detailedFeedback.categoryScores.differential),
+          treatment: safeScore(detailedFeedback.categoryScores.treatment),
+          total: safeScore(detailedFeedback.overallScore)
         },
         feedback: detailedFeedback.overallFeedback,
         questionFeedbacks: detailedFeedback.questionFeedbacks,
@@ -7495,7 +7510,7 @@ Base your analysis on established postural assessment principles and correlate f
         .update(competitionParticipants)
         .set({
           completedAt: new Date(),
-          totalScore: detailedFeedback.overallScore,
+          totalScore: safeScore(detailedFeedback.overallScore),
           timeSpent: timeSpent || 0,
           caseAttempts: caseAttempts
         })
@@ -7516,7 +7531,7 @@ Base your analysis on established postural assessment principles and correlate f
       }
 
       res.json({ 
-        totalScore: detailedFeedback.overallScore,
+        totalScore: safeScore(detailedFeedback.overallScore),
         timeSpent: timeSpent || 0,
         feedback: detailedFeedback.overallFeedback,
         scores: caseAttempts[0].scores,

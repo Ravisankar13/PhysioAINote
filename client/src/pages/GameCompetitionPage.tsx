@@ -574,11 +574,14 @@ export default function GameCompetitionPage() {
   };
 
   const renderTreatmentSpeedRun = (content: any) => {
-    const treatmentContent = content.treatmentSpeedRun || {};
+    const treatmentContent = content.treatment_speed_run || {};
     const cases = treatmentContent.cases || [];
     const currentCase = cases[currentStage] || cases[0];
     
-    if (!currentCase) return null;
+    if (!currentCase) {
+      console.log('No treatment speed run content found:', content);
+      return <div className="text-center py-4 text-muted-foreground">No treatment speed run cases available.</div>;
+    }
 
     return (
       <div className="space-y-4">

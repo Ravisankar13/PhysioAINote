@@ -7506,6 +7506,15 @@ Base your analysis on established postural assessment principles and correlate f
 
       console.log('Game submission completed with detailed AI feedback. Overall score:', detailedFeedback.overallScore);
 
+      // Calculate correct/incorrect counts for Lightning Diagnosis
+      let correctAnswers = 0;
+      let totalQuestions = 0;
+      
+      if (gameType === 'lightning_diagnosis' && detailedFeedback.questionFeedbacks) {
+        totalQuestions = detailedFeedback.questionFeedbacks.length;
+        correctAnswers = detailedFeedback.questionFeedbacks.filter((q: any) => q.score === 100).length;
+      }
+
       res.json({ 
         totalScore: detailedFeedback.overallScore,
         timeSpent: timeSpent || 0,
@@ -7513,7 +7522,9 @@ Base your analysis on established postural assessment principles and correlate f
         scores: caseAttempts[0].scores,
         questionFeedbacks: detailedFeedback.questionFeedbacks,
         recommendedLearning: detailedFeedback.recommendedLearning,
-        nextSteps: detailedFeedback.nextSteps
+        nextSteps: detailedFeedback.nextSteps,
+        correctAnswers: correctAnswers,
+        totalQuestions: totalQuestions
       });
     } catch (error: any) {
       console.error('Error submitting game competition:', error);

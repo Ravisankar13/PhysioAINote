@@ -723,8 +723,8 @@ export default function GameCompetitionPage() {
                 type="radio"
                 name={`diagnosis-${currentStage}`}
                 value={currentCase.correctDiagnosis}
-                checked={responses[`case-${currentStage}`] === currentCase.correctDiagnosis}
-                onChange={(e) => handleResponse(`case-${currentStage}`, e.target.value)}
+                checked={responses[`case_${currentStage}`] === currentCase.correctDiagnosis}
+                onChange={(e) => handleResponse(`case_${currentStage}`, e.target.value)}
                 className="text-blue-600"
               />
               <span>{currentCase.correctDiagnosis}</span>
@@ -737,8 +737,8 @@ export default function GameCompetitionPage() {
                   type="radio"
                   name={`diagnosis-${currentStage}`}
                   value={redHerring}
-                  checked={responses[`case-${currentStage}`] === redHerring}
-                  onChange={(e) => handleResponse(`case-${currentStage}`, e.target.value)}
+                  checked={responses[`case_${currentStage}`] === redHerring}
+                  onChange={(e) => handleResponse(`case_${currentStage}`, e.target.value)}
                   className="text-blue-600"
                 />
                 <span>{redHerring}</span>
@@ -1137,10 +1137,109 @@ export default function GameCompetitionPage() {
           competition={competition} 
           onStart={startGame}
         />
-      ) : showResults ? (
-        <GameResults 
-          competitionId={id!}
-        />
+      ) : showResults && submissionResult ? (
+        <div className="space-y-6">
+          {/* Overall Performance Summary */}
+          <div className="bg-white border border-gray-200 rounded-lg p-6">
+            <h2 className="text-2xl font-bold mb-4 text-center">🎯 Lightning Diagnosis Results</h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+              <div className="text-center p-4 bg-green-50 rounded-lg">
+                <div className="text-3xl font-bold text-green-600">
+                  {submissionResult.correctAnswers || 0}
+                </div>
+                <div className="text-sm text-green-800">Correct Diagnoses</div>
+              </div>
+              
+              <div className="text-center p-4 bg-red-50 rounded-lg">
+                <div className="text-3xl font-bold text-red-600">
+                  {submissionResult.totalQuestions - (submissionResult.correctAnswers || 0)}
+                </div>
+                <div className="text-sm text-red-800">Incorrect Diagnoses</div>
+              </div>
+              
+              <div className="text-center p-4 bg-blue-50 rounded-lg">
+                <div className="text-3xl font-bold text-blue-600">
+                  {Math.round(submissionResult.totalScore || 0)}%
+                </div>
+                <div className="text-sm text-blue-800">Overall Score</div>
+              </div>
+            </div>
+
+            {/* AI Performance Analysis */}
+            {submissionResult.feedback && (
+              <div className="bg-blue-50 p-4 rounded-lg mb-6">
+                <h3 className="font-semibold text-blue-900 mb-2">🤖 AI Performance Analysis</h3>
+                <p className="text-blue-800 text-sm leading-relaxed">{submissionResult.feedback}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Question-by-Question Breakdown */}
+          {submissionResult.questionFeedbacks && submissionResult.questionFeedbacks.length > 0 && (
+            <div className="space-y-4">
+              <h3 className="text-xl font-semibold">📋 Question-by-Question Analysis</h3>
+              
+              {submissionResult.questionFeedbacks.map((feedback: any, index: number) => (
+                <div key={index} className={`border rounded-lg p-4 ${
+                  feedback.score === 100 ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
+                }`}>
+                  <div className="flex justify-between items-start mb-3">
+                    <h4 className="font-medium text-sm">Question {index + 1}</h4>
+                    <div className={`px-2 py-1 rounded text-xs font-medium ${
+                      feedback.score === 100 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-red-100 text-red-800'
+                    }`}>
+                      {feedback.score === 100 ? '✓ Correct' : '✗ Incorrect'}
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2 text-sm">
+                    <div>
+                      <span className="font-medium text-gray-700">Your Answer: </span>
+                      <span>{feedback.userResponse}</span>
+                    </div>
+                    
+                    {feedback.score !== 100 && (
+                      <div>
+                        <span className="font-medium text-gray-700">Correct Answer: </span>
+                        <span className="text-green-600 font-medium">{feedback.correctAnswer}</span>
+                      </div>
+                    )}
+                    
+                    <div>
+                      <span className="font-medium text-gray-700">AI Analysis: </span>
+                      <span className="text-gray-600">{feedback.aiAnalysis}</span>
+                    </div>
+                    
+                    {feedback.improvements && feedback.improvements.length > 0 && (
+                      <div>
+                        <span className="font-medium text-gray-700">Learning Points: </span>
+                        <ul className="list-disc list-inside ml-4 text-gray-600">
+                          {feedback.improvements.map((improvement: string, i: number) => (
+                            <li key={i}>{improvement}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex justify-center space-x-4">
+            <button
+              onClick={() => window.location.href = '/game-competitions'}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              Back to Competitions
+            </button>
+            <GameResults competitionId={id!} />
+          </div>
+        </div>
       ) : (
         <div className="space-y-6">
           {/* Game Header */}

@@ -1162,7 +1162,7 @@ export default function GameCompetitionPage() {
           {/* Game Content */}
           <div>
             {competition.gameType === 'lightning_diagnosis' && gameContent && (
-              renderLightningDiagnosis(gameContent.content)
+              renderLightningDiagnosis(gameContent)
             )}
             
             {competition.gameType === 'treatment_speed_run' && gameContent && (

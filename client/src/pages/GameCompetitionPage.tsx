@@ -584,22 +584,134 @@ export default function GameCompetitionPage() {
   };
 
   const renderTreatmentSpeedRun = (content: any) => {
+    // Debug logging to understand data flow
+    console.log('renderTreatmentSpeedRun called with:', content);
+    console.log('content.treatment_speed_run:', content?.treatment_speed_run);
+    
     // Access the treatment_speed_run content directly from the gameContent
     const treatmentContent = content?.treatment_speed_run || {};
     const cases = treatmentContent.cases || [];
     const currentCase = cases[currentStage] || cases[0];
     
+    console.log('treatmentContent:', treatmentContent);
+    console.log('cases:', cases);
+    console.log('currentCase:', currentCase);
+    console.log('currentStage:', currentStage);
+    
+    // Force a direct approach: if we don't have cases but have content, try different access paths
+    if ((!currentCase || cases.length === 0) && content) {
+      // Try accessing content directly in case the structure is different
+      const directCases = content.cases || content.treatment_speed_run?.cases || [];
+      if (directCases.length > 0) {
+        const directCurrentCase = directCases[currentStage] || directCases[0];
+        if (directCurrentCase) {
+          // Inline rendering for direct case content
+          return (
+            <div className="space-y-6">
+              {/* Case Information */}
+              <div className="bg-white border border-gray-200 rounded-lg p-6">
+                <h3 className="text-lg font-semibold mb-4">Case {directCurrentCase.case_id || 'Unknown'}</h3>
+                
+                <div className="space-y-4">
+                  {/* Patient Scenario */}
+                  <div>
+                    <h4 className="font-medium text-sm text-gray-700 mb-2">Patient Scenario</h4>
+                    <p className="text-sm">{directCurrentCase.patient_scenario || 'No scenario provided'}</p>
+                  </div>
+
+                  {/* Required Assessments */}
+                  {directCurrentCase.required_assessments && directCurrentCase.required_assessments.length > 0 && (
+                    <div>
+                      <h4 className="font-medium text-sm text-gray-700 mb-2">Required Assessments</h4>
+                      <ul className="text-sm space-y-1">
+                        {directCurrentCase.required_assessments.map((assessment: string, index: number) => (
+                          <li key={index} className="flex items-start">
+                            <span className="text-blue-600 mr-2">•</span>
+                            {assessment}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Treatment Objectives */}
+                  {directCurrentCase.treatment_objectives && directCurrentCase.treatment_objectives.length > 0 && (
+                    <div>
+                      <h4 className="font-medium text-sm text-gray-700 mb-2">Treatment Objectives</h4>
+                      <ul className="text-sm space-y-1">
+                        {directCurrentCase.treatment_objectives.map((objective: string, index: number) => (
+                          <li key={index} className="flex items-start">
+                            <span className="text-green-600 mr-2">•</span>
+                            {objective}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Treatment Modalities */}
+                  {directCurrentCase.treatment_modalities && directCurrentCase.treatment_modalities.length > 0 && (
+                    <div>
+                      <h4 className="font-medium text-sm text-gray-700 mb-2">Treatment Modalities</h4>
+                      <ul className="text-sm space-y-1">
+                        {directCurrentCase.treatment_modalities.map((modality: string, index: number) => (
+                          <li key={index} className="flex items-start">
+                            <span className="text-purple-600 mr-2">•</span>
+                            {modality}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Response Form */}
+              <div className="bg-white border border-gray-200 rounded-lg p-6">
+                <h4 className="font-semibold mb-4">Your Treatment Plan</h4>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Assessment Approach</label>
+                    <textarea
+                      value={responses.assessment || ''}
+                      onChange={(e) => handleResponse('assessment', e.target.value)}
+                      className="w-full p-3 border border-gray-300 rounded-md text-sm"
+                      rows={3}
+                      placeholder="Describe your assessment strategy..."
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Treatment Plan</label>
+                    <textarea
+                      value={responses.treatment || ''}
+                      onChange={(e) => handleResponse('treatment', e.target.value)}
+                      className="w-full p-3 border border-gray-300 rounded-md text-sm"
+                      rows={4}
+                      placeholder="Outline your comprehensive treatment plan..."
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Clinical Justification</label>
+                    <textarea
+                      value={responses.reasoning || ''}
+                      onChange={(e) => handleResponse('reasoning', e.target.value)}
+                      className="w-full p-3 border border-gray-300 rounded-md text-sm"
+                      rows={3}
+                      placeholder="Explain your clinical reasoning..."
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        }
+      }
+    }
+    
     if (!currentCase || cases.length === 0) {
-      // Fallback: create a sample case structure to ensure content displays
-      const fallbackCase = {
-        case_id: "sample_001",
-        patient_scenario: "Sample patient scenario for testing",
-        required_assessments: ["Range of motion", "Strength testing", "Functional assessment"],
-        treatment_objectives: ["Reduce pain", "Improve mobility", "Restore function"],
-        treatment_modalities: ["Manual therapy", "Exercise therapy", "Education"],
-        outcome_measures: ["Pain scale", "ROM measurements", "Functional tests"],
-        clinical_reasoning: "Based on assessment findings..."
-      };
+      console.log('renderTreatmentSpeedRun: No cases available, showing diagnostic info');
       
       return (
         <div className="space-y-6">
@@ -607,19 +719,19 @@ export default function GameCompetitionPage() {
             <div className="flex items-center">
               <AlertTriangle className="w-5 h-5 text-yellow-600 mr-2" />
               <div>
-                <h4 className="text-sm font-medium text-yellow-800">Loading Fallback Content</h4>
-                <p className="text-sm text-yellow-700">Using fallback content while data loads. Please refresh if this persists.</p>
+                <h4 className="text-sm font-medium text-yellow-800">Content Issue Detected</h4>
+                <p className="text-sm text-yellow-700">Treatment Speed Run content not found. Debug info below:</p>
               </div>
             </div>
           </div>
-          {/* Render fallback case content */}
-          <div className="bg-white border border-gray-200 rounded-lg p-6">
-            <h3 className="text-lg font-semibold mb-4">Case {fallbackCase.case_id}</h3>
-            <div className="space-y-4">
-              <div>
-                <h4 className="font-medium text-sm text-gray-700 mb-2">Patient Scenario</h4>
-                <p className="text-sm">{fallbackCase.patient_scenario}</p>
-              </div>
+          
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+            <h4 className="font-medium text-sm text-gray-700 mb-2">Debug Information</h4>
+            <div className="text-xs space-y-1">
+              <div>Content object keys: {content ? Object.keys(content).join(', ') : 'null'}</div>
+              <div>Treatment content keys: {treatmentContent ? Object.keys(treatmentContent).join(', ') : 'null'}</div>
+              <div>Cases length: {cases.length}</div>
+              <div>Current stage: {currentStage}</div>
             </div>
           </div>
         </div>
@@ -963,7 +1075,14 @@ export default function GameCompetitionPage() {
   };
 
   const renderGameContent = () => {
-    if (!gameContent || !competition) return null;
+    if (!gameContent || !competition) {
+      console.log('renderGameContent: Missing data', { gameContent, competition });
+      return null;
+    }
+
+    console.log('renderGameContent: Called for gameType:', competition.gameType);
+    console.log('renderGameContent: gameContent keys:', Object.keys(gameContent));
+    console.log('renderGameContent: gameContent.treatment_speed_run:', gameContent.treatment_speed_run);
 
     // Map snake_case game types to camelCase content keys for other game types
     const contentKeyMap: { [key: string]: string } = {
@@ -982,6 +1101,8 @@ export default function GameCompetitionPage() {
     const content = (competition.gameType === 'treatment_speed_run' || competition.gameType === 'progressive_diagnostic_challenge')
       ? gameContent 
       : gameContent[contentKeyMap[competition.gameType] || competition.gameType];
+    
+    console.log('renderGameContent: content being passed to renderer:', content);
     
     if (!content) {
       return (

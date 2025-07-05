@@ -571,7 +571,8 @@ export default function GameCompetitionPage() {
       const data = await response.json();
       setCompetition(data.competition);
       setGameContent(data.content);
-      setTimeRemaining(data.competition.timeLimit);
+      // Convert time limit from minutes to seconds
+      setTimeRemaining((data.competition.timeLimit || 0) * 60);
 
       // Add temporary logging to understand the data structure
       if (data.competition?.gameType === 'treatment_speed_run' && data.content) {
@@ -611,7 +612,7 @@ export default function GameCompetitionPage() {
     
     setSubmitting(true);
     try {
-      const timeSpent = (competition?.timeLimit || 0) - timeRemaining;
+      const timeSpent = ((competition?.timeLimit || 0) * 60) - timeRemaining;
       
       const response = await fetch(`/api/game-competitions/${id}/submit`, {
         method: 'POST',

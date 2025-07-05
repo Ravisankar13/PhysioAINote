@@ -537,6 +537,9 @@ export default function GameCompetitionPage() {
   const [selectedQuestion, setSelectedQuestion] = useState<string>('');
   const [selectedTest, setSelectedTest] = useState<string>('');
   const [showDiagnosisInput, setShowDiagnosisInput] = useState<boolean>(false);
+  const [revealedInformation, setRevealedInformation] = useState<Record<string, any>>({});
+  const [questionResponses, setQuestionResponses] = useState<Record<string, string>>({});
+  const [testResults, setTestResults] = useState<Record<string, string>>({});
 
   useEffect(() => {
     fetchCompetitionData();
@@ -657,6 +660,78 @@ export default function GameCompetitionPage() {
 
   const handleResponse = (key: string, value: any) => {
     setResponses((prev: any) => ({ ...prev, [key]: value }));
+  };
+
+  // Helper function to reveal information when questions are asked
+  const askQuestion = (questionId: string, challengeContent: any) => {
+    const question = challengeContent.availableQuestions?.find((q: any) => q.id === questionId);
+    if (!question) return;
+
+    // Mark question as asked and deduct credits
+    setAskedQuestions([...askedQuestions, questionId]);
+    setUsedQuestionCredits(usedQuestionCredits + question.cost);
+    setSelectedQuestion('');
+
+    // Reveal hidden information based on question reveals
+    const newRevealedInfo = { ...revealedInformation };
+    question.reveals?.forEach((key: string) => {
+      if (challengeContent.hiddenInformation?.[key]) {
+        newRevealedInfo[key] = challengeContent.hiddenInformation[key];
+      }
+    });
+    setRevealedInformation(newRevealedInfo);
+
+    // Generate appropriate response based on question type
+    let response = '';
+    if (questionId === 'q1') {
+      response = challengeContent.hiddenInformation?.painDescription || 'Patient reports significant pain and discomfort.';
+    } else if (questionId === 'q2') {
+      response = challengeContent.hiddenInformation?.auditorySymptoms || 'Patient heard a distinct sound during the incident.';
+    } else if (questionId === 'q3') {
+      response = challengeContent.hiddenInformation?.functionalLoss || 'Patient has difficulty with normal activities.';
+    } else {
+      response = `Question answered. Additional clinical information revealed. Check the revealed information section.`;
+    }
+    
+    setQuestionResponses({
+      ...questionResponses,
+      [questionId]: response
+    });
+  };
+
+  // Helper function to reveal information when tests are performed
+  const performTest = (testId: string, challengeContent: any) => {
+    const test = challengeContent.availableTests?.find((t: any) => t.id === testId);
+    if (!test) return;
+
+    // Mark test as performed and deduct credits
+    setPerformedTests([...performedTests, testId]);
+    setUsedTestCredits(usedTestCredits + test.cost);
+    setSelectedTest('');
+
+    // Reveal hidden information based on test reveals
+    const newRevealedInfo = { ...revealedInformation };
+    test.reveals?.forEach((key: string) => {
+      if (challengeContent.hiddenInformation?.[key]) {
+        newRevealedInfo[key] = challengeContent.hiddenInformation[key];
+      }
+    });
+    setRevealedInformation(newRevealedInfo);
+
+    // Generate appropriate test result based on test type
+    let result = '';
+    if (testId === 't1') {
+      result = challengeContent.hiddenInformation?.acl_status || 'Positive test result - significant anterior translation noted.';
+    } else if (testId === 't2') {
+      result = challengeContent.hiddenInformation?.meniscal_integrity || 'Test shows mechanical symptoms consistent with meniscal pathology.';
+    } else {
+      result = `Test completed. Results indicate clinical findings. Check the revealed information section.`;
+    }
+    
+    setTestResults({
+      ...testResults,
+      [testId]: result
+    });
   };
 
   const formatTime = (seconds: number) => {
@@ -1020,12 +1095,7 @@ export default function GameCompetitionPage() {
               disabled={!selectedQuestion || remainingQuestionCredits < 1}
               onClick={() => {
                 if (selectedQuestion) {
-                  const question = availableQuestions.find((q: any) => q.id === selectedQuestion);
-                  if (question) {
-                    setAskedQuestions([...askedQuestions, selectedQuestion]);
-                    setUsedQuestionCredits(usedQuestionCredits + question.cost);
-                    setSelectedQuestion('');
-                  }
+                  askQuestion(selectedQuestion, challengeContent);
                 }
               }}
             >
@@ -1062,12 +1132,7 @@ export default function GameCompetitionPage() {
               disabled={!selectedTest || remainingTestCredits < 1}
               onClick={() => {
                 if (selectedTest) {
-                  const test = availableTests.find((t: any) => t.id === selectedTest);
-                  if (test) {
-                    setPerformedTests([...performedTests, selectedTest]);
-                    setUsedTestCredits(usedTestCredits + test.cost);
-                    setSelectedTest('');
-                  }
+                  performTest(selectedTest, challengeContent);
                 }
               }}
             >
@@ -1075,6 +1140,73 @@ export default function GameCompetitionPage() {
             </button>
           </div>
         </div>
+
+        {/* Question Responses and Test Results */}
+        {(Object.keys(questionResponses).length > 0 || Object.keys(testResults).length > 0) && (
+          <div className="bg-white border border-gray-200 rounded-lg p-6">
+            <h4 className="font-medium mb-4">Investigation Results</h4>
+            
+            {/* Question Responses */}
+            {Object.keys(questionResponses).length > 0 && (
+              <div className="mb-4">
+                <h5 className="font-medium text-sm text-gray-700 mb-2">Question Responses:</h5>
+                <div className="space-y-2">
+                  {Object.entries(questionResponses).map(([questionId, response]) => {
+                    const question = challengeContent.availableQuestions?.find((q: any) => q.id === questionId);
+                    return (
+                      <div key={questionId} className="bg-blue-50 p-3 rounded border-l-4 border-blue-400">
+                        <div className="text-sm font-medium text-blue-900">
+                          Q: {question?.question || 'Question'}
+                        </div>
+                        <div className="text-sm text-blue-800 mt-1">
+                          A: {response}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Test Results */}
+            {Object.keys(testResults).length > 0 && (
+              <div className="mb-4">
+                <h5 className="font-medium text-sm text-gray-700 mb-2">Test Results:</h5>
+                <div className="space-y-2">
+                  {Object.entries(testResults).map(([testId, result]) => {
+                    const test = challengeContent.availableTests?.find((t: any) => t.id === testId);
+                    return (
+                      <div key={testId} className="bg-green-50 p-3 rounded border-l-4 border-green-400">
+                        <div className="text-sm font-medium text-green-900">
+                          Test: {test?.test || 'Diagnostic Test'}
+                        </div>
+                        <div className="text-sm text-green-800 mt-1">
+                          Result: {result}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Revealed Information */}
+            {Object.keys(revealedInformation).length > 0 && (
+              <div>
+                <h5 className="font-medium text-sm text-gray-700 mb-2">Additional Clinical Information:</h5>
+                <div className="space-y-1">
+                  {Object.entries(revealedInformation).map(([key, value]) => (
+                    <div key={key} className="bg-yellow-50 p-2 rounded border-l-4 border-yellow-400">
+                      <div className="text-sm text-yellow-800">
+                        <span className="font-medium">{key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}:</span> {value}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Final Diagnosis */}
         <div className="bg-white border border-gray-200 rounded-lg p-6">

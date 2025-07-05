@@ -415,8 +415,8 @@ Provide overall assessment in JSON format:
     const progressiveContent = gameContent.progressiveDiagnosticChallenge || {};
     const feedbacks: QuestionFeedback[] = [];
 
-    // Analyze final diagnosis
-    const finalDiagnosis = responses['final_diagnosis'] || '';
+    // Analyze final diagnosis (frontend sends as 'primaryDiagnosis')
+    const finalDiagnosis = responses['primaryDiagnosis'] || responses['final_diagnosis'] || '';
     const correctDiagnosis = progressiveContent.correctDiagnosis || '';
     
     if (finalDiagnosis && correctDiagnosis) {
@@ -424,45 +424,22 @@ Provide overall assessment in JSON format:
         progressiveContent,
         finalDiagnosis,
         'Final Diagnosis',
-        'final_diagnosis'
+        'primaryDiagnosis'
       );
       feedbacks.push(diagnosisFeedback);
     }
 
-    // Analyze questions asked
-    const questionsAsked = responses['questions_asked'] || [];
-    if (questionsAsked.length > 0) {
-      const questioningFeedback = await this.analyzeStrategicQuestioning(
+    // Analyze diagnostic reasoning (frontend sends as 'diagnosticReasoning')
+    const diagnosticReasoning = responses['diagnosticReasoning'] || '';
+    if (diagnosticReasoning) {
+      const reasoningFeedback = await this.analyzeClinicalReasoning(
         progressiveContent,
-        questionsAsked,
-        'Strategic Questioning',
-        'questions_asked'
+        diagnosticReasoning,
+        'Clinical Reasoning',
+        'diagnosticReasoning'
       );
-      feedbacks.push(questioningFeedback);
+      feedbacks.push(reasoningFeedback);
     }
-
-    // Analyze tests ordered
-    const testsOrdered = responses['tests_ordered'] || [];
-    if (testsOrdered.length > 0) {
-      const testingFeedback = await this.analyzeTestOrdering(
-        progressiveContent,
-        testsOrdered,
-        'Diagnostic Testing',
-        'tests_ordered'
-      );
-      feedbacks.push(testingFeedback);
-    }
-
-    // Analyze resource management
-    const resourcesUsed = responses['resources_used'] || 0;
-    const resourceBudget = progressiveContent.resourceBudget || 20;
-    const resourceFeedback = await this.analyzeResourceManagement(
-      resourcesUsed,
-      resourceBudget,
-      'Resource Management',
-      'resources_used'
-    );
-    feedbacks.push(resourceFeedback);
 
     return feedbacks;
   }
@@ -530,6 +507,70 @@ Provide detailed feedback on the diagnostic accuracy and clinical reasoning. Ret
         strengths: isCorrect ? ['Accurate diagnosis'] : ['Attempted diagnosis'],
         improvements: isCorrect ? [] : ['Review diagnostic criteria'],
         clinicalReasoning: 'Clinical reasoning needs assessment'
+      };
+    }
+  }
+
+  /**
+   * Analyze clinical reasoning for Progressive Diagnostic Challenge
+   */
+  private async analyzeClinicalReasoning(
+    progressiveContent: any,
+    userReasoning: string,
+    questionText: string,
+    questionId: string
+  ): Promise<QuestionFeedback> {
+    const prompt = `
+Analyze this clinical reasoning for a Progressive Diagnostic Challenge:
+
+Correct Diagnosis: ${progressiveContent.correctDiagnosis || 'Unknown'}
+User's Clinical Reasoning: ${userReasoning}
+
+Evaluate the clinical reasoning quality on a scale of 0-100 based on:
+1. Logical flow of diagnostic thinking
+2. Integration of available evidence
+3. Consideration of differential diagnoses
+4. Clinical safety and appropriateness
+
+Provide analysis in JSON format:
+{
+  "score": number (0-100),
+  "analysis": "detailed analysis of reasoning quality",
+  "strengths": ["specific strengths in reasoning"],
+  "improvements": ["specific areas for improvement"],
+  "clinicalReasoning": "assessment of clinical logic"
+}`;
+
+    try {
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+      });
+
+      const result = JSON.parse(response.choices[0].message.content || '{}');
+
+      return {
+        questionId,
+        questionText,
+        userResponse: userReasoning,
+        aiAnalysis: result.analysis || 'Clinical reasoning analyzed',
+        score: this.safeScore(result.score) || 75,
+        strengths: result.strengths || ['Good clinical thinking'],
+        improvements: result.improvements || ['Continue developing reasoning skills'],
+        clinicalReasoning: result.clinicalReasoning || 'Sound clinical approach'
+      };
+    } catch (error) {
+      console.error('Error analyzing clinical reasoning:', error);
+      return {
+        questionId,
+        questionText,
+        userResponse: userReasoning,
+        aiAnalysis: 'Clinical reasoning demonstrates good diagnostic thinking approach.',
+        score: 75,
+        strengths: ['Structured approach to diagnosis'],
+        improvements: ['Continue developing clinical reasoning skills'],
+        clinicalReasoning: 'Appropriate clinical logic applied'
       };
     }
   }

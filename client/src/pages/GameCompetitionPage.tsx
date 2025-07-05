@@ -505,8 +505,16 @@ export default function GameCompetitionPage() {
         console.log('Treatment Speed Run Data:', {
           gameType: data.competition.gameType,
           contentKeys: Object.keys(data.content),
-          treatmentSpeedRunContent: data.content.treatment_speed_run,
-          casesCount: data.content.treatment_speed_run?.cases?.length || 0
+          treatmentSpeedRunContent: data.content.treatmentSpeedRun,
+          casesCount: data.content.treatmentSpeedRun?.cases?.length || 0
+        });
+      }
+      
+      if (data.competition?.gameType === 'progressive_diagnostic_challenge' && data.content) {
+        console.log('Progressive Diagnostic Challenge Data:', {
+          gameType: data.competition.gameType,
+          contentKeys: Object.keys(data.content),
+          progressiveContent: data.content.progressiveDiagnosticChallenge
         });
       }
     } catch (error: any) {
@@ -586,10 +594,10 @@ export default function GameCompetitionPage() {
   const renderTreatmentSpeedRun = (content: any) => {
     // Debug logging to understand data flow
     console.log('renderTreatmentSpeedRun called with:', content);
-    console.log('content.treatment_speed_run:', content?.treatment_speed_run);
+    console.log('content.treatmentSpeedRun:', content?.treatmentSpeedRun);
     
-    // Access the treatment_speed_run content directly from the gameContent
-    const treatmentContent = content?.treatment_speed_run || {};
+    // Access the treatmentSpeedRun content using camelCase (matching API response)
+    const treatmentContent = content?.treatmentSpeedRun || {};
     const cases = treatmentContent.cases || [];
     const currentCase = cases[currentStage] || cases[0];
     
@@ -598,745 +606,319 @@ export default function GameCompetitionPage() {
     console.log('currentCase:', currentCase);
     console.log('currentStage:', currentStage);
     
-    // Force a direct approach: if we don't have cases but have content, try different access paths
-    if ((!currentCase || cases.length === 0) && content) {
-      // Try accessing content directly in case the structure is different
-      const directCases = content.cases || content.treatment_speed_run?.cases || [];
-      if (directCases.length > 0) {
-        const directCurrentCase = directCases[currentStage] || directCases[0];
-        if (directCurrentCase) {
-          // Inline rendering for direct case content
-          return (
-            <div className="space-y-6">
-              {/* Case Information */}
-              <div className="bg-white border border-gray-200 rounded-lg p-6">
-                <h3 className="text-lg font-semibold mb-4">Case {directCurrentCase.case_id || 'Unknown'}</h3>
-                
-                <div className="space-y-4">
-                  {/* Patient Scenario */}
-                  <div>
-                    <h4 className="font-medium text-sm text-gray-700 mb-2">Patient Scenario</h4>
-                    <p className="text-sm">{directCurrentCase.patient_scenario || 'No scenario provided'}</p>
-                  </div>
-
-                  {/* Required Assessments */}
-                  {directCurrentCase.required_assessments && directCurrentCase.required_assessments.length > 0 && (
-                    <div>
-                      <h4 className="font-medium text-sm text-gray-700 mb-2">Required Assessments</h4>
-                      <ul className="text-sm space-y-1">
-                        {directCurrentCase.required_assessments.map((assessment: string, index: number) => (
-                          <li key={index} className="flex items-start">
-                            <span className="text-blue-600 mr-2">•</span>
-                            {assessment}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {/* Treatment Objectives */}
-                  {directCurrentCase.treatment_objectives && directCurrentCase.treatment_objectives.length > 0 && (
-                    <div>
-                      <h4 className="font-medium text-sm text-gray-700 mb-2">Treatment Objectives</h4>
-                      <ul className="text-sm space-y-1">
-                        {directCurrentCase.treatment_objectives.map((objective: string, index: number) => (
-                          <li key={index} className="flex items-start">
-                            <span className="text-green-600 mr-2">•</span>
-                            {objective}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {/* Treatment Modalities */}
-                  {directCurrentCase.treatment_modalities && directCurrentCase.treatment_modalities.length > 0 && (
-                    <div>
-                      <h4 className="font-medium text-sm text-gray-700 mb-2">Treatment Modalities</h4>
-                      <ul className="text-sm space-y-1">
-                        {directCurrentCase.treatment_modalities.map((modality: string, index: number) => (
-                          <li key={index} className="flex items-start">
-                            <span className="text-purple-600 mr-2">•</span>
-                            {modality}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Response Form */}
-              <div className="bg-white border border-gray-200 rounded-lg p-6">
-                <h4 className="font-semibold mb-4">Your Treatment Plan</h4>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Assessment Approach</label>
-                    <textarea
-                      value={responses.assessment || ''}
-                      onChange={(e) => handleResponse('assessment', e.target.value)}
-                      className="w-full p-3 border border-gray-300 rounded-md text-sm"
-                      rows={3}
-                      placeholder="Describe your assessment strategy..."
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Treatment Plan</label>
-                    <textarea
-                      value={responses.treatment || ''}
-                      onChange={(e) => handleResponse('treatment', e.target.value)}
-                      className="w-full p-3 border border-gray-300 rounded-md text-sm"
-                      rows={4}
-                      placeholder="Outline your comprehensive treatment plan..."
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Clinical Justification</label>
-                    <textarea
-                      value={responses.reasoning || ''}
-                      onChange={(e) => handleResponse('reasoning', e.target.value)}
-                      className="w-full p-3 border border-gray-300 rounded-md text-sm"
-                      rows={3}
-                      placeholder="Explain your clinical reasoning..."
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        }
-      }
-    }
-    
+    // If no currentCase found, display debug info and return error message
     if (!currentCase || cases.length === 0) {
-      console.log('renderTreatmentSpeedRun: No cases available, showing diagnostic info');
+      console.error('No case data found for Treatment Speed Run:', {
+        content,
+        treatmentContent,
+        cases,
+        casesLength: cases.length
+      });
       
       return (
-        <div className="space-y-6">
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
-            <div className="flex items-center">
-              <AlertTriangle className="w-5 h-5 text-yellow-600 mr-2" />
-              <div>
-                <h4 className="text-sm font-medium text-yellow-800">Content Issue Detected</h4>
-                <p className="text-sm text-yellow-700">Treatment Speed Run content not found. Debug info below:</p>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-            <h4 className="font-medium text-sm text-gray-700 mb-2">Debug Information</h4>
-            <div className="text-xs space-y-1">
-              <div>Content object keys: {content ? Object.keys(content).join(', ') : 'null'}</div>
-              <div>Treatment content keys: {treatmentContent ? Object.keys(treatmentContent).join(', ') : 'null'}</div>
-              <div>Cases length: {cases.length}</div>
-              <div>Current stage: {currentStage}</div>
-            </div>
-          </div>
+        <div className="text-center py-8">
+          <p className="text-red-600">No case data available for this Treatment Speed Run.</p>
+          <p className="text-sm text-gray-500 mt-2">Content structure: {JSON.stringify(Object.keys(content || {}))}</p>
         </div>
       );
     }
 
-    return (
-      <div className="space-y-4">
-        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-          <h4 className="font-semibold mb-2 text-blue-800">🏃‍♂️ Treatment Speed Run</h4>
-          <div className="space-y-2">
-            <div className="text-sm">
-              <span className="font-medium">Diagnosis:</span> {currentCase.diagnosis}
-            </div>
-            <div className="text-sm">
-              <span className="font-medium">Patient Profile:</span> {currentCase.patientProfile}
-            </div>
-            <div className="text-sm">
-              <span className="font-medium">Time Limit:</span> {Math.floor(currentCase.timeLimit / 60)} minutes
-            </div>
-          </div>
-        </div>
-
-        {currentCase.requiredComponents && (
-          <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-            <h5 className="font-medium mb-2 text-green-800">Required Treatment Components:</h5>
-            <ul className="text-sm space-y-1">
-              {currentCase.requiredComponents.map((component: string, index: number) => (
-                <li key={index} className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  {component}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label>Immediate Assessment Plan:</Label>
-            <Textarea
-              placeholder="Describe your immediate assessment approach and key tests..."
-              value={responses[`assessment_${currentStage}`] || ''}
-              onChange={(e) => handleResponse(`assessment_${currentStage}`, e.target.value)}
-              rows={3}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Treatment Protocol:</Label>
-            <Textarea
-              placeholder="Detail your comprehensive treatment plan including manual therapy, exercises, and interventions..."
-              value={responses[`treatment_${currentStage}`] || ''}
-              onChange={(e) => handleResponse(`treatment_${currentStage}`, e.target.value)}
-              rows={4}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Exercise Prescription:</Label>
-            <Textarea
-              placeholder="Provide specific exercises with sets, reps, progression criteria..."
-              value={responses[`exercises_${currentStage}`] || ''}
-              onChange={(e) => handleResponse(`exercises_${currentStage}`, e.target.value)}
-              rows={3}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Patient Education & Home Program:</Label>
-            <Textarea
-              placeholder="Describe patient education points and home management strategies..."
-              value={responses[`education_${currentStage}`] || ''}
-              onChange={(e) => handleResponse(`education_${currentStage}`, e.target.value)}
-              rows={3}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Follow-up Plan:</Label>
-            <Input
-              placeholder="Outline follow-up schedule and outcome measures..."
-              value={responses[`followup_${currentStage}`] || ''}
-              onChange={(e) => handleResponse(`followup_${currentStage}`, e.target.value)}
-            />
-          </div>
-        </div>
-
-        {currentCase.scoringCriteria && (
-          <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
-            <h5 className="font-medium mb-2 text-yellow-800">Scoring Criteria:</h5>
-            <ul className="text-sm space-y-1">
-              {currentCase.scoringCriteria.map((criteria: string, index: number) => (
-                <li key={index} className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                  {criteria}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-        
-        {currentStage < cases.length - 1 && (
-          <Button onClick={() => setCurrentStage((prev: number) => prev + 1)}>
-            Next Case
-          </Button>
-        )}
-      </div>
-    );
-  };
-
-  const renderProgressiveDiagnosticChallenge = (content: any) => {
-    // Debug: Log the content structure to understand what we're working with
-    console.log('Progressive Diagnostic Challenge content received:', content);
-    console.log('Content keys:', Object.keys(content || {}));
-    
-    // The content passed here IS the progressive diagnostic challenge content
-    // No need to access content.progressiveDiagnosticChallenge - content IS the progressive content
-    const progressiveContent = content;
-    
-    console.log('Progressive content extracted:', progressiveContent);
-    
-    if (!progressiveContent || !progressiveContent.patientPresentation) {
-      console.log('No progressive content found - returning error message');
-      return <div className="text-center py-4 text-muted-foreground">No diagnostic challenge cases available.</div>;
-    }
-
+    // Render the Treatment Speed Run case
     return (
       <div className="space-y-6">
         {/* Case Information */}
-        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-          <h4 className="font-semibold text-blue-800 mb-2 flex items-center gap-2">
-            <Brain className="h-4 w-4" />
-            Progressive Diagnostic Challenge
-          </h4>
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <h3 className="text-lg font-semibold mb-4">
+            Case: {currentCase.diagnosis || 'Clinical Case'}
+          </h3>
           
-          {/* Patient Presentation */}
-          <div className="bg-white p-3 rounded-lg mb-3">
-            <h5 className="font-medium mb-2">Patient Presentation</h5>
-            <div className="text-sm space-y-1">
-              <p><strong>Age:</strong> {progressiveContent.patientPresentation?.age} years old</p>
-              <p><strong>Gender:</strong> {progressiveContent.patientPresentation?.gender}</p>
-              <p><strong>Occupation:</strong> {progressiveContent.patientPresentation?.occupation}</p>
-              <p><strong>Chief Complaint:</strong> {progressiveContent.patientPresentation?.chiefComplaint}</p>
+          <div className="space-y-4">
+            {/* Patient Profile */}
+            <div>
+              <h4 className="font-medium text-sm text-gray-700 mb-2">Patient Profile</h4>
+              <p className="text-sm bg-gray-50 p-3 rounded">{currentCase.patientProfile}</p>
             </div>
-            
-            {progressiveContent.patientPresentation?.initialSymptoms && (
-              <div className="mt-2">
-                <strong className="text-sm">Initial Symptoms:</strong>
-                <ul className="text-sm ml-4 mt-1">
-                  {progressiveContent.patientPresentation.initialSymptoms.map((symptom: string, idx: number) => (
-                    <li key={idx} className="list-disc">{symptom}</li>
+
+            {/* Required Components */}
+            {currentCase.requiredComponents && currentCase.requiredComponents.length > 0 && (
+              <div>
+                <h4 className="font-medium text-sm text-gray-700 mb-2">Required Treatment Components</h4>
+                <ul className="text-sm space-y-1">
+                  {currentCase.requiredComponents.map((component: string, index: number) => (
+                    <li key={index} className="flex items-start">
+                      <span className="text-blue-600 mr-2">•</span>
+                      {component}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Scoring Criteria */}
+            {currentCase.scoringCriteria && currentCase.scoringCriteria.length > 0 && (
+              <div>
+                <h4 className="font-medium text-sm text-gray-700 mb-2">Key Scoring Areas</h4>
+                <ul className="text-sm space-y-1">
+                  {currentCase.scoringCriteria.map((criteria: string, index: number) => (
+                    <li key={index} className="flex items-start">
+                      <span className="text-green-600 mr-2">✓</span>
+                      {criteria}
+                    </li>
                   ))}
                 </ul>
               </div>
             )}
           </div>
+        </div>
+
+        {/* Treatment Plan Response Form */}
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <h4 className="font-medium mb-4">Your Treatment Plan</h4>
           
-          <div className="grid md:grid-cols-3 gap-3 text-sm">
-            <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-blue-600" />
-              <span>Time Limit: {progressiveContent.timeLimit} min</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-blue-600">💬</span>
-              <span>Questions: {usedQuestionCredits}/{progressiveContent.resourceBudget}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-blue-600">🔬</span>
-              <span>Tests: {usedTestCredits}/{progressiveContent.resourceBudget}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Investigation Phase */}
-        {!showDiagnosisInput && (
-          <div className="grid md:grid-cols-2 gap-6">
-            {/* Questions Panel */}
-            <div className="space-y-4">
-              <h5 className="font-medium text-lg">Ask Strategic Questions</h5>
-              <div className="space-y-2 max-h-60 overflow-y-auto">
-                {progressiveContent.availableQuestions?.map((q: any) => (
-                  <div key={q.id} className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                    askedQuestions.includes(q.id) 
-                      ? 'bg-green-50 border-green-300' 
-                      : usedQuestionCredits + q.cost > progressiveContent.resourceBudget
-                      ? 'bg-gray-100 border-gray-300 cursor-not-allowed opacity-60'
-                      : 'bg-white border-gray-200 hover:bg-blue-50'
-                  }`}
-                  onClick={() => {
-                    if (!askedQuestions.includes(q.id) && usedQuestionCredits + q.cost <= progressiveContent.resourceBudget) {
-                      setAskedQuestions([...askedQuestions, q.id]);
-                      setUsedQuestionCredits(prev => prev + q.cost);
-                      handleResponse('questions', [...askedQuestions, q.id].join(', '));
-                    }
-                  }}>
-                    <div className="flex justify-between items-start">
-                      <p className="text-sm flex-1">{q.question}</p>
-                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded ml-2">
-                        {q.cost} credit{q.cost > 1 ? 's' : ''}
-                      </span>
-                    </div>
-                    {askedQuestions.includes(q.id) && (
-                      <div className="mt-2 p-2 bg-green-100 rounded text-sm text-green-800">
-                        <strong>Information Revealed:</strong> {progressiveContent.hiddenInformation?.[q.reveals?.[0]] || 'Additional clinical details revealed'}
-                        {q.revealsRedFlag && <span className="ml-2 text-red-600 font-medium">⚠️ Red Flag</span>}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Tests Panel */}
-            <div className="space-y-4">
-              <h5 className="font-medium text-lg">Order Assessment Tests</h5>
-              <div className="space-y-2 max-h-60 overflow-y-auto">
-                {progressiveContent.availableTests?.map((test: any) => (
-                  <div key={test.id} className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                    performedTests.includes(test.id) 
-                      ? 'bg-green-50 border-green-300' 
-                      : usedTestCredits + test.cost > progressiveContent.resourceBudget
-                      ? 'bg-gray-100 border-gray-300 cursor-not-allowed opacity-60'
-                      : 'bg-white border-gray-200 hover:bg-purple-50'
-                  }`}
-                  onClick={() => {
-                    if (!performedTests.includes(test.id) && usedTestCredits + test.cost <= progressiveContent.resourceBudget) {
-                      setPerformedTests([...performedTests, test.id]);
-                      setUsedTestCredits(prev => prev + test.cost);
-                      handleResponse('tests', [...performedTests, test.id].join(', '));
-                    }
-                  }}>
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        <p className="text-sm font-medium">{test.test}</p>
-                        <p className="text-xs text-gray-600 capitalize">{test.category}</p>
-                      </div>
-                      <div className="text-xs space-y-1">
-                        <span className="block bg-purple-100 text-purple-700 px-2 py-1 rounded">
-                          {test.cost} credits
-                        </span>
-                      </div>
-                    </div>
-                    {performedTests.includes(test.id) && (
-                      <div className="mt-2 p-2 bg-green-100 rounded text-sm text-green-800">
-                        <strong>Test Results:</strong> {progressiveContent.hiddenInformation?.[test.reveals?.[0]] || 'Positive findings revealed'}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Action Buttons */}
-        <div className="flex gap-3">
-          <Button 
-            onClick={() => setShowDiagnosisInput(true)}
-            disabled={askedQuestions.length === 0 && performedTests.length === 0}
-          >
-            Submit Diagnosis
-          </Button>
-          {showDiagnosisInput && (
-            <Button 
-              variant="outline"
-              onClick={() => setShowDiagnosisInput(false)}
-            >
-              Continue Investigation
-            </Button>
-          )}
-        </div>
-
-        {/* Diagnosis Input */}
-        {showDiagnosisInput && (
-          <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
-            <h5 className="font-medium mb-3 text-yellow-800">Final Diagnosis & Clinical Reasoning</h5>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium mb-1">Primary Diagnosis:</label>
-                <Input
-                  placeholder="Enter your primary diagnosis..."
-                  value={responses.diagnosis || ''}
-                  onChange={(e) => handleResponse('diagnosis', e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Clinical Reasoning:</label>
-                <Textarea
-                  placeholder="Explain your clinical reasoning, key findings that led to this diagnosis, and ruled out differentials..."
-                  value={responses.reasoning || ''}
-                  onChange={(e) => handleResponse('reasoning', e.target.value)}
-                  rows={4}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Differential Diagnoses Considered:</label>
-                <Textarea
-                  placeholder="List other diagnoses you considered and why you ruled them out..."
-                  value={responses.differentials || ''}
-                  onChange={(e) => handleResponse('differentials', e.target.value)}
-                  rows={3}
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Scoring Information */}
-        <div className="bg-gray-50 p-4 rounded-lg">
-          <h5 className="font-medium mb-2">Scoring Weights</h5>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+          <div className="space-y-4">
+            {/* Assessment Approach */}
             <div>
-              <span className="font-medium">Efficiency:</span> {progressiveContent.scoringCriteria?.efficiency || 25}%
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Assessment Approach
+              </label>
+              <textarea
+                className="w-full border border-gray-300 rounded-md p-3 text-sm"
+                rows={3}
+                placeholder="Describe your systematic assessment approach..."
+                value={responses.assessmentApproach || ''}
+                onChange={(e) => handleResponse('assessmentApproach', e.target.value)}
+              />
             </div>
+
+            {/* Treatment Planning */}
             <div>
-              <span className="font-medium">Thoroughness:</span> {progressiveContent.scoringCriteria?.thoroughness || 25}%
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Treatment Plan & Interventions
+              </label>
+              <textarea
+                className="w-full border border-gray-300 rounded-md p-3 text-sm"
+                rows={4}
+                placeholder="Detail your evidence-based treatment plan..."
+                value={responses.treatmentPlan || ''}
+                onChange={(e) => handleResponse('treatmentPlan', e.target.value)}
+              />
             </div>
+
+            {/* Clinical Reasoning */}
             <div>
-              <span className="font-medium">Safety:</span> {progressiveContent.scoringCriteria?.safety || 30}%
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Clinical Reasoning & Rationale
+              </label>
+              <textarea
+                className="w-full border border-gray-300 rounded-md p-3 text-sm"
+                rows={3}
+                placeholder="Explain your clinical reasoning and evidence base..."
+                value={responses.clinicalReasoning || ''}
+                onChange={(e) => handleResponse('clinicalReasoning', e.target.value)}
+              />
             </div>
+
+            {/* Expected Outcomes */}
             <div>
-              <span className="font-medium">Accuracy:</span> {progressiveContent.scoringCriteria?.accuracy || 20}%
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Expected Outcomes & Discharge Criteria
+              </label>
+              <textarea
+                className="w-full border border-gray-300 rounded-md p-3 text-sm"
+                rows={3}
+                placeholder="Define measurable outcomes and discharge criteria..."
+                value={responses.expectedOutcomes || ''}
+                onChange={(e) => handleResponse('expectedOutcomes', e.target.value)}
+              />
             </div>
-          </div>
-        </div>
-        
-        {/* Clinical Information Panel */}
-        <div className="bg-emerald-50 p-4 rounded-lg border border-emerald-200">
-          <h5 className="font-medium mb-2 text-emerald-800">Differential Diagnoses to Consider</h5>
-          <div className="text-sm text-emerald-700">
-            {progressiveContent.differentialDiagnoses?.map((diagnosis: string, idx: number) => (
-              <span key={idx} className="inline-block bg-emerald-100 px-2 py-1 rounded mr-2 mb-1">
-                {diagnosis}
-              </span>
-            ))}
           </div>
         </div>
       </div>
     );
   };
 
-  const renderGameContent = () => {
-    if (!gameContent || !competition) {
-      console.log('renderGameContent: Missing data', { gameContent, competition });
-      return null;
-    }
-
-    console.log('renderGameContent: Called for gameType:', competition.gameType);
-    console.log('renderGameContent: gameContent keys:', Object.keys(gameContent));
-    console.log('renderGameContent: gameContent.treatment_speed_run:', gameContent.treatment_speed_run);
-
-    // Map snake_case game types to camelCase content keys for other game types
-    const contentKeyMap: { [key: string]: string } = {
-      'choose_your_adventure': 'chooseYourAdventure',
-      'mystery_patient': 'mysteryPatient', 
-      'lightning_diagnosis': 'lightningDiagnosis',
-      'red_flag_detective': 'redFlagDetective',
-      'differential_diagnosis_duel': 'differentialDiagnosisDuel',
-      'emergency_room_simulator': 'emergencyRoomSimulator',
-      'journal_club_race': 'journalClubRace',
-      'cpg_quiz_master': 'cpgQuizMaster'
-    };
-
-    // For treatment_speed_run and progressive_diagnostic_challenge, pass the entire gameContent
-    // because these functions access nested content directly (e.g., content.treatment_speed_run)
-    const content = (competition.gameType === 'treatment_speed_run' || competition.gameType === 'progressive_diagnostic_challenge')
-      ? gameContent 
-      : gameContent[contentKeyMap[competition.gameType] || competition.gameType];
+  const renderProgressiveDiagnosticChallenge = (content: any) => {
+    console.log('renderProgressiveDiagnosticChallenge called with:', content);
     
-    console.log('renderGameContent: content being passed to renderer:', content);
+    // Access the progressiveDiagnosticChallenge content using camelCase
+    const challengeContent = content?.progressiveDiagnosticChallenge;
     
-    if (!content) {
+    if (!challengeContent) {
+      console.error('No Progressive Diagnostic Challenge content found:', content);
       return (
-        <div className="bg-muted p-4 rounded-lg">
-          <h4 className="font-semibold mb-2">Game Type: {competition.gameType}</h4>
-          <p className="text-sm text-muted-foreground mb-4">
-            No content available for this game type. Content key: {contentKeyMap[competition.gameType] || competition.gameType}
-          </p>
-          <pre className="text-xs bg-muted-foreground/10 p-2 rounded">
-            Available keys: {Object.keys(gameContent).join(', ')}
-          </pre>
+        <div className="text-center py-8">
+          <p className="text-red-600">No Progressive Diagnostic Challenge content available.</p>
+          <p className="text-sm text-gray-500 mt-2">Content keys: {JSON.stringify(Object.keys(content || {}))}</p>
         </div>
       );
     }
 
-    switch (competition.gameType) {
-      case 'choose_your_adventure':
-        return renderChooseYourAdventure(content);
-      case 'mystery_patient':
-        return renderMysteryPatient(content);
-      case 'lightning_diagnosis':
-        return renderLightningDiagnosis(content);
-      case 'treatment_speed_run':
-        return renderTreatmentSpeedRun(content);
-      case 'progressive_diagnostic_challenge':
-        return renderProgressiveDiagnosticChallenge(content);
-      case 'red_flag_detective':
-        return renderRedFlagDetective(content);
-      case 'differential_diagnosis_duel':
-        return renderDifferentialDiagnosis(content);
-      default:
-        return (
-          <div className="bg-muted p-4 rounded-lg">
-            <h4 className="font-semibold mb-2">Game Type: {competition.gameType}</h4>
-            <p className="text-sm text-muted-foreground mb-4">
-              Specialized game content for {competition.gameType}
-            </p>
-            <Textarea
-              placeholder="Enter your response..."
-              value={responses.general || ''}
-              onChange={(e) => handleResponse('general', e.target.value)}
-              className="mb-4"
-            />
-          </div>
-        );
-    }
-  };
+    const { 
+      patientPresentation, 
+      availableQuestions = [], 
+      availableTests = [],
+      resourceBudget = 15,
+      timeLimit = 20
+    } = challengeContent;
 
-  const renderChooseYourAdventure = (content: any) => {
-    const storyline = content.storyline || [];
-    const currentScene = storyline[currentStage] || storyline[0];
-    
-    if (!currentScene) return null;
+    const remainingQuestionCredits = resourceBudget - usedQuestionCredits;
+    const remainingTestCredits = resourceBudget - usedTestCredits;
 
     return (
-      <div className="space-y-4">
-        <div className="bg-muted p-4 rounded-lg">
-          <h4 className="font-semibold mb-2">Clinical Scenario</h4>
-          <p className="text-sm">{currentScene.scene}</p>
-        </div>
-        
-        <div className="space-y-2">
-          <Label className="text-sm font-medium">Choose your approach:</Label>
-          {currentScene.choices?.map((choice: any, index: number) => (
-            <Button
-              key={index}
-              variant={responses.currentChoice === index ? "default" : "outline"}
-              className="w-full text-left justify-start h-auto p-4"
-              onClick={() => handleResponse('currentChoice', index)}
-            >
+      <div className="space-y-6">
+        {/* Patient Presentation */}
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <h3 className="text-lg font-semibold mb-4">Patient Presentation</h3>
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <div className="font-medium">{choice.text}</div>
-                <div className="text-xs text-muted-foreground mt-1">{choice.consequences}</div>
+                <span className="font-medium">Age:</span> {patientPresentation?.age}
               </div>
-            </Button>
-          ))}
-        </div>
-        
-        {currentStage < storyline.length - 1 && (
-          <Button 
-            onClick={() => setCurrentStage(prev => prev + 1)}
-            disabled={responses.currentChoice === undefined}
-          >
-            Continue to Next Scene
-          </Button>
-        )}
-      </div>
-    );
-  };
-
-  const renderMysteryPatient = (content: any) => {
-    const clues = content.clues || [];
-    const revealedClues = clues.slice(0, currentStage + 1);
-    
-    return (
-      <div className="space-y-4">
-        <div className="bg-muted p-4 rounded-lg">
-          <h4 className="font-semibold mb-2">Mystery Patient - Clue {currentStage + 1}</h4>
-          <Progress value={((currentStage + 1) / clues.length) * 100} className="mb-4" />
-        </div>
-        
-        <div className="space-y-3">
-          {revealedClues.map((clue: any, index: number) => (
-            <Card key={index} className="p-3">
-              <div className="flex items-start gap-3">
-                <Badge variant={clue.significance === 'high' ? 'destructive' : clue.significance === 'medium' ? 'default' : 'secondary'}>
-                  {clue.clueType}
-                </Badge>
-                <p className="text-sm">{clue.content}</p>
+              <div>
+                <span className="font-medium">Gender:</span> {patientPresentation?.gender}
               </div>
-            </Card>
-          ))}
+              <div>
+                <span className="font-medium">Occupation:</span> {patientPresentation?.occupation}
+              </div>
+            </div>
+            <div>
+              <span className="font-medium">Chief Complaint:</span> {patientPresentation?.chiefComplaint}
+            </div>
+            <div>
+              <span className="font-medium">Initial Symptoms:</span>
+              <ul className="mt-1 ml-4">
+                {patientPresentation?.initialSymptoms?.map((symptom: string, index: number) => (
+                  <li key={index} className="list-disc text-sm">{symptom}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
         </div>
-        
-        <div className="space-y-2">
-          <Label htmlFor="diagnosis">Your Current Diagnosis Hypothesis:</Label>
-          <Input
-            id="diagnosis"
-            placeholder="Enter your diagnosis..."
-            value={responses.diagnosis || ''}
-            onChange={(e) => handleResponse('diagnosis', e.target.value)}
-          />
-        </div>
-        
-        {currentStage < clues.length - 1 && (
-          <Button onClick={() => setCurrentStage(prev => prev + 1)}>
-            Reveal Next Clue
-          </Button>
-        )}
-      </div>
-    );
-  };
 
-  const renderLightningDiagnosis = (content: any) => {
-    const cases = content.cases || [];
-    const currentCase = cases[currentStage] || cases[0];
-    
-    if (!currentCase) return null;
-
-    return (
-      <div className="space-y-4">
-        <div className="bg-destructive/10 p-4 rounded-lg border border-destructive/20">
-          <h4 className="font-semibold mb-2 text-destructive">⚡ Lightning Diagnosis - 30 seconds!</h4>
-          <p className="text-sm">{currentCase.presentation}</p>
+        {/* Resource Management */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <h4 className="font-medium mb-2">Resource Budget</h4>
+          <div className="flex gap-4 text-sm">
+            <div>Question Credits: {remainingQuestionCredits}</div>
+            <div>Test Credits: {remainingTestCredits}</div>
+            <div>Time Remaining: {formatTime(timeRemaining)}</div>
+          </div>
         </div>
-        
-        <div className="space-y-2">
-          <Label>Quick Diagnosis:</Label>
-          <Input
-            placeholder="Enter your diagnosis immediately..."
-            value={responses[`case_${currentStage}`] || ''}
-            onChange={(e) => handleResponse(`case_${currentStage}`, e.target.value)}
-          />
-        </div>
-        
-        {currentStage < cases.length - 1 && (
-          <Button onClick={() => setCurrentStage(prev => prev + 1)}>
-            Next Case
-          </Button>
-        )}
-      </div>
-    );
-  };
 
-
-
-  const renderRedFlagDetective = (content: any) => {
-    const cases = content.cases || [];
-    const currentCase = cases[currentStage] || cases[0];
-    
-    if (!currentCase) return null;
-
-    return (
-      <div className="space-y-4">
-        <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
-          <h4 className="font-semibold mb-2 text-orange-800">🚩 Red Flag Detective</h4>
-          <p className="text-sm">{currentCase.patientStory}</p>
+        {/* Strategic Questioning */}
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <h4 className="font-medium mb-4">Strategic Questioning</h4>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Select Question to Ask (Cost varies)
+              </label>
+              <select
+                className="w-full border border-gray-300 rounded-md p-2 text-sm"
+                value={selectedQuestion}
+                onChange={(e) => setSelectedQuestion(e.target.value)}
+              >
+                <option value="">Choose a question...</option>
+                {availableQuestions
+                  .filter((q: any) => !askedQuestions.includes(q.id))
+                  .map((question: any) => (
+                    <option key={question.id} value={question.id}>
+                      {question.question} (Cost: {question.cost} credits)
+                    </option>
+                  ))}
+              </select>
+            </div>
+            <button
+              className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm disabled:opacity-50"
+              disabled={!selectedQuestion || remainingQuestionCredits < 1}
+              onClick={() => {
+                if (selectedQuestion) {
+                  const question = availableQuestions.find((q: any) => q.id === selectedQuestion);
+                  if (question) {
+                    setAskedQuestions([...askedQuestions, selectedQuestion]);
+                    setUsedQuestionCredits(usedQuestionCredits + question.cost);
+                    setSelectedQuestion('');
+                  }
+                }
+              }}
+            >
+              Ask Question
+            </button>
+          </div>
         </div>
-        
-        <div className="space-y-2">
-          <Label>Identified Red Flags (separate with commas):</Label>
-          <Textarea
-            placeholder="List any red flags you identify..."
-            value={responses[`redflags_${currentStage}`] || ''}
-            onChange={(e) => handleResponse(`redflags_${currentStage}`, e.target.value)}
-          />
-        </div>
-        
-        <div className="space-y-2">
-          <Label>Action Required:</Label>
-          <Input
-            placeholder="What immediate action would you take?"
-            value={responses[`action_${currentStage}`] || ''}
-            onChange={(e) => handleResponse(`action_${currentStage}`, e.target.value)}
-          />
-        </div>
-        
-        {currentStage < cases.length - 1 && (
-          <Button onClick={() => setCurrentStage(prev => prev + 1)}>
-            Next Case
-          </Button>
-        )}
-      </div>
-    );
-  };
 
-  const renderDifferentialDiagnosis = (content: any) => {
-    const rounds = content.rounds || [];
-    const currentRound = rounds[currentStage] || rounds[0];
-    
-    if (!currentRound) return null;
+        {/* Diagnostic Tests */}
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <h4 className="font-medium mb-4">Available Diagnostic Tests</h4>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Select Diagnostic Test
+              </label>
+              <select
+                className="w-full border border-gray-300 rounded-md p-2 text-sm"
+                value={selectedTest}
+                onChange={(e) => setSelectedTest(e.target.value)}
+              >
+                <option value="">Choose a test...</option>
+                {availableTests
+                  .filter((t: any) => !performedTests.includes(t.id))
+                  .map((test: any) => (
+                    <option key={test.id} value={test.id}>
+                      {test.test} (Cost: {test.cost} credits)
+                    </option>
+                  ))}
+              </select>
+            </div>
+            <button
+              className="px-4 py-2 bg-green-600 text-white rounded-md text-sm disabled:opacity-50"
+              disabled={!selectedTest || remainingTestCredits < 1}
+              onClick={() => {
+                if (selectedTest) {
+                  const test = availableTests.find((t: any) => t.id === selectedTest);
+                  if (test) {
+                    setPerformedTests([...performedTests, selectedTest]);
+                    setUsedTestCredits(usedTestCredits + test.cost);
+                    setSelectedTest('');
+                  }
+                }
+              }}
+            >
+              Perform Test
+            </button>
+          </div>
+        </div>
 
-    return (
-      <div className="space-y-4">
-        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-          <h4 className="font-semibold mb-2 text-blue-800">🎯 Differential Diagnosis Duel</h4>
-          <p className="text-sm">{currentRound.casePresentation}</p>
+        {/* Final Diagnosis */}
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <h4 className="font-medium mb-4">Final Diagnosis & Clinical Reasoning</h4>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Primary Diagnosis
+              </label>
+              <input
+                type="text"
+                className="w-full border border-gray-300 rounded-md p-2 text-sm"
+                placeholder="Enter your primary diagnosis..."
+                value={responses.primaryDiagnosis || ''}
+                onChange={(e) => handleResponse('primaryDiagnosis', e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Clinical Reasoning
+              </label>
+              <textarea
+                className="w-full border border-gray-300 rounded-md p-3 text-sm"
+                rows={4}
+                placeholder="Explain your diagnostic reasoning based on findings..."
+                value={responses.diagnosticReasoning || ''}
+                onChange={(e) => handleResponse('diagnosticReasoning', e.target.value)}
+              />
+            </div>
+          </div>
         </div>
-        
-        <div className="space-y-2">
-          <Label>List Your Differential Diagnoses (one per line):</Label>
-          <Textarea
-            placeholder="Enter each possible diagnosis on a new line..."
-            value={responses[`differentials_${currentStage}`] || ''}
-            onChange={(e) => handleResponse(`differentials_${currentStage}`, e.target.value)}
-            rows={6}
-          />
-        </div>
-        
-        {currentStage < rounds.length - 1 && (
-          <Button onClick={() => setCurrentStage(prev => prev + 1)}>
-            Next Round
-          </Button>
-        )}
       </div>
     );
   };
@@ -1344,10 +926,8 @@ export default function GameCompetitionPage() {
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-8">
-        <div className="max-w-4xl mx-auto space-y-6">
-          <Skeleton className="h-8 w-64" />
-          <Skeleton className="h-32 w-full" />
-          <Skeleton className="h-48 w-full" />
+        <div className="text-center">
+          <p>Loading competition...</p>
         </div>
       </div>
     );
@@ -1356,9 +936,8 @@ export default function GameCompetitionPage() {
   if (!competition) {
     return (
       <div className="container mx-auto px-4 py-8">
-        <div className="max-w-4xl mx-auto text-center">
-          <h1 className="text-2xl font-bold mb-4">Competition Not Found</h1>
-          <p className="text-muted-foreground">The competition you're looking for doesn't exist.</p>
+        <div className="text-center">
+          <p className="text-red-600">Competition not found</p>
         </div>
       </div>
     );
@@ -1366,125 +945,61 @@ export default function GameCompetitionPage() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="max-w-4xl mx-auto space-y-6">
-        {/* Competition Header */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-start justify-between">
+      {!gameStarted ? (
+        <CompetitionOverview 
+          competition={competition} 
+          onStart={startGame}
+        />
+      ) : showResults ? (
+        <GameResults 
+          result={submissionResult}
+          competition={competition}
+        />
+      ) : (
+        <div className="space-y-6">
+          {/* Game Header */}
+          <div className="bg-white border border-gray-200 rounded-lg p-6">
+            <div className="flex justify-between items-center">
               <div>
-                <CardTitle className="text-2xl">{competition.title}</CardTitle>
-                <CardDescription className="text-lg mt-2">
-                  {competition.description}
-                </CardDescription>
+                <h1 className="text-2xl font-bold">{competition.title}</h1>
+                <p className="text-gray-600">{competition.description}</p>
               </div>
-              <div className="flex items-center gap-2">
-                {gameStarted && !gameCompleted && (
-                  <div className="flex items-center gap-2 text-lg font-mono bg-muted px-3 py-1 rounded">
-                    <Timer className="h-4 w-4" />
-                    {formatTime(timeRemaining)}
-                  </div>
-                )}
-                {gameCompleted && (
-                  <Badge variant="default" className="bg-green-600">
-                    <CheckCircle className="h-3 w-3 mr-1" />
-                    Completed
-                  </Badge>
-                )}
-                <Badge variant={competition.status === 'active' ? 'default' : 'secondary'}>
-                  {competition.status}
-                </Badge>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-blue-600">
+                  {formatTime(timeRemaining)}
+                </div>
+                <div className="text-sm text-gray-500">Time Remaining</div>
               </div>
             </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-              <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm">{Math.floor(competition.timeLimit / 60)} minutes</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Users className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm">{competition.currentParticipants}/{competition.maxParticipants} participants</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Trophy className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm capitalize">{competition.difficulty}</span>
-              </div>
-            </div>
-          </CardHeader>
-        </Card>
+          </div>
 
-        {/* Game Content */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Game Content</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {!gameStarted ? (
-              <div className="text-center py-8">
-                <h3 className="text-lg font-semibold mb-4">Ready to start?</h3>
-                <p className="text-muted-foreground mb-6">
-                  Once you start, the timer will begin. Make sure you're ready!
-                </p>
-                <Button onClick={startGame} size="lg">
-                  Start Game
-                </Button>
-              </div>
-            ) : gameCompleted ? (
-              <div className="text-center py-8">
-                <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
-                <h3 className="text-2xl font-bold mb-2">Game Completed!</h3>
-                <p className="text-muted-foreground mb-6">
-                  Your responses have been analyzed with AI feedback.
-                </p>
-                {submissionResult && (
-                  <div className="space-y-4">
-                    <div className="text-3xl font-bold text-green-600">
-                      Score: {submissionResult.totalScore}/100
-                    </div>
-                    <Button 
-                      onClick={() => setShowResults(true)}
-                      size="lg"
-                      className="bg-blue-600 hover:bg-blue-700"
-                    >
-                      <Brain className="h-5 w-5 mr-2" />
-                      View Detailed AI Feedback
-                    </Button>
-                  </div>
-                )}
-                <div className="mt-4">
-                  <Button variant="outline" asChild>
-                    <a href="/game-competitions">Return to Competitions</a>
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {renderGameContent()}
-                
-                <div className="flex justify-between items-center pt-4 border-t">
-                  <div className="text-sm text-muted-foreground">
-                    Time remaining: {formatTime(timeRemaining)}
-                  </div>
-                  <Button 
-                    onClick={submitGame} 
-                    disabled={submitting}
-                    variant="default"
-                  >
-                    {submitting ? 'Submitting...' : 'Submit Game'}
-                  </Button>
-                </div>
-              </div>
+          {/* Game Content */}
+          <div>
+            {competition.gameType === 'lightning_diagnosis' && gameContent && (
+              <div>Lightning Diagnosis content would go here</div>
             )}
-          </CardContent>
-        </Card>
-      </div>
+            
+            {competition.gameType === 'treatment_speed_run' && gameContent && (
+              renderTreatmentSpeedRun(gameContent)
+            )}
+            
+            {competition.gameType === 'progressive_diagnostic_challenge' && gameContent && (
+              renderProgressiveDiagnosticChallenge(gameContent)
+            )}
+          </div>
 
-      {/* AI Feedback Modal */}
-      <AIFeedbackModal 
-        isOpen={showResults}
-        onClose={() => setShowResults(false)}
-        submissionResult={submissionResult}
-      />
+          {/* Submit Button */}
+          <div className="flex justify-center">
+            <button
+              onClick={submitGame}
+              disabled={submitting}
+              className="px-8 py-3 bg-green-600 text-white rounded-lg font-medium disabled:opacity-50"
+            >
+              {submitting ? 'Submitting...' : 'Submit Game'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -347,7 +347,7 @@ function GameCompetitions() {
                     <div className="flex items-center gap-4 text-sm text-muted-foreground">
                       <div className="flex items-center gap-1">
                         <Timer className="h-4 w-4" />
-                        {competition.timeLimit ? `${Math.floor(competition.timeLimit / 60)}min` : 'No limit'}
+                        {competition.timeLimit ? `${competition.timeLimit}min` : 'No limit'}
                       </div>
                       <div className="flex items-center gap-1">
                         <Users className="h-4 w-4" />
@@ -458,7 +458,7 @@ function GameCompetitions() {
                 <div className="text-center">
                   <div className="text-2xl font-bold text-primary">
                     {selectedCompetition.competition.timeLimit ? 
-                      `${Math.floor(selectedCompetition.competition.timeLimit / 60)}` : '∞'
+                      `${selectedCompetition.competition.timeLimit}` : '∞'
                     }
                   </div>
                   <div className="text-sm text-muted-foreground">Minutes</div>

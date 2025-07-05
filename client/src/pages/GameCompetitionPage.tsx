@@ -469,7 +469,7 @@ function CompetitionOverview({ competition, onStart }: { competition: Competitio
               <div className="flex items-center gap-2">
                 <Clock className="h-5 w-5 text-gray-500" />
                 <span className="font-medium">Time Limit:</span>
-                <span>{Math.floor(competition.timeLimit / 60)} minutes</span>
+                <span>{competition.timeLimit} minutes</span>
               </div>
               <div className="flex items-center gap-2">
                 <Users className="h-5 w-5 text-gray-500" />

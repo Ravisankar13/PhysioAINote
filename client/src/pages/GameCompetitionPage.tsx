@@ -574,13 +574,17 @@ export default function GameCompetitionPage() {
   };
 
   const renderTreatmentSpeedRun = (content: any) => {
-    const treatmentContent = content.treatment_speed_run || {};
+    // Access the treatment_speed_run content directly from the gameContent
+    const treatmentContent = content?.treatment_speed_run || {};
     const cases = treatmentContent.cases || [];
     const currentCase = cases[currentStage] || cases[0];
     
-    if (!currentCase) {
-      console.log('No treatment speed run content found:', content);
-      return <div className="text-center py-4 text-muted-foreground">No treatment speed run cases available.</div>;
+    if (!currentCase || cases.length === 0) {
+      return (
+        <div className="text-center py-4 text-muted-foreground">
+          <div>No treatment speed run cases available.</div>
+        </div>
+      );
     }
 
     return (
@@ -922,26 +926,6 @@ export default function GameCompetitionPage() {
   const renderGameContent = () => {
     if (!gameContent || !competition) return null;
 
-    // For treatment_speed_run and progressive_diagnostic_challenge, pass the entire gameContent
-    // because these functions access nested content directly (e.g., content.treatment_speed_run)
-    if (competition.gameType === 'treatment_speed_run' || competition.gameType === 'progressive_diagnostic_challenge') {
-      const content = gameContent;
-      
-      if (!content) {
-        return (
-          <div className="bg-muted p-4 rounded-lg">
-            <h4 className="font-semibold mb-2">Game Type: {competition.gameType}</h4>
-            <p className="text-sm text-muted-foreground mb-4">
-              No content available for this game type.
-            </p>
-            <pre className="text-xs bg-muted-foreground/10 p-2 rounded">
-              Available keys: {Object.keys(gameContent).join(', ')}
-            </pre>
-          </div>
-        );
-      }
-    }
-
     // Map snake_case game types to camelCase content keys for other game types
     const contentKeyMap: { [key: string]: string } = {
       'choose_your_adventure': 'chooseYourAdventure',
@@ -954,17 +938,18 @@ export default function GameCompetitionPage() {
       'cpg_quiz_master': 'cpgQuizMaster'
     };
 
-    const contentKey = contentKeyMap[competition.gameType] || competition.gameType;
-    const content = competition.gameType === 'treatment_speed_run' || competition.gameType === 'progressive_diagnostic_challenge' 
+    // For treatment_speed_run and progressive_diagnostic_challenge, pass the entire gameContent
+    // because these functions access nested content directly (e.g., content.treatment_speed_run)
+    const content = (competition.gameType === 'treatment_speed_run' || competition.gameType === 'progressive_diagnostic_challenge')
       ? gameContent 
-      : gameContent[contentKey];
+      : gameContent[contentKeyMap[competition.gameType] || competition.gameType];
     
     if (!content) {
       return (
         <div className="bg-muted p-4 rounded-lg">
           <h4 className="font-semibold mb-2">Game Type: {competition.gameType}</h4>
           <p className="text-sm text-muted-foreground mb-4">
-            No content available for this game type. Content key: {contentKey}
+            No content available for this game type. Content key: {contentKeyMap[competition.gameType] || competition.gameType}
           </p>
           <pre className="text-xs bg-muted-foreground/10 p-2 rounded">
             Available keys: {Object.keys(gameContent).join(', ')}

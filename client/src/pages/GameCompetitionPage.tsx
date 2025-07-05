@@ -454,6 +454,16 @@ export default function GameCompetitionPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submissionResult, setSubmissionResult] = useState<any>(null);
   const [showResults, setShowResults] = useState(false);
+  
+  // Progressive Diagnostic Challenge state
+  const [askedQuestions, setAskedQuestions] = useState<string[]>([]);
+  const [performedTests, setPerformedTests] = useState<string[]>([]);
+  const [usedQuestionCredits, setUsedQuestionCredits] = useState<number>(0);
+  const [usedTestCredits, setUsedTestCredits] = useState<number>(0);
+  const [currentTime, setCurrentTime] = useState<number>(0);
+  const [selectedQuestion, setSelectedQuestion] = useState<string>('');
+  const [selectedTest, setSelectedTest] = useState<string>('');
+  const [showDiagnosisInput, setShowDiagnosisInput] = useState<boolean>(false);
 
   useEffect(() => {
     fetchCompetitionData();
@@ -690,15 +700,6 @@ export default function GameCompetitionPage() {
       console.log('No progressive content found - returning error message');
       return <div className="text-center py-4 text-muted-foreground">No diagnostic challenge cases available.</div>;
     }
-
-    const [askedQuestions, setAskedQuestions] = useState<string[]>([]);
-    const [performedTests, setPerformedTests] = useState<string[]>([]);
-    const [usedQuestionCredits, setUsedQuestionCredits] = useState<number>(0);
-    const [usedTestCredits, setUsedTestCredits] = useState<number>(0);
-    const [currentTime, setCurrentTime] = useState<number>(0);
-    const [selectedQuestion, setSelectedQuestion] = useState<string>('');
-    const [selectedTest, setSelectedTest] = useState<string>('');
-    const [showDiagnosisInput, setShowDiagnosisInput] = useState<boolean>(false);
 
     return (
       <div className="space-y-6">

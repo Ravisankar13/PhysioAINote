@@ -75,6 +75,8 @@ export class GameAIFeedbackService {
         return await this.analyzeLightningDiagnosis(responses, gameContent);
       case 'treatment_speed_run':
         return await this.analyzeTreatmentSpeedRun(responses, gameContent);
+      case 'progressive_diagnostic_challenge':
+        return await this.analyzeProgressiveDiagnosticChallenge(responses, gameContent);
       case 'mystery_patient':
         return await this.analyzeMysteryPatient(responses, gameContent);
       case 'red_flag_detective':
@@ -387,6 +389,292 @@ Provide overall assessment in JSON format:
         nextSteps: ['Participate in more competitions']
       };
     }
+  }
+
+  /**
+   * Analyze Progressive Diagnostic Challenge responses
+   */
+  private async analyzeProgressiveDiagnosticChallenge(responses: any, gameContent: any): Promise<QuestionFeedback[]> {
+    const progressiveContent = gameContent.progressiveDiagnosticChallenge || {};
+    const feedbacks: QuestionFeedback[] = [];
+
+    // Analyze final diagnosis
+    const finalDiagnosis = responses['final_diagnosis'] || '';
+    const correctDiagnosis = progressiveContent.correctDiagnosis || '';
+    
+    if (finalDiagnosis && correctDiagnosis) {
+      const diagnosisFeedback = await this.analyzeProgressiveDiagnosisCase(
+        progressiveContent,
+        finalDiagnosis,
+        'Final Diagnosis',
+        'final_diagnosis'
+      );
+      feedbacks.push(diagnosisFeedback);
+    }
+
+    // Analyze questions asked
+    const questionsAsked = responses['questions_asked'] || [];
+    if (questionsAsked.length > 0) {
+      const questioningFeedback = await this.analyzeStrategicQuestioning(
+        progressiveContent,
+        questionsAsked,
+        'Strategic Questioning',
+        'questions_asked'
+      );
+      feedbacks.push(questioningFeedback);
+    }
+
+    // Analyze tests ordered
+    const testsOrdered = responses['tests_ordered'] || [];
+    if (testsOrdered.length > 0) {
+      const testingFeedback = await this.analyzeTestOrdering(
+        progressiveContent,
+        testsOrdered,
+        'Diagnostic Testing',
+        'tests_ordered'
+      );
+      feedbacks.push(testingFeedback);
+    }
+
+    // Analyze resource management
+    const resourcesUsed = responses['resources_used'] || 0;
+    const resourceBudget = progressiveContent.resourceBudget || 20;
+    const resourceFeedback = await this.analyzeResourceManagement(
+      resourcesUsed,
+      resourceBudget,
+      'Resource Management',
+      'resources_used'
+    );
+    feedbacks.push(resourceFeedback);
+
+    return feedbacks;
+  }
+
+  /**
+   * Analyze Progressive Diagnostic Challenge case - focusing on diagnosis accuracy and clinical reasoning
+   */
+  private async analyzeProgressiveDiagnosisCase(
+    progressiveContent: any,
+    userDiagnosis: string,
+    questionText: string,
+    questionId: string
+  ): Promise<QuestionFeedback> {
+    const correctDiagnosis = progressiveContent.correctDiagnosis || '';
+    const differentialDiagnoses = progressiveContent.differentialDiagnoses || [];
+    
+    // Check if diagnosis matches
+    const isCorrect = this.isMatchingDiagnosis(userDiagnosis, correctDiagnosis);
+    
+    const prompt = `Analyze this Progressive Diagnostic Challenge diagnosis:
+    
+Patient Presentation: ${JSON.stringify(progressiveContent.patientPresentation || {})}
+Correct Diagnosis: ${correctDiagnosis}
+User Diagnosis: ${userDiagnosis}
+Differential Diagnoses: ${differentialDiagnoses.join(', ')}
+
+Provide detailed feedback on the diagnostic accuracy and clinical reasoning. Return as JSON:
+{
+  "score": number (0-100),
+  "aiAnalysis": "detailed analysis",
+  "strengths": ["strength1", "strength2"],
+  "improvements": ["improvement1", "improvement2"],
+  "clinicalReasoning": "reasoning assessment"
+}`;
+
+    try {
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+      });
+
+      const result = JSON.parse(response.choices[0].message.content || '{}');
+
+      return {
+        questionId,
+        questionText,
+        userResponse: userDiagnosis,
+        correctAnswer: correctDiagnosis,
+        aiAnalysis: result.aiAnalysis || (isCorrect ? 'Correct diagnosis!' : 'Incorrect diagnosis'),
+        score: result.score || (isCorrect ? 100 : 0),
+        strengths: result.strengths || (isCorrect ? ['Accurate diagnosis'] : ['Attempted diagnosis']),
+        improvements: result.improvements || (isCorrect ? [] : ['Review diagnostic criteria']),
+        clinicalReasoning: result.clinicalReasoning || 'Clinical reasoning assessed'
+      };
+    } catch (error) {
+      console.error('Error analyzing progressive diagnosis case:', error);
+      return {
+        questionId,
+        questionText,
+        userResponse: userDiagnosis,
+        correctAnswer: correctDiagnosis,
+        aiAnalysis: isCorrect ? 'Correct diagnosis!' : 'Incorrect diagnosis',
+        score: isCorrect ? 100 : 0,
+        strengths: isCorrect ? ['Accurate diagnosis'] : ['Attempted diagnosis'],
+        improvements: isCorrect ? [] : ['Review diagnostic criteria'],
+        clinicalReasoning: 'Clinical reasoning needs assessment'
+      };
+    }
+  }
+
+  /**
+   * Analyze strategic questioning approach
+   */
+  private async analyzeStrategicQuestioning(
+    progressiveContent: any,
+    questionsAsked: string[],
+    questionText: string,
+    questionId: string
+  ): Promise<QuestionFeedback> {
+    const availableQuestions = progressiveContent.availableQuestions || [];
+    
+    const prompt = `Analyze the strategic questioning approach:
+    
+Available Questions: ${JSON.stringify(availableQuestions)}
+Questions Asked: ${questionsAsked.join(', ')}
+Patient Presentation: ${JSON.stringify(progressiveContent.patientPresentation || {})}
+
+Assess the efficiency and effectiveness of the questioning strategy. Return as JSON:
+{
+  "score": number (0-100),
+  "aiAnalysis": "analysis of questioning strategy",
+  "strengths": ["strength1", "strength2"],
+  "improvements": ["improvement1", "improvement2"],
+  "clinicalReasoning": "reasoning assessment"
+}`;
+
+    try {
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+      });
+
+      const result = JSON.parse(response.choices[0].message.content || '{}');
+
+      return {
+        questionId,
+        questionText,
+        userResponse: questionsAsked.join(', '),
+        aiAnalysis: result.aiAnalysis || 'Strategic questioning assessed',
+        score: result.score || 75,
+        strengths: result.strengths || ['Systematic approach'],
+        improvements: result.improvements || ['Consider more targeted questions'],
+        clinicalReasoning: result.clinicalReasoning || 'Strategic questioning evaluated'
+      };
+    } catch (error) {
+      console.error('Error analyzing strategic questioning:', error);
+      return {
+        questionId,
+        questionText,
+        userResponse: questionsAsked.join(', '),
+        aiAnalysis: 'Strategic questioning needs improvement',
+        score: 75,
+        strengths: ['Systematic approach'],
+        improvements: ['Consider more targeted questions'],
+        clinicalReasoning: 'Strategic questioning needs refinement'
+      };
+    }
+  }
+
+  /**
+   * Analyze diagnostic test ordering
+   */
+  private async analyzeTestOrdering(
+    progressiveContent: any,
+    testsOrdered: string[],
+    questionText: string,
+    questionId: string
+  ): Promise<QuestionFeedback> {
+    const availableTests = progressiveContent.availableTests || [];
+    
+    const prompt = `Analyze the diagnostic testing strategy:
+    
+Available Tests: ${JSON.stringify(availableTests)}
+Tests Ordered: ${testsOrdered.join(', ')}
+Patient Presentation: ${JSON.stringify(progressiveContent.patientPresentation || {})}
+
+Assess the appropriateness and efficiency of test ordering. Return as JSON:
+{
+  "score": number (0-100),
+  "aiAnalysis": "analysis of test ordering strategy",
+  "strengths": ["strength1", "strength2"],
+  "improvements": ["improvement1", "improvement2"],
+  "clinicalReasoning": "reasoning assessment"
+}`;
+
+    try {
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+      });
+
+      const result = JSON.parse(response.choices[0].message.content || '{}');
+
+      return {
+        questionId,
+        questionText,
+        userResponse: testsOrdered.join(', '),
+        aiAnalysis: result.aiAnalysis || 'Test ordering assessed',
+        score: result.score || 80,
+        strengths: result.strengths || ['Appropriate test selection'],
+        improvements: result.improvements || ['Consider cost-effectiveness'],
+        clinicalReasoning: result.clinicalReasoning || 'Test ordering strategy evaluated'
+      };
+    } catch (error) {
+      console.error('Error analyzing test ordering:', error);
+      return {
+        questionId,
+        questionText,
+        userResponse: testsOrdered.join(', '),
+        aiAnalysis: 'Test ordering needs improvement',
+        score: 80,
+        strengths: ['Appropriate test selection'],
+        improvements: ['Consider cost-effectiveness'],
+        clinicalReasoning: 'Test ordering strategy needs refinement'
+      };
+    }
+  }
+
+  /**
+   * Analyze resource management efficiency
+   */
+  private async analyzeResourceManagement(
+    resourcesUsed: number,
+    resourceBudget: number,
+    questionText: string,
+    questionId: string
+  ): Promise<QuestionFeedback> {
+    const efficiency = resourceBudget > 0 ? Math.max(0, 100 - ((resourcesUsed / resourceBudget) * 100)) : 100;
+    
+    let analysis = '';
+    let score = Math.round(efficiency);
+    
+    if (resourcesUsed <= resourceBudget * 0.5) {
+      analysis = 'Excellent resource management - very efficient use of available resources';
+      score = Math.max(score, 90);
+    } else if (resourcesUsed <= resourceBudget * 0.75) {
+      analysis = 'Good resource management - efficient use of resources';
+      score = Math.max(score, 80);
+    } else if (resourcesUsed <= resourceBudget) {
+      analysis = 'Adequate resource management - stayed within budget';
+      score = Math.max(score, 70);
+    } else {
+      analysis = 'Poor resource management - exceeded available budget';
+      score = Math.min(score, 50);
+    }
+
+    return {
+      questionId,
+      questionText,
+      userResponse: `${resourcesUsed}/${resourceBudget} resources used`,
+      aiAnalysis: analysis,
+      score,
+      strengths: resourcesUsed <= resourceBudget ? ['Stayed within budget'] : ['Attempted systematic approach'],
+      improvements: resourcesUsed > resourceBudget ? ['Practice resource conservation'] : ['Continue efficient approach'],
+      clinicalReasoning: 'Resource management is crucial for real-world clinical practice'
+    };
   }
 
   /**

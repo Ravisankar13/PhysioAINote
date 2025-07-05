@@ -664,6 +664,120 @@ export default function GameCompetitionPage() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const renderLightningDiagnosis = (content: any) => {
+    console.log('renderLightningDiagnosis called with:', content);
+    
+    // Access the lightning diagnosis content
+    const lightningContent = content?.lightningDiagnosis || content?.lightning_diagnosis || {};
+    const cases = lightningContent.cases || [];
+    
+    console.log('lightningContent:', lightningContent);
+    console.log('cases:', cases);
+    console.log('cases length:', cases.length);
+    
+    if (!cases || cases.length === 0) {
+      console.error('No Lightning Diagnosis cases found');
+      return (
+        <div className="text-center py-8">
+          <p className="text-red-600">No Lightning Diagnosis questions available.</p>
+          <p className="text-sm text-gray-500 mt-2">Content keys: {JSON.stringify(Object.keys(content || {}))}</p>
+        </div>
+      );
+    }
+
+    const currentCase = cases[currentStage] || cases[0];
+    if (!currentCase) {
+      return (
+        <div className="text-center py-8">
+          <p className="text-red-600">No current case available.</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-6">
+        {/* Progress indicator */}
+        <div className="flex justify-between items-center bg-blue-50 p-4 rounded-lg">
+          <span className="text-sm font-medium">
+            Question {currentStage + 1} of {cases.length}
+          </span>
+          <span className="text-sm text-blue-600">
+            Time Limit: {currentCase.timeLimit || 30} seconds per question
+          </span>
+        </div>
+
+        {/* Case presentation */}
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <h4 className="font-medium mb-4 text-lg">Clinical Scenario</h4>
+          <p className="text-gray-700 leading-relaxed mb-6">
+            {currentCase.presentation}
+          </p>
+
+          {/* Answer options */}
+          <div className="space-y-3">
+            <h5 className="font-medium">What is your diagnosis?</h5>
+            
+            {/* Correct diagnosis option */}
+            <label className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
+              <input
+                type="radio"
+                name={`diagnosis-${currentStage}`}
+                value={currentCase.correctDiagnosis}
+                checked={responses[`case-${currentStage}`] === currentCase.correctDiagnosis}
+                onChange={(e) => handleResponse(`case-${currentStage}`, e.target.value)}
+                className="text-blue-600"
+              />
+              <span>{currentCase.correctDiagnosis}</span>
+            </label>
+
+            {/* Red herring options */}
+            {currentCase.redHerrings?.map((redHerring: string, index: number) => (
+              <label key={index} className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
+                <input
+                  type="radio"
+                  name={`diagnosis-${currentStage}`}
+                  value={redHerring}
+                  checked={responses[`case-${currentStage}`] === redHerring}
+                  onChange={(e) => handleResponse(`case-${currentStage}`, e.target.value)}
+                  className="text-blue-600"
+                />
+                <span>{redHerring}</span>
+              </label>
+            ))}
+          </div>
+
+          {/* Navigation buttons */}
+          <div className="flex justify-between mt-6">
+            <button
+              onClick={() => setCurrentStage(Math.max(0, currentStage - 1))}
+              disabled={currentStage === 0}
+              className="px-4 py-2 border border-gray-300 rounded-md text-sm disabled:opacity-50"
+            >
+              Previous
+            </button>
+            
+            {currentStage < cases.length - 1 ? (
+              <button
+                onClick={() => setCurrentStage(Math.min(cases.length - 1, currentStage + 1))}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm"
+              >
+                Next Question
+              </button>
+            ) : (
+              <button
+                onClick={submitGame}
+                disabled={submitting}
+                className="px-6 py-2 bg-green-600 text-white rounded-md text-sm disabled:opacity-50"
+              >
+                {submitting ? 'Submitting...' : 'Submit All Answers'}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderTreatmentSpeedRun = (content: any) => {
     // Debug logging to understand data flow
     console.log('renderTreatmentSpeedRun called with:', content);
@@ -1048,7 +1162,7 @@ export default function GameCompetitionPage() {
           {/* Game Content */}
           <div>
             {competition.gameType === 'lightning_diagnosis' && gameContent && (
-              <div>Lightning Diagnosis content would go here</div>
+              renderLightningDiagnosis(gameContent.content)
             )}
             
             {competition.gameType === 'treatment_speed_run' && gameContent && (

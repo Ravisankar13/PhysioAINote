@@ -676,10 +676,17 @@ export default function GameCompetitionPage() {
   };
 
   const renderProgressiveDiagnosticChallenge = (content: any) => {
+    // Debug: Log the content structure to understand what we're working with
+    console.log('Progressive Diagnostic Challenge content received:', content);
+    console.log('Content keys:', Object.keys(content || {}));
+    
     // Progressive Diagnostic Challenge content is stored directly in content.progressiveDiagnosticChallenge
     const progressiveContent = content.progressiveDiagnosticChallenge;
     
+    console.log('Progressive content extracted:', progressiveContent);
+    
     if (!progressiveContent) {
+      console.log('No progressive content found - returning error message');
       return <div className="text-center py-4 text-muted-foreground">No diagnostic challenge cases available.</div>;
     }
 

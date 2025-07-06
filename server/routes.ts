@@ -3354,6 +3354,227 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
 
+  // AI Analysis for Virtual Patient
+  app.post("/api/virtual-patients/:id/ai-analysis", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { id } = req.params;
+      const patientId = parseInt(id);
+      if (isNaN(patientId)) {
+        return res.status(400).json({ error: 'Invalid patient ID' });
+      }
+
+      // Try to get virtual patient from both storage systems
+      let virtualPatient;
+      
+      try {
+        // First try SOAP virtual patients
+        virtualPatient = await soapVirtualPatientService.getVirtualPatient(patientId, userId);
+      } catch (error) {
+        // Fallback to original virtual patients
+        virtualPatient = await storage.getVirtualPatient(patientId);
+        if (virtualPatient && virtualPatient.userId !== userId) {
+          return res.status(403).json({ error: 'You do not have permission to access this virtual patient' });
+        }
+      }
+
+      if (!virtualPatient) {
+        return res.status(404).json({ error: 'Virtual patient not found' });
+      }
+
+      // Import OpenAI service
+      const openai = (await import("./openai")).openai;
+
+      // Prepare patient data for analysis
+      const patientData = {
+        name: virtualPatient.patient_name || virtualPatient.patientProfile?.name,
+        age: virtualPatient.age || virtualPatient.patientProfile?.age,
+        gender: virtualPatient.gender || virtualPatient.patientProfile?.gender,
+        chiefComplaint: virtualPatient.chief_complaint || virtualPatient.clinicalPresentation?.chiefComplaint,
+        symptoms: virtualPatient.symptoms_description || virtualPatient.clinicalPresentation?.historyOfPresentIllness,
+        bodyPart: virtualPatient.body_part || virtualPatient.primaryBodyPart,
+        medicalHistory: virtualPatient.past_medical_history || virtualPatient.patientProfile?.medicalHistory,
+        objectiveFindings: virtualPatient.objective_findings || virtualPatient.physicalFindings,
+        diagnosis: virtualPatient.diagnosis || virtualPatient.assessmentPlan?.primaryDiagnosis,
+        motionData: virtualPatient.motionData ? JSON.parse(virtualPatient.motionData) : null
+      };
+
+      // Generate AI analysis prompt
+      const analysisPrompt = `As an expert physiotherapist, provide a comprehensive clinical analysis of this virtual patient case:
+
+Patient Information:
+- Name: ${patientData.name}
+- Age: ${patientData.age}
+- Gender: ${patientData.gender}
+- Chief Complaint: ${patientData.chiefComplaint}
+- Symptoms: ${patientData.symptoms}
+- Body Part: ${patientData.bodyPart}
+- Medical History: ${patientData.medicalHistory}
+- Objective Findings: ${typeof patientData.objectiveFindings === 'string' ? patientData.objectiveFindings : JSON.stringify(patientData.objectiveFindings)}
+- Current Diagnosis: ${patientData.diagnosis}
+${patientData.motionData ? '- Motion Capture Data: Available (Digital Twin)' : ''}
+
+Please provide a detailed analysis in JSON format with the following structure:
+{
+  "clinicalSummary": "Comprehensive summary of the patient's clinical presentation",
+  "diagnosticAnalysis": "In-depth analysis of the diagnostic process and reasoning",
+  "treatmentRecommendations": "Evidence-based treatment recommendations",
+  "keyInsights": ["Array of key clinical insights and learning points"],
+  "confidenceScore": 85
+}
+
+Focus on clinical reasoning, evidence-based practice, and educational value.`;
+
+      // Call OpenAI for analysis
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+        messages: [
+          {
+            role: "system",
+            content: "You are an expert physiotherapist providing comprehensive clinical analysis. Always respond with valid JSON format."
+          },
+          {
+            role: "user",
+            content: analysisPrompt
+          }
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.7,
+        max_tokens: 1500
+      });
+
+      const analysisResult = JSON.parse(response.choices[0].message.content || '{}');
+
+      res.json(analysisResult);
+
+    } catch (error) {
+      console.error("Error generating AI analysis:", error);
+      if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
+      }
+    }
+  });
+
+  // Find Relevant Research for Virtual Patient
+  app.post("/api/virtual-patients/:id/relevant-research", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { id } = req.params;
+      const patientId = parseInt(id);
+      if (isNaN(patientId)) {
+        return res.status(400).json({ error: 'Invalid patient ID' });
+      }
+
+      // Try to get virtual patient from both storage systems
+      let virtualPatient;
+      
+      try {
+        // First try SOAP virtual patients
+        virtualPatient = await soapVirtualPatientService.getVirtualPatient(patientId, userId);
+      } catch (error) {
+        // Fallback to original virtual patients
+        virtualPatient = await storage.getVirtualPatient(patientId);
+        if (virtualPatient && virtualPatient.userId !== userId) {
+          return res.status(403).json({ error: 'You do not have permission to access this virtual patient' });
+        }
+      }
+
+      if (!virtualPatient) {
+        return res.status(404).json({ error: 'Virtual patient not found' });
+      }
+
+      // Extract key search terms
+      const bodyPart = virtualPatient.body_part || virtualPatient.primaryBodyPart || 'general';
+      const diagnosis = virtualPatient.diagnosis || virtualPatient.assessmentPlan?.primaryDiagnosis || '';
+      const symptoms = virtualPatient.symptoms_description || virtualPatient.clinicalPresentation?.historyOfPresentIllness || '';
+
+      // Search for relevant research papers
+      const relevantPapers = await storage.searchResearchPapers({
+        bodyPart: bodyPart,
+        searchTerm: `${diagnosis} ${symptoms}`.trim(),
+        limit: 5
+      });
+
+      // Import OpenAI service for relevance scoring
+      const openai = (await import("./openai")).openai;
+
+      // Score relevance for each paper
+      const scoredPapers = await Promise.all(
+        relevantPapers.map(async (paper) => {
+          try {
+            const relevancePrompt = `Rate the relevance of this research paper to the patient case on a scale of 1-100:
+
+Patient Case:
+- Body Part: ${bodyPart}
+- Diagnosis: ${diagnosis}
+- Symptoms: ${symptoms}
+- Chief Complaint: ${virtualPatient.chief_complaint || virtualPatient.clinicalPresentation?.chiefComplaint}
+
+Research Paper:
+- Title: ${paper.title}
+- Abstract: ${paper.abstract}
+- Body Part: ${paper.bodyPart}
+- Keywords: ${Array.isArray(paper.keywords) ? paper.keywords.join(', ') : paper.keywords || ''}
+
+Respond with only a number between 1-100 representing the relevance score.`;
+
+            const relevanceResponse = await openai.chat.completions.create({
+              model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+              messages: [
+                {
+                  role: "system",
+                  content: "You are an expert in physiotherapy research. Rate research paper relevance to clinical cases accurately."
+                },
+                {
+                  role: "user",
+                  content: relevancePrompt
+                }
+              ],
+              temperature: 0.3,
+              max_tokens: 10
+            });
+
+            const relevanceScore = parseInt(relevanceResponse.choices[0].message.content?.trim() || '50');
+            
+            return {
+              ...paper,
+              relevanceScore: Math.min(Math.max(relevanceScore, 1), 100) // Ensure score is between 1-100
+            };
+          } catch (error) {
+            console.error("Error scoring paper relevance:", error);
+            return {
+              ...paper,
+              relevanceScore: 50 // Default score if scoring fails
+            };
+          }
+        })
+      );
+
+      // Sort by relevance score (highest first)
+      const sortedPapers = scoredPapers.sort((a, b) => b.relevanceScore - a.relevanceScore);
+
+      res.json(sortedPapers);
+
+    } catch (error) {
+      console.error("Error finding relevant research:", error);
+      if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
+      }
+    }
+  });
+
   // Peer Knowledge Exchange - Shared Cases Operations
   app.get("/api/shared-cases", async (req: Request, res: Response) => {
     try {

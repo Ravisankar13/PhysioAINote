@@ -6,7 +6,7 @@ import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { User, Calendar, Activity, Heart, Brain, FileText, Users, Edit2, Check, X, Camera, Video } from "lucide-react";
+import { User, Calendar, Activity, Heart, Brain, FileText, Users, Edit2, Check, X, Camera, Video, Search, BookOpen, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { SoapVirtualPatient } from "@shared/schema";
@@ -89,6 +89,12 @@ function VirtualPatientCard({ patient }: { patient: any }) {
   const [showMotionCapture, setShowMotionCapture] = useState(false);
   const [capturedMotionData, setCapturedMotionData] = useState<any>(null);
   const [isAddingMotionData, setIsAddingMotionData] = useState(false);
+  const [showAIAnalysis, setShowAIAnalysis] = useState(false);
+  const [aiAnalysisData, setAiAnalysisData] = useState<any>(null);
+  const [isLoadingAIAnalysis, setIsLoadingAIAnalysis] = useState(false);
+  const [showResearchDialog, setShowResearchDialog] = useState(false);
+  const [relevantResearch, setRelevantResearch] = useState<any[]>([]);
+  const [isLoadingResearch, setIsLoadingResearch] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
@@ -169,6 +175,52 @@ function VirtualPatientCard({ patient }: { patient: any }) {
       });
     }
   });
+
+  // AI Analysis function
+  const performAIAnalysis = async () => {
+    setIsLoadingAIAnalysis(true);
+    try {
+      const response = await apiRequest(
+        'POST',
+        `/api/virtual-patients/${patient.id}/ai-analysis`,
+        {}
+      );
+      const analysisData = await response.json();
+      setAiAnalysisData(analysisData);
+      setShowAIAnalysis(true);
+    } catch (error: any) {
+      toast({
+        title: "Analysis Error",
+        description: error.message || "Failed to generate AI analysis",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoadingAIAnalysis(false);
+    }
+  };
+
+  // Find Relevant Research function
+  const findRelevantResearch = async () => {
+    setIsLoadingResearch(true);
+    try {
+      const response = await apiRequest(
+        'POST',
+        `/api/virtual-patients/${patient.id}/relevant-research`,
+        {}
+      );
+      const researchData = await response.json();
+      setRelevantResearch(researchData || []);
+      setShowResearchDialog(true);
+    } catch (error: any) {
+      toast({
+        title: "Research Error",
+        description: error.message || "Failed to find relevant research",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoadingResearch(false);
+    }
+  };
 
   const handleStartEdit = () => {
     setEditName(profile.name || patient.patient_name || '');
@@ -395,6 +447,46 @@ function VirtualPatientCard({ patient }: { patient: any }) {
           )}
         </div>
 
+        {/* Clinical Analysis Tools */}
+        <div className="pt-2 border-t">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="font-medium text-sm text-gray-800 flex items-center gap-1">
+              <Brain className="h-3 w-3 text-blue-500" />
+              Clinical Analysis
+            </h4>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={performAIAnalysis}
+              disabled={isLoadingAIAnalysis}
+              className="text-xs flex-1"
+            >
+              {isLoadingAIAnalysis ? (
+                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+              ) : (
+                <Brain className="h-3 w-3 mr-1" />
+              )}
+              AI Analysis
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={findRelevantResearch}
+              disabled={isLoadingResearch}
+              className="text-xs flex-1"
+            >
+              {isLoadingResearch ? (
+                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+              ) : (
+                <BookOpen className="h-3 w-3 mr-1" />
+              )}
+              Find Research
+            </Button>
+          </div>
+        </div>
+
         {/* Metadata */}
         <div className="pt-2 border-t text-xs text-gray-500 flex items-center justify-between">
           <span className="flex items-center gap-1">
@@ -433,6 +525,172 @@ function VirtualPatientCard({ patient }: { patient: any }) {
               }}
             />
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* AI Analysis Dialog */}
+      <Dialog open={showAIAnalysis} onOpenChange={setShowAIAnalysis}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Brain className="h-5 w-5 text-blue-600" />
+              AI Clinical Analysis: {profile.name || patient.patient_name}
+            </DialogTitle>
+            <p className="text-sm text-gray-600">
+              Comprehensive AI analysis of this virtual patient case
+            </p>
+          </DialogHeader>
+          
+          {aiAnalysisData && (
+            <div className="space-y-6">
+              {/* Clinical Summary */}
+              {aiAnalysisData.clinicalSummary && (
+                <div>
+                  <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-blue-500" />
+                    Clinical Summary
+                  </h3>
+                  <p className="text-gray-700 leading-relaxed">{aiAnalysisData.clinicalSummary}</p>
+                </div>
+              )}
+
+              {/* Diagnostic Analysis */}
+              {aiAnalysisData.diagnosticAnalysis && (
+                <div>
+                  <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
+                    <Search className="h-4 w-4 text-green-500" />
+                    Diagnostic Analysis
+                  </h3>
+                  <p className="text-gray-700 leading-relaxed">{aiAnalysisData.diagnosticAnalysis}</p>
+                </div>
+              )}
+
+              {/* Treatment Recommendations */}
+              {aiAnalysisData.treatmentRecommendations && (
+                <div>
+                  <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
+                    <Heart className="h-4 w-4 text-red-500" />
+                    Treatment Recommendations
+                  </h3>
+                  <p className="text-gray-700 leading-relaxed">{aiAnalysisData.treatmentRecommendations}</p>
+                </div>
+              )}
+
+              {/* Key Insights */}
+              {aiAnalysisData.keyInsights && Array.isArray(aiAnalysisData.keyInsights) && (
+                <div>
+                  <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
+                    <Brain className="h-4 w-4 text-purple-500" />
+                    Key Clinical Insights
+                  </h3>
+                  <div className="space-y-2">
+                    {aiAnalysisData.keyInsights.map((insight: string, index: number) => (
+                      <div key={index} className="bg-purple-50 p-3 rounded-lg border-l-4 border-purple-200">
+                        <p className="text-gray-700">{insight}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Confidence Score */}
+              {aiAnalysisData.confidenceScore && (
+                <div>
+                  <h3 className="font-semibold text-lg mb-2">Analysis Confidence</h3>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-blue-500 h-2 rounded-full" 
+                        style={{ width: `${aiAnalysisData.confidenceScore}%` }}
+                      ></div>
+                    </div>
+                    <span className="text-sm font-medium">{aiAnalysisData.confidenceScore}%</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Research Dialog */}
+      <Dialog open={showResearchDialog} onOpenChange={setShowResearchDialog}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <BookOpen className="h-5 w-5 text-green-600" />
+              Relevant Research: {profile.name || patient.patient_name}
+            </DialogTitle>
+            <p className="text-sm text-gray-600">
+              Research articles and evidence relevant to this case
+            </p>
+          </DialogHeader>
+          
+          {relevantResearch && relevantResearch.length > 0 ? (
+            <div className="space-y-4">
+              {relevantResearch.map((article: any, index: number) => (
+                <div key={index} className="border rounded-lg p-4 hover:bg-gray-50">
+                  <h3 className="font-semibold text-lg mb-2 text-blue-700">
+                    {article.title || 'Research Article'}
+                  </h3>
+                  
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {article.authors && (
+                      <Badge variant="outline" className="text-xs">
+                        {article.authors}
+                      </Badge>
+                    )}
+                    {article.journal && (
+                      <Badge variant="secondary" className="text-xs">
+                        {article.journal}
+                      </Badge>
+                    )}
+                    {article.bodyPart && (
+                      <Badge variant="default" className="text-xs">
+                        {article.bodyPart}
+                      </Badge>
+                    )}
+                  </div>
+                  
+                  {article.abstract && (
+                    <p className="text-gray-700 text-sm mb-3 leading-relaxed">
+                      {article.abstract}
+                    </p>
+                  )}
+                  
+                  {article.relevanceScore && (
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-xs text-gray-600">Relevance:</span>
+                      <div className="flex-1 bg-gray-200 rounded-full h-1">
+                        <div 
+                          className="bg-green-500 h-1 rounded-full" 
+                          style={{ width: `${article.relevanceScore}%` }}
+                        ></div>
+                      </div>
+                      <span className="text-xs font-medium">{article.relevanceScore}%</span>
+                    </div>
+                  )}
+                  
+                  {article.url && (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => window.open(article.url, '_blank')}
+                      className="text-xs"
+                    >
+                      <BookOpen className="h-3 w-3 mr-1" />
+                      View Article
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <BookOpen className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500">No relevant research found for this case.</p>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </Card>

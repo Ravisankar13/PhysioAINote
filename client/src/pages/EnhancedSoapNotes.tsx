@@ -79,15 +79,12 @@ export default function EnhancedSoapNotesPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Get current user data
-  const { data: userData } = useQuery({
-    queryKey: ["/api/user"],
-  });
+  // Mock user data for demo
+  const userData = { id: 1, username: "Demo User" };
 
-  // Get current SOAP notes
-  const { data: soapNotes = [], isLoading: notesLoading } = useQuery({
-    queryKey: ["/api/soap-notes"],
-  });
+  // Mock SOAP notes data
+  const soapNotes: any[] = [];
+  const notesLoading = false;
 
   // Mock WebSocket connection for demo
   const connectWebSocket = useCallback((sessionId: string, userId: number) => {
@@ -206,7 +203,7 @@ export default function EnhancedSoapNotesPage() {
     }, 2000);
     
     // Connect WebSocket when recording starts
-    if (userData && 'id' in userData && userData.id) {
+    if (userData?.id) {
       connectWebSocket("demo-session", userData.id);
     }
   };

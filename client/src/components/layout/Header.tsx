@@ -114,6 +114,15 @@ const Header = () => {
                 <span>SOAP Notes</span>
               </Button>
             </Link>
+            <Link to="/enhanced-soap-notes">
+              <Button className="bg-gradient-to-r from-teal-600 to-blue-600 hover:from-teal-700 hover:to-blue-700 text-white font-semibold shadow-sm flex items-center gap-2 relative">
+                <Stethoscope className="h-4 w-4" />
+                <span>Enhanced SOAP</span>
+                <span className="absolute -top-1 -right-1 bg-yellow-400 text-yellow-900 text-xs font-bold px-1.5 py-0.5 rounded-full">
+                  AI
+                </span>
+              </Button>
+            </Link>
             <Link to="/research">
               <Button className="bg-secondary hover:bg-secondary/90 text-white font-semibold shadow-sm flex items-center gap-2">
                 <BookOpen className="h-4 w-4" />

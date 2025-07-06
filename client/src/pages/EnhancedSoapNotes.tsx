@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,7 +13,8 @@ import {
   Mic, MicOff, Brain, MessageSquare, Lightbulb, 
   Bot, Send, FileText, UserCheck, TrendingUp, Activity,
   Clock, Users, User, CheckCircle2, FileCheck, Shield, 
-  DollarSign, Calendar, Copy
+  DollarSign, Calendar, Copy, ChevronDown, ChevronUp, 
+  Star, AlertTriangle, BookOpen, Copy as CopyIcon
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -73,6 +75,7 @@ export default function EnhancedSoapNotesPage() {
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [showAIPanel, setShowAIPanel] = useState(true);
   const [isWebSocketConnected, setIsWebSocketConnected] = useState(false);
+  const [expandedSections, setExpandedSections] = useState<{[key: string]: boolean}>({});
   
 
   
@@ -84,6 +87,109 @@ export default function EnhancedSoapNotesPage() {
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Helper function to get evidence grade badge color
+  const getEvidenceGradeColor = (grade: string) => {
+    switch (grade.toLowerCase()) {
+      case 'a': return 'bg-green-100 text-green-800 border-green-200';
+      case 'b': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'c': return 'bg-orange-100 text-orange-800 border-orange-200';
+      case 'd': return 'bg-red-100 text-red-800 border-red-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  // Helper function to parse structured PhysioGPT response
+  const parsePhysioGPTResponse = (response: string) => {
+    const sections = [];
+    const lines = response.split('\n');
+    let currentSection: any = null;
+    
+    for (let line of lines) {
+      line = line.trim();
+      if (!line) continue;
+
+      // Match numbered sections like "1. **Assessment Name**"
+      const sectionMatch = line.match(/^(\d+)\.\s+\*\*([^*]+)\*\*/);
+      if (sectionMatch) {
+        if (currentSection) {
+          sections.push(currentSection);
+        }
+        currentSection = {
+          id: sectionMatch[1],
+          title: sectionMatch[2],
+          evidenceGrade: '',
+          researchSummary: '',
+          clinicalApplication: '',
+          patientConsiderations: '',
+          icon: '🔍'
+        };
+        continue;
+      }
+
+      if (currentSection) {
+        // Match evidence grade
+        const evidenceMatch = line.match(/Evidence Grade:\s*([A-D])\s*\(([^)]+)\)/);
+        if (evidenceMatch) {
+          currentSection.evidenceGrade = evidenceMatch[1];
+          currentSection.confidence = evidenceMatch[2];
+          continue;
+        }
+
+        // Match research summary
+        if (line.includes('Supporting Research Summary:')) {
+          currentSection.researchSummary = line.replace(/.*Supporting Research Summary:\s*/, '');
+          continue;
+        }
+
+        // Match clinical application
+        if (line.includes('Clinical Application Guidance:')) {
+          currentSection.clinicalApplication = line.replace(/.*Clinical Application Guidance:\s*/, '');
+          continue;
+        }
+
+        // Match patient considerations
+        if (line.includes('Individual Patient Considerations:')) {
+          currentSection.patientConsiderations = line.replace(/.*Individual Patient Considerations:\s*/, '');
+          continue;
+        }
+
+        // Append to last field if continuing
+        if (line.startsWith('-') || line.match(/^\s+[•·]/)) {
+          if (currentSection.patientConsiderations && !line.includes(':')) {
+            currentSection.patientConsiderations += ' ' + line;
+          } else if (currentSection.clinicalApplication && !line.includes(':')) {
+            currentSection.clinicalApplication += ' ' + line;
+          } else if (currentSection.researchSummary && !line.includes(':')) {
+            currentSection.researchSummary += ' ' + line;
+          }
+        }
+      }
+    }
+
+    if (currentSection) {
+      sections.push(currentSection);
+    }
+
+    return sections;
+  };
+
+  // Helper function to copy text to clipboard
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({
+        title: "Copied to clipboard",
+        description: "Text has been copied to clipboard",
+      });
+    } catch (error) {
+      toast({
+        title: "Copy failed",
+        description: "Failed to copy text to clipboard",
+        variant: "destructive",
+      });
+    }
+  };
 
   // Mutation for creating virtual patient from SOAP notes
   const createVirtualPatientMutation = useMutation({
@@ -357,7 +463,7 @@ export default function EnhancedSoapNotesPage() {
   };
 
   // Copy SOAP notes to clipboard
-  const copyToClipboard = async () => {
+  const copySoapNotesToClipboard = async () => {
     const soapNote = `
 SOAP NOTE
 =========
@@ -739,7 +845,7 @@ Generated by PhysioGPT Enhanced SOAP Notes
                 
                 <div className="flex gap-2 mt-4">
                   <Button 
-                    onClick={copyToClipboard}
+                    onClick={copySoapNotesToClipboard}
                     className="flex items-center gap-2 flex-1"
                   >
                     <Copy className="w-4 h-4" />
@@ -813,26 +919,169 @@ Generated by PhysioGPT Enhanced SOAP Notes
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  <div className="h-48 overflow-y-auto border rounded-lg p-3 space-y-3">
+                  <div className="h-96 overflow-y-auto border rounded-lg p-3 space-y-4">
                     {physioGptChat.length === 0 ? (
                       <p className="text-sm text-gray-500 text-center py-8">
                         Ask PhysioGPT any clinical question for instant consultation
                       </p>
                     ) : (
-                      physioGptChat.map((message) => (
-                        <div key={message.id} className="space-y-2">
-                          <div className="bg-blue-50 p-2 rounded text-sm">
-                            <strong>You:</strong> {message.query}
+                      physioGptChat.map((message) => {
+                        const parsedSections = parsePhysioGPTResponse(message.answer);
+                        
+                        return (
+                          <div key={message.id} className="space-y-3">
+                            {/* User Question */}
+                            <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                              <div className="flex items-center gap-2 mb-1">
+                                <User className="w-4 h-4 text-blue-600" />
+                                <span className="font-medium text-blue-800">You asked:</span>
+                              </div>
+                              <p className="text-sm text-blue-700">{message.query}</p>
+                            </div>
+
+                            {/* PhysioGPT Response */}
+                            <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-4 rounded-lg border border-green-200">
+                              <div className="flex items-center gap-2 mb-3">
+                                <Bot className="w-5 h-5 text-green-600" />
+                                <span className="font-semibold text-green-800">PhysioGPT Clinical Analysis</span>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => copyToClipboard(message.answer)}
+                                  className="ml-auto h-6 w-6 p-0"
+                                >
+                                  <CopyIcon className="w-3 h-3" />
+                                </Button>
+                              </div>
+
+                              {parsedSections.length > 0 ? (
+                                <div className="space-y-3">
+                                  {parsedSections.map((section, index) => (
+                                    <Collapsible
+                                      key={index}
+                                      open={expandedSections[`${message.id}-${index}`] !== false}
+                                      onOpenChange={(open) => 
+                                        setExpandedSections(prev => ({
+                                          ...prev,
+                                          [`${message.id}-${index}`]: open
+                                        }))
+                                      }
+                                    >
+                                      <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+                                        <CollapsibleTrigger asChild>
+                                          <Button
+                                            variant="ghost"
+                                            className="w-full justify-between p-4 h-auto hover:bg-gray-50"
+                                          >
+                                            <div className="flex items-center gap-3">
+                                              <span className="text-lg">{section.icon}</span>
+                                              <div className="text-left">
+                                                <h4 className="font-semibold text-gray-900">
+                                                  {section.title}
+                                                </h4>
+                                                {section.evidenceGrade && (
+                                                  <div className="flex items-center gap-2 mt-1">
+                                                    <Badge 
+                                                      className={`text-xs ${getEvidenceGradeColor(section.evidenceGrade)}`}
+                                                      variant="outline"
+                                                    >
+                                                      <Star className="w-3 h-3 mr-1" />
+                                                      Grade {section.evidenceGrade}
+                                                    </Badge>
+                                                    {section.confidence && (
+                                                      <span className="text-xs text-gray-500">
+                                                        {section.confidence}
+                                                      </span>
+                                                    )}
+                                                  </div>
+                                                )}
+                                              </div>
+                                            </div>
+                                            {expandedSections[`${message.id}-${index}`] !== false ? 
+                                              <ChevronUp className="w-4 h-4" /> : 
+                                              <ChevronDown className="w-4 h-4" />
+                                            }
+                                          </Button>
+                                        </CollapsibleTrigger>
+
+                                        <CollapsibleContent>
+                                          <div className="px-4 pb-4 space-y-3">
+                                            {section.researchSummary && (
+                                              <div className="bg-blue-50 p-3 rounded border border-blue-200">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                  <BookOpen className="w-4 h-4 text-blue-600" />
+                                                  <span className="font-medium text-blue-800">Research Summary</span>
+                                                </div>
+                                                <p className="text-sm text-blue-700 leading-relaxed">
+                                                  {section.researchSummary}
+                                                </p>
+                                              </div>
+                                            )}
+
+                                            {section.clinicalApplication && (
+                                              <div className="bg-green-50 p-3 rounded border border-green-200">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                  <CheckCircle2 className="w-4 h-4 text-green-600" />
+                                                  <span className="font-medium text-green-800">Clinical Application</span>
+                                                </div>
+                                                <p className="text-sm text-green-700 leading-relaxed">
+                                                  {section.clinicalApplication}
+                                                </p>
+                                              </div>
+                                            )}
+
+                                            {section.patientConsiderations && (
+                                              <div className="bg-amber-50 p-3 rounded border border-amber-200">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                  <AlertTriangle className="w-4 h-4 text-amber-600" />
+                                                  <span className="font-medium text-amber-800">Patient Considerations</span>
+                                                </div>
+                                                <p className="text-sm text-amber-700 leading-relaxed">
+                                                  {section.patientConsiderations}
+                                                </p>
+                                              </div>
+                                            )}
+
+                                            <div className="flex gap-2 mt-3">
+                                              <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => copyToClipboard(section.title + '\n\n' + 
+                                                  (section.researchSummary ? 'Research: ' + section.researchSummary + '\n\n' : '') +
+                                                  (section.clinicalApplication ? 'Application: ' + section.clinicalApplication + '\n\n' : '') +
+                                                  (section.patientConsiderations ? 'Considerations: ' + section.patientConsiderations : '')
+                                                )}
+                                                className="text-xs"
+                                              >
+                                                <CopyIcon className="w-3 h-3 mr-1" />
+                                                Copy Section
+                                              </Button>
+                                            </div>
+                                          </div>
+                                        </CollapsibleContent>
+                                      </div>
+                                    </Collapsible>
+                                  ))}
+                                </div>
+                              ) : (
+                                // Fallback for non-structured responses
+                                <div className="bg-white p-3 rounded border border-gray-200">
+                                  <p className="text-sm text-gray-700 leading-relaxed">
+                                    {message.answer}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
                           </div>
-                          <div className="bg-green-50 p-2 rounded text-sm">
-                            <strong>PhysioGPT:</strong> {message.answer}
-                          </div>
-                        </div>
-                      ))
+                        );
+                      })
                     )}
                     {isChatLoading && (
-                      <div className="bg-gray-50 p-2 rounded text-sm animate-pulse">
-                        PhysioGPT is thinking...
+                      <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 animate-pulse">
+                        <div className="flex items-center gap-2">
+                          <Bot className="w-4 h-4 text-gray-500" />
+                          <span className="text-sm text-gray-600">PhysioGPT is analyzing...</span>
+                        </div>
                       </div>
                     )}
                     <div ref={chatEndRef} />

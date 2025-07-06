@@ -138,6 +138,8 @@ export default function VirtualPatientsPage() {
   const [relevantResearch, setRelevantResearch] = useState<any[]>([]);
   const [showAIAnalysis, setShowAIAnalysis] = useState(false);
   const [showResearchDialog, setShowResearchDialog] = useState(false);
+  const [editingPatientId, setEditingPatientId] = useState<number | null>(null);
+  const [editingName, setEditingName] = useState<string>('');
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -145,6 +147,30 @@ export default function VirtualPatientsPage() {
   // Get all virtual patients for user
   const { data: virtualPatients = [], isLoading: patientsLoading } = useQuery({
     queryKey: ["/api/virtual-patients"],
+  });
+
+  // Mutation for updating patient name
+  const updatePatientMutation = useMutation({
+    mutationFn: async ({ id, name }: { id: number; name: string }) => {
+      const response = await apiRequest('PUT', `/api/virtual-patients/${id}`, { patient_name: name });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/virtual-patients"] });
+      toast({
+        title: "Success",
+        description: "Patient name updated successfully",
+      });
+      setEditingPatientId(null);
+      setEditingName('');
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Update Failed",
+        description: error.message || "Failed to update patient name",
+        variant: "destructive"
+      });
+    }
   });
 
   // Enhanced patient data loading
@@ -313,6 +339,31 @@ export default function VirtualPatientsPage() {
     setIsPlaying(false);
   };
 
+  // Helper functions for editing patient names
+  const startEditing = (patient: SoapVirtualPatient) => {
+    setEditingPatientId(patient.id!);
+    setEditingName(patient.patient_name || `Patient ${patient.id}`);
+  };
+
+  const cancelEditing = () => {
+    setEditingPatientId(null);
+    setEditingName('');
+  };
+
+  const savePatientName = () => {
+    if (editingPatientId && editingName.trim()) {
+      updatePatientMutation.mutate({ id: editingPatientId, name: editingName.trim() });
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      savePatientName();
+    } else if (e.key === 'Escape') {
+      cancelEditing();
+    }
+  };
+
   if (patientsLoading) {
     return (
       <div className="container mx-auto py-8 px-4">
@@ -342,16 +393,61 @@ export default function VirtualPatientsPage() {
             {virtualPatients.map((patient: SoapVirtualPatient) => (
               <Card 
                 key={patient.id} 
-                className="hover:shadow-lg transition-shadow cursor-pointer"
+                className="hover:shadow-lg transition-shadow cursor-pointer group"
                 onClick={() => loadEnhancedPatientData(patient)}
               >
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <User className="h-5 w-5 text-blue-600" />
-                      <CardTitle className="text-lg">
-                        {patient.patient_name || `Patient ${patient.id}`}
-                      </CardTitle>
+                      {editingPatientId === patient.id ? (
+                        <div className="flex items-center gap-2 flex-1">
+                          <Input
+                            value={editingName}
+                            onChange={(e) => setEditingName(e.target.value)}
+                            onKeyDown={handleKeyPress}
+                            className="text-lg font-semibold"
+                            autoFocus
+                          />
+                          <Button
+                            size="sm"
+                            onClick={savePatientName}
+                            disabled={updatePatientMutation.isPending}
+                            className="flex items-center gap-1"
+                          >
+                            {updatePatientMutation.isPending ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <Check className="h-3 w-3" />
+                            )}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={cancelEditing}
+                            disabled={updatePatientMutation.isPending}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 flex-1">
+                          <CardTitle className="text-lg">
+                            {patient.patient_name || `Patient ${patient.id}`}
+                          </CardTitle>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              startEditing(patient);
+                            }}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <Edit2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
                     </div>
                     {patient.motionData && (
                       <Badge variant="secondary" className="bg-green-100 text-green-800">

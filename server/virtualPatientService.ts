@@ -257,6 +257,32 @@ Focus on creating an educational case that:
   }
 
   /**
+   * Update virtual patient
+   */
+  async updateVirtualPatient(virtualPatientId: number, userId: number, updateData: { patient_name?: string }) {
+    try {
+      // First verify the virtual patient exists and belongs to the user
+      const [existingPatient] = await db.select().from(soapVirtualPatients)
+        .where(eq(soapVirtualPatients.id, virtualPatientId));
+      
+      if (!existingPatient || existingPatient.userId !== userId) {
+        return null;
+      }
+
+      // Update the virtual patient
+      const [updatedPatient] = await db.update(soapVirtualPatients)
+        .set(updateData)
+        .where(eq(soapVirtualPatients.id, virtualPatientId))
+        .returning();
+        
+      return updatedPatient;
+    } catch (error) {
+      console.error("Error updating virtual patient:", error);
+      throw error;
+    }
+  }
+
+  /**
    * Toggle virtual patient public visibility
    */
   async togglePublicVisibility(virtualPatientId: number, userId: number, isPublic: boolean) {

@@ -8729,6 +8729,34 @@ Respond in JSON format:
     }
   });
 
+  // Update virtual patient
+  app.put("/api/virtual-patients/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { id } = req.params;
+      const { patient_name } = req.body;
+
+      if (!patient_name || typeof patient_name !== 'string') {
+        return res.status(400).json({ error: 'Patient name is required' });
+      }
+
+      const updatedPatient = await virtualPatientService.updateVirtualPatient(parseInt(id), userId, { patient_name });
+      
+      if (!updatedPatient) {
+        return res.status(404).json({ error: 'Virtual patient not found or not authorized' });
+      }
+
+      res.json(updatedPatient);
+    } catch (error: any) {
+      console.error("Error updating virtual patient:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Toggle virtual patient public visibility
   app.patch("/api/virtual-patients/:id/visibility", ensureAuthenticated, async (req: Request, res: Response) => {
     try {

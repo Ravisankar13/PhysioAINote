@@ -194,7 +194,7 @@ export default function EnhancedSoapNotesPage() {
 
   // Regenerate suggestions when transcript changes significantly
   useEffect(() => {
-    if (realTimeTranscript.length > 50 && realTimeTranscript.length % 100 === 0) {
+    if (realTimeTranscript.length > 100 && realTimeTranscript.length % 200 === 0) {
       generateAISuggestions();
     }
   }, [realTimeTranscript, generateAISuggestions]);
@@ -672,33 +672,35 @@ export default function EnhancedSoapNotesPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  {aiSuggestions.length === 0 ? (
-                    <p className="text-sm text-gray-500 text-center py-4">
-                      AI suggestions will appear here during your session
-                    </p>
-                  ) : (
-                    aiSuggestions.map((suggestion) => (
-                      <div key={suggestion.id} className="p-3 border rounded-lg">
-                        <div className="flex items-start justify-between mb-2">
-                          <Badge variant={suggestion.priority === 'high' ? 'destructive' : 'secondary'}>
-                            {suggestion.type}
-                          </Badge>
-                          <Button 
-                            size="sm" 
-                            variant="ghost"
-                            onClick={() => acceptSuggestion(suggestion)}
-                          >
-                            <CheckCircle2 className="w-4 h-4" />
-                          </Button>
+                <div className="max-h-64 overflow-y-auto">
+                  <div className="space-y-3">
+                    {aiSuggestions.length === 0 ? (
+                      <p className="text-sm text-gray-500 text-center py-4">
+                        AI suggestions will appear here during your session
+                      </p>
+                    ) : (
+                      aiSuggestions.map((suggestion) => (
+                        <div key={suggestion.id} className="p-3 border rounded-lg">
+                          <div className="flex items-start justify-between mb-2">
+                            <Badge variant={suggestion.priority === 'high' ? 'destructive' : 'secondary'}>
+                              {suggestion.type}
+                            </Badge>
+                            <Button 
+                              size="sm" 
+                              variant="ghost"
+                              onClick={() => acceptSuggestion(suggestion)}
+                            >
+                              <CheckCircle2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                          <p className="text-sm mb-1">{suggestion.suggestion}</p>
+                          {suggestion.reasoning && (
+                            <p className="text-xs text-gray-500">{suggestion.reasoning}</p>
+                          )}
                         </div>
-                        <p className="text-sm mb-1">{suggestion.suggestion}</p>
-                        {suggestion.reasoning && (
-                          <p className="text-xs text-gray-500">{suggestion.reasoning}</p>
-                        )}
-                      </div>
-                    ))
-                  )}
+                      ))
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>

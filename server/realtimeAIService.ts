@@ -195,19 +195,20 @@ ${sectionSpecificPrompt}
 
 Provide response in JSON format with these fields:
 {
-  "questions": ["specific question 1", "specific question 2", "specific question 3"],
-  "treatments": ["treatment option 1", "treatment option 2", "treatment option 3"],
-  "diagnoses": ["possible diagnosis 1", "possible diagnosis 2", "possible diagnosis 3"],
-  "tests": ["assessment test 1", "assessment test 2", "assessment test 3"],
-  "redFlags": ["red flag 1", "red flag 2"] // Only if relevant warning signs are present
+  "questions": ["most important question 1", "most important question 2"],
+  "treatments": ["key treatment option 1", "key treatment option 2"],
+  "diagnoses": ["most likely diagnosis 1", "most likely diagnosis 2"],
+  "tests": ["essential assessment 1", "essential assessment 2"],
+  "redFlags": ["red flag 1"] // Only if relevant warning signs are present
 }
 
 Keep suggestions:
 - Specific and actionable
 - Evidence-based
-- Relevant to current context
-- Maximum 3-4 items per category
-- Concise (under 60 characters per suggestion)
+- Highly relevant to current context
+- Maximum 2 items per category (prioritize quality over quantity)
+- Concise (under 50 characters per suggestion)
+- Only suggest the MOST important/relevant items
     `;
   }
 

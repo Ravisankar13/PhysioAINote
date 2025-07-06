@@ -12,7 +12,6 @@ import {
   Target,
   Brain,
   Timer,
-  Calendar,
   Search,
   FileText,
   Stethoscope,

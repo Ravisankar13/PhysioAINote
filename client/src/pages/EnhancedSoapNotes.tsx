@@ -10,7 +10,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { 
   Mic, MicOff, Brain, MessageSquare, Lightbulb, 
   Bot, Send, FileText, UserCheck, TrendingUp, Activity,
-  Clock, Users, User, CheckCircle2
+  Clock, Users, User, CheckCircle2, FileCheck, Shield, 
+  DollarSign, Calendar
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -370,144 +371,130 @@ export default function EnhancedSoapNotesPage() {
 
         <div className="grid lg:grid-cols-3 gap-6">
           {/* Main SOAP Notes Area */}
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-2 space-y-6">
+            {/* Recording Section */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Mic className="w-5 h-5" />
+                  Audio Recording
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center py-8">
+                  <div className={`w-20 h-20 mx-auto mb-4 rounded-full flex items-center justify-center ${
+                    isRecording ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-600'
+                  }`}>
+                    {isRecording ? <MicOff className="w-8 h-8" /> : <Mic className="w-8 h-8" />}
+                  </div>
+                  
+                  {isRecording && (
+                    <div className="mb-4">
+                      <div className="text-2xl font-bold text-red-600 mb-2">
+                        {formatTime(recordingTime)}
+                      </div>
+                      <Badge variant="destructive" className="animate-pulse">
+                        Recording in progress...
+                      </Badge>
+                    </div>
+                  )}
+                  
+                  <Button
+                    onClick={isRecording ? stopRecording : startRecording}
+                    variant={isRecording ? "destructive" : "default"}
+                    size="lg"
+                    className="mb-4"
+                  >
+                    {isRecording ? "Stop Recording" : "Start Recording"}
+                  </Button>
+                  
+                  {realTimeTranscript && (
+                    <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                      <h4 className="font-semibold mb-2">Live Transcript:</h4>
+                      <p className="text-sm text-gray-700">{realTimeTranscript}</p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* SOAP Sections */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <FileText className="w-5 h-5" />
-                  Clinical Documentation
+                  SOAP Note Sections
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <Tabs defaultValue="record" className="w-full">
-                  <TabsList className="grid w-full grid-cols-3">
-                    <TabsTrigger value="record">Record</TabsTrigger>
-                    <TabsTrigger value="soap">SOAP Note</TabsTrigger>
-                    <TabsTrigger value="admin">Admin Tasks</TabsTrigger>
-                  </TabsList>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4">
+                  {/* Subjective */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-2 block">
+                      Subjective
+                    </label>
+                    <Textarea 
+                      value={soapSections.subjective}
+                      onChange={(e) => setSoapSections(prev => ({...prev, subjective: e.target.value}))}
+                      placeholder="Patient's subjective complaints and history..."
+                      className="min-h-[100px]"
+                    />
+                  </div>
 
-                  {/* Recording Tab */}
-                  <TabsContent value="record" className="space-y-4">
-                    <div className="text-center py-8">
-                      <div className={`w-20 h-20 mx-auto mb-4 rounded-full flex items-center justify-center ${
-                        isRecording ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-600'
-                      }`}>
-                        {isRecording ? <MicOff className="w-8 h-8" /> : <Mic className="w-8 h-8" />}
-                      </div>
-                      
-                      {isRecording && (
-                        <div className="mb-4">
-                          <div className="text-2xl font-bold text-red-600 mb-2">
-                            {formatTime(recordingTime)}
-                          </div>
-                          <Badge variant="destructive" className="animate-pulse">
-                            Recording in progress...
-                          </Badge>
-                        </div>
-                      )}
-                      
-                      <Button
-                        onClick={isRecording ? stopRecording : startRecording}
-                        variant={isRecording ? "destructive" : "default"}
-                        size="lg"
-                        className="mb-4"
-                      >
-                        {isRecording ? "Stop Recording" : "Start Recording"}
-                      </Button>
-                      
-                      {realTimeTranscript && (
-                        <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-                          <h4 className="font-semibold mb-2">Live Transcript:</h4>
-                          <p className="text-sm text-gray-700">{realTimeTranscript}</p>
-                        </div>
-                      )}
-                    </div>
-                  </TabsContent>
+                  {/* Objective */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-2 block">
+                      Objective
+                    </label>
+                    <Textarea 
+                      value={soapSections.objective}
+                      onChange={(e) => setSoapSections(prev => ({...prev, objective: e.target.value}))}
+                      placeholder="Objective findings, measurements, test results..."
+                      className="min-h-[100px]"
+                    />
+                  </div>
 
-                  {/* SOAP Note Tab */}
-                  <TabsContent value="soap" className="space-y-4">
-                    <div className="grid gap-4">
-                      <div>
-                        <label className="block text-sm font-semibold mb-2 text-green-700">
-                          Subjective
-                        </label>
-                        <Textarea
-                          value={soapSections.subjective}
-                          onChange={(e) => setSoapSections(prev => ({ ...prev, subjective: e.target.value }))}
-                          placeholder="Patient's reported symptoms, history..."
-                          className="min-h-20"
-                        />
-                      </div>
-                      
-                      <div>
-                        <label className="block text-sm font-semibold mb-2 text-blue-700">
-                          Objective
-                        </label>
-                        <Textarea
-                          value={soapSections.objective}
-                          onChange={(e) => setSoapSections(prev => ({ ...prev, objective: e.target.value }))}
-                          placeholder="Clinical observations, measurements..."
-                          className="min-h-20"
-                        />
-                      </div>
-                      
-                      <div>
-                        <label className="block text-sm font-semibold mb-2 text-purple-700">
-                          Assessment
-                        </label>
-                        <Textarea
-                          value={soapSections.assessment}
-                          onChange={(e) => setSoapSections(prev => ({ ...prev, assessment: e.target.value }))}
-                          placeholder="Clinical diagnosis, interpretation..."
-                          className="min-h-20"
-                        />
-                      </div>
-                      
-                      <div>
-                        <label className="block text-sm font-semibold mb-2 text-orange-700">
-                          Plan
-                        </label>
-                        <Textarea
-                          value={soapSections.plan}
-                          onChange={(e) => setSoapSections(prev => ({ ...prev, plan: e.target.value }))}
-                          placeholder="Treatment plan, interventions..."
-                          className="min-h-20"
-                        />
-                      </div>
-                    </div>
-                    
-                    <div className="flex gap-2">
-                      <Button className="flex-1">
-                        Save SOAP Note
-                      </Button>
-                      <Button 
-                        variant="outline" 
-                        onClick={createVirtualPatient}
-                        disabled={isCreatingVirtualPatient}
-                        className="flex items-center gap-2"
-                      >
-                        <UserCheck className="w-4 h-4" />
-                        {isCreatingVirtualPatient ? "Creating..." : "Create Virtual Patient"}
-                      </Button>
-                    </div>
-                  </TabsContent>
+                  {/* Assessment */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-2 block">
+                      Assessment
+                    </label>
+                    <Textarea 
+                      value={soapSections.assessment}
+                      onChange={(e) => setSoapSections(prev => ({...prev, assessment: e.target.value}))}
+                      placeholder="Clinical assessment and diagnosis..."
+                      className="min-h-[100px]"
+                    />
+                  </div>
 
-                  {/* Admin Tasks Tab */}
-                  <TabsContent value="admin" className="space-y-4">
-                    <div className="text-center py-8">
-                      <TrendingUp className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-                      <h3 className="font-semibold mb-2">Automated Administrative Tasks</h3>
-                      <p className="text-sm text-gray-600 mb-4">
-                        AI-powered generation of administrative documentation
-                      </p>
-                      <div className="grid gap-2">
-                        <Button variant="outline" size="sm">Generate Doctor Report</Button>
-                        <Button variant="outline" size="sm">Create AHTR Submission</Button>
-                        <Button variant="outline" size="sm">Generate Insurance Forms</Button>
-                      </div>
-                    </div>
-                  </TabsContent>
-                </Tabs>
+                  {/* Plan */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-2 block">
+                      Plan
+                    </label>
+                    <Textarea 
+                      value={soapSections.plan}
+                      onChange={(e) => setSoapSections(prev => ({...prev, plan: e.target.value}))}
+                      placeholder="Treatment plan and recommendations..."
+                      className="min-h-[100px]"
+                    />
+                  </div>
+                </div>
+                
+                <div className="flex gap-2 mt-4">
+                  <Button className="flex-1">
+                    Save SOAP Note
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={createVirtualPatient}
+                    disabled={isCreatingVirtualPatient}
+                    className="flex items-center gap-2"
+                  >
+                    <UserCheck className="w-4 h-4" />
+                    {isCreatingVirtualPatient ? "Creating..." : "Create Virtual Patient"}
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -602,6 +589,45 @@ export default function EnhancedSoapNotesPage() {
                       disabled={isChatLoading}
                     >
                       <Send className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Admin Tasks */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5" />
+                  Admin Tasks
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  <p className="text-sm text-gray-600 mb-3">
+                    AI-powered administrative automation
+                  </p>
+                  <div className="grid gap-2">
+                    <Button variant="outline" size="sm" className="w-full justify-start">
+                      <FileText className="w-4 h-4 mr-2" />
+                      Generate Doctor Report
+                    </Button>
+                    <Button variant="outline" size="sm" className="w-full justify-start">
+                      <FileCheck className="w-4 h-4 mr-2" />
+                      Create AHTR Submission
+                    </Button>
+                    <Button variant="outline" size="sm" className="w-full justify-start">
+                      <Shield className="w-4 h-4 mr-2" />
+                      Generate Insurance Forms
+                    </Button>
+                    <Button variant="outline" size="sm" className="w-full justify-start">
+                      <DollarSign className="w-4 h-4 mr-2" />
+                      Billing Codes
+                    </Button>
+                    <Button variant="outline" size="sm" className="w-full justify-start">
+                      <Calendar className="w-4 h-4 mr-2" />
+                      Schedule Follow-up
                     </Button>
                   </div>
                 </div>

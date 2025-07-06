@@ -3238,6 +3238,63 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
 
+  // Rename virtual patient
+  app.patch("/api/virtual-patients/:id/rename", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { id } = req.params;
+      const { newName } = req.body;
+
+      // Validate input
+      if (!newName || typeof newName !== 'string' || newName.trim().length === 0) {
+        return res.status(400).json({ error: 'New name is required and must be a non-empty string' });
+      }
+
+      const patientId = parseInt(id);
+      if (isNaN(patientId)) {
+        return res.status(400).json({ error: 'Invalid patient ID' });
+      }
+
+      // Get the virtual patient to verify ownership
+      const virtualPatient = await storage.getVirtualPatient(patientId);
+      if (!virtualPatient) {
+        return res.status(404).json({ error: 'Virtual patient not found' });
+      }
+
+      // Ensure the virtual patient belongs to the authenticated user
+      if (virtualPatient.userId !== userId) {
+        return res.status(403).json({ error: 'You do not have permission to rename this virtual patient' });
+      }
+
+      // Update the patient name
+      const updatedPatient = await storage.updateVirtualPatient(patientId, {
+        patient_name: newName.trim()
+      });
+
+      if (!updatedPatient) {
+        return res.status(500).json({ error: 'Failed to update virtual patient name' });
+      }
+
+      res.json({
+        success: true,
+        message: 'Virtual patient renamed successfully',
+        virtualPatient: updatedPatient
+      });
+
+    } catch (error) {
+      console.error("Error renaming virtual patient:", error);
+      if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
+      }
+    }
+  });
+
   // Peer Knowledge Exchange - Shared Cases Operations
   app.get("/api/shared-cases", async (req: Request, res: Response) => {
     try {

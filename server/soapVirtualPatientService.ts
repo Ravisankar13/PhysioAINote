@@ -556,10 +556,16 @@ Return the virtual patient in JSON format with this exact structure:
       // We need to import the storage and virtual patients table
       const { storage } = await import("./storage");
       
+      // Create timestamp-based name for SOAP virtual patients
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T');
+      const dateStr = timestamp[0];
+      const timeStr = timestamp[1].split('.')[0];
+      const timestampName = `VP-${dateStr}-${timeStr}`;
+
       // Create a virtual patient using the existing storage interface
       const virtualPatientInput = {
         userId: params.userId,
-        patient_name: params.virtualPatientData.patientProfile?.name || "Virtual Patient",
+        patient_name: timestampName,
         age: params.virtualPatientData.patientProfile?.age || 35,
         gender: params.virtualPatientData.patientProfile?.gender || "other",
         chief_complaint: params.virtualPatientData.clinicalPresentation?.chiefComplaint || "Pain and functional limitations",

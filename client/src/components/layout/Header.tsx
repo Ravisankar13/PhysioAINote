@@ -48,7 +48,6 @@ const Header = () => {
     { to: "/exercises", label: "Exercise Library" },
     { to: "/manual-therapy", label: "Manual Therapy" },
     { to: "/virtual-patients", label: "Virtual Patients" },
-    { to: "/game-competitions", label: "Game Competitions" },
     { to: "/body-scanner", label: "Body Scanner" },
     { to: "/membership", label: "Membership" },
   ];

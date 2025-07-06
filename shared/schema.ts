@@ -129,7 +129,31 @@ export const sessionStatusEnum = pgEnum("session_status", [
   "transcribed",
   "processing",
   "completed",
+  "continuous_recording", // New status for ongoing continuous recording
+  "auto_segmented", // New status for auto-detected patient segments
 ]);
+
+// Continuous recording session table for managing clinic day recordings
+export const continuousRecordingSessions = pgTable("continuous_recording_sessions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  sessionId: text("session_id").notNull().unique(), // Unique identifier for the clinic day session
+  sessionName: text("session_name").notNull(), // e.g. "Clinic Day - January 6, 2025"
+  startTime: timestamp("start_time").defaultNow().notNull(),
+  endTime: timestamp("end_time"),
+  totalDuration: integer("total_duration"), // Duration in seconds
+  isActive: boolean("is_active").default(true).notNull(),
+  totalPatients: integer("total_patients").default(0).notNull(),
+  fullTranscript: text("full_transcript"), // Complete recording transcript
+  audioFileUrl: text("audio_file_url"), // URL to complete audio file
+  patientSegments: json("patient_segments"), // Array of detected patient segments
+  aiAnalysisLog: json("ai_analysis_log"), // Log of AI decisions and confidence scores
+  status: text("status").default("recording").notNull(), // recording, processing, completed
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
 
 // Users
 export const users = pgTable("users", {
@@ -233,6 +257,9 @@ export const soapNotes = pgTable("soap_notes", {
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   sessionId: text("session_id").notNull().unique(), // For tracking continuous recording sessions
+  continuousRecordingSessionId: integer("continuous_recording_session_id")
+    .references(() => continuousRecordingSessions.id, { onDelete: "set null" }), // Link to continuous recording session
+  patientSequenceNumber: integer("patient_sequence_number"), // Order in the continuous recording (Patient 1, 2, 3...)
   patientName: text("patient_name"),
   patientId: text("patient_id"),
   dateOfBirth: text("date_of_birth"),
@@ -290,6 +317,16 @@ export const insertSoapNoteSchema = createInsertSchema(soapNotes).omit({
 
 export type InsertSoapNote = z.infer<typeof insertSoapNoteSchema>;
 export type SoapNote = typeof soapNotes.$inferSelect;
+
+// Continuous Recording Session schema types
+export const insertContinuousRecordingSessionSchema = createInsertSchema(continuousRecordingSessions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertContinuousRecordingSession = z.infer<typeof insertContinuousRecordingSessionSchema>;
+export type ContinuousRecordingSession = typeof continuousRecordingSessions.$inferSelect;
 
 // Virtual Patients from SOAP Notes Schema
 export const soapVirtualPatients = pgTable("soap_virtual_patients", {

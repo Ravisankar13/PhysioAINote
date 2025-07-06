@@ -8939,5 +8939,145 @@ Respond in JSON format:
     }
   });
 
+  // ===== CONTINUOUS RECORDING API ENDPOINTS =====
+
+  // Start continuous recording session
+  app.post('/api/continuous-recording/start', ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { sessionName } = req.body;
+      const { continuousRecordingService } = await import('./continuousRecordingService');
+      
+      // Check if user already has an active session
+      const activeSession = await continuousRecordingService.getActiveContinuousSession(userId);
+      if (activeSession) {
+        return res.status(409).json({ 
+          error: 'Active continuous recording session already exists',
+          activeSession 
+        });
+      }
+
+      const newSession = await continuousRecordingService.startContinuousRecording(userId, sessionName);
+      res.json(newSession);
+    } catch (error: any) {
+      console.error("Error starting continuous recording:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // End continuous recording session
+  app.post('/api/continuous-recording/end', ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { sessionId } = req.body;
+      if (!sessionId) {
+        return res.status(400).json({ error: 'Session ID is required' });
+      }
+
+      const { continuousRecordingService } = await import('./continuousRecordingService');
+      const endedSession = await continuousRecordingService.endContinuousRecording(sessionId, userId);
+      
+      if (!endedSession) {
+        return res.status(404).json({ error: 'Continuous recording session not found' });
+      }
+
+      res.json(endedSession);
+    } catch (error: any) {
+      console.error("Error ending continuous recording:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Process transcript chunk and detect patient transitions
+  app.post('/api/continuous-recording/process-transcript', ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { sessionId, transcript, duration } = req.body;
+      if (!sessionId || !transcript || duration === undefined) {
+        return res.status(400).json({ error: 'Session ID, transcript, and duration are required' });
+      }
+
+      const { continuousRecordingService } = await import('./continuousRecordingService');
+      const detectionResult = await continuousRecordingService.processTranscriptChunk(
+        sessionId, 
+        userId, 
+        transcript, 
+        duration
+      );
+
+      res.json(detectionResult);
+    } catch (error: any) {
+      console.error("Error processing transcript chunk:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get active continuous recording session
+  app.get('/api/continuous-recording/active', ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { continuousRecordingService } = await import('./continuousRecordingService');
+      const activeSession = await continuousRecordingService.getActiveContinuousSession(userId);
+      
+      res.json(activeSession);
+    } catch (error: any) {
+      console.error("Error getting active continuous recording session:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get all continuous recording sessions for user
+  app.get('/api/continuous-recording/sessions', ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { continuousRecordingService } = await import('./continuousRecordingService');
+      const sessions = await continuousRecordingService.getUserContinuousSessions(userId);
+      
+      res.json(sessions);
+    } catch (error: any) {
+      console.error("Error getting continuous recording sessions:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get SOAP notes for a continuous recording session
+  app.get('/api/continuous-recording/sessions/:sessionId/soap-notes', ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { sessionId } = req.params;
+      const { continuousRecordingService } = await import('./continuousRecordingService');
+      const soapNotes = await continuousRecordingService.getSessionSoapNotes(parseInt(sessionId), userId);
+      
+      res.json(soapNotes);
+    } catch (error: any) {
+      console.error("Error getting session SOAP notes:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   return httpServer;
 }

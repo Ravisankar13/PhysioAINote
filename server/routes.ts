@@ -8319,5 +8319,45 @@ Respond in JSON format:
     }
   });
 
+  // AHTR PDF Generation endpoint
+  app.post('/api/generate-ahtr-pdf', async (req: Request, res: Response) => {
+    try {
+      const { subjective, objective, assessment, plan } = req.body;
+
+      if (!subjective || !objective || !assessment || !plan) {
+        return res.status(400).json({ 
+          error: 'Missing required SOAP note sections' 
+        });
+      }
+
+      const { ahtrPdfService } = await import('./ahtrPdfService');
+      
+      // Generate form data from SOAP notes
+      const formData = await ahtrPdfService.generateAHTRFormData({
+        subjective,
+        objective,
+        assessment,
+        plan
+      });
+
+      // Create filled PDF
+      const pdfBuffer = await ahtrPdfService.createFilledPDF(formData);
+
+      // Set response headers for PDF download
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'attachment; filename=AHTR-Form.pdf');
+      res.setHeader('Content-Length', pdfBuffer.length);
+
+      // Send PDF buffer
+      res.send(pdfBuffer);
+
+    } catch (error) {
+      console.error('Error generating AHTR PDF:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Failed to generate AHTR PDF' 
+      });
+    }
+  });
+
   return httpServer;
 }

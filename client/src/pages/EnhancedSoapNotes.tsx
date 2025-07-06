@@ -82,6 +82,8 @@ export default function EnhancedSoapNotesPage() {
   
   const [isCreatingVirtualPatient, setIsCreatingVirtualPatient] = useState(false);
   const [showMotionCaptureIntegration, setShowMotionCaptureIntegration] = useState(false);
+  const [isCreatingEnhancedPatient, setIsCreatingEnhancedPatient] = useState(false);
+  const [capturedMotionData, setCapturedMotionData] = useState<any>(null);
 
 
   

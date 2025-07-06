@@ -34,6 +34,7 @@ import { bodyScannerService, SymptomData } from "./bodyScannerService";
 import { realTimeAIService } from "./realtimeAIService";
 import { virtualPatientService } from "./virtualPatientService";
 import { soapVirtualPatientService } from "./soapVirtualPatientService";
+import { documentGenerationService } from "./documentGenerationService";
 import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, exercises, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, insertSoapNoteSchema, bodyScans, insertBodyScanSchema } from "@shared/schema";
 import { ZodError, z } from "zod";
 import { fromZodError } from "zod-validation-error";
@@ -8251,6 +8252,70 @@ Respond in JSON format:
     } catch (error: any) {
       console.error("Error updating virtual patient visibility:", error);
       res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Form Generation API endpoint
+  app.post("/api/generate-form", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { formType, soapData, patientName, date } = req.body;
+
+      if (!formType || !soapData || !patientName || !date) {
+        return res.status(400).json({ 
+          error: 'Form type, SOAP data, patient name, and date are required' 
+        });
+      }
+
+      if (!['doctor_report', 'ahtr', 'imaging_referral'].includes(formType)) {
+        return res.status(400).json({ 
+          error: 'Invalid form type. Must be doctor_report, ahtr, or imaging_referral' 
+        });
+      }
+
+      let generatedContent: string;
+
+      switch (formType) {
+        case 'doctor_report':
+          generatedContent = await documentGenerationService.generateDoctorReport({
+            formType,
+            soapData,
+            patientName,
+            date
+          });
+          break;
+        case 'ahtr':
+          generatedContent = await documentGenerationService.generateAHTR({
+            formType,
+            soapData,
+            patientName,
+            date
+          });
+          break;
+        case 'imaging_referral':
+          generatedContent = await documentGenerationService.generateImagingReferral({
+            formType,
+            soapData,
+            patientName,
+            date
+          });
+          break;
+        default:
+          throw new Error('Invalid form type');
+      }
+
+      res.json({
+        success: true,
+        content: generatedContent,
+        formType,
+        patientName,
+        date: new Date(date).toLocaleDateString()
+      });
+
+    } catch (error) {
+      console.error('Error generating form:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Failed to generate form' 
+      });
     }
   });
 

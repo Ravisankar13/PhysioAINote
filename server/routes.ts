@@ -7432,6 +7432,103 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
 
+  // Create enhanced virtual patient with motion capture integration
+  app.post("/api/enhanced-virtual-patients", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { soapData, sessionDuration, includeMotionData, motionCaptureData, soapNoteId, motionData } = req.body;
+
+      // Handle both new Enhanced SOAP Notes format and legacy format
+      if (soapData) {
+        // New Enhanced SOAP Notes format - create from SOAP sections directly
+        if (!soapData.subjective && !soapData.objective) {
+          return res.status(400).json({ error: 'Insufficient SOAP data to create virtual patient' });
+        }
+
+        const { enhancedVirtualPatientService } = await import("./enhancedVirtualPatientService");
+        const result = await enhancedVirtualPatientService.createEnhancedVirtualPatientFromSOAP(
+          soapData, 
+          userId, 
+          includeMotionData ? motionCaptureData : null,
+          sessionDuration
+        );
+
+        if (!result.success) {
+          return res.status(400).json({ error: result.message });
+        }
+
+        res.json(result);
+      } else if (soapNoteId) {
+        // Legacy format - create from existing SOAP note ID
+        const { enhancedVirtualPatientService } = await import("./enhancedVirtualPatientService");
+        const result = await enhancedVirtualPatientService.createEnhancedVirtualPatient(
+          soapNoteId, 
+          userId, 
+          motionData
+        );
+
+        if (!result.success) {
+          return res.status(400).json({ error: result.message });
+        }
+
+        res.json(result);
+      } else {
+        return res.status(400).json({ error: 'Either SOAP data or SOAP note ID is required' });
+      }
+    } catch (error: any) {
+      console.error("Error creating enhanced virtual patient:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get enhanced virtual patients with motion data indicators
+  app.get("/api/enhanced-virtual-patients", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { enhancedVirtualPatientService } = await import("./enhancedVirtualPatientService");
+      const virtualPatients = await enhancedVirtualPatientService.getEnhancedVirtualPatients(userId);
+      res.json(virtualPatients);
+    } catch (error: any) {
+      console.error("Error getting enhanced virtual patients:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get specific enhanced virtual patient
+  app.get("/api/enhanced-virtual-patients/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const virtualPatientId = parseInt(req.params.id);
+      if (isNaN(virtualPatientId)) {
+        return res.status(400).json({ error: 'Invalid virtual patient ID' });
+      }
+
+      const { enhancedVirtualPatientService } = await import("./enhancedVirtualPatientService");
+      const virtualPatient = await enhancedVirtualPatientService.getEnhancedVirtualPatient(virtualPatientId, userId);
+      
+      if (!virtualPatient) {
+        return res.status(404).json({ error: 'Enhanced virtual patient not found' });
+      }
+
+      res.json(virtualPatient);
+    } catch (error: any) {
+      console.error("Error getting enhanced virtual patient:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Get specific virtual patient
   app.get("/api/virtual-patients/:id", ensureAuthenticated, async (req: Request, res: Response) => {
     try {

@@ -351,10 +351,57 @@ export const soapVirtualPatients = pgTable("soap_virtual_patients", {
   estimatedDuration: text("estimated_duration"), // e.g., "6-8 weeks"
   prognosis: text("prognosis"),
   
+  // Motion Capture Integration (Digital Patient Twin Data)
+  motionCaptureData: json("motion_capture_data").$type<{
+    landmarks: Array<{
+      timestamp: number;
+      landmarks: Array<{
+        x: number;
+        y: number;
+        z: number;
+        visibility: number;
+      }>;
+    }>;
+    analysis: {
+      totalFrames: number;
+      duration: number;
+      movementQuality: number;
+      avgLandmarksPerFrame: number;
+    };
+    dysfunctionPatterns: string[];
+    compensationMechanisms: string[];
+    clinicalCorrelations: string[];
+  }>(),
+  
+  // 3D Biomechanical Analysis
+  biomechanicalAnalysis: json("biomechanical_analysis").$type<{
+    postureAssessment: {
+      frontal: string[];
+      sagittal: string[];
+      transverse: string[];
+    };
+    movementPatterns: {
+      quality: number;
+      deviations: string[];
+      restrictions: string[];
+    };
+    jointAngles: Record<string, number>;
+    asymmetries: string[];
+  }>(),
+  
+  // Integrated Clinical Presentation (SOAP + Motion)
+  integratedFindings: json("integrated_findings").$type<{
+    subjectiveMotionCorrelation: string;
+    objectiveMotionFindings: string;
+    movementAssessment: string;
+    combinedTreatmentPlan: string;
+  }>(),
+  
   // AI Generation Metadata
   aiGeneratedAt: timestamp("ai_generated_at").defaultNow().notNull(),
   generationPrompt: text("generation_prompt"),
   generationModel: text("generation_model").default("gpt-4o").notNull(),
+  hasMotionData: boolean("has_motion_data").default(false).notNull(),
   
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

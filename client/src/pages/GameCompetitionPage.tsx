@@ -681,16 +681,45 @@ export default function GameCompetitionPage() {
     });
     setRevealedInformation(newRevealedInfo);
 
-    // Generate appropriate response based on question type
+    // Generate response based on the revealed information from the question
     let response = '';
-    if (questionId === 'q1') {
-      response = challengeContent.hiddenInformation?.painDescription || 'Patient reports significant pain and discomfort.';
-    } else if (questionId === 'q2') {
-      response = challengeContent.hiddenInformation?.auditorySymptoms || 'Patient heard a distinct sound during the incident.';
-    } else if (questionId === 'q3') {
-      response = challengeContent.hiddenInformation?.functionalLoss || 'Patient has difficulty with normal activities.';
+    const revealedValues = question.reveals?.map((key: string) => 
+      challengeContent.hiddenInformation?.[key]
+    ).filter(Boolean) || [];
+    
+    if (revealedValues.length > 0) {
+      response = revealedValues.join('. ');
     } else {
-      response = `Question answered. Additional clinical information revealed. Check the revealed information section.`;
+      // Fallback: use question category to generate appropriate response
+      switch (question.category) {
+        case 'mechanism':
+        case 'history':
+          response = challengeContent.hiddenInformation?.detailedHistory || 
+                    challengeContent.hiddenInformation?.mechanism || 
+                    'Patient provides additional history details.';
+          break;
+        case 'auditory_symptoms':
+          response = challengeContent.hiddenInformation?.auditorySymptoms || 
+                    'Patient reports auditory findings during the incident.';
+          break;
+        case 'function':
+          response = challengeContent.hiddenInformation?.functionalLoss || 
+                    challengeContent.hiddenInformation?.weight_bearing_status ||
+                    'Patient describes functional limitations.';
+          break;
+        case 'aggravating_factors':
+          response = challengeContent.hiddenInformation?.movements ||
+                    challengeContent.hiddenInformation?.positions ||
+                    'Patient identifies specific aggravating factors.';
+          break;
+        case 'severity':
+          response = challengeContent.hiddenInformation?.pain_intensity ||
+                    challengeContent.hiddenInformation?.pain_pattern ||
+                    'Patient provides pain severity and pattern details.';
+          break;
+        default:
+          response = 'Additional clinical information obtained from patient history.';
+      }
     }
     
     setQuestionResponses({
@@ -718,14 +747,48 @@ export default function GameCompetitionPage() {
     });
     setRevealedInformation(newRevealedInfo);
 
-    // Generate appropriate test result based on test type
+    // Generate test result based on the revealed information from the test
     let result = '';
-    if (testId === 't1') {
-      result = challengeContent.hiddenInformation?.acl_status || 'Positive test result - significant anterior translation noted.';
-    } else if (testId === 't2') {
-      result = challengeContent.hiddenInformation?.meniscal_integrity || 'Test shows mechanical symptoms consistent with meniscal pathology.';
+    const revealedValues = test.reveals?.map((key: string) => 
+      challengeContent.hiddenInformation?.[key]
+    ).filter(Boolean) || [];
+    
+    if (revealedValues.length > 0) {
+      result = revealedValues.join('. ');
     } else {
-      result = `Test completed. Results indicate clinical findings. Check the revealed information section.`;
+      // Fallback: use test category to generate appropriate result
+      switch (test.category) {
+        case 'ligament_integrity':
+          result = challengeContent.hiddenInformation?.acl_status || 
+                  challengeContent.hiddenInformation?.mcl_status ||
+                  challengeContent.hiddenInformation?.anterior_translation ||
+                  'Test reveals ligament integrity findings.';
+          break;
+        case 'meniscal_assessment':
+          result = challengeContent.hiddenInformation?.meniscal_integrity || 
+                  challengeContent.hiddenInformation?.mechanical_symptoms ||
+                  'Test shows meniscal assessment findings.';
+          break;
+        case 'special_tests':
+        case 'impingement':
+          result = challengeContent.hiddenInformation?.impingement_signs || 
+                  challengeContent.hiddenInformation?.impingement_confirmation ||
+                  challengeContent.hiddenInformation?.arc_of_pain ||
+                  'Special test reveals clinical findings.';
+          break;
+        case 'neurological':
+          result = challengeContent.hiddenInformation?.neurological_signs || 
+                  challengeContent.hiddenInformation?.nerve_function ||
+                  'Neurological testing reveals findings.';
+          break;
+        case 'stability':
+          result = challengeContent.hiddenInformation?.joint_stability || 
+                  challengeContent.hiddenInformation?.laxity_findings ||
+                  'Stability testing shows clinical findings.';
+          break;
+        default:
+          result = 'Test completed with clinical findings noted.';
+      }
     }
     
     setTestResults({

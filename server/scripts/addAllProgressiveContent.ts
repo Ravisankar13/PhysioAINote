@@ -66,7 +66,20 @@ const progressiveContents = {
         detailedHistory: "Patient started experiencing pain after moving furniture 2 weeks ago",
         mechanism: "Overhead lifting with poor technique",
         previousHistory: "No previous shoulder problems",
-        medicationHistory: "Taking ibuprofen with moderate relief"
+        medicationHistory: "Taking ibuprofen with moderate relief",
+        // Question reveals mapping
+        onset: "Pain began 2 weeks ago after heavy lifting episode",
+        movements: "Pain worsens with overhead reaching and lifting",
+        positions: "Sleeping on affected side causes significant discomfort",
+        trauma_history: "No direct trauma, but overuse from furniture moving",
+        causative_factors: "Poor lifting technique with repetitive overhead motions",
+        pain_intensity: "Pain rated 6-7/10 during activities, 3/10 at rest",
+        pain_pattern: "Worse in morning, improves with gentle movement",
+        // Test reveals mapping
+        impingement_signs: "Positive painful arc between 60-120 degrees abduction",
+        arc_of_pain: "Clear painful arc present during active abduction",
+        impingement_confirmation: "Positive Hawkins-Kennedy test reproducing symptoms",
+        rotator_cuff_involvement: "Suggests rotator cuff tendon involvement in impingement"
       },
       correctDiagnosis: "Subacromial Impingement Syndrome",
       differentialDiagnoses: [
@@ -140,7 +153,19 @@ const progressiveContents = {
         detailedHistory: "Non-contact injury during pivoting movement",
         mechanism: "Valgus stress with external rotation",
         auditorySymptoms: "Loud pop heard at time of injury",
-        functionalLoss: "Immediate inability to continue playing"
+        functionalLoss: "Immediate inability to continue playing",
+        // Question reveals mapping
+        injury_details: "Non-contact injury occurred during pivoting movement while defending",
+        position_at_injury: "Player was in a planted position with knee in slight flexion",
+        pop_sound: "Loud audible pop heard by player and teammates",
+        crack_indication: "No cracking sounds, just a single distinct pop",
+        weight_bearing_status: "Unable to bear weight immediately after injury",
+        gait_pattern: "Cannot walk normally, requires assistance off field",
+        // Test reveals mapping
+        acl_status: "Positive anterior drawer test indicating ACL rupture",
+        anterior_translation: "Significant anterior translation of tibia on femur",
+        meniscal_integrity: "McMurray test shows some mechanical symptoms",
+        mechanical_symptoms: "Possible concurrent meniscal damage with locking sensation"
       },
       correctDiagnosis: "ACL Rupture",
       differentialDiagnoses: [

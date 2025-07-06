@@ -187,17 +187,82 @@ export class GameAIFeedbackService {
     // Exact match
     if (userNorm === correctNorm) return true;
     
-    // Check if user diagnosis contains the key terms from correct diagnosis
+    // Enhanced fuzzy matching for medical terms
     const correctWords = correctNorm.split(/\s+/).filter(word => word.length > 2);
-    const userWords = userNorm.split(/\s+/);
+    const userWords = userNorm.split(/\s+/).filter(word => word.length > 2);
     
-    // If most key words from correct diagnosis are present in user response
-    const matchedWords = correctWords.filter(word => 
-      userWords.some(userWord => userWord.includes(word) || word.includes(userWord))
+    // Count matched words with flexible similarity
+    const matchedWords = correctWords.filter(correctWord => 
+      userWords.some(userWord => {
+        // Direct inclusion check (both directions)
+        if (userWord.includes(correctWord) || correctWord.includes(userWord)) return true;
+        
+        // Handle common medical spelling variations and abbreviations
+        const variations = this.getMedicalTermVariations(correctWord);
+        return variations.some(variation => 
+          userWord.includes(variation) || variation.includes(userWord)
+        );
+      })
     );
     
-    // Consider it correct if at least 70% of key words match
-    return matchedWords.length >= Math.ceil(correctWords.length * 0.7);
+    // Also check reverse direction - user words that match correct diagnosis
+    const reverseMatchedWords = userWords.filter(userWord => 
+      correctWords.some(correctWord => {
+        if (correctWord.includes(userWord) || userWord.includes(correctWord)) return true;
+        
+        const variations = this.getMedicalTermVariations(userWord);
+        return variations.some(variation => 
+          correctWord.includes(variation) || variation.includes(correctWord)
+        );
+      })
+    );
+    
+    // Use the better match ratio
+    const forwardRatio = matchedWords.length / correctWords.length;
+    const reverseRatio = reverseMatchedWords.length / userWords.length;
+    const matchRatio = Math.max(forwardRatio, reverseRatio);
+    
+    // Consider it correct if at least 70% of key terms match
+    // This handles cases like "subacromial impingement" vs "subacromical impingement syndrome"
+    return matchRatio >= 0.7;
+  }
+
+  private getMedicalTermVariations(term: string): string[] {
+    const variations = [term];
+    
+    // Common medical spelling variations
+    const medicalSpellingMap: { [key: string]: string[] } = {
+      'subacromial': ['subacromical', 'sub-acromial'],
+      'subacromical': ['subacromial', 'sub-acromical'],
+      'impingement': ['impingment', 'impingement'],
+      'syndrome': ['syn', 'synd'],
+      'tendinopathy': ['tendinitis', 'tendonitis', 'tendinosis'],
+      'tendinitis': ['tendinopathy', 'tendonitis'],
+      'tendonitis': ['tendinopathy', 'tendinitis'],
+      'rotator': ['rotor', 'rotater'],
+      'cuff': ['cup'],
+      'lateral': ['lat'],
+      'medial': ['med'],
+      'anterior': ['ant'],
+      'posterior': ['post'],
+      'superior': ['sup'],
+      'inferior': ['inf']
+    };
+    
+    // Add variations for the term
+    if (medicalSpellingMap[term]) {
+      variations.push(...medicalSpellingMap[term]);
+    }
+    
+    // Check if term is a variation of something else
+    for (const [key, values] of Object.entries(medicalSpellingMap)) {
+      if (values.includes(term)) {
+        variations.push(key, ...values.filter(v => v !== term));
+      }
+    }
+    
+    // Remove duplicates using filter
+    return variations.filter((value, index, self) => self.indexOf(value) === index);
   }
 
   /**
@@ -479,8 +544,9 @@ Provide overall assessment in JSON format:
     const correctDiagnosis = progressiveContent.correctDiagnosis || '';
     const differentialDiagnoses = progressiveContent.differentialDiagnoses || [];
     
-    // Check if diagnosis matches
+    // Check if diagnosis matches using enhanced fuzzy matching
     const isCorrect = this.isMatchingDiagnosis(userDiagnosis, correctDiagnosis);
+    const matchQuality = this.getMatchQuality(userDiagnosis, correctDiagnosis);
     
     const prompt = `Analyze this Progressive Diagnostic Challenge diagnosis:
     
@@ -488,11 +554,18 @@ Patient Presentation: ${JSON.stringify(progressiveContent.patientPresentation ||
 Correct Diagnosis: ${correctDiagnosis}
 User Diagnosis: ${userDiagnosis}
 Differential Diagnoses: ${differentialDiagnoses.join(', ')}
+Match Status: ${isCorrect ? 'SUBSTANTIALLY CORRECT' : 'INCORRECT'}
+
+IMPORTANT SCORING GUIDELINES:
+- If the user diagnosis captures the essential medical condition correctly, award 100 points even if wording differs
+- Examples of 100-point matches: "subacromial impingement" = "subacromical impingement syndrome"
+- Focus on clinical accuracy rather than exact terminology
+- Partial credit only for completely different but related conditions
 
 Provide detailed feedback on the diagnostic accuracy and clinical reasoning. Return as JSON:
 {
-  "score": number (0-100),
-  "aiAnalysis": "detailed analysis",
+  "score": number (0-100, award 100 for substantially correct diagnoses),
+  "aiAnalysis": "detailed analysis explaining why this ${isCorrect ? 'IS CORRECT' : 'is incorrect'}",
   "strengths": ["strength1", "strength2"],
   "improvements": ["improvement1", "improvement2"],
   "clinicalReasoning": "reasoning assessment"
@@ -507,15 +580,18 @@ Provide detailed feedback on the diagnostic accuracy and clinical reasoning. Ret
 
       const result = JSON.parse(response.choices[0].message.content || '{}');
 
+      // Ensure score reflects fuzzy matching logic
+      const finalScore = isCorrect ? 100 : (result.score || 0);
+      
       return {
         questionId,
         questionText,
         userResponse: userDiagnosis,
         correctAnswer: correctDiagnosis,
-        aiAnalysis: result.aiAnalysis || (isCorrect ? 'Correct diagnosis!' : 'Incorrect diagnosis'),
-        score: result.score || (isCorrect ? 100 : 0),
-        strengths: result.strengths || (isCorrect ? ['Accurate diagnosis'] : ['Attempted diagnosis']),
-        improvements: result.improvements || (isCorrect ? [] : ['Review diagnostic criteria']),
+        aiAnalysis: result.aiAnalysis || this.getDefaultAnalysis(isCorrect, matchQuality, userDiagnosis, correctDiagnosis),
+        score: finalScore,
+        strengths: result.strengths || this.getDefaultStrengths(isCorrect, matchQuality),
+        improvements: result.improvements || this.getDefaultImprovements(isCorrect),
         clinicalReasoning: result.clinicalReasoning || 'Clinical reasoning assessed'
       };
     } catch (error) {
@@ -525,12 +601,52 @@ Provide detailed feedback on the diagnostic accuracy and clinical reasoning. Ret
         questionText,
         userResponse: userDiagnosis,
         correctAnswer: correctDiagnosis,
-        aiAnalysis: isCorrect ? 'Correct diagnosis!' : 'Incorrect diagnosis',
+        aiAnalysis: this.getDefaultAnalysis(isCorrect, matchQuality, userDiagnosis, correctDiagnosis),
         score: isCorrect ? 100 : 0,
-        strengths: isCorrect ? ['Accurate diagnosis'] : ['Attempted diagnosis'],
-        improvements: isCorrect ? [] : ['Review diagnostic criteria'],
-        clinicalReasoning: 'Clinical reasoning needs assessment'
+        strengths: this.getDefaultStrengths(isCorrect, matchQuality),
+        improvements: this.getDefaultImprovements(isCorrect),
+        clinicalReasoning: 'Clinical reasoning assessed based on diagnostic accuracy'
       };
+    }
+  }
+
+  private getMatchQuality(userDiagnosis: string, correctDiagnosis: string): string {
+    const normalize = (text: string) => text.toLowerCase().trim().replace(/[^\w\s]/g, '');
+    const userNorm = normalize(userDiagnosis);
+    const correctNorm = normalize(correctDiagnosis);
+    
+    if (userNorm === correctNorm) return 'exact';
+    if (this.isMatchingDiagnosis(userDiagnosis, correctDiagnosis)) return 'substantial';
+    return 'poor';
+  }
+
+  private getDefaultAnalysis(isCorrect: boolean, matchQuality: string, userDiagnosis: string, correctDiagnosis: string): string {
+    if (isCorrect) {
+      if (matchQuality === 'exact') {
+        return `Excellent! Your diagnosis "${userDiagnosis}" is exactly correct.`;
+      } else {
+        return `Correct diagnosis! Your answer "${userDiagnosis}" accurately identifies the condition as "${correctDiagnosis}". Minor differences in terminology do not affect the clinical accuracy.`;
+      }
+    } else {
+      return `The diagnosis "${userDiagnosis}" does not match the correct diagnosis "${correctDiagnosis}". Review the key clinical features to improve diagnostic accuracy.`;
+    }
+  }
+
+  private getDefaultStrengths(isCorrect: boolean, matchQuality: string): string[] {
+    if (isCorrect) {
+      return matchQuality === 'exact' 
+        ? ['Perfect diagnostic accuracy', 'Precise medical terminology']
+        : ['Clinically accurate diagnosis', 'Good understanding of the condition', 'Appropriate clinical reasoning'];
+    } else {
+      return ['Attempted systematic diagnosis', 'Engaged with clinical reasoning process'];
+    }
+  }
+
+  private getDefaultImprovements(isCorrect: boolean): string[] {
+    if (isCorrect) {
+      return ['Continue building on strong diagnostic skills'];
+    } else {
+      return ['Review key diagnostic criteria', 'Practice systematic clinical reasoning', 'Study differential diagnosis approaches'];
     }
   }
 

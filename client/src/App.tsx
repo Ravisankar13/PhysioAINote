@@ -7,6 +7,7 @@ import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
 import ClinicalNotes from "@/pages/ClinicalNotes";
 import SoapNotes from "@/pages/SoapNotes";
+import EnhancedSoapNotes from "@/pages/EnhancedSoapNotes";
 import About from "@/pages/About";
 import Contact from "@/pages/Contact";
 import Terms from "@/pages/Terms";
@@ -68,6 +69,9 @@ function Router() {
           <Route path="/notes-clinical" component={NotesClinical} />
           <Route path="/soap-notes">
             <ProtectedRoute component={SoapNotes} />
+          </Route>
+          <Route path="/enhanced-soap-notes">
+            <ProtectedRoute component={EnhancedSoapNotes} />
           </Route>
           <Route path="/shared-notes" component={SharedNotes} />
           <Route path="/research" component={ResearchHub} />

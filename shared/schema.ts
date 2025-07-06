@@ -241,6 +241,8 @@ export const soapNotes = pgTable("soap_notes", {
   objective: text("objective"),
   assessment: text("assessment"),
   plan: text("plan"),
+  goals: text("goals"),
+  treatment: text("treatment"),
   fullTranscription: text("full_transcription"), // Raw audio transcription
   audioFileUrl: text("audio_file_url"), // URL to stored audio file
   bodyPart: bodyPartEnum("body_part").default("other"),
@@ -249,6 +251,11 @@ export const soapNotes = pgTable("soap_notes", {
   patientSwitchDetected: boolean("patient_switch_detected").default(false).notNull(),
   recordingDuration: integer("recording_duration"), // Duration in seconds
   confidence: integer("confidence"), // AI confidence in transcription/generation (0-100)
+  
+  // Real-time AI suggestions data
+  suggestedQuestions: text("suggested_questions"), // JSON array of AI-suggested questions
+  suggestedTreatments: text("suggested_treatments"), // JSON array of AI-suggested treatments
+  suggestedDiagnoses: text("suggested_diagnoses"), // JSON array of AI-suggested diagnoses
   
   // AI Automatic Paperwork Fields
   treatmentSummary: text("treatment_summary"),
@@ -372,6 +379,31 @@ export const soapVirtualPatientRelations = relations(soapVirtualPatients, ({ one
     references: [soapNotes.id],
   }),
 }));
+
+// AI Suggestions for real-time assistance during SOAP note recording
+export const aiSuggestions = pgTable("ai_suggestions", {
+  id: serial("id").primaryKey(),
+  sessionId: text("session_id").notNull(), // Links to SOAP note session
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  suggestionType: text("suggestion_type").notNull(), // 'question', 'treatment', 'diagnosis', 'test'
+  suggestionText: text("suggestion_text").notNull(),
+  context: text("context"), // What triggered this suggestion
+  confidence: integer("confidence"), // AI confidence 0-100
+  accepted: boolean("accepted").default(false),
+  acceptedAt: timestamp("accepted_at"),
+  relevantBodyPart: bodyPartEnum("relevant_body_part"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertAiSuggestionSchema = createInsertSchema(aiSuggestions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertAiSuggestion = z.infer<typeof insertAiSuggestionSchema>;
+export type AiSuggestion = typeof aiSuggestions.$inferSelect;
 
 // Comments on clinical notes
 export const comments = pgTable("comments", {

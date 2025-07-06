@@ -1,22 +1,86 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Mic, MicOff, Upload, Users, User, FileAudio, Clock, Brain, AlertCircle, CheckCircle2, UserPlus } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { 
+  Mic, MicOff, Upload, Users, User, FileAudio, Clock, Brain, 
+  AlertCircle, CheckCircle2, UserPlus, MessageSquare, Lightbulb, 
+  Robot, Send, FileText, UserCheck, TrendingUp, Activity
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { SoapNote } from "@shared/schema";
 
+// Real-time AI assistance interfaces
+interface AISuggestion {
+  id: number;
+  type: 'question' | 'treatment' | 'diagnosis' | 'administrative';
+  suggestion: string;
+  reasoning?: string;
+  priority: 'low' | 'medium' | 'high';
+  createdAt: string;
+}
+
+interface PhysioGPTMessage {
+  id: number;
+  query: string;
+  answer: string;
+  timestamp: string;
+}
+
+interface RealTimeContext {
+  currentTranscript: string;
+  soapSections: {
+    subjective: string;
+    objective: string;
+    assessment: string;
+    plan: string;
+  };
+  patientInfo?: {
+    name?: string;
+    age?: number;
+    condition?: string;
+  };
+}
+
 export default function SoapNotesPage() {
+  // Recording state
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
+  
+  // Session and notes state
   const [activeSession, setActiveSession] = useState<SoapNote | null>(null);
+  const [realTimeTranscript, setRealTimeTranscript] = useState("");
+  const [soapSections, setSoapSections] = useState({
+    subjective: "",
+    objective: "",
+    assessment: "",
+    plan: ""
+  });
+  
+  // Real-time AI assistance state
+  const [aiSuggestions, setAiSuggestions] = useState<AISuggestion[]>([]);
+  const [physioGptChat, setPhysioGptChat] = useState<PhysioGPTMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [isChatLoading, setIsChatLoading] = useState(false);
+  const [showAIPanel, setShowAIPanel] = useState(true);
+  const [isWebSocketConnected, setIsWebSocketConnected] = useState(false);
+  
+  // Virtual patient creation state
+  const [isCreatingVirtualPatient, setIsCreatingVirtualPatient] = useState(false);
+  
+  // Refs
   const intervalRef = useRef<NodeJS.Timeout>();
+  const wsRef = useRef<WebSocket | null>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -59,6 +123,54 @@ export default function SoapNotesPage() {
     },
   });
 
+  // WebSocket connection for real-time AI assistance
+  const connectWebSocket = useCallback((sessionId: string, userId: number) => {
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${protocol}//${window.location.host}/ws/soap-ai?sessionId=${sessionId}&userId=${userId}`;
+    
+    wsRef.current = new WebSocket(wsUrl);
+    
+    wsRef.current.onopen = () => {
+      setIsWebSocketConnected(true);
+      console.log("WebSocket connected for real-time AI assistance");
+    };
+    
+    wsRef.current.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        
+        if (data.type === 'ai_suggestions') {
+          setAiSuggestions(prev => [...prev, ...data.suggestions]);
+        } else if (data.type === 'physio_gpt_response') {
+          setPhysioGptChat(prev => [...prev, data.message]);
+          setIsChatLoading(false);
+        }
+      } catch (error) {
+        console.error('Error parsing WebSocket message:', error);
+      }
+    };
+    
+    wsRef.current.onerror = (error) => {
+      console.error('WebSocket error:', error);
+      setIsWebSocketConnected(false);
+    };
+    
+    wsRef.current.onclose = () => {
+      setIsWebSocketConnected(false);
+      console.log("WebSocket disconnected");
+    };
+  }, []);
+
+  // Update real-time context
+  const updateRealTimeContext = useCallback((context: RealTimeContext) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'context_update',
+        context
+      }));
+    }
+  }, []);
+
   // Upload audio mutation
   const uploadAudioMutation = useMutation({
     mutationFn: async ({ sessionId, audioFile }: { sessionId: string; audioFile: File }) => {
@@ -76,6 +188,12 @@ export default function SoapNotesPage() {
     },
     onSuccess: (data) => {
       setActiveSession(data);
+      setSoapSections({
+        subjective: data.subjective || "",
+        objective: data.objective || "",
+        assessment: data.assessment || "",
+        plan: data.plan || ""
+      });
       queryClient.invalidateQueries({ queryKey: ["/api/soap-notes"] });
       queryClient.invalidateQueries({ queryKey: ["/api/soap-notes/sessions/active"] });
       toast({

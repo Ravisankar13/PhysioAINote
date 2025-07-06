@@ -1,0 +1,412 @@
+import OpenAI from "openai";
+import { db } from "./db";
+import { aiSuggestions, type InsertAiSuggestion } from "@shared/schema";
+import { eq } from "drizzle-orm";
+import { WebSocket } from "ws";
+
+if (!process.env.OPENAI_API_KEY) {
+  throw new Error("OPENAI_API_KEY must be set");
+}
+
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+export interface RealTimeContext {
+  transcript: string;
+  currentSection: string; // 'subjective', 'objective', 'assessment', 'plan'
+  patientSymptoms: string[];
+  bodyPart?: string;
+  sessionDuration: number; // in minutes
+}
+
+export interface AISuggestionResponse {
+  questions: string[];
+  treatments: string[];
+  diagnoses: string[];
+  tests: string[];
+  redFlags: string[];
+}
+
+export class RealTimeAIService {
+  private static instance: RealTimeAIService;
+  private connectedClients: Map<string, { ws: WebSocket; userId: number; sessionId: string }> = new Map();
+
+  static getInstance(): RealTimeAIService {
+    if (!RealTimeAIService.instance) {
+      RealTimeAIService.instance = new RealTimeAIService();
+    }
+    return RealTimeAIService.instance;
+  }
+
+  /**
+   * Add a WebSocket client for real-time suggestions
+   */
+  addClient(clientId: string, ws: WebSocket, userId: number, sessionId: string) {
+    this.connectedClients.set(clientId, { ws, userId, sessionId });
+    
+    ws.on('close', () => {
+      this.connectedClients.delete(clientId);
+    });
+
+    // Send welcome message
+    this.sendToClient(clientId, {
+      type: 'connected',
+      message: 'Real-time AI assistance connected'
+    });
+  }
+
+  /**
+   * Remove a WebSocket client
+   */
+  removeClient(clientId: string) {
+    this.connectedClients.delete(clientId);
+  }
+
+  /**
+   * Send message to specific client
+   */
+  private sendToClient(clientId: string, data: any) {
+    const client = this.connectedClients.get(clientId);
+    if (client && client.ws.readyState === WebSocket.OPEN) {
+      client.ws.send(JSON.stringify(data));
+    }
+  }
+
+  /**
+   * Broadcast to all clients in a session
+   */
+  private broadcastToSession(sessionId: string, data: any) {
+    for (const [clientId, client] of this.connectedClients) {
+      if (client.sessionId === sessionId && client.ws.readyState === WebSocket.OPEN) {
+        client.ws.send(JSON.stringify(data));
+      }
+    }
+  }
+
+  /**
+   * Generate real-time AI suggestions based on current conversation context
+   */
+  async generateSuggestions(context: RealTimeContext, userId: number, sessionId: string): Promise<AISuggestionResponse> {
+    try {
+      const prompt = this.buildSuggestionPrompt(context);
+      
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+        messages: [
+          {
+            role: "system",
+            content: "You are an expert physiotherapist AI assistant providing real-time suggestions during patient consultations. Provide concise, actionable suggestions in JSON format."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.3,
+      });
+
+      const suggestions = JSON.parse(response.choices[0].message.content || '{}');
+      
+      // Store suggestions in database
+      await this.storeSuggestions(suggestions, context, userId, sessionId);
+      
+      // Broadcast to connected clients
+      this.broadcastToSession(sessionId, {
+        type: 'suggestions',
+        data: suggestions,
+        context: context.currentSection
+      });
+
+      return suggestions;
+    } catch (error) {
+      console.error("Error generating AI suggestions:", error);
+      return {
+        questions: ["Consider asking about pain location and triggers"],
+        treatments: ["Consider conservative management approaches"],
+        diagnoses: ["Review differential diagnoses based on symptoms"],
+        tests: ["Consider relevant assessment tests"],
+        redFlags: []
+      };
+    }
+  }
+
+  /**
+   * Build the AI prompt based on current context
+   */
+  private buildSuggestionPrompt(context: RealTimeContext): string {
+    const { transcript, currentSection, patientSymptoms, bodyPart, sessionDuration } = context;
+    
+    let sectionSpecificPrompt = "";
+    
+    switch (currentSection) {
+      case 'subjective':
+        sectionSpecificPrompt = `
+The clinician is currently gathering subjective information. Suggest:
+- Follow-up questions to explore symptoms more deeply
+- Questions about pain characteristics, triggers, and relieving factors
+- Questions about functional limitations and impact on daily activities
+- Questions about medical history and previous treatments
+        `;
+        break;
+        
+      case 'objective':
+        sectionSpecificPrompt = `
+The clinician is conducting objective assessment. Suggest:
+- Specific physical tests and assessments based on symptoms
+- Observation points for posture and movement
+- Palpation techniques for suspected areas
+- Range of motion and strength testing protocols
+        `;
+        break;
+        
+      case 'assessment':
+        sectionSpecificPrompt = `
+The clinician is forming their assessment. Suggest:
+- Possible differential diagnoses based on findings
+- Clinical reasoning patterns to consider
+- Red flags to rule out
+- Prognosis factors to discuss
+        `;
+        break;
+        
+      case 'plan':
+        sectionSpecificPrompt = `
+The clinician is developing the treatment plan. Suggest:
+- Evidence-based treatment approaches
+- Exercise prescriptions and modifications
+- Patient education topics
+- Follow-up recommendations and timelines
+        `;
+        break;
+    }
+
+    return `
+Based on the following clinical consultation context, provide real-time suggestions for the physiotherapist:
+
+**Current Section:** ${currentSection}
+**Body Part:** ${bodyPart || 'Not specified'}
+**Session Duration:** ${sessionDuration} minutes
+**Patient Symptoms:** ${patientSymptoms.join(', ') || 'Not specified'}
+
+**Current Transcript:**
+${transcript.slice(-1000)} // Last 1000 characters
+
+${sectionSpecificPrompt}
+
+Provide response in JSON format with these fields:
+{
+  "questions": ["specific question 1", "specific question 2", "specific question 3"],
+  "treatments": ["treatment option 1", "treatment option 2", "treatment option 3"],
+  "diagnoses": ["possible diagnosis 1", "possible diagnosis 2", "possible diagnosis 3"],
+  "tests": ["assessment test 1", "assessment test 2", "assessment test 3"],
+  "redFlags": ["red flag 1", "red flag 2"] // Only if relevant warning signs are present
+}
+
+Keep suggestions:
+- Specific and actionable
+- Evidence-based
+- Relevant to current context
+- Maximum 3-4 items per category
+- Concise (under 60 characters per suggestion)
+    `;
+  }
+
+  /**
+   * Store AI suggestions in database
+   */
+  private async storeSuggestions(suggestions: AISuggestionResponse, context: RealTimeContext, userId: number, sessionId: string) {
+    try {
+      const suggestionInserts: InsertAiSuggestion[] = [];
+      
+      // Store questions
+      suggestions.questions?.forEach(text => {
+        suggestionInserts.push({
+          sessionId,
+          userId,
+          suggestionType: 'question',
+          suggestionText: text,
+          context: `${context.currentSection} - ${context.transcript.slice(-100)}`,
+          confidence: 85,
+          relevantBodyPart: context.bodyPart as any
+        });
+      });
+
+      // Store treatments
+      suggestions.treatments?.forEach(text => {
+        suggestionInserts.push({
+          sessionId,
+          userId,
+          suggestionType: 'treatment',
+          suggestionText: text,
+          context: `${context.currentSection} - ${context.transcript.slice(-100)}`,
+          confidence: 85,
+          relevantBodyPart: context.bodyPart as any
+        });
+      });
+
+      // Store diagnoses
+      suggestions.diagnoses?.forEach(text => {
+        suggestionInserts.push({
+          sessionId,
+          userId,
+          suggestionType: 'diagnosis',
+          suggestionText: text,
+          context: `${context.currentSection} - ${context.transcript.slice(-100)}`,
+          confidence: 85,
+          relevantBodyPart: context.bodyPart as any
+        });
+      });
+
+      // Store tests
+      suggestions.tests?.forEach(text => {
+        suggestionInserts.push({
+          sessionId,
+          userId,
+          suggestionType: 'test',
+          suggestionText: text,
+          context: `${context.currentSection} - ${context.transcript.slice(-100)}`,
+          confidence: 85,
+          relevantBodyPart: context.bodyPart as any
+        });
+      });
+
+      if (suggestionInserts.length > 0) {
+        await db.insert(aiSuggestions).values(suggestionInserts);
+      }
+    } catch (error) {
+      console.error("Error storing AI suggestions:", error);
+    }
+  }
+
+  /**
+   * Handle PhysioGPT chat questions within SOAP interface
+   */
+  async handlePhysioGPTQuery(query: string, context: RealTimeContext, userId: number, sessionId: string): Promise<string> {
+    try {
+      const contextualPrompt = `
+You are PhysioGPT, an expert physiotherapy AI assistant. The user is currently in a clinical consultation and has asked you a question.
+
+**Current Clinical Context:**
+- Session Section: ${context.currentSection}
+- Body Part: ${context.bodyPart || 'Not specified'}
+- Patient Symptoms: ${context.patientSymptoms.join(', ') || 'Not specified'}
+- Current Transcript Context: ${context.transcript.slice(-500)}
+
+**User Question:** ${query}
+
+Provide a concise, evidence-based response that helps with the current clinical situation. Keep the response under 200 words and focus on actionable clinical advice.
+      `;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+        messages: [
+          {
+            role: "system",
+            content: "You are PhysioGPT, an expert physiotherapy AI assistant providing real-time clinical support during patient consultations."
+          },
+          {
+            role: "user",
+            content: contextualPrompt
+          }
+        ],
+        temperature: 0.3,
+      });
+
+      const answer = response.choices[0].message.content || "I apologize, but I'm unable to provide a response at this time. Please try rephrasing your question.";
+      
+      // Broadcast the Q&A to connected clients
+      this.broadcastToSession(sessionId, {
+        type: 'physioGPT_response',
+        data: {
+          question: query,
+          answer: answer,
+          timestamp: new Date().toISOString()
+        }
+      });
+
+      return answer;
+    } catch (error) {
+      console.error("Error handling PhysioGPT query:", error);
+      return "I'm experiencing technical difficulties. Please try again or consult clinical resources directly.";
+    }
+  }
+
+  /**
+   * Mark suggestion as accepted by clinician
+   */
+  async acceptSuggestion(suggestionId: number, userId: number) {
+    try {
+      await db.update(aiSuggestions)
+        .set({ 
+          accepted: true, 
+          acceptedAt: new Date() 
+        })
+        .where(eq(aiSuggestions.id, suggestionId));
+    } catch (error) {
+      console.error("Error accepting suggestion:", error);
+    }
+  }
+
+  /**
+   * Generate automated administrative tasks detection
+   */
+  async detectAdministrativeTasks(transcript: string, userId: number, sessionId: string): Promise<string[]> {
+    try {
+      const prompt = `
+Analyze the following clinical conversation transcript and identify any administrative commitments or paperwork the clinician has mentioned they will complete:
+
+**Transcript:** ${transcript}
+
+Look for mentions of:
+- Writing reports to doctors/GPs
+- Submitting insurance claims (AHTR)
+- Providing work certificates
+- Creating referral letters
+- Writing progress reports
+- Any other administrative tasks
+
+Return a JSON array of administrative tasks that were mentioned, in this format:
+["task1", "task2", "task3"]
+
+If no administrative tasks are mentioned, return an empty array: []
+      `;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+        messages: [
+          {
+            role: "system",
+            content: "You are an AI assistant that identifies administrative commitments made during clinical consultations."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.1,
+      });
+
+      const result = JSON.parse(response.choices[0].message.content || '{"tasks": []}');
+      const tasks = result.tasks || [];
+      
+      // Broadcast detected tasks to clients
+      if (tasks.length > 0) {
+        this.broadcastToSession(sessionId, {
+          type: 'administrative_tasks_detected',
+          data: {
+            tasks: tasks,
+            timestamp: new Date().toISOString()
+          }
+        });
+      }
+
+      return tasks;
+    } catch (error) {
+      console.error("Error detecting administrative tasks:", error);
+      return [];
+    }
+  }
+}
+
+export const realTimeAIService = RealTimeAIService.getInstance();

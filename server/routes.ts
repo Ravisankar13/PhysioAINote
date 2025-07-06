@@ -1,5 +1,6 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
+import { WebSocketServer, WebSocket } from "ws";
 import { eq, sql, ilike } from "drizzle-orm";
 import { storage } from "./storage";
 import { db } from "./db";
@@ -30,6 +31,8 @@ import { competitionContentService } from "./competitionContentService";
 import { competitionAnalyticsService } from "./competitionAnalyticsService";
 import { soapNotesService } from "./soapNotesService";
 import { bodyScannerService, SymptomData } from "./bodyScannerService";
+import { realTimeAIService } from "./realtimeAIService";
+import { virtualPatientService } from "./virtualPatientService";
 import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, exercises, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, insertSoapNoteSchema, bodyScans, insertBodyScanSchema } from "@shared/schema";
 import { ZodError, z } from "zod";
 import { fromZodError } from "zod-validation-error";
@@ -4726,6 +4729,46 @@ Base your analysis on established postural assessment principles and correlate f
 
   const httpServer = createServer(app);
 
+  // Real-time AI WebSocket Server for SOAP Notes
+  const wss = new WebSocketServer({ server: httpServer, path: '/ws/soap-ai' });
+  
+  wss.on('connection', (ws: WebSocket, req) => {
+    const url = new URL(req.url!, `http://${req.headers.host}`);
+    const sessionId = url.searchParams.get('sessionId');
+    const userId = url.searchParams.get('userId');
+    
+    if (!sessionId || !userId) {
+      ws.close(1000, 'Missing sessionId or userId');
+      return;
+    }
+
+    const clientId = `${userId}-${sessionId}-${Date.now()}`;
+    console.log(`WebSocket client connected: ${clientId}`);
+    
+    // Add client to real-time AI service
+    realTimeAIService.addClient(clientId, ws, parseInt(userId), sessionId);
+    
+    ws.on('message', async (message) => {
+      try {
+        const data = JSON.parse(message.toString());
+        
+        if (data.type === 'context_update') {
+          // Generate suggestions when context is updated
+          await realTimeAIService.generateSuggestions(data.context, parseInt(userId), sessionId);
+        }
+      } catch (error) {
+        console.error('Error processing WebSocket message:', error);
+      }
+    });
+
+    ws.on('close', () => {
+      console.log(`WebSocket client disconnected: ${clientId}`);
+      realTimeAIService.removeClient(clientId);
+    });
+  });
+
+  console.log('🔗 Real-time AI WebSocket server started on /ws/soap-ai');
+
   // Competition System Routes
   
   // Get active competitions
@@ -7906,6 +7949,172 @@ Respond in JSON format:
     } catch (error) {
       console.error('Error updating review status:', error);
       res.status(500).json({ message: 'Failed to update review status' });
+    }
+  });
+
+  // ============================================================================
+  // REAL-TIME AI ASSISTANCE API ROUTES
+  // ============================================================================
+
+  // Generate AI suggestions for current context
+  app.post("/api/soap-notes/:sessionId/suggestions", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { sessionId } = req.params;
+      const { context } = req.body; // RealTimeContext object
+
+      const suggestions = await realTimeAIService.generateSuggestions(context, userId, sessionId);
+      res.json(suggestions);
+    } catch (error: any) {
+      console.error("Error generating AI suggestions:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Handle PhysioGPT chat query
+  app.post("/api/soap-notes/:sessionId/physio-gpt", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { sessionId } = req.params;
+      const { query, context } = req.body;
+
+      const answer = await realTimeAIService.handlePhysioGPTQuery(query, context, userId, sessionId);
+      res.json({ answer });
+    } catch (error: any) {
+      console.error("Error handling PhysioGPT query:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Accept AI suggestion
+  app.post("/api/ai-suggestions/:id/accept", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { id } = req.params;
+      await realTimeAIService.acceptSuggestion(parseInt(id), userId);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error accepting suggestion:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Detect administrative tasks
+  app.post("/api/soap-notes/:sessionId/detect-admin-tasks", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { sessionId } = req.params;
+      const { transcript } = req.body;
+
+      const tasks = await realTimeAIService.detectAdministrativeTasks(transcript, userId, sessionId);
+      res.json({ tasks });
+    } catch (error: any) {
+      console.error("Error detecting administrative tasks:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ============================================================================
+  // VIRTUAL PATIENT CREATION API ROUTES
+  // ============================================================================
+
+  // Create virtual patient from SOAP note
+  app.post("/api/soap-notes/:id/create-virtual-patient", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { id } = req.params;
+      const result = await virtualPatientService.createVirtualPatientFromSoapNote(parseInt(id), userId);
+      
+      if (result.success) {
+        res.json(result.virtualPatient);
+      } else {
+        res.status(400).json({ error: result.message });
+      }
+    } catch (error: any) {
+      console.error("Error creating virtual patient:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get user's virtual patients
+  app.get("/api/virtual-patients", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const virtualPatients = await virtualPatientService.getUserVirtualPatients(userId);
+      res.json(virtualPatients);
+    } catch (error: any) {
+      console.error("Error getting virtual patients:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get specific virtual patient
+  app.get("/api/virtual-patients/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { id } = req.params;
+      const virtualPatient = await virtualPatientService.getVirtualPatient(parseInt(id), userId);
+      
+      if (!virtualPatient) {
+        return res.status(404).json({ error: 'Virtual patient not found' });
+      }
+
+      res.json(virtualPatient);
+    } catch (error: any) {
+      console.error("Error getting virtual patient:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Toggle virtual patient public visibility
+  app.patch("/api/virtual-patients/:id/visibility", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { id } = req.params;
+      const { isPublic } = req.body;
+
+      const success = await virtualPatientService.togglePublicVisibility(parseInt(id), userId, isPublic);
+      
+      if (success) {
+        res.json({ success: true });
+      } else {
+        res.status(400).json({ error: 'Failed to update visibility' });
+      }
+    } catch (error: any) {
+      console.error("Error updating virtual patient visibility:", error);
+      res.status(500).json({ error: error.message });
     }
   });
 

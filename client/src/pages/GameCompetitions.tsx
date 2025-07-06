@@ -254,31 +254,222 @@ function GameCompetitions() {
     );
   }
 
+  // Organize competitions by game type for dashboard sections
+  const lightningDiagnosisCompetitions = competitions.filter(comp => comp.gameType === 'lightning_diagnosis');
+  const progressiveDiagnosticCompetitions = competitions.filter(comp => comp.gameType === 'progressive_diagnostic_challenge');
+  const treatmentSpeedRunCompetitions = competitions.filter(comp => comp.gameType === 'treatment_speed_run');
+  
+  // Get popular competitions (for demo purposes, using active status as popularity indicator)
+  const popularCompetitions = competitions.filter(comp => comp.status === 'active').slice(0, 4);
+  
+  // Helper function to render competition cards
+  const renderCompetitionCard = (competition: GameCompetition, featured = false) => {
+    const IconComponent = gameTypeIcons[competition.gameType] || Trophy;
+    return (
+      <Card key={competition.id} className={`hover:shadow-lg transition-all duration-200 ${featured ? 'border-primary/20 bg-gradient-to-br from-primary/5 to-secondary/5' : ''}`}>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <IconComponent className={`h-6 w-6 ${featured ? 'text-primary' : 'text-muted-foreground'}`} />
+            <Badge variant={competition.status === 'active' ? 'default' : 'secondary'} className="text-xs">
+              {competition.status}
+            </Badge>
+          </div>
+          <CardTitle className="text-base leading-tight">{competition.title}</CardTitle>
+        </CardHeader>
+        <CardContent className="pt-0 space-y-3">
+          <div className="flex flex-wrap gap-1">
+            {competition.bodyPart && (
+              <Badge variant="outline" className="text-xs">{competition.bodyPart}</Badge>
+            )}
+            {competition.difficulty && (
+              <Badge variant="outline" className="text-xs">{competition.difficulty}</Badge>
+            )}
+          </div>
+          
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <div className="flex items-center gap-1">
+              <Timer className="h-3 w-3" />
+              {competition.timeLimit ? `${competition.timeLimit}min` : 'No limit'}
+            </div>
+            <div className="flex items-center gap-1">
+              <Users className="h-3 w-3" />
+              {competition.maxParticipants}
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <Button 
+              onClick={() => viewCompetitionDetails(competition.id)}
+              variant="outline" 
+              size="sm"
+              className="flex-1 text-xs h-8"
+            >
+              View
+            </Button>
+            <Button 
+              onClick={() => joinCompetition(competition.id)}
+              size="sm"
+              className="flex-1 text-xs h-8"
+              disabled={joiningCompetition === competition.id}
+            >
+              {joiningCompetition === competition.id ? 'Loading...' : 'Join'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
   return (
     <div className="container mx-auto py-8 space-y-8">
+      {/* Hero Section */}
       <div className="text-center space-y-4">
-        <h1 className="text-4xl font-bold">Clinical Challenges</h1>
-        <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
-          Test your clinical skills with Lightning Diagnosis and Treatment Speed Run challenges. 
-          Master rapid diagnostic decisions and comprehensive treatment planning under time pressure.
+        <h1 className="text-4xl font-bold">Clinical Challenge Dashboard</h1>
+        <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
+          Master your clinical skills through gamified challenges. Quick diagnostics, complex detective work, and comprehensive treatment planning.
         </p>
       </div>
 
-      <Tabs defaultValue="browse" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="browse">Browse Challenges</TabsTrigger>
-          <TabsTrigger value="active">Active Challenges</TabsTrigger>
-          <TabsTrigger value="create">Create Challenge</TabsTrigger>
-        </TabsList>
+      {/* Quick Challenge Section */}
+      <section>
+        <div className="flex items-center gap-3 mb-6">
+          <div className="flex items-center gap-2">
+            <Zap className="h-6 w-6 text-yellow-500" />
+            <h2 className="text-2xl font-bold">Quick Challenges</h2>
+          </div>
+          <Badge variant="secondary" className="text-xs">30 seconds each</Badge>
+        </div>
+        <p className="text-muted-foreground mb-4">
+          Lightning-fast diagnosis challenges. Perfect for quick skill practice and warm-ups.
+        </p>
+        
+        {lightningDiagnosisCompetitions.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {lightningDiagnosisCompetitions.slice(0, 8).map(comp => renderCompetitionCard(comp))}
+          </div>
+        ) : (
+          <Card className="border-dashed">
+            <CardContent className="text-center py-8">
+              <Zap className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+              <p className="text-muted-foreground">No Lightning Diagnosis challenges available</p>
+            </CardContent>
+          </Card>
+        )}
 
-        <TabsContent value="browse" className="space-y-6">
-          {/* Filters */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Filter Competitions</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-wrap gap-4">
+        {lightningDiagnosisCompetitions.length > 8 && (
+          <div className="text-center mt-4">
+            <Button variant="outline" size="sm">
+              View All {lightningDiagnosisCompetitions.length} Lightning Challenges
+              <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          </div>
+        )}
+      </section>
 
+      {/* Clinical Detective Work Section */}
+      <section>
+        <div className="flex items-center gap-3 mb-6">
+          <div className="flex items-center gap-2">
+            <Brain className="h-6 w-6 text-blue-500" />
+            <h2 className="text-2xl font-bold">Clinical Detective Work</h2>
+          </div>
+          <Badge variant="secondary" className="text-xs">5 minutes each</Badge>
+        </div>
+        <p className="text-muted-foreground mb-4">
+          Complex diagnostic challenges requiring strategic questioning and clinical reasoning under time pressure.
+        </p>
+        
+        {progressiveDiagnosticCompetitions.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {progressiveDiagnosticCompetitions.slice(0, 6).map(comp => renderCompetitionCard(comp))}
+          </div>
+        ) : (
+          <Card className="border-dashed">
+            <CardContent className="text-center py-8">
+              <Brain className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+              <p className="text-muted-foreground">No Progressive Diagnostic challenges available</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {progressiveDiagnosticCompetitions.length > 6 && (
+          <div className="text-center mt-4">
+            <Button variant="outline" size="sm">
+              View All {progressiveDiagnosticCompetitions.length} Detective Challenges
+              <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          </div>
+        )}
+      </section>
+
+      {/* Treatment Planning Section */}
+      <section>
+        <div className="flex items-center gap-3 mb-6">
+          <div className="flex items-center gap-2">
+            <Clock className="h-6 w-6 text-green-500" />
+            <h2 className="text-2xl font-bold">Treatment Planning</h2>
+          </div>
+          <Badge variant="secondary" className="text-xs">Comprehensive protocols</Badge>
+        </div>
+        <p className="text-muted-foreground mb-4">
+          Create detailed treatment plans under time pressure. Test your comprehensive clinical planning skills.
+        </p>
+        
+        {treatmentSpeedRunCompetitions.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {treatmentSpeedRunCompetitions.slice(0, 6).map(comp => renderCompetitionCard(comp))}
+          </div>
+        ) : (
+          <Card className="border-dashed">
+            <CardContent className="text-center py-8">
+              <Clock className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+              <p className="text-muted-foreground">No Treatment Speed Run challenges available</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {treatmentSpeedRunCompetitions.length > 6 && (
+          <div className="text-center mt-4">
+            <Button variant="outline" size="sm">
+              View All {treatmentSpeedRunCompetitions.length} Treatment Challenges
+              <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          </div>
+        )}
+      </section>
+
+      {/* Popular This Week Section */}
+      {popularCompetitions.length > 0 && (
+        <section>
+          <div className="flex items-center gap-3 mb-6">
+            <div className="flex items-center gap-2">
+              <Trophy className="h-6 w-6 text-orange-500" />
+              <h2 className="text-2xl font-bold">Popular This Week</h2>
+            </div>
+            <Badge variant="secondary" className="text-xs">Most active</Badge>
+          </div>
+          <p className="text-muted-foreground mb-4">
+            Join the challenges other clinicians are taking on this week.
+          </p>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {popularCompetitions.map(comp => renderCompetitionCard(comp, true))}
+          </div>
+        </section>
+      )}
+
+      {/* Global Filters and Browse All */}
+      <section>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Search className="h-5 w-5" />
+              Browse All Challenges
+            </CardTitle>
+            <CardDescription>Filter and explore all available competitions</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap gap-4">
               <Select value={selectedBodyPart} onValueChange={setSelectedBodyPart}>
                 <SelectTrigger className="w-48">
                   <SelectValue placeholder="Body Part" />
@@ -289,6 +480,8 @@ function GameCompetitions() {
                   <SelectItem value="knee">Knee</SelectItem>
                   <SelectItem value="back">Back</SelectItem>
                   <SelectItem value="neck">Neck</SelectItem>
+                  <SelectItem value="ankle">Ankle</SelectItem>
+                  <SelectItem value="hip">Hip</SelectItem>
                   <SelectItem value="general">General</SelectItem>
                 </SelectContent>
               </Select>
@@ -312,137 +505,28 @@ function GameCompetitions() {
                 <SelectContent>
                   <SelectItem value="all">All Challenge Types</SelectItem>
                   <SelectItem value="lightning_diagnosis">Lightning Diagnosis</SelectItem>
+                  <SelectItem value="progressive_diagnostic_challenge">Progressive Diagnostic</SelectItem>
                   <SelectItem value="treatment_speed_run">Treatment Speed Run</SelectItem>
                 </SelectContent>
               </Select>
-            </CardContent>
-          </Card>
+            </div>
 
-          {/* Competitions Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredCompetitions.map((competition) => {
-              const IconComponent = gameTypeIcons[competition.gameType] || Trophy;
-              return (
-                <Card key={competition.id} className="hover:shadow-lg transition-shadow">
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <IconComponent className="h-8 w-8 text-primary" />
-                      <Badge variant={competition.status === 'active' ? 'default' : 'secondary'}>
-                        {competition.status}
-                      </Badge>
-                    </div>
-                    <CardTitle className="text-lg">{competition.title}</CardTitle>
-                    <CardDescription>{competition.description}</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="flex flex-wrap gap-2">
-                      {competition.bodyPart && (
-                        <Badge variant="outline">{competition.bodyPart}</Badge>
-                      )}
-                      {competition.difficulty && (
-                        <Badge variant="outline">{competition.difficulty}</Badge>
-                      )}
-                    </div>
-                    
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                      <div className="flex items-center gap-1">
-                        <Timer className="h-4 w-4" />
-                        {competition.timeLimit ? `${competition.timeLimit}min` : 'No limit'}
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Users className="h-4 w-4" />
-                        Max {competition.maxParticipants}
-                      </div>
-                    </div>
-
-                    <div className="flex gap-2">
-                      <Button 
-                        onClick={() => viewCompetitionDetails(competition.id)}
-                        variant="outline" 
-                        size="sm"
-                        className="flex-1"
-                      >
-                        <ExternalLink className="h-4 w-4 mr-1" />
-                        View Details
-                      </Button>
-                      <Button 
-                        onClick={() => joinCompetition(competition.id)}
-                        size="sm"
-                        className="flex-1"
-                        disabled={joiningCompetition === competition.id}
-                      >
-                        {joiningCompetition === competition.id ? (
-                          <>Loading...</>
-                        ) : (
-                          <>
-                            <ChevronRight className="h-4 w-4 mr-1" />
-                            Join
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-
-          {filteredCompetitions.length === 0 && (
-            <Card>
-              <CardContent className="text-center py-12">
-                <Trophy className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No competitions found</h3>
-                <p className="text-muted-foreground">Try adjusting your filters or create a new competition.</p>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-
-        <TabsContent value="active" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Active Competitions</CardTitle>
-              <CardDescription>Competitions currently accepting participants</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-8 text-muted-foreground">
-                <Trophy className="h-12 w-12 mx-auto mb-4" />
-                <p>No active competitions at the moment. Check back soon!</p>
+            {filteredCompetitions.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {filteredCompetitions.map(comp => renderCompetitionCard(comp))}
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="create" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Create Lightning Diagnosis Challenge</CardTitle>
-              <CardDescription>Create a new rapid-fire diagnostic challenge for competitive learning</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 max-w-md mx-auto">
-                <Card className="hover:shadow-md transition-shadow cursor-pointer">
-                  <CardContent className="p-6">
-                    <div className="flex flex-col items-center space-y-4">
-                      <Zap className="h-12 w-12 text-primary" />
-                      <h3 className="text-lg font-semibold text-center">Lightning Diagnosis</h3>
-                      <p className="text-sm text-muted-foreground text-center">
-                        Fast-paced 30-second diagnostic challenges testing rapid clinical reasoning and pattern recognition
-                      </p>
-                      <Button 
-                        onClick={() => createNewCompetition('lightning_diagnosis')}
-                        className="w-full"
-                      >
-                        Create Lightning Challenge
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+            ) : (
+              <Card className="border-dashed">
+                <CardContent className="text-center py-12">
+                  <Search className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">No competitions found</h3>
+                  <p className="text-muted-foreground">Try adjusting your filters to see more challenges.</p>
+                </CardContent>
+              </Card>
+            )}
+          </CardContent>
+        </Card>
+      </section>
 
       {/* Competition Details Dialog */}
       <Dialog open={!!selectedCompetition} onOpenChange={() => setSelectedCompetition(null)}>

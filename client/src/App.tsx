@@ -76,9 +76,6 @@ function Router() {
           <Route path="/shared-notes" component={SharedNotes} />
           <Route path="/research" component={ResearchHub} />
           <Route path="/research/gaps" component={ResearchGaps} />
-          <Route path="/research/projects/create">
-            <ProtectedRoute component={CreateResearchProject} />
-          </Route>
           <Route path="/my-notes">
             <ProtectedRoute component={MyNotes} />
           </Route>

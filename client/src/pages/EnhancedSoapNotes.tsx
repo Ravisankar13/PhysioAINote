@@ -103,33 +103,101 @@ export default function EnhancedSoapNotesPage() {
   const soapNotes: any[] = [];
   const notesLoading = false;
 
+  // Generate AI suggestions based on current context
+  const generateAISuggestions = useCallback(async () => {
+    try {
+      const context = {
+        transcript: realTimeTranscript,
+        currentSection: 'subjective', // Default to subjective section
+        patientSymptoms: extractSymptomsFromTranscript(realTimeTranscript),
+        bodyPart: extractBodyPartFromTranscript(realTimeTranscript),
+        sessionDuration: Math.floor(recordingTime / 60)
+      };
+
+      const response = await fetch(`/api/soap-notes/demo-session/suggestions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ context }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        
+        // Convert backend response to frontend format
+        const suggestions: AISuggestion[] = [];
+        let id = 1;
+
+        // Add questions
+        data.questions?.forEach((question: string) => {
+          suggestions.push({
+            id: id++,
+            type: 'question',
+            suggestion: question,
+            reasoning: "AI-generated based on current conversation context",
+            priority: 'high',
+            createdAt: new Date().toISOString()
+          });
+        });
+
+        // Add treatments
+        data.treatments?.forEach((treatment: string) => {
+          suggestions.push({
+            id: id++,
+            type: 'treatment',
+            suggestion: treatment,
+            reasoning: "Evidence-based treatment recommendation",
+            priority: 'medium',
+            createdAt: new Date().toISOString()
+          });
+        });
+
+        // Add diagnoses
+        data.diagnoses?.forEach((diagnosis: string) => {
+          suggestions.push({
+            id: id++,
+            type: 'diagnosis',
+            suggestion: diagnosis,
+            reasoning: "Differential diagnosis consideration",
+            priority: 'medium',
+            createdAt: new Date().toISOString()
+          });
+        });
+
+        setAiSuggestions(suggestions);
+      }
+    } catch (error) {
+      console.error('Error generating AI suggestions:', error);
+      // Set fallback suggestions if API fails
+      setAiSuggestions([
+        {
+          id: 1,
+          type: 'question',
+          suggestion: "Ask about pain location and intensity",
+          reasoning: "Essential baseline information",
+          priority: 'high',
+          createdAt: new Date().toISOString()
+        }
+      ]);
+    }
+  }, [realTimeTranscript, recordingTime]);
+
   // Mock WebSocket connection for demo
   const connectWebSocket = useCallback((sessionId: string, userId: number) => {
     console.log("Connecting WebSocket for real-time AI assistance...");
     setIsWebSocketConnected(true);
     
-    // Simulate AI suggestions
-    setTimeout(() => {
-      setAiSuggestions([
-        {
-          id: 1,
-          type: 'question',
-          suggestion: "Ask about pain severity on a scale of 1-10",
-          reasoning: "Pain scale assessment is crucial for baseline measurement",
-          priority: 'high',
-          createdAt: new Date().toISOString()
-        },
-        {
-          id: 2,
-          type: 'diagnosis',
-          suggestion: "Consider rotator cuff impingement based on shoulder symptoms",
-          reasoning: "Symptoms align with common shoulder pathology patterns",
-          priority: 'medium',
-          createdAt: new Date().toISOString()
-        }
-      ]);
-    }, 2000);
-  }, []);
+    // Generate initial AI suggestions
+    generateAISuggestions();
+  }, [generateAISuggestions]);
+
+  // Regenerate suggestions when transcript changes significantly
+  useEffect(() => {
+    if (realTimeTranscript.length > 50 && realTimeTranscript.length % 100 === 0) {
+      generateAISuggestions();
+    }
+  }, [realTimeTranscript, generateAISuggestions]);
 
   // Handle PhysioGPT chat
   const handlePhysioGPTQuery = async (query: string) => {

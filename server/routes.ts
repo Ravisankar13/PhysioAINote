@@ -7982,6 +7982,21 @@ Respond in JSON format:
     }
   });
 
+  // Demo version of AI suggestions (no authentication required)
+  app.post("/api/soap-notes/demo-session/suggestions", async (req: Request, res: Response) => {
+    try {
+      const { context } = req.body; // RealTimeContext object
+      const demoUserId = 1; // Demo user ID
+      const sessionId = 'demo-session';
+
+      const suggestions = await realTimeAIService.generateSuggestions(context, demoUserId, sessionId);
+      res.json(suggestions);
+    } catch (error: any) {
+      console.error("Error generating AI suggestions:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Handle PhysioGPT chat query
   app.post("/api/soap-notes/:sessionId/physio-gpt", ensureAuthenticated, async (req: Request, res: Response) => {
     try {

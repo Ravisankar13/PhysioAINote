@@ -30,16 +30,15 @@ import {
   Pause,
   SkipBack,
   SkipForward,
-  RotateLeft,
-  RotateRight,
+  RotateCcw,
+  RotateCw,
   ZoomIn,
   ZoomOut,
   Target,
   TrendingUp,
   Clock,
   Zap,
-  MapPin,
-  RotateCcw
+  MapPin
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -660,10 +659,10 @@ export default function VirtualPatientsPage() {
                   <ZoomOut className="h-4 w-4" />
                 </Button>
                 <Button variant="outline" size="sm" className="text-gray-300">
-                  <RotateLeft className="h-4 w-4" />
+                  <RotateCcw className="h-4 w-4" />
                 </Button>
                 <Button variant="outline" size="sm" className="text-gray-300">
-                  <RotateRight className="h-4 w-4" />
+                  <RotateCw className="h-4 w-4" />
                 </Button>
               </div>
             </div>

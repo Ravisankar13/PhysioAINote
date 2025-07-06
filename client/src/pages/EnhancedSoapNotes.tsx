@@ -75,9 +75,25 @@ export default function EnhancedSoapNotesPage() {
   const intervalRef = useRef<NodeJS.Timeout>();
   const wsRef = useRef<WebSocket | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const recognitionRef = useRef<any>(null);
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Cleanup on component unmount
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, []);
 
   // Mock user data for demo
   const userData = { id: 1, username: "Demo User" };
@@ -187,20 +203,82 @@ export default function EnhancedSoapNotesPage() {
     });
   };
 
-  // Start recording simulation
+  // Start real speech recognition
   const startRecording = () => {
+    // Check if browser supports speech recognition
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    
+    if (!SpeechRecognition) {
+      toast({
+        title: "Speech Recognition Not Supported",
+        description: "Your browser doesn't support speech recognition. Please use Chrome, Edge, or Safari.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsRecording(true);
     setRecordingTime(0);
+    setRealTimeTranscript("");
     
     // Start timer
     intervalRef.current = setInterval(() => {
       setRecordingTime(prev => prev + 1);
     }, 1000);
     
-    // Simulate real-time transcript
-    setTimeout(() => {
-      setRealTimeTranscript("Patient reports shoulder pain for 3 weeks...");
-    }, 2000);
+    // Initialize speech recognition
+    recognitionRef.current = new SpeechRecognition();
+    recognitionRef.current.continuous = true;
+    recognitionRef.current.interimResults = true;
+    recognitionRef.current.lang = 'en-US';
+    
+    let finalTranscript = '';
+    
+    recognitionRef.current.onresult = (event: any) => {
+      let interimTranscript = '';
+      
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript + ' ';
+        } else {
+          interimTranscript += transcript;
+        }
+      }
+      
+      setRealTimeTranscript(finalTranscript + interimTranscript);
+    };
+    
+    recognitionRef.current.onerror = (event: any) => {
+      console.error('Speech recognition error:', event.error);
+      toast({
+        title: "Speech Recognition Error",
+        description: `Error: ${event.error}. Please check your microphone permissions.`,
+        variant: "destructive",
+      });
+    };
+    
+    recognitionRef.current.onend = () => {
+      if (isRecording) {
+        // Restart recognition if still recording
+        recognitionRef.current?.start();
+      }
+    };
+    
+    try {
+      recognitionRef.current.start();
+    } catch (error) {
+      console.error('Failed to start speech recognition:', error);
+      toast({
+        title: "Microphone Access Required",
+        description: "Please allow microphone access to use speech recognition.",
+        variant: "destructive",
+      });
+      setIsRecording(false);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    }
     
     // Connect WebSocket when recording starts
     if (userData?.id) {
@@ -208,22 +286,60 @@ export default function EnhancedSoapNotesPage() {
     }
   };
 
-  // Stop recording simulation
+  // Stop speech recognition
   const stopRecording = () => {
     setIsRecording(false);
+    
+    // Stop speech recognition
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
+    }
+    
+    // Stop timer
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
     }
     
-    // Simulate SOAP note generation
-    setTimeout(() => {
-      setSoapSections({
-        subjective: realTimeTranscript + " Pain is 7/10, worse with overhead activities.",
-        objective: "Limited shoulder flexion 120°, positive Neer test, tender over subacromial space.",
-        assessment: "Likely subacromial impingement syndrome.",
-        plan: "Conservative management with physiotherapy, NSAIDs, activity modification."
+    // Generate SOAP sections from transcript
+    if (realTimeTranscript.trim()) {
+      setTimeout(() => {
+        // Use AI to generate structured SOAP sections from the transcript
+        generateSoapSections(realTimeTranscript);
+      }, 1000);
+    } else {
+      toast({
+        title: "No Speech Detected",
+        description: "No speech was captured. Please try recording again.",
+        variant: "destructive",
       });
-    }, 1000);
+    }
+  };
+
+  // Generate SOAP sections from transcript using AI
+  const generateSoapSections = async (transcript: string) => {
+    try {
+      // For now, let's create basic sections based on transcript
+      // This could be enhanced with AI processing
+      setSoapSections({
+        subjective: transcript.trim(),
+        objective: "Physical examination findings to be documented...",
+        assessment: "Clinical assessment based on subjective findings...",
+        plan: "Treatment plan to be developed..."
+      });
+      
+      toast({
+        title: "SOAP Sections Generated",
+        description: "Your speech has been converted to SOAP note format.",
+      });
+    } catch (error) {
+      console.error('Error generating SOAP sections:', error);
+      toast({
+        title: "Generation Error",
+        description: "Failed to generate SOAP sections. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   // Format recording time

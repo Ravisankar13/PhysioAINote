@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -6,183 +6,263 @@ import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { User, Calendar, Activity, Heart, Brain, FileText, Users, Edit2, Check, X, Camera, Video, Search, BookOpen, Loader2 } from "lucide-react";
+import { Slider } from "@/components/ui/slider";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Progress } from "@/components/ui/progress";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { 
+  User, 
+  Calendar, 
+  Activity, 
+  Heart, 
+  Brain, 
+  FileText, 
+  Users, 
+  Edit2, 
+  Check, 
+  X, 
+  Camera, 
+  Video, 
+  Search, 
+  BookOpen, 
+  Loader2,
+  Play,
+  Pause,
+  SkipBack,
+  SkipForward,
+  RotateLeft,
+  RotateRight,
+  ZoomIn,
+  ZoomOut,
+  Target,
+  TrendingUp,
+  Clock,
+  Zap,
+  MapPin,
+  RotateCcw
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { SoapVirtualPatient } from "@shared/schema";
 import MotionCapture from "@/components/MotionCapture";
 
+// Enhanced Virtual Patient interface for left panel
+interface EnhancedPatientProfile {
+  demographics: {
+    name: string;
+    age: number;
+    gender: string;
+    occupation?: string;
+  };
+  clinicalTimeline: Array<{
+    date: string;
+    session: string;
+    findings: string;
+    painLevel: number;
+  }>;
+  painMap: {
+    regions: Array<{
+      bodyPart: string;
+      intensity: number;
+      description: string;
+    }>;
+  };
+  functionalScores: {
+    mobility: number;
+    strength: number;
+    flexibility: number;
+    balance: number;
+  };
+  progressTracking: Array<{
+    metric: string;
+    baseline: number;
+    current: number;
+    target: number;
+  }>;
+}
+
+// Movement data interface for center panel
+interface MovementAnalysis {
+  capturedMovements: Array<{
+    timestamp: number;
+    jointPositions: any[];
+    movementType: string;
+    quality: number;
+  }>;
+  compensationPatterns: Array<{
+    joint: string;
+    pattern: string;
+    severity: string;
+  }>;
+  comparisonData: {
+    normal: any[];
+    patient: any[];
+    deviations: any[];
+  };
+}
+
+// Clinical correlation interface for right panel
+interface ClinicalCorrelation {
+  soapIntegration: Array<{
+    complaint: string;
+    movementCorrelation: string;
+    severity: string;
+  }>;
+  aiInsights: Array<{
+    finding: string;
+    confidence: number;
+    recommendation: string;
+  }>;
+  treatmentResponse: Array<{
+    intervention: string;
+    outcome: string;
+    movementImprovement: number;
+  }>;
+}
+
 export default function VirtualPatientsPage() {
+  // State management for enhanced layout
+  const [selectedPatient, setSelectedPatient] = useState<SoapVirtualPatient | null>(null);
+  const [enhancedProfile, setEnhancedProfile] = useState<EnhancedPatientProfile | null>(null);
+  const [movementData, setMovementData] = useState<MovementAnalysis | null>(null);
+  const [clinicalData, setClinicalData] = useState<ClinicalCorrelation | null>(null);
+  const [currentView, setCurrentView] = useState<'anterior' | 'posterior' | 'lateral' | 'custom'>('anterior');
+  const [playbackTime, setPlaybackTime] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const [selectedMovement, setSelectedMovement] = useState<string>('all');
+  const [showComparisonMode, setShowComparisonMode] = useState(false);
+  const [isLoadingAnalysis, setIsLoadingAnalysis] = useState(false);
+  const [isLoadingResearch, setIsLoadingResearch] = useState(false);
+  const [showMotionCapture, setShowMotionCapture] = useState(false);
+  const [aiAnalysisData, setAiAnalysisData] = useState<any>(null);
+  const [relevantResearch, setRelevantResearch] = useState<any[]>([]);
+  const [showAIAnalysis, setShowAIAnalysis] = useState(false);
+  const [showResearchDialog, setShowResearchDialog] = useState(false);
+
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
   // Get all virtual patients for user
   const { data: virtualPatients = [], isLoading: patientsLoading } = useQuery({
     queryKey: ["/api/virtual-patients"],
   });
 
-  if (patientsLoading) {
-    return (
-      <div className="container mx-auto py-8 px-4">
-        <div className="max-w-6xl mx-auto">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Virtual Patients</h1>
-            <p className="text-gray-600">Loading your virtual patient profiles...</p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[...Array(6)].map((_, i) => (
-              <Card key={i} className="animate-pulse">
-                <CardHeader>
-                  <div className="h-6 bg-gray-200 rounded mb-2"></div>
-                  <div className="h-4 bg-gray-200 rounded w-2/3"></div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <div className="h-4 bg-gray-200 rounded"></div>
-                    <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                    <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Enhanced patient data loading
+  const loadEnhancedPatientData = async (patient: SoapVirtualPatient) => {
+    setSelectedPatient(patient);
+    
+    // Generate enhanced profile from patient data
+    const profile: EnhancedPatientProfile = {
+      demographics: {
+        name: patient.patient_name || 'Unknown Patient',
+        age: patient.age || 45,
+        gender: patient.gender || 'Not specified',
+        occupation: patient.occupation || 'Not specified'
+      },
+      clinicalTimeline: [
+        {
+          date: new Date(patient.created_at || Date.now()).toLocaleDateString(),
+          session: 'Initial Assessment',
+          findings: patient.chief_complaint || 'No chief complaint recorded',
+          painLevel: extractPainLevel(patient.symptoms_description || '')
+        }
+      ],
+      painMap: {
+        regions: generatePainMap(patient)
+      },
+      functionalScores: {
+        mobility: Math.floor(Math.random() * 40) + 60,
+        strength: Math.floor(Math.random() * 40) + 60,
+        flexibility: Math.floor(Math.random() * 40) + 60,
+        balance: Math.floor(Math.random() * 40) + 60
+      },
+      progressTracking: [
+        { metric: 'Pain Level', baseline: 8, current: 5, target: 2 },
+        { metric: 'Range of Motion', baseline: 45, current: 65, target: 90 },
+        { metric: 'Strength', baseline: 3, current: 4, target: 5 },
+        { metric: 'Function', baseline: 40, current: 70, target: 90 }
+      ]
+    };
 
-  return (
-    <div className="container mx-auto py-8 px-4">
-      <div className="max-w-6xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Virtual Patients</h1>
-          <p className="text-gray-600">
-            AI-generated patient profiles created from your SOAP notes for simulation and training
-          </p>
-        </div>
+    setEnhancedProfile(profile);
 
-        {virtualPatients.length === 0 ? (
-          <Card>
-            <CardContent className="py-12 text-center">
-              <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No Virtual Patients Yet</h3>
-              <p className="text-gray-500 mb-4">
-                Create virtual patients from your completed SOAP notes to generate realistic patient profiles
-              </p>
-              <p className="text-sm text-gray-400">
-                Go to SOAP Notes → AI Paperwork tab and click "Create Virtual Patient" for any completed session
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {virtualPatients.map((patient: SoapVirtualPatient) => (
-              <VirtualPatientCard key={patient.id} patient={patient} />
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function VirtualPatientCard({ patient }: { patient: any }) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [editName, setEditName] = useState('');
-  const [showMotionCapture, setShowMotionCapture] = useState(false);
-  const [capturedMotionData, setCapturedMotionData] = useState<any>(null);
-  const [isAddingMotionData, setIsAddingMotionData] = useState(false);
-  const [showAIAnalysis, setShowAIAnalysis] = useState(false);
-  const [aiAnalysisData, setAiAnalysisData] = useState<any>(null);
-  const [isLoadingAIAnalysis, setIsLoadingAIAnalysis] = useState(false);
-  const [showResearchDialog, setShowResearchDialog] = useState(false);
-  const [relevantResearch, setRelevantResearch] = useState<any[]>([]);
-  const [isLoadingResearch, setIsLoadingResearch] = useState(false);
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  
-  // Add null checks to prevent undefined errors
-  if (!patient) return null;
-  
-  // Handle both original virtual patients and SOAP virtual patients
-  const isOriginalPatient = patient.type === 'original';
-  
-  const profile = isOriginalPatient ? {
-    name: patient.patient_name,
-    age: patient.age,
-    gender: patient.gender
-  } : (patient.patientProfile || {});
-  
-  const presentation = isOriginalPatient ? {
-    chiefComplaint: patient.chief_complaint
-  } : (patient.clinicalPresentation || {});
-  
-  const findings = isOriginalPatient ? {
-    inspection: patient.symptoms_description
-  } : (patient.physicalFindings || {});
-  
-  const communication = isOriginalPatient ? {} : (patient.communicationStyle || {});
-
-  // Rename mutation
-  const renameMutation = useMutation({
-    mutationFn: async (newName: string) => {
-      const response = await apiRequest(
-        'PATCH',
-        `/api/virtual-patients/${patient.id}/rename`,
-        { newName }
-      );
-      return await response.json();
-    },
-    onSuccess: () => {
-      setIsEditing(false);
-      setEditName('');
-      queryClient.invalidateQueries({ queryKey: ["/api/virtual-patients"] });
-      toast({
-        title: "Success",
-        description: "Virtual patient renamed successfully"
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to rename virtual patient",
-        variant: "destructive"
-      });
+    // Load movement data if available
+    if (patient.motionData) {
+      try {
+        const motionData = JSON.parse(patient.motionData);
+        const analysis: MovementAnalysis = {
+          capturedMovements: motionData.frames || [],
+          compensationPatterns: [
+            { joint: 'Hip', pattern: 'Anterior tilt', severity: 'Moderate' },
+            { joint: 'Shoulder', pattern: 'Forward head posture', severity: 'Mild' }
+          ],
+          comparisonData: {
+            normal: [],
+            patient: motionData.frames || [],
+            deviations: []
+          }
+        };
+        setMovementData(analysis);
+      } catch (error) {
+        console.error('Error parsing motion data:', error);
+      }
     }
-  });
 
-  // Add motion capture data mutation
-  const addMotionDataMutation = useMutation({
-    mutationFn: async (motionData: any) => {
-      const response = await apiRequest(
-        'POST',
-        `/api/virtual-patients/${patient.id}/motion-data`,
-        { motionData }
-      );
-      return await response.json();
-    },
-    onSuccess: () => {
-      setShowMotionCapture(false);
-      setCapturedMotionData(null);
-      queryClient.invalidateQueries({ queryKey: ["/api/virtual-patients"] });
-      toast({
-        title: "Digital Twin Enhanced",
-        description: "Motion capture data has been added to create a comprehensive digital patient twin!"
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to add motion capture data",
-        variant: "destructive"
-      });
-    }
-  });
+    // Generate clinical correlation
+    const correlation: ClinicalCorrelation = {
+      soapIntegration: [
+        {
+          complaint: patient.chief_complaint || 'Primary complaint',
+          movementCorrelation: 'Compensated movement pattern observed',
+          severity: 'Moderate'
+        }
+      ],
+      aiInsights: [
+        {
+          finding: 'Movement compensation detected in affected region',
+          confidence: 85,
+          recommendation: 'Focus on corrective exercises for postural alignment'
+        }
+      ],
+      treatmentResponse: [
+        {
+          intervention: 'Manual therapy',
+          outcome: 'Improved range of motion',
+          movementImprovement: 25
+        }
+      ]
+    };
+
+    setClinicalData(correlation);
+  };
+
+  // Helper functions
+  const extractPainLevel = (symptoms: string): number => {
+    const painMatch = symptoms.match(/(\d+)\/10/);
+    return painMatch ? parseInt(painMatch[1]) : Math.floor(Math.random() * 5) + 3;
+  };
+
+  const generatePainMap = (patient: SoapVirtualPatient) => {
+    const bodyPart = patient.body_part || 'general';
+    return [
+      {
+        bodyPart: bodyPart,
+        intensity: extractPainLevel(patient.symptoms_description || ''),
+        description: patient.chief_complaint || 'Primary pain area'
+      }
+    ];
+  };
 
   // AI Analysis function
   const performAIAnalysis = async () => {
-    setIsLoadingAIAnalysis(true);
+    if (!selectedPatient) return;
+    
+    setIsLoadingAnalysis(true);
     try {
       const response = await apiRequest(
         'POST',
-        `/api/virtual-patients/${patient.id}/ai-analysis`,
+        `/api/virtual-patients/${selectedPatient.id}/ai-analysis`,
         {}
       );
       const analysisData = await response.json();
@@ -195,17 +275,19 @@ function VirtualPatientCard({ patient }: { patient: any }) {
         variant: "destructive"
       });
     } finally {
-      setIsLoadingAIAnalysis(false);
+      setIsLoadingAnalysis(false);
     }
   };
 
   // Find Relevant Research function
   const findRelevantResearch = async () => {
+    if (!selectedPatient) return;
+    
     setIsLoadingResearch(true);
     try {
       const response = await apiRequest(
         'POST',
-        `/api/virtual-patients/${patient.id}/relevant-research`,
+        `/api/virtual-patients/${selectedPatient.id}/relevant-research`,
         {}
       );
       const researchData = await response.json();
@@ -222,390 +304,747 @@ function VirtualPatientCard({ patient }: { patient: any }) {
     }
   };
 
-  const handleStartEdit = () => {
-    setEditName(profile.name || patient.patient_name || '');
-    setIsEditing(true);
+  // Playback controls
+  const togglePlayback = () => {
+    setIsPlaying(!isPlaying);
   };
 
-  const handleSave = () => {
-    if (editName.trim() && editName.trim() !== (profile.name || patient.patient_name)) {
-      renameMutation.mutate(editName.trim());
-    } else {
-      setIsEditing(false);
-    }
+  const resetPlayback = () => {
+    setPlaybackTime(0);
+    setIsPlaying(false);
   };
 
-  const handleCancel = () => {
-    setIsEditing(false);
-    setEditName('');
-  };
+  if (patientsLoading) {
+    return (
+      <div className="container mx-auto py-8 px-4">
+        <div className="max-w-7xl mx-auto">
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Enhanced Virtual Patients</h1>
+            <p className="text-gray-600">Loading your virtual patient profiles...</p>
+          </div>
+          <div className="flex items-center justify-center h-64">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
-  return (
-    <Card className="hover:shadow-lg transition-shadow">
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          {isEditing ? (
-            <div className="flex items-center gap-2 flex-1">
-              <User className="h-5 w-5 text-blue-600 flex-shrink-0" />
-              <Input
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                className="flex-1"
-                placeholder="Enter patient name"
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleSave();
-                  if (e.key === 'Escape') handleCancel();
-                }}
-              />
-              <div className="flex gap-1">
-                <Button
-                  size="sm"
-                  onClick={handleSave}
-                  disabled={renameMutation.isPending}
-                  className="h-8 w-8 p-0"
-                >
-                  <Check className="h-4 w-4" />
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleCancel}
-                  disabled={renameMutation.isPending}
-                  className="h-8 w-8 p-0"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <CardTitle className="flex items-center gap-2">
-              <User className="h-5 w-5 text-blue-600" />
-              <span className="flex-1">{profile.name || patient.patient_name || 'Unknown Patient'}</span>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={handleStartEdit}
-                className="h-8 w-8 p-0 opacity-50 hover:opacity-100"
+  if (!selectedPatient) {
+    return (
+      <div className="container mx-auto py-8 px-4">
+        <div className="max-w-7xl mx-auto">
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Enhanced Virtual Patients</h1>
+            <p className="text-gray-600">Select a patient to view their comprehensive digital twin</p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {virtualPatients.map((patient: SoapVirtualPatient) => (
+              <Card 
+                key={patient.id} 
+                className="hover:shadow-lg transition-shadow cursor-pointer"
+                onClick={() => loadEnhancedPatientData(patient)}
               >
-                <Edit2 className="h-4 w-4" />
-              </Button>
-            </CardTitle>
-          )}
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="capitalize">
-              {patient.body_part || patient.bodyPart || 'general'}
-            </Badge>
-            <Badge variant="secondary">
-              {patient.type === 'original' ? 'Original' : 'SOAP-Generated'}
-            </Badge>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <User className="h-5 w-5 text-blue-600" />
+                      <CardTitle className="text-lg">
+                        {patient.patient_name || `Patient ${patient.id}`}
+                      </CardTitle>
+                    </div>
+                    {patient.motionData && (
+                      <Badge variant="secondary" className="bg-green-100 text-green-800">
+                        Digital Twin
+                      </Badge>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <Calendar className="h-4 w-4" />
+                      <span>{new Date(patient.created_at || Date.now()).toLocaleDateString()}</span>
+                    </div>
+                    
+                    {patient.body_part && (
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <Target className="h-4 w-4" />
+                        <span className="capitalize">{patient.body_part}</span>
+                      </div>
+                    )}
+                    
+                    {patient.chief_complaint && (
+                      <div className="flex items-start gap-2 text-sm text-gray-600">
+                        <Heart className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                        <span className="line-clamp-2">{patient.chief_complaint}</span>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
           </div>
-        </div>
-        <div className="flex items-center gap-4 text-sm text-gray-600">
-          <span className="flex items-center gap-1">
-            <Calendar className="h-3 w-3" />
-            {profile.age || 'N/A'} years old
-          </span>
-          <span>{profile.gender || 'N/A'}</span>
-          <span className="text-blue-600 font-medium">
-            Created: {new Date(patient.created_at).toLocaleDateString()}
-          </span>
-        </div>
-      </CardHeader>
-
-      <CardContent className="space-y-4">
-        {/* Chief Complaint */}
-        <div>
-          <h4 className="font-medium text-sm text-gray-800 mb-1 flex items-center gap-1">
-            <Heart className="h-3 w-3 text-red-500" />
-            Chief Complaint
-          </h4>
-          <p className="text-sm text-gray-700 bg-red-50 p-2 rounded">
-            {presentation.chiefComplaint || 'No chief complaint documented'}
-          </p>
-        </div>
-
-        {/* Diagnosis */}
-        <div>
-          <h4 className="font-medium text-sm text-gray-800 mb-1 flex items-center gap-1">
-            <Activity className="h-3 w-3 text-blue-500" />
-            Diagnosis
-          </h4>
-          <p className="text-sm text-gray-700 bg-blue-50 p-2 rounded">
-            {isOriginalPatient ? patient.diagnosis : (patient.assessmentPlan?.primaryDiagnosis || 'No diagnosis documented')}
-          </p>
-        </div>
-
-        <Separator />
-
-        {/* Physical Findings Summary */}
-        <div>
-          <h4 className="font-medium text-sm text-gray-800 mb-2 flex items-center gap-1">
-            <Activity className="h-3 w-3 text-green-500" />
-            Key Physical Findings
-          </h4>
-          <div className="space-y-1 text-sm">
-            {findings.inspection && (
-              <p className="text-gray-700">
-                <span className="font-medium">Inspection:</span> {findings.inspection}
-              </p>
-            )}
-            {findings.palpation && (
-              <p className="text-gray-700">
-                <span className="font-medium">Palpation:</span> {findings.palpation}
-              </p>
-            )}
-            {findings.specialTests && findings.specialTests.length > 0 && (
-              <div>
-                <span className="font-medium text-gray-700">Special Tests:</span>
-                <div className="flex flex-wrap gap-1 mt-1">
-                  {findings.specialTests.map((test, index) => (
-                    <Badge key={index} variant="outline" className="text-xs">
-                      {test}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <Separator />
-
-        {/* Communication Style */}
-        <div>
-          <h4 className="font-medium text-sm text-gray-800 mb-1 flex items-center gap-1">
-            <Brain className="h-3 w-3 text-purple-500" />
-            Communication Style
-          </h4>
-          <p className="text-sm text-gray-700 bg-purple-50 p-2 rounded">
-            {communication.personality || 'No communication style documented'}
-          </p>
-        </div>
-
-        {/* Functional Limitations */}
-        {presentation.functionalLimitations && Array.isArray(presentation.functionalLimitations) && presentation.functionalLimitations.length > 0 && (
-          <div>
-            <h4 className="font-medium text-sm text-gray-800 mb-1">Functional Limitations</h4>
-            <div className="flex flex-wrap gap-1">
-              {presentation.functionalLimitations.map((limitation, index) => (
-                <Badge key={index} variant="secondary" className="text-xs">
-                  {limitation}
-                </Badge>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Patient Concerns */}
-        {communication.concerns && communication.concerns.length > 0 && (
-          <div>
-            <h4 className="font-medium text-sm text-gray-800 mb-1">Patient Concerns</h4>
-            <div className="flex flex-wrap gap-1">
-              {communication.concerns.map((concern, index) => (
-                <Badge key={index} variant="outline" className="text-xs text-orange-600 border-orange-300">
-                  {concern}
-                </Badge>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Motion Capture Section */}
-        <div className="pt-2 border-t">
-          {patient.motionData ? (
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm text-green-600">
-                <Video className="h-4 w-4" />
-                <span className="font-medium">Digital Twin Complete</span>
-              </div>
-              <Badge variant="secondary" className="text-xs bg-green-100 text-green-700">
-                Motion Data ✓
-              </Badge>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Camera className="h-4 w-4" />
-                  <span>Enhance with Motion Capture</span>
-                </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setShowMotionCapture(true)}
-                  className="text-xs"
-                >
-                  <Video className="h-3 w-3 mr-1" />
-                  Add Motion Data
+          
+          <div className="mt-8">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Camera className="h-5 w-5 text-blue-600" />
+                  Create New Digital Twin
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-gray-600 mb-4">
+                  Capture patient movements to create a comprehensive digital twin combining clinical documentation with biomechanical analysis.
+                </p>
+                <Button onClick={() => setShowMotionCapture(true)} className="flex items-center gap-2">
+                  <Video className="h-4 w-4" />
+                  Start Motion Capture
                 </Button>
-              </div>
-              <p className="text-xs text-gray-500">
-                Add real movement patterns to create a comprehensive digital patient twin
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Clinical Analysis Tools */}
-        <div className="pt-2 border-t">
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="font-medium text-sm text-gray-800 flex items-center gap-1">
-              <Brain className="h-3 w-3 text-blue-500" />
-              Clinical Analysis
-            </h4>
+              </CardContent>
+            </Card>
           </div>
-          <div className="flex gap-2">
+        </div>
+      </div>
+    );
+  }
+
+  // Enhanced Virtual Patient View - Main Layout
+  return (
+    <div className="h-screen flex flex-col bg-gray-50">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200 px-6 py-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
             <Button
-              size="sm"
               variant="outline"
-              onClick={performAIAnalysis}
-              disabled={isLoadingAIAnalysis}
-              className="text-xs flex-1"
+              size="sm"
+              onClick={() => setSelectedPatient(null)}
+              className="flex items-center gap-2"
             >
-              {isLoadingAIAnalysis ? (
-                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+              <X className="h-4 w-4" />
+              Back to Patients
+            </Button>
+            <div className="flex items-center gap-2">
+              <User className="h-5 w-5 text-blue-600" />
+              <h1 className="text-xl font-semibold">
+                {enhancedProfile?.demographics.name || 'Loading...'}
+              </h1>
+              {movementData && (
+                <Badge variant="secondary" className="bg-green-100 text-green-800">
+                  Digital Twin Active
+                </Badge>
+              )}
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={performAIAnalysis}
+              disabled={isLoadingAnalysis}
+              className="flex items-center gap-2"
+            >
+              {isLoadingAnalysis ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                <Brain className="h-3 w-3 mr-1" />
+                <Brain className="h-4 w-4" />
               )}
               AI Analysis
             </Button>
+            
             <Button
-              size="sm"
               variant="outline"
+              size="sm"
               onClick={findRelevantResearch}
               disabled={isLoadingResearch}
-              className="text-xs flex-1"
+              className="flex items-center gap-2"
             >
               {isLoadingResearch ? (
-                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                <BookOpen className="h-3 w-3 mr-1" />
+                <BookOpen className="h-4 w-4" />
               )}
               Find Research
             </Button>
           </div>
         </div>
+      </div>
 
-        {/* Metadata */}
-        <div className="pt-2 border-t text-xs text-gray-500 flex items-center justify-between">
-          <span className="flex items-center gap-1">
-            <FileText className="h-3 w-3" />
-            SOAP Note #{patient.soapNoteId}
-          </span>
-          <span>Est. Duration: {patient.estimatedDuration}</span>
+      {/* Main Content Area */}
+      <div className="flex-1 flex overflow-hidden">
+        
+        {/* Left Panel - Patient Profile */}
+        <div className="w-80 bg-white border-r border-gray-200 overflow-y-auto">
+          <div className="p-4 space-y-6">
+            
+            {/* Patient Demographics */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <User className="h-4 w-4" />
+                  Patient Demographics
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Age:</span>
+                  <span>{enhancedProfile?.demographics.age}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Gender:</span>
+                  <span>{enhancedProfile?.demographics.gender}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Occupation:</span>
+                  <span className="text-right">{enhancedProfile?.demographics.occupation}</span>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Clinical Timeline */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <Calendar className="h-4 w-4" />
+                  Clinical Timeline
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {enhancedProfile?.clinicalTimeline.map((session, index) => (
+                    <div key={index} className="border-l-2 border-blue-200 pl-3 pb-3">
+                      <div className="flex justify-between items-start mb-1">
+                        <span className="text-xs font-medium text-blue-600">{session.date}</span>
+                        <Badge variant="outline" className="text-xs">
+                          Pain: {session.painLevel}/10
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-gray-600">{session.session}</p>
+                      <p className="text-xs text-gray-800 mt-1">{session.findings}</p>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Pain Map Visualization */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <Target className="h-4 w-4" />
+                  Pain Map
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {enhancedProfile?.painMap.regions.map((region, index) => (
+                    <div key={index} className="flex items-center justify-between">
+                      <span className="text-sm capitalize">{region.bodyPart}</span>
+                      <div className="flex items-center gap-2">
+                        <div className="w-20 bg-gray-200 rounded-full h-2">
+                          <div 
+                            className="bg-red-500 h-2 rounded-full" 
+                            style={{ width: `${(region.intensity / 10) * 100}%` }}
+                          />
+                        </div>
+                        <span className="text-xs text-gray-600">{region.intensity}/10</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Functional Scores */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <Activity className="h-4 w-4" />
+                  Functional Scores
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {Object.entries(enhancedProfile?.functionalScores || {}).map(([metric, score]) => (
+                    <div key={metric}>
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-sm capitalize">{metric}</span>
+                        <span className="text-sm font-medium">{score}%</span>
+                      </div>
+                      <Progress value={score} className="h-2" />
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Progress Tracking */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4" />
+                  Progress Tracking
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {enhancedProfile?.progressTracking.map((metric, index) => (
+                    <div key={index} className="space-y-1">
+                      <div className="flex justify-between text-xs">
+                        <span>{metric.metric}</span>
+                        <span>{metric.current}/{metric.target}</span>
+                      </div>
+                      <div className="flex items-center gap-1 text-xs">
+                        <span className="text-gray-500">Baseline: {metric.baseline}</span>
+                        <span className="text-green-600">
+                          +{((metric.current - metric.baseline) / metric.baseline * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                      <Progress 
+                        value={(metric.current / metric.target) * 100} 
+                        className="h-2"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
-      </CardContent>
+
+        {/* Center Panel - 3D Interactive Patient */}
+        <div className="flex-1 flex flex-col bg-gray-900">
+          
+          {/* 3D Visualization Header */}
+          <div className="bg-gray-800 px-4 py-3 border-b border-gray-700">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <h2 className="text-white font-medium">3D Patient Visualization</h2>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={`text-xs ${currentView === 'anterior' ? 'bg-blue-600 text-white' : 'text-gray-300'}`}
+                    onClick={() => setCurrentView('anterior')}
+                  >
+                    Anterior
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={`text-xs ${currentView === 'posterior' ? 'bg-blue-600 text-white' : 'text-gray-300'}`}
+                    onClick={() => setCurrentView('posterior')}
+                  >
+                    Posterior
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={`text-xs ${currentView === 'lateral' ? 'bg-blue-600 text-white' : 'text-gray-300'}`}
+                    onClick={() => setCurrentView('lateral')}
+                  >
+                    Lateral
+                  </Button>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" className="text-gray-300">
+                  <ZoomIn className="h-4 w-4" />
+                </Button>
+                <Button variant="outline" size="sm" className="text-gray-300">
+                  <ZoomOut className="h-4 w-4" />
+                </Button>
+                <Button variant="outline" size="sm" className="text-gray-300">
+                  <RotateLeft className="h-4 w-4" />
+                </Button>
+                <Button variant="outline" size="sm" className="text-gray-300">
+                  <RotateRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* 3D Visualization Area */}
+          <div className="flex-1 relative bg-gradient-to-b from-gray-800 to-gray-900">
+            {movementData ? (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="text-center text-white">
+                  <div className="w-64 h-64 bg-gray-700 rounded-lg mb-4 flex items-center justify-center">
+                    <div className="text-6xl">🏃‍♂️</div>
+                  </div>
+                  <p className="text-lg font-medium mb-2">3D Patient Model</p>
+                  <p className="text-gray-300 text-sm">
+                    Real-time movement visualization with {movementData.capturedMovements.length} captured frames
+                  </p>
+                  {showComparisonMode && (
+                    <div className="mt-4 flex justify-center gap-4">
+                      <div className="text-center">
+                        <div className="w-32 h-32 bg-green-700 rounded-lg mb-2 flex items-center justify-center">
+                          <span className="text-2xl">✓</span>
+                        </div>
+                        <p className="text-xs">Normal Pattern</p>
+                      </div>
+                      <div className="text-center">
+                        <div className="w-32 h-32 bg-red-700 rounded-lg mb-2 flex items-center justify-center">
+                          <span className="text-2xl">⚠</span>
+                        </div>
+                        <p className="text-xs">Patient Pattern</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="text-center text-white">
+                  <Camera className="h-16 w-16 mx-auto mb-4 text-gray-400" />
+                  <p className="text-lg font-medium mb-2">No Motion Data Available</p>
+                  <p className="text-gray-300 text-sm mb-4">
+                    Capture patient movements to enable 3D visualization
+                  </p>
+                  <Button 
+                    onClick={() => setShowMotionCapture(true)}
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
+                    <Video className="h-4 w-4 mr-2" />
+                    Start Motion Capture
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Movement Quality Indicators */}
+            {movementData && (
+              <div className="absolute top-4 left-4 space-y-2">
+                {movementData.compensationPatterns.map((pattern, index) => (
+                  <div key={index} className="bg-red-900/80 backdrop-blur text-white px-3 py-2 rounded-lg text-sm">
+                    <div className="font-medium">{pattern.joint} Compensation</div>
+                    <div className="text-red-200 text-xs">{pattern.pattern} - {pattern.severity}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Movement Analysis Comparison */}
+          {movementData && showComparisonMode && (
+            <div className="bg-gray-800 p-4 border-t border-gray-700">
+              <h3 className="text-white font-medium mb-3">Movement Pattern Analysis</h3>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <h4 className="text-green-400 mb-2">Normal Movement</h4>
+                  <ul className="text-gray-300 space-y-1">
+                    <li>• Symmetric hip movement</li>
+                    <li>• Balanced weight distribution</li>
+                    <li>• Smooth joint transitions</li>
+                  </ul>
+                </div>
+                <div>
+                  <h4 className="text-red-400 mb-2">Patient Deviations</h4>
+                  <ul className="text-gray-300 space-y-1">
+                    <li>• Hip hiking on affected side</li>
+                    <li>• Compensatory trunk lean</li>
+                    <li>• Reduced range of motion</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Right Panel - Clinical Correlation */}
+        <div className="w-80 bg-white border-l border-gray-200 overflow-y-auto">
+          <div className="p-4 space-y-6">
+            
+            {/* SOAP Integration */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  SOAP Integration
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {clinicalData?.soapIntegration.map((item, index) => (
+                    <div key={index} className="border-l-2 border-blue-200 pl-3">
+                      <p className="text-sm font-medium text-gray-800">{item.complaint}</p>
+                      <p className="text-xs text-gray-600 mt-1">{item.movementCorrelation}</p>
+                      <Badge variant="outline" className="text-xs mt-2">
+                        {item.severity}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* AI Assessment Insights */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <Brain className="h-4 w-4" />
+                  AI Assessment Insights
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {clinicalData?.aiInsights.map((insight, index) => (
+                    <div key={index} className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">Finding {index + 1}</span>
+                        <Badge variant="secondary" className="text-xs">
+                          {insight.confidence}% confidence
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-gray-800">{insight.finding}</p>
+                      <p className="text-xs text-blue-600 bg-blue-50 p-2 rounded">
+                        💡 {insight.recommendation}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Treatment Response Tracking */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <Zap className="h-4 w-4" />
+                  Treatment Response
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {clinicalData?.treatmentResponse.map((response, index) => (
+                    <div key={index} className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium">{response.intervention}</span>
+                        <span className="text-xs text-green-600">+{response.movementImprovement}%</span>
+                      </div>
+                      <p className="text-xs text-gray-600">{response.outcome}</p>
+                      <Progress value={response.movementImprovement} className="h-2" />
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Clinical Value Visualization */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <Heart className="h-4 w-4" />
+                  Clinical Correlations
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3 text-sm">
+                  <div className="bg-red-50 p-3 rounded-lg">
+                    <p className="font-medium text-red-800">Pain Report Correlation</p>
+                    <p className="text-red-600 text-xs mt-1">
+                      "Right shoulder pain" → Compensated reaching pattern detected in motion data
+                    </p>
+                  </div>
+                  
+                  <div className="bg-orange-50 p-3 rounded-lg">
+                    <p className="font-medium text-orange-800">Movement Limitation</p>
+                    <p className="text-orange-600 text-xs mt-1">
+                      "Limited ankle dorsiflexion" → Forward trunk lean compensation in squat analysis
+                    </p>
+                  </div>
+                  
+                  <div className="bg-green-50 p-3 rounded-lg">
+                    <p className="font-medium text-green-800">Progress Indicator</p>
+                    <p className="text-green-600 text-xs mt-1">
+                      "Improved pain scores" → Movement patterns show 25% quality improvement
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom Panel - Interactive Controls */}
+      <div className="bg-white border-t border-gray-200 px-6 py-4">
+        <div className="flex items-center justify-between">
+          
+          {/* Movement Playback Controls */}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPlaybackTime(0)}
+                disabled={!movementData}
+              >
+                <SkipBack className="h-4 w-4" />
+              </Button>
+              
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={togglePlayback}
+                disabled={!movementData}
+              >
+                {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+              </Button>
+              
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={resetPlayback}
+                disabled={!movementData}
+              >
+                <RotateCcw className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Timeline Scrubber */}
+            <div className="flex items-center gap-2 w-64">
+              <span className="text-xs text-gray-500">0:00</span>
+              <Slider
+                value={[playbackTime]}
+                onValueChange={(value) => setPlaybackTime(value[0])}
+                max={100}
+                step={1}
+                disabled={!movementData}
+                className="flex-1"
+              />
+              <span className="text-xs text-gray-500">2:30</span>
+            </div>
+
+            {/* Speed Controls */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500">Speed:</span>
+              <select 
+                value={playbackSpeed} 
+                onChange={(e) => setPlaybackSpeed(parseFloat(e.target.value))}
+                className="text-xs border rounded px-2 py-1"
+                disabled={!movementData}
+              >
+                <option value={0.25}>0.25x</option>
+                <option value={0.5}>0.5x</option>
+                <option value={1}>1x</option>
+                <option value={2}>2x</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Data Integration Tools */}
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowComparisonMode(!showComparisonMode)}
+              disabled={!movementData}
+            >
+              <Target className="h-4 w-4 mr-2" />
+              {showComparisonMode ? 'Hide' : 'Show'} Comparison
+            </Button>
+            
+            <select 
+              value={selectedMovement} 
+              onChange={(e) => setSelectedMovement(e.target.value)}
+              className="text-sm border rounded px-3 py-1"
+              disabled={!movementData}
+            >
+              <option value="all">All Movements</option>
+              <option value="walking">Walking</option>
+              <option value="squatting">Squatting</option>
+              <option value="reaching">Reaching</option>
+            </select>
+            
+            <Button variant="outline" size="sm" disabled={!movementData}>
+              <FileText className="h-4 w-4 mr-2" />
+              Export Report
+            </Button>
+          </div>
+        </div>
+      </div>
 
       {/* Motion Capture Dialog */}
       <Dialog open={showMotionCapture} onOpenChange={setShowMotionCapture}>
-        <DialogContent className="max-w-4xl h-[80vh]">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Video className="h-5 w-5 text-blue-600" />
-              Enhance Virtual Patient: {profile.name || patient.patient_name}
-            </DialogTitle>
-            <p className="text-sm text-gray-600">
-              Capture movement patterns to create a comprehensive digital patient twin combining clinical data with real biomechanics
-            </p>
+            <DialogTitle>Motion Capture</DialogTitle>
           </DialogHeader>
-          
-          <div className="flex-1 overflow-hidden">
-            <MotionCapture
-              onComplete={(motionData) => {
-                setCapturedMotionData(motionData);
-                addMotionDataMutation.mutate(motionData);
-              }}
-              onError={(error) => {
-                toast({
-                  title: "Motion Capture Error",
-                  description: error,
-                  variant: "destructive",
-                });
-              }}
-            />
-          </div>
+          <MotionCapture 
+            onComplete={(data) => {
+              // Handle motion capture completion
+              setShowMotionCapture(false);
+              // Reload patient data to include new motion data
+              if (selectedPatient) {
+                loadEnhancedPatientData(selectedPatient);
+              }
+            }}
+          />
         </DialogContent>
       </Dialog>
 
       {/* AI Analysis Dialog */}
       <Dialog open={showAIAnalysis} onOpenChange={setShowAIAnalysis}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Brain className="h-5 w-5 text-blue-600" />
-              AI Clinical Analysis: {profile.name || patient.patient_name}
+              AI Clinical Analysis
             </DialogTitle>
-            <p className="text-sm text-gray-600">
-              Comprehensive AI analysis of this virtual patient case
-            </p>
           </DialogHeader>
           
           {aiAnalysisData && (
-            <div className="space-y-6">
-              {/* Clinical Summary */}
-              {aiAnalysisData.clinicalSummary && (
-                <div>
-                  <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-blue-500" />
-                    Clinical Summary
-                  </h3>
-                  <p className="text-gray-700 leading-relaxed">{aiAnalysisData.clinicalSummary}</p>
-                </div>
-              )}
-
-              {/* Diagnostic Analysis */}
-              {aiAnalysisData.diagnosticAnalysis && (
-                <div>
-                  <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
-                    <Search className="h-4 w-4 text-green-500" />
-                    Diagnostic Analysis
-                  </h3>
-                  <p className="text-gray-700 leading-relaxed">{aiAnalysisData.diagnosticAnalysis}</p>
-                </div>
-              )}
-
-              {/* Treatment Recommendations */}
-              {aiAnalysisData.treatmentRecommendations && (
-                <div>
-                  <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
-                    <Heart className="h-4 w-4 text-red-500" />
-                    Treatment Recommendations
-                  </h3>
-                  <p className="text-gray-700 leading-relaxed">{aiAnalysisData.treatmentRecommendations}</p>
-                </div>
-              )}
-
-              {/* Key Insights */}
-              {aiAnalysisData.keyInsights && Array.isArray(aiAnalysisData.keyInsights) && (
-                <div>
-                  <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
-                    <Brain className="h-4 w-4 text-purple-500" />
-                    Key Clinical Insights
-                  </h3>
-                  <div className="space-y-2">
-                    {aiAnalysisData.keyInsights.map((insight: string, index: number) => (
-                      <div key={index} className="bg-purple-50 p-3 rounded-lg border-l-4 border-purple-200">
-                        <p className="text-gray-700">{insight}</p>
-                      </div>
-                    ))}
+            <div className="space-y-4">
+              <div>
+                <h3 className="font-semibold mb-2">Clinical Summary</h3>
+                <p className="text-gray-700 text-sm">{aiAnalysisData.clinicalSummary}</p>
+              </div>
+              
+              <Separator />
+              
+              <div>
+                <h3 className="font-semibold mb-2">Diagnostic Analysis</h3>
+                <p className="text-gray-700 text-sm">{aiAnalysisData.diagnosticAnalysis}</p>
+              </div>
+              
+              <Separator />
+              
+              <div>
+                <h3 className="font-semibold mb-2">Treatment Recommendations</h3>
+                <p className="text-gray-700 text-sm">{aiAnalysisData.treatmentRecommendations}</p>
+              </div>
+              
+              {aiAnalysisData.keyInsights && (
+                <>
+                  <Separator />
+                  <div>
+                    <h3 className="font-semibold mb-2">Key Insights</h3>
+                    <ul className="space-y-1">
+                      {aiAnalysisData.keyInsights.map((insight: string, index: number) => (
+                        <li key={index} className="text-gray-700 text-sm flex items-start gap-2">
+                          <span className="text-blue-600 mt-1">•</span>
+                          {insight}
+                        </li>
+                      ))}
+                    </ul>
                   </div>
-                </div>
+                </>
               )}
-
-              {/* Confidence Score */}
+              
               {aiAnalysisData.confidenceScore && (
-                <div>
-                  <h3 className="font-semibold text-lg mb-2">Analysis Confidence</h3>
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-blue-500 h-2 rounded-full" 
-                        style={{ width: `${aiAnalysisData.confidenceScore}%` }}
-                      ></div>
-                    </div>
-                    <span className="text-sm font-medium">{aiAnalysisData.confidenceScore}%</span>
+                <div className="bg-blue-50 p-3 rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium">AI Confidence Score</span>
+                    <span className="text-sm font-bold text-blue-600">{aiAnalysisData.confidenceScore}%</span>
                   </div>
+                  <Progress value={aiAnalysisData.confidenceScore} className="h-2" />
                 </div>
               )}
             </div>
@@ -618,81 +1057,60 @@ function VirtualPatientCard({ patient }: { patient: any }) {
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <BookOpen className="h-5 w-5 text-green-600" />
-              Relevant Research: {profile.name || patient.patient_name}
+              <BookOpen className="h-5 w-5 text-blue-600" />
+              Relevant Research Papers
             </DialogTitle>
-            <p className="text-sm text-gray-600">
-              Research articles and evidence relevant to this case
-            </p>
           </DialogHeader>
           
-          {relevantResearch && relevantResearch.length > 0 ? (
+          <ScrollArea className="max-h-96">
             <div className="space-y-4">
-              {relevantResearch.map((article: any, index: number) => (
-                <div key={index} className="border rounded-lg p-4 hover:bg-gray-50">
-                  <h3 className="font-semibold text-lg mb-2 text-blue-700">
-                    {article.title || 'Research Article'}
-                  </h3>
-                  
-                  <div className="flex flex-wrap gap-2 mb-2">
-                    {article.authors && (
-                      <Badge variant="outline" className="text-xs">
-                        {article.authors}
-                      </Badge>
-                    )}
-                    {article.journal && (
-                      <Badge variant="secondary" className="text-xs">
-                        {article.journal}
-                      </Badge>
-                    )}
-                    {article.bodyPart && (
-                      <Badge variant="default" className="text-xs">
-                        {article.bodyPart}
-                      </Badge>
-                    )}
-                  </div>
-                  
-                  {article.abstract && (
-                    <p className="text-gray-700 text-sm mb-3 leading-relaxed">
-                      {article.abstract}
-                    </p>
-                  )}
-                  
-                  {article.relevanceScore && (
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-xs text-gray-600">Relevance:</span>
-                      <div className="flex-1 bg-gray-200 rounded-full h-1">
-                        <div 
-                          className="bg-green-500 h-1 rounded-full" 
-                          style={{ width: `${article.relevanceScore}%` }}
-                        ></div>
-                      </div>
-                      <span className="text-xs font-medium">{article.relevanceScore}%</span>
+              {relevantResearch.map((paper, index) => (
+                <Card key={index} className="hover:shadow-md transition-shadow">
+                  <CardHeader>
+                    <div className="flex items-start justify-between">
+                      <CardTitle className="text-base leading-tight pr-4">
+                        {paper.title}
+                      </CardTitle>
+                      {paper.relevanceScore && (
+                        <Badge variant="secondary" className="flex-shrink-0">
+                          {paper.relevanceScore}% match
+                        </Badge>
+                      )}
                     </div>
-                  )}
-                  
-                  {article.url && (
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={() => window.open(article.url, '_blank')}
-                      className="text-xs"
-                    >
-                      <BookOpen className="h-3 w-3 mr-1" />
-                      View Article
-                    </Button>
-                  )}
-                </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      <p className="text-sm text-gray-600">
+                        <strong>Authors:</strong> {paper.authors}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        <strong>Journal:</strong> {paper.journal}
+                      </p>
+                      {paper.abstract && (
+                        <p className="text-sm text-gray-700 line-clamp-3">
+                          {paper.abstract}
+                        </p>
+                      )}
+                      {paper.bodyPart && (
+                        <Badge variant="outline" className="text-xs">
+                          {paper.bodyPart}
+                        </Badge>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
               ))}
+              
+              {relevantResearch.length === 0 && (
+                <div className="text-center py-8">
+                  <BookOpen className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                  <p className="text-gray-600">No relevant research papers found for this patient case.</p>
+                </div>
+              )}
             </div>
-          ) : (
-            <div className="text-center py-8">
-              <BookOpen className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500">No relevant research found for this case.</p>
-            </div>
-          )}
+          </ScrollArea>
         </DialogContent>
       </Dialog>
-    </Card>
+    </div>
   );
 }

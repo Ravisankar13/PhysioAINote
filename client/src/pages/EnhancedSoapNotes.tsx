@@ -14,7 +14,8 @@ import {
   Bot, Send, FileText, UserCheck, TrendingUp, Activity,
   Clock, Users, User, CheckCircle2, FileCheck, Shield, 
   DollarSign, Calendar, Copy, ChevronDown, ChevronUp, 
-  Star, AlertTriangle, BookOpen, Copy as CopyIcon
+  Star, AlertTriangle, BookOpen, Copy as CopyIcon,
+  BarChart3, Briefcase
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -588,6 +589,246 @@ export default function EnhancedSoapNotesPage() {
       toast({
         title: "Generation Failed",
         description: "Failed to generate imaging referral. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const generateDischargeSummary = async () => {
+    try {
+      const response = await fetch('/api/generate-form', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          formType: 'discharge_summary',
+          soapData: {
+            subjective: soapSections.subjective,
+            objective: soapSections.objective,
+            assessment: soapSections.assessment,
+            plan: soapSections.plan,
+          },
+          patientName: 'Patient Name',
+          date: new Date().toISOString(),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate discharge summary');
+      }
+
+      const data = await response.json();
+      await copyToClipboard(data.content);
+      
+      toast({
+        title: "Discharge Summary Generated",
+        description: "Discharge summary has been generated and copied to clipboard",
+      });
+    } catch (error) {
+      toast({
+        title: "Generation Failed",
+        description: "Failed to generate discharge summary. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const generateProgressReport = async () => {
+    try {
+      const response = await fetch('/api/generate-form', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          formType: 'progress_report',
+          soapData: {
+            subjective: soapSections.subjective,
+            objective: soapSections.objective,
+            assessment: soapSections.assessment,
+            plan: soapSections.plan,
+          },
+          patientName: 'Patient Name',
+          date: new Date().toISOString(),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate progress report');
+      }
+
+      const data = await response.json();
+      await copyToClipboard(data.content);
+      
+      toast({
+        title: "Progress Report Generated",
+        description: "Progress report has been generated and copied to clipboard",
+      });
+    } catch (error) {
+      toast({
+        title: "Generation Failed",
+        description: "Failed to generate progress report. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const generateSpecialistReferral = async () => {
+    try {
+      const response = await fetch('/api/generate-form', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          formType: 'specialist_referral',
+          soapData: {
+            subjective: soapSections.subjective,
+            objective: soapSections.objective,
+            assessment: soapSections.assessment,
+            plan: soapSections.plan,
+          },
+          patientName: 'Patient Name',
+          date: new Date().toISOString(),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate specialist referral');
+      }
+
+      const data = await response.json();
+      await copyToClipboard(data.content);
+      
+      toast({
+        title: "Specialist Referral Generated",
+        description: "Specialist referral has been generated and copied to clipboard",
+      });
+    } catch (error) {
+      toast({
+        title: "Generation Failed",
+        description: "Failed to generate specialist referral. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const generateReturnToWork = async () => {
+    try {
+      const response = await fetch('/api/generate-form', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          formType: 'return_to_work',
+          soapData: {
+            subjective: soapSections.subjective,
+            objective: soapSections.objective,
+            assessment: soapSections.assessment,
+            plan: soapSections.plan,
+          },
+          patientName: 'Patient Name',
+          date: new Date().toISOString(),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate return to work certificate');
+      }
+
+      const data = await response.json();
+      await copyToClipboard(data.content);
+      
+      toast({
+        title: "Return to Work Certificate Generated",
+        description: "Return to work certificate has been generated and copied to clipboard",
+      });
+    } catch (error) {
+      toast({
+        title: "Generation Failed",
+        description: "Failed to generate return to work certificate. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const generateTimeOffWork = async () => {
+    try {
+      const response = await fetch('/api/generate-form', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          formType: 'time_off_work',
+          soapData: {
+            subjective: soapSections.subjective,
+            objective: soapSections.objective,
+            assessment: soapSections.assessment,
+            plan: soapSections.plan,
+          },
+          patientName: 'Patient Name',
+          date: new Date().toISOString(),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate time off work certificate');
+      }
+
+      const data = await response.json();
+      await copyToClipboard(data.content);
+      
+      toast({
+        title: "Time Off Work Certificate Generated",
+        description: "Time off work certificate has been generated and copied to clipboard",
+      });
+    } catch (error) {
+      toast({
+        title: "Generation Failed",
+        description: "Failed to generate time off work certificate. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const generateInsuranceDocumentation = async () => {
+    try {
+      const response = await fetch('/api/generate-form', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          formType: 'insurance_documentation',
+          soapData: {
+            subjective: soapSections.subjective,
+            objective: soapSections.objective,
+            assessment: soapSections.assessment,
+            plan: soapSections.plan,
+          },
+          patientName: 'Patient Name',
+          date: new Date().toISOString(),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate insurance documentation');
+      }
+
+      const data = await response.json();
+      await copyToClipboard(data.content);
+      
+      toast({
+        title: "Insurance Documentation Generated",
+        description: "Insurance documentation has been generated and copied to clipboard",
+      });
+    } catch (error) {
+      toast({
+        title: "Generation Failed",
+        description: "Failed to generate insurance documentation. Please try again.",
         variant: "destructive",
       });
     }
@@ -1283,26 +1524,56 @@ Generated by PhysioGPT Enhanced SOAP Notes
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      className="w-full justify-start hover:bg-yellow-50"
-                      onClick={() => toast({
-                        title: "Coming Soon",
-                        description: "Billing codes generation will be available soon.",
-                      })}
+                      className="w-full justify-start hover:bg-indigo-50"
+                      onClick={generateDischargeSummary}
                     >
-                      <DollarSign className="w-4 h-4 mr-2" />
-                      Billing Codes
+                      <FileCheck className="w-4 h-4 mr-2" />
+                      Discharge Summary
                     </Button>
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      className="w-full justify-start hover:bg-gray-50"
-                      onClick={() => toast({
-                        title: "Coming Soon",
-                        description: "Follow-up scheduling will be available soon.",
-                      })}
+                      className="w-full justify-start hover:bg-emerald-50"
+                      onClick={generateProgressReport}
                     >
-                      <Calendar className="w-4 h-4 mr-2" />
-                      Schedule Follow-up
+                      <BarChart3 className="w-4 h-4 mr-2" />
+                      Progress Report
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="w-full justify-start hover:bg-cyan-50"
+                      onClick={generateSpecialistReferral}
+                    >
+                      <Users className="w-4 h-4 mr-2" />
+                      Specialist Referral
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="w-full justify-start hover:bg-lime-50"
+                      onClick={generateReturnToWork}
+                    >
+                      <Briefcase className="w-4 h-4 mr-2" />
+                      Return to Work Certificate
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="w-full justify-start hover:bg-amber-50"
+                      onClick={generateTimeOffWork}
+                    >
+                      <Clock className="w-4 h-4 mr-2" />
+                      Time Off Work Certificate
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="w-full justify-start hover:bg-yellow-50"
+                      onClick={generateInsuranceDocumentation}
+                    >
+                      <DollarSign className="w-4 h-4 mr-2" />
+                      Insurance Documentation
                     </Button>
                   </div>
                 </div>

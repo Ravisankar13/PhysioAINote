@@ -8388,9 +8388,15 @@ Respond in JSON format:
         });
       }
 
-      if (!['doctor_report', 'ahtr', 'imaging_referral'].includes(formType)) {
+      const validFormTypes = [
+        'doctor_report', 'ahtr', 'imaging_referral', 'discharge_summary', 
+        'progress_report', 'specialist_referral', 'return_to_work', 
+        'time_off_work', 'insurance_documentation'
+      ];
+      
+      if (!validFormTypes.includes(formType)) {
         return res.status(400).json({ 
-          error: 'Invalid form type. Must be doctor_report, ahtr, or imaging_referral' 
+          error: `Invalid form type. Must be one of: ${validFormTypes.join(', ')}` 
         });
       }
 
@@ -8415,6 +8421,54 @@ Respond in JSON format:
           break;
         case 'imaging_referral':
           generatedContent = await documentGenerationService.generateImagingReferral({
+            formType,
+            soapData,
+            patientName,
+            date
+          });
+          break;
+        case 'discharge_summary':
+          generatedContent = await documentGenerationService.generateDischargeSummary({
+            formType,
+            soapData,
+            patientName,
+            date
+          });
+          break;
+        case 'progress_report':
+          generatedContent = await documentGenerationService.generateProgressReport({
+            formType,
+            soapData,
+            patientName,
+            date
+          });
+          break;
+        case 'specialist_referral':
+          generatedContent = await documentGenerationService.generateSpecialistReferral({
+            formType,
+            soapData,
+            patientName,
+            date
+          });
+          break;
+        case 'return_to_work':
+          generatedContent = await documentGenerationService.generateReturnToWorkCertificate({
+            formType,
+            soapData,
+            patientName,
+            date
+          });
+          break;
+        case 'time_off_work':
+          generatedContent = await documentGenerationService.generateTimeOffWorkCertificate({
+            formType,
+            soapData,
+            patientName,
+            date
+          });
+          break;
+        case 'insurance_documentation':
+          generatedContent = await documentGenerationService.generateInsuranceDocumentation({
             formType,
             soapData,
             patientName,

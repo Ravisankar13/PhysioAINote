@@ -7,11 +7,13 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 export interface PaperworkGenerationResult {
   treatmentSummary: string;
   progressNotes: string;
-  dischargeInstructions?: string;
-  referralLetter?: string;
+  dischargeSummary?: string;
+  progressReport?: string;
+  imagingReferral?: string;
+  specialistReferral?: string;
+  returnToWorkCertificate?: string;
+  timeOffWorkCertificate?: string;
   insuranceDocumentation: string;
-  billingCodes: string[];
-  followUpRecommendations: string;
   homeExerciseProgram?: string;
   workCapacityAssessment?: string;
   functionalOutcomes: string;
@@ -57,11 +59,13 @@ Generate the following clinical documentation in JSON format:
 {
   "treatmentSummary": "Comprehensive summary of treatment provided including techniques, modalities, and patient response",
   "progressNotes": "Detailed progress notes documenting functional improvements, pain levels, range of motion changes",
-  "dischargeInstructions": "Patient education and discharge instructions (if applicable)",
-  "referralLetter": "Referral letter to other healthcare providers (if needed)",
+  "dischargeSummary": "Complete discharge summary for end of treatment (if applicable)",
+  "progressReport": "Formal progress report for insurance or referring physician",
+  "imagingReferral": "Imaging referral form with clinical justification (if imaging needed)",
+  "specialistReferral": "Specialist referral letter with detailed clinical findings",
+  "returnToWorkCertificate": "Return to work certificate with capacity assessment",
+  "timeOffWorkCertificate": "Time off work certificate with medical justification",
   "insuranceDocumentation": "Documentation justifying medical necessity for insurance purposes",
-  "billingCodes": ["List of appropriate CPT codes for billing"],
-  "followUpRecommendations": "Specific follow-up care recommendations and timelines",
   "homeExerciseProgram": "Detailed home exercise program with instructions",
   "workCapacityAssessment": "Assessment of work capacity and restrictions (if applicable)",
   "functionalOutcomes": "Objective functional outcome measures and improvements",
@@ -73,8 +77,8 @@ Requirements:
 - Include specific measurements and objective data where available
 - Ensure all documentation supports medical necessity
 - Follow clinical best practices for documentation
-- Include appropriate billing codes (CPT codes)
 - Make recommendations evidence-based
+- Include work capacity details for certificates
 `;
 
       const response = await openai.chat.completions.create({
@@ -98,11 +102,13 @@ Requirements:
       return {
         treatmentSummary: result.treatmentSummary || "Treatment summary not available",
         progressNotes: result.progressNotes || "Progress notes not available",
-        dischargeInstructions: result.dischargeInstructions,
-        referralLetter: result.referralLetter,
+        dischargeSummary: result.dischargeSummary,
+        progressReport: result.progressReport,
+        imagingReferral: result.imagingReferral,
+        specialistReferral: result.specialistReferral,
+        returnToWorkCertificate: result.returnToWorkCertificate,
+        timeOffWorkCertificate: result.timeOffWorkCertificate,
         insuranceDocumentation: result.insuranceDocumentation || "Insurance documentation not available",
-        billingCodes: result.billingCodes || [],
-        followUpRecommendations: result.followUpRecommendations || "Follow-up recommendations not available",
         homeExerciseProgram: result.homeExerciseProgram,
         workCapacityAssessment: result.workCapacityAssessment,
         functionalOutcomes: result.functionalOutcomes || "Functional outcomes not available",
@@ -174,6 +180,267 @@ Format as a formal medical referral letter.
     } catch (error) {
       console.error("Error generating referral letter:", error);
       throw new Error("Failed to generate referral letter");
+    }
+  }
+
+  /**
+   * Generates comprehensive discharge summary
+   */
+  async generateDischargeSummary(soapNote: SoapNote): Promise<string> {
+    try {
+      const prompt = `
+Generate a comprehensive discharge summary based on this SOAP note:
+
+PATIENT: ${soapNote.patientName || 'Unknown'}
+DATE: ${soapNote.dateOfVisit}
+DURATION: ${soapNote.recordingDuration ? Math.round(soapNote.recordingDuration / 60) : 0} minutes
+
+SUBJECTIVE: ${soapNote.subjective || 'None recorded'}
+OBJECTIVE: ${soapNote.objective || 'None recorded'}
+ASSESSMENT: ${soapNote.assessment || 'None recorded'}
+PLAN: ${soapNote.plan || 'None recorded'}
+
+Generate a professional discharge summary including:
+1. Summary of treatment course and interventions provided
+2. Patient's functional progress and outcomes achieved
+3. Current functional status and remaining limitations
+4. Home exercise program and self-management instructions
+5. Return to activity/work recommendations
+6. Follow-up care recommendations
+7. Prognosis and expected recovery timeline
+
+Format as a comprehensive discharge summary for medical records.
+`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: "You are a physiotherapist writing a comprehensive discharge summary. Use professional medical terminology and structured formatting."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        temperature: 0.2,
+      });
+
+      return response.choices[0].message.content || "Discharge summary generation failed";
+
+    } catch (error) {
+      console.error("Error generating discharge summary:", error);
+      throw new Error("Failed to generate discharge summary");
+    }
+  }
+
+  /**
+   * Generates formal progress report
+   */
+  async generateProgressReport(soapNote: SoapNote): Promise<string> {
+    try {
+      const prompt = `
+Generate a formal progress report based on this SOAP note:
+
+PATIENT: ${soapNote.patientName || 'Unknown'}
+DATE: ${soapNote.dateOfVisit}
+DURATION: ${soapNote.recordingDuration ? Math.round(soapNote.recordingDuration / 60) : 0} minutes
+
+SUBJECTIVE: ${soapNote.subjective || 'None recorded'}
+OBJECTIVE: ${soapNote.objective || 'None recorded'}
+ASSESSMENT: ${soapNote.assessment || 'None recorded'}
+PLAN: ${soapNote.plan || 'None recorded'}
+
+Generate a professional progress report including:
+1. Treatment goals and objectives
+2. Interventions provided during this period
+3. Patient's response to treatment
+4. Functional improvements and objective measures
+5. Current limitations and barriers to progress
+6. Plan for continued treatment
+7. Expected timeline for goal achievement
+
+Format as a formal progress report suitable for insurance or referring physician.
+`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: "You are a physiotherapist writing a formal progress report. Use objective measurements and professional medical language."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        temperature: 0.2,
+      });
+
+      return response.choices[0].message.content || "Progress report generation failed";
+
+    } catch (error) {
+      console.error("Error generating progress report:", error);
+      throw new Error("Failed to generate progress report");
+    }
+  }
+
+  /**
+   * Generates imaging referral form
+   */
+  async generateImagingReferral(soapNote: SoapNote, imagingType: string): Promise<string> {
+    try {
+      const prompt = `
+Generate an imaging referral form based on this clinical assessment:
+
+PATIENT: ${soapNote.patientName || 'Unknown'}
+DATE: ${soapNote.dateOfVisit}
+IMAGING TYPE REQUESTED: ${imagingType}
+
+CLINICAL FINDINGS:
+Subjective: ${soapNote.subjective || 'None recorded'}
+Objective: ${soapNote.objective || 'None recorded'}
+Assessment: ${soapNote.assessment || 'None recorded'}
+
+Generate a professional imaging referral including:
+1. Clinical history and presentation
+2. Physical examination findings
+3. Clinical question for imaging
+4. Suspected diagnoses requiring confirmation
+5. Medical necessity justification
+6. Urgency level and timeline
+7. Specific anatomical areas to be imaged
+
+Format as a formal imaging referral request with clear clinical justification.
+`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: "You are a physiotherapist writing an imaging referral. Provide clear clinical justification and specific diagnostic questions."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        temperature: 0.2,
+      });
+
+      return response.choices[0].message.content || "Imaging referral generation failed";
+
+    } catch (error) {
+      console.error("Error generating imaging referral:", error);
+      throw new Error("Failed to generate imaging referral");
+    }
+  }
+
+  /**
+   * Generates return to work certificate
+   */
+  async generateReturnToWorkCertificate(soapNote: SoapNote): Promise<string> {
+    try {
+      const prompt = `
+Generate a return to work certificate based on this clinical assessment:
+
+PATIENT: ${soapNote.patientName || 'Unknown'}
+DATE: ${soapNote.dateOfVisit}
+
+CLINICAL ASSESSMENT:
+Subjective: ${soapNote.subjective || 'None recorded'}
+Objective: ${soapNote.objective || 'None recorded'}
+Assessment: ${soapNote.assessment || 'None recorded'}
+Plan: ${soapNote.plan || 'None recorded'}
+
+Generate a professional return to work certificate including:
+1. Current functional capacity assessment
+2. Work restrictions and limitations
+3. Recommended duty modifications
+4. Timeline for full return to regular duties
+5. Follow-up requirements
+6. Medical clearance status
+7. Ergonomic recommendations
+
+Format as an official return to work certificate suitable for employers and insurance.
+`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: "You are a physiotherapist issuing a return to work certificate. Be specific about work capacity and restrictions."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        temperature: 0.2,
+      });
+
+      return response.choices[0].message.content || "Return to work certificate generation failed";
+
+    } catch (error) {
+      console.error("Error generating return to work certificate:", error);
+      throw new Error("Failed to generate return to work certificate");
+    }
+  }
+
+  /**
+   * Generates time off work certificate
+   */
+  async generateTimeOffWorkCertificate(soapNote: SoapNote, duration: string): Promise<string> {
+    try {
+      const prompt = `
+Generate a time off work certificate based on this clinical assessment:
+
+PATIENT: ${soapNote.patientName || 'Unknown'}
+DATE: ${soapNote.dateOfVisit}
+RECOMMENDED TIME OFF: ${duration}
+
+CLINICAL ASSESSMENT:
+Subjective: ${soapNote.subjective || 'None recorded'}
+Objective: ${soapNote.objective || 'None recorded'}
+Assessment: ${soapNote.assessment || 'None recorded'}
+Plan: ${soapNote.plan || 'None recorded'}
+
+Generate a professional time off work certificate including:
+1. Medical justification for time off work
+2. Specific functional limitations preventing work
+3. Duration of recommended time off
+4. Treatment plan during time off period
+5. Criteria for return to work assessment
+6. Follow-up appointment requirements
+7. Prognosis and expected recovery timeline
+
+Format as an official medical certificate suitable for employers and insurance claims.
+`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: "You are a physiotherapist issuing a time off work certificate. Provide clear medical justification and specific timelines."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        temperature: 0.2,
+      });
+
+      return response.choices[0].message.content || "Time off work certificate generation failed";
+
+    } catch (error) {
+      console.error("Error generating time off work certificate:", error);
+      throw new Error("Failed to generate time off work certificate");
     }
   }
 

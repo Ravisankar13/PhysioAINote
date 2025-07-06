@@ -724,6 +724,140 @@ function AIPaperworkTab({ activeSession }: { activeSession: SoapNote | null }) {
     },
   });
 
+  // Generate discharge summary mutation
+  const generateDischargeSummaryMutation = useMutation({
+    mutationFn: async (soapNoteId: number) => {
+      const response = await fetch(`/api/soap-notes/${soapNoteId}/generate-discharge-summary`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to generate discharge summary");
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Discharge Summary Generated",
+        description: "Discharge summary has been generated successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/soap-notes"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Generate progress report mutation
+  const generateProgressReportMutation = useMutation({
+    mutationFn: async (soapNoteId: number) => {
+      const response = await fetch(`/api/soap-notes/${soapNoteId}/generate-progress-report`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to generate progress report");
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Progress Report Generated",
+        description: "Progress report has been generated successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/soap-notes"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Generate imaging referral mutation
+  const generateImagingReferralMutation = useMutation({
+    mutationFn: async ({ soapNoteId, imagingType }: { soapNoteId: number; imagingType: string }) => {
+      const response = await fetch(`/api/soap-notes/${soapNoteId}/generate-imaging-referral`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ imagingType }),
+      });
+      if (!response.ok) throw new Error("Failed to generate imaging referral");
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Imaging Referral Generated",
+        description: "Imaging referral has been generated successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/soap-notes"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Generate return to work certificate mutation
+  const generateReturnToWorkMutation = useMutation({
+    mutationFn: async (soapNoteId: number) => {
+      const response = await fetch(`/api/soap-notes/${soapNoteId}/generate-return-to-work`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to generate return to work certificate");
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Return to Work Certificate Generated",
+        description: "Return to work certificate has been generated successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/soap-notes"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Generate time off work certificate mutation
+  const generateTimeOffWorkMutation = useMutation({
+    mutationFn: async ({ soapNoteId, duration }: { soapNoteId: number; duration: string }) => {
+      const response = await fetch(`/api/soap-notes/${soapNoteId}/generate-time-off-work`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ duration }),
+      });
+      if (!response.ok) throw new Error("Failed to generate time off work certificate");
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Time Off Work Certificate Generated",
+        description: "Time off work certificate has been generated successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/soap-notes"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   // Create virtual patient mutation
   const createVirtualPatientMutation = useMutation({
     mutationFn: async (soapNoteId: number) => {
@@ -804,7 +938,7 @@ function AIPaperworkTab({ activeSession }: { activeSession: SoapNote | null }) {
           <CardTitle>Generate AI Paperwork</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <Button
               onClick={() => generatePaperworkMutation.mutate(activeSession.id)}
               disabled={generatePaperworkMutation.isPending}
@@ -839,6 +973,52 @@ function AIPaperworkTab({ activeSession }: { activeSession: SoapNote | null }) {
               disabled={generateReferralMutation.isPending}
             >
               Generate Referral
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={() => generateDischargeSummaryMutation.mutate(activeSession.id)}
+              disabled={generateDischargeSummaryMutation.isPending}
+            >
+              Discharge Summary
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={() => generateProgressReportMutation.mutate(activeSession.id)}
+              disabled={generateProgressReportMutation.isPending}
+            >
+              Progress Report
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={() => generateImagingReferralMutation.mutate({ 
+                soapNoteId: activeSession.id, 
+                imagingType: "MRI" 
+              })}
+              disabled={generateImagingReferralMutation.isPending}
+            >
+              Imaging Referral
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={() => generateReturnToWorkMutation.mutate(activeSession.id)}
+              disabled={generateReturnToWorkMutation.isPending}
+            >
+              Return to Work Certificate
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={() => generateTimeOffWorkMutation.mutate({ 
+                soapNoteId: activeSession.id, 
+                duration: "1 week" 
+              })}
+              disabled={generateTimeOffWorkMutation.isPending}
+            >
+              Time Off Work Certificate
             </Button>
 
             <Button
@@ -997,6 +1177,118 @@ function AIPaperworkTab({ activeSession }: { activeSession: SoapNote | null }) {
                 <div className="p-4 bg-gray-50 rounded-lg">
                   <p className="text-gray-700 whitespace-pre-wrap">
                     {activeSession.dischargeInstructions}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Discharge Summary */}
+          {activeSession.dischargeSummary && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Discharge Summary</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="p-4 bg-indigo-50 rounded-lg">
+                  <p className="text-gray-700 whitespace-pre-wrap">
+                    {activeSession.dischargeSummary}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Progress Report */}
+          {activeSession.progressReport && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Progress Report</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="p-4 bg-emerald-50 rounded-lg">
+                  <p className="text-gray-700 whitespace-pre-wrap">
+                    {activeSession.progressReport}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Imaging Referral */}
+          {activeSession.imagingReferral && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Imaging Referral</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="p-4 bg-cyan-50 rounded-lg">
+                  <p className="text-gray-700 whitespace-pre-wrap">
+                    {activeSession.imagingReferral}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Specialist Referral */}
+          {activeSession.specialistReferral && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Specialist Referral</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="p-4 bg-rose-50 rounded-lg">
+                  <p className="text-gray-700 whitespace-pre-wrap">
+                    {activeSession.specialistReferral}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Return to Work Certificate */}
+          {activeSession.returnToWorkCertificate && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Return to Work Certificate</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="p-4 bg-lime-50 rounded-lg">
+                  <p className="text-gray-700 whitespace-pre-wrap">
+                    {activeSession.returnToWorkCertificate}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Time Off Work Certificate */}
+          {activeSession.timeOffWorkCertificate && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Time Off Work Certificate</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="p-4 bg-amber-50 rounded-lg">
+                  <p className="text-gray-700 whitespace-pre-wrap">
+                    {activeSession.timeOffWorkCertificate}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Work Capacity Assessment */}
+          {activeSession.workCapacityAssessment && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Work Capacity Assessment</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="p-4 bg-violet-50 rounded-lg">
+                  <p className="text-gray-700 whitespace-pre-wrap">
+                    {activeSession.workCapacityAssessment}
                   </p>
                 </div>
               </CardContent>

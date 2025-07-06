@@ -7219,6 +7219,128 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
 
+  // Generate discharge summary for specific SOAP note
+  app.post("/api/soap-notes/:id/generate-discharge-summary", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { id } = req.params;
+      const soapNote = await soapNotesService.getSoapNote(parseInt(id));
+      if (!soapNote || soapNote.userId !== userId) {
+        return res.status(404).json({ error: 'SOAP note not found' });
+      }
+
+      const dischargeSummary = await aiPaperworkService.generateDischargeSummary(soapNote);
+      res.json({ dischargeSummary });
+    } catch (error: any) {
+      console.error("Error generating discharge summary:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Generate progress report for specific SOAP note
+  app.post("/api/soap-notes/:id/generate-progress-report", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { id } = req.params;
+      const soapNote = await soapNotesService.getSoapNote(parseInt(id));
+      if (!soapNote || soapNote.userId !== userId) {
+        return res.status(404).json({ error: 'SOAP note not found' });
+      }
+
+      const progressReport = await aiPaperworkService.generateProgressReport(soapNote);
+      res.json({ progressReport });
+    } catch (error: any) {
+      console.error("Error generating progress report:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Generate imaging referral for specific SOAP note
+  app.post("/api/soap-notes/:id/generate-imaging-referral", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { id } = req.params;
+      const { imagingType } = req.body;
+
+      if (!imagingType) {
+        return res.status(400).json({ error: 'Imaging type is required' });
+      }
+
+      const soapNote = await soapNotesService.getSoapNote(parseInt(id));
+      if (!soapNote || soapNote.userId !== userId) {
+        return res.status(404).json({ error: 'SOAP note not found' });
+      }
+
+      const imagingReferral = await aiPaperworkService.generateImagingReferral(soapNote, imagingType);
+      res.json({ imagingReferral });
+    } catch (error: any) {
+      console.error("Error generating imaging referral:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Generate return to work certificate for specific SOAP note
+  app.post("/api/soap-notes/:id/generate-return-to-work", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { id } = req.params;
+      const soapNote = await soapNotesService.getSoapNote(parseInt(id));
+      if (!soapNote || soapNote.userId !== userId) {
+        return res.status(404).json({ error: 'SOAP note not found' });
+      }
+
+      const returnToWorkCertificate = await aiPaperworkService.generateReturnToWorkCertificate(soapNote);
+      res.json({ returnToWorkCertificate });
+    } catch (error: any) {
+      console.error("Error generating return to work certificate:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Generate time off work certificate for specific SOAP note
+  app.post("/api/soap-notes/:id/generate-time-off-work", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { id } = req.params;
+      const { duration } = req.body;
+
+      if (!duration) {
+        return res.status(400).json({ error: 'Duration is required for time off certificate' });
+      }
+
+      const soapNote = await soapNotesService.getSoapNote(parseInt(id));
+      if (!soapNote || soapNote.userId !== userId) {
+        return res.status(404).json({ error: 'SOAP note not found' });
+      }
+
+      const timeOffWorkCertificate = await aiPaperworkService.generateTimeOffWorkCertificate(soapNote, duration);
+      res.json({ timeOffWorkCertificate });
+    } catch (error: any) {
+      console.error("Error generating time off work certificate:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Auto-generate paperwork for all completed notes
   app.post("/api/soap-notes/auto-generate-paperwork", ensureAuthenticated, async (req: Request, res: Response) => {
     try {

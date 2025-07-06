@@ -77,10 +77,13 @@ export default function VirtualPatientsPage() {
 }
 
 function VirtualPatientCard({ patient }: { patient: SoapVirtualPatient }) {
-  const profile = patient.patientProfile;
-  const presentation = patient.clinicalPresentation;
-  const findings = patient.physicalFindings;
-  const communication = patient.communicationStyle;
+  // Add null checks to prevent undefined errors
+  if (!patient) return null;
+  
+  const profile = patient.patientProfile || {};
+  const presentation = patient.clinicalPresentation || {};
+  const findings = patient.physicalFindings || {};
+  const communication = patient.communicationStyle || {};
 
   return (
     <Card className="hover:shadow-lg transition-shadow">
@@ -88,27 +91,27 @@ function VirtualPatientCard({ patient }: { patient: SoapVirtualPatient }) {
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
             <User className="h-5 w-5 text-blue-600" />
-            {profile.name}
+            {profile.name || 'Unknown Patient'}
           </CardTitle>
           <div className="flex items-center gap-2">
             <Badge variant="outline" className="capitalize">
-              {patient.bodyPart}
+              {patient.bodyPart || 'general'}
             </Badge>
             <Badge 
               variant={patient.complexity === 'high' ? 'destructive' : 
                       patient.complexity === 'medium' ? 'secondary' : 'default'}
             >
-              {patient.complexity} complexity
+              {patient.complexity || 'medium'} complexity
             </Badge>
           </div>
         </div>
         <div className="flex items-center gap-4 text-sm text-gray-600">
           <span className="flex items-center gap-1">
             <Calendar className="h-3 w-3" />
-            {profile.age} years old
+            {profile.age || 'N/A'} years old
           </span>
-          <span>{profile.gender}</span>
-          <span>{profile.occupation}</span>
+          <span>{profile.gender || 'N/A'}</span>
+          <span>{profile.occupation || 'N/A'}</span>
         </div>
       </CardHeader>
 
@@ -120,7 +123,7 @@ function VirtualPatientCard({ patient }: { patient: SoapVirtualPatient }) {
             Chief Complaint
           </h4>
           <p className="text-sm text-gray-700 bg-red-50 p-2 rounded">
-            {presentation.chiefComplaint}
+            {presentation.chiefComplaint || 'No chief complaint documented'}
           </p>
         </div>
 
@@ -128,7 +131,7 @@ function VirtualPatientCard({ patient }: { patient: SoapVirtualPatient }) {
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium text-gray-700">Pain Level:</span>
           <div className="flex items-center gap-1">
-            <span className="text-lg font-bold text-red-600">{presentation.painScale}</span>
+            <span className="text-lg font-bold text-red-600">{presentation.painScale || 0}</span>
             <span className="text-sm text-gray-500">/10</span>
           </div>
         </div>
@@ -176,12 +179,12 @@ function VirtualPatientCard({ patient }: { patient: SoapVirtualPatient }) {
             Communication Style
           </h4>
           <p className="text-sm text-gray-700 bg-purple-50 p-2 rounded">
-            {communication.personality}
+            {communication.personality || 'No communication style documented'}
           </p>
         </div>
 
         {/* Functional Limitations */}
-        {presentation.functionalLimitations && presentation.functionalLimitations.length > 0 && (
+        {presentation.functionalLimitations && Array.isArray(presentation.functionalLimitations) && presentation.functionalLimitations.length > 0 && (
           <div>
             <h4 className="font-medium text-sm text-gray-800 mb-1">Functional Limitations</h4>
             <div className="flex flex-wrap gap-1">

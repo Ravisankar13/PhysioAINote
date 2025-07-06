@@ -112,10 +112,12 @@ function VirtualPatientCard({ patient }: { patient: any }) {
   // Rename mutation
   const renameMutation = useMutation({
     mutationFn: async (newName: string) => {
-      return await apiRequest(`/api/virtual-patients/${patient.id}/rename`, {
-        method: 'PATCH',
-        body: { newName }
-      });
+      const response = await apiRequest(
+        'PATCH',
+        `/api/virtual-patients/${patient.id}/rename`,
+        { newName }
+      );
+      return await response.json();
     },
     onSuccess: () => {
       setIsEditing(false);

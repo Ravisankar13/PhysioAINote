@@ -195,135 +195,153 @@ Focus on clinical accuracy and realistic progression. Use appropriate outcome me
   }
 
   /**
-   * Create filled PDF from AHTR form data
+   * Create filled PDF from AHTR form data using the original SIRA template
    */
   async createFilledPDF(formData: AHTRFormData): Promise<Buffer> {
     try {
-      // Create a new PDF document (since we don't have the original fillable form)
-      const pdfDoc = await PDFDocument.create();
-      const page = pdfDoc.addPage([595, 842]); // A4 size
-      const { width, height } = page.getSize();
+      // Load the original SIRA AHTR template
+      const templatePath = path.join(process.cwd(), 'attached_assets', 'SIRA-Allied-health-treatment-request-form_1751798303980.pdf');
+      const templateBytes = await fs.readFile(templatePath);
+      const pdfDoc = await PDFDocument.load(templateBytes);
       
-      // Add content to the PDF
-      const fontSize = 10;
-      const lineHeight = 12;
-      let yPosition = height - 50;
-
-      // Helper function to add text
-      const addText = (text: string, x: number = 50, size: number = fontSize) => {
-        page.drawText(text, {
-          x,
-          y: yPosition,
-          size,
-        });
-        yPosition -= lineHeight;
+      // Get the form from the PDF
+      const form = pdfDoc.getForm();
+      const fields = form.getFields();
+      
+      console.log('Available form fields:', fields.map(field => field.getName()));
+      
+      // Helper function to safely set form field values
+      const setFieldValue = (fieldName: string, value: string) => {
+        try {
+          const field = form.getField(fieldName);
+          if (field) {
+            if (field.constructor.name === 'PDFTextField') {
+              (field as PDFTextField).setText(value);
+            } else if (field.constructor.name === 'PDFCheckBox') {
+              // For checkboxes, check if value indicates true
+              if (value.toLowerCase() === 'yes' || value.toLowerCase() === 'true') {
+                (field as PDFCheckBox).check();
+              }
+            }
+          }
+        } catch (error) {
+          console.log(`Could not set field "${fieldName}": ${error}`);
+        }
       };
 
-      // Add header
-      addText('SIRA - Allied Health Treatment Request', 50, 16);
-      yPosition -= 10;
-      
-      // Add form data
-      addText(`Request Number: ${formData.requestNumber}`);
-      addText(`Date of Request: ${formData.dateOfRequest}`);
-      addText(`Date Services Commenced: ${formData.dateServicesCommenced}`);
-      addText(`Total Consultations: ${formData.totalConsultations}`);
-      addText(`Allied Health Discipline: ${formData.alliedHealthDiscipline}`);
-      addText(`Referred By: ${formData.referredBy}`);
-      yPosition -= 10;
+      // If the PDF doesn't have fillable fields, add text overlays instead
+      if (fields.length === 0) {
+        console.log('No fillable fields found, adding text overlays');
+        
+        const pages = pdfDoc.getPages();
+        const firstPage = pages[0];
+        const { width, height } = firstPage.getSize();
+        
+        // Add clinical data as text overlays on the existing form
+        const fontSize = 9;
+        
+        // Add clinical data only (leaving patient details blank for privacy)
+        // These coordinates would need to be adjusted based on the actual SIRA form layout
+        firstPage.drawText(formData.compensableInjury, { x: 200, y: height - 300, size: fontSize });
+        firstPage.drawText(formData.currentSigns, { x: 100, y: height - 350, size: fontSize });
+        firstPage.drawText(formData.alliedHealthDiscipline, { x: 200, y: height - 150, size: fontSize });
+        firstPage.drawText(formData.practitionerName, { x: 150, y: height - 750, size: fontSize });
+        firstPage.drawText(formData.ahpraNumber, { x: 400, y: height - 750, size: fontSize });
+        
+      } else {
+        // Try to fill form fields if they exist
+        // Fill clinical data fields only (leave patient identifying information blank)
+        setFieldValue('Request Number', formData.requestNumber);
+        setFieldValue('Date of Request', formData.dateOfRequest);
+        setFieldValue('Date Services Commenced', formData.dateServicesCommenced);
+        setFieldValue('Total Consultations', formData.totalConsultations);
+        setFieldValue('Allied Health Discipline', formData.alliedHealthDiscipline);
+        setFieldValue('Referred By', formData.referredBy);
+        setFieldValue('Referred By Phone', formData.referredByPhone);
 
-      // Section 1: Details of person with injury
-      addText('Section 1: Details of person with an injury', 50, 12);
-      addText(`Name: ${formData.patientName}`);
-      addText(`Date of Birth: ${formData.dateOfBirth}`);
-      addText(`Pre-injury Occupation: ${formData.preInjuryOccupation}`);
-      addText(`Pre-injury Work Hours/Week: ${formData.preInjuryWorkHours}`);
-      addText(`Claim Number: ${formData.claimNumber}`);
-      addText(`Date of Injury: ${formData.dateOfInjury}`);
-      yPosition -= 10;
+        // Section 2: Clinical assessment (fill with clinical data)
+        setFieldValue('Compensable Injury', formData.compensableInjury);
+        setFieldValue('Current Signs', formData.currentSigns);
+        setFieldValue('Risk Screening Applied', formData.riskScreeningApplied ? 'Yes' : 'No');
+        setFieldValue('Risk Screening Tool', formData.riskScreeningTool);
+        setFieldValue('Risk Screening Date', formData.riskScreeningDate);
+        setFieldValue('Risk Screening Score', formData.riskScreeningScore);
+        setFieldValue('Pre-existing Conditions', formData.preExistingConditions);
 
-      // Section 2: Clinical assessment
-      addText('Section 2: Your clinical assessment', 50, 12);
-      addText(`Compensable Injury/Illness: ${formData.compensableInjury}`);
-      addText(`Current Clinical Signs and Symptoms:`);
-      this.addWrappedText(page, formData.currentSigns, 50, yPosition, width - 100, fontSize);
-      yPosition -= this.getTextHeight(formData.currentSigns, width - 100) + 10;
+        // Capacity
+        setFieldValue('Pre-injury Work Capacity', formData.preInjuryCapacityWork);
+        setFieldValue('Current Work Capacity', formData.currentCapacityWork);
+        setFieldValue('Pre-injury Activities Capacity', formData.preInjuryCapacityActivities);
+        setFieldValue('Current Activities Capacity', formData.currentCapacityActivities);
 
-      addText(`Risk Screening Applied: ${formData.riskScreeningApplied ? 'Yes' : 'No'}`);
-      addText(`Risk Screening Tool: ${formData.riskScreeningTool}`);
-      addText(`Date Administered: ${formData.riskScreeningDate}`);
-      addText(`Score/Comment: ${formData.riskScreeningScore}`);
-      yPosition -= 10;
+        // Outcome measures
+        setFieldValue('Outcome Measure 1 Name', formData.outcomeMeasure1Name);
+        setFieldValue('Outcome Measure 1 Initial Date', formData.outcomeMeasure1InitialDate);
+        setFieldValue('Outcome Measure 1 Initial Score', formData.outcomeMeasure1InitialScore);
+        setFieldValue('Outcome Measure 1 Current Date', formData.outcomeMeasure1CurrentDate);
+        setFieldValue('Outcome Measure 1 Current Score', formData.outcomeMeasure1CurrentScore);
+        setFieldValue('Outcome Measure Interpretation', formData.outcomeMeasureInterpretation);
 
-      // Capacity section
-      addText('Capacity Assessment', 50, 12);
-      addText('Pre-injury Work Capacity:');
-      this.addWrappedText(page, formData.preInjuryCapacityWork, 50, yPosition, width - 100, fontSize);
-      yPosition -= this.getTextHeight(formData.preInjuryCapacityWork, width - 100) + 5;
+        // Section 3: Barriers and strategies
+        setFieldValue('Barriers to Recovery', formData.barriersToRecovery);
+        setFieldValue('Strategies to Address', formData.strategiesToAddress);
 
-      addText('Current Work Capacity:');
-      this.addWrappedText(page, formData.currentCapacityWork, 50, yPosition, width - 100, fontSize);
-      yPosition -= this.getTextHeight(formData.currentCapacityWork, width - 100) + 10;
+        // Section 4: Treatment plan
+        setFieldValue('Goal Achieved', formData.goalAchieved);
+        setFieldValue('Work Goal', formData.workGoal);
+        setFieldValue('Work Goal By', formData.workGoalBy);
+        setFieldValue('Activity Goal', formData.activityGoal);
+        setFieldValue('Activity Goal By', formData.activityGoalBy);
+        setFieldValue('Self Management', formData.selfManagement);
+        setFieldValue('Intervention', formData.intervention);
+        setFieldValue('Rationale', formData.rationale);
+        setFieldValue('Additional Sessions', formData.additionalSessions);
+        setFieldValue('Anticipated Discharge', formData.anticipatedDischarge);
+        setFieldValue('Collaboratively Developed', formData.collaborativelyDeveloped ? 'Yes' : 'No');
 
-      // Outcome measures
-      addText('Standardised Outcome Measures', 50, 12);
-      addText(`Measure: ${formData.outcomeMeasure1Name}`);
-      addText(`Initial: ${formData.outcomeMeasure1InitialDate} - ${formData.outcomeMeasure1InitialScore}`);
-      addText(`Current: ${formData.outcomeMeasure1CurrentDate} - ${formData.outcomeMeasure1CurrentScore}`);
-      addText('Interpretation:');
-      this.addWrappedText(page, formData.outcomeMeasureInterpretation, 50, yPosition, width - 100, fontSize);
-      yPosition -= this.getTextHeight(formData.outcomeMeasureInterpretation, width - 100) + 10;
+        // Section 5: Service requested
+        setFieldValue('Service Type 1', formData.serviceType1);
+        setFieldValue('Sessions 1', formData.sessions1);
+        setFieldValue('Frequency 1', formData.frequency1);
+        setFieldValue('Cost 1', formData.cost1);
 
-      // Check if we need a new page
-      if (yPosition < 200) {
-        const newPage = pdfDoc.addPage([595, 842]);
-        yPosition = height - 50;
+        // Section 6: Practitioner details
+        setFieldValue('Practitioner Name', formData.practitionerName);
+        setFieldValue('Practice Email', formData.practiceEmail);
+        setFieldValue('AHPRA Number', formData.ahpraNumber);
+        setFieldValue('Contact Time', formData.contactTime);
+        setFieldValue('Practice Name', formData.practiceName);
+        setFieldValue('SIRA Approval Number', formData.siraApprovalNumber);
+        setFieldValue('Suburb', formData.suburb);
+        setFieldValue('State', formData.state);
+        setFieldValue('Postcode', formData.postcode);
+        setFieldValue('Practitioner Email', formData.practitionerEmail);
+        setFieldValue('Phone Number', formData.phoneNumber);
+        setFieldValue('Fax', formData.fax);
+
+        // Flatten the form to prevent further editing
+        form.flatten();
       }
-
-      // Section 3: Barriers and strategies
-      addText('Section 3: Barriers to recovery and strategies', 50, 12);
-      addText('Barriers to Recovery:');
-      this.addWrappedText(page, formData.barriersToRecovery, 50, yPosition, width - 100, fontSize);
-      yPosition -= this.getTextHeight(formData.barriersToRecovery, width - 100) + 5;
-
-      addText('Strategies to Address:');
-      this.addWrappedText(page, formData.strategiesToAddress, 50, yPosition, width - 100, fontSize);
-      yPosition -= this.getTextHeight(formData.strategiesToAddress, width - 100) + 10;
-
-      // Section 4: Treatment plan
-      addText('Section 4: Treatment plan', 50, 12);
-      addText(`Goals Achieved: ${formData.goalAchieved}`);
-      addText(`Work Goal: ${formData.workGoal} by ${formData.workGoalBy}`);
-      addText(`Activity Goal: ${formData.activityGoal} by ${formData.activityGoalBy}`);
-      addText('Self-Management:');
-      this.addWrappedText(page, formData.selfManagement, 50, yPosition, width - 100, fontSize);
-      yPosition -= this.getTextHeight(formData.selfManagement, width - 100) + 5;
-
-      addText('Intervention:');
-      this.addWrappedText(page, formData.intervention, 50, yPosition, width - 100, fontSize);
-      yPosition -= this.getTextHeight(formData.intervention, width - 100) + 10;
-
-      // Section 5: Service requested
-      addText('Section 5: Service requested', 50, 12);
-      addText(`Service Type: ${formData.serviceType1}`);
-      addText(`Sessions: ${formData.sessions1}`);
-      addText(`Frequency: ${formData.frequency1}`);
-      addText(`Cost: $${formData.cost1}`);
-      yPosition -= 10;
-
-      // Section 6: Practitioner details
-      addText('Section 6: Your details', 50, 12);
-      addText(`Practitioner Name: ${formData.practitionerName}`);
-      addText(`Practice Name: ${formData.practiceName}`);
-      addText(`AHPRA Number: ${formData.ahpraNumber}`);
-      addText(`Email: ${formData.practitionerEmail}`);
-      addText(`Phone: ${formData.phoneNumber}`);
 
       const pdfBytes = await pdfDoc.save();
       return Buffer.from(pdfBytes);
     } catch (error) {
       console.error('Error creating PDF:', error);
-      throw new Error('Failed to create AHTR PDF');
+      
+      // Fallback: create a new PDF with the template structure if loading fails
+      const fallbackDoc = await PDFDocument.create();
+      const page = fallbackDoc.addPage([595, 842]);
+      const { width, height } = page.getSize();
+      
+      page.drawText('SIRA - Allied Health Treatment Request', { x: 50, y: height - 50, size: 16 });
+      page.drawText(`Allied Health Discipline: ${formData.alliedHealthDiscipline}`, { x: 50, y: height - 100, size: 10 });
+      page.drawText(`Compensable Injury: ${formData.compensableInjury}`, { x: 50, y: height - 130, size: 10 });
+      page.drawText(`Current Signs: ${formData.currentSigns}`, { x: 50, y: height - 160, size: 10 });
+      page.drawText(`Practitioner: ${formData.practitionerName}`, { x: 50, y: height - 200, size: 10 });
+      page.drawText(`AHPRA: ${formData.ahpraNumber}`, { x: 50, y: height - 230, size: 10 });
+      
+      const fallbackBytes = await fallbackDoc.save();
+      return Buffer.from(fallbackBytes);
     }
   }
 

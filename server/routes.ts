@@ -8037,6 +8037,28 @@ Respond in JSON format:
     }
   });
 
+  // Generate SOAP sections from transcript using AI
+  app.post("/api/generate-soap-sections", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { transcript } = req.body;
+
+      if (!transcript || transcript.trim().length === 0) {
+        return res.status(400).json({ error: 'Transcript is required' });
+      }
+
+      const soapSections = await realTimeAIService.generateSoapSections(transcript);
+      res.json(soapSections);
+    } catch (error: any) {
+      console.error("Error generating SOAP sections:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // ============================================================================
   // VIRTUAL PATIENT CREATION API ROUTES
   // ============================================================================

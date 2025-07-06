@@ -407,6 +407,86 @@ If no administrative tasks are mentioned, return an empty array: []
       return [];
     }
   }
+
+  /**
+   * Generate SOAP sections from transcript using AI
+   */
+  async generateSoapSections(transcript: string): Promise<{
+    subjective: string;
+    objective: string;
+    assessment: string;
+    plan: string;
+  }> {
+    try {
+      const prompt = `
+Analyze the following clinical transcript and generate structured SOAP note sections. Extract and organize the information appropriately for each section:
+
+**Transcript:**
+${transcript}
+
+Generate SOAP sections based on this transcript. Follow these guidelines:
+
+**SUBJECTIVE:** Include patient's reported symptoms, history, pain descriptions, functional limitations, and onset details. Use the patient's own words when possible.
+
+**OBJECTIVE:** Include any physical examination findings, observable signs, test results, measurements, and clinical observations mentioned.
+
+**ASSESSMENT:** Provide clinical reasoning, possible diagnoses, problem identification, and interpretation of findings.
+
+**PLAN:** Include proposed treatments, interventions, patient education, follow-up recommendations, and goals.
+
+If information for a section is not available in the transcript, provide a professional template prompt for that section.
+
+Respond in JSON format:
+{
+  "subjective": "Patient reports...",
+  "objective": "On examination...",
+  "assessment": "Clinical impression...",
+  "plan": "Treatment plan includes..."
+}
+      `;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+        messages: [
+          {
+            role: "system",
+            content: "You are an expert physiotherapist AI assistant specialized in creating structured SOAP notes from clinical conversations."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        temperature: 0.3,
+        response_format: { type: "json_object" }
+      });
+
+      const content = response.choices[0].message.content;
+      if (!content) {
+        throw new Error("No response from AI");
+      }
+
+      const soapSections = JSON.parse(content);
+      
+      return {
+        subjective: soapSections.subjective || "Patient reports [information to be documented]...",
+        objective: soapSections.objective || "On examination [findings to be documented]...",
+        assessment: soapSections.assessment || "Clinical impression [analysis to be completed]...",
+        plan: soapSections.plan || "Treatment plan includes [interventions to be planned]..."
+      };
+
+    } catch (error) {
+      console.error("Error generating SOAP sections:", error);
+      
+      // Fallback to basic template
+      return {
+        subjective: `Patient reports: ${transcript.slice(0, 200)}...`,
+        objective: "Physical examination findings to be documented during assessment.",
+        assessment: "Clinical assessment and reasoning to be completed based on subjective and objective findings.",
+        plan: "Treatment plan and interventions to be developed based on assessment."
+      };
+    }
+  }
 }
 
 export const realTimeAIService = RealTimeAIService.getInstance();

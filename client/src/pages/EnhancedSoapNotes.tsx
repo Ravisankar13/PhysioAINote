@@ -139,17 +139,92 @@ export default function EnhancedSoapNotesPage() {
     const newMessage: PhysioGPTMessage = {
       id: Date.now(),
       query,
-      answer: "Analyzing your clinical question... This would connect to the real PhysioGPT service for instant clinical consultation.",
+      answer: "Processing your question...",
       timestamp: new Date().toISOString()
     };
     
     setPhysioGptChat(prev => [...prev, newMessage]);
     setChatInput("");
-    
-    // Simulate response delay
-    setTimeout(() => {
+
+    try {
+      // Create context for PhysioGPT
+      const context = {
+        transcript: realTimeTranscript,
+        currentSection: 'subjective', // Default section
+        patientSymptoms: extractSymptomsFromTranscript(realTimeTranscript),
+        bodyPart: extractBodyPartFromTranscript(realTimeTranscript),
+        sessionDuration: Math.floor(recordingTime / 60)
+      };
+
+      const response = await fetch(`/api/physiogpt/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          message: `${query}\n\nClinical Context:\n- Body Part: ${context.bodyPart}\n- Symptoms: ${context.patientSymptoms.join(', ')}\n- Transcript Context: ${context.transcript.slice(-300)}`,
+          patientContext: {
+            bodyPart: context.bodyPart,
+            symptoms: context.patientSymptoms,
+            transcript: context.transcript.slice(-300)
+          }
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get PhysioGPT response');
+      }
+
+      const data = await response.json();
+
+      setPhysioGptChat(prev => 
+        prev.map(msg => 
+          msg.id === newMessage.id 
+            ? { ...msg, answer: data.response || data.answer || data.message || "Response received successfully" }
+            : msg
+        )
+      );
+
+    } catch (error) {
+      console.error('Error handling PhysioGPT query:', error);
+      setPhysioGptChat(prev => 
+        prev.map(msg => 
+          msg.id === newMessage.id 
+            ? { ...msg, answer: "I'm experiencing technical difficulties. Please try again or consult clinical resources directly." }
+            : msg
+        )
+      );
+    } finally {
       setIsChatLoading(false);
-    }, 1500);
+    }
+  };
+
+  // Helper functions to extract context from transcript
+  const extractSymptomsFromTranscript = (transcript: string): string[] => {
+    const symptomKeywords = ['pain', 'ache', 'stiff', 'sore', 'swollen', 'numb', 'weak', 'tight'];
+    const symptoms = [];
+    const lowerTranscript = transcript.toLowerCase();
+    
+    for (const keyword of symptomKeywords) {
+      if (lowerTranscript.includes(keyword)) {
+        symptoms.push(keyword);
+      }
+    }
+    
+    return symptoms;
+  };
+
+  const extractBodyPartFromTranscript = (transcript: string): string => {
+    const bodyParts = ['shoulder', 'knee', 'back', 'neck', 'ankle', 'hip', 'elbow', 'wrist', 'hand', 'foot'];
+    const lowerTranscript = transcript.toLowerCase();
+    
+    for (const bodyPart of bodyParts) {
+      if (lowerTranscript.includes(bodyPart)) {
+        return bodyPart;
+      }
+    }
+    
+    return 'general';
   };
 
   // Create virtual patient from current session
@@ -320,8 +395,34 @@ export default function EnhancedSoapNotesPage() {
   // Generate SOAP sections from transcript using AI
   const generateSoapSections = async (transcript: string) => {
     try {
-      // For now, let's create basic sections based on transcript
-      // This could be enhanced with AI processing
+      const response = await fetch('/api/generate-soap-sections', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ transcript }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate SOAP sections');
+      }
+
+      const data = await response.json();
+      
+      setSoapSections({
+        subjective: data.subjective || transcript.trim(),
+        objective: data.objective || "Physical examination findings to be documented...",
+        assessment: data.assessment || "Clinical assessment based on subjective findings...",
+        plan: data.plan || "Treatment plan to be developed..."
+      });
+      
+      toast({
+        title: "SOAP Sections Generated",
+        description: "AI has analyzed your speech and created structured SOAP sections.",
+      });
+    } catch (error) {
+      console.error('Error generating SOAP sections:', error);
+      // Fallback to basic processing
       setSoapSections({
         subjective: transcript.trim(),
         objective: "Physical examination findings to be documented...",
@@ -331,14 +432,7 @@ export default function EnhancedSoapNotesPage() {
       
       toast({
         title: "SOAP Sections Generated",
-        description: "Your speech has been converted to SOAP note format.",
-      });
-    } catch (error) {
-      console.error('Error generating SOAP sections:', error);
-      toast({
-        title: "Generation Error",
-        description: "Failed to generate SOAP sections. Please try again.",
-        variant: "destructive",
+        description: "Basic SOAP sections created. AI enhancement temporarily unavailable.",
       });
     }
   };

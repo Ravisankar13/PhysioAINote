@@ -412,12 +412,24 @@ Provide overall assessment in JSON format:
    * Analyze Progressive Diagnostic Challenge responses
    */
   private async analyzeProgressiveDiagnosticChallenge(responses: any, gameContent: any): Promise<QuestionFeedback[]> {
+    console.log('Progressive Diagnostic Challenge Analysis Debug:', {
+      responsesKeys: Object.keys(responses || {}),
+      gameContentKeys: Object.keys(gameContent || {}),
+      progressiveContentExists: !!gameContent.progressiveDiagnosticChallenge
+    });
+
     const progressiveContent = gameContent.progressiveDiagnosticChallenge || {};
     const feedbacks: QuestionFeedback[] = [];
 
     // Analyze final diagnosis (frontend sends as 'primaryDiagnosis')
     const finalDiagnosis = responses['primaryDiagnosis'] || responses['final_diagnosis'] || '';
     const correctDiagnosis = progressiveContent.correctDiagnosis || '';
+    
+    console.log('Diagnosis Analysis:', {
+      finalDiagnosis,
+      correctDiagnosis,
+      hasValidDiagnosis: !!(finalDiagnosis && correctDiagnosis)
+    });
     
     if (finalDiagnosis && correctDiagnosis) {
       const diagnosisFeedback = await this.analyzeProgressiveDiagnosisCase(
@@ -431,6 +443,12 @@ Provide overall assessment in JSON format:
 
     // Analyze diagnostic reasoning (frontend sends as 'diagnosticReasoning')
     const diagnosticReasoning = responses['diagnosticReasoning'] || '';
+    
+    console.log('Reasoning Analysis:', {
+      hasReasoning: !!diagnosticReasoning,
+      reasoningLength: diagnosticReasoning.length
+    });
+    
     if (diagnosticReasoning) {
       const reasoningFeedback = await this.analyzeClinicalReasoning(
         progressiveContent,
@@ -440,6 +458,11 @@ Provide overall assessment in JSON format:
       );
       feedbacks.push(reasoningFeedback);
     }
+
+    console.log('Progressive Diagnostic Challenge Analysis Complete:', {
+      feedbackCount: feedbacks.length,
+      feedbackIds: feedbacks.map(f => f.questionId)
+    });
 
     return feedbacks;
   }
@@ -555,7 +578,7 @@ Provide analysis in JSON format:
         questionText,
         userResponse: userReasoning,
         aiAnalysis: result.analysis || 'Clinical reasoning analyzed',
-        score: this.safeScore(result.score) || 75,
+        score: this.safeScore(result.score, 75),
         strengths: result.strengths || ['Good clinical thinking'],
         improvements: result.improvements || ['Continue developing reasoning skills'],
         clinicalReasoning: result.clinicalReasoning || 'Sound clinical approach'
@@ -766,6 +789,36 @@ Assess the appropriateness and efficiency of test ordering. Return as JSON:
       recommendedLearning: ['Continue clinical practice', 'Review competition materials'],
       nextSteps: ['Participate in more competitions', 'Practice specific areas for improvement']
     };
+  }
+
+  /**
+   * Safe score calculation to prevent NaN values
+   */
+  private safeScore(score: any, fallback: number = 0): number {
+    const numScore = Number(score);
+    if (isNaN(numScore) || !isFinite(numScore)) {
+      return fallback;
+    }
+    return Math.max(0, Math.min(100, Math.round(numScore)));
+  }
+
+  /**
+   * Stub methods for missing game types (to prevent compilation errors)
+   */
+  private async analyzeMysteryPatient(responses: any, gameContent: any): Promise<QuestionFeedback[]> {
+    return this.analyzeGenericGame(responses, gameContent);
+  }
+
+  private async analyzeRedFlagDetective(responses: any, gameContent: any): Promise<QuestionFeedback[]> {
+    return this.analyzeGenericGame(responses, gameContent);
+  }
+
+  private async analyzeDifferentialDiagnosis(responses: any, gameContent: any): Promise<QuestionFeedback[]> {
+    return this.analyzeGenericGame(responses, gameContent);
+  }
+
+  private async analyzeChooseYourAdventure(responses: any, gameContent: any): Promise<QuestionFeedback[]> {
+    return this.analyzeGenericGame(responses, gameContent);
   }
 }
 

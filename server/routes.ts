@@ -2136,31 +2136,13 @@ Base your analysis on established postural assessment principles and correlate f
         return res.status(401).json({ error: 'User not authenticated' });
       }
 
-      // Get both original virtual patients and SOAP-based virtual patients
-      const [originalVirtualPatients, soapVirtualPatients] = await Promise.all([
-        storage.getUserVirtualPatients(userId),
-        virtualPatientService.getUserVirtualPatients(userId)
-      ]);
+      // Get original virtual patients (SOAP virtual patients table doesn't exist yet)
+      const originalVirtualPatients = await storage.getUserVirtualPatients(userId);
 
-      // Transform SOAP virtual patients to match the original format for consistent frontend display
-      const transformedSoapPatients = soapVirtualPatients.map(soapPatient => ({
-        id: `soap_${soapPatient.id}`, // Prefix to distinguish from original patients
-        patient_name: soapPatient.patientProfile?.name || 'SOAP Patient',
-        age: soapPatient.patientProfile?.age || 0,
-        gender: soapPatient.patientProfile?.gender || 'Not specified',
-        chief_complaint: soapPatient.clinicalPresentation?.chiefComplaint || 'SOAP-generated patient',
-        body_part: soapPatient.bodyPart || 'general',
-        diagnosis: soapPatient.assessmentPlan?.primaryDiagnosis || 'SOAP assessment',
-        created_at: soapPatient.createdAt,
-        user_id: soapPatient.userId,
-        type: 'soap' // Mark as SOAP-generated
-      }));
-
-      // Combine both types and sort by creation date
-      const allVirtualPatients = [
-        ...originalVirtualPatients.map(patient => ({ ...patient, type: 'original' })),
-        ...transformedSoapPatients
-      ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      // Mark all as original type and sort by creation date
+      const allVirtualPatients = originalVirtualPatients
+        .map(patient => ({ ...patient, type: 'original' }))
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
       res.json(allVirtualPatients);
     } catch (error) {

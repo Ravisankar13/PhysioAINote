@@ -76,14 +76,28 @@ export default function VirtualPatientsPage() {
   );
 }
 
-function VirtualPatientCard({ patient }: { patient: SoapVirtualPatient }) {
+function VirtualPatientCard({ patient }: { patient: any }) {
   // Add null checks to prevent undefined errors
   if (!patient) return null;
   
-  const profile = patient.patientProfile || {};
-  const presentation = patient.clinicalPresentation || {};
-  const findings = patient.physicalFindings || {};
-  const communication = patient.communicationStyle || {};
+  // Handle both original virtual patients and SOAP virtual patients
+  const isOriginalPatient = patient.type === 'original';
+  
+  const profile = isOriginalPatient ? {
+    name: patient.patient_name,
+    age: patient.age,
+    gender: patient.gender
+  } : (patient.patientProfile || {});
+  
+  const presentation = isOriginalPatient ? {
+    chiefComplaint: patient.chief_complaint
+  } : (patient.clinicalPresentation || {});
+  
+  const findings = isOriginalPatient ? {
+    inspection: patient.symptoms_description
+  } : (patient.physicalFindings || {});
+  
+  const communication = isOriginalPatient ? {} : (patient.communicationStyle || {});
 
   return (
     <Card className="hover:shadow-lg transition-shadow">
@@ -91,17 +105,14 @@ function VirtualPatientCard({ patient }: { patient: SoapVirtualPatient }) {
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
             <User className="h-5 w-5 text-blue-600" />
-            {profile.name || 'Unknown Patient'}
+            {profile.name || patient.patient_name || 'Unknown Patient'}
           </CardTitle>
           <div className="flex items-center gap-2">
             <Badge variant="outline" className="capitalize">
-              {patient.bodyPart || 'general'}
+              {patient.body_part || patient.bodyPart || 'general'}
             </Badge>
-            <Badge 
-              variant={patient.complexity === 'high' ? 'destructive' : 
-                      patient.complexity === 'medium' ? 'secondary' : 'default'}
-            >
-              {patient.complexity || 'medium'} complexity
+            <Badge variant="secondary">
+              {patient.type === 'original' ? 'Original' : 'SOAP-Generated'}
             </Badge>
           </div>
         </div>
@@ -111,7 +122,9 @@ function VirtualPatientCard({ patient }: { patient: SoapVirtualPatient }) {
             {profile.age || 'N/A'} years old
           </span>
           <span>{profile.gender || 'N/A'}</span>
-          <span>{profile.occupation || 'N/A'}</span>
+          <span className="text-blue-600 font-medium">
+            Created: {new Date(patient.created_at).toLocaleDateString()}
+          </span>
         </div>
       </CardHeader>
 
@@ -127,13 +140,15 @@ function VirtualPatientCard({ patient }: { patient: SoapVirtualPatient }) {
           </p>
         </div>
 
-        {/* Pain Scale */}
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-gray-700">Pain Level:</span>
-          <div className="flex items-center gap-1">
-            <span className="text-lg font-bold text-red-600">{presentation.painScale || 0}</span>
-            <span className="text-sm text-gray-500">/10</span>
-          </div>
+        {/* Diagnosis */}
+        <div>
+          <h4 className="font-medium text-sm text-gray-800 mb-1 flex items-center gap-1">
+            <Activity className="h-3 w-3 text-blue-500" />
+            Diagnosis
+          </h4>
+          <p className="text-sm text-gray-700 bg-blue-50 p-2 rounded">
+            {isOriginalPatient ? patient.diagnosis : (patient.assessmentPlan?.primaryDiagnosis || 'No diagnosis documented')}
+          </p>
         </div>
 
         <Separator />

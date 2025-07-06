@@ -33,6 +33,7 @@ import { soapNotesService } from "./soapNotesService";
 import { bodyScannerService, SymptomData } from "./bodyScannerService";
 import { realTimeAIService } from "./realtimeAIService";
 import { virtualPatientService } from "./virtualPatientService";
+import { soapVirtualPatientService } from "./soapVirtualPatientService";
 import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, exercises, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, insertSoapNoteSchema, bodyScans, insertBodyScanSchema } from "@shared/schema";
 import { ZodError, z } from "zod";
 import { fromZodError } from "zod-validation-error";
@@ -3195,6 +3196,40 @@ Base your analysis on established postural assessment principles and correlate f
         res.json(updatedPatient);
       }
     } catch (error) {
+      if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
+      }
+    }
+  });
+
+  // Create virtual patient from SOAP notes
+  app.post("/api/soap-virtual-patients", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { soapSections, transcript, sessionDuration, timestamp } = req.body;
+
+      // Validate required data
+      if (!soapSections || (!soapSections.subjective && !soapSections.objective)) {
+        return res.status(400).json({ error: 'Insufficient SOAP data to create virtual patient' });
+      }
+
+      // Use the SOAP Virtual Patient Service to create a virtual patient
+      const virtualPatient = await soapVirtualPatientService.createVirtualPatientFromSOAP({
+        soapSections,
+        transcript,
+        sessionDuration,
+        userId
+      });
+
+      res.json(virtualPatient);
+    } catch (error) {
+      console.error("Error creating virtual patient from SOAP:", error);
       if (error instanceof Error) {
         res.status(500).json({ error: error.message });
       } else {

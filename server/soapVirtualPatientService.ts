@@ -19,6 +19,49 @@ export interface VirtualPatientGenerationResult {
 
 export class SoapVirtualPatientService {
   /**
+   * Create a virtual patient from SOAP sections
+   */
+  async createVirtualPatientFromSOAP(params: {
+    soapSections: {
+      subjective: string;
+      objective: string;
+      assessment: string;
+      plan: string;
+    };
+    transcript?: string;
+    sessionDuration?: number;
+    userId: number;
+  }): Promise<VirtualPatientGenerationResult> {
+    try {
+      const { soapSections, transcript, sessionDuration, userId } = params;
+
+      // Generate virtual patient using AI with SOAP sections
+      const virtualPatientData = await this.generateVirtualPatientFromSections(soapSections, transcript);
+
+      // Determine body part from SOAP sections
+      const bodyPart = this.extractBodyPartFromSOAP(soapSections);
+
+      // Create virtual patient in the main virtual patients table for compatibility
+      const virtualPatientResult = await this.createCompatibleVirtualPatient({
+        userId,
+        virtualPatientData,
+        bodyPart,
+        soapSections
+      });
+
+      return {
+        virtualPatient: virtualPatientResult,
+        success: true,
+        message: "Virtual patient created successfully from SOAP notes"
+      };
+
+    } catch (error) {
+      console.error("Error creating virtual patient from SOAP:", error);
+      throw new Error(`Failed to create virtual patient: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
    * Create a virtual patient from a SOAP note
    */
   async createVirtualPatientFromSoapNote(
@@ -338,6 +381,205 @@ Return the virtual patient in JSON format with this exact structure:
     } catch (error) {
       console.error("Error deleting virtual patient:", error);
       return false;
+    }
+  }
+
+  /**
+   * Generate virtual patient data from SOAP sections
+   */
+  private async generateVirtualPatientFromSections(
+    soapSections: {
+      subjective: string;
+      objective: string;
+      assessment: string;
+      plan: string;
+    },
+    transcript?: string
+  ): Promise<any> {
+    try {
+      const prompt = this.constructVirtualPatientPromptFromSections(soapSections, transcript);
+
+      // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: "You are an expert physiotherapist creating realistic virtual patient profiles from clinical notes. Generate comprehensive, anonymized patient profiles that maintain clinical accuracy while protecting privacy."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.7,
+        max_tokens: 3000
+      });
+
+      const responseContent = response.choices[0].message.content;
+      if (!responseContent) {
+        throw new Error("Empty response from OpenAI");
+      }
+
+      const virtualPatientData = JSON.parse(responseContent);
+      virtualPatientData.generationPrompt = prompt;
+
+      return virtualPatientData;
+
+    } catch (error) {
+      console.error("Error generating virtual patient with AI:", error);
+      throw new Error(`AI generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Construct prompt for creating virtual patient from SOAP sections
+   */
+  private constructVirtualPatientPromptFromSections(
+    soapSections: {
+      subjective: string;
+      objective: string;
+      assessment: string;
+      plan: string;
+    },
+    transcript?: string
+  ): string {
+    return `
+Create a comprehensive virtual patient profile based on the following SOAP note sections. The virtual patient should be realistic, detailed, and suitable for training purposes while maintaining complete anonymization.
+
+SOAP NOTE SECTIONS:
+Subjective: ${soapSections.subjective || 'Not provided'}
+Objective: ${soapSections.objective || 'Not provided'}
+Assessment: ${soapSections.assessment || 'Not provided'}
+Plan: ${soapSections.plan || 'Not provided'}
+
+${transcript ? `Full Transcription: ${transcript}` : ''}
+
+INSTRUCTIONS:
+1. Create a realistic patient profile that could have presented with the symptoms and findings described
+2. Anonymize completely - use fictional names and details
+3. Expand on the clinical information to create a comprehensive case
+4. Include realistic patient personality and communication style
+5. Ensure consistency between all sections
+6. Make the case appropriate for physiotherapy training
+
+Return the virtual patient in JSON format with this exact structure:
+{
+  "patientProfile": {
+    "name": "realistic fictional name",
+    "age": number (appropriate for condition),
+    "gender": "male/female/other",
+    "occupation": "relevant occupation",
+    "lifestyle": "lifestyle description including activity level",
+    "medicalHistory": ["relevant past medical conditions"],
+    "currentMedications": ["current medications if any"],
+    "familyHistory": "relevant family medical history"
+  },
+  "clinicalPresentation": {
+    "chiefComplaint": "main reason for seeking treatment",
+    "historyOfPresentIllness": "detailed history of current problem",
+    "painScale": number (0-10),
+    "functionalLimitations": ["specific functional restrictions"],
+    "symptomsTimeline": "when symptoms started and progression",
+    "aggravatingFactors": ["things that make symptoms worse"],
+    "relievingFactors": ["things that help symptoms"]
+  },
+  "physicalFindings": {
+    "inspection": "visual assessment findings",
+    "palpation": "palpation findings",
+    "rangeOfMotion": "ROM findings with measurements",
+    "strengthTesting": "strength testing results",
+    "specialTests": ["specific orthopedic tests performed"],
+    "neurologicalAssessment": "neurological findings",
+    "functionalTests": ["functional movement assessments"]
+  },
+  "communicationStyle": {
+    "personality": "patient personality traits",
+    "communicationPreferences": "how patient prefers to communicate",
+    "concerns": ["patient's main concerns and fears"],
+    "expectations": ["what patient hopes to achieve"],
+    "motivationLevel": "high/moderate/low with explanation",
+    "complianceHistory": "likelihood to follow treatment recommendations"
+  },
+  "complexity": "beginner/intermediate/advanced",
+  "estimatedDuration": "estimated treatment duration (e.g., 4-6 weeks)",
+  "prognosis": "expected outcome and recovery potential"
+}
+    `;
+  }
+
+  /**
+   * Extract body part from SOAP sections using AI analysis
+   */
+  private extractBodyPartFromSOAP(soapSections: {
+    subjective: string;
+    objective: string;
+    assessment: string;
+    plan: string;
+  }): string {
+    const allContent = `${soapSections.subjective} ${soapSections.objective} ${soapSections.assessment} ${soapSections.plan}`.toLowerCase();
+    
+    // Simple keyword matching for body parts
+    const bodyPartMap = {
+      shoulder: ['shoulder', 'glenohumeral', 'rotator cuff', 'subacromial'],
+      knee: ['knee', 'patella', 'patellofemoral', 'meniscus', 'acl', 'pcl', 'mcl', 'lcl'],
+      back: ['back', 'spine', 'lumbar', 'thoracic', 'vertebral', 'disc'],
+      neck: ['neck', 'cervical', 'c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7'],
+      hip: ['hip', 'femoral', 'acetabular', 'trochanter', 'groin'],
+      ankle: ['ankle', 'achilles', 'calcaneus', 'tibial', 'fibular'],
+      foot: ['foot', 'plantar', 'metatarsal', 'tarsal', 'toe'],
+      elbow: ['elbow', 'radial', 'ulnar', 'humerus', 'epicondyle'],
+      wrist: ['wrist', 'carpal', 'scaphoid', 'radius', 'ulna'],
+      hand: ['hand', 'finger', 'thumb', 'metacarpal', 'phalanx']
+    };
+
+    for (const [bodyPart, keywords] of Object.entries(bodyPartMap)) {
+      if (keywords.some(keyword => allContent.includes(keyword))) {
+        return bodyPart;
+      }
+    }
+
+    return 'other';
+  }
+
+  /**
+   * Create compatible virtual patient for main virtual patients table
+   */
+  private async createCompatibleVirtualPatient(params: {
+    userId: number;
+    virtualPatientData: any;
+    bodyPart: string;
+    soapSections: any;
+  }): Promise<any> {
+    try {
+      // We need to import the storage and virtual patients table
+      const { storage } = await import("./storage");
+      
+      // Create a virtual patient using the existing storage interface
+      const virtualPatientInput = {
+        userId: params.userId,
+        patient_name: params.virtualPatientData.patientProfile?.name || "Virtual Patient",
+        age: params.virtualPatientData.patientProfile?.age || 35,
+        gender: params.virtualPatientData.patientProfile?.gender || "other",
+        chief_complaint: params.virtualPatientData.clinicalPresentation?.chiefComplaint || "Pain and functional limitations",
+        symptoms_description: params.virtualPatientData.clinicalPresentation?.historyOfPresentIllness || "Patient presents with symptoms requiring physiotherapy intervention",
+        body_part: params.bodyPart,
+        past_medical_history: Array.isArray(params.virtualPatientData.patientProfile?.medicalHistory) 
+          ? params.virtualPatientData.patientProfile.medicalHistory.join(', ') 
+          : params.virtualPatientData.patientProfile?.medicalHistory || "",
+        objective_findings: JSON.stringify(params.virtualPatientData.physicalFindings || {}),
+        source: "soap_notes",
+        complexity_level: params.virtualPatientData.complexity || "intermediate",
+        status: "active"
+      };
+
+      const createdPatient = await storage.createVirtualPatient(virtualPatientInput);
+      return createdPatient;
+
+    } catch (error) {
+      console.error("Error creating compatible virtual patient:", error);
+      throw new Error(`Failed to create virtual patient: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 }

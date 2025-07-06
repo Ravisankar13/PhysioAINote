@@ -80,34 +80,9 @@ export default function EnhancedSoapNotesPage() {
   const [isWebSocketConnected, setIsWebSocketConnected] = useState(false);
   const [expandedSections, setExpandedSections] = useState<{[key: string]: boolean}>({});
   
-  // Motion capture integration state
-  const [showMotionCaptureIntegration, setShowMotionCaptureIntegration] = useState(false);
-  const [capturedMotionData, setCapturedMotionData] = useState<any>(null);
-  const [isCreatingEnhancedPatient, setIsCreatingEnhancedPatient] = useState(false);
+  const [isCreatingVirtualPatient, setIsCreatingVirtualPatient] = useState(false);
 
-  // Motion capture data interface
-  interface MotionCaptureData {
-    poseData: Array<{
-      timestamp: number;
-      keypoints: Array<{
-        x: number;
-        y: number;
-        confidence: number;
-      }>;
-    }>;
-    analysis: {
-      duration: number;
-      totalFrames: number;
-      avgConfidence: number;
-      movementPatterns: string[];
-      identifiedDysfunctions: string[];
-    };
-    metadata: {
-      captureDate: string;
-      sessionId: string;
-      bodyPart: string;
-    };
-  }
+
   
   // Refs
   const intervalRef = useRef<NodeJS.Timeout>();

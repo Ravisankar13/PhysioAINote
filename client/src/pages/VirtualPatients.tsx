@@ -5,10 +5,12 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { User, Calendar, Activity, Heart, Brain, FileText, Users, Edit2, Check, X } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { User, Calendar, Activity, Heart, Brain, FileText, Users, Edit2, Check, X, Camera, Video } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { SoapVirtualPatient } from "@shared/schema";
+import MotionCapture from "@/components/MotionCapture";
 
 export default function VirtualPatientsPage() {
   // Get all virtual patients for user
@@ -84,6 +86,9 @@ export default function VirtualPatientsPage() {
 function VirtualPatientCard({ patient }: { patient: any }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState('');
+  const [showMotionCapture, setShowMotionCapture] = useState(false);
+  const [capturedMotionData, setCapturedMotionData] = useState<any>(null);
+  const [isAddingMotionData, setIsAddingMotionData] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
@@ -132,6 +137,34 @@ function VirtualPatientCard({ patient }: { patient: any }) {
       toast({
         title: "Error",
         description: error.message || "Failed to rename virtual patient",
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Add motion capture data mutation
+  const addMotionDataMutation = useMutation({
+    mutationFn: async (motionData: any) => {
+      const response = await apiRequest(
+        'POST',
+        `/api/virtual-patients/${patient.id}/motion-data`,
+        { motionData }
+      );
+      return await response.json();
+    },
+    onSuccess: () => {
+      setShowMotionCapture(false);
+      setCapturedMotionData(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/virtual-patients"] });
+      toast({
+        title: "Digital Twin Enhanced",
+        description: "Motion capture data has been added to create a comprehensive digital patient twin!"
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to add motion capture data",
         variant: "destructive"
       });
     }
@@ -326,6 +359,42 @@ function VirtualPatientCard({ patient }: { patient: any }) {
           </div>
         )}
 
+        {/* Motion Capture Section */}
+        <div className="pt-2 border-t">
+          {patient.motionData ? (
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm text-green-600">
+                <Video className="h-4 w-4" />
+                <span className="font-medium">Digital Twin Complete</span>
+              </div>
+              <Badge variant="secondary" className="text-xs bg-green-100 text-green-700">
+                Motion Data ✓
+              </Badge>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <Camera className="h-4 w-4" />
+                  <span>Enhance with Motion Capture</span>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowMotionCapture(true)}
+                  className="text-xs"
+                >
+                  <Video className="h-3 w-3 mr-1" />
+                  Add Motion Data
+                </Button>
+              </div>
+              <p className="text-xs text-gray-500">
+                Add real movement patterns to create a comprehensive digital patient twin
+              </p>
+            </div>
+          )}
+        </div>
+
         {/* Metadata */}
         <div className="pt-2 border-t text-xs text-gray-500 flex items-center justify-between">
           <span className="flex items-center gap-1">
@@ -335,6 +404,37 @@ function VirtualPatientCard({ patient }: { patient: any }) {
           <span>Est. Duration: {patient.estimatedDuration}</span>
         </div>
       </CardContent>
+
+      {/* Motion Capture Dialog */}
+      <Dialog open={showMotionCapture} onOpenChange={setShowMotionCapture}>
+        <DialogContent className="max-w-4xl h-[80vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Video className="h-5 w-5 text-blue-600" />
+              Enhance Virtual Patient: {profile.name || patient.patient_name}
+            </DialogTitle>
+            <p className="text-sm text-gray-600">
+              Capture movement patterns to create a comprehensive digital patient twin combining clinical data with real biomechanics
+            </p>
+          </DialogHeader>
+          
+          <div className="flex-1 overflow-hidden">
+            <MotionCapture
+              onComplete={(motionData) => {
+                setCapturedMotionData(motionData);
+                addMotionDataMutation.mutate(motionData);
+              }}
+              onError={(error) => {
+                toast({
+                  title: "Motion Capture Error",
+                  description: error,
+                  variant: "destructive",
+                });
+              }}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

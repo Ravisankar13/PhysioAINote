@@ -3296,6 +3296,64 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
 
+  // Add motion capture data to virtual patient
+  app.post("/api/virtual-patients/:id/motion-data", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { id } = req.params;
+      const { motionData } = req.body;
+
+      const patientId = parseInt(id);
+      if (isNaN(patientId)) {
+        return res.status(400).json({ error: 'Invalid patient ID' });
+      }
+
+      // Validate motion data
+      if (!motionData) {
+        return res.status(400).json({ error: 'Motion data is required' });
+      }
+
+      // Get the virtual patient to verify ownership
+      const virtualPatient = await storage.getVirtualPatient(patientId);
+      if (!virtualPatient) {
+        return res.status(404).json({ error: 'Virtual patient not found' });
+      }
+
+      // Ensure the virtual patient belongs to the authenticated user
+      if (virtualPatient.userId !== userId) {
+        return res.status(403).json({ error: 'You do not have permission to modify this virtual patient' });
+      }
+
+      // Update the patient with motion capture data to create digital twin
+      const updatedPatient = await storage.updateVirtualPatient(patientId, {
+        motionData: JSON.stringify(motionData),
+        enhancedAt: new Date()
+      });
+
+      if (!updatedPatient) {
+        return res.status(500).json({ error: 'Failed to add motion capture data' });
+      }
+
+      res.json({
+        success: true,
+        message: 'Motion capture data added successfully - Digital twin created!',
+        virtualPatient: updatedPatient
+      });
+
+    } catch (error) {
+      console.error("Error adding motion capture data:", error);
+      if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
+      }
+    }
+  });
+
   // Peer Knowledge Exchange - Shared Cases Operations
   app.get("/api/shared-cases", async (req: Request, res: Response) => {
     try {

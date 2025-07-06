@@ -18,6 +18,8 @@ interface PoseFrame {
 interface MotionCaptureProps {
   onMotionDataCapture?: (data: PoseFrame[]) => void;
   onAnalysisComplete?: (data: any) => void;
+  onComplete?: (data: any) => void;
+  onError?: (error: string) => void;
   previousData?: any;
   staticPosturalData?: any;
   className?: string;
@@ -26,6 +28,8 @@ interface MotionCaptureProps {
 export default function MotionCapture({ 
   onMotionDataCapture, 
   onAnalysisComplete,
+  onComplete,
+  onError,
   previousData,
   staticPosturalData,
   className 
@@ -277,6 +281,11 @@ export default function MotionCapture({
       
       setError(errorMessage);
       setIsLoading(false);
+      
+      // Call onError callback if provided
+      if (onError) {
+        onError(errorMessage);
+      }
     }
   }, [selectedCameraId, cameraFacing]);
 
@@ -458,14 +467,21 @@ export default function MotionCapture({
         console.log('Virtual patient created:', patientProfile);
         
         // Call the completion callback if provided
+        const completedData = {
+          motionData: currentFrames,
+          analysis: motionAnalysis,
+          virtualPatient: patientProfile,
+          staticPosturalCorrelations: staticPosturalData ? 
+            generateStaticMotionCorrelations(staticPosturalData, motionAnalysis) : []
+        };
+
         if (onAnalysisComplete) {
-          onAnalysisComplete({
-            motionData: currentFrames,
-            analysis: motionAnalysis,
-            virtualPatient: patientProfile,
-            staticPosturalCorrelations: staticPosturalData ? 
-              generateStaticMotionCorrelations(staticPosturalData, motionAnalysis) : []
-          });
+          onAnalysisComplete(completedData);
+        }
+
+        // Call the onComplete callback for Virtual Patients page integration
+        if (onComplete) {
+          onComplete(completedData);
         }
         
       } else {

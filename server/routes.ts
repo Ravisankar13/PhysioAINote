@@ -3511,7 +3511,10 @@ Focus on clinical reasoning, evidence-based practice, and educational value.`;
       }
 
       // Search for relevant research papers
-      const relevantPapers = await storage.searchResearchPapers(bodyPart, `${diagnosis} ${symptoms}`.trim(), 5);
+      const searchQuery = `${diagnosis} ${symptoms}`.trim();
+      const relevantPapers = await storage.searchResearchPapers(searchQuery, { 
+        bodyPart: bodyPart 
+      });
 
       // Import OpenAI service for relevance scoring
       const openai = (await import("./openai")).openai;

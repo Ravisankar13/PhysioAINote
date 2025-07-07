@@ -3354,6 +3354,90 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
 
+  // Save 3D Visualization for Virtual Patient
+  app.post("/api/virtual-patients/:id/save-3d-visualization", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { id } = req.params;
+      const { motionData, analysis, clinicalCorrelations } = req.body;
+
+      const patientId = parseInt(id);
+      if (isNaN(patientId)) {
+        return res.status(400).json({ error: 'Invalid patient ID' });
+      }
+
+      // Validate motion data
+      if (!motionData || !Array.isArray(motionData) || motionData.length === 0) {
+        return res.status(400).json({ error: 'Valid motion data is required' });
+      }
+
+      // Try to get virtual patient from SOAP virtual patients
+      const virtualPatient = await soapVirtualPatientService.getVirtualPatient(patientId, userId);
+      if (!virtualPatient) {
+        return res.status(404).json({ error: 'Virtual patient not found' });
+      }
+
+      // Import the 3D visualization service
+      const { threeDVisualizationService } = await import('./threeDVisualizationService');
+
+      // Generate 3D visualization data
+      const threeDVisualization = await threeDVisualizationService.generate3DVisualization(
+        motionData,
+        {
+          dysfunctionPatterns: analysis?.identifiedDysfunctions || [],
+          compensationMechanisms: clinicalCorrelations || [],
+          movementQuality: analysis?.avgConfidence || 0.8
+        }
+      );
+
+      // Update the virtual patient with motion capture and 3D visualization data
+      const updateData = {
+        motionCaptureData: {
+          landmarks: motionData.map((frame: any) => ({
+            timestamp: frame.timestamp,
+            landmarks: frame.landmarks || frame.worldLandmarks || []
+          })),
+          analysis: {
+            totalFrames: motionData.length,
+            duration: analysis?.duration || 0,
+            movementQuality: analysis?.avgConfidence || 0.8,
+            avgLandmarksPerFrame: motionData.filter((f: any) => (f.landmarks || f.worldLandmarks || []).length > 0).length
+          },
+          dysfunctionPatterns: analysis?.identifiedDysfunctions || [],
+          compensationMechanisms: clinicalCorrelations || [],
+          clinicalCorrelations: clinicalCorrelations || []
+        },
+        threeDVisualization,
+        hasMotionData: true
+      };
+
+      const updatedPatient = await soapVirtualPatientService.updateVirtualPatient(patientId, updateData, userId);
+
+      if (!updatedPatient) {
+        return res.status(500).json({ error: 'Failed to save 3D visualization data' });
+      }
+
+      res.json({
+        success: true,
+        message: '3D Digital Twin created successfully with motion capture visualization!',
+        virtualPatient: updatedPatient,
+        threeDVisualization: threeDVisualization
+      });
+
+    } catch (error) {
+      console.error("Error saving 3D visualization:", error);
+      if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
+      }
+    }
+  });
+
   // AI Analysis for Virtual Patient
   app.post("/api/virtual-patients/:id/ai-analysis", ensureAuthenticated, async (req: Request, res: Response) => {
     try {

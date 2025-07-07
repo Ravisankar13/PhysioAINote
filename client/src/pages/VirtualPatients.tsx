@@ -766,16 +766,79 @@ export default function VirtualPatientsPage() {
 
           {/* 3D Visualization Area */}
           <div className="flex-1 relative bg-gradient-to-b from-gray-800 to-gray-900">
-            {movementData ? (
+            {selectedPatient?.threeDVisualization ? (
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="text-center text-white">
-                  <div className="w-64 h-64 bg-gray-700 rounded-lg mb-4 flex items-center justify-center">
+                  <div className="w-64 h-64 bg-gray-700 rounded-lg mb-4 flex items-center justify-center relative">
                     <div className="text-6xl">🏃‍♂️</div>
+                    <Badge className="absolute top-2 right-2 bg-green-600 text-white">
+                      3D Ready
+                    </Badge>
                   </div>
-                  <p className="text-lg font-medium mb-2">3D Patient Model</p>
-                  <p className="text-gray-300 text-sm">
-                    Real-time movement visualization with {movementData.capturedMovements.length} captured frames
+                  <p className="text-lg font-medium mb-2">3D Digital Twin Active</p>
+                  <p className="text-gray-300 text-sm mb-4">
+                    Complete skeletal model with {selectedPatient.threeDVisualization.animationSequences?.length || 0} animation frames
                   </p>
+                  
+                  {/* 3D Visualization Stats */}
+                  <div className="grid grid-cols-2 gap-4 max-w-md mx-auto">
+                    <div className="bg-gray-800 p-3 rounded-lg">
+                      <div className="text-blue-400 text-lg font-semibold">
+                        {selectedPatient.threeDVisualization.skeletalMesh?.bones?.length || 0}
+                      </div>
+                      <div className="text-xs text-gray-300">Bone Joints</div>
+                    </div>
+                    <div className="bg-gray-800 p-3 rounded-lg">
+                      <div className="text-green-400 text-lg font-semibold">
+                        {selectedPatient.threeDVisualization.movementHeatmap?.length || 0}
+                      </div>
+                      <div className="text-xs text-gray-300">Tracked Joints</div>
+                    </div>
+                    <div className="bg-gray-800 p-3 rounded-lg">
+                      <div className="text-yellow-400 text-lg font-semibold">
+                        {selectedPatient.threeDVisualization.clinicalAnnotations?.length || 0}
+                      </div>
+                      <div className="text-xs text-gray-300">Clinical Notes</div>
+                    </div>
+                    <div className="bg-gray-800 p-3 rounded-lg">
+                      <div className="text-purple-400 text-lg font-semibold">
+                        {selectedPatient.threeDVisualization.animationSequences?.length || 0}
+                      </div>
+                      <div className="text-xs text-gray-300">Keyframes</div>
+                    </div>
+                  </div>
+
+                  {/* Movement Quality Heatmap */}
+                  {selectedPatient.threeDVisualization.movementHeatmap && selectedPatient.threeDVisualization.movementHeatmap.length > 0 && (
+                    <div className="mt-6 max-w-md mx-auto">
+                      <h4 className="text-sm font-medium text-gray-300 mb-3">Movement Quality Analysis</h4>
+                      <div className="space-y-2">
+                        {selectedPatient.threeDVisualization.movementHeatmap.slice(0, 5).map((joint, index) => (
+                          <div key={index} className="flex items-center justify-between text-xs">
+                            <span className="text-gray-300 capitalize">{joint.jointName}</span>
+                            <div className="flex items-center gap-2">
+                              <div className="w-20 h-2 bg-gray-700 rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full rounded-full ${
+                                    joint.problemAreas ? 'bg-red-500' : 
+                                    joint.intensity > 70 ? 'bg-yellow-500' : 'bg-green-500'
+                                  }`}
+                                  style={{ width: `${joint.intensity}%` }}
+                                />
+                              </div>
+                              <span className={
+                                joint.problemAreas ? 'text-red-400' : 
+                                joint.intensity > 70 ? 'text-yellow-400' : 'text-green-400'
+                              }>
+                                {joint.intensity.toFixed(0)}%
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {showComparisonMode && (
                     <div className="mt-4 flex justify-center gap-4">
                       <div className="text-center">
@@ -792,6 +855,25 @@ export default function VirtualPatientsPage() {
                       </div>
                     </div>
                   )}
+                </div>
+              </div>
+            ) : movementData ? (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="text-center text-white">
+                  <div className="w-64 h-64 bg-gray-700 rounded-lg mb-4 flex items-center justify-center">
+                    <div className="text-6xl">🏃‍♂️</div>
+                  </div>
+                  <p className="text-lg font-medium mb-2">Motion Data Available</p>
+                  <p className="text-gray-300 text-sm mb-4">
+                    Basic movement data with {movementData.capturedMovements.length} captured frames
+                  </p>
+                  <Button 
+                    onClick={() => setShowMotionCapture(true)}
+                    className="bg-orange-600 hover:bg-orange-700"
+                  >
+                    <Video className="h-4 w-4 mr-2" />
+                    Upgrade to 3D Twin
+                  </Button>
                 </div>
               </div>
             ) : (
@@ -930,6 +1012,111 @@ export default function VirtualPatientsPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* 3D Visualization Details */}
+            {selectedPatient?.threeDVisualization && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <Activity className="h-4 w-4" />
+                    3D Digital Twin Details
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="bg-gray-50 p-2 rounded">
+                        <div className="font-semibold text-blue-600">
+                          {selectedPatient.threeDVisualization.skeletalMesh?.vertices?.length || 0}
+                        </div>
+                        <div className="text-gray-600">3D Vertices</div>
+                      </div>
+                      <div className="bg-gray-50 p-2 rounded">
+                        <div className="font-semibold text-green-600">
+                          {selectedPatient.threeDVisualization.skeletalMesh?.bones?.length || 0}
+                        </div>
+                        <div className="text-gray-600">Bone Joints</div>
+                      </div>
+                    </div>
+
+                    {/* Clinical Annotations */}
+                    {selectedPatient.threeDVisualization.clinicalAnnotations && selectedPatient.threeDVisualization.clinicalAnnotations.length > 0 && (
+                      <div className="space-y-2">
+                        <h4 className="text-xs font-medium text-gray-700">Clinical Annotations</h4>
+                        {selectedPatient.threeDVisualization.clinicalAnnotations.slice(0, 3).map((annotation, index) => (
+                          <div key={index} className={`p-2 rounded text-xs ${
+                            annotation.severity === 'severe' ? 'bg-red-50 border-l-2 border-red-500' :
+                            annotation.severity === 'moderate' ? 'bg-orange-50 border-l-2 border-orange-500' :
+                            annotation.severity === 'mild' ? 'bg-yellow-50 border-l-2 border-yellow-500' :
+                            'bg-green-50 border-l-2 border-green-500'
+                          }`}>
+                            <div className={`font-medium ${
+                              annotation.severity === 'severe' ? 'text-red-800' :
+                              annotation.severity === 'moderate' ? 'text-orange-800' :
+                              annotation.severity === 'mild' ? 'text-yellow-800' :
+                              'text-green-800'
+                            }`}>
+                              {annotation.severity.toUpperCase()} Issue
+                            </div>
+                            <div className="text-gray-700 mt-1">{annotation.text}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Movement Quality Top Issues */}
+                    {selectedPatient.threeDVisualization.movementHeatmap && (
+                      <div className="space-y-2">
+                        <h4 className="text-xs font-medium text-gray-700">Movement Quality Issues</h4>
+                        {selectedPatient.threeDVisualization.movementHeatmap
+                          .filter(joint => joint.problemAreas || joint.intensity > 70)
+                          .slice(0, 3)
+                          .map((joint, index) => (
+                            <div key={index} className="flex justify-between items-center text-xs p-2 bg-red-50 rounded">
+                              <span className="font-medium text-red-800 capitalize">{joint.jointName}</span>
+                              <span className="text-red-600">{joint.intensity.toFixed(0)}% abnormal</span>
+                            </div>
+                          ))}
+                      </div>
+                    )}
+
+                    {/* Generation Info */}
+                    <div className="pt-2 border-t border-gray-200 text-xs text-gray-500">
+                      <div>Generated: {selectedPatient.threeDVisualization.generatedAt ? 
+                        new Date(selectedPatient.threeDVisualization.generatedAt).toLocaleDateString() : 'Unknown'}</div>
+                      <div className="mt-1">
+                        Camera: [{selectedPatient.threeDVisualization.cameraSettings?.position?.join(', ') || 'Default'}]
+                      </div>
+                    </div>
+
+                    {/* Export Options */}
+                    <div className="pt-2 border-t border-gray-200">
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        className="w-full text-xs"
+                        onClick={() => {
+                          const dataStr = JSON.stringify(selectedPatient.threeDVisualization, null, 2);
+                          const dataBlob = new Blob([dataStr], {type: 'application/json'});
+                          const url = URL.createObjectURL(dataBlob);
+                          const link = document.createElement('a');
+                          link.href = url;
+                          link.download = `3d-visualization-patient-${selectedPatient.id}.json`;
+                          link.click();
+                          URL.revokeObjectURL(url);
+                          toast({
+                            title: "3D Data Exported",
+                            description: "3D visualization data downloaded successfully",
+                          });
+                        }}
+                      >
+                        Export 3D Data
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Clinical Value Visualization */}
             <Card>
@@ -1070,18 +1257,80 @@ export default function VirtualPatientsPage() {
       <Dialog open={showMotionCapture} onOpenChange={setShowMotionCapture}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Motion Capture</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Camera className="h-5 w-5" />
+              Motion Capture for 3D Digital Twin
+            </DialogTitle>
           </DialogHeader>
-          <MotionCapture 
-            onComplete={(data) => {
-              // Handle motion capture completion
-              setShowMotionCapture(false);
-              // Reload patient data to include new motion data
-              if (selectedPatient) {
-                loadEnhancedPatientData(selectedPatient);
-              }
-            }}
-          />
+          <div className="space-y-4">
+            <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <h4 className="font-semibold text-blue-800 mb-2">3D Visualization Creation</h4>
+              <p className="text-sm text-blue-700">
+                Capture patient movements to generate comprehensive 3D digital twin with:
+              </p>
+              <ul className="text-sm text-blue-700 mt-2 space-y-1">
+                <li>• Real-time skeletal mesh reconstruction</li>
+                <li>• Animation sequences from captured movement</li>
+                <li>• Movement heatmaps showing problem areas</li>
+                <li>• Clinical annotations on dysfunction patterns</li>
+                <li>• 3D biomechanical analysis integration</li>
+              </ul>
+            </div>
+            <MotionCapture 
+              onComplete={async (data) => {
+                try {
+                  setIsLoadingAnalysis(true);
+                  
+                  // Process and save 3D visualization data
+                  if (data.motionData && data.motionData.length > 0 && selectedPatient) {
+                    toast({
+                      title: "Processing 3D Visualization",
+                      description: "Converting motion data into 3D digital twin...",
+                    });
+
+                    // Save motion capture data with 3D visualization
+                    const response = await apiRequest(
+                      'POST', 
+                      `/api/virtual-patients/${selectedPatient.id}/save-3d-visualization`,
+                      {
+                        motionData: data.motionData,
+                        analysis: data.analysis,
+                        clinicalCorrelations: data.staticPosturalCorrelations || []
+                      }
+                    );
+
+                    if (response.ok) {
+                      const result = await response.json();
+                      toast({
+                        title: "3D Digital Twin Created",
+                        description: "Motion capture data saved with 3D visualization successfully!",
+                      });
+                      
+                      setShowMotionCapture(false);
+                      // Reload patient data to include new 3D visualization
+                      loadEnhancedPatientData(selectedPatient);
+                    } else {
+                      throw new Error('Failed to save 3D visualization');
+                    }
+                  } else {
+                    toast({
+                      title: "No Motion Data",
+                      description: "Please capture some movement data first.",
+                      variant: "destructive"
+                    });
+                  }
+                } catch (error: any) {
+                  toast({
+                    title: "3D Visualization Error",
+                    description: error.message || "Failed to create 3D visualization",
+                    variant: "destructive"
+                  });
+                } finally {
+                  setIsLoadingAnalysis(false);
+                }
+              }}
+            />
+          </div>
         </DialogContent>
       </Dialog>
 

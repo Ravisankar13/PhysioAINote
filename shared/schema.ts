@@ -434,6 +434,44 @@ export const soapVirtualPatients = pgTable("soap_virtual_patients", {
     combinedTreatmentPlan: string;
   }>(),
   
+  // 3D Visualization Data for Motion Capture
+  threeDVisualization: json("three_d_visualization").$type<{
+    skeletalMesh: {
+      vertices: number[][];
+      faces: number[][];
+      bones: Array<{
+        name: string;
+        position: number[];
+        rotation: number[];
+        parent?: string;
+      }>;
+    };
+    animationSequences: Array<{
+      timestamp: number;
+      keyframes: Array<{
+        boneName: string;
+        position: number[];
+        rotation: number[];
+      }>;
+    }>;
+    cameraSettings: {
+      position: number[];
+      target: number[];
+      fov: number;
+    };
+    movementHeatmap: Array<{
+      jointName: string;
+      intensity: number;
+      problemAreas: boolean;
+    }>;
+    clinicalAnnotations: Array<{
+      position: number[];
+      text: string;
+      severity: 'normal' | 'mild' | 'moderate' | 'severe';
+    }>;
+    generatedAt: string;
+  }>(),
+  
   // AI Generation Metadata
   aiGeneratedAt: timestamp("ai_generated_at").defaultNow().notNull(),
   generationPrompt: text("generation_prompt"),

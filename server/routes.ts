@@ -3493,17 +3493,25 @@ Focus on clinical reasoning, evidence-based practice, and educational value.`;
         return res.status(404).json({ error: 'Virtual patient not found' });
       }
 
-      // Extract key search terms
-      const bodyPart = virtualPatient.body_part || virtualPatient.primaryBodyPart || 'general';
-      const diagnosis = virtualPatient.diagnosis || virtualPatient.assessmentPlan?.primaryDiagnosis || '';
-      const symptoms = virtualPatient.symptoms_description || virtualPatient.clinicalPresentation?.historyOfPresentIllness || '';
+      // Extract key search terms - handle both table structures
+      let bodyPart, diagnosis, symptoms, chiefComplaint;
+      
+      if ('body_part' in virtualPatient) {
+        // Old virtualPatients table structure (snake_case)
+        bodyPart = virtualPatient.body_part || 'general';
+        diagnosis = virtualPatient.diagnosis || '';
+        symptoms = virtualPatient.symptoms_description || '';
+        chiefComplaint = virtualPatient.chief_complaint || '';
+      } else {
+        // New soapVirtualPatients table structure (camelCase with JSON fields)
+        bodyPart = virtualPatient.bodyPart || 'general';
+        diagnosis = virtualPatient.assessmentPlan?.primaryDiagnosis || '';
+        symptoms = virtualPatient.clinicalPresentation?.historyOfPresentIllness || '';
+        chiefComplaint = virtualPatient.clinicalPresentation?.chiefComplaint || '';
+      }
 
       // Search for relevant research papers
-      const relevantPapers = await storage.searchResearchPapers({
-        bodyPart: bodyPart,
-        searchTerm: `${diagnosis} ${symptoms}`.trim(),
-        limit: 5
-      });
+      const relevantPapers = await storage.searchResearchPapers(bodyPart, `${diagnosis} ${symptoms}`.trim(), 5);
 
       // Import OpenAI service for relevance scoring
       const openai = (await import("./openai")).openai;
@@ -3518,7 +3526,7 @@ Patient Case:
 - Body Part: ${bodyPart}
 - Diagnosis: ${diagnosis}
 - Symptoms: ${symptoms}
-- Chief Complaint: ${virtualPatient.chief_complaint || virtualPatient.clinicalPresentation?.chiefComplaint}
+- Chief Complaint: ${chiefComplaint}
 
 Research Paper:
 - Title: ${paper.title}

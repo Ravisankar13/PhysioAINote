@@ -64,8 +64,8 @@ export class EnhancedVirtualPatientService {
       
       // Create virtual patient in database
       const [createdVirtualPatient] = await db.insert(soapVirtualPatients).values({
-        soapNoteId: soapNoteId,
-        userId: userId,
+        soap_note_id: soapNoteId,
+        user_id: userId,
         patientProfile: virtualPatientData.patientProfile,
         clinicalPresentation: virtualPatientData.clinicalPresentation,
         physicalFindings: virtualPatientData.physicalFindings,
@@ -372,8 +372,8 @@ export class EnhancedVirtualPatientService {
       
       // Create virtual patient in database
       const [createdVirtualPatient] = await db.insert(soapVirtualPatients).values({
-        soapNoteId: null, // No associated SOAP note since created directly from sections
-        userId: userId,
+        soap_note_id: null, // No associated SOAP note since created directly from sections
+        user_id: userId,
         patientProfile: virtualPatientData.patientProfile,
         clinicalPresentation: virtualPatientData.clinicalPresentation,
         physicalFindings: virtualPatientData.physicalFindings,

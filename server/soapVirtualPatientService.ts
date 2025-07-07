@@ -86,7 +86,7 @@ export class SoapVirtualPatientService {
       const existingVirtualPatient = await db
         .select()
         .from(soapVirtualPatients)
-        .where(eq(soapVirtualPatients.soapNoteId, soapNoteId))
+        .where(eq(soapVirtualPatients.soap_note_id, soapNoteId))
         .limit(1);
 
       if (existingVirtualPatient.length > 0) {
@@ -287,7 +287,7 @@ Return the virtual patient in JSON format with this exact structure:
       const virtualPatient = await db
         .select()
         .from(soapVirtualPatients)
-        .where(eq(soapVirtualPatients.soapNoteId, soapNoteId))
+        .where(eq(soapVirtualPatients.soap_note_id, soapNoteId))
         .limit(1);
 
       if (!virtualPatient[0] || virtualPatient[0].userId !== userId) {

@@ -3461,7 +3461,141 @@ Focus on clinical reasoning, evidence-based practice, and educational value.`;
     }
   });
 
-  // Find Relevant Research for Virtual Patient
+  // Find Relevant Research for Virtual Patient (GET route)
+  app.get("/api/virtual-patients/:id/research", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { id } = req.params;
+      const patientId = parseInt(id);
+      if (isNaN(patientId)) {
+        return res.status(400).json({ error: 'Invalid patient ID' });
+      }
+
+      // Try to get virtual patient from both storage systems
+      let virtualPatient;
+      
+      try {
+        // First try SOAP virtual patients
+        virtualPatient = await soapVirtualPatientService.getVirtualPatient(patientId, userId);
+      } catch (error) {
+        // Fallback to original virtual patients
+        virtualPatient = await storage.getVirtualPatient(patientId);
+        if (virtualPatient && virtualPatient.userId !== userId) {
+          return res.status(403).json({ error: 'You do not have permission to access this virtual patient' });
+        }
+      }
+
+      if (!virtualPatient) {
+        return res.status(404).json({ error: 'Virtual patient not found' });
+      }
+
+      // Extract key search terms - handle both table structures
+      let bodyPart, diagnosis, symptoms, chiefComplaint;
+      
+      if ('body_part' in virtualPatient) {
+        // Old virtualPatients table structure (snake_case)
+        bodyPart = virtualPatient.body_part || 'general';
+        diagnosis = virtualPatient.diagnosis || '';
+        symptoms = virtualPatient.symptoms_description || '';
+        chiefComplaint = virtualPatient.chief_complaint || '';
+      } else {
+        // New soapVirtualPatients table structure (camelCase with JSON fields)
+        bodyPart = virtualPatient.bodyPart || 'general';
+        
+        // Extract diagnosis information from clinical presentation and physical findings
+        const clinicalPresentation = virtualPatient.clinicalPresentation as any;
+        const physicalFindings = virtualPatient.physicalFindings as any;
+        
+        diagnosis = '';
+        symptoms = clinicalPresentation?.historyOfPresentIllness || clinicalPresentation?.symptomsTimeline || '';
+        chiefComplaint = clinicalPresentation?.chiefComplaint || '';
+        
+        // Try to construct a diagnosis search term from available clinical data
+        const functionalLimitations = clinicalPresentation?.functionalLimitations?.join(' ') || '';
+        const specialTests = physicalFindings?.specialTests?.join(' ') || '';
+        diagnosis = `${chiefComplaint} ${functionalLimitations} ${specialTests}`.trim();
+      }
+
+      // Search for relevant research papers
+      const searchQuery = `${diagnosis} ${symptoms}`.trim();
+      const relevantPapers = await storage.searchResearchPapers(searchQuery, { 
+        bodyPart: bodyPart 
+      });
+
+      // Import OpenAI service for relevance scoring
+      const openai = (await import("./openai")).openai;
+
+      // Score relevance for each paper
+      const scoredPapers = await Promise.all(
+        relevantPapers.map(async (paper) => {
+          try {
+            const relevancePrompt = `Rate the relevance of this research paper to the patient case on a scale of 1-100:
+
+Patient Case:
+- Body Part: ${bodyPart}
+- Diagnosis: ${diagnosis}
+- Symptoms: ${symptoms}
+- Chief Complaint: ${chiefComplaint}
+
+Research Paper:
+- Title: ${paper.title}
+- Abstract: ${paper.abstract}
+- Body Part: ${paper.bodyPart}
+
+Respond with only a number between 1-100 representing the relevance score.`;
+
+            const relevanceResponse = await openai.chat.completions.create({
+              model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+              messages: [
+                {
+                  role: "system",
+                  content: "You are an expert in physiotherapy research. Rate research paper relevance to clinical cases accurately."
+                },
+                {
+                  role: "user",
+                  content: relevancePrompt
+                }
+              ],
+              temperature: 0.3,
+              max_tokens: 10
+            });
+
+            const relevanceScore = parseInt(relevanceResponse.choices[0].message.content?.trim() || '50');
+            
+            return {
+              ...paper,
+              relevanceScore: Math.min(Math.max(relevanceScore, 1), 100) // Ensure score is between 1-100
+            };
+          } catch (error) {
+            console.error("Error scoring paper relevance:", error);
+            return {
+              ...paper,
+              relevanceScore: 50 // Default score if scoring fails
+            };
+          }
+        })
+      );
+
+      // Sort by relevance score (highest first)
+      const sortedPapers = scoredPapers.sort((a, b) => b.relevanceScore - a.relevanceScore);
+
+      res.json(sortedPapers);
+
+    } catch (error) {
+      console.error("Error finding relevant research:", error);
+      if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
+      }
+    }
+  });
+
+  // Find Relevant Research for Virtual Patient (POST route)
   app.post("/api/virtual-patients/:id/relevant-research", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const userId = req.user?.id;
@@ -3505,9 +3639,19 @@ Focus on clinical reasoning, evidence-based practice, and educational value.`;
       } else {
         // New soapVirtualPatients table structure (camelCase with JSON fields)
         bodyPart = virtualPatient.bodyPart || 'general';
-        diagnosis = virtualPatient.assessmentPlan?.primaryDiagnosis || '';
-        symptoms = virtualPatient.clinicalPresentation?.historyOfPresentIllness || '';
-        chiefComplaint = virtualPatient.clinicalPresentation?.chiefComplaint || '';
+        
+        // Extract diagnosis information from clinical presentation and physical findings
+        const clinicalPresentation = virtualPatient.clinicalPresentation as any;
+        const physicalFindings = virtualPatient.physicalFindings as any;
+        
+        diagnosis = '';
+        symptoms = clinicalPresentation?.historyOfPresentIllness || clinicalPresentation?.symptomsTimeline || '';
+        chiefComplaint = clinicalPresentation?.chiefComplaint || '';
+        
+        // Try to construct a diagnosis search term from available clinical data
+        const functionalLimitations = clinicalPresentation?.functionalLimitations?.join(' ') || '';
+        const specialTests = physicalFindings?.specialTests?.join(' ') || '';
+        diagnosis = `${chiefComplaint} ${functionalLimitations} ${specialTests}`.trim();
       }
 
       // Search for relevant research papers

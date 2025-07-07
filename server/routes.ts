@@ -3375,10 +3375,26 @@ Base your analysis on established postural assessment principles and correlate f
         return res.status(400).json({ error: 'Valid motion data is required' });
       }
 
-      // Try to get virtual patient from SOAP virtual patients
-      const virtualPatient = await soapVirtualPatientService.getVirtualPatient(patientId, userId);
+      // Try to get virtual patient from either system
+      let virtualPatient;
+      let isSOAPPatient = false;
+      
+      try {
+        // First try SOAP virtual patients
+        virtualPatient = await soapVirtualPatientService.getVirtualPatient(patientId, userId);
+        if (virtualPatient) {
+          isSOAPPatient = true;
+        }
+      } catch (error) {
+        console.log('Not a SOAP virtual patient, checking regular virtual patients');
+      }
+      
       if (!virtualPatient) {
-        return res.status(404).json({ error: 'Virtual patient not found' });
+        // Fallback to regular virtual patients
+        virtualPatient = await storage.getVirtualPatient(patientId);
+        if (!virtualPatient || virtualPatient.userId !== userId) {
+          return res.status(404).json({ error: 'Virtual patient not found' });
+        }
       }
 
       // Import the 3D visualization service
@@ -3415,7 +3431,19 @@ Base your analysis on established postural assessment principles and correlate f
         hasMotionData: true
       };
 
-      const updatedPatient = await soapVirtualPatientService.updateVirtualPatient(patientId, updateData, userId);
+      let updatedPatient;
+      
+      if (isSOAPPatient) {
+        // Update SOAP virtual patient
+        updatedPatient = await soapVirtualPatientService.updateVirtualPatient(patientId, updateData, userId);
+      } else {
+        // Update regular virtual patient with motion data and 3D visualization
+        updatedPatient = await storage.updateVirtualPatient(patientId, {
+          motionData: JSON.stringify(updateData.motionCaptureData),
+          threeDVisualization: JSON.stringify(threeDVisualization),
+          enhancedAt: new Date()
+        });
+      }
 
       if (!updatedPatient) {
         return res.status(500).json({ error: 'Failed to save 3D visualization data' });

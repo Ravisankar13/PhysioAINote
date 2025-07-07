@@ -1310,6 +1310,57 @@ export const virtualPatients = pgTable("virtual_patients", {
   treatmentOptions: json("treatment_options"),
   relatedArticleIds: json("related_article_ids"),
   hasBeenEdited: boolean("has_been_edited").default(false),
+  
+  // Motion Capture Data
+  motionData: text("motion_data"), // JSON string of motion capture landmarks
+  enhancedAt: timestamp("enhanced_at"), // When motion capture was added
+  
+  // 3D Visualization Data for Motion Capture
+  threeDVisualization: json("three_d_visualization").$type<{
+    skeletalMesh: {
+      vertices: number[][];
+      faces: number[][];
+      bones: Array<{
+        name: string;
+        position: number[];
+        rotation: number[];
+        parent?: string;
+      }>;
+    };
+    animationSequences: Array<{
+      frame: number;
+      timestamp: number;
+      bonePositions: Array<{
+        boneName: string;
+        position: number[];
+        rotation: number[];
+      }>;
+    }>;
+    movementHeatmap: Array<{
+      jointName: string;
+      intensity: number;
+      problemAreas: boolean;
+      coordinates: number[];
+    }>;
+    clinicalAnnotations: Array<{
+      position: number[];
+      text: string;
+      severity: 'mild' | 'moderate' | 'severe' | 'normal';
+      timestamp?: number;
+    }>;
+    exportFormats: {
+      fbx?: string;
+      obj?: string;
+      gltf?: string;
+    };
+    cameraSettings: {
+      position: number[];
+      rotation: number[];
+      fov: number;
+    };
+    generatedAt: string;
+  }>(),
+  
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

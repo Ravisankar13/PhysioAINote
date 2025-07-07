@@ -7,7 +7,7 @@ import {
   soapNotes 
 } from "@shared/schema";
 import { db } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -265,14 +265,13 @@ Return the virtual patient in JSON format with this exact structure:
       const virtualPatient = await db
         .select()
         .from(soapVirtualPatients)
-        .where(eq(soapVirtualPatients.id, id))
+        .where(and(
+          eq(soapVirtualPatients.id, id),
+          eq(soapVirtualPatients.userId, userId)
+        ))
         .limit(1);
 
-      if (!virtualPatient[0] || virtualPatient[0].userId !== userId) {
-        return null;
-      }
-
-      return virtualPatient[0];
+      return virtualPatient[0] || null;
     } catch (error) {
       console.error("Error getting virtual patient:", error);
       return null;

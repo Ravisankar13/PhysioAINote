@@ -1383,13 +1383,21 @@ export default function VirtualPatientsPage() {
                       
                       setShowMotionCapture(false);
                       
-                      // Refresh virtual patients data to show updated 3D visualization
-                      await queryClient.invalidateQueries({ queryKey: ['/api/virtual-patients'] });
-                      
-                      // Reload enhanced patient data to include new 3D visualization
-                      if (selectedPatient) {
-                        loadEnhancedPatientData(selectedPatient);
+                      // IMMEDIATE UPDATE: Set the patient to show 3D visualization instantly
+                      if (selectedPatient && result.threeDVisualization) {
+                        const updatedPatient = {
+                          ...selectedPatient,
+                          threeDVisualization: result.threeDVisualization,
+                          hasMotionData: true
+                        };
+                        setSelectedPatient(updatedPatient);
+                        
+                        // Force immediate enhanced profile reload with new 3D data
+                        loadEnhancedPatientData(updatedPatient);
                       }
+                      
+                      // Background data refresh for persistence
+                      queryClient.invalidateQueries({ queryKey: ['/api/virtual-patients'] });
                       
                       // Force re-render by updating patient list
                       if (refetch) {

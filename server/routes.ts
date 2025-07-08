@@ -9255,7 +9255,7 @@ Respond in JSON format:
         return res.status(401).json({ error: 'User not authenticated' });
       }
 
-      const virtualPatients = await virtualPatientService.getUserVirtualPatients(userId);
+      const virtualPatients = await soapVirtualPatientService.getUserVirtualPatients(userId);
       res.json(virtualPatients);
     } catch (error: any) {
       console.error("Error getting virtual patients:", error);

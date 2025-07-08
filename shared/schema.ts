@@ -522,6 +522,9 @@ export const soapVirtualPatients = pgTable("soap_virtual_patients", {
   hasMotionData: boolean("has_motion_data").default(false).notNull(),
   hasAiAnimation: boolean("has_ai_animation").default(false).notNull(),
   
+  // Text-to-Digital Patient
+  textGeneratedDescription: text("text_generated_description"), // Clinical text input for text-to-animation
+  
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

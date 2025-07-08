@@ -8029,6 +8029,58 @@ Respond with only a number between 1-100 representing the relevance score.`;
     }
   });
 
+  // Generate animation from text input (Text-to-Digital Patient)
+  app.post("/api/virtual-patients/:id/generate-text-animation", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const virtualPatientId = parseInt(req.params.id);
+      if (isNaN(virtualPatientId)) {
+        return res.status(400).json({ error: 'Invalid virtual patient ID' });
+      }
+
+      const { soapNote } = req.body;
+      if (!soapNote || !soapNote.subjective) {
+        return res.status(400).json({ error: 'Clinical text description required' });
+      }
+
+      // Get virtual patient to verify ownership
+      const virtualPatient = await storage.getSoapVirtualPatient(virtualPatientId);
+      if (!virtualPatient || virtualPatient.userId !== userId) {
+        return res.status(404).json({ error: 'Virtual patient not found' });
+      }
+
+      console.log('Generating text-to-animation for virtual patient:', virtualPatientId);
+      console.log('Clinical text input:', soapNote.subjective.substring(0, 100) + '...');
+
+      // Generate AI movement animation from text description
+      const animationData = await aiMovementGenerator.generateMovementFromSOAP(soapNote);
+      
+      // Update virtual patient with text-generated animation data
+      const updatedVirtualPatient = await storage.updateSoapVirtualPatient(virtualPatientId, {
+        aiGeneratedPoseData: animationData.frames,
+        animationGeneratedAt: new Date(),
+        animationGenerationStatus: "complete",
+        textGeneratedDescription: soapNote.subjective,
+        hasAiAnimation: true
+      });
+
+      res.json({
+        success: true,
+        ...animationData,
+        source: "text-to-animation",
+        generatedAt: new Date(),
+        virtualPatient: updatedVirtualPatient
+      });
+    } catch (error) {
+      console.error('Error generating text animation:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Update virtual patient animation when SOAP text changes
   app.post("/api/virtual-patients/:id/update-animation", ensureAuthenticated, async (req: Request, res: Response) => {
     try {

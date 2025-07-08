@@ -165,6 +165,11 @@ export default function VirtualPatientsPage() {
   const [animationBlendMode, setAnimationBlendMode] = useState<'text-only' | 'motion-only' | 'hybrid'>('text-only');
   const [isLoadingAnimation, setIsLoadingAnimation] = useState(false);
 
+  // Text-to-Digital Patient state
+  const [textToAnimationInput, setTextToAnimationInput] = useState("");
+  const [isGeneratingFromText, setIsGeneratingFromText] = useState(false);
+  const [textAnimationResult, setTextAnimationResult] = useState<any>(null);
+
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -437,6 +442,72 @@ export default function VirtualPatientsPage() {
       savePatientName();
     } else if (e.key === 'Escape') {
       cancelEditing();
+    }
+  };
+
+  // Text-to-Digital Patient function
+  const generateAnimationFromText = async (patientId: number, clinicalText: string) => {
+    if (!clinicalText.trim()) {
+      toast({
+        title: "Input Required",
+        description: "Please enter clinical description to generate animation",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsGeneratingFromText(true);
+    try {
+      // Create a mock SOAP note structure for the AI movement generator
+      const mockSoapNote = {
+        id: Date.now(),
+        subjective: clinicalText,
+        objective: "",
+        assessment: "",
+        plan: "",
+        fullTranscription: clinicalText
+      };
+
+      // Call the AI animation generation endpoint
+      const response = await apiRequest(
+        'POST',
+        `/api/virtual-patients/${patientId}/generate-text-animation`,
+        { soapNote: mockSoapNote }
+      );
+
+      const animationData = await response.json();
+      setTextAnimationResult(animationData);
+      
+      // Update the selected patient with new animation data
+      if (selectedPatient && selectedPatient.id === patientId) {
+        const updatedPatient = {
+          ...selectedPatient,
+          threeDVisualization: {
+            ...selectedPatient.threeDVisualization,
+            textGeneratedAnimation: animationData,
+            animationSequences: animationData.frames || []
+          }
+        };
+        setSelectedPatient(updatedPatient);
+      }
+
+      // Refresh the patients list
+      queryClient.invalidateQueries({ queryKey: ['/api/virtual-patients'] });
+
+      toast({
+        title: "Animation Generated",
+        description: "Digital patient created from clinical text successfully",
+      });
+
+    } catch (error: any) {
+      console.error("Text animation generation error:", error);
+      toast({
+        title: "Generation Error",
+        description: error.message || "Failed to generate animation from text",
+        variant: "destructive"
+      });
+    } finally {
+      setIsGeneratingFromText(false);
     }
   };
 
@@ -862,7 +933,7 @@ export default function VirtualPatientsPage() {
                       <div className="text-center text-gray-400">
                         <Activity className="h-12 w-12 mx-auto mb-4" />
                         <p className="mb-4">AI Animation System Ready</p>
-                        <p className="text-sm">Motion capture will generate enhanced skeleton visualization</p>
+                        <p className="text-sm">Motion capture or text description will generate enhanced skeleton visualization</p>
                         {animationSequence && (
                           <div className="mt-4">
                             <Badge className="bg-green-600">
@@ -1313,8 +1384,70 @@ export default function VirtualPatientsPage() {
         </div>
       </div>
 
-      {/* Bottom Panel - Interactive Controls */}
+      {/* Bottom Panel - Text-to-Digital Patient & Interactive Controls */}
       <div className="bg-white border-t border-gray-200 px-6 py-4">
+        {/* Text-to-Digital Patient Interface */}
+        <div className="mb-6 p-4 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-lg border border-emerald-200">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-gray-800 font-medium flex items-center gap-2">
+              <FileText className="h-4 w-4 text-emerald-600" />
+              Text-to-Digital Patient
+            </h3>
+            <Badge variant="outline" className="text-xs text-emerald-600 border-emerald-400">
+              AI Powered
+            </Badge>
+          </div>
+          
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="lg:col-span-2">
+              <textarea
+                placeholder="Describe patient symptoms, movement patterns, or clinical findings...
+Example: 'Patient reports decreased shoulder external rotation, pain during overhead movements, visible compensation with hip hiking during arm elevation'"
+                value={textToAnimationInput}
+                onChange={(e) => setTextToAnimationInput(e.target.value)}
+                className="w-full h-20 px-3 py-2 bg-white text-gray-800 placeholder-gray-500 rounded-md border border-emerald-300 focus:border-emerald-500 focus:outline-none resize-none text-sm"
+              />
+              <div className="flex items-center justify-between mt-2">
+                <div className="text-xs text-gray-500">
+                  {textToAnimationInput.length} characters
+                </div>
+                <Button
+                  onClick={() => selectedPatient && generateAnimationFromText(selectedPatient.id!, textToAnimationInput)}
+                  disabled={!selectedPatient || !textToAnimationInput.trim() || isGeneratingFromText}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                  size="sm"
+                >
+                  {isGeneratingFromText ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="h-4 w-4 mr-2" />
+                      Generate Digital Twin
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+            
+            {textAnimationResult && (
+              <div className="bg-emerald-100 border border-emerald-300 rounded-md p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Check className="h-4 w-4 text-emerald-600" />
+                  <span className="text-emerald-700 text-sm font-medium">Digital Patient Generated</span>
+                </div>
+                <div className="text-xs text-gray-600 space-y-1">
+                  <div>Movement Patterns: {textAnimationResult.movementPatterns?.restrictions?.length || 0} identified</div>
+                  <div>Animation Frames: {textAnimationResult.frames?.length || 0} generated</div>
+                  <div>Clinical Correlations: {textAnimationResult.clinicalCorrelation?.soapFindings?.length || 0} found</div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
         <div className="flex items-center justify-between">
           
           {/* Movement Playback Controls */}

@@ -39,7 +39,8 @@ import {
   Clock,
   Zap,
   MapPin,
-  ArrowLeft
+  ArrowLeft,
+  Stethoscope
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";

@@ -38,7 +38,8 @@ import {
   TrendingUp,
   Clock,
   Zap,
-  MapPin
+  MapPin,
+  ArrowLeft
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";

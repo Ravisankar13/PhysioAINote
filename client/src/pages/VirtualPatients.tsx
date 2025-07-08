@@ -787,15 +787,29 @@ export default function VirtualPatientsPage() {
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="text-center text-white">
                   {/* 3D Interactive Skeleton Visualization */}
-                  <div className="w-64 h-64 bg-gray-700 rounded-lg mb-4 flex items-center justify-center relative overflow-hidden">
-                    {/* Three.js 3D Canvas - Animated motion data */}
-                    <ThreeDSkeletonPlayer 
-                      animationSequences={selectedPatient.threeDVisualization.animationSequences}
-                      movementHeatmap={selectedPatient.threeDVisualization.movementHeatmap}
-                      isPlaying={isPlaying}
-                      playbackTime={playbackTime}
-                      className="absolute inset-0 w-full h-full"
-                    />
+                  <div className="w-full h-96 bg-gray-700 rounded-lg mb-4 flex items-center justify-center relative overflow-hidden">
+                    {selectedPatient.threeDVisualization?.animationSequences?.length > 0 ? (
+                      /* Three.js 3D Canvas - Animated motion data */
+                      <ThreeDSkeletonPlayer 
+                        animationSequences={selectedPatient.threeDVisualization.animationSequences}
+                        movementHeatmap={selectedPatient.threeDVisualization.movementHeatmap || []}
+                        isPlaying={isPlaying}
+                        playbackTime={playbackTime}
+                        className="absolute inset-0 w-full h-full"
+                      />
+                    ) : (
+                      /* Show motion capture interface when no 3D data exists */
+                      <div className="text-center text-gray-400">
+                        <p className="mb-4">No 3D motion data available</p>
+                        <Button
+                          onClick={() => setShowMotionCapture(true)}
+                          className="bg-blue-600 hover:bg-blue-700"
+                        >
+                          <Camera className="h-4 w-4 mr-2" />
+                          Capture Motion Data
+                        </Button>
+                      </div>
+                    )}
                     
                     {/* Real-time data indicators */}
                     <div className="absolute top-2 left-2 text-xs text-cyan-400 z-20">

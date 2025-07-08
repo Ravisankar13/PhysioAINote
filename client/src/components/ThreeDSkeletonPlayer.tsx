@@ -276,6 +276,8 @@ const ThreeDSkeletonPlayer: React.FC<ThreeDSkeletonPlayerProps> = ({
       }
     };
 
+    // Start the clock when animation begins
+    clockRef.current.start();
     animate();
   };
 
@@ -285,9 +287,9 @@ const ThreeDSkeletonPlayer: React.FC<ThreeDSkeletonPlayerProps> = ({
 
     let newFrame;
     if (isPlaying) {
-      // When playing, advance automatically
+      // When playing, advance automatically using frame rate (30 FPS)
       const delta = clockRef.current.getDelta();
-      newFrame = currentFrame + (delta * animationSpeed);
+      newFrame = currentFrame + (delta * 30 * animationSpeed); // 30 FPS * speed multiplier
     } else {
       // When not playing, use the playbackTime prop for manual scrubbing
       newFrame = playbackTime;

@@ -267,7 +267,7 @@ Return the virtual patient in JSON format with this exact structure:
         .from(soapVirtualPatients)
         .where(and(
           eq(soapVirtualPatients.id, id),
-          eq(soapVirtualPatients.user_id, userId)
+          eq(soapVirtualPatients.userId, userId)
         ))
         .limit(1);
 

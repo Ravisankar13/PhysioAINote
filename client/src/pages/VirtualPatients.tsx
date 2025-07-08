@@ -43,7 +43,7 @@ import {
   Stethoscope
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { SoapVirtualPatient } from "@shared/schema";
 import MotionCapture from "@/components/MotionCapture";
 import ThreeDSkeletonPlayer from "@/components/ThreeDSkeletonPlayer";
@@ -248,18 +248,34 @@ export default function VirtualPatientsPage() {
       };
     }
     
-    // Check for stored animation data field (from API generation)
-    if (patient?.aiAnimationData?.frames?.length > 0) {
-      console.log('Found AI-generated animation frames in aiAnimationData:', patient.aiAnimationData.frames.length);
+    // Check for AI text-generated animation data in motionData field (this is the correct field from database schema)
+    if (patient?.motionData?.frames?.length > 0) {
+      console.log('Found AI-generated animation frames in motionData:', patient.motionData.frames.length);
       return {
         source: 'Text Generated',
-        frames: patient.aiAnimationData.frames,
-        animationSequences: patient.aiAnimationData.frames,
-        movementHeatmap: []
+        frames: patient.motionData.frames,
+        animationSequences: patient.motionData.frames,
+        movementHeatmap: [],
+        movementPatterns: patient.motionData.movementPatterns,
+        clinicalCorrelation: patient.motionData.clinicalCorrelation
       };
     }
     
-    // Check animationData field 
+    // Check for hasMotionData flag (from database schema)
+    if (patient?.hasMotionData && patient?.aiGenerated) {
+      console.log('Patient has AI-generated motion data flag set');
+      // Trigger fetch of animation data
+      fetchAnimationForPatient(patient.id);
+      return {
+        source: 'Text Generated (Loading)',
+        frames: [],
+        animationSequences: [],
+        movementHeatmap: [],
+        needsFetch: true
+      };
+    }
+    
+    // Fallback: Check other possible storage locations
     if (patient?.animationData?.frames?.length > 0) {
       console.log('Found AI-generated animation frames in animationData:', patient.animationData.frames.length);
       return {
@@ -270,31 +286,32 @@ export default function VirtualPatientsPage() {
       };
     }
     
-    // Check for AI text-generated animation data in motionData field
-    if (patient?.motionData?.frames?.length > 0) {
-      console.log('Found AI-generated animation frames in motionData:', patient.motionData.frames.length);
+    // Check for motion data directly stored as array
+    if (Array.isArray(patient?.motionData) && patient.motionData.length > 0) {
+      console.log('Found motion data array:', patient.motionData.length);
       return {
         source: 'Text Generated',
-        frames: patient.motionData.frames,
-        animationSequences: patient.motionData.frames,
+        frames: patient.motionData,
+        animationSequences: patient.motionData,
         movementHeatmap: []
-      };
-    }
-    
-    // Check hasAiAnimation flag and fetch animation separately
-    if (patient?.hasAiAnimation) {
-      console.log('Patient has AI animation flag set, should fetch animation data');
-      return {
-        source: 'Text Generated (Cached)',
-        frames: [],
-        animationSequences: [],
-        movementHeatmap: [],
-        needsFetch: true
       };
     }
     
     console.log('No animation data found for patient');
     return null;
+  }
+
+  // Helper function to fetch animation data for a patient
+  const fetchAnimationForPatient = async (patientId: number) => {
+    try {
+      const response = await apiRequest('POST', `/api/virtual-patients/${patientId}/animation`, {});
+      const animationData = await response.json();
+      console.log('Fetched animation data:', animationData);
+      // Trigger a re-fetch of virtual patients to update the UI
+      queryClient.invalidateQueries({ queryKey: ['/api/virtual-patients'] });
+    } catch (error) {
+      console.error('Error fetching animation data:', error);
+    }
   };
 
   // Enhanced patient data loading  

@@ -552,18 +552,33 @@ Return the virtual patient in JSON format with this exact structure:
     soapSections: any;
   }): Promise<any> {
     try {
-      // We need to import the storage and virtual patients table
-      const { storage } = await import("./storage");
-      
       // Create timestamp-based name for SOAP virtual patients
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T');
       const dateStr = timestamp[0];
       const timeStr = timestamp[1].split('.')[0];
-      const timestampName = `VP-${dateStr}-${timeStr}`;
+      const timestampName = `VP-${dateStr}-${timeStr}-${Math.floor(Math.random() * 1000)}Z`;
 
-      // Create a virtual patient using the existing storage interface
-      const virtualPatientInput = {
+      // Create virtual patient directly in soapVirtualPatients table with animation fields
+      const [createdPatient] = await db.insert(soapVirtualPatients).values({
         userId: params.userId,
+        soapNoteId: null, // No associated SOAP note since created from sections
+        title: timestampName,
+        patientProfile: params.virtualPatientData.patientProfile || {},
+        clinicalPresentation: params.virtualPatientData.clinicalPresentation || {},
+        physicalFindings: params.virtualPatientData.physicalFindings || {},
+        assessmentPlan: params.virtualPatientData.assessmentPlan || {},
+        bodyPart: params.bodyPart as any,
+        
+        // Initialize animation fields (this is crucial for animation support)
+        motionData: null,
+        hasMotionData: false,
+        aiGenerated: false,
+      }).returning();
+
+      // Return in expected format with compatible fields for frontend
+      return {
+        id: createdPatient.id,
+        userId: createdPatient.userId,
         patient_name: timestampName,
         age: params.virtualPatientData.patientProfile?.age || 35,
         gender: params.virtualPatientData.patientProfile?.gender || "other",
@@ -573,14 +588,22 @@ Return the virtual patient in JSON format with this exact structure:
         past_medical_history: Array.isArray(params.virtualPatientData.patientProfile?.medicalHistory) 
           ? params.virtualPatientData.patientProfile.medicalHistory.join(', ') 
           : params.virtualPatientData.patientProfile?.medicalHistory || "",
-        objective_findings: JSON.stringify(params.virtualPatientData.physicalFindings || {}),
-        source: "soap_notes",
-        complexity_level: params.virtualPatientData.complexity || "intermediate",
-        status: "active"
+        type: "original",
+        hasBeenEdited: false,
+        createdAt: createdPatient.createdAt,
+        updatedAt: createdPatient.updatedAt,
+        
+        // Include animation fields in response
+        motionData: createdPatient.motionData,
+        hasMotionData: createdPatient.hasMotionData,
+        aiGenerated: createdPatient.aiGenerated,
+        
+        // Legacy compatibility fields
+        diagnosis: null,
+        differentialDiagnosis: null,
+        treatmentOptions: null,
+        relatedArticleIds: null
       };
-
-      const createdPatient = await storage.createVirtualPatient(virtualPatientInput);
-      return createdPatient;
 
     } catch (error) {
       console.error("Error creating compatible virtual patient:", error);

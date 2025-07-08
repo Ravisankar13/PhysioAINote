@@ -9224,21 +9224,7 @@ Respond in JSON format:
     }
   });
 
-  // Get user's virtual patients
-  app.get("/api/virtual-patients", ensureAuthenticated, async (req: Request, res: Response) => {
-    try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ error: 'User not authenticated' });
-      }
-
-      const virtualPatients = await soapVirtualPatientService.getUserVirtualPatients(userId);
-      res.json(virtualPatients);
-    } catch (error: any) {
-      console.error("Error getting virtual patients:", error);
-      res.status(500).json({ error: error.message });
-    }
-  });
+  // Duplicate route handler removed
 
   // Get specific virtual patient
   app.get("/api/virtual-patients/:id", ensureAuthenticated, async (req: Request, res: Response) => {

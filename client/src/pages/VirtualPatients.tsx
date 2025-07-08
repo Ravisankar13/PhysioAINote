@@ -145,7 +145,7 @@ export default function VirtualPatientsPage() {
   const queryClient = useQueryClient();
 
   // Get all virtual patients for user
-  const { data: virtualPatients = [], isLoading: patientsLoading } = useQuery({
+  const { data: virtualPatients = [], isLoading: patientsLoading, refetch } = useQuery({
     queryKey: ["/api/virtual-patients"],
   });
 
@@ -1382,8 +1382,19 @@ export default function VirtualPatientsPage() {
                       });
                       
                       setShowMotionCapture(false);
-                      // Reload patient data to include new 3D visualization
-                      loadEnhancedPatientData(selectedPatient);
+                      
+                      // Refresh virtual patients data to show updated 3D visualization
+                      await queryClient.invalidateQueries({ queryKey: ['/api/virtual-patients'] });
+                      
+                      // Reload enhanced patient data to include new 3D visualization
+                      if (selectedPatient) {
+                        loadEnhancedPatientData(selectedPatient);
+                      }
+                      
+                      // Force re-render by updating patient list
+                      if (refetch) {
+                        refetch();
+                      }
                     } else {
                       throw new Error('Failed to save 3D visualization');
                     }

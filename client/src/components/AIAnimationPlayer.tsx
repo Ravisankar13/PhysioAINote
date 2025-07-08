@@ -130,12 +130,11 @@ const AIAnimationPlayer: React.FC<AIAnimationPlayerProps> = ({
     };
   }, [animationFrames]);
 
+  // Animation loop effect - separate from state updates
   useEffect(() => {
-    if (!isInitialized || !animationFrames?.length) return;
+    if (!isInitialized || !animationFrames?.length || !isPlaying) return;
 
     const animate = () => {
-      if (!isPlaying) return;
-
       const frameIndex = currentFrame % animationFrames.length;
       const frame = animationFrames[frameIndex];
 
@@ -180,28 +179,76 @@ const AIAnimationPlayer: React.FC<AIAnimationPlayerProps> = ({
       if (rendererRef.current && sceneRef.current && cameraRef.current) {
         rendererRef.current.render(sceneRef.current, cameraRef.current);
       }
-
-      // Update frame
-      setCurrentFrame(prev => (prev + 1) % animationFrames.length);
-
-      // Continue animation
-      if (isPlaying) {
-        animationRef.current = requestAnimationFrame(() => {
-          setTimeout(animate, 100); // ~10 FPS for smooth viewing
-        });
-      }
     };
 
-    if (isPlaying) {
+    const animationLoop = () => {
+      if (!isPlaying) return;
+      
       animate();
-    }
+      setCurrentFrame(prev => (prev + 1) % animationFrames.length);
+      
+      animationRef.current = requestAnimationFrame(() => {
+        setTimeout(animationLoop, 100); // ~10 FPS for smooth viewing
+      });
+    };
+
+    animationLoop();
 
     return () => {
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [isPlaying, currentFrame, animationFrames, isInitialized]);
+  }, [isPlaying, isInitialized, animationFrames?.length]);
+
+  // Render current frame when frame changes
+  useEffect(() => {
+    if (!isInitialized || !animationFrames?.length) return;
+
+    const frame = animationFrames[currentFrame % animationFrames.length];
+    
+    // Clear previous skeleton
+    if (skeletonRef.current) {
+      skeletonRef.current.clear();
+    }
+
+    // Draw joints
+    frame.landmarks.forEach((landmark, index) => {
+      if (landmark.visibility > 0.5) {
+        const geometry = new THREE.SphereGeometry(0.02, 8, 8);
+        const material = new THREE.MeshBasicMaterial({ 
+          color: landmark.visibility > 0.8 ? 0x00ff00 : 0xffff00 
+        });
+        const sphere = new THREE.Mesh(geometry, material);
+        sphere.position.set(landmark.x, landmark.y, landmark.z);
+        skeletonRef.current!.add(sphere);
+      }
+    });
+
+    // Draw bones
+    boneConnections.forEach(([startIdx, endIdx]) => {
+      const start = frame.landmarks[startIdx];
+      const end = frame.landmarks[endIdx];
+      
+      if (start && end && start.visibility > 0.5 && end.visibility > 0.5) {
+        const geometry = new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(start.x, start.y, start.z),
+          new THREE.Vector3(end.x, end.y, end.z)
+        ]);
+        const material = new THREE.LineBasicMaterial({ 
+          color: 0x00aaff,
+          linewidth: 2
+        });
+        const line = new THREE.Line(geometry, material);
+        skeletonRef.current!.add(line);
+      }
+    });
+
+    // Render
+    if (rendererRef.current && sceneRef.current && cameraRef.current) {
+      rendererRef.current.render(sceneRef.current, cameraRef.current);
+    }
+  }, [currentFrame, isInitialized, animationFrames]);
 
   // Handle window resize
   useEffect(() => {

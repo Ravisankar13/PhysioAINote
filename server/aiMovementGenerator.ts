@@ -188,12 +188,27 @@ Focus on realistic, clinically accurate movement patterns that would be visible 
    */
   private generatePoseSequence(analysis: any): GeneratedMovementData['frames'] {
     const frames: GeneratedMovementData['frames'] = [];
-    const frameCount = 120; // 4 seconds at 30 FPS
-    const duration = 4000; // 4 seconds in milliseconds
+    const frameCount = 120; // 12 seconds at 10 FPS
+    const duration = 12000; // 12 seconds in milliseconds
 
     for (let i = 0; i < frameCount; i++) {
       const timestamp = (i / frameCount) * duration;
-      const landmarks = this.generateLandmarksForFrame(i, frameCount, analysis);
+      
+      // Create movement progression showing restrictions
+      const progress = i / frameCount;
+      let movementPhase: 'rest' | 'attempt' | 'restricted' | 'compensation' = 'rest';
+      
+      if (progress < 0.2) {
+        movementPhase = 'rest';
+      } else if (progress < 0.5) {
+        movementPhase = 'attempt'; // Person tries to move
+      } else if (progress < 0.8) {
+        movementPhase = 'restricted'; // Shows limitation
+      } else {
+        movementPhase = 'compensation'; // Shows compensatory movement
+      }
+      
+      const landmarks = this.generateLandmarksForFrame(i, frameCount, analysis, movementPhase);
       
       frames.push({
         timestamp,
@@ -210,7 +225,8 @@ Focus on realistic, clinically accurate movement patterns that would be visible 
   private generateLandmarksForFrame(
     frameIndex: number, 
     totalFrames: number, 
-    analysis: any
+    analysis: any,
+    movementPhase: 'rest' | 'attempt' | 'restricted' | 'compensation' = 'rest'
   ): Array<{ x: number; y: number; z: number; visibility: number }> {
     const landmarks: Array<{ x: number; y: number; z: number; visibility: number }> = [];
     
@@ -224,7 +240,8 @@ Focus on realistic, clinically accurate movement patterns that would be visible 
           skeletonLandmark,
           frameIndex,
           totalFrames,
-          analysis.patterns
+          analysis.patterns,
+          movementPhase
         );
         
         landmarks.push({
@@ -254,45 +271,105 @@ Focus on realistic, clinically accurate movement patterns that would be visible 
     landmark: SkeletonLandmark,
     frameIndex: number,
     totalFrames: number,
-    patterns: any
+    patterns: any,
+    movementPhase: 'rest' | 'attempt' | 'restricted' | 'compensation' = 'rest'
   ): [number, number, number] {
     let [x, y, z] = landmark.defaultPosition;
     
-    // Add subtle breathing movement
-    const breathingCycle = Math.sin((frameIndex / totalFrames) * Math.PI * 4) * 0.01;
-    if (landmark.name.includes('shoulder') || landmark.name === 'nose') {
-      y += breathingCycle;
-    }
-
-    // Apply restrictions based on clinical findings
-    if (patterns?.restrictions) {
-      for (const restriction of patterns.restrictions) {
-        if (this.landmarkMatchesBodyPart(landmark.name, restriction.bodyPart)) {
-          const restrictionFactor = restriction.severity / 10;
-          
-          // Reduce range of motion based on restriction type
-          if (restriction.limitationType.includes('flexion')) {
-            y *= (1 - restrictionFactor * 0.3);
-          }
-          if (restriction.limitationType.includes('rotation')) {
-            x *= (1 - restrictionFactor * 0.2);
-          }
-          if (restriction.limitationType.includes('elevation')) {
-            y *= (1 - restrictionFactor * 0.4);
+    // Create different movement patterns based on phase and clinical restrictions
+    const progress = frameIndex / totalFrames;
+    
+    // Apply movement based on phase
+    switch (movementPhase) {
+      case 'rest':
+        // Neutral position with subtle breathing
+        const breathingCycle = Math.sin(progress * Math.PI * 8) * 0.01;
+        if (landmark.name.includes('shoulder') || landmark.name === 'nose') {
+          y += breathingCycle;
+        }
+        break;
+        
+      case 'attempt':
+        // Person attempts normal movement
+        if (patterns?.restrictions) {
+          for (const restriction of patterns.restrictions) {
+            if (this.landmarkMatchesBodyPart(landmark.name, restriction.bodyPart)) {
+              // Show attempted movement - starts normal then gets restricted
+              const attemptProgress = Math.sin(progress * Math.PI * 2);
+              
+              if (restriction.bodyPart.includes('shoulder')) {
+                // Attempt shoulder elevation/flexion
+                y += attemptProgress * 0.3;
+                if (restriction.bodyPart.includes('right')) {
+                  x += attemptProgress * 0.1;
+                } else if (restriction.bodyPart.includes('left')) {
+                  x -= attemptProgress * 0.1;
+                }
+              }
+              
+              if (restriction.bodyPart.includes('spine')) {
+                // Attempt forward bending
+                z += attemptProgress * 0.2;
+                y -= attemptProgress * 0.1;
+              }
+            }
           }
         }
-      }
-    }
-
-    // Add compensatory movements
-    if (patterns?.compensations) {
-      for (const compensation of patterns.compensations) {
-        if (compensation.bodyPartsInvolved?.includes(landmark.name.replace('_', ' '))) {
-          // Add slight compensation movement
-          const compensationPhase = Math.sin((frameIndex / totalFrames) * Math.PI * 2) * 0.05;
-          x += compensationPhase;
+        break;
+        
+      case 'restricted':
+        // Shows the limitation - movement stops at restriction point
+        if (patterns?.restrictions) {
+          for (const restriction of patterns.restrictions) {
+            if (this.landmarkMatchesBodyPart(landmark.name, restriction.bodyPart)) {
+              const restrictionFactor = restriction.severity / 10;
+              const limitedProgress = Math.min(progress, 0.3); // Can only achieve 30% of normal range
+              
+              if (restriction.bodyPart.includes('shoulder')) {
+                // Limited shoulder movement
+                y += limitedProgress * 0.2 * (1 - restrictionFactor);
+                if (restriction.bodyPart.includes('right')) {
+                  x += limitedProgress * 0.05 * (1 - restrictionFactor);
+                } else if (restriction.bodyPart.includes('left')) {
+                  x -= limitedProgress * 0.05 * (1 - restrictionFactor);
+                }
+              }
+              
+              if (restriction.bodyPart.includes('spine')) {
+                // Limited forward bending
+                z += limitedProgress * 0.1 * (1 - restrictionFactor);
+                y -= limitedProgress * 0.05 * (1 - restrictionFactor);
+              }
+            }
+          }
         }
-      }
+        break;
+        
+      case 'compensation':
+        // Shows compensatory movement patterns
+        if (patterns?.compensations) {
+          for (const compensation of patterns.compensations) {
+            for (const bodyPart of compensation.bodyPartsInvolved) {
+              if (this.landmarkMatchesBodyPart(landmark.name, bodyPart)) {
+                const compensationCycle = Math.sin(progress * Math.PI * 3);
+                
+                // Exaggerated compensatory movements
+                if (bodyPart.includes('left') && compensation.primaryRestriction.includes('right')) {
+                  // Left side compensates for right side restriction
+                  y += compensationCycle * 0.15;
+                  x -= compensationCycle * 0.1;
+                }
+                
+                if (bodyPart.includes('trunk') || bodyPart.includes('spine')) {
+                  // Trunk compensation
+                  x += compensationCycle * 0.08;
+                  z += compensationCycle * 0.05;
+                }
+              }
+            }
+          }
+        }
+        break;
     }
 
     return [x, y, z];

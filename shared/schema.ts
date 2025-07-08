@@ -339,7 +339,7 @@ export const soapVirtualPatients = pgTable("soap_virtual_patients", {
     .references(() => soapNotes.id, { onDelete: "cascade" }),
   
   // Core Patient Information
-  patientProfile: json("patient_profile").$type<{
+  patientProfile: json("patientProfile").$type<{
     name: string;
     age: number;
     gender: string;
@@ -351,7 +351,7 @@ export const soapVirtualPatients = pgTable("soap_virtual_patients", {
   }>().notNull(),
   
   // Clinical Presentation
-  clinicalPresentation: json("clinical_presentation").$type<{
+  clinicalPresentation: json("clinicalPresentation").$type<{
     chiefComplaint: string;
     historyOfPresentIllness: string;
     painScale: number;
@@ -362,7 +362,7 @@ export const soapVirtualPatients = pgTable("soap_virtual_patients", {
   }>().notNull(),
   
   // Physical Examination
-  physicalFindings: json("physical_findings").$type<{
+  physicalFindings: json("physicalFindings").$type<{
     inspection: string;
     palpation: string;
     rangeOfMotion: string;
@@ -373,7 +373,7 @@ export const soapVirtualPatients = pgTable("soap_virtual_patients", {
   }>().notNull(),
   
   // Patient Communication Style
-  communicationStyle: json("communication_style").$type<{
+  communicationStyle: json("communicationStyle").$type<{
     personality: string;
     communicationPreferences: string;
     concerns: string[];
@@ -383,13 +383,13 @@ export const soapVirtualPatients = pgTable("soap_virtual_patients", {
   }>().notNull(),
   
   // Clinical Context
-  bodyPart: bodyPartEnum("body_part").notNull(),
+  bodyPart: bodyPartEnum("bodyPart").notNull(),
   complexity: text("complexity").notNull(), // beginner, intermediate, advanced
-  estimatedDuration: text("estimated_duration"), // e.g., "6-8 weeks"
+  estimatedDuration: text("estimatedDuration"), // e.g., "6-8 weeks"
   prognosis: text("prognosis"),
   
   // Motion Capture Integration (Digital Patient Twin Data)
-  motionCaptureData: json("motion_capture_data").$type<{
+  motionCaptureData: json("motionData").$type<{
     landmarks: Array<{
       timestamp: number;
       landmarks: Array<{
@@ -523,10 +523,10 @@ export const soapVirtualPatients = pgTable("soap_virtual_patients", {
   hasAiAnimation: boolean("has_ai_animation").default(false).notNull(),
   
   // Text-to-Digital Patient
-  textGeneratedDescription: text("text_generated_description"), // Clinical text input for text-to-animation
+  textGeneratedDescription: text("textGeneratedDescription"), // Clinical text input for text-to-animation
   
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export const insertSoapVirtualPatientSchema = createInsertSchema(soapVirtualPatients).omit({

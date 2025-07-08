@@ -44,6 +44,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { SoapVirtualPatient } from "@shared/schema";
 import MotionCapture from "@/components/MotionCapture";
+import ThreeDSkeletonPlayer from "@/components/ThreeDSkeletonPlayer";
 
 // Enhanced Virtual Patient interface for left panel
 interface EnhancedPatientProfile {
@@ -769,63 +770,16 @@ export default function VirtualPatientsPage() {
             {selectedPatient && selectedPatient?.threeDVisualization ? (
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="text-center text-white">
-                  {/* 3D Skeleton Visualization */}
+                  {/* 3D Interactive Skeleton Visualization */}
                   <div className="w-64 h-64 bg-gray-700 rounded-lg mb-4 flex items-center justify-center relative overflow-hidden">
-                    {/* 3D Canvas Background */}
-                    <canvas 
-                      id="skeleton-canvas"
+                    {/* Three.js 3D Canvas - Animated motion data */}
+                    <ThreeDSkeletonPlayer 
+                      animationSequences={selectedPatient.threeDVisualization.animationSequences}
+                      movementHeatmap={selectedPatient.threeDVisualization.movementHeatmap}
+                      isPlaying={isPlaying}
+                      playbackTime={playbackTime}
                       className="absolute inset-0 w-full h-full"
-                      style={{ background: 'linear-gradient(135deg, #374151 0%, #1f2937 100%)' }}
                     />
-                    
-                    {/* SVG Skeleton Overlay */}
-                    <svg
-                      viewBox="0 0 300 400"
-                      className="absolute inset-0 w-full h-full z-10"
-                      style={{ filter: 'drop-shadow(0 0 8px rgba(59, 130, 246, 0.4))' }}
-                    >
-                      {/* Head */}
-                      <circle cx="150" cy="60" r="20" fill="#3b82f6" stroke="#60a5fa" strokeWidth="2" />
-                      
-                      {/* Spine */}
-                      <line x1="150" y1="80" x2="150" y2="220" stroke="#3b82f6" strokeWidth="3" />
-                      
-                      {/* Left Arm */}
-                      <line x1="150" y1="110" x2="120" y2="150" stroke="#3b82f6" strokeWidth="2" />
-                      <line x1="120" y1="150" x2="100" y2="190" stroke="#3b82f6" strokeWidth="2" />
-                      <circle cx="120" cy="150" r="4" fill="#60a5fa" />
-                      <circle cx="100" cy="190" r="4" fill="#60a5fa" />
-                      
-                      {/* Right Arm */}
-                      <line x1="150" y1="110" x2="180" y2="150" stroke="#3b82f6" strokeWidth="2" />
-                      <line x1="180" y1="150" x2="200" y2="190" stroke="#3b82f6" strokeWidth="2" />
-                      <circle cx="180" cy="150" r="4" fill="#60a5fa" />
-                      <circle cx="200" cy="190" r="4" fill="#60a5fa" />
-                      
-                      {/* Left Leg */}
-                      <line x1="150" y1="220" x2="130" y2="290" stroke="#3b82f6" strokeWidth="3" />
-                      <line x1="130" y1="290" x2="125" y2="350" stroke="#3b82f6" strokeWidth="3" />
-                      <circle cx="130" cy="290" r="5" fill="#ef4444" className="animate-pulse" />
-                      <circle cx="125" cy="350" r="4" fill="#60a5fa" />
-                      
-                      {/* Right Leg */}
-                      <line x1="150" y1="220" x2="170" y2="290" stroke="#3b82f6" strokeWidth="3" />
-                      <line x1="170" y1="290" x2="175" y2="350" stroke="#3b82f6" strokeWidth="3" />
-                      <circle cx="170" cy="290" r="5" fill="#60a5fa" />
-                      <circle cx="175" cy="350" r="4" fill="#60a5fa" />
-                      
-                      {/* Problem area highlight - Hip */}
-                      <circle cx="130" cy="290" r="12" fill="none" stroke="#ef4444" strokeWidth="2" opacity="0.7">
-                        <animate attributeName="r" values="12;18;12" dur="2s" repeatCount="indefinite" />
-                      </circle>
-                      
-                      {/* Movement quality indicators */}
-                      {Array.from({ length: 6 }, (_, i) => (
-                        <circle key={i} cx={120 + i * 10} cy={40} r="1.5" fill="#22d3ee" opacity="0.8">
-                          <animate attributeName="opacity" values="0.8;0.2;0.8" dur="1.5s" repeatCount="indefinite" begin={`${i * 0.3}s`} />
-                        </circle>
-                      ))}
-                    </svg>
                     
                     {/* Real-time data indicators */}
                     <div className="absolute top-2 left-2 text-xs text-cyan-400 z-20">

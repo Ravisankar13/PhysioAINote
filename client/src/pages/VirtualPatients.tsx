@@ -45,6 +45,7 @@ import { apiRequest } from "@/lib/queryClient";
 import type { SoapVirtualPatient } from "@shared/schema";
 import MotionCapture from "@/components/MotionCapture";
 import ThreeDSkeletonPlayer from "@/components/ThreeDSkeletonPlayer";
+import AnimatedInteractiveSkeleton from "@/components/virtualPatient/AnimatedInteractiveSkeleton";
 
 // Enhanced Virtual Patient interface for left panel
 interface EnhancedPatientProfile {
@@ -850,15 +851,29 @@ export default function VirtualPatientsPage() {
                 <div className="text-center text-white">
                   {/* AI-Generated Interactive Skeleton Visualization */}
                   <div className="w-full h-96 bg-gray-700 rounded-lg mb-4 flex items-center justify-center relative overflow-hidden">
-                    {/* Temporary fallback to original 3D visualization while fixing animation issues */}
                     {selectedPatient.threeDVisualization?.animationSequences?.length > 0 ? (
-                      <ThreeDSkeletonPlayer 
-                        animationSequences={selectedPatient.threeDVisualization.animationSequences}
-                        movementHeatmap={selectedPatient.threeDVisualization.movementHeatmap || []}
-                        isPlaying={isPlaying}
-                        playbackTime={playbackTime}
-                        className="absolute inset-0 w-full h-full"
-                      />
+                      /* Show both old and new visualization based on what's available */
+                      animationSequence ? (
+                        <AnimatedInteractiveSkeleton
+                          animationSequence={animationSequence}
+                          onRegionSelect={(region, displayName) => {
+                            setSelectedBodyRegion(region);
+                            console.log(`Selected body region: ${displayName}`);
+                          }}
+                          selectedRegion={selectedBodyRegion}
+                          autoPlay={true}
+                          showControls={true}
+                          height="100%"
+                        />
+                      ) : (
+                        <ThreeDSkeletonPlayer 
+                          animationSequences={selectedPatient.threeDVisualization.animationSequences}
+                          movementHeatmap={selectedPatient.threeDVisualization.movementHeatmap || []}
+                          isPlaying={isPlaying}
+                          playbackTime={playbackTime}
+                          className="absolute inset-0 w-full h-full"
+                        />
+                      )
                     ) : (
                       <div className="text-center text-gray-400">
                         <Activity className="h-12 w-12 mx-auto mb-4" />

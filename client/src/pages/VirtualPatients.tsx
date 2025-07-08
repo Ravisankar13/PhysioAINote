@@ -588,16 +588,28 @@ export default function VirtualPatientsPage() {
       // Update the animation sequence for immediate display
       if (animationResult.animationSequence) {
         setAnimationSequence(animationResult.animationSequence);
+        console.log('Setting animation sequence:', animationResult.animationSequence);
       }
       
-      // Update the selected patient to include animation data
+      // Refresh the movement data to trigger re-render
+      await getAnimationData(selectedPatient);
+      
+      // Update the selected patient to include animation data with proper structure
       const updatedPatient = {
         ...selectedPatient,
-        motionData: animationResult.motionData,
+        motionData: {
+          frames: animationResult.animationSequence?.frames || [],
+          movementPatterns: animationResult.movementPatterns,
+          clinicalCorrelation: animationResult.clinicalCorrelation,
+          animationSource: "text-to-animation",
+          generatedAt: new Date().toISOString()
+        },
         hasMotionData: true,
         aiGenerated: true
       };
       setSelectedPatient(updatedPatient);
+      
+      console.log('Updated patient with animation data:', updatedPatient.motionData);
       
       // Clear the input
       setTextToAnimationInput('');

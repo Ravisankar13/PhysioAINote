@@ -555,74 +555,54 @@ export default function VirtualPatientsPage() {
 
     setIsGeneratingFromText(true);
     try {
-      // Create a new regular virtual patient for text-to-animation (using the SOAP virtual patient service)
-      const newPatientData = {
-        soapSections: {
-          subjective: clinicalText,
-          objective: "",
-          assessment: "",
-          plan: ""
-        },
-        transcript: clinicalText,
-        sessionDuration: 0,
-        timestamp: new Date().toISOString()
-      };
-
-      console.log('Creating virtual patient for text animation...');
-      const createResponse = await apiRequest('POST', '/api/soap-virtual-patients', newPatientData);
-      if (!createResponse.ok) {
-        throw new Error(`Failed to create virtual patient: ${createResponse.statusText}`);
-      }
-      
-      const createResult = await createResponse.json();
-      const patientId = createResult.virtualPatient?.id;
-      
-      if (!patientId) {
-        throw new Error('Failed to get virtual patient ID from creation response');
+      // Check if patient is selected
+      if (!selectedPatient) {
+        throw new Error('Please select a patient card first to generate animation');
       }
 
-      console.log('Virtual patient created with ID:', patientId, 'Generating animation...');
-
-      // Create a mock SOAP note structure for the AI movement generator
-      const mockSoapNote = {
-        id: Date.now(),
-        subjective: clinicalText,
-        objective: "",
-        assessment: "",
-        plan: "",
-        fullTranscription: clinicalText
-      };
-
-      // Call the AI animation generation endpoint
-      const response = await apiRequest(
-        'POST',
-        `/api/virtual-patients/${patientId}/generate-text-animation`,
-        { soapNote: mockSoapNote }
+      console.log('Generating animation for selected patient:', selectedPatient.id);
+      
+      // Generate animation for the currently selected patient using text description
+      const animationResponse = await apiRequest(
+        'POST', 
+        `/api/virtual-patients/${selectedPatient.id}/generate-text-animation`, 
+        {
+          clinicalDescription: clinicalText,
+          patientContext: {
+            bodyPart: selectedPatient.body_part,
+            chiefComplaint: selectedPatient.chief_complaint,
+            symptoms: selectedPatient.symptoms_description
+          }
+        }
       );
 
-      if (!response.ok) {
-        throw new Error(`Animation generation failed: ${response.statusText}`);
+      if (!animationResponse.ok) {
+        throw new Error(`Animation generation failed: ${animationResponse.statusText}`);
       }
 
-      const animationData = await response.json();
-      console.log('Animation generation response:', animationData);
-      setTextAnimationResult(animationData);
+      const animationResult = await animationResponse.json();
+      setTextAnimationResult(animationResult);
       
-      // Refresh the patients list to get updated data
-      await queryClient.invalidateQueries({ queryKey: ['/api/virtual-patients'] });
-
-      // Select the newly created patient to show the animation
-      const updatedPatients = await queryClient.fetchQuery({
-        queryKey: ['/api/virtual-patients']
-      });
-      const newPatient = updatedPatients.find((p: any) => p.id === patientId);
-      if (newPatient) {
-        setSelectedPatient(newPatient);
+      // Update the animation sequence for immediate display
+      if (animationResult.animationSequence) {
+        setAnimationSequence(animationResult.animationSequence);
       }
+      
+      // Update the selected patient to include animation data
+      const updatedPatient = {
+        ...selectedPatient,
+        motionData: animationResult.motionData,
+        hasMotionData: true,
+        aiGenerated: true
+      };
+      setSelectedPatient(updatedPatient);
+      
+      // Clear the input
+      setTextToAnimationInput('');
 
       toast({
         title: "Animation Generated",
-        description: "Digital patient created from clinical text successfully",
+        description: `Successfully generated ${animationResult.animationSequence?.frames?.length || 0} animation frames for ${selectedPatient.patient_name}`,
       });
 
     } catch (error: any) {

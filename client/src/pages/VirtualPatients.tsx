@@ -1493,6 +1493,7 @@ export default function VirtualPatientsPage() {
                       throw new Error('Failed to save 3D visualization');
                     }
                   } else {
+                    console.log('No motion data - selectedPatient:', selectedPatient, 'data:', data);
                     toast({
                       title: "No Motion Data",
                       description: "Please capture some movement data first.",
@@ -1500,8 +1501,9 @@ export default function VirtualPatientsPage() {
                     });
                   }
                 } catch (error: any) {
+                  console.error('3D Visualization Error:', error);
                   toast({
-                    title: "3D Visualization Error",
+                    title: "3D Visualization Error", 
                     description: error.message || "Failed to create 3D visualization",
                     variant: "destructive"
                   });

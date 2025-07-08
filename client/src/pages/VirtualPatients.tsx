@@ -1624,7 +1624,6 @@ Example: 'Patient reports decreased shoulder external rotation, pain during over
           </ScrollArea>
         </DialogContent>
       </Dialog>
-      </div>
     </div>
   );
 }

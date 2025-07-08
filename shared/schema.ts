@@ -335,192 +335,20 @@ export const soapVirtualPatients = pgTable("soap_virtual_patients", {
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   soapNoteId: integer("soapNoteId")
-    .notNull()
     .references(() => soapNotes.id, { onDelete: "cascade" }),
   
-  // Core Patient Information
-  patientProfile: json("patientProfile").$type<{
-    name: string;
-    age: number;
-    gender: string;
-    occupation: string;
-    lifestyle: string;
-    medicalHistory: string[];
-    currentMedications: string[];
-    familyHistory: string;
-  }>().notNull(),
-  
-  // Clinical Presentation
-  clinicalPresentation: json("clinicalPresentation").$type<{
-    chiefComplaint: string;
-    historyOfPresentIllness: string;
-    painScale: number;
-    functionalLimitations: string[];
-    symptomsTimeline: string;
-    aggravatingFactors: string[];
-    relievingFactors: string[];
-  }>().notNull(),
-  
-  // Physical Examination
-  physicalFindings: json("physicalFindings").$type<{
-    inspection: string;
-    palpation: string;
-    rangeOfMotion: string;
-    strengthTesting: string;
-    specialTests: string[];
-    neurologicalAssessment: string;
-    functionalTests: string[];
-  }>().notNull(),
-  
-  // Patient Communication Style
-  communicationStyle: json("communicationStyle").$type<{
-    personality: string;
-    communicationPreferences: string;
-    concerns: string[];
-    expectations: string[];
-    motivationLevel: string;
-    complianceHistory: string;
-  }>().notNull(),
-  
-  // Clinical Context
+  // Basic Patient Information (matching actual database structure)
+  title: text("title"),
+  patientProfile: json("patientProfile"),
+  clinicalPresentation: json("clinicalPresentation"),
+  physicalFindings: json("physicalFindings"),
+  assessmentPlan: json("assessmentPlan"),
   bodyPart: bodyPartEnum("bodyPart").notNull(),
-  complexity: text("complexity").notNull(), // beginner, intermediate, advanced
-  estimatedDuration: text("estimatedDuration"), // e.g., "6-8 weeks"
-  prognosis: text("prognosis"),
   
-  // Motion Capture Integration (Digital Patient Twin Data)
-  motionCaptureData: json("motionData").$type<{
-    landmarks: Array<{
-      timestamp: number;
-      landmarks: Array<{
-        x: number;
-        y: number;
-        z: number;
-        visibility: number;
-      }>;
-    }>;
-    analysis: {
-      totalFrames: number;
-      duration: number;
-      movementQuality: number;
-      avgLandmarksPerFrame: number;
-    };
-    dysfunctionPatterns: string[];
-    compensationMechanisms: string[];
-    clinicalCorrelations: string[];
-  }>(),
-  
-  // 3D Biomechanical Analysis
-  biomechanicalAnalysis: json("biomechanical_analysis").$type<{
-    postureAssessment: {
-      frontal: string[];
-      sagittal: string[];
-      transverse: string[];
-    };
-    movementPatterns: {
-      quality: number;
-      deviations: string[];
-      restrictions: string[];
-    };
-    jointAngles: Record<string, number>;
-    asymmetries: string[];
-  }>(),
-  
-  // Integrated Clinical Presentation (SOAP + Motion)
-  integratedFindings: json("integrated_findings").$type<{
-    subjectiveMotionCorrelation: string;
-    objectiveMotionFindings: string;
-    movementAssessment: string;
-    combinedTreatmentPlan: string;
-  }>(),
-  
-  // 3D Visualization Data for Motion Capture
-  threeDVisualization: json("three_d_visualization").$type<{
-    skeletalMesh: {
-      vertices: number[][];
-      faces: number[][];
-      bones: Array<{
-        name: string;
-        position: number[];
-        rotation: number[];
-        parent?: string;
-      }>;
-    };
-    animationSequences: Array<{
-      timestamp: number;
-      keyframes: Array<{
-        boneName: string;
-        position: number[];
-        rotation: number[];
-      }>;
-    }>;
-    cameraSettings: {
-      position: number[];
-      target: number[];
-      fov: number;
-    };
-    movementHeatmap: Array<{
-      jointName: string;
-      intensity: number;
-      problemAreas: boolean;
-    }>;
-    clinicalAnnotations: Array<{
-      position: number[];
-      text: string;
-      severity: 'normal' | 'mild' | 'moderate' | 'severe';
-    }>;
-    generatedAt: string;
-  }>(),
-  
-  // AI-Generated Animation Data (Pure Text-to-Movement)
-  aiGeneratedPoseData: json("ai_generated_pose_data").$type<{
-    frames: Array<{
-      timestamp: number;
-      landmarks: Array<{
-        x: number;
-        y: number;
-        z: number;
-        visibility: number;
-      }>;
-    }>;
-    movementPatterns: {
-      restrictions: Array<{
-        bodyPart: string;
-        limitationType: string;
-        severity: number;
-        description: string;
-      }>;
-      compensations: Array<{
-        primaryRestriction: string;
-        compensatoryMovement: string;
-        bodyPartsInvolved: string[];
-      }>;
-      painResponses: Array<{
-        trigger: string;
-        response: string;
-        affectedRegions: string[];
-      }>;
-    };
-    clinicalCorrelation: {
-      soapFindings: string[];
-      movementHypotheses: string[];
-      expectedLimitations: string[];
-    };
-  }>(),
-  
-  // Animation Blend Configuration
-  animationBlendMode: text("animation_blend_mode").$type<"text-only" | "motion-only" | "hybrid">().default("text-only").notNull(),
-  lastTextAnalysisHash: text("last_text_analysis_hash"), // Track SOAP note changes
-  animationGenerationStatus: text("animation_generation_status").$type<"pending" | "generating" | "complete" | "error">().default("pending").notNull(),
-  
-  // AI Generation Metadata
-  aiGeneratedAt: timestamp("ai_generated_at").defaultNow().notNull(),
-  animationGeneratedAt: timestamp("animation_generated_at"),
-  generationPrompt: text("generation_prompt"),
-  animationPrompt: text("animation_prompt"),
-  generationModel: text("generation_model").default("gpt-4o").notNull(),
-  hasMotionData: boolean("has_motion_data").default(false).notNull(),
-  hasAiAnimation: boolean("has_ai_animation").default(false).notNull(),
+  // Motion Capture Data
+  motionData: json("motionData"),
+  hasMotionData: boolean("hasMotionData").default(false).notNull(),
+  aiGenerated: boolean("aiGenerated").default(false).notNull(),
   
   // Text-to-Digital Patient
   textGeneratedDescription: text("textGeneratedDescription"), // Clinical text input for text-to-animation
@@ -533,7 +361,6 @@ export const insertSoapVirtualPatientSchema = createInsertSchema(soapVirtualPati
   id: true,
   createdAt: true,
   updatedAt: true,
-  aiGeneratedAt: true,
 });
 
 export type InsertSoapVirtualPatient = z.infer<typeof insertSoapVirtualPatientSchema>;

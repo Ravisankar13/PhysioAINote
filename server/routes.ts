@@ -8047,8 +8047,16 @@ Respond with only a number between 1-100 representing the relevance score.`;
         return res.status(400).json({ error: 'Clinical text description required' });
       }
 
-      // Get SOAP virtual patient to verify ownership
-      const virtualPatient = await storage.getSoapVirtualPatient(virtualPatientId);
+      // Check both SOAP virtual patient and regular virtual patient tables
+      let virtualPatient = await storage.getSoapVirtualPatient(virtualPatientId);
+      let isRegularVirtualPatient = false;
+      
+      if (!virtualPatient) {
+        // Try regular virtual patient table
+        virtualPatient = await storage.getVirtualPatient(virtualPatientId);
+        isRegularVirtualPatient = true;
+      }
+      
       if (!virtualPatient || virtualPatient.userId !== userId) {
         return res.status(404).json({ error: 'Virtual patient not found' });
       }
@@ -8061,18 +8069,33 @@ Respond with only a number between 1-100 representing the relevance score.`;
       const animationData = await aiMovementGenerator.generateMovementFromSOAP(soapNote);
       console.log('AI movement generation completed, frames:', animationData.frames.length);
       
-      // Update SOAP virtual patient with animation data
-      const updatedVirtualPatient = await storage.updateSoapVirtualPatient(virtualPatientId, {
-        motionData: {
-          frames: animationData.frames,
-          movementPatterns: animationData.movementPatterns,
-          clinicalCorrelation: animationData.clinicalCorrelation,
-          animationSource: "text-to-animation",
-          generatedAt: new Date().toISOString()
-        },
-        hasMotionData: true,
-        aiGenerated: true
-      });
+      // Update the appropriate virtual patient table with animation data
+      let updatedVirtualPatient;
+      if (isRegularVirtualPatient) {
+        // Update regular virtual patient
+        updatedVirtualPatient = await storage.updateVirtualPatient(virtualPatientId, {
+          treatment_options: {
+            motionData: animationData.frames,
+            movementPatterns: animationData.movementPatterns,
+            clinicalCorrelation: animationData.clinicalCorrelation,
+            animationSource: "text-to-animation",
+            generatedAt: new Date().toISOString()
+          }
+        });
+      } else {
+        // Update SOAP virtual patient
+        updatedVirtualPatient = await storage.updateSoapVirtualPatient(virtualPatientId, {
+          motionData: {
+            frames: animationData.frames,
+            movementPatterns: animationData.movementPatterns,
+            clinicalCorrelation: animationData.clinicalCorrelation,
+            animationSource: "text-to-animation",
+            generatedAt: new Date().toISOString()
+          },
+          hasMotionData: true,
+          aiGenerated: true
+        });
+      }
       
       console.log('Virtual patient updated with animation data');
 

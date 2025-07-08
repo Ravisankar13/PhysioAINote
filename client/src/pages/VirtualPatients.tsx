@@ -45,7 +45,7 @@ import { apiRequest } from "@/lib/queryClient";
 import type { SoapVirtualPatient } from "@shared/schema";
 import MotionCapture from "@/components/MotionCapture";
 import ThreeDSkeletonPlayer from "@/components/ThreeDSkeletonPlayer";
-import AnimatedInteractiveSkeleton from "@/components/virtualPatient/AnimatedInteractiveSkeleton";
+import SimplifiedInteractiveSkeleton from "@/components/virtualPatient/SimplifiedInteractiveSkeleton";
 
 // Enhanced Virtual Patient interface for left panel
 interface EnhancedPatientProfile {
@@ -849,30 +849,14 @@ export default function VirtualPatientsPage() {
                 <div className="text-center text-white">
                   {/* AI-Generated Interactive Skeleton Visualization */}
                   <div className="w-full h-96 bg-gray-700 rounded-lg mb-4 flex items-center justify-center relative overflow-hidden">
-                    {/* Always show AnimatedInteractiveSkeleton when we have motion capture data */}
+                    {/* Show enhanced interactive skeleton when motion capture data exists */}
                     {selectedPatient.threeDVisualization?.animationSequences?.length > 0 ? (
-                      <AnimatedInteractiveSkeleton
-                        animationSequence={animationSequence || {
-                          frames: selectedPatient.threeDVisualization.animationSequences,
-                          movementPatterns: {
-                            restrictions: [],
-                            compensations: [],
-                            painResponses: []
-                          },
-                          clinicalCorrelation: {
-                            soapFindings: [],
-                            movementHypotheses: [],
-                            expectedLimitations: []
-                          }
-                        }}
-                        onRegionSelect={(region, displayName) => {
-                          setSelectedBodyRegion(region);
-                          console.log(`Selected body region: ${displayName}`);
-                        }}
-                        selectedRegion={selectedBodyRegion}
-                        autoPlay={true}
-                        showControls={true}
-                        height="100%"
+                      <SimplifiedInteractiveSkeleton 
+                        animationSequences={selectedPatient.threeDVisualization.animationSequences}
+                        movementHeatmap={selectedPatient.threeDVisualization.movementHeatmap || []}
+                        isPlaying={isPlaying}
+                        playbackTime={playbackTime}
+                        className="absolute inset-0 w-full h-full"
                       />
                     ) : (
                       <div className="text-center text-gray-400">

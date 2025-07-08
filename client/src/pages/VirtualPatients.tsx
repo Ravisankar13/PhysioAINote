@@ -446,7 +446,7 @@ export default function VirtualPatientsPage() {
   };
 
   // Text-to-Digital Patient function
-  const generateAnimationFromText = async (patientId: number, clinicalText: string) => {
+  const generateAnimationFromText = async (clinicalText: string) => {
     if (!clinicalText.trim()) {
       toast({
         title: "Input Required",
@@ -458,6 +458,36 @@ export default function VirtualPatientsPage() {
 
     setIsGeneratingFromText(true);
     try {
+      // First, create a new virtual patient if none selected
+      let patientId = selectedPatient?.id;
+      
+      if (!patientId) {
+        // Create a new virtual patient with basic information
+        const newPatientData = {
+          title: `Text-Generated Patient ${new Date().toLocaleDateString()}`,
+          bodyPart: "general",
+          patientProfile: {
+            name: "Anonymous Patient",
+            age: 35,
+            gender: "not specified"
+          },
+          clinicalPresentation: {
+            chiefComplaint: clinicalText.substring(0, 100)
+          },
+          physicalFindings: {},
+          assessmentPlan: {},
+          aiGenerated: true,
+          hasMotionData: false
+        };
+
+        const createResponse = await apiRequest('POST', '/api/soap-virtual-patients', newPatientData);
+        const newPatient = await createResponse.json();
+        patientId = newPatient.id;
+        
+        // Refresh patients list and select new patient
+        await queryClient.invalidateQueries({ queryKey: ['/api/virtual-patients'] });
+      }
+
       // Create a mock SOAP note structure for the AI movement generator
       const mockSoapNote = {
         id: Date.now(),
@@ -478,21 +508,8 @@ export default function VirtualPatientsPage() {
       const animationData = await response.json();
       setTextAnimationResult(animationData);
       
-      // Update the selected patient with new animation data
-      if (selectedPatient && selectedPatient.id === patientId) {
-        const updatedPatient = {
-          ...selectedPatient,
-          threeDVisualization: {
-            ...selectedPatient.threeDVisualization,
-            textGeneratedAnimation: animationData,
-            animationSequences: animationData.frames || []
-          }
-        };
-        setSelectedPatient(updatedPatient);
-      }
-
-      // Refresh the patients list
-      queryClient.invalidateQueries({ queryKey: ['/api/virtual-patients'] });
+      // Refresh the patients list to get updated data
+      await queryClient.invalidateQueries({ queryKey: ['/api/virtual-patients'] });
 
       toast({
         title: "Animation Generated",
@@ -1412,8 +1429,8 @@ Example: 'Patient reports decreased shoulder external rotation, pain during over
                   {textToAnimationInput.length} characters
                 </div>
                 <Button
-                  onClick={() => selectedPatient && generateAnimationFromText(selectedPatient.id!, textToAnimationInput)}
-                  disabled={!selectedPatient || !textToAnimationInput.trim() || isGeneratingFromText}
+                  onClick={() => generateAnimationFromText(textToAnimationInput)}
+                  disabled={!textToAnimationInput.trim() || isGeneratingFromText}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white"
                   size="sm"
                 >

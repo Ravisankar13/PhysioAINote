@@ -45,7 +45,7 @@ import { apiRequest } from "@/lib/queryClient";
 import type { SoapVirtualPatient } from "@shared/schema";
 import MotionCapture from "@/components/MotionCapture";
 import ThreeDSkeletonPlayer from "@/components/ThreeDSkeletonPlayer";
-// import SimplifiedInteractiveSkeleton from "@/components/virtualPatient/SimplifiedInteractiveSkeleton";
+import InteractiveSkeleton from "@/components/virtualPatient/InteractiveSkeleton";
 
 // Enhanced Virtual Patient interface for left panel
 interface EnhancedPatientProfile {
@@ -849,9 +849,9 @@ export default function VirtualPatientsPage() {
                 <div className="text-center text-white">
                   {/* AI-Generated Interactive Skeleton Visualization */}
                   <div className="w-full h-96 bg-gray-700 rounded-lg mb-4 flex items-center justify-center relative overflow-hidden">
-                    {/* Enhanced 3D skeleton visualization */}
+                    {/* Enhanced Interactive Skeleton visualization */}
                     {selectedPatient.threeDVisualization?.animationSequences?.length > 0 ? (
-                      <ThreeDSkeletonPlayer 
+                      <InteractiveSkeleton 
                         animationSequences={selectedPatient.threeDVisualization.animationSequences}
                         movementHeatmap={selectedPatient.threeDVisualization.movementHeatmap || []}
                         isPlaying={isPlaying}

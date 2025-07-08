@@ -8239,7 +8239,7 @@ Respond with only a number between 1-100 representing the relevance score.`;
       // Get virtual patients from both old and new tables
       const [soapVirtualPatients, oldVirtualPatients] = await Promise.all([
         soapVirtualPatientService.getUserVirtualPatients(userId),
-        storage.getVirtualPatients(userId)
+        storage.getUserVirtualPatients(userId)
       ]);
 
       // Convert old virtual patients to compatible format with animation fields

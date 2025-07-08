@@ -7967,6 +7967,207 @@ Respond with only a number between 1-100 representing the relevance score.`;
     }
   });
 
+  // ============================================================================
+  // VIRTUAL PATIENT ANIMATION API ROUTES
+  // ============================================================================
+  
+  // Import animation services
+  const { aiMovementGenerator } = await import('./aiMovementGenerator');
+  const { skeletonAnimationController } = await import('./skeletonAnimationController');
+
+  // Helper function to generate text hash for change detection
+  function generateTextHash(soapNote: SoapNote): string {
+    const textContent = [
+      soapNote.subjective || '',
+      soapNote.objective || '',
+      soapNote.assessment || '',
+      soapNote.plan || '',
+      soapNote.fullTranscription || ''
+    ].join('|');
+    
+    // Simple hash function
+    let hash = 0;
+    for (let i = 0; i < textContent.length; i++) {
+      const char = textContent.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    return hash.toString();
+  }
+
+  // Generate AI animation from SOAP note text
+  app.post("/api/soap-notes/:id/generate-animation", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const soapNoteId = parseInt(req.params.id);
+      if (isNaN(soapNoteId)) {
+        return res.status(400).json({ error: 'Invalid SOAP note ID' });
+      }
+
+      // Get SOAP note
+      const soapNote = await storage.getSoapNote(soapNoteId);
+      if (!soapNote || soapNote.userId !== userId) {
+        return res.status(404).json({ error: 'SOAP note not found' });
+      }
+
+      // Generate AI movement animation
+      const animationData = await aiMovementGenerator.generateMovementFromSOAP(soapNote);
+      
+      res.json({
+        success: true,
+        animationData,
+        source: "ai-generated",
+        generatedAt: new Date()
+      });
+    } catch (error) {
+      console.error('Error generating animation:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Update virtual patient animation when SOAP text changes
+  app.post("/api/virtual-patients/:id/update-animation", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const virtualPatientId = parseInt(req.params.id);
+      if (isNaN(virtualPatientId)) {
+        return res.status(400).json({ error: 'Invalid virtual patient ID' });
+      }
+
+      // Get virtual patient
+      const virtualPatient = await storage.getSoapVirtualPatient(virtualPatientId);
+      if (!virtualPatient || virtualPatient.userId !== userId) {
+        return res.status(404).json({ error: 'Virtual patient not found' });
+      }
+
+      // Get associated SOAP note
+      const soapNote = await storage.getSoapNote(virtualPatient.soapNoteId);
+      if (!soapNote) {
+        return res.status(404).json({ error: 'Associated SOAP note not found' });
+      }
+
+      // Generate updated animation sequence
+      const animationSequence = await skeletonAnimationController.updateAnimationFromSOAPChanges(virtualPatient, soapNote);
+      
+      // Update virtual patient with new animation data
+      const updatedVirtualPatient = await storage.updateSoapVirtualPatient(virtualPatientId, {
+        aiGeneratedPoseData: animationSequence.frames,
+        animationGeneratedAt: new Date(),
+        animationGenerationStatus: "complete"
+      });
+
+      res.json({
+        success: true,
+        virtualPatient: updatedVirtualPatient,
+        animationSequence
+      });
+    } catch (error) {
+      console.error('Error updating animation:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Set animation blend mode (text-only, motion-only, hybrid)
+  app.post("/api/virtual-patients/:id/set-blend-mode", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const virtualPatientId = parseInt(req.params.id);
+      const { blendMode } = req.body;
+
+      if (!["text-only", "motion-only", "hybrid"].includes(blendMode)) {
+        return res.status(400).json({ error: 'Invalid blend mode' });
+      }
+
+      // Get virtual patient
+      const virtualPatient = await storage.getSoapVirtualPatient(virtualPatientId);
+      if (!virtualPatient || virtualPatient.userId !== userId) {
+        return res.status(404).json({ error: 'Virtual patient not found' });
+      }
+
+      // Get SOAP note
+      const soapNote = await storage.getSoapNote(virtualPatient.soapNoteId);
+      if (!soapNote) {
+        return res.status(404).json({ error: 'Associated SOAP note not found' });
+      }
+
+      // Generate animation with new blend mode
+      const animationSequence = await skeletonAnimationController.setBlendMode(blendMode, virtualPatient, soapNote);
+      
+      // Update virtual patient
+      const updatedVirtualPatient = await storage.updateSoapVirtualPatient(virtualPatientId, {
+        animationBlendMode: blendMode,
+        aiGeneratedPoseData: blendMode === "motion-only" ? null : animationSequence.frames,
+        animationGeneratedAt: new Date()
+      });
+
+      res.json({
+        success: true,
+        virtualPatient: updatedVirtualPatient,
+        animationSequence
+      });
+    } catch (error) {
+      console.error('Error setting blend mode:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get animation sequence for virtual patient
+  app.get("/api/virtual-patients/:id/animation", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const virtualPatientId = parseInt(req.params.id);
+      if (isNaN(virtualPatientId)) {
+        return res.status(400).json({ error: 'Invalid virtual patient ID' });
+      }
+
+      // Get virtual patient
+      const virtualPatient = await storage.getSoapVirtualPatient(virtualPatientId);
+      if (!virtualPatient || virtualPatient.userId !== userId) {
+        return res.status(404).json({ error: 'Virtual patient not found' });
+      }
+
+      // Get SOAP note
+      const soapNote = await storage.getSoapNote(virtualPatient.soapNoteId);
+      if (!soapNote) {
+        return res.status(404).json({ error: 'Associated SOAP note not found' });
+      }
+
+      // Generate current animation sequence based on blend mode
+      const animationSequence = await skeletonAnimationController.generateAnimationSequence(
+        virtualPatient, 
+        soapNote, 
+        virtualPatient.animationBlendMode || "text-only"
+      );
+
+      res.json({
+        success: true,
+        animationSequence,
+        blendMode: virtualPatient.animationBlendMode || "text-only",
+        hasMotionData: virtualPatient.hasMotionData || false,
+        hasAiAnimation: virtualPatient.hasAiAnimation || false
+      });
+    } catch (error) {
+      console.error('Error getting animation:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Get all virtual patients for user
   app.get("/api/virtual-patients", ensureAuthenticated, async (req: Request, res: Response) => {
     try {

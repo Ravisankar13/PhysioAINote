@@ -45,6 +45,7 @@ import { apiRequest } from "@/lib/queryClient";
 import type { SoapVirtualPatient } from "@shared/schema";
 import MotionCapture from "@/components/MotionCapture";
 import ThreeDSkeletonPlayer from "@/components/ThreeDSkeletonPlayer";
+import AnimatedInteractiveSkeleton from "@/components/virtualPatient/AnimatedInteractiveSkeleton";
 
 // Enhanced Virtual Patient interface for left panel
 interface EnhancedPatientProfile {
@@ -157,6 +158,12 @@ export default function VirtualPatientsPage() {
   const [editingPatientId, setEditingPatientId] = useState<number | null>(null);
   const [editingName, setEditingName] = useState<string>('');
   const [showRecaptureConfirm, setShowRecaptureConfirm] = useState(false);
+  
+  // Animation state for AI-generated skeleton movement
+  const [selectedBodyRegion, setSelectedBodyRegion] = useState<string>('');
+  const [animationSequence, setAnimationSequence] = useState<any>(null);
+  const [animationBlendMode, setAnimationBlendMode] = useState<'text-only' | 'motion-only' | 'hybrid'>('text-only');
+  const [isLoadingAnimation, setIsLoadingAnimation] = useState(false);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -205,9 +212,12 @@ export default function VirtualPatientsPage() {
     }
   });
 
-  // Enhanced patient data loading
+  // Enhanced patient data loading  
   const loadEnhancedPatientData = async (patient: SoapVirtualPatient) => {
     setSelectedPatient(patient);
+    
+    // Generate AI animation from SOAP text
+    await generateAnimation(patient);
     
     // Generate enhanced profile from patient data
     const profile: EnhancedPatientProfile = {
@@ -333,6 +343,33 @@ export default function VirtualPatientsPage() {
       });
     } finally {
       setIsLoadingAnalysis(false);
+    }
+  };
+
+  // Generate AI Animation from SOAP text
+  const generateAnimation = async (patient: SoapVirtualPatient) => {
+    if (!patient) return;
+    
+    setIsLoadingAnimation(true);
+    try {
+      const response = await apiRequest(
+        'POST', 
+        `/api/virtual-patients/${patient.id}/animation`,
+        { blendMode: animationBlendMode }
+      );
+      const animationData = await response.json();
+      setAnimationSequence(animationData.animationSequence);
+      
+      console.log('Generated AI animation sequence:', animationData);
+    } catch (error: any) {
+      console.error('Animation generation error:', error);
+      toast({
+        title: "Animation Error",
+        description: error.message || "Failed to generate movement animation",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoadingAnimation(false);
     }
   };
 
@@ -750,31 +787,33 @@ export default function VirtualPatientsPage() {
           <div className="bg-gray-800 px-4 py-3 border-b border-gray-700">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <h2 className="text-white font-medium">3D Patient Visualization</h2>
+                <h2 className="text-white font-medium">AI-Generated Movement</h2>
                 <div className="flex items-center gap-2">
                   <Button
                     variant="outline"
                     size="sm"
-                    className={`text-xs ${currentView === 'anterior' ? 'bg-blue-600 text-white' : 'text-gray-300'}`}
-                    onClick={() => setCurrentView('anterior')}
+                    className={`text-xs ${animationBlendMode === 'text-only' ? 'bg-green-600 text-white' : 'text-gray-300'}`}
+                    onClick={() => setAnimationBlendMode('text-only')}
                   >
-                    Anterior
+                    SOAP Text
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
-                    className={`text-xs ${currentView === 'posterior' ? 'bg-blue-600 text-white' : 'text-gray-300'}`}
-                    onClick={() => setCurrentView('posterior')}
+                    className={`text-xs ${animationBlendMode === 'motion-only' ? 'bg-blue-600 text-white' : 'text-gray-300'}`}
+                    onClick={() => setAnimationBlendMode('motion-only')}
+                    disabled={!selectedPatient?.motionData}
                   >
-                    Posterior
+                    Motion Only
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
-                    className={`text-xs ${currentView === 'lateral' ? 'bg-blue-600 text-white' : 'text-gray-300'}`}
-                    onClick={() => setCurrentView('lateral')}
+                    className={`text-xs ${animationBlendMode === 'hybrid' ? 'bg-purple-600 text-white' : 'text-gray-300'}`}
+                    onClick={() => setAnimationBlendMode('hybrid')}
+                    disabled={!selectedPatient?.motionData}
                   >
-                    Lateral
+                    Hybrid
                   </Button>
                 </div>
               </div>
@@ -801,28 +840,27 @@ export default function VirtualPatientsPage() {
             {selectedPatient && selectedPatient?.threeDVisualization ? (
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="text-center text-white">
-                  {/* 3D Interactive Skeleton Visualization */}
+                  {/* AI-Generated Interactive Skeleton Visualization */}
                   <div className="w-full h-96 bg-gray-700 rounded-lg mb-4 flex items-center justify-center relative overflow-hidden">
-                    {selectedPatient.threeDVisualization?.animationSequences?.length > 0 ? (
-                      /* Three.js 3D Canvas - Animated motion data */
-                      <ThreeDSkeletonPlayer 
-                        animationSequences={selectedPatient.threeDVisualization.animationSequences}
-                        movementHeatmap={selectedPatient.threeDVisualization.movementHeatmap || []}
-                        isPlaying={isPlaying}
-                        playbackTime={playbackTime}
-                        className="absolute inset-0 w-full h-full"
-                      />
-                    ) : (
-                      /* Show motion capture interface when no 3D data exists */
-                      <div className="text-center text-gray-400">
-                        <p className="mb-4">No 3D motion data available</p>
-                        <Button
-                          onClick={() => setShowMotionCapture(true)}
-                          className="bg-blue-600 hover:bg-blue-700"
-                        >
-                          <Camera className="h-4 w-4 mr-2" />
-                          Capture Motion Data
-                        </Button>
+                    <AnimatedInteractiveSkeleton
+                      animationSequence={animationSequence}
+                      onRegionSelect={(region, displayName) => {
+                        setSelectedBodyRegion(region);
+                        console.log(`Selected body region: ${displayName}`);
+                      }}
+                      selectedRegion={selectedBodyRegion}
+                      autoPlay={true}
+                      showControls={true}
+                      height="100%"
+                    />
+                    
+                    {/* Loading overlay when generating animation */}
+                    {isLoadingAnimation && (
+                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10">
+                        <div className="text-center text-white">
+                          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
+                          <p className="text-sm">Generating AI Movement...</p>
+                        </div>
                       </div>
                     )}
                     

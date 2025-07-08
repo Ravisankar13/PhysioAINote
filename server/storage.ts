@@ -57,6 +57,9 @@ import {
   caseStudyAttempts,
   type CaseStudyAttempt,
   type InsertCaseStudyAttempt,
+  soapVirtualPatients,
+  type SoapVirtualPatient,
+  type InsertSoapVirtualPatient,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, isNull, sql, ilike } from "drizzle-orm";
@@ -352,6 +355,13 @@ export interface IStorage {
     trialDaysRemaining: number;
     trialEndDate: Date | null;
   }>;
+
+  // SOAP Virtual Patient Operations
+  getSoapVirtualPatient(id: number): Promise<SoapVirtualPatient | undefined>;
+  getSoapVirtualPatientBySoapNote(soapNoteId: number): Promise<SoapVirtualPatient | undefined>;
+  getUserSoapVirtualPatients(userId: number): Promise<SoapVirtualPatient[]>;
+  createSoapVirtualPatient(virtualPatient: InsertSoapVirtualPatient): Promise<SoapVirtualPatient>;
+  updateSoapVirtualPatient(id: number, data: Partial<InsertSoapVirtualPatient>): Promise<SoapVirtualPatient>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2102,6 +2112,84 @@ export class DatabaseStorage implements IStorage {
       return result[0];
     } catch (error) {
       console.error("Error marking patient switch:", error);
+      throw error;
+    }
+  }
+
+  // SOAP Virtual Patient Methods
+  async getSoapVirtualPatient(id: number): Promise<SoapVirtualPatient | undefined> {
+    try {
+      const result = await db
+        .select()
+        .from(soapVirtualPatients)
+        .where(eq(soapVirtualPatients.id, id))
+        .limit(1);
+      
+      return result[0];
+    } catch (error) {
+      console.error("Error getting SOAP virtual patient:", error);
+      throw error;
+    }
+  }
+
+  async getSoapVirtualPatientBySoapNote(soapNoteId: number): Promise<SoapVirtualPatient | undefined> {
+    try {
+      const result = await db
+        .select()
+        .from(soapVirtualPatients)
+        .where(eq(soapVirtualPatients.soapNoteId, soapNoteId))
+        .limit(1);
+      
+      return result[0];
+    } catch (error) {
+      console.error("Error getting SOAP virtual patient by soap note:", error);
+      throw error;
+    }
+  }
+
+  async getUserSoapVirtualPatients(userId: number): Promise<SoapVirtualPatient[]> {
+    try {
+      const result = await db
+        .select()
+        .from(soapVirtualPatients)
+        .where(eq(soapVirtualPatients.userId, userId))
+        .orderBy(desc(soapVirtualPatients.createdAt));
+      
+      return result;
+    } catch (error) {
+      console.error("Error getting user SOAP virtual patients:", error);
+      throw error;
+    }
+  }
+
+  async createSoapVirtualPatient(virtualPatient: InsertSoapVirtualPatient): Promise<SoapVirtualPatient> {
+    try {
+      const result = await db
+        .insert(soapVirtualPatients)
+        .values(virtualPatient)
+        .returning();
+      
+      return result[0];
+    } catch (error) {
+      console.error("Error creating SOAP virtual patient:", error);
+      throw error;
+    }
+  }
+
+  async updateSoapVirtualPatient(id: number, data: Partial<InsertSoapVirtualPatient>): Promise<SoapVirtualPatient> {
+    try {
+      const result = await db
+        .update(soapVirtualPatients)
+        .set({
+          ...data,
+          updatedAt: new Date(),
+        })
+        .where(eq(soapVirtualPatients.id, id))
+        .returning();
+      
+      return result[0];
+    } catch (error) {
+      console.error("Error updating SOAP virtual patient:", error);
       throw error;
     }
   }

@@ -472,11 +472,55 @@ export const soapVirtualPatients = pgTable("soap_virtual_patients", {
     generatedAt: string;
   }>(),
   
+  // AI-Generated Animation Data (Pure Text-to-Movement)
+  aiGeneratedPoseData: json("ai_generated_pose_data").$type<{
+    frames: Array<{
+      timestamp: number;
+      landmarks: Array<{
+        x: number;
+        y: number;
+        z: number;
+        visibility: number;
+      }>;
+    }>;
+    movementPatterns: {
+      restrictions: Array<{
+        bodyPart: string;
+        limitationType: string;
+        severity: number;
+        description: string;
+      }>;
+      compensations: Array<{
+        primaryRestriction: string;
+        compensatoryMovement: string;
+        bodyPartsInvolved: string[];
+      }>;
+      painResponses: Array<{
+        trigger: string;
+        response: string;
+        affectedRegions: string[];
+      }>;
+    };
+    clinicalCorrelation: {
+      soapFindings: string[];
+      movementHypotheses: string[];
+      expectedLimitations: string[];
+    };
+  }>(),
+  
+  // Animation Blend Configuration
+  animationBlendMode: text("animation_blend_mode").$type<"text-only" | "motion-only" | "hybrid">().default("text-only").notNull(),
+  lastTextAnalysisHash: text("last_text_analysis_hash"), // Track SOAP note changes
+  animationGenerationStatus: text("animation_generation_status").$type<"pending" | "generating" | "complete" | "error">().default("pending").notNull(),
+  
   // AI Generation Metadata
   aiGeneratedAt: timestamp("ai_generated_at").defaultNow().notNull(),
+  animationGeneratedAt: timestamp("animation_generated_at"),
   generationPrompt: text("generation_prompt"),
+  animationPrompt: text("animation_prompt"),
   generationModel: text("generation_model").default("gpt-4o").notNull(),
   hasMotionData: boolean("has_motion_data").default(false).notNull(),
+  hasAiAnimation: boolean("has_ai_animation").default(false).notNull(),
   
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

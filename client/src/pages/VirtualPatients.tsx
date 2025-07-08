@@ -766,7 +766,7 @@ export default function VirtualPatientsPage() {
 
           {/* 3D Visualization Area */}
           <div className="flex-1 relative bg-gradient-to-b from-gray-800 to-gray-900">
-            {selectedPatient && (selectedPatient?.threeDVisualization || selectedPatient?.id === 31) ? (
+            {selectedPatient && selectedPatient?.threeDVisualization ? (
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="text-center text-white">
                   {/* 3D Skeleton Visualization */}
@@ -877,8 +877,8 @@ export default function VirtualPatientsPage() {
                     </div>
                   </div>
 
-                  {/* Movement Quality Heatmap - Show mock data for motion capture patients */}
-                  {((selectedPatient.threeDVisualization?.movementHeatmap && selectedPatient.threeDVisualization.movementHeatmap.length > 0) || selectedPatient?.id === 31) && (
+                  {/* Movement Quality Heatmap - Show analysis for motion capture patients */}
+                  {selectedPatient.threeDVisualization && (
                     <div className="mt-6 max-w-md mx-auto">
                       <h4 className="text-sm font-medium text-gray-300 mb-3">Movement Quality Analysis</h4>
                       <div className="space-y-2">

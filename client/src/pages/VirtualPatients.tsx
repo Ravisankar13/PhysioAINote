@@ -141,6 +141,7 @@ export default function VirtualPatientsPage() {
   const [showResearchDialog, setShowResearchDialog] = useState(false);
   const [editingPatientId, setEditingPatientId] = useState<number | null>(null);
   const [editingName, setEditingName] = useState<string>('');
+  const [showRecaptureConfirm, setShowRecaptureConfirm] = useState(false);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -793,6 +794,17 @@ export default function VirtualPatientsPage() {
                       3D Ready
                     </Badge>
                     
+                    {/* Recapture Button */}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="absolute bottom-2 right-2 text-xs bg-orange-600/20 border-orange-500 text-orange-400 hover:bg-orange-600/40 z-20"
+                      onClick={() => setShowRecaptureConfirm(true)}
+                    >
+                      <Video className="h-3 w-3 mr-1" />
+                      Recapture
+                    </Button>
+                    
                     {/* Movement quality badge - Dynamic based on actual analysis */}
                     {selectedPatient.threeDVisualization?.movementHeatmap && (
                       <div className="absolute bottom-2 left-2 text-xs z-20">
@@ -1298,29 +1310,78 @@ export default function VirtualPatientsPage() {
         </div>
       </div>
 
+      {/* Recapture Confirmation Dialog */}
+      <Dialog open={showRecaptureConfirm} onOpenChange={setShowRecaptureConfirm}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Recapture Motion Data?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">
+              This will replace the existing 3D visualization and movement analysis for this patient. 
+              The current motion data will be permanently overwritten.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setShowRecaptureConfirm(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  setShowRecaptureConfirm(false);
+                  setShowMotionCapture(true);
+                }}
+                className="bg-orange-600 hover:bg-orange-700"
+              >
+                <Video className="h-4 w-4 mr-2" />
+                Recapture Motion
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Motion Capture Dialog */}
       <Dialog open={showMotionCapture} onOpenChange={setShowMotionCapture}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Camera className="h-5 w-5" />
-              Motion Capture for 3D Digital Twin
+              {selectedPatient?.threeDVisualization ? "Recapture Motion Data" : "Motion Capture for 3D Digital Twin"}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <h4 className="font-semibold text-blue-800 mb-2">3D Visualization Creation</h4>
-              <p className="text-sm text-blue-700">
-                Capture patient movements to generate comprehensive 3D digital twin with:
-              </p>
-              <ul className="text-sm text-blue-700 mt-2 space-y-1">
-                <li>• Real-time skeletal mesh reconstruction</li>
-                <li>• Animation sequences from captured movement</li>
-                <li>• Movement heatmaps showing problem areas</li>
-                <li>• Clinical annotations on dysfunction patterns</li>
-                <li>• 3D biomechanical analysis integration</li>
-              </ul>
-            </div>
+{selectedPatient?.threeDVisualization ? (
+              <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
+                <h4 className="font-semibold text-orange-800 mb-2">Overriding Existing Data</h4>
+                <p className="text-sm text-orange-700">
+                  This will replace the current 3D visualization with new motion data:
+                </p>
+                <ul className="text-sm text-orange-700 mt-2 space-y-1">
+                  <li>• Previous motion sequences will be deleted</li>
+                  <li>• New 3D skeletal animation will be generated</li>
+                  <li>• Updated movement analysis and problem areas</li>
+                  <li>• Fresh clinical correlation data</li>
+                  <li>• Improved biomechanical insights</li>
+                </ul>
+              </div>
+            ) : (
+              <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <h4 className="font-semibold text-blue-800 mb-2">3D Visualization Creation</h4>
+                <p className="text-sm text-blue-700">
+                  Capture patient movements to generate comprehensive 3D digital twin with:
+                </p>
+                <ul className="text-sm text-blue-700 mt-2 space-y-1">
+                  <li>• Real-time skeletal mesh reconstruction</li>
+                  <li>• Animation sequences from captured movement</li>
+                  <li>• Movement heatmaps showing problem areas</li>
+                  <li>• Clinical annotations on dysfunction patterns</li>
+                  <li>• 3D biomechanical analysis integration</li>
+                </ul>
+              </div>
+            )}
             <MotionCapture 
               onComplete={async (data) => {
                 try {

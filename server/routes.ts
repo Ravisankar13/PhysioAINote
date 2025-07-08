@@ -8047,8 +8047,8 @@ Respond with only a number between 1-100 representing the relevance score.`;
         return res.status(400).json({ error: 'Clinical text description required' });
       }
 
-      // Get virtual patient to verify ownership (check regular virtual patients table since SOAP service stores there)
-      const virtualPatient = await storage.getVirtualPatient(virtualPatientId);
+      // Get SOAP virtual patient to verify ownership
+      const virtualPatient = await storage.getSoapVirtualPatient(virtualPatientId);
       if (!virtualPatient || virtualPatient.userId !== userId) {
         return res.status(404).json({ error: 'Virtual patient not found' });
       }
@@ -8057,18 +8057,24 @@ Respond with only a number between 1-100 representing the relevance score.`;
       console.log('Clinical text input:', soapNote.subjective.substring(0, 100) + '...');
 
       // Generate AI movement animation from text description
+      console.log('Generating AI movement from SOAP note:', Date.now());
       const animationData = await aiMovementGenerator.generateMovementFromSOAP(soapNote);
+      console.log('AI movement generation completed, frames:', animationData.frames.length);
       
-      // Update virtual patient with text-generated animation data (store in treatment_options JSON field)
-      const updatedVirtualPatient = await storage.updateVirtualPatient(virtualPatientId, {
-        treatment_options: {
-          motionData: animationData.frames,
-          hasMotionData: true,
-          aiGenerated: true,
+      // Update SOAP virtual patient with animation data
+      const updatedVirtualPatient = await storage.updateSoapVirtualPatient(virtualPatientId, {
+        motionData: {
+          frames: animationData.frames,
+          movementPatterns: animationData.movementPatterns,
+          clinicalCorrelation: animationData.clinicalCorrelation,
           animationSource: "text-to-animation",
           generatedAt: new Date().toISOString()
-        }
+        },
+        hasMotionData: true,
+        aiGenerated: true
       });
+      
+      console.log('Virtual patient updated with animation data');
 
       res.json({
         success: true,

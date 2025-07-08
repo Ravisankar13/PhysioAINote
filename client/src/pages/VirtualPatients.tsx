@@ -217,26 +217,56 @@ export default function VirtualPatientsPage() {
     }
   });
 
+  // Helper function to convert AI-generated frames to animation sequences format
+  const convertAIFramesToAnimationSequences = (frames: any[]) => {
+    console.log('Converting AI frames to animation sequences, frame count:', frames.length);
+    return frames.map((frame, index) => ({
+      timestamp: frame.timestamp || index * 0.1, // 10 FPS default
+      keyframes: frame.landmarks ? frame.landmarks.map((landmark: any, landmarkIndex: number) => ({
+        boneName: `joint_${landmarkIndex}`,
+        position: [landmark.x || 0, landmark.y || 0, landmark.z || 0],
+        rotation: [0, 0, 0] // Default rotation
+      })) : []
+    }));
+  }
+
   // Helper function to get animation data from either threeDVisualization or treatment_options
   const getAnimationData = (patient: any) => {
+    console.log('Getting animation data for patient:', patient);
+    
     // Check for motion capture animation data
     if (patient?.threeDVisualization?.animationSequences?.length > 0) {
+      console.log('Found motion capture animation sequences:', patient.threeDVisualization.animationSequences.length);
       return {
-        source: 'motion-capture',
+        source: 'Motion Capture',
         animationSequences: patient.threeDVisualization.animationSequences,
         movementHeatmap: patient.threeDVisualization.movementHeatmap || []
       };
     }
     
-    // Check for text-generated animation data
-    if (patient?.treatment_options?.motionData?.length > 0) {
+    // Check for AI text-generated animation data (new format from aiMovementGenerator)
+    if (patient?.motionData?.frames?.length > 0) {
+      console.log('Found AI-generated animation frames in motionData:', patient.motionData.frames.length);
+      // Convert AI-generated frames to the format expected by ThreeDSkeletonPlayer
+      const convertedSequences = convertAIFramesToAnimationSequences(patient.motionData.frames);
       return {
-        source: 'text-generated', 
+        source: 'Text Generated',
+        animationSequences: convertedSequences,
+        movementHeatmap: [] // AI-generated may not have heatmap yet
+      };
+    }
+    
+    // Check for text-generated animation data (legacy format)
+    if (patient?.treatment_options?.motionData?.length > 0) {
+      console.log('Found legacy motion data:', patient.treatment_options.motionData.length);
+      return {
+        source: 'Text Generated', 
         animationSequences: patient.treatment_options.motionData,
         movementHeatmap: [] // Text-generated may not have heatmap
       };
     }
     
+    console.log('No animation data found for patient');
     return null;
   };
 

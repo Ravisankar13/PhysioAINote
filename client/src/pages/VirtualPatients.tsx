@@ -1328,43 +1328,49 @@ export default function VirtualPatientsPage() {
                 </CardContent>
               </Card>
             )}
-
-            {/* Clinical Value Visualization */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <Heart className="h-4 w-4" />
-                  Clinical Correlations
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3 text-sm">
-                  <div className="bg-red-50 p-3 rounded-lg">
-                    <p className="font-medium text-red-800">Pain Report Correlation</p>
-                    <p className="text-red-600 text-xs mt-1">
-                      "Right shoulder pain" → Compensated reaching pattern detected in motion data
-                    </p>
-                  </div>
-                  
-                  <div className="bg-orange-50 p-3 rounded-lg">
-                    <p className="font-medium text-orange-800">Movement Limitation</p>
-                    <p className="text-orange-600 text-xs mt-1">
-                      "Limited ankle dorsiflexion" → Forward trunk lean compensation in squat analysis
-                    </p>
-                  </div>
-                  
-                  <div className="bg-green-50 p-3 rounded-lg">
-                    <p className="font-medium text-green-800">Progress Indicator</p>
-                    <p className="text-green-600 text-xs mt-1">
-                      "Improved pain scores" → Movement patterns show 25% quality improvement
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
           </div>
-        
-          {/* Right Panel - Clinical Analysis */}
+        </div>
+
+        {/* Clinical Correlations Row - Below 3D Animation */}
+        <div className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Heart className="h-4 w-4" />
+                Clinical Correlations
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                <div className="bg-red-50 p-3 rounded-lg">
+                  <p className="font-medium text-red-800">Pain Report Correlation</p>
+                  <p className="text-red-600 text-xs mt-1">
+                    "Right shoulder pain" → Compensated reaching pattern detected in motion data
+                  </p>
+                </div>
+                
+                <div className="bg-orange-50 p-3 rounded-lg">
+                  <p className="font-medium text-orange-800">Movement Limitation</p>
+                  <p className="text-orange-600 text-xs mt-1">
+                    "Limited ankle dorsiflexion" → Forward trunk lean compensation in squat analysis
+                  </p>
+                </div>
+                
+                <div className="bg-green-50 p-3 rounded-lg">
+                  <p className="font-medium text-green-800">Progress Indicator</p>
+                  <p className="text-green-600 text-xs mt-1">
+                    "Improved pain scores" → Movement patterns show 25% quality improvement
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right Panel - Clinical Analysis */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mt-6">
+          <div className="lg:col-span-1"></div>
+          <div className="lg:col-span-2"></div>
           <div className="lg:col-span-1 space-y-4">
             <Card>
               <CardHeader className="pb-3">

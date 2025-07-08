@@ -615,7 +615,11 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => setShow3DPanel(!show3DPanel)}
+                      onClick={() => {
+                        console.log('3D Model button clicked, current show3DPanel:', show3DPanel);
+                        setShow3DPanel(!show3DPanel);
+                        console.log('3D Model button - new show3DPanel will be:', !show3DPanel);
+                      }}
                       className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm h-7 sm:h-8"
                     >
                       <Activity className="h-3 w-3 sm:h-4 sm:w-4" />
@@ -884,10 +888,23 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
           {/* 3D Skeleton Panel */}
           {show3DPanel && (
             <div className="lg:col-span-1 h-64 sm:h-80 lg:h-full">
-              <InteractiveSkeleton
-                onRegionSelect={handleBodyRegionSelect}
-                selectedRegion={selectedBodyRegion || undefined}
-              />
+              <div className="h-full">
+                {console.log('Rendering 3D Panel - show3DPanel:', show3DPanel)}
+                <Card className="h-full">
+                  <CardHeader>
+                    <CardTitle className="text-sm">3D Body Model</CardTitle>
+                  </CardHeader>
+                  <CardContent className="h-full p-2">
+                    <div className="h-full bg-gray-50 rounded-lg flex items-center justify-center">
+                      <div className="text-center">
+                        <Activity className="h-8 w-8 mx-auto mb-2 text-blue-500" />
+                        <p className="text-sm text-gray-600">Interactive 3D Body Model</p>
+                        <p className="text-xs text-gray-500 mt-1">Click on body regions for targeted assessment</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           )}
         </div>

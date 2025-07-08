@@ -2131,30 +2131,7 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
 
-  app.get("/api/virtual-patients", ensureAuthenticated, async (req: Request, res: Response) => {
-    try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ error: 'User not authenticated' });
-      }
-
-      // Get original virtual patients (SOAP virtual patients table doesn't exist yet)
-      const originalVirtualPatients = await storage.getUserVirtualPatients(userId);
-
-      // Mark all as original type and sort by creation date
-      const allVirtualPatients = originalVirtualPatients
-        .map(patient => ({ ...patient, type: 'original' }))
-        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-
-      res.json(allVirtualPatients);
-    } catch (error) {
-      if (error instanceof Error) {
-        res.status(500).json({ error: error.message });
-      } else {
-        res.status(500).json({ error: 'An unknown error occurred' });
-      }
-    }
-  });
+  // Route handler removed - duplicate of line 8255
 
   app.get("/api/virtual-patients/:id", ensureAuthenticated, async (req: Request, res: Response) => {
     try {

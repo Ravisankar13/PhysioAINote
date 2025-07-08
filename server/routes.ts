@@ -8061,11 +8061,9 @@ Respond with only a number between 1-100 representing the relevance score.`;
       
       // Update virtual patient with text-generated animation data
       const updatedVirtualPatient = await storage.updateSoapVirtualPatient(virtualPatientId, {
-        aiGeneratedPoseData: animationData.frames,
-        animationGeneratedAt: new Date(),
-        animationGenerationStatus: "complete",
-        textGeneratedDescription: soapNote.subjective,
-        hasAiAnimation: true
+        motionData: animationData.frames,
+        hasMotionData: true,
+        aiGenerated: true
       });
 
       res.json({

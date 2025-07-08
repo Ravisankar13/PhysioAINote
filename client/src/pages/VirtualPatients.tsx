@@ -851,13 +851,15 @@ export default function VirtualPatientsPage() {
                   <div className="w-full h-96 bg-gray-700 rounded-lg mb-4 flex items-center justify-center relative overflow-hidden">
                     {/* Show enhanced interactive skeleton when motion capture data exists */}
                     {selectedPatient.threeDVisualization?.animationSequences?.length > 0 ? (
-                      <SimplifiedInteractiveSkeleton 
-                        animationSequences={selectedPatient.threeDVisualization.animationSequences}
-                        movementHeatmap={selectedPatient.threeDVisualization.movementHeatmap || []}
-                        isPlaying={isPlaying}
-                        playbackTime={playbackTime}
-                        className="absolute inset-0 w-full h-full"
-                      />
+                      <div className="absolute inset-0 w-full h-full">
+                        <SimplifiedInteractiveSkeleton 
+                          animationSequences={selectedPatient.threeDVisualization.animationSequences}
+                          movementHeatmap={selectedPatient.threeDVisualization.movementHeatmap || []}
+                          isPlaying={isPlaying}
+                          playbackTime={playbackTime}
+                          className="w-full h-full"
+                        />
+                      </div>
                     ) : (
                       <div className="text-center text-gray-400">
                         <Activity className="h-12 w-12 mx-auto mb-4" />

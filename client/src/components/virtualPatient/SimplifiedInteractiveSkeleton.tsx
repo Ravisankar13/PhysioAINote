@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, Suspense } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
@@ -124,6 +124,14 @@ export default function SimplifiedInteractiveSkeleton({
 }: SimplifiedSkeletonProps) {
   const [currentFrame, setCurrentFrame] = useState(0);
   const [localIsPlaying, setLocalIsPlaying] = useState(isPlaying);
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    console.log('SimplifiedInteractiveSkeleton received:', { 
+      animationSequences: animationSequences?.length,
+      firstFrame: animationSequences?.[0]
+    });
+  }, [animationSequences]);
 
   useEffect(() => {
     setLocalIsPlaying(isPlaying);
@@ -143,6 +151,28 @@ export default function SimplifiedInteractiveSkeleton({
 
   const currentLandmarks = animationSequences?.[currentFrame]?.landmarks || [];
 
+  if (hasError) {
+    return (
+      <div className={`relative w-full h-full ${className} flex items-center justify-center bg-gray-800`}>
+        <div className="text-center text-white">
+          <Activity className="h-12 w-12 mx-auto mb-4" />
+          <p>Loading enhanced skeleton...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!animationSequences?.length) {
+    return (
+      <div className={`relative w-full h-full ${className} flex items-center justify-center bg-gray-800`}>
+        <div className="text-center text-white">
+          <Activity className="h-12 w-12 mx-auto mb-4" />
+          <p>No motion data available</p>
+        </div>
+      </div>
+    );
+  }
+
   const handlePlay = () => setLocalIsPlaying(true);
   const handlePause = () => setLocalIsPlaying(false);
   const handleReset = () => {
@@ -161,7 +191,7 @@ export default function SimplifiedInteractiveSkeleton({
         <pointLight position={[2, 2, 2]} intensity={0.8} />
         <pointLight position={[-2, -2, -2]} intensity={0.4} />
         
-        <Suspense fallback={null}>
+        <Suspense fallback={<mesh><boxGeometry args={[0.1, 0.1, 0.1]} /><meshBasicMaterial color="white" /></mesh>}>
           <SkeletonMesh landmarks={currentLandmarks} frameIndex={currentFrame} />
         </Suspense>
         

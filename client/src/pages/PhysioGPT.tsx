@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, Suspense, Component } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -26,7 +26,8 @@ import {
   Activity,
   FileText,
   BookOpen,
-  Stethoscope
+  Stethoscope,
+  AlertTriangle
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -39,6 +40,38 @@ import EvidenceDisplay from "@/components/clinical/EvidenceDisplay";
 import ColorCodedContent from "@/components/clinical/ColorCodedContent";
 import ColorCodeLegend from "@/components/clinical/ColorCodeLegend";
 import VirtualPatientSidebar from "@/components/virtualPatient/VirtualPatientSidebar";
+
+// Error Boundary Component
+class ErrorBoundary extends Component<{children: React.ReactNode}, {hasError: boolean}> {
+  constructor(props: {children: React.ReactNode}) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: any, errorInfo: any) {
+    console.error('3D Component Error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="h-full bg-gray-50 rounded-lg flex items-center justify-center">
+          <div className="text-center">
+            <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-orange-500" />
+            <p className="text-sm text-gray-600">3D Model Loading Error</p>
+            <p className="text-xs text-gray-500 mt-1">Please try refreshing the page</p>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 interface ChatMessage extends PhysioGptMessage {
   suggestions?: string[];
@@ -615,11 +648,7 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => {
-                        console.log('3D Model button clicked, current show3DPanel:', show3DPanel);
-                        setShow3DPanel(!show3DPanel);
-                        console.log('3D Model button - new show3DPanel will be:', !show3DPanel);
-                      }}
+                      onClick={() => setShow3DPanel(!show3DPanel)}
                       className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm h-7 sm:h-8"
                     >
                       <Activity className="h-3 w-3 sm:h-4 sm:w-4" />
@@ -889,18 +918,27 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
           {show3DPanel && (
             <div className="lg:col-span-1 h-64 sm:h-80 lg:h-full">
               <div className="h-full">
-                {console.log('Rendering 3D Panel - show3DPanel:', show3DPanel)}
                 <Card className="h-full">
-                  <CardHeader>
+                  <CardHeader className="p-3">
                     <CardTitle className="text-sm">3D Body Model</CardTitle>
                   </CardHeader>
-                  <CardContent className="h-full p-2">
-                    <div className="h-full bg-gray-50 rounded-lg flex items-center justify-center">
-                      <div className="text-center">
-                        <Activity className="h-8 w-8 mx-auto mb-2 text-blue-500" />
-                        <p className="text-sm text-gray-600">Interactive 3D Body Model</p>
-                        <p className="text-xs text-gray-500 mt-1">Click on body regions for targeted assessment</p>
-                      </div>
+                  <CardContent className="h-full p-0">
+                    <div className="h-full">
+                      <ErrorBoundary>
+                        <Suspense fallback={
+                          <div className="h-full bg-gray-50 rounded-lg flex items-center justify-center">
+                            <div className="text-center">
+                              <Loader2 className="h-8 w-8 mx-auto mb-2 text-blue-500 animate-spin" />
+                              <p className="text-sm text-gray-600">Loading 3D Model...</p>
+                            </div>
+                          </div>
+                        }>
+                          <InteractiveSkeleton
+                            onRegionSelect={handleBodyRegionSelect}
+                            selectedRegion={selectedBodyRegion || undefined}
+                          />
+                        </Suspense>
+                      </ErrorBoundary>
                     </div>
                   </CardContent>
                 </Card>

@@ -583,22 +583,31 @@ export default function VirtualPatientsPage() {
       }
 
       const animationResult = await animationResponse.json();
+      console.log('Full animation result from backend:', animationResult);
       setTextAnimationResult(animationResult);
       
       // Update the animation sequence for immediate display
       if (animationResult.animationSequence) {
         setAnimationSequence(animationResult.animationSequence);
         console.log('Setting animation sequence:', animationResult.animationSequence);
+      } else if (animationResult.frames) {
+        // Handle direct frames response
+        const sequence = { frames: animationResult.frames };
+        setAnimationSequence(sequence);
+        console.log('Setting animation sequence from direct frames:', sequence);
       }
       
       // Refresh the movement data to trigger re-render
       await getAnimationData(selectedPatient);
       
       // Update the selected patient to include animation data with proper structure
+      const frames = animationResult.animationSequence?.frames || animationResult.frames || [];
+      console.log('Extracted frames for patient:', frames.length);
+      
       const updatedPatient = {
         ...selectedPatient,
         motionData: {
-          frames: animationResult.animationSequence?.frames || [],
+          frames: frames,
           movementPatterns: animationResult.movementPatterns,
           clinicalCorrelation: animationResult.clinicalCorrelation,
           animationSource: "text-to-animation",

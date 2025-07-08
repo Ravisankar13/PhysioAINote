@@ -8076,9 +8076,18 @@ Respond with only a number between 1-100 representing the relevance score.`;
       
       console.log('Virtual patient updated with animation data');
 
+      console.log('Sending animation response with frames:', animationData.frames?.length || 0);
+      
       res.json({
         success: true,
-        ...animationData,
+        frames: animationData.frames,
+        animationSequence: {
+          frames: animationData.frames,
+          movementPatterns: animationData.movementPatterns,
+          clinicalCorrelation: animationData.clinicalCorrelation
+        },
+        movementPatterns: animationData.movementPatterns,
+        clinicalCorrelation: animationData.clinicalCorrelation,
         source: "text-to-animation",
         generatedAt: new Date(),
         virtualPatient: updatedVirtualPatient

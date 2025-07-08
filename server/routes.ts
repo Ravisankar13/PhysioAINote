@@ -3386,6 +3386,7 @@ Base your analysis on established postural assessment principles and correlate f
           isSOAPPatient = true;
         }
       } catch (error) {
+        console.error('Error getting virtual patient:', error);
         console.log('Not a SOAP virtual patient, checking regular virtual patients');
       }
       

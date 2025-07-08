@@ -129,6 +129,21 @@ export default function VirtualPatientsPage() {
   const [currentView, setCurrentView] = useState<'anterior' | 'posterior' | 'lateral' | 'custom'>('anterior');
   const [playbackTime, setPlaybackTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  
+  // Animation frame updating when playing
+  useEffect(() => {
+    if (!isPlaying || !selectedPatient?.threeDVisualization?.animationSequences?.length) return;
+    
+    const interval = setInterval(() => {
+      setPlaybackTime(prev => {
+        const next = prev + 1;
+        const maxFrames = selectedPatient.threeDVisualization.animationSequences.length;
+        return next >= maxFrames ? 0 : next; // Loop back to start
+      });
+    }, 33); // ~30 FPS
+    
+    return () => clearInterval(interval);
+  }, [isPlaying, selectedPatient?.threeDVisualization?.animationSequences?.length]);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [selectedMovement, setSelectedMovement] = useState<string>('all');
   const [showComparisonMode, setShowComparisonMode] = useState(false);

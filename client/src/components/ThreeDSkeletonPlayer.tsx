@@ -290,19 +290,20 @@ const ThreeDSkeletonPlayer: React.FC<ThreeDSkeletonPlayerProps> = ({
       // When playing, advance automatically using frame rate (30 FPS)
       const delta = clockRef.current.getDelta();
       newFrame = currentFrame + (delta * 30 * animationSpeed); // 30 FPS * speed multiplier
+      
+      // Loop animation and update state
+      const loopedFrame = newFrame % animationSequences.length;
+      setCurrentFrame(loopedFrame);
     } else {
       // When not playing, use the playbackTime prop for manual scrubbing
       newFrame = playbackTime;
+      setCurrentFrame(newFrame);
     }
-    
-    // Loop animation
-    const loopedFrame = newFrame % animationSequences.length;
-    setCurrentFrame(loopedFrame);
 
-    // Get current and next frame indices
-    const currentIndex = Math.floor(loopedFrame);
+    // Get current and next frame indices using the updated currentFrame
+    const currentIndex = Math.floor(currentFrame);
     const nextIndex = (currentIndex + 1) % animationSequences.length;
-    const interpolationFactor = loopedFrame - currentIndex;
+    const interpolationFactor = currentFrame - currentIndex;
 
     // Get interpolated frame
     const interpolatedFrame = getInterpolatedFrame(

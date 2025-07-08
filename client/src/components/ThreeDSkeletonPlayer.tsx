@@ -56,6 +56,19 @@ const ThreeDSkeletonPlayer: React.FC<ThreeDSkeletonPlayerProps> = ({
     ['leftKnee', 'leftAnkle'], ['rightKnee', 'rightAnkle']
   ];
 
+  // Helper function to normalize pixel coordinates to 3D space
+  const normalizePosition = (x: number, y: number, z: number = 0) => {
+    // Assume camera dimensions of 1280x720 based on console logs
+    const normalizedX = (x / 1280) - 0.5; // -0.5 to 0.5
+    const normalizedY = (y / 720) - 0.5;  // -0.5 to 0.5
+    
+    return {
+      x: normalizedX * 4, // Scale for visibility
+      y: -normalizedY * 4, // Flip Y axis for proper orientation
+      z: z * 0.1 || 0 // Small Z depth
+    };
+  };
+
   useEffect(() => {
     console.log('ThreeDSkeletonPlayer useEffect called with:', {
       mountRef: !!mountRef.current,
@@ -75,6 +88,8 @@ const ThreeDSkeletonPlayer: React.FC<ThreeDSkeletonPlayerProps> = ({
       return;
     }
 
+    console.log('Initializing Three.js scene for real skeleton data');
+
     // Initialize Three.js scene
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x1f2937);
@@ -82,14 +97,13 @@ const ThreeDSkeletonPlayer: React.FC<ThreeDSkeletonPlayerProps> = ({
 
     // Create camera
     const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
-    camera.position.set(0, 0, 3);
+    camera.position.set(0, 0, 5);
     cameraRef.current = camera;
 
     // Create renderer
     const renderer = new THREE.WebGLRenderer({ 
       antialias: true, 
-      alpha: true,
-      canvas: undefined
+      alpha: true
     });
     renderer.setSize(256, 256);
     renderer.shadowMap.enabled = true;
@@ -101,10 +115,10 @@ const ThreeDSkeletonPlayer: React.FC<ThreeDSkeletonPlayerProps> = ({
     mountRef.current.appendChild(renderer.domElement);
 
     // Create lighting
-    const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+    const ambientLight = new THREE.AmbientLight(0x404040, 0.8);
     scene.add(ambientLight);
 
-    const directionalLight = new THREE.DirectionalLight(0x3b82f6, 0.8);
+    const directionalLight = new THREE.DirectionalLight(0x3b82f6, 1.0);
     directionalLight.position.set(5, 5, 5);
     directionalLight.castShadow = true;
     scene.add(directionalLight);
@@ -133,7 +147,7 @@ const ThreeDSkeletonPlayer: React.FC<ThreeDSkeletonPlayerProps> = ({
 
       // Rotate skeleton for better viewing
       if (skeletonGroup) {
-        skeletonGroup.rotation.y += 0.005;
+        skeletonGroup.rotation.y += 0.01;
       }
 
       renderer.render(scene, camera);
@@ -155,6 +169,10 @@ const ThreeDSkeletonPlayer: React.FC<ThreeDSkeletonPlayerProps> = ({
 
   const createSkeletonMesh = (frame: AnimationFrame, skeletonGroup: THREE.Group) => {
     console.log('Creating skeleton mesh with frame:', frame);
+    console.log('First few keyframes positions:', frame.keyframes.slice(0, 3).map(kf => ({ 
+      name: kf.boneName, 
+      pos: kf.position 
+    })));
     
     // Clear existing skeleton
     while (skeletonGroup.children.length > 0) {
@@ -170,46 +188,42 @@ const ThreeDSkeletonPlayer: React.FC<ThreeDSkeletonPlayerProps> = ({
         joint => joint.jointName === keyframe.boneName && joint.problemAreas
       );
 
-      const geometry = new THREE.SphereGeometry(0.05, 8, 8);
+      const geometry = new THREE.SphereGeometry(0.08, 8, 8); // Slightly larger for visibility
       const material = isProblematic ? problemJointMaterial : jointMaterial;
       const joint = new THREE.Mesh(geometry, material);
 
-      // Position joint
-      joint.position.set(
-        (keyframe.position[0] - 0.5) * 2, // Normalize and scale
-        -(keyframe.position[1] - 0.5) * 2, // Flip Y and normalize
-        keyframe.position[2] || 0
-      );
+      // Position joint using normalized coordinates
+      const pos = normalizePosition(keyframe.position[0], keyframe.position[1], keyframe.position[2]);
+      joint.position.set(pos.x, pos.y, pos.z);
 
       joint.name = keyframe.boneName;
       skeletonGroup.add(joint);
+      
+      console.log(`Joint ${keyframe.boneName}: raw(${keyframe.position[0]}, ${keyframe.position[1]}) -> normalized(${pos.x}, ${pos.y})`);
     });
 
     // Create bone connections
-    const boneMaterial = new THREE.LineBasicMaterial({ color: 0x3b82f6, linewidth: 2 });
+    const boneMaterial = new THREE.LineBasicMaterial({ color: 0x3b82f6, linewidth: 3 });
     
     boneConnections.forEach(([bone1, bone2]) => {
       const joint1 = frame.keyframes.find(kf => kf.boneName === bone1);
       const joint2 = frame.keyframes.find(kf => kf.boneName === bone2);
 
       if (joint1 && joint2) {
+        const pos1 = normalizePosition(joint1.position[0], joint1.position[1], joint1.position[2]);
+        const pos2 = normalizePosition(joint2.position[0], joint2.position[1], joint2.position[2]);
+        
         const geometry = new THREE.BufferGeometry().setFromPoints([
-          new THREE.Vector3(
-            (joint1.position[0] - 0.5) * 2,
-            -(joint1.position[1] - 0.5) * 2,
-            joint1.position[2] || 0
-          ),
-          new THREE.Vector3(
-            (joint2.position[0] - 0.5) * 2,
-            -(joint2.position[1] - 0.5) * 2,
-            joint2.position[2] || 0
-          )
+          new THREE.Vector3(pos1.x, pos1.y, pos1.z),
+          new THREE.Vector3(pos2.x, pos2.y, pos2.z)
         ]);
 
         const line = new THREE.Line(geometry, boneMaterial);
         skeletonGroup.add(line);
       }
     });
+
+    console.log(`Created skeleton with ${skeletonGroup.children.length} elements`);
   };
 
   const updateSkeletonFrame = (frame: AnimationFrame, skeletonGroup: THREE.Group) => {
@@ -220,11 +234,8 @@ const ThreeDSkeletonPlayer: React.FC<ThreeDSkeletonPlayerProps> = ({
       ) as THREE.Mesh;
 
       if (joint) {
-        joint.position.set(
-          (keyframe.position[0] - 0.5) * 2,
-          -(keyframe.position[1] - 0.5) * 2,
-          keyframe.position[2] || 0
-        );
+        const pos = normalizePosition(keyframe.position[0], keyframe.position[1], keyframe.position[2]);
+        joint.position.set(pos.x, pos.y, pos.z);
 
         // Apply rotation
         if (keyframe.rotation) {
@@ -242,24 +253,19 @@ const ThreeDSkeletonPlayer: React.FC<ThreeDSkeletonPlayerProps> = ({
     lines.forEach(line => skeletonGroup.remove(line));
 
     // Recreate bone connections with updated positions
-    const boneMaterial = new THREE.LineBasicMaterial({ color: 0x3b82f6, linewidth: 2 });
+    const boneMaterial = new THREE.LineBasicMaterial({ color: 0x3b82f6, linewidth: 3 });
     
     boneConnections.forEach(([bone1, bone2]) => {
       const joint1 = frame.keyframes.find(kf => kf.boneName === bone1);
       const joint2 = frame.keyframes.find(kf => kf.boneName === bone2);
 
       if (joint1 && joint2) {
+        const pos1 = normalizePosition(joint1.position[0], joint1.position[1], joint1.position[2]);
+        const pos2 = normalizePosition(joint2.position[0], joint2.position[1], joint2.position[2]);
+        
         const geometry = new THREE.BufferGeometry().setFromPoints([
-          new THREE.Vector3(
-            (joint1.position[0] - 0.5) * 2,
-            -(joint1.position[1] - 0.5) * 2,
-            joint1.position[2] || 0
-          ),
-          new THREE.Vector3(
-            (joint2.position[0] - 0.5) * 2,
-            -(joint2.position[1] - 0.5) * 2,
-            joint2.position[2] || 0
-          )
+          new THREE.Vector3(pos1.x, pos1.y, pos1.z),
+          new THREE.Vector3(pos2.x, pos2.y, pos2.z)
         ]);
 
         const line = new THREE.Line(geometry, boneMaterial);

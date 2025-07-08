@@ -57,7 +57,23 @@ const ThreeDSkeletonPlayer: React.FC<ThreeDSkeletonPlayerProps> = ({
   ];
 
   useEffect(() => {
-    if (!mountRef.current || !animationSequences || animationSequences.length === 0) return;
+    console.log('ThreeDSkeletonPlayer useEffect called with:', {
+      mountRef: !!mountRef.current,
+      animationSequences: animationSequences?.length || 0,
+      movementHeatmap: movementHeatmap?.length || 0
+    });
+    
+    if (!mountRef.current) {
+      console.log('No mount ref');
+      return;
+    }
+
+    // If no animation sequences, create a test skeleton
+    if (!animationSequences || animationSequences.length === 0) {
+      console.log('Creating test skeleton');
+      createTestSkeleton();
+      return;
+    }
 
     // Initialize Three.js scene
     const scene = new THREE.Scene();
@@ -100,6 +116,7 @@ const ThreeDSkeletonPlayer: React.FC<ThreeDSkeletonPlayerProps> = ({
 
     // Create initial skeleton from first frame
     if (animationSequences.length > 0) {
+      console.log('Creating skeleton from first frame:', animationSequences[0]);
       createSkeletonMesh(animationSequences[0], skeletonGroup);
     }
 
@@ -137,6 +154,8 @@ const ThreeDSkeletonPlayer: React.FC<ThreeDSkeletonPlayerProps> = ({
   }, [animationSequences, isPlaying]);
 
   const createSkeletonMesh = (frame: AnimationFrame, skeletonGroup: THREE.Group) => {
+    console.log('Creating skeleton mesh with frame:', frame);
+    
     // Clear existing skeleton
     while (skeletonGroup.children.length > 0) {
       skeletonGroup.remove(skeletonGroup.children[0]);
@@ -249,6 +268,96 @@ const ThreeDSkeletonPlayer: React.FC<ThreeDSkeletonPlayerProps> = ({
     });
   };
 
+  const createTestSkeleton = () => {
+    if (!mountRef.current) return;
+
+    // Initialize Three.js scene for test
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x1f2937);
+
+    const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
+    camera.position.set(0, 0, 3);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(256, 256);
+    
+    // Clear and append renderer
+    mountRef.current.innerHTML = '';
+    mountRef.current.appendChild(renderer.domElement);
+
+    // Create basic lighting
+    const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+    scene.add(ambientLight);
+
+    const directionalLight = new THREE.DirectionalLight(0x3b82f6, 0.8);
+    directionalLight.position.set(5, 5, 5);
+    scene.add(directionalLight);
+
+    // Create a simple test skeleton
+    const testGroup = new THREE.Group();
+    
+    // Create joint spheres in basic human pose
+    const jointPositions = [
+      { name: 'head', pos: [0, 1.6, 0] },
+      { name: 'neck', pos: [0, 1.4, 0] },
+      { name: 'leftShoulder', pos: [-0.4, 1.2, 0] },
+      { name: 'rightShoulder', pos: [0.4, 1.2, 0] },
+      { name: 'leftElbow', pos: [-0.6, 0.8, 0] },
+      { name: 'rightElbow', pos: [0.6, 0.8, 0] },
+      { name: 'spine', pos: [0, 0.8, 0] },
+      { name: 'leftHip', pos: [-0.2, 0.0, 0] },
+      { name: 'rightHip', pos: [0.2, 0.0, 0] },
+      { name: 'leftKnee', pos: [-0.2, -0.6, 0] },
+      { name: 'rightKnee', pos: [0.2, -0.6, 0] },
+      { name: 'leftAnkle', pos: [-0.2, -1.2, 0] },
+      { name: 'rightAnkle', pos: [0.2, -1.2, 0] }
+    ];
+
+    // Create joints
+    const jointMaterial = new THREE.MeshPhongMaterial({ color: 0x60a5fa });
+    jointPositions.forEach(joint => {
+      const geometry = new THREE.SphereGeometry(0.05, 8, 8);
+      const mesh = new THREE.Mesh(geometry, jointMaterial);
+      mesh.position.set(joint.pos[0], joint.pos[1], joint.pos[2]);
+      testGroup.add(mesh);
+    });
+
+    // Create bones
+    const boneMaterial = new THREE.LineBasicMaterial({ color: 0x3b82f6, linewidth: 2 });
+    const connections = [
+      ['head', 'neck'], ['neck', 'leftShoulder'], ['neck', 'rightShoulder'],
+      ['leftShoulder', 'leftElbow'], ['rightShoulder', 'rightElbow'],
+      ['neck', 'spine'], ['spine', 'leftHip'], ['spine', 'rightHip'],
+      ['leftHip', 'rightHip'], ['leftHip', 'leftKnee'], ['rightHip', 'rightKnee'],
+      ['leftKnee', 'leftAnkle'], ['rightKnee', 'rightAnkle']
+    ];
+
+    connections.forEach(([start, end]) => {
+      const startJoint = jointPositions.find(j => j.name === start);
+      const endJoint = jointPositions.find(j => j.name === end);
+      if (startJoint && endJoint) {
+        const geometry = new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(...startJoint.pos),
+          new THREE.Vector3(...endJoint.pos)
+        ]);
+        const line = new THREE.Line(geometry, boneMaterial);
+        testGroup.add(line);
+      }
+    });
+
+    scene.add(testGroup);
+
+    // Animation loop
+    const animate = () => {
+      requestAnimationFrame(animate);
+      testGroup.rotation.y += 0.01;
+      renderer.render(scene, camera);
+    };
+    animate();
+
+    console.log('Test skeleton created and animating');
+  };
+
   return (
     <div ref={mountRef} className={className} style={{ 
       background: 'linear-gradient(135deg, #374151 0%, #1f2937 100%)' 
@@ -258,7 +367,10 @@ const ThreeDSkeletonPlayer: React.FC<ThreeDSkeletonPlayerProps> = ({
         <div className="absolute inset-0 flex items-center justify-center text-white text-sm">
           <div className="text-center">
             <div className="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-2"></div>
-            Generating 3D Skeleton...
+            <div>Generating 3D Skeleton...</div>
+            <div className="text-xs text-gray-400 mt-1">
+              Data: {animationSequences?.length || 0} frames
+            </div>
           </div>
         </div>
       )}

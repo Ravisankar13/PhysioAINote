@@ -992,414 +992,193 @@ export default function VirtualPatientsPage() {
           </div>
         </div>
 
-        {/* Center Panel - 3D Interactive Patient */}
-        <div className="flex-1 flex flex-col bg-gray-900">
-          
-          {/* 3D Visualization Header */}
-          <div className="bg-gray-800 px-4 py-3 border-b border-gray-700">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <h2 className="text-white font-medium">AI-Generated Movement</h2>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className={`text-xs ${animationBlendMode === 'text-only' ? 'bg-green-600 text-white' : 'text-gray-300'}`}
-                    onClick={() => setAnimationBlendMode('text-only')}
-                  >
-                    SOAP Text
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className={`text-xs ${animationBlendMode === 'motion-only' ? 'bg-blue-600 text-white' : 'text-gray-300'}`}
-                    onClick={() => setAnimationBlendMode('motion-only')}
-                    disabled={!selectedPatient?.motionData}
-                  >
-                    Motion Only
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className={`text-xs ${animationBlendMode === 'hybrid' ? 'bg-purple-600 text-white' : 'text-gray-300'}`}
-                    onClick={() => setAnimationBlendMode('hybrid')}
-                    disabled={!selectedPatient?.motionData}
-                  >
-                    Hybrid
-                  </Button>
-                </div>
-              </div>
-              
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" className="text-gray-300">
-                  <ZoomIn className="h-4 w-4" />
-                </Button>
-                <Button variant="outline" size="sm" className="text-gray-300">
-                  <ZoomOut className="h-4 w-4" />
-                </Button>
-                <Button variant="outline" size="sm" className="text-gray-300">
-                  <RotateCcw className="h-4 w-4" />
-                </Button>
-                <Button variant="outline" size="sm" className="text-gray-300">
-                  <RotateCw className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          </div>
-
-          {/* 3D Visualization Area */}
-          <div className="lg:col-span-2">
-            <Card className="h-[500px]">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <Activity className="h-4 w-4" />
-                  3D Movement Animation
-                  {(() => {
-                    const animationData = getAnimationData(selectedPatient);
-                    if (animationData) {
-                      return (
-                        <Badge variant="secondary" className="text-xs">
-                          {animationData.source} ({animationData.frames?.length || animationData.animationSequences?.length || 0} frames)
-                        </Badge>
-                      );
-                    }
-                    return null;
-                  })()}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="h-[430px] relative">
+        {/* Center Panel - 3D Animation */}
+        <div className="lg:col-span-2">
+          <Card className="h-[500px]">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Activity className="h-4 w-4" />
+                3D Movement Animation
                 {(() => {
                   const animationData = getAnimationData(selectedPatient);
-                  if (selectedPatient && animationData && animationData.frames?.length > 0) {
+                  if (animationData) {
                     return (
-                      <div className="w-full h-full bg-gray-900 rounded-lg flex items-center justify-center relative overflow-hidden">
-                        <AIAnimationPlayer
-                          animationFrames={animationData.frames}
-                          isPlaying={isPlaying}
-                          className="w-full h-full"
-                          onPlayPauseToggle={() => setIsPlaying(!isPlaying)}
-                        />
-                        {/* Animation Source Badge */}
-                        <div className="absolute top-2 left-2 z-10">
-                          <Badge className={animationData.source === 'Motion Capture' ? 'bg-blue-600' : 'bg-emerald-600'}>
-                            {animationData.source}
-                          </Badge>
-                        </div>
-                        {/* Play Controls */}
-                        <div className="absolute bottom-2 left-2 z-10 flex gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setIsPlaying(!isPlaying)}
-                            className="bg-black/20 text-white border-white/20"
-                          >
-                            {isPlaying ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
-                          </Button>
-                        </div>
-                      </div>
-                    );
-                  } else if (selectedPatient) {
-                return (
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="text-center text-white">
-                      <div className="w-full h-96 bg-gray-700 rounded-lg mb-4 flex items-center justify-center relative overflow-hidden">
-                        <div className="text-center text-gray-400">
-                          <Activity className="h-12 w-12 mx-auto mb-4" />
-                          <p className="mb-4">AI Animation System Ready</p>
-                          <p className="text-sm">Motion capture or text description will generate enhanced skeleton visualization</p>
-                          {animationSequence && (
-                            <div className="mt-4">
-                              <Badge className="bg-green-600">
-                                Animation Generated ({animationSequence.frames?.length || 0} frames)
-                              </Badge>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              } else {
-                return (
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="text-center text-white">
-                      <Activity className="h-12 w-12 mx-auto mb-4" />
-                      <p className="mb-4">Select a Virtual Patient</p>
-                      <p className="text-sm">Choose a patient from the list to view their digital twin</p>
-                    </div>
-                  </div>
-                );
-              }
-            })()}
-            
-                {/* Loading overlay when generating animation */}
-                {isLoadingAnimation && (
-                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10">
-                    <div className="text-center text-white">
-                      <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
-                      <p className="text-sm">Generating AI Movement...</p>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-        {/* Right Panel - Clinical Correlation */}
-        <div className="w-80 bg-white border-l border-gray-200 overflow-y-auto">
-          <div className="p-4 space-y-6">
-            
-            {/* SOAP Integration */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <FileText className="h-4 w-4" />
-                  SOAP Integration
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {clinicalData?.soapIntegration.map((item, index) => (
-                    <div key={index} className="border-l-2 border-blue-200 pl-3">
-                      <p className="text-sm font-medium text-gray-800">{item.complaint}</p>
-                      <p className="text-xs text-gray-600 mt-1">{item.movementCorrelation}</p>
-                      <Badge variant="outline" className="text-xs mt-2">
-                        {item.severity}
+                      <Badge variant="secondary" className="text-xs">
+                        {animationData.source} ({animationData.frames?.length || animationData.animationSequences?.length || 0} frames)
                       </Badge>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* AI Assessment Insights */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <Brain className="h-4 w-4" />
-                  AI Assessment Insights
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {clinicalData?.aiInsights.map((insight, index) => (
-                    <div key={index} className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium">Finding {index + 1}</span>
-                        <Badge variant="secondary" className="text-xs">
-                          {insight.confidence}% confidence
+                    );
+                  }
+                  return null;
+                })()}
+              </CardTitle>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={`text-xs ${animationBlendMode === 'text-only' ? 'bg-green-600 text-white' : ''}`}
+                  onClick={() => setAnimationBlendMode('text-only')}
+                >
+                  SOAP Text
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={`text-xs ${animationBlendMode === 'motion-only' ? 'bg-blue-600 text-white' : ''}`}
+                  onClick={() => setAnimationBlendMode('motion-only')}
+                  disabled={!selectedPatient?.motionData}
+                >
+                  Motion Only
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={`text-xs ${animationBlendMode === 'hybrid' ? 'bg-purple-600 text-white' : ''}`}
+                  onClick={() => setAnimationBlendMode('hybrid')}
+                  disabled={!selectedPatient?.motionData}
+                >
+                  Hybrid
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="h-[430px] relative">
+              {(() => {
+                const animationData = getAnimationData(selectedPatient);
+                if (selectedPatient && animationData && animationData.frames?.length > 0) {
+                  return (
+                    <div className="w-full h-full bg-gray-900 rounded-lg flex items-center justify-center relative overflow-hidden">
+                      <AIAnimationPlayer
+                        animationFrames={animationData.frames}
+                        isPlaying={isPlaying}
+                        className="w-full h-full"
+                        onPlayPauseToggle={() => setIsPlaying(!isPlaying)}
+                      />
+                      {/* Animation Source Badge */}
+                      <div className="absolute top-2 left-2 z-10">
+                        <Badge className={animationData.source === 'Motion Capture' ? 'bg-blue-600' : 'bg-emerald-600'}>
+                          {animationData.source}
                         </Badge>
                       </div>
-                      <p className="text-sm text-gray-800">{insight.finding}</p>
-                      <p className="text-xs text-blue-600 bg-blue-50 p-2 rounded">
-                        💡 {insight.recommendation}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Treatment Response Tracking */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <Zap className="h-4 w-4" />
-                  Treatment Response
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {clinicalData?.treatmentResponse.map((response, index) => (
-                    <div key={index} className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm font-medium">{response.intervention}</span>
-                        <span className="text-xs text-green-600">+{response.movementImprovement}%</span>
-                      </div>
-                      <p className="text-xs text-gray-600">{response.outcome}</p>
-                      <Progress value={response.movementImprovement} className="h-2" />
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* 3D Visualization Details */}
-            {selectedPatient?.threeDVisualization && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm font-medium flex items-center gap-2">
-                    <Activity className="h-4 w-4" />
-                    3D Digital Twin Details
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div className="bg-gray-50 p-2 rounded">
-                        <div className="font-semibold text-blue-600">
-                          {selectedPatient.threeDVisualization.skeletalMesh?.vertices?.length || 0}
-                        </div>
-                        <div className="text-gray-600">3D Vertices</div>
-                      </div>
-                      <div className="bg-gray-50 p-2 rounded">
-                        <div className="font-semibold text-green-600">
-                          {selectedPatient.threeDVisualization.skeletalMesh?.bones?.length || 0}
-                        </div>
-                        <div className="text-gray-600">Bone Joints</div>
+                      {/* Play Controls */}
+                      <div className="absolute bottom-2 left-2 z-10 flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setIsPlaying(!isPlaying)}
+                          className="bg-black/20 text-white border-white/20"
+                        >
+                          {isPlaying ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
+                        </Button>
                       </div>
                     </div>
-
-                    {/* Clinical Annotations */}
-                    {selectedPatient.threeDVisualization.clinicalAnnotations && selectedPatient.threeDVisualization.clinicalAnnotations.length > 0 && (
-                      <div className="space-y-2">
-                        <h4 className="text-xs font-medium text-gray-700">Clinical Annotations</h4>
-                        {selectedPatient.threeDVisualization.clinicalAnnotations.slice(0, 3).map((annotation, index) => (
-                          <div key={index} className={`p-2 rounded text-xs ${
-                            annotation.severity === 'severe' ? 'bg-red-50 border-l-2 border-red-500' :
-                            annotation.severity === 'moderate' ? 'bg-orange-50 border-l-2 border-orange-500' :
-                            annotation.severity === 'mild' ? 'bg-yellow-50 border-l-2 border-yellow-500' :
-                            'bg-green-50 border-l-2 border-green-500'
-                          }`}>
-                            <div className={`font-medium ${
-                              annotation.severity === 'severe' ? 'text-red-800' :
-                              annotation.severity === 'moderate' ? 'text-orange-800' :
-                              annotation.severity === 'mild' ? 'text-yellow-800' :
-                              'text-green-800'
-                            }`}>
-                              {annotation.severity.toUpperCase()} Issue
-                            </div>
-                            <div className="text-gray-700 mt-1">{annotation.text}</div>
+                  );
+                } else if (selectedPatient) {
+                  return (
+                    <div className="w-full h-full bg-gray-100 rounded-lg flex items-center justify-center">
+                      <div className="text-center text-gray-600">
+                        <Activity className="h-12 w-12 mx-auto mb-4" />
+                        <p className="mb-4">AI Animation System Ready</p>
+                        <p className="text-sm">Motion capture or text description will generate enhanced skeleton visualization</p>
+                        {animationSequence && (
+                          <div className="mt-4">
+                            <Badge className="bg-green-600">
+                              Animation Generated ({animationSequence.frames?.length || 0} frames)
+                            </Badge>
                           </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Movement Quality Top Issues */}
-                    {selectedPatient.threeDVisualization.movementHeatmap && (
-                      <div className="space-y-2">
-                        <h4 className="text-xs font-medium text-gray-700">Movement Quality Issues</h4>
-                        {selectedPatient.threeDVisualization.movementHeatmap
-                          .filter(joint => joint.problemAreas || joint.intensity > 70)
-                          .slice(0, 3)
-                          .map((joint, index) => (
-                            <div key={index} className="flex justify-between items-center text-xs p-2 bg-red-50 rounded">
-                              <span className="font-medium text-red-800 capitalize">{joint.jointName}</span>
-                              <span className="text-red-600">{joint.intensity.toFixed(0)}% abnormal</span>
-                            </div>
-                          ))}
-                      </div>
-                    )}
-
-                    {/* Generation Info */}
-                    <div className="pt-2 border-t border-gray-200 text-xs text-gray-500">
-                      <div>Generated: {selectedPatient.threeDVisualization.generatedAt ? 
-                        new Date(selectedPatient.threeDVisualization.generatedAt).toLocaleDateString() : 'Unknown'}</div>
-                      <div className="mt-1">
-                        Camera: [{selectedPatient.threeDVisualization.cameraSettings?.position?.join(', ') || 'Default'}]
+                        )}
                       </div>
                     </div>
-
-                    {/* Export Options */}
-                    <div className="pt-2 border-t border-gray-200">
-                      <Button 
-                        size="sm" 
-                        variant="outline" 
-                        className="w-full text-xs"
-                        onClick={() => {
-                          const dataStr = JSON.stringify(selectedPatient.threeDVisualization, null, 2);
-                          const dataBlob = new Blob([dataStr], {type: 'application/json'});
-                          const url = URL.createObjectURL(dataBlob);
-                          const link = document.createElement('a');
-                          link.href = url;
-                          link.download = `3d-visualization-patient-${selectedPatient.id}.json`;
-                          link.click();
-                          URL.revokeObjectURL(url);
-                          toast({
-                            title: "3D Data Exported",
-                            description: "3D visualization data downloaded successfully",
-                          });
-                        }}
-                      >
-                        Export 3D Data
-                      </Button>
+                  );
+                } else {
+                  return (
+                    <div className="w-full h-full bg-gray-100 rounded-lg flex items-center justify-center">
+                      <div className="text-center text-gray-600">
+                        <Activity className="h-12 w-12 mx-auto mb-4" />
+                        <p className="mb-4">Select a Virtual Patient</p>
+                        <p className="text-sm">Choose a patient from the list to view their digital twin</p>
+                      </div>
                     </div>
+                  );
+                }
+              })()}
+              
+              {/* Loading overlay when generating animation */}
+              {isLoadingAnimation && (
+                <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10">
+                  <div className="text-center text-white">
+                    <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
+                    <p className="text-sm">Generating AI Movement...</p>
                   </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        </div>
-
-        {/* Clinical Correlations Row - Below 3D Animation */}
-        <div className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Heart className="h-4 w-4" />
-                Clinical Correlations
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                <div className="bg-red-50 p-3 rounded-lg">
-                  <p className="font-medium text-red-800">Pain Report Correlation</p>
-                  <p className="text-red-600 text-xs mt-1">
-                    "Right shoulder pain" → Compensated reaching pattern detected in motion data
-                  </p>
                 </div>
-                
-                <div className="bg-orange-50 p-3 rounded-lg">
-                  <p className="font-medium text-orange-800">Movement Limitation</p>
-                  <p className="text-orange-600 text-xs mt-1">
-                    "Limited ankle dorsiflexion" → Forward trunk lean compensation in squat analysis
-                  </p>
-                </div>
-                
-                <div className="bg-green-50 p-3 rounded-lg">
-                  <p className="font-medium text-green-800">Progress Indicator</p>
-                  <p className="text-green-600 text-xs mt-1">
-                    "Improved pain scores" → Movement patterns show 25% quality improvement
-                  </p>
-                </div>
-              </div>
+              )}
             </CardContent>
           </Card>
         </div>
 
         {/* Right Panel - Clinical Analysis */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mt-6">
-          <div className="lg:col-span-1"></div>
-          <div className="lg:col-span-2"></div>
-          <div className="lg:col-span-1 space-y-4">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <Stethoscope className="h-4 w-4" />
-                  Clinical Notes
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <div className="bg-blue-50 p-3 rounded-lg">
-                  <p className="font-medium text-blue-800">Chief Complaint</p>
-                  <p className="text-blue-600 text-xs mt-1">{selectedPatient.chief_complaint}</p>
+        <div className="lg:col-span-1 space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Stethoscope className="h-4 w-4" />
+                Clinical Notes
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <div className="bg-blue-50 p-3 rounded-lg">
+                <p className="font-medium text-blue-800">Chief Complaint</p>
+                <p className="text-blue-600 text-xs mt-1">{selectedPatient.chief_complaint}</p>
+              </div>
+              {selectedPatient.symptoms_description && (
+                <div className="bg-yellow-50 p-3 rounded-lg">
+                  <p className="font-medium text-yellow-800">Symptoms</p>
+                  <p className="text-yellow-600 text-xs mt-1">{selectedPatient.symptoms_description}</p>
                 </div>
-                {selectedPatient.symptoms_description && (
-                  <div className="bg-yellow-50 p-3 rounded-lg">
-                    <p className="font-medium text-yellow-800">Symptoms</p>
-                    <p className="text-yellow-600 text-xs mt-1">{selectedPatient.symptoms_description}</p>
-                  </div>
-                )}
-                {selectedPatient.past_medical_history && (
-                  <div className="bg-gray-50 p-3 rounded-lg">
-                    <p className="font-medium text-gray-800">History</p>
-                    <p className="text-gray-600 text-xs mt-1">{selectedPatient.past_medical_history}</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+              )}
+              {selectedPatient.past_medical_history && (
+                <div className="bg-gray-50 p-3 rounded-lg">
+                  <p className="font-medium text-gray-800">History</p>
+                  <p className="text-gray-600 text-xs mt-1">{selectedPatient.past_medical_history}</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
+      </div>
+
+      {/* Clinical Correlations Row - Below 3D Animation */}
+      <div className="mt-6 px-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Heart className="h-4 w-4" />
+              Clinical Correlations
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+              <div className="bg-red-50 p-3 rounded-lg">
+                <p className="font-medium text-red-800">Pain Report Correlation</p>
+                <p className="text-red-600 text-xs mt-1">
+                  "Right shoulder pain" → Compensated reaching pattern detected in motion data
+                </p>
+              </div>
+              
+              <div className="bg-orange-50 p-3 rounded-lg">
+                <p className="font-medium text-orange-800">Movement Limitation</p>
+                <p className="text-orange-600 text-xs mt-1">
+                  "Limited ankle dorsiflexion" → Forward trunk lean compensation in squat analysis
+                </p>
+              </div>
+              
+              <div className="bg-green-50 p-3 rounded-lg">
+                <p className="font-medium text-green-800">Progress Indicator</p>
+                <p className="text-green-600 text-xs mt-1">
+                  "Improved pain scores" → Movement patterns show 25% quality improvement
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Bottom Panel - Text-to-Digital Patient & Interactive Controls */}

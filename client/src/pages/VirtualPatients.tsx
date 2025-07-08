@@ -839,10 +839,32 @@ export default function VirtualPatientsPage() {
                       3D Ready
                     </Badge>
                     
-                    {/* Movement quality badge */}
-                    <div className="absolute bottom-2 left-2 text-xs bg-yellow-500/20 text-yellow-400 px-2 py-1 rounded z-20">
-                      Hip Issue Detected
-                    </div>
+                    {/* Movement quality badge - Dynamic based on actual analysis */}
+                    {selectedPatient.threeDVisualization?.movementHeatmap && (
+                      <div className="absolute bottom-2 left-2 text-xs z-20">
+                        {(() => {
+                          const problemJoints = selectedPatient.threeDVisualization.movementHeatmap
+                            .filter(joint => joint.problemAreas || joint.intensity > 70);
+                          
+                          if (problemJoints.length > 0) {
+                            const topProblem = problemJoints.reduce((max, joint) => 
+                              joint.intensity > max.intensity ? joint : max
+                            );
+                            return (
+                              <div className="bg-red-500/20 text-red-400 px-2 py-1 rounded">
+                                {topProblem.jointName.charAt(0).toUpperCase() + topProblem.jointName.slice(1)} Issue Detected
+                              </div>
+                            );
+                          } else {
+                            return (
+                              <div className="bg-green-500/20 text-green-400 px-2 py-1 rounded">
+                                Normal Movement
+                              </div>
+                            );
+                          }
+                        })()}
+                      </div>
+                    )}
                   </div>
                   <p className="text-lg font-medium mb-2">3D Digital Twin Active</p>
                   <p className="text-gray-300 text-sm mb-4">
@@ -882,13 +904,7 @@ export default function VirtualPatientsPage() {
                     <div className="mt-6 max-w-md mx-auto">
                       <h4 className="text-sm font-medium text-gray-300 mb-3">Movement Quality Analysis</h4>
                       <div className="space-y-2">
-                        {(selectedPatient.threeDVisualization?.movementHeatmap || [
-                          { jointName: 'shoulder', intensity: 85, problemAreas: false },
-                          { jointName: 'elbow', intensity: 92, problemAreas: false },
-                          { jointName: 'hip', intensity: 78, problemAreas: true },
-                          { jointName: 'knee', intensity: 88, problemAreas: false },
-                          { jointName: 'ankle', intensity: 94, problemAreas: false }
-                        ]).slice(0, 5).map((joint, index) => (
+                        {selectedPatient.threeDVisualization?.movementHeatmap?.slice(0, 5).map((joint, index) => (
                           <div key={index} className="flex items-center justify-between text-xs">
                             <span className="text-gray-300 capitalize">{joint.jointName}</span>
                             <div className="flex items-center gap-2">

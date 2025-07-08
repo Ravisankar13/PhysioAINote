@@ -342,23 +342,38 @@ export class ThreeDVisualizationService {
    * Identify problem areas based on movement patterns
    */
   private identifyProblemAreas(boneName: string, intensity: number): boolean {
-    // Flag joints with abnormal movement patterns
-    const highMovementThreshold = 0.1;
-    const lowMovementThreshold = 0.01;
+    // Enhanced movement analysis with more sophisticated thresholds
+    const analysisThresholds = {
+      // Upper extremity joints
+      'leftShoulder': { min: 0.02, max: 0.15, problemAbove: 0.12 },
+      'rightShoulder': { min: 0.02, max: 0.15, problemAbove: 0.12 },
+      'leftElbow': { min: 0.03, max: 0.20, problemAbove: 0.16 },
+      'rightElbow': { min: 0.03, max: 0.20, problemAbove: 0.16 },
+      'leftWrist': { min: 0.01, max: 0.25, problemAbove: 0.20 },
+      'rightWrist': { min: 0.01, max: 0.25, problemAbove: 0.20 },
+      
+      // Axial skeleton
+      'head': { min: 0.005, max: 0.08, problemAbove: 0.06 },
+      'neck': { min: 0.01, max: 0.10, problemAbove: 0.08 },
+      'spine': { min: 0.008, max: 0.12, problemAbove: 0.10 },
+      
+      // Lower extremity joints
+      'leftHip': { min: 0.02, max: 0.18, problemAbove: 0.14 },
+      'rightHip': { min: 0.02, max: 0.18, problemAbove: 0.14 },
+      'leftKnee': { min: 0.03, max: 0.22, problemAbove: 0.18 },
+      'rightKnee': { min: 0.03, max: 0.22, problemAbove: 0.18 },
+      'leftAnkle': { min: 0.02, max: 0.20, problemAbove: 0.16 },
+      'rightAnkle': { min: 0.02, max: 0.20, problemAbove: 0.16 }
+    };
 
-    // Joints that should move more
-    const shouldMoveJoints = ['leftKnee', 'rightKnee', 'leftElbow', 'rightElbow'];
+    const thresholds = analysisThresholds[boneName as keyof typeof analysisThresholds];
+    if (!thresholds) return false;
+
+    // Check for excessive movement (compensation patterns)
+    if (intensity > thresholds.problemAbove) return true;
     
-    // Joints that should move less (stability joints)
-    const stabilityJoints = ['head', 'neck', 'spine'];
-
-    if (shouldMoveJoints.includes(boneName) && intensity < lowMovementThreshold) {
-      return true; // Too little movement
-    }
-
-    if (stabilityJoints.includes(boneName) && intensity > highMovementThreshold) {
-      return true; // Too much movement
-    }
+    // Check for restricted movement (mobility issues)
+    if (intensity < thresholds.min) return true;
 
     return false;
   }
@@ -367,14 +382,93 @@ export class ThreeDVisualizationService {
    * Generate annotation text for joints
    */
   private generateAnnotationText(jointName: string, intensity: number): string {
-    if (intensity > 75) {
-      return `${jointName}: Excessive movement detected`;
-    } else if (intensity > 50) {
-      return `${jointName}: Increased movement`;
-    } else if (intensity < 10) {
-      return `${jointName}: Limited movement`;
+    const clinicalFindings = {
+      // Upper extremity specific findings
+      'leftShoulder': {
+        high: 'Possible shoulder impingement or compensatory overuse',
+        moderate: 'Increased shoulder activation pattern',
+        low: 'Restricted shoulder mobility or guarding'
+      },
+      'rightShoulder': {
+        high: 'Possible shoulder impingement or compensatory overuse', 
+        moderate: 'Increased shoulder activation pattern',
+        low: 'Restricted shoulder mobility or guarding'
+      },
+      'leftElbow': {
+        high: 'Excessive elbow movement - possible compensation',
+        moderate: 'Altered elbow movement pattern',
+        low: 'Limited elbow mobility or stiffness'
+      },
+      'rightElbow': {
+        high: 'Excessive elbow movement - possible compensation',
+        moderate: 'Altered elbow movement pattern', 
+        low: 'Limited elbow mobility or stiffness'
+      },
+      
+      // Axial skeleton findings
+      'head': {
+        high: 'Head postural instability or forward head posture',
+        moderate: 'Mild head movement compensation',
+        low: 'Restricted cervical range of motion'
+      },
+      'neck': {
+        high: 'Cervical spine hypermobility or instability',
+        moderate: 'Cervical movement compensation pattern',
+        low: 'Cervical stiffness or restricted mobility'
+      },
+      'spine': {
+        high: 'Spinal instability or excessive compensation',
+        moderate: 'Spinal movement pattern deviation',
+        low: 'Restricted spinal mobility or stiffness'
+      },
+      
+      // Lower extremity findings
+      'leftHip': {
+        high: 'Hip instability or excessive compensatory movement',
+        moderate: 'Hip movement pattern alteration',
+        low: 'Hip mobility restriction or tightness'
+      },
+      'rightHip': {
+        high: 'Hip instability or excessive compensatory movement',
+        moderate: 'Hip movement pattern alteration', 
+        low: 'Hip mobility restriction or tightness'
+      },
+      'leftKnee': {
+        high: 'Knee instability or tracking dysfunction',
+        moderate: 'Altered knee movement pattern',
+        low: 'Knee stiffness or mobility restriction'
+      },
+      'rightKnee': {
+        high: 'Knee instability or tracking dysfunction',
+        moderate: 'Altered knee movement pattern',
+        low: 'Knee stiffness or mobility restriction'
+      },
+      'leftAnkle': {
+        high: 'Ankle instability or excessive movement',
+        moderate: 'Ankle movement compensation',
+        low: 'Ankle stiffness or limited dorsiflexion'
+      },
+      'rightAnkle': {
+        high: 'Ankle instability or excessive movement',
+        moderate: 'Ankle movement compensation',
+        low: 'Ankle stiffness or limited dorsiflexion'
+      }
+    };
+
+    const findings = clinicalFindings[jointName as keyof typeof clinicalFindings];
+    if (!findings) {
+      return `${jointName}: Movement pattern requires assessment`;
+    }
+
+    // Convert normalized intensity (0-1) to percentage for thresholds
+    const intensityPercent = intensity * 100;
+    
+    if (intensityPercent > 70) {
+      return findings.high;
+    } else if (intensityPercent > 30) {
+      return findings.moderate;
     } else {
-      return `${jointName}: Movement pattern noted`;
+      return findings.low;
     }
   }
 

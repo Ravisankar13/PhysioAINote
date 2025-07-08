@@ -331,10 +331,10 @@ export type ContinuousRecordingSession = typeof continuousRecordingSessions.$inf
 // Virtual Patients from SOAP Notes Schema
 export const soapVirtualPatients = pgTable("soap_virtual_patients", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id")
+  userId: integer("userId")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
-  soapNoteId: integer("soap_note_id")
+  soapNoteId: integer("soapNoteId")
     .notNull()
     .references(() => soapNotes.id, { onDelete: "cascade" }),
   

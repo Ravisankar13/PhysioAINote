@@ -563,17 +563,19 @@ export default function VirtualPatientsPage() {
       console.log('Generating animation for selected patient:', selectedPatient.id);
       
       // Generate animation for the currently selected patient using text description
+      const soapNote = {
+        id: Date.now(),
+        subjective: `${selectedPatient.chief_complaint}. ${clinicalText}. ${selectedPatient.symptoms_description}`,
+        objective: `Clinical examination findings related to ${selectedPatient.body_part} complaints.`,
+        assessment: `Working assessment based on clinical presentation in ${selectedPatient.body_part} region.`,
+        plan: 'Treatment plan to be determined based on movement analysis.',
+        fullTranscription: clinicalText
+      };
+
       const animationResponse = await apiRequest(
         'POST', 
         `/api/virtual-patients/${selectedPatient.id}/generate-text-animation`, 
-        {
-          clinicalDescription: clinicalText,
-          patientContext: {
-            bodyPart: selectedPatient.body_part,
-            chiefComplaint: selectedPatient.chief_complaint,
-            symptoms: selectedPatient.symptoms_description
-          }
-        }
+        { soapNote }
       );
 
       if (!animationResponse.ok) {

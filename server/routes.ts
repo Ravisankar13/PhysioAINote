@@ -8047,8 +8047,8 @@ Respond with only a number between 1-100 representing the relevance score.`;
         return res.status(400).json({ error: 'Clinical text description required' });
       }
 
-      // Get virtual patient to verify ownership
-      const virtualPatient = await storage.getSoapVirtualPatient(virtualPatientId);
+      // Get virtual patient to verify ownership (check regular virtual patients table since SOAP service stores there)
+      const virtualPatient = await storage.getVirtualPatient(virtualPatientId);
       if (!virtualPatient || virtualPatient.userId !== userId) {
         return res.status(404).json({ error: 'Virtual patient not found' });
       }
@@ -8059,11 +8059,15 @@ Respond with only a number between 1-100 representing the relevance score.`;
       // Generate AI movement animation from text description
       const animationData = await aiMovementGenerator.generateMovementFromSOAP(soapNote);
       
-      // Update virtual patient with text-generated animation data
-      const updatedVirtualPatient = await storage.updateSoapVirtualPatient(virtualPatientId, {
-        motionData: animationData.frames,
-        hasMotionData: true,
-        aiGenerated: true
+      // Update virtual patient with text-generated animation data (store in treatment_options JSON field)
+      const updatedVirtualPatient = await storage.updateVirtualPatient(virtualPatientId, {
+        treatment_options: {
+          motionData: animationData.frames,
+          hasMotionData: true,
+          aiGenerated: true,
+          animationSource: "text-to-animation",
+          generatedAt: new Date().toISOString()
+        }
       });
 
       res.json({

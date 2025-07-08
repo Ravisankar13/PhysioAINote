@@ -3441,7 +3441,7 @@ Base your analysis on established postural assessment principles and correlate f
       
       if (isSOAPPatient) {
         // Update SOAP virtual patient
-        updatedPatient = await soapVirtualPatientService.updateVirtualPatient(patientId, updateData, userId);
+        updatedPatient = await soapVirtualPatientService.updateVirtualPatient(patientId, userId, updateData);
       } else {
         // For now, just update the regular virtual patient without motion data fields
         // TODO: Add motion data fields to regular virtual patients after schema update

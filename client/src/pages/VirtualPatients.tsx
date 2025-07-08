@@ -232,39 +232,64 @@ export default function VirtualPatientsPage() {
     }));
   }
 
-  // Helper function to get animation data from either threeDVisualization or treatment_options
+  // Helper function to get animation data from virtual patient
   const getAnimationData = (patient: any) => {
     console.log('Getting animation data for patient:', patient);
+    console.log('Patient object keys:', Object.keys(patient || {}));
     
     // Check for motion capture animation data
     if (patient?.threeDVisualization?.animationSequences?.length > 0) {
       console.log('Found motion capture animation sequences:', patient.threeDVisualization.animationSequences.length);
       return {
         source: 'Motion Capture',
+        frames: patient.threeDVisualization.animationSequences,
         animationSequences: patient.threeDVisualization.animationSequences,
         movementHeatmap: patient.threeDVisualization.movementHeatmap || []
       };
     }
     
-    // Check for AI text-generated animation data (new format from aiMovementGenerator)
-    if (patient?.motionData?.frames?.length > 0) {
-      console.log('Found AI-generated animation frames in motionData:', patient.motionData.frames.length);
-      // Convert AI-generated frames to the format expected by ThreeDSkeletonPlayer
-      const convertedSequences = convertAIFramesToAnimationSequences(patient.motionData.frames);
+    // Check for stored animation data field (from API generation)
+    if (patient?.aiAnimationData?.frames?.length > 0) {
+      console.log('Found AI-generated animation frames in aiAnimationData:', patient.aiAnimationData.frames.length);
       return {
         source: 'Text Generated',
-        animationSequences: convertedSequences,
-        movementHeatmap: [] // AI-generated may not have heatmap yet
+        frames: patient.aiAnimationData.frames,
+        animationSequences: patient.aiAnimationData.frames,
+        movementHeatmap: []
       };
     }
     
-    // Check for text-generated animation data (legacy format)
-    if (patient?.treatment_options?.motionData?.length > 0) {
-      console.log('Found legacy motion data:', patient.treatment_options.motionData.length);
+    // Check animationData field 
+    if (patient?.animationData?.frames?.length > 0) {
+      console.log('Found AI-generated animation frames in animationData:', patient.animationData.frames.length);
       return {
-        source: 'Text Generated', 
-        animationSequences: patient.treatment_options.motionData,
-        movementHeatmap: [] // Text-generated may not have heatmap
+        source: 'Text Generated',
+        frames: patient.animationData.frames,
+        animationSequences: patient.animationData.frames,
+        movementHeatmap: []
+      };
+    }
+    
+    // Check for AI text-generated animation data in motionData field
+    if (patient?.motionData?.frames?.length > 0) {
+      console.log('Found AI-generated animation frames in motionData:', patient.motionData.frames.length);
+      return {
+        source: 'Text Generated',
+        frames: patient.motionData.frames,
+        animationSequences: patient.motionData.frames,
+        movementHeatmap: []
+      };
+    }
+    
+    // Check hasAiAnimation flag and fetch animation separately
+    if (patient?.hasAiAnimation) {
+      console.log('Patient has AI animation flag set, should fetch animation data');
+      return {
+        source: 'Text Generated (Cached)',
+        frames: [],
+        animationSequences: [],
+        movementHeatmap: [],
+        needsFetch: true
       };
     }
     
@@ -1002,33 +1027,57 @@ export default function VirtualPatientsPage() {
           </div>
 
           {/* 3D Visualization Area */}
-          <div className="flex-1 relative bg-gradient-to-b from-gray-800 to-gray-900">
-            {(() => {
-              const animationData = getAnimationData(selectedPatient);
-              if (selectedPatient && animationData) {
-                return (
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="text-center text-white">
-                      {/* AI-Generated Interactive Skeleton Visualization */}
-                      <div className="w-full h-96 bg-gray-700 rounded-lg mb-4 flex items-center justify-center relative overflow-hidden">
-                        <InteractiveSkeleton 
-                          animationSequences={animationData.animationSequences}
-                          movementHeatmap={animationData.movementHeatmap}
+          <div className="lg:col-span-2">
+            <Card className="h-[500px]">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <Activity className="h-4 w-4" />
+                  3D Movement Animation
+                  {(() => {
+                    const animationData = getAnimationData(selectedPatient);
+                    if (animationData) {
+                      return (
+                        <Badge variant="secondary" className="text-xs">
+                          {animationData.source} ({animationData.frames?.length || animationData.animationSequences?.length || 0} frames)
+                        </Badge>
+                      );
+                    }
+                    return null;
+                  })()}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="h-[430px] relative">
+                {(() => {
+                  const animationData = getAnimationData(selectedPatient);
+                  if (selectedPatient && animationData && animationData.frames?.length > 0) {
+                    return (
+                      <div className="w-full h-full bg-gray-900 rounded-lg flex items-center justify-center relative overflow-hidden">
+                        <ThreeDSkeletonPlayer 
+                          animationData={animationData.frames}
                           isPlaying={isPlaying}
-                          playbackTime={playbackTime}
-                          className="absolute inset-0 w-full h-full"
+                          onPlayPauseToggle={() => setIsPlaying(!isPlaying)}
+                          className="w-full h-full"
                         />
                         {/* Animation Source Badge */}
                         <div className="absolute top-2 left-2 z-10">
-                          <Badge className={animationData.source === 'motion-capture' ? 'bg-blue-600' : 'bg-emerald-600'}>
-                            {animationData.source === 'motion-capture' ? 'Motion Capture' : 'Text Generated'}
+                          <Badge className={animationData.source === 'Motion Capture' ? 'bg-blue-600' : 'bg-emerald-600'}>
+                            {animationData.source}
                           </Badge>
                         </div>
+                        {/* Play Controls */}
+                        <div className="absolute bottom-2 left-2 z-10 flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setIsPlaying(!isPlaying)}
+                            className="bg-black/20 text-white border-white/20"
+                          >
+                            {isPlaying ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                );
-              } else if (selectedPatient) {
+                    );
+                  } else if (selectedPatient) {
                 return (
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="text-center text-white">
@@ -1062,16 +1111,18 @@ export default function VirtualPatientsPage() {
               }
             })()}
             
-            {/* Loading overlay when generating animation */}
-            {isLoadingAnimation && (
-              <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10">
-                <div className="text-center text-white">
-                  <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
-                  <p className="text-sm">Generating AI Movement...</p>
-                </div>
-              </div>
-            )}
-        </div>
+                {/* Loading overlay when generating animation */}
+                {isLoadingAnimation && (
+                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10">
+                    <div className="text-center text-white">
+                      <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
+                      <p className="text-sm">Generating AI Movement...</p>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
 
         {/* Right Panel - Clinical Correlation */}
         <div className="w-80 bg-white border-l border-gray-200 overflow-y-auto">

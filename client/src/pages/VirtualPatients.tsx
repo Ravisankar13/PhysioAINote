@@ -1437,6 +1437,7 @@ export default function VirtualPatientsPage() {
                   setIsLoadingAnalysis(true);
                   
                   // Process and save 3D visualization data
+                  console.log('Motion capture complete, data received:', data);
                   if (data.motionData && data.motionData.length > 0 && selectedPatient) {
                     toast({
                       title: "Processing 3D Visualization",
@@ -1470,10 +1471,15 @@ export default function VirtualPatientsPage() {
                           threeDVisualization: result.threeDVisualization,
                           hasMotionData: true
                         };
+                        console.log('Updated patient with 3D visualization:', updatedPatient);
                         setSelectedPatient(updatedPatient);
                         
                         // Force immediate enhanced profile reload with new 3D data
                         loadEnhancedPatientData(updatedPatient);
+                      } else {
+                        console.log('No 3D visualization data received or no selected patient');
+                        console.log('selectedPatient:', selectedPatient);
+                        console.log('result:', result);
                       }
                       
                       // Background data refresh for persistence

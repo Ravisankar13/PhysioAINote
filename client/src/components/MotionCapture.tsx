@@ -480,16 +480,25 @@ export default function MotionCapture({
         }
 
         // Call the onComplete callback for Virtual Patients page integration
+        console.log('Calling onComplete with data:', completedData);
         if (onComplete) {
           onComplete(completedData);
+        } else {
+          console.log('No onComplete callback provided');
         }
         
       } else {
+        console.log('No motion data captured - frames length:', currentFrames.length);
         toast({
           title: "Recording Stopped",
           description: "No motion data captured. Try recording with movement.",
           variant: "destructive",
         });
+        
+        // Still call onComplete even if no data, so the parent knows recording stopped
+        if (onComplete) {
+          onComplete({ motionData: [], analysis: null, virtualPatient: null });
+        }
       }
     } catch (error) {
       console.error('Error in stopRecording:', error);

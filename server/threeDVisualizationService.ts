@@ -168,14 +168,34 @@ export class ThreeDVisualizationService {
    * Create animation sequences from motion data
    */
   private createAnimationSequences(motionData: PoseFrame[]) {
-    return motionData.map(frame => ({
+    // Map bone names to MediaPipe landmark indices (33 total landmarks)
+    const boneToLandmarkMap: Record<string, number> = {
+      'head': 0,         // nose
+      'neck': 0,         // use nose as neck approximation
+      'leftShoulder': 11,
+      'rightShoulder': 12,
+      'leftElbow': 13,
+      'rightElbow': 14,
+      'leftWrist': 15,
+      'rightWrist': 16,
+      'spine': 11,       // use left shoulder as spine approximation
+      'leftHip': 23,
+      'rightHip': 24,
+      'leftKnee': 25,
+      'rightKnee': 26,
+      'leftAnkle': 27,
+      'rightAnkle': 28
+    };
+
+    return motionData.map((frame, frameIndex) => ({
       timestamp: frame.timestamp,
-      keyframes: this.BONE_NAMES.map((boneName, index) => {
-        const landmark = frame.landmarks[index] || frame.landmarks[0];
+      keyframes: this.BONE_NAMES.map((boneName) => {
+        const landmarkIndex = boneToLandmarkMap[boneName] || 0;
+        const landmark = frame.landmarks[landmarkIndex] || { x: 0, y: 0, z: 0, visibility: 0 };
         return {
           boneName,
           position: [landmark.x, landmark.y, landmark.z || 0],
-          rotation: this.calculateBoneRotation(landmark, boneName)
+          rotation: this.calculateBoneRotation(landmark, boneName, frameIndex)
         };
       })
     }));
@@ -359,13 +379,43 @@ export class ThreeDVisualizationService {
   /**
    * Calculate bone rotation from landmark position
    */
-  private calculateBoneRotation(landmark: any, boneName: string): number[] {
-    // Simplified rotation calculation - could be enhanced with more sophisticated algorithms
-    return [
+  private calculateBoneRotation(landmark: any, boneName: string, frameIndex: number = 0): number[] {
+    // Simplified rotation calculation with bone-specific logic
+    const baseRotation = [
       Math.atan2(landmark.y, landmark.x),
       Math.atan2(landmark.z || 0, landmark.x),
       0
     ];
+    
+    // Add slight variation for different bones to create more realistic animation
+    const boneVariation = this.getBoneSpecificRotation(boneName, frameIndex);
+    
+    return [
+      baseRotation[0] + boneVariation[0],
+      baseRotation[1] + boneVariation[1], 
+      baseRotation[2] + boneVariation[2]
+    ];
+  }
+
+  /**
+   * Get bone-specific rotation variations for more realistic animation
+   */
+  private getBoneSpecificRotation(boneName: string, frameIndex: number): number[] {
+    const time = frameIndex * 0.1; // Create time-based variation
+    
+    switch (boneName) {
+      case 'leftShoulder':
+      case 'rightShoulder':
+        return [0, 0, Math.sin(time) * 0.1];
+      case 'leftElbow':
+      case 'rightElbow':
+        return [Math.cos(time) * 0.05, 0, 0];
+      case 'leftKnee':
+      case 'rightKnee':
+        return [Math.sin(time * 0.5) * 0.08, 0, 0];
+      default:
+        return [0, 0, 0];
+    }
   }
 
   /**

@@ -43,6 +43,7 @@ import {
   Stethoscope
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import AIAnimationPlayer from '../components/AIAnimationPlayer';
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { SoapVirtualPatient } from "@shared/schema";
 import MotionCapture from "@/components/MotionCapture";
@@ -1072,11 +1073,11 @@ export default function VirtualPatientsPage() {
                   if (selectedPatient && animationData && animationData.frames?.length > 0) {
                     return (
                       <div className="w-full h-full bg-gray-900 rounded-lg flex items-center justify-center relative overflow-hidden">
-                        <ThreeDSkeletonPlayer 
-                          animationData={animationData.frames}
+                        <AIAnimationPlayer
+                          animationFrames={animationData.frames}
                           isPlaying={isPlaying}
-                          onPlayPauseToggle={() => setIsPlaying(!isPlaying)}
                           className="w-full h-full"
+                          onPlayPauseToggle={() => setIsPlaying(!isPlaying)}
                         />
                         {/* Animation Source Badge */}
                         <div className="absolute top-2 left-2 z-10">

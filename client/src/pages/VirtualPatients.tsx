@@ -1238,7 +1238,7 @@ export default function VirtualPatientsPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => setPlaybackTime(0)}
-                disabled={!movementData}
+                disabled={!selectedPatient?.threeDVisualization?.animationSequences?.length}
               >
                 <SkipBack className="h-4 w-4" />
               </Button>
@@ -1247,7 +1247,7 @@ export default function VirtualPatientsPage() {
                 variant="outline"
                 size="sm"
                 onClick={togglePlayback}
-                disabled={!movementData}
+                disabled={!selectedPatient?.threeDVisualization?.animationSequences?.length}
               >
                 {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
               </Button>
@@ -1256,7 +1256,7 @@ export default function VirtualPatientsPage() {
                 variant="outline"
                 size="sm"
                 onClick={resetPlayback}
-                disabled={!movementData}
+                disabled={!selectedPatient?.threeDVisualization?.animationSequences?.length}
               >
                 <RotateCcw className="h-4 w-4" />
               </Button>
@@ -1264,16 +1264,21 @@ export default function VirtualPatientsPage() {
 
             {/* Timeline Scrubber */}
             <div className="flex items-center gap-2 w-64">
-              <span className="text-xs text-gray-500">0:00</span>
+              <span className="text-xs text-gray-500">
+                {Math.floor(playbackTime / 30)}:{(Math.floor(playbackTime) % 30).toString().padStart(2, '0')}
+              </span>
               <Slider
                 value={[playbackTime]}
                 onValueChange={(value) => setPlaybackTime(value[0])}
-                max={100}
+                max={selectedPatient?.threeDVisualization?.animationSequences?.length || 100}
                 step={1}
-                disabled={!movementData}
+                disabled={!selectedPatient?.threeDVisualization?.animationSequences?.length}
                 className="flex-1"
               />
-              <span className="text-xs text-gray-500">2:30</span>
+              <span className="text-xs text-gray-500">
+                {Math.floor((selectedPatient?.threeDVisualization?.animationSequences?.length || 90) / 30)}:
+                {(Math.floor((selectedPatient?.threeDVisualization?.animationSequences?.length || 90)) % 30).toString().padStart(2, '0')}
+              </span>
             </div>
 
             {/* Speed Controls */}

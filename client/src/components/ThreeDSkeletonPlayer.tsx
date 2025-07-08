@@ -166,7 +166,7 @@ const ThreeDSkeletonPlayer: React.FC<ThreeDSkeletonPlayerProps> = ({
       }
       renderer.dispose();
     };
-  }, [animationSequences]);
+  }, [animationSequences, isPlaying, playbackTime]);
 
   // Create skeleton structure with joints and bones
   const createSkeletonStructure = (skeletonGroup: THREE.Group) => {
@@ -260,7 +260,8 @@ const ThreeDSkeletonPlayer: React.FC<ThreeDSkeletonPlayerProps> = ({
     const animate = () => {
       animationRef.current = requestAnimationFrame(animate);
       
-      if (isPlaying && animationSequences.length > 0) {
+      // Always update skeleton position (for both playing and manual scrubbing)
+      if (animationSequences.length > 0) {
         updateSkeletonAnimation();
       }
 
@@ -282,8 +283,15 @@ const ThreeDSkeletonPlayer: React.FC<ThreeDSkeletonPlayerProps> = ({
   const updateSkeletonAnimation = () => {
     if (!animationSequences || animationSequences.length === 0) return;
 
-    const delta = clockRef.current.getDelta();
-    const newFrame = currentFrame + (delta * animationSpeed);
+    let newFrame;
+    if (isPlaying) {
+      // When playing, advance automatically
+      const delta = clockRef.current.getDelta();
+      newFrame = currentFrame + (delta * animationSpeed);
+    } else {
+      // When not playing, use the playbackTime prop for manual scrubbing
+      newFrame = playbackTime;
+    }
     
     // Loop animation
     const loopedFrame = newFrame % animationSequences.length;

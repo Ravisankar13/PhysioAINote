@@ -8228,7 +8228,7 @@ Respond with only a number between 1-100 representing the relevance score.`;
     }
   });
 
-  // Get all virtual patients for user
+  // Get all virtual patients for user (from both tables)
   app.get("/api/virtual-patients", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const userId = req.user?.id;
@@ -8236,8 +8236,34 @@ Respond with only a number between 1-100 representing the relevance score.`;
         return res.status(401).json({ error: 'User not authenticated' });
       }
 
-      const virtualPatients = await soapVirtualPatientService.getUserVirtualPatients(userId);
-      res.json(virtualPatients);
+      // Get virtual patients from both old and new tables
+      const [soapVirtualPatients, oldVirtualPatients] = await Promise.all([
+        soapVirtualPatientService.getUserVirtualPatients(userId),
+        storage.getVirtualPatients(userId)
+      ]);
+
+      // Convert old virtual patients to compatible format with animation fields
+      const convertedOldPatients = oldVirtualPatients.map(patient => ({
+        ...patient,
+        // Add animation fields for compatibility (initially false/null for old patients)
+        motionData: null,
+        hasMotionData: false,
+        aiGenerated: false,
+        // Add type field to distinguish old vs new patients
+        tableSource: "virtual_patients"
+      }));
+
+      // Add tableSource to new patients for identification
+      const enhancedSoapPatients = soapVirtualPatients.map(patient => ({
+        ...patient,
+        tableSource: "soap_virtual_patients"
+      }));
+
+      // Combine all patients and sort by creation date
+      const allPatients = [...enhancedSoapPatients, ...convertedOldPatients]
+        .sort((a, b) => new Date(b.createdAt || b.created_at).getTime() - new Date(a.createdAt || a.created_at).getTime());
+
+      res.json(allPatients);
     } catch (error: any) {
       console.error("Error getting virtual patients:", error);
       res.status(500).json({ error: error.message });

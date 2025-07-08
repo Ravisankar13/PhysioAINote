@@ -3397,16 +3397,21 @@ Base your analysis on established postural assessment principles and correlate f
         }
       }
 
-      // Import the 3D visualization service
+      // Import visualization and clinical analysis services
       const { threeDVisualizationService } = await import('./threeDVisualizationService');
+      const { clinicalMotionAnalysisService } = await import('./clinicalMotionAnalysis');
 
-      // Generate 3D visualization data
+      // Generate real clinical motion analysis
+      const clinicalAnalysis = await clinicalMotionAnalysisService.analyzeMotionData(motionData);
+
+      // Generate 3D visualization data with real clinical insights
       const threeDVisualization = await threeDVisualizationService.generate3DVisualization(
         motionData,
         {
           dysfunctionPatterns: analysis?.identifiedDysfunctions || [],
           compensationMechanisms: clinicalCorrelations || [],
-          movementQuality: analysis?.avgConfidence || 0.8
+          movementQuality: analysis?.avgConfidence || 0.8,
+          clinicalScores: clinicalAnalysis
         }
       );
 
@@ -3451,7 +3456,8 @@ Base your analysis on established postural assessment principles and correlate f
         success: true,
         message: '3D Digital Twin created successfully with motion capture visualization!',
         virtualPatient: updatedPatient,
-        threeDVisualization: threeDVisualization
+        threeDVisualization: threeDVisualization,
+        clinicalAnalysis: clinicalAnalysis
       });
 
     } catch (error) {

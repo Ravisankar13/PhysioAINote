@@ -146,6 +146,21 @@ export default function VirtualPatientsPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // Helper functions for clinical scoring display
+  const getScoreColor = (score: number): string => {
+    if (score >= 80) return 'text-green-400';
+    if (score >= 60) return 'text-yellow-400';
+    if (score >= 40) return 'text-orange-400';
+    return 'text-red-400';
+  };
+
+  const getScoreColorClass = (score: number): string => {
+    if (score >= 80) return 'bg-green-400';
+    if (score >= 60) return 'bg-yellow-400';
+    if (score >= 40) return 'bg-orange-400';
+    return 'bg-red-400';
+  };
+
   // Get all virtual patients for user
   const { data: virtualPatients = [], isLoading: patientsLoading, refetch } = useQuery({
     queryKey: ["/api/virtual-patients"],

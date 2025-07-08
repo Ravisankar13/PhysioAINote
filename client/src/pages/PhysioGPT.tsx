@@ -32,75 +32,7 @@ import {
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import type { PhysioGptConversation, PhysioGptMessage } from "@shared/schema";
-// Simple 3D Body Model Component (reliable fallback)
-const Simple3DBodyModel = ({ onRegionSelect, selectedRegion }: { onRegionSelect: (region: string, displayName: string) => void; selectedRegion?: string }) => {
-  const bodyRegions = [
-    { name: 'head', displayName: 'Head & Neck', color: '#ef4444', position: 'top: 5%; left: 42%' },
-    { name: 'shoulder_left', displayName: 'Left Shoulder', color: '#f97316', position: 'top: 15%; left: 25%' },
-    { name: 'shoulder_right', displayName: 'Right Shoulder', color: '#f97316', position: 'top: 15%; right: 25%' },
-    { name: 'chest', displayName: 'Chest & Thorax', color: '#eab308', position: 'top: 25%; left: 35%' },
-    { name: 'back', displayName: 'Back & Spine', color: '#84cc16', position: 'top: 30%; left: 42%' },
-    { name: 'elbow_left', displayName: 'Left Elbow', color: '#06b6d4', position: 'top: 35%; left: 15%' },
-    { name: 'elbow_right', displayName: 'Right Elbow', color: '#06b6d4', position: 'top: 35%; right: 15%' },
-    { name: 'wrist_left', displayName: 'Left Wrist & Hand', color: '#3b82f6', position: 'top: 50%; left: 10%' },
-    { name: 'wrist_right', displayName: 'Right Wrist & Hand', color: '#3b82f6', position: 'top: 50%; right: 10%' },
-    { name: 'hip_left', displayName: 'Left Hip', color: '#8b5cf6', position: 'top: 55%; left: 35%' },
-    { name: 'hip_right', displayName: 'Right Hip', color: '#8b5cf6', position: 'top: 55%; right: 35%' },
-    { name: 'knee_left', displayName: 'Left Knee', color: '#ec4899', position: 'top: 70%; left: 32%' },
-    { name: 'knee_right', displayName: 'Right Knee', color: '#ec4899', position: 'top: 70%; right: 32%' },
-    { name: 'ankle_left', displayName: 'Left Ankle & Foot', color: '#f43f5e', position: 'top: 85%; left: 32%' },
-    { name: 'ankle_right', displayName: 'Right Ankle & Foot', color: '#f43f5e', position: 'top: 85%; right: 32%' },
-  ];
-
-  return (
-    <div className="h-full w-full bg-gradient-to-b from-blue-50 to-gray-50 rounded-lg relative overflow-hidden">
-      {/* Human Body Outline */}
-      <svg className="absolute inset-0 w-full h-full" viewBox="0 0 200 300" preserveAspectRatio="xMidYMid meet">
-        {/* Simple body outline */}
-        <path
-          d="M100 20 C90 15, 80 25, 85 35 L85 50 C75 50, 70 55, 70 65 L70 120 C65 125, 65 135, 70 140 L70 180 C70 185, 75 190, 80 190 L85 210 C80 215, 80 225, 85 230 L85 270 C85 275, 90 280, 95 280 L105 280 C110 280, 115 275, 115 270 L115 230 C120 225, 120 215, 115 210 L120 190 C125 190, 130 185, 130 180 L130 140 C135 135, 135 125, 130 120 L130 65 C130 55, 125 50, 115 50 L115 35 C120 25, 110 15, 100 20"
-          fill="rgba(59, 130, 246, 0.1)"
-          stroke="rgba(59, 130, 246, 0.3)"
-          strokeWidth="2"
-        />
-      </svg>
-
-      {/* Interactive Body Region Points */}
-      {bodyRegions.map((region) => (
-        <button
-          key={region.name}
-          className={`absolute w-6 h-6 rounded-full border-2 border-white shadow-lg transition-all duration-200 hover:scale-125 hover:shadow-xl cursor-pointer z-10 ${
-            selectedRegion === region.name
-              ? 'ring-2 ring-blue-500 ring-offset-2 scale-110'
-              : 'hover:ring-2 hover:ring-gray-300'
-          }`}
-          style={{
-            backgroundColor: region.color,
-            ...Object.fromEntries(
-              region.position.split('; ').map(pos => pos.split(': '))
-            ),
-            transform: 'translate(-50%, -50%)'
-          }}
-          onClick={() => onRegionSelect(region.name, region.displayName)}
-          title={region.displayName}
-        />
-      ))}
-
-      {/* Legend */}
-      <div className="absolute bottom-2 left-2 right-2">
-        <div className="bg-white/90 backdrop-blur-sm rounded-lg p-2 text-xs">
-          <p className="font-medium text-gray-700 mb-1">Interactive Body Model</p>
-          <p className="text-gray-500">Click on body regions for assessment</p>
-          {selectedRegion && (
-            <p className="text-blue-600 font-medium mt-1">
-              Selected: {bodyRegions.find(r => r.name === selectedRegion)?.displayName}
-            </p>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
+import InteractiveSkeleton from "@/components/3d/InteractiveSkeleton";
 import AssessmentTemplates, { type AssessmentTemplate } from "@/components/clinical/AssessmentTemplates";
 import AssessmentForm, { type AssessmentResults } from "@/components/clinical/AssessmentForm";
 import EvidenceBasedProtocols from "@/components/clinical/EvidenceBasedProtocols";
@@ -993,10 +925,19 @@ Recommendations: ${results.recommendations?.join('; ') || 'Standard care protoco
                   <CardContent className="h-full p-0">
                     <div className="h-full">
                       <ErrorBoundary>
-                        <Simple3DBodyModel
-                          onRegionSelect={handleBodyRegionSelect}
-                          selectedRegion={selectedBodyRegion || undefined}
-                        />
+                        <Suspense fallback={
+                          <div className="h-full bg-gray-50 rounded-lg flex items-center justify-center">
+                            <div className="text-center">
+                              <Loader2 className="h-8 w-8 mx-auto mb-2 text-blue-500 animate-spin" />
+                              <p className="text-sm text-gray-600">Loading 3D Model...</p>
+                            </div>
+                          </div>
+                        }>
+                          <InteractiveSkeleton
+                            onRegionSelect={handleBodyRegionSelect}
+                            selectedRegion={selectedBodyRegion || undefined}
+                          />
+                        </Suspense>
                       </ErrorBoundary>
                     </div>
                   </CardContent>

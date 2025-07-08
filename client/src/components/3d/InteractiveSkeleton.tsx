@@ -185,6 +185,19 @@ export default function InteractiveSkeleton({ onRegionSelect, selectedRegion }: 
           <Canvas
             camera={{ position: cameraPosition, fov: 45 }}
             style={{ background: '#f8fafc' }}
+            gl={{ 
+              antialias: true, 
+              alpha: true,
+              powerPreference: "default",
+              failIfMajorPerformanceCaveat: false
+            }}
+            onCreated={({ gl }) => {
+              try {
+                gl.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+              } catch (e) {
+                console.warn('WebGL setup warning:', e);
+              }
+            }}
           >
             <ambientLight intensity={0.6} />
             <directionalLight position={[10, 10, 5]} intensity={0.8} />

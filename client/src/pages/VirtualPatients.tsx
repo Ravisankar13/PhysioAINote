@@ -217,6 +217,29 @@ export default function VirtualPatientsPage() {
     }
   });
 
+  // Helper function to get animation data from either threeDVisualization or treatment_options
+  const getAnimationData = (patient: any) => {
+    // Check for motion capture animation data
+    if (patient?.threeDVisualization?.animationSequences?.length > 0) {
+      return {
+        source: 'motion-capture',
+        animationSequences: patient.threeDVisualization.animationSequences,
+        movementHeatmap: patient.threeDVisualization.movementHeatmap || []
+      };
+    }
+    
+    // Check for text-generated animation data
+    if (patient?.treatment_options?.motionData?.length > 0) {
+      return {
+        source: 'text-generated', 
+        animationSequences: patient.treatment_options.motionData,
+        movementHeatmap: [] // Text-generated may not have heatmap
+      };
+    }
+    
+    return null;
+  };
+
   // Enhanced patient data loading  
   const loadEnhancedPatientData = async (patient: SoapVirtualPatient) => {
     setSelectedPatient(patient);
@@ -458,7 +481,7 @@ export default function VirtualPatientsPage() {
 
     setIsGeneratingFromText(true);
     try {
-      // Always create a new SOAP virtual patient for text-to-animation
+      // Create a new regular virtual patient for text-to-animation (using the SOAP virtual patient service)
       const newPatientData = {
         soapSections: {
           subjective: clinicalText,
@@ -471,6 +494,7 @@ export default function VirtualPatientsPage() {
         timestamp: new Date().toISOString()
       };
 
+      console.log('Creating virtual patient for text animation...');
       const createResponse = await apiRequest('POST', '/api/soap-virtual-patients', newPatientData);
       if (!createResponse.ok) {
         throw new Error(`Failed to create virtual patient: ${createResponse.statusText}`);
@@ -482,6 +506,8 @@ export default function VirtualPatientsPage() {
       if (!patientId) {
         throw new Error('Failed to get virtual patient ID from creation response');
       }
+
+      console.log('Virtual patient created with ID:', patientId, 'Generating animation...');
 
       // Create a mock SOAP note structure for the AI movement generator
       const mockSoapNote = {
@@ -500,11 +526,25 @@ export default function VirtualPatientsPage() {
         { soapNote: mockSoapNote }
       );
 
+      if (!response.ok) {
+        throw new Error(`Animation generation failed: ${response.statusText}`);
+      }
+
       const animationData = await response.json();
+      console.log('Animation generation response:', animationData);
       setTextAnimationResult(animationData);
       
       // Refresh the patients list to get updated data
       await queryClient.invalidateQueries({ queryKey: ['/api/virtual-patients'] });
+
+      // Select the newly created patient to show the animation
+      const updatedPatients = await queryClient.fetchQuery({
+        queryKey: ['/api/virtual-patients']
+      });
+      const newPatient = updatedPatients.find((p: any) => p.id === patientId);
+      if (newPatient) {
+        setSelectedPatient(newPatient);
+      }
 
       toast({
         title: "Animation Generated",
@@ -927,252 +967,74 @@ export default function VirtualPatientsPage() {
 
           {/* 3D Visualization Area */}
           <div className="flex-1 relative bg-gradient-to-b from-gray-800 to-gray-900">
-            {selectedPatient && selectedPatient?.threeDVisualization ? (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-center text-white">
-                  {/* AI-Generated Interactive Skeleton Visualization */}
-                  <div className="w-full h-96 bg-gray-700 rounded-lg mb-4 flex items-center justify-center relative overflow-hidden">
-                    {/* Enhanced Interactive Skeleton visualization */}
-                    {selectedPatient.threeDVisualization?.animationSequences?.length > 0 ? (
-                      <InteractiveSkeleton 
-                        animationSequences={selectedPatient.threeDVisualization.animationSequences}
-                        movementHeatmap={selectedPatient.threeDVisualization.movementHeatmap || []}
-                        isPlaying={isPlaying}
-                        playbackTime={playbackTime}
-                        className="absolute inset-0 w-full h-full"
-                      />
-                    ) : (
-                      <div className="text-center text-gray-400">
-                        <Activity className="h-12 w-12 mx-auto mb-4" />
-                        <p className="mb-4">AI Animation System Ready</p>
-                        <p className="text-sm">Motion capture or text description will generate enhanced skeleton visualization</p>
-                        {animationSequence && (
-                          <div className="mt-4">
-                            <Badge className="bg-green-600">
-                              Animation Generated ({animationSequence.frames?.length || 0} frames)
-                            </Badge>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    
-                    {/* Loading overlay when generating animation */}
-                    {isLoadingAnimation && (
-                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10">
-                        <div className="text-center text-white">
-                          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
-                          <p className="text-sm">Generating AI Movement...</p>
+            {(() => {
+              const animationData = getAnimationData(selectedPatient);
+              if (selectedPatient && animationData) {
+                return (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="text-center text-white">
+                      {/* AI-Generated Interactive Skeleton Visualization */}
+                      <div className="w-full h-96 bg-gray-700 rounded-lg mb-4 flex items-center justify-center relative overflow-hidden">
+                        <InteractiveSkeleton 
+                          animationSequences={animationData.animationSequences}
+                          movementHeatmap={animationData.movementHeatmap}
+                          isPlaying={isPlaying}
+                          playbackTime={playbackTime}
+                          className="absolute inset-0 w-full h-full"
+                        />
+                        {/* Animation Source Badge */}
+                        <div className="absolute top-2 left-2 z-10">
+                          <Badge className={animationData.source === 'motion-capture' ? 'bg-blue-600' : 'bg-emerald-600'}>
+                            {animationData.source === 'motion-capture' ? 'Motion Capture' : 'Text Generated'}
+                          </Badge>
                         </div>
                       </div>
-                    )}
-                    
-                    {/* Real-time data indicators */}
-                    <div className="absolute top-2 left-2 text-xs text-cyan-400 z-20">
-                      <div className="flex items-center gap-1">
-                        <div className="w-1.5 h-1.5 bg-cyan-400 rounded-full animate-pulse"></div>
-                        Live Data
-                      </div>
-                    </div>
-                    
-                    <Badge className="absolute top-2 right-2 bg-green-600 text-white z-20">
-                      3D Ready
-                    </Badge>
-                    
-                    {/* Recapture Button */}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="absolute bottom-2 right-2 text-xs bg-orange-600/20 border-orange-500 text-orange-400 hover:bg-orange-600/40 z-20"
-                      onClick={() => setShowRecaptureConfirm(true)}
-                    >
-                      <Video className="h-3 w-3 mr-1" />
-                      Recapture
-                    </Button>
-                    
-                    {/* Movement quality badge - Dynamic based on actual analysis */}
-                    {selectedPatient.threeDVisualization?.movementHeatmap && (
-                      <div className="absolute bottom-2 left-2 text-xs z-20">
-                        {(() => {
-                          const problemJoints = selectedPatient.threeDVisualization.movementHeatmap
-                            .filter(joint => joint.problemAreas || joint.intensity > 70);
-                          
-                          if (problemJoints.length > 0) {
-                            const topProblem = problemJoints.reduce((max, joint) => 
-                              joint.intensity > max.intensity ? joint : max
-                            );
-                            return (
-                              <div className="bg-red-500/20 text-red-400 px-2 py-1 rounded">
-                                {topProblem.jointName.charAt(0).toUpperCase() + topProblem.jointName.slice(1)} Issue Detected
-                              </div>
-                            );
-                          } else {
-                            return (
-                              <div className="bg-green-500/20 text-green-400 px-2 py-1 rounded">
-                                Normal Movement
-                              </div>
-                            );
-                          }
-                        })()}
-                      </div>
-                    )}
-                  </div>
-                  <p className="text-lg font-medium mb-2">3D Digital Twin Active</p>
-                  <p className="text-gray-300 text-sm mb-4">
-                    Complete skeletal model with {selectedPatient.threeDVisualization?.animationSequences?.length || 'multiple'} animation frames
-                  </p>
-                  
-                  {/* 3D Visualization Stats */}
-                  <div className="grid grid-cols-2 gap-4 max-w-md mx-auto">
-                    <div className="bg-gray-800 p-3 rounded-lg">
-                      <div className="text-blue-400 text-lg font-semibold">
-                        {selectedPatient.threeDVisualization?.skeletalMesh?.bones?.length || 17}
-                      </div>
-                      <div className="text-xs text-gray-300">Bone Joints</div>
-                    </div>
-                    <div className="bg-gray-800 p-3 rounded-lg">
-                      <div className="text-green-400 text-lg font-semibold">
-                        {selectedPatient.threeDVisualization?.movementHeatmap?.length || 17}
-                      </div>
-                      <div className="text-xs text-gray-300">Tracked Joints</div>
-                    </div>
-                    <div className="bg-gray-800 p-3 rounded-lg">
-                      <div className="text-yellow-400 text-lg font-semibold">
-                        {selectedPatient.threeDVisualization?.clinicalAnnotations?.length || 3}
-                      </div>
-                      <div className="text-xs text-gray-300">Clinical Notes</div>
-                    </div>
-                    <div className="bg-gray-800 p-3 rounded-lg">
-                      <div className="text-purple-400 text-lg font-semibold">
-                        {selectedPatient.threeDVisualization?.animationSequences?.length || 24}
-                      </div>
-                      <div className="text-xs text-gray-300">Keyframes</div>
                     </div>
                   </div>
-
-                  {/* Movement Quality Heatmap - Show analysis for motion capture patients */}
-                  {selectedPatient.threeDVisualization && (
-                    <div className="mt-6 max-w-md mx-auto">
-                      <h4 className="text-sm font-medium text-gray-300 mb-3">Movement Quality Analysis</h4>
-                      <div className="space-y-2">
-                        {selectedPatient.threeDVisualization?.movementHeatmap?.slice(0, 5).map((joint, index) => (
-                          <div key={index} className="flex items-center justify-between text-xs">
-                            <span className="text-gray-300 capitalize">{joint.jointName}</span>
-                            <div className="flex items-center gap-2">
-                              <div className="w-20 h-2 bg-gray-700 rounded-full overflow-hidden">
-                                <div 
-                                  className={`h-full rounded-full ${
-                                    joint.problemAreas ? 'bg-red-500' : 
-                                    joint.intensity > 70 ? 'bg-yellow-500' : 'bg-green-500'
-                                  }`}
-                                  style={{ width: `${joint.intensity}%` }}
-                                />
-                              </div>
-                              <span className={
-                                joint.problemAreas ? 'text-red-400' : 
-                                joint.intensity > 70 ? 'text-yellow-400' : 'text-green-400'
-                              }>
-                                {joint.intensity.toFixed(0)}%
-                              </span>
+                );
+              } else if (selectedPatient) {
+                return (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="text-center text-white">
+                      <div className="w-full h-96 bg-gray-700 rounded-lg mb-4 flex items-center justify-center relative overflow-hidden">
+                        <div className="text-center text-gray-400">
+                          <Activity className="h-12 w-12 mx-auto mb-4" />
+                          <p className="mb-4">AI Animation System Ready</p>
+                          <p className="text-sm">Motion capture or text description will generate enhanced skeleton visualization</p>
+                          {animationSequence && (
+                            <div className="mt-4">
+                              <Badge className="bg-green-600">
+                                Animation Generated ({animationSequence.frames?.length || 0} frames)
+                              </Badge>
                             </div>
-                          </div>
-                        ))}
+                          )}
+                        </div>
                       </div>
                     </div>
-                  )}
-
-                  {showComparisonMode && (
-                    <div className="mt-4 flex justify-center gap-4">
-                      <div className="text-center">
-                        <div className="w-32 h-32 bg-green-700 rounded-lg mb-2 flex items-center justify-center">
-                          <span className="text-2xl">✓</span>
-                        </div>
-                        <p className="text-xs">Normal Pattern</p>
-                      </div>
-                      <div className="text-center">
-                        <div className="w-32 h-32 bg-red-700 rounded-lg mb-2 flex items-center justify-center">
-                          <span className="text-2xl">⚠</span>
-                        </div>
-                        <p className="text-xs">Patient Pattern</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ) : movementData ? (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-center text-white">
-                  <div className="w-64 h-64 bg-gray-700 rounded-lg mb-4 flex items-center justify-center">
-                    <div className="text-6xl">🏃‍♂️</div>
                   </div>
-                  <p className="text-lg font-medium mb-2">Motion Data Available</p>
-                  <p className="text-gray-300 text-sm mb-4">
-                    Basic movement data with {movementData.capturedMovements.length} captured frames
-                  </p>
-                  <Button 
-                    onClick={() => setShowMotionCapture(true)}
-                    className="bg-orange-600 hover:bg-orange-700"
-                  >
-                    <Video className="h-4 w-4 mr-2" />
-                    Upgrade to 3D Twin
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="absolute inset-0 flex items-center justify-center">
+                );
+              } else {
+                return (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="text-center text-white">
+                      <Activity className="h-12 w-12 mx-auto mb-4" />
+                      <p className="mb-4">Select a Virtual Patient</p>
+                      <p className="text-sm">Choose a patient from the list to view their digital twin</p>
+                    </div>
+                  </div>
+                );
+              }
+            })()}
+            
+            {/* Loading overlay when generating animation */}
+            {isLoadingAnimation && (
+              <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10">
                 <div className="text-center text-white">
-                  <Camera className="h-16 w-16 mx-auto mb-4 text-gray-400" />
-                  <p className="text-lg font-medium mb-2">No Motion Data Available</p>
-                  <p className="text-gray-300 text-sm mb-4">
-                    Capture patient movements to enable 3D visualization
-                  </p>
-                  <Button 
-                    onClick={() => setShowMotionCapture(true)}
-                    className="bg-blue-600 hover:bg-blue-700"
-                  >
-                    <Video className="h-4 w-4 mr-2" />
-                    Start Motion Capture
-                  </Button>
+                  <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
+                  <p className="text-sm">Generating AI Movement...</p>
                 </div>
               </div>
             )}
-
-            {/* Movement Quality Indicators */}
-            {movementData && (
-              <div className="absolute top-4 left-4 space-y-2">
-                {movementData.compensationPatterns.map((pattern, index) => (
-                  <div key={index} className="bg-red-900/80 backdrop-blur text-white px-3 py-2 rounded-lg text-sm">
-                    <div className="font-medium">{pattern.joint} Compensation</div>
-                    <div className="text-red-200 text-xs">{pattern.pattern} - {pattern.severity}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Movement Analysis Comparison */}
-          {movementData && showComparisonMode && (
-            <div className="bg-gray-800 p-4 border-t border-gray-700">
-              <h3 className="text-white font-medium mb-3">Movement Pattern Analysis</h3>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <h4 className="text-green-400 mb-2">Normal Movement</h4>
-                  <ul className="text-gray-300 space-y-1">
-                    <li>• Symmetric hip movement</li>
-                    <li>• Balanced weight distribution</li>
-                    <li>• Smooth joint transitions</li>
-                  </ul>
-                </div>
-                <div>
-                  <h4 className="text-red-400 mb-2">Patient Deviations</h4>
-                  <ul className="text-gray-300 space-y-1">
-                    <li>• Hip hiking on affected side</li>
-                    <li>• Compensatory trunk lean</li>
-                    <li>• Reduced range of motion</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Right Panel - Clinical Correlation */}
@@ -1839,6 +1701,7 @@ Example: 'Patient reports decreased shoulder external rotation, pain during over
           </ScrollArea>
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 }

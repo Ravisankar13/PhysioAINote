@@ -458,34 +458,29 @@ export default function VirtualPatientsPage() {
 
     setIsGeneratingFromText(true);
     try {
-      // First, create a new virtual patient if none selected
-      let patientId = selectedPatient?.id;
+      // Always create a new SOAP virtual patient for text-to-animation
+      const newPatientData = {
+        soapSections: {
+          subjective: clinicalText,
+          objective: "",
+          assessment: "",
+          plan: ""
+        },
+        transcript: clinicalText,
+        sessionDuration: 0,
+        timestamp: new Date().toISOString()
+      };
+
+      const createResponse = await apiRequest('POST', '/api/soap-virtual-patients', newPatientData);
+      if (!createResponse.ok) {
+        throw new Error(`Failed to create virtual patient: ${createResponse.statusText}`);
+      }
+      
+      const createResult = await createResponse.json();
+      const patientId = createResult.virtualPatient?.id;
       
       if (!patientId) {
-        // Create a new virtual patient with basic information
-        const newPatientData = {
-          title: `Text-Generated Patient ${new Date().toLocaleDateString()}`,
-          bodyPart: "general",
-          patientProfile: {
-            name: "Anonymous Patient",
-            age: 35,
-            gender: "not specified"
-          },
-          clinicalPresentation: {
-            chiefComplaint: clinicalText.substring(0, 100)
-          },
-          physicalFindings: {},
-          assessmentPlan: {},
-          aiGenerated: true,
-          hasMotionData: false
-        };
-
-        const createResponse = await apiRequest('POST', '/api/soap-virtual-patients', newPatientData);
-        const newPatient = await createResponse.json();
-        patientId = newPatient.id;
-        
-        // Refresh patients list and select new patient
-        await queryClient.invalidateQueries({ queryKey: ['/api/virtual-patients'] });
+        throw new Error('Failed to get virtual patient ID from creation response');
       }
 
       // Create a mock SOAP note structure for the AI movement generator

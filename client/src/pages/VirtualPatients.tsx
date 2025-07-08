@@ -737,28 +737,28 @@ export default function VirtualPatientsPage() {
 
   // Enhanced Virtual Patient View - Main Layout
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
+    <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+      <div className="bg-white border-b border-gray-200 px-4 py-3">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3">
             <Button
               variant="outline"
               size="sm"
               onClick={() => setSelectedPatient(null)}
               className="flex items-center gap-2"
             >
-              <X className="h-4 w-4" />
+              <ArrowLeft className="h-4 w-4" />
               Back to Patients
             </Button>
             <div className="flex items-center gap-2">
               <User className="h-5 w-5 text-blue-600" />
-              <h1 className="text-xl font-semibold">
-                {enhancedProfile?.demographics.name || 'Loading...'}
+              <h1 className="text-lg font-semibold">
+                {enhancedProfile?.demographics.name || selectedPatient.patient_name || 'Patient Profile'}
               </h1>
               {movementData && (
-                <Badge variant="secondary" className="bg-green-100 text-green-800">
-                  Digital Twin Active
+                <Badge variant="secondary" className="bg-green-100 text-green-800 text-xs">
+                  {movementData.source}
                 </Badge>
               )}
             </div>
@@ -799,32 +799,36 @@ export default function VirtualPatientsPage() {
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex overflow-hidden">
-        
-        {/* Left Panel - Patient Profile */}
-        <div className="w-80 bg-white border-r border-gray-200 overflow-y-auto">
-          <div className="p-4 space-y-6">
+      <div className="max-w-7xl mx-auto px-4 py-4">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+          
+          {/* Left Panel - Patient Profile */}
+          <div className="lg:col-span-1 space-y-4 max-h-[calc(100vh-200px)] overflow-y-auto">
             
             {/* Patient Demographics */}
             <Card>
-              <CardHeader>
+              <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium flex items-center gap-2">
                   <User className="h-4 w-4" />
-                  Patient Demographics
+                  Demographics
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Age:</span>
-                  <span>{enhancedProfile?.demographics.age}</span>
+                  <span>{enhancedProfile?.demographics.age || selectedPatient.age}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Gender:</span>
-                  <span>{enhancedProfile?.demographics.gender}</span>
+                  <span>{enhancedProfile?.demographics.gender || selectedPatient.gender}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Occupation:</span>
-                  <span className="text-right">{enhancedProfile?.demographics.occupation}</span>
+                  <span className="text-gray-600">Body Part:</span>
+                  <span className="capitalize">{selectedPatient.body_part}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Chief Complaint:</span>
+                  <span className="text-right text-xs">{selectedPatient.chief_complaint}</span>
                 </div>
               </CardContent>
             </Card>
@@ -1282,6 +1286,36 @@ export default function VirtualPatientsPage() {
                     </p>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+          </div>
+        
+          {/* Right Panel - Clinical Analysis */}
+          <div className="lg:col-span-1 space-y-4">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <Stethoscope className="h-4 w-4" />
+                  Clinical Notes
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                <div className="bg-blue-50 p-3 rounded-lg">
+                  <p className="font-medium text-blue-800">Chief Complaint</p>
+                  <p className="text-blue-600 text-xs mt-1">{selectedPatient.chief_complaint}</p>
+                </div>
+                {selectedPatient.symptoms_description && (
+                  <div className="bg-yellow-50 p-3 rounded-lg">
+                    <p className="font-medium text-yellow-800">Symptoms</p>
+                    <p className="text-yellow-600 text-xs mt-1">{selectedPatient.symptoms_description}</p>
+                  </div>
+                )}
+                {selectedPatient.past_medical_history && (
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <p className="font-medium text-gray-800">History</p>
+                    <p className="text-gray-600 text-xs mt-1">{selectedPatient.past_medical_history}</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

@@ -52,13 +52,22 @@ interface QuestionFeedback {
   improvements: string[];
   clinicalReasoning: string;
   timeSpent?: number;
+  researchReferences?: string[];
 }
 
 interface SubmissionResult {
   totalScore: number;
   timeSpent: number;
-  feedback: string;
-  scores: {
+  feedback?: string;
+  overallFeedback?: string;
+  categoryScores?: {
+    accuracy: number;
+    speed: number;
+    reasoning: number;
+    differential: number;
+    treatment: number;
+  };
+  scores?: {
     accuracy: number;
     speed: number;
     reasoning: number;
@@ -69,6 +78,8 @@ interface SubmissionResult {
   questionFeedbacks?: QuestionFeedback[];
   recommendedLearning?: string[];
   nextSteps?: string[];
+  correctAnswers?: number;
+  totalQuestions?: number;
 }
 
 function AIFeedbackModal({ 
@@ -1493,11 +1504,64 @@ export default function GameCompetitionPage() {
               </div>
             </div>
 
-            {/* AI Performance Analysis */}
-            {submissionResult.feedback && (
-              <div className="bg-blue-50 p-4 rounded-lg mb-6">
-                <h3 className="font-semibold text-blue-900 mb-2">🤖 AI Performance Analysis</h3>
-                <p className="text-blue-800 text-sm leading-relaxed">{submissionResult.feedback}</p>
+            {/* Comprehensive AI Analysis */}
+            {submissionResult.overallFeedback && (
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-lg mb-6 border border-blue-200">
+                <h3 className="font-semibold text-blue-900 mb-4 flex items-center">
+                  🤖 Comprehensive Clinical Performance Analysis
+                </h3>
+                <p className="text-blue-800 text-sm leading-relaxed mb-4">{submissionResult.overallFeedback}</p>
+                
+                {/* Category Scores */}
+                {submissionResult.categoryScores && (
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+                    <div className="text-center p-2 bg-white rounded border">
+                      <div className="text-lg font-bold text-blue-600">{Math.round(submissionResult.categoryScores.accuracy || 0)}%</div>
+                      <div className="text-xs text-blue-800">Accuracy</div>
+                    </div>
+                    <div className="text-center p-2 bg-white rounded border">
+                      <div className="text-lg font-bold text-green-600">{Math.round(submissionResult.categoryScores.speed || 0)}%</div>
+                      <div className="text-xs text-green-800">Speed</div>
+                    </div>
+                    <div className="text-center p-2 bg-white rounded border">
+                      <div className="text-lg font-bold text-purple-600">{Math.round(submissionResult.categoryScores.reasoning || 0)}%</div>
+                      <div className="text-xs text-purple-800">Reasoning</div>
+                    </div>
+                    <div className="text-center p-2 bg-white rounded border">
+                      <div className="text-lg font-bold text-orange-600">{Math.round(submissionResult.categoryScores.differential || 0)}%</div>
+                      <div className="text-xs text-orange-800">Differential</div>
+                    </div>
+                    <div className="text-center p-2 bg-white rounded border">
+                      <div className="text-lg font-bold text-red-600">{Math.round(submissionResult.categoryScores.treatment || 0)}%</div>
+                      <div className="text-xs text-red-800">Treatment</div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Recommended Learning and Next Steps */}
+                <div className="grid md:grid-cols-2 gap-4">
+                  {submissionResult.recommendedLearning && submissionResult.recommendedLearning.length > 0 && (
+                    <div className="bg-white p-3 rounded border">
+                      <h4 className="font-medium text-indigo-800 mb-2">📚 Recommended Learning</h4>
+                      <ul className="list-disc list-inside text-sm text-indigo-700 space-y-1">
+                        {submissionResult.recommendedLearning.map((item: string, i: number) => (
+                          <li key={i}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  
+                  {submissionResult.nextSteps && submissionResult.nextSteps.length > 0 && (
+                    <div className="bg-white p-3 rounded border">
+                      <h4 className="font-medium text-green-800 mb-2">🎯 Next Steps</h4>
+                      <ul className="list-disc list-inside text-sm text-green-700 space-y-1">
+                        {submissionResult.nextSteps.map((step: string, i: number) => (
+                          <li key={i}>{step}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -1522,30 +1586,74 @@ export default function GameCompetitionPage() {
                     </div>
                   </div>
                   
-                  <div className="space-y-2 text-sm">
-                    <div>
-                      <span className="font-medium text-gray-700">Your Answer: </span>
-                      <span>{feedback.userResponse}</span>
+                  <div className="space-y-4 text-sm">
+                    {/* User's Response */}
+                    <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                      <h5 className="font-medium text-blue-800 mb-2">🔸 Your Response</h5>
+                      <p className="text-blue-700">{feedback.userResponse}</p>
                     </div>
                     
-                    {feedback.score !== 100 && (
-                      <div>
-                        <span className="font-medium text-gray-700">Correct Answer: </span>
-                        <span className="text-green-600 font-medium">{feedback.correctAnswer}</span>
+                    {/* AI Ideal Response (Research-Backed) */}
+                    {feedback.correctAnswer && (
+                      <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-200">
+                        <h5 className="font-medium text-emerald-800 mb-2">🎯 Evidence-Based Ideal Response</h5>
+                        <p className="text-emerald-700">{feedback.correctAnswer}</p>
                       </div>
                     )}
                     
-                    <div>
-                      <span className="font-medium text-gray-700">AI Analysis: </span>
-                      <span className="text-gray-600">{feedback.aiAnalysis}</span>
+                    {/* AI Analysis with Research */}
+                    <div className="bg-purple-50 p-3 rounded-lg border border-purple-200">
+                      <h5 className="font-medium text-purple-800 mb-2">🤖 AI Clinical Analysis</h5>
+                      <p className="text-purple-700">{feedback.aiAnalysis}</p>
+                    </div>
+
+                    {/* Score Breakdown */}
+                    <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                      <h5 className="font-medium text-gray-800 mb-2">📊 Performance Score</h5>
+                      <div className="flex items-center space-x-3">
+                        <div className={`text-2xl font-bold ${
+                          feedback.score >= 80 ? 'text-green-600' : 
+                          feedback.score >= 60 ? 'text-yellow-600' : 'text-red-600'
+                        }`}>
+                          {feedback.score}%
+                        </div>
+                        <div className="text-gray-600">
+                          {feedback.clinicalReasoning || 'Clinical reasoning assessed'}
+                        </div>
+                      </div>
                     </div>
                     
+                    {/* Strengths */}
+                    {feedback.strengths && feedback.strengths.length > 0 && (
+                      <div className="bg-green-50 p-3 rounded-lg border border-green-200">
+                        <h5 className="font-medium text-green-800 mb-2">✅ Clinical Strengths</h5>
+                        <ul className="list-disc list-inside space-y-1 text-green-700">
+                          {feedback.strengths.map((strength: string, i: number) => (
+                            <li key={i}>{strength}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    
+                    {/* Improvement Areas */}
                     {feedback.improvements && feedback.improvements.length > 0 && (
-                      <div>
-                        <span className="font-medium text-gray-700">Learning Points: </span>
-                        <ul className="list-disc list-inside ml-4 text-gray-600">
+                      <div className="bg-amber-50 p-3 rounded-lg border border-amber-200">
+                        <h5 className="font-medium text-amber-800 mb-2">🎯 Areas for Improvement</h5>
+                        <ul className="list-disc list-inside space-y-1 text-amber-700">
                           {feedback.improvements.map((improvement: string, i: number) => (
                             <li key={i}>{improvement}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Research References */}
+                    {feedback.researchReferences && feedback.researchReferences.length > 0 && (
+                      <div className="bg-indigo-50 p-3 rounded-lg border border-indigo-200">
+                        <h5 className="font-medium text-indigo-800 mb-2">📚 Supporting Research</h5>
+                        <ul className="list-disc list-inside space-y-1 text-indigo-700">
+                          {feedback.researchReferences.map((reference: string, i: number) => (
+                            <li key={i} className="italic">{reference}</li>
                           ))}
                         </ul>
                       </div>

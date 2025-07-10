@@ -85,6 +85,8 @@ export class GameAIFeedbackService {
         return await this.analyzeDifferentialDiagnosis(responses, gameContent);
       case 'choose_your_adventure':
         return await this.analyzeChooseYourAdventure(responses, gameContent);
+      case 'emergency_room_simulator':
+        return await this.analyzeEmergencySimulator(responses, gameContent);
       default:
         return await this.analyzeGenericGame(responses, gameContent);
     }
@@ -925,12 +927,349 @@ Assess the appropriateness and efficiency of test ordering. Return as JSON:
     return this.analyzeGenericGame(responses, gameContent);
   }
 
+  /**
+   * Analyze Red Flag Detective responses with research-backed feedback
+   */
   private async analyzeRedFlagDetective(responses: any, gameContent: any): Promise<QuestionFeedback[]> {
-    return this.analyzeGenericGame(responses, gameContent);
+    const redFlagContent = gameContent.redFlagDetective || {};
+    const cases = redFlagContent.cases || [];
+    const feedbacks: QuestionFeedback[] = [];
+
+    for (let i = 0; i < cases.length; i++) {
+      const caseData = cases[i];
+      const identifiedFlags = responses[`redFlags_${i}`] || '';
+      const urgencyLevel = responses[`urgency_${i}`] || '';
+      const expectedActions = responses[`actions_${i}`] || '';
+
+      if (caseData && (identifiedFlags || urgencyLevel || expectedActions)) {
+        const feedback = await this.analyzeRedFlagCase(
+          caseData,
+          {
+            identifiedFlags,
+            urgencyLevel,
+            expectedActions
+          },
+          `Red Flag Case ${i + 1}: Emergency Assessment`,
+          `red_flag_${i}`
+        );
+        feedbacks.push(feedback);
+      }
+    }
+
+    return feedbacks.length > 0 ? feedbacks : [await this.createRedFlagFallback()];
   }
 
+  /**
+   * Analyze individual Red Flag Detective case with comprehensive research-backed feedback
+   */
+  private async analyzeRedFlagCase(
+    caseData: any,
+    responses: any,
+    questionText: string,
+    questionId: string
+  ): Promise<QuestionFeedback> {
+    const prompt = `Analyze this Red Flag Detective response for serious pathology identification:
+
+Clinical Presentation: ${caseData.presentation || 'Emergency clinical scenario'}
+Expected Red Flags: ${caseData.redFlags?.join(', ') || 'Serious pathology indicators'}
+Expected Urgency: ${caseData.urgency || 'Emergency level'}
+Expected Actions: ${caseData.expectedActions?.join(', ') || 'Immediate clinical actions'}
+
+User's Assessment:
+- Identified Red Flags: ${responses.identifiedFlags}
+- Urgency Level: ${responses.urgencyLevel}
+- Recommended Actions: ${responses.expectedActions}
+
+Provide comprehensive analysis with research references for red flag identification. Rate 0-100 based on:
+1. Accuracy of red flag identification (40%)
+2. Appropriate urgency assessment (30%)
+3. Evidence-based immediate actions (30%)
+
+Include specific research citations for red flag criteria and emergency protocols.
+
+Return JSON:
+{
+  "score": number,
+  "aiAnalysis": "Detailed analysis with research references",
+  "idealResponse": "Research-backed ideal assessment for this case",
+  "strengths": ["Specific clinical strengths"],
+  "improvements": ["Evidence-based improvement areas"],
+  "clinicalReasoning": "Assessment of emergency clinical reasoning",
+  "researchReferences": ["Specific studies/guidelines supporting the analysis"]
+}`;
+
+    try {
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+      });
+
+      const result = JSON.parse(response.choices[0].message.content || '{}');
+
+      return {
+        questionId,
+        questionText,
+        userResponse: `Red Flags: ${responses.identifiedFlags} | Urgency: ${responses.urgencyLevel} | Actions: ${responses.expectedActions}`,
+        correctAnswer: result.idealResponse || `Expected: ${caseData.redFlags?.join(', ')} with ${caseData.urgency} urgency`,
+        aiAnalysis: result.aiAnalysis || 'Red flag assessment completed with research analysis',
+        score: this.safeScore(result.score, 75),
+        strengths: result.strengths || ['Emergency assessment attempted'],
+        improvements: result.improvements || ['Review red flag identification criteria'],
+        clinicalReasoning: result.clinicalReasoning || 'Emergency clinical reasoning assessed',
+        researchReferences: result.researchReferences || []
+      };
+    } catch (error) {
+      console.error('Error analyzing red flag case:', error);
+      return this.createRedFlagFallback();
+    }
+  }
+
+  /**
+   * Analyze Differential Diagnosis responses with comprehensive clinical reasoning assessment
+   */
   private async analyzeDifferentialDiagnosis(responses: any, gameContent: any): Promise<QuestionFeedback[]> {
-    return this.analyzeGenericGame(responses, gameContent);
+    const differentialContent = gameContent.differentialDiagnosis || {};
+    const cases = differentialContent.cases || [];
+    const feedbacks: QuestionFeedback[] = [];
+
+    for (let i = 0; i < cases.length; i++) {
+      const caseData = cases[i];
+      const userDifferentials = responses[`differentials_${i}`] || '';
+      const clinicalReasoning = responses[`reasoning_${i}`] || '';
+      const mostLikely = responses[`mostLikely_${i}`] || '';
+
+      if (caseData && (userDifferentials || clinicalReasoning || mostLikely)) {
+        const feedback = await this.analyzeDifferentialCase(
+          caseData,
+          {
+            userDifferentials,
+            clinicalReasoning,
+            mostLikely
+          },
+          `Differential Diagnosis Case ${i + 1}: Complex Reasoning`,
+          `differential_${i}`
+        );
+        feedbacks.push(feedback);
+      }
+    }
+
+    return feedbacks.length > 0 ? feedbacks : [await this.createDifferentialFallback()];
+  }
+
+  /**
+   * Analyze individual Differential Diagnosis case with evidence-based assessment
+   */
+  private async analyzeDifferentialCase(
+    caseData: any,
+    responses: any,
+    questionText: string,
+    questionId: string
+  ): Promise<QuestionFeedback> {
+    const prompt = `Analyze this Differential Diagnosis response with evidence-based clinical reasoning:
+
+Clinical Presentation: ${caseData.presentation || 'Complex clinical scenario'}
+Expected Differentials: ${caseData.expectedDifferentials?.join(', ') || 'Multiple potential diagnoses'}
+Most Likely Diagnosis: ${caseData.mostLikely || 'Primary diagnosis'}
+Clinical Tests: ${caseData.clinicalTests?.join(', ') || 'Diagnostic approach'}
+
+User's Assessment:
+- Differential Diagnoses: ${responses.userDifferentials}
+- Clinical Reasoning: ${responses.clinicalReasoning}
+- Most Likely Diagnosis: ${responses.mostLikely}
+
+Evaluate based on evidence-based diagnostic reasoning (0-100):
+1. Completeness of differential list (25%)
+2. Accuracy of most likely diagnosis (35%)
+3. Quality of clinical reasoning (25%)
+4. Evidence-based diagnostic approach (15%)
+
+Include specific research supporting the diagnostic criteria and differential ranking.
+
+Return JSON:
+{
+  "score": number,
+  "aiAnalysis": "Comprehensive diagnostic reasoning analysis with research",
+  "idealResponse": "Evidence-based ideal differential diagnosis approach",
+  "strengths": ["Specific diagnostic reasoning strengths"],
+  "improvements": ["Research-backed improvement recommendations"],
+  "clinicalReasoning": "Assessment of diagnostic thinking quality",
+  "researchReferences": ["Studies supporting diagnostic criteria"]
+}`;
+
+    try {
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+      });
+
+      const result = JSON.parse(response.choices[0].message.content || '{}');
+
+      return {
+        questionId,
+        questionText,
+        userResponse: `Differentials: ${responses.userDifferentials} | Most Likely: ${responses.mostLikely} | Reasoning: ${responses.clinicalReasoning}`,
+        correctAnswer: result.idealResponse || `Expected: ${caseData.expectedDifferentials?.join(', ')} with ${caseData.mostLikely} as most likely`,
+        aiAnalysis: result.aiAnalysis || 'Differential diagnosis reasoning analyzed with research support',
+        score: this.safeScore(result.score, 75),
+        strengths: result.strengths || ['Differential diagnosis approach attempted'],
+        improvements: result.improvements || ['Enhance diagnostic reasoning with evidence'],
+        clinicalReasoning: result.clinicalReasoning || 'Diagnostic reasoning quality assessed',
+        researchReferences: result.researchReferences || []
+      };
+    } catch (error) {
+      console.error('Error analyzing differential case:', error);
+      return this.createDifferentialFallback();
+    }
+  }
+
+  /**
+   * Create fallback Red Flag Detective feedback
+   */
+  private async createRedFlagFallback(): Promise<QuestionFeedback> {
+    return {
+      questionId: 'red_flag_fallback',
+      questionText: 'Red Flag Detective Assessment',
+      userResponse: 'Red flag assessment completed',
+      correctAnswer: 'Systematic identification of serious pathology indicators',
+      aiAnalysis: 'Red flag identification requires systematic evaluation of serious pathology. Key areas include: neurological deficits, systemic symptoms, progressive pain patterns, and constitutional symptoms requiring immediate medical attention.',
+      score: 75,
+      strengths: ['Emergency assessment attempted', 'Clinical evaluation approach'],
+      improvements: ['Review red flag criteria systematically', 'Practice emergency decision-making'],
+      clinicalReasoning: 'Emergency clinical reasoning development needed',
+      researchReferences: ['Clinical red flag guidelines', 'Emergency assessment protocols']
+    };
+  }
+
+  /**
+   * Create fallback Differential Diagnosis feedback
+   */
+  private async createDifferentialFallback(): Promise<QuestionFeedback> {
+    return {
+      questionId: 'differential_fallback',
+      questionText: 'Differential Diagnosis Assessment',
+      userResponse: 'Differential diagnosis approach completed',
+      correctAnswer: 'Comprehensive evidence-based differential diagnosis list',
+      aiAnalysis: 'Effective differential diagnosis requires systematic consideration of multiple potential conditions, ranking by probability based on clinical presentation, and evidence-based diagnostic reasoning.',
+      score: 75,
+      strengths: ['Diagnostic approach attempted', 'Clinical reasoning engagement'],
+      improvements: ['Develop systematic differential approach', 'Enhance evidence-based reasoning'],
+      clinicalReasoning: 'Diagnostic reasoning skills require continued development',
+      researchReferences: ['Diagnostic reasoning frameworks', 'Evidence-based diagnosis protocols']
+    };
+  }
+
+  /**
+   * Analyze Emergency Room Simulator responses with triage assessment
+   */
+  private async analyzeEmergencySimulator(responses: any, gameContent: any): Promise<QuestionFeedback[]> {
+    const emergencyContent = gameContent.emergencySimulator || {};
+    const cases = emergencyContent.cases || [];
+    const feedbacks: QuestionFeedback[] = [];
+
+    for (let i = 0; i < cases.length; i++) {
+      const caseData = cases[i];
+      const triagePriority = responses[`triagePriority_${i}`] || responses.triagePriority || '';
+      const immediateActions = responses[`immediateActions_${i}`] || responses.immediateActions || '';
+
+      if (caseData && (triagePriority || immediateActions)) {
+        const feedback = await this.analyzeEmergencyCase(
+          caseData,
+          {
+            triagePriority,
+            immediateActions
+          },
+          `Emergency Triage Case ${i + 1}: Critical Decision Making`,
+          `emergency_${i}`
+        );
+        feedbacks.push(feedback);
+      }
+    }
+
+    return feedbacks.length > 0 ? feedbacks : [await this.createEmergencyFallback()];
+  }
+
+  /**
+   * Analyze individual Emergency Simulator case with triage protocols
+   */
+  private async analyzeEmergencyCase(
+    caseData: any,
+    responses: any,
+    questionText: string,
+    questionId: string
+  ): Promise<QuestionFeedback> {
+    const prompt = `Analyze this Emergency Triage response based on established triage protocols:
+
+Multi-Patient Emergency Scenario: ${caseData.presentation || 'Multiple patient emergency'}
+Expected Patient Prioritization: ${caseData.expectedPrioritization || 'Systematic triage approach'}
+Patient Details: ${JSON.stringify(caseData.patients || [])}
+
+User's Emergency Assessment:
+- Triage Priority Level: ${responses.triagePriority}
+- Immediate Actions: ${responses.immediateActions}
+
+Evaluate emergency decision-making (0-100) based on:
+1. Accurate triage prioritization (50%)
+2. Appropriate immediate actions (30%)
+3. Resource allocation efficiency (20%)
+
+Include research references for triage protocols and emergency management guidelines.
+
+Return JSON:
+{
+  "score": number,
+  "aiAnalysis": "Emergency triage analysis with protocol references",
+  "idealResponse": "Evidence-based emergency management approach",
+  "strengths": ["Emergency assessment strengths"],
+  "improvements": ["Triage improvement recommendations"],
+  "clinicalReasoning": "Emergency clinical reasoning assessment",
+  "researchReferences": ["Emergency medicine guidelines and triage protocols"]
+}`;
+
+    try {
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+      });
+
+      const result = JSON.parse(response.choices[0].message.content || '{}');
+
+      return {
+        questionId,
+        questionText,
+        userResponse: `Triage Priority: ${responses.triagePriority} | Actions: ${responses.immediateActions}`,
+        correctAnswer: result.idealResponse || `Expected: ${caseData.expectedPrioritization}`,
+        aiAnalysis: result.aiAnalysis || 'Emergency triage assessment completed with protocol analysis',
+        score: this.safeScore(result.score, 75),
+        strengths: result.strengths || ['Emergency triage attempted'],
+        improvements: result.improvements || ['Review triage protocols'],
+        clinicalReasoning: result.clinicalReasoning || 'Emergency decision-making assessed',
+        researchReferences: result.researchReferences || []
+      };
+    } catch (error) {
+      console.error('Error analyzing emergency case:', error);
+      return this.createEmergencyFallback();
+    }
+  }
+
+  /**
+   * Create fallback Emergency Simulator feedback
+   */
+  private async createEmergencyFallback(): Promise<QuestionFeedback> {
+    return {
+      questionId: 'emergency_fallback',
+      questionText: 'Emergency Triage Assessment',
+      userResponse: 'Emergency triage decision completed',
+      correctAnswer: 'Systematic emergency triage prioritization',
+      aiAnalysis: 'Emergency triage requires systematic patient prioritization based on severity, time-sensitivity, and resource requirements. Key principles include immediate life-threat assessment, resource allocation, and multi-patient management.',
+      score: 75,
+      strengths: ['Emergency assessment attempted', 'Triage approach applied'],
+      improvements: ['Review emergency triage protocols', 'Practice multi-patient scenarios'],
+      clinicalReasoning: 'Emergency decision-making skills require continued development',
+      researchReferences: ['Emergency triage guidelines', 'Multi-patient management protocols']
+    };
   }
 
   private async analyzeChooseYourAdventure(responses: any, gameContent: any): Promise<QuestionFeedback[]> {

@@ -208,21 +208,38 @@ function AIFeedbackModal({
                         
                         <div className="grid md:grid-cols-2 gap-4">
                           {/* Your Response */}
-                          <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                            <h6 className="font-medium mb-3 text-blue-800 flex items-center gap-2">
-                              👤 Your Response
+                          <div className={`p-4 rounded-lg border ${
+                            questionFeedback.score === 100 
+                              ? 'bg-green-50 border-green-200' 
+                              : 'bg-red-50 border-red-200'
+                          }`}>
+                            <h6 className={`font-medium mb-3 flex items-center gap-2 ${
+                              questionFeedback.score === 100 
+                                ? 'text-green-800' 
+                                : 'text-red-800'
+                            }`}>
+                              {questionFeedback.score === 100 ? '✅ Your Answer (Correct)' : '❌ Your Answer (Incorrect)'}
                             </h6>
-                            <p className="text-sm text-blue-700 leading-relaxed">{questionFeedback.userResponse}</p>
+                            <p className={`text-sm leading-relaxed ${
+                              questionFeedback.score === 100 ? 'text-green-700' : 'text-red-700'
+                            }`}>
+                              {questionFeedback.userResponse}
+                            </p>
                           </div>
 
-                          {/* AI Ideal Response */}
+                          {/* Correct Answer */}
                           <div className="bg-emerald-50 p-4 rounded-lg border border-emerald-200">
                             <h6 className="font-medium mb-3 text-emerald-800 flex items-center gap-2">
-                              🤖 AI Ideal Response
+                              ✅ Correct Answer
                             </h6>
-                            <p className="text-sm text-emerald-700 leading-relaxed">
-                              {questionFeedback.aiIdealResponse || questionFeedback.correctAnswer}
+                            <p className="text-sm text-emerald-700 leading-relaxed font-medium">
+                              {questionFeedback.correctAnswer}
                             </p>
+                            {questionFeedback.score !== 100 && questionFeedback.aiIdealResponse && (
+                              <div className="mt-2 pt-2 border-t border-emerald-200">
+                                <p className="text-emerald-600 text-xs">{questionFeedback.aiIdealResponse}</p>
+                              </div>
+                            )}
                           </div>
                         </div>
                         

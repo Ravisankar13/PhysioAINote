@@ -1286,67 +1286,88 @@ Return JSON:
   }
 
   /**
-   * Analyze Diagnosis Duel responses - 10 rapid cases with progressive difficulty
+   * Analyze Diagnosis Duel responses - 10 rapid cases with progressive difficulty (OPTIMIZED)
    */
   private async analyzeDiagnosisDuel(responses: any, gameContent: any): Promise<QuestionFeedback[]> {
     const duelContent = gameContent.diagnosisDuel || {};
     const cases = duelContent.cases || [];
     const feedbacks: QuestionFeedback[] = [];
 
-    for (let i = 0; i < cases.length; i++) {
-      const caseData = cases[i];
+    // Process all cases in parallel for faster feedback
+    const feedbackPromises = cases.map(async (caseData, i) => {
       const responseKey = `case_${i}`;
       const userResponse = responses[responseKey];
 
       if (caseData && userResponse) {
-        const feedback = await this.analyzeDiagnosisDuelCase(
+        return this.analyzeDiagnosisDuelCaseOptimized(
           caseData,
           userResponse,
           `Rapid Diagnosis Case ${i + 1}: ${caseData.presentation?.substring(0, 50)}...`,
           responseKey,
           i + 1
         );
-        feedbacks.push(feedback);
       }
-    }
+      return null;
+    });
 
-    return feedbacks;
+    // Wait for all feedback to complete in parallel
+    const results = await Promise.all(feedbackPromises);
+    
+    // Filter out null results
+    return results.filter(feedback => feedback !== null) as QuestionFeedback[];
   }
 
   /**
-   * Analyze individual Diagnosis Duel case with speed and accuracy focus
+   * Analyze individual Diagnosis Duel case with speed and accuracy focus (OPTIMIZED)
    */
-  private async analyzeDiagnosisDuelCase(
+  private async analyzeDiagnosisDuelCaseOptimized(
     caseData: any,
     userResponse: string,
     questionText: string,
     questionId: string,
     caseNumber: number
   ): Promise<QuestionFeedback> {
-    const prompt = `Analyze this rapid diagnosis response from a 60-second speed challenge:
+    // Check if diagnosis is correct immediately
+    const isCorrect = this.isMatchingDiagnosis(userResponse, caseData.correctDiagnosis);
+    
+    // For speed, use simplified feedback for correct answers and detailed AI analysis only for incorrect ones
+    if (isCorrect) {
+      return {
+        questionId,
+        questionText,
+        userResponse: userResponse,
+        aiIdealResponse: `${caseData.correctDiagnosis} - Excellent rapid pattern recognition for ${caseData.difficulty} level case`,
+        correctAnswer: caseData.correctDiagnosis,
+        aiAnalysis: `✅ CORRECT: Your diagnosis "${userResponse}" is accurate! Well done identifying this ${caseData.difficulty} level case quickly.`,
+        score: 100,
+        strengths: ['Accurate rapid diagnosis', 'Effective pattern recognition', 'Good time management'],
+        improvements: ['Continue building speed for harder cases'],
+        clinicalReasoning: `Successful rapid diagnostic reasoning for ${caseData.difficulty} level presentation`,
+        researchReferences: [`Pattern recognition in ${caseData.difficulty} clinical presentations`, 'Rapid diagnosis methodologies']
+      };
+    }
+
+    // For incorrect answers, provide detailed AI analysis with correct reasoning
+    const prompt = `Provide educational feedback for this INCORRECT diagnosis in a speed challenge:
 
 Case ${caseNumber}/10 (${caseData.difficulty} difficulty):
 Clinical Presentation: ${caseData.presentation}
 Correct Diagnosis: ${caseData.correctDiagnosis}
-User's Diagnosis: ${userResponse}
-Time Allocation: ${caseData.timeAllocation} seconds
+User's Incorrect Diagnosis: ${userResponse}
 
-This is case ${caseNumber} of 10 in a progressive difficulty speed challenge. Evaluate based on:
-1. Diagnostic accuracy (70%)
-2. Speed appropriateness for difficulty level (20%) 
-3. Clinical reasoning under time pressure (10%)
-
-Provide feedback tailored to the rapid-fire format and progressive difficulty nature.
+Focus on:
+1. Why the correct diagnosis is right (key clinical indicators)
+2. Why the user's diagnosis doesn't fit
+3. Learning points for similar future cases
 
 Return JSON:
 {
-  "score": number,
-  "aiAnalysis": "Speed-focused analysis with progressive difficulty context",
-  "idealResponse": "Optimal rapid diagnosis approach for this difficulty level",
-  "strengths": ["Speed diagnosis strengths demonstrated"],
-  "improvements": ["Rapid clinical reasoning enhancement areas"],
-  "clinicalReasoning": "Assessment of diagnostic thinking under time pressure",
-  "researchReferences": ["Evidence supporting rapid diagnosis techniques"]
+  "aiAnalysis": "Clear explanation of why correct diagnosis is right and user's is wrong",
+  "idealResponse": "Key clinical reasoning for correct diagnosis",
+  "strengths": ["Any positive aspects of the attempt"],
+  "improvements": ["Specific areas to focus on"],
+  "clinicalReasoning": "Educational reasoning explanation",
+  "researchReferences": ["Relevant evidence sources"]
 }`;
 
     try {
@@ -1357,23 +1378,19 @@ Return JSON:
       });
 
       const result = JSON.parse(response.choices[0].message.content || '{}');
-      
-      // Check if diagnosis is correct for scoring
-      const isCorrect = this.isMatchingDiagnosis(userResponse, caseData.correctDiagnosis);
-      const baseScore = isCorrect ? 100 : 0;
 
       return {
         questionId,
         questionText,
         userResponse: userResponse,
-        aiIdealResponse: result.idealResponse || `${caseData.correctDiagnosis} - Rapid recognition of ${caseData.difficulty} level clinical presentation requiring swift pattern recognition and systematic approach`,
+        aiIdealResponse: result.idealResponse || `${caseData.correctDiagnosis} - Key indicators point to this diagnosis based on clinical presentation`,
         correctAnswer: caseData.correctDiagnosis,
-        aiAnalysis: result.aiAnalysis || `Case ${caseNumber}: ${caseData.difficulty} difficulty diagnosis challenge completed in speed format`,
-        score: this.safeScore(result.score || baseScore, baseScore),
-        strengths: result.strengths || ['Rapid diagnosis attempt under time pressure'],
-        improvements: result.improvements || ['Enhance speed diagnosis pattern recognition'],
-        clinicalReasoning: result.clinicalReasoning || 'Rapid clinical reasoning under time constraint assessed',
-        researchReferences: result.researchReferences || [`Rapid diagnosis techniques for ${caseData.difficulty} presentations`]
+        aiAnalysis: result.aiAnalysis || `❌ INCORRECT: The correct diagnosis is "${caseData.correctDiagnosis}". Your answer "${userResponse}" doesn't match the clinical presentation.`,
+        score: 0,
+        strengths: result.strengths || ['Attempted rapid assessment'],
+        improvements: result.improvements || ['Review pattern recognition', 'Study key clinical indicators'],
+        clinicalReasoning: result.clinicalReasoning || 'Focus on key clinical indicators for accurate rapid diagnosis',
+        researchReferences: result.researchReferences || [`Clinical features of ${caseData.correctDiagnosis}`, 'Differential diagnosis techniques']
       };
     } catch (error) {
       console.error('Error analyzing diagnosis duel case:', error);

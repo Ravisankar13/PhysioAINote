@@ -31,6 +31,8 @@ import {
   ArrowRight,
   Play,
   AlertCircle,
+  AlertTriangle,
+  Heart,
   Settings,
   ChevronRight,
   Search,
@@ -963,15 +965,96 @@ export default function CompetitionPage() {
               </Card>
             </div>
 
-            {/* Active Competitions Preview */}
+            {/* Elite Clinical Competitions */}
+            <Card className="mb-6 border-2 border-yellow-200 bg-gradient-to-r from-yellow-50 to-orange-50">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Zap className="h-5 w-5 text-yellow-600" />
+                  Elite Clinical Competitions
+                </CardTitle>
+                <CardDescription>
+                  New competition format: 6 specialized challenges limited to 10 participants each
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <Card className="border-red-200 hover:shadow-lg transition-shadow cursor-pointer" 
+                        onClick={() => setActiveTab("competitions")}>
+                    <CardContent className="p-4 text-center">
+                      <AlertTriangle className="h-8 w-8 text-red-500 mx-auto mb-2" />
+                      <div className="font-semibold text-red-700">Red Flag Detective</div>
+                      <div className="text-xs text-red-600">Spot dangerous conditions</div>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card className="border-blue-200 hover:shadow-lg transition-shadow cursor-pointer"
+                        onClick={() => setActiveTab("competitions")}>
+                    <CardContent className="p-4 text-center">
+                      <Target className="h-8 w-8 text-blue-500 mx-auto mb-2" />
+                      <div className="font-semibold text-blue-700">Differential Race</div>
+                      <div className="text-xs text-blue-600">Generate differential lists</div>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card className="border-yellow-200 hover:shadow-lg transition-shadow cursor-pointer"
+                        onClick={() => setActiveTab("competitions")}>
+                    <CardContent className="p-4 text-center">
+                      <Zap className="h-8 w-8 text-yellow-500 mx-auto mb-2" />
+                      <div className="font-semibold text-yellow-700">Pattern Recognition</div>
+                      <div className="text-xs text-yellow-600">Instant clinical presentations</div>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card className="border-purple-200 hover:shadow-lg transition-shadow cursor-pointer"
+                        onClick={() => setActiveTab("competitions")}>
+                    <CardContent className="p-4 text-center">
+                      <Heart className="h-8 w-8 text-purple-500 mx-auto mb-2" />
+                      <div className="font-semibold text-purple-700">Emergency Triage</div>
+                      <div className="text-xs text-purple-600">Multi-patient decisions</div>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card className="border-green-200 hover:shadow-lg transition-shadow cursor-pointer"
+                        onClick={() => setActiveTab("competitions")}>
+                    <CardContent className="p-4 text-center">
+                      <Clock className="h-8 w-8 text-green-500 mx-auto mb-2" />
+                      <div className="font-semibold text-green-700">Manual Therapy</div>
+                      <div className="text-xs text-green-600">Optimal technique selection</div>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card className="border-indigo-200 hover:shadow-lg transition-shadow cursor-pointer"
+                        onClick={() => setActiveTab("competitions")}>
+                    <CardContent className="p-4 text-center">
+                      <Clock className="h-8 w-8 text-indigo-500 mx-auto mb-2" />
+                      <div className="font-semibold text-indigo-700">Exercise Prescription</div>
+                      <div className="text-xs text-indigo-600">Evidence-based programs</div>
+                    </CardContent>
+                  </Card>
+                </div>
+                
+                <div className="mt-4 text-center">
+                  <Button 
+                    onClick={() => setActiveTab("competitions")}
+                    className="bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700"
+                  >
+                    <Trophy className="h-4 w-4 mr-2" />
+                    View All Elite Competitions
+                    <ArrowRight className="h-4 w-4 ml-2" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Active Complex Case Competitions Preview */}
             <Card className="mb-6">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Trophy className="h-5 w-5 text-blue-600" />
-                  Active Competitions
+                  <Brain className="h-5 w-5 text-blue-600" />
+                  Active Complex Case Competitions
                 </CardTitle>
                 <CardDescription>
-                  Join ongoing competitions and test your skills against other participants
+                  Multi-stage clinical reasoning challenges
                 </CardDescription>
               </CardHeader>
               <CardContent>

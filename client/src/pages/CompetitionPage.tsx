@@ -96,6 +96,8 @@ function GameCompetitionsView() {
         return <Heart className="h-5 w-5 text-purple-500" />;
       case 'treatment_speed_run':
         return <Clock className="h-5 w-5 text-green-500" />;
+      case 'diagnosis_duel':
+        return <Zap className="h-5 w-5 text-orange-500" />;
       default:
         return <Trophy className="h-5 w-5 text-gray-500" />;
     }
@@ -113,6 +115,8 @@ function GameCompetitionsView() {
         return 'border-purple-200 bg-purple-50/50';
       case 'treatment_speed_run':
         return 'border-green-200 bg-green-50/50';
+      case 'diagnosis_duel':
+        return 'border-orange-200 bg-orange-50/50';
       default:
         return 'border-gray-200 bg-gray-50/50';
     }
@@ -130,6 +134,8 @@ function GameCompetitionsView() {
         return 'Emergency Triage';
       case 'treatment_speed_run':
         return 'Speed Challenge';
+      case 'diagnosis_duel':
+        return 'Diagnosis Duel';
       default:
         return 'Game Competition';
     }

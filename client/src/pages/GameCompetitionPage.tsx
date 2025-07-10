@@ -45,6 +45,7 @@ interface QuestionFeedback {
   questionId: string;
   questionText: string;
   userResponse: string;
+  aiIdealResponse: string;
   correctAnswer?: string;
   aiAnalysis: string;
   score: number;
@@ -201,34 +202,91 @@ function AIFeedbackModal({
                         </div>
                       </div>
 
-                      <div className="grid md:grid-cols-2 gap-4">
-                        {/* Your Response */}
-                        <div>
-                          <h5 className="font-medium mb-2 text-gray-700">Your Response:</h5>
-                          <div className="p-3 bg-gray-50 rounded border">
-                            <p className="text-sm">{questionFeedback.userResponse}</p>
+                      {/* Response Comparison */}
+                      <div className="space-y-4">
+                        <h5 className="font-medium text-gray-800 border-b pb-2">📋 Response Comparison</h5>
+                        
+                        <div className="grid md:grid-cols-2 gap-4">
+                          {/* Your Response */}
+                          <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                            <h6 className="font-medium mb-3 text-blue-800 flex items-center gap-2">
+                              👤 Your Response
+                            </h6>
+                            <p className="text-sm text-blue-700 leading-relaxed">{questionFeedback.userResponse}</p>
+                          </div>
+
+                          {/* AI Ideal Response */}
+                          <div className="bg-emerald-50 p-4 rounded-lg border border-emerald-200">
+                            <h6 className="font-medium mb-3 text-emerald-800 flex items-center gap-2">
+                              🤖 AI Ideal Response
+                            </h6>
+                            <p className="text-sm text-emerald-700 leading-relaxed">
+                              {questionFeedback.aiIdealResponse || questionFeedback.correctAnswer}
+                            </p>
                           </div>
                         </div>
-
-                        {/* Correct Answer */}
-                        {questionFeedback.correctAnswer && (
-                          <div>
-                            <h5 className="font-medium mb-2 text-green-700">Ideal Response:</h5>
-                            <div className="p-3 bg-green-50 rounded border border-green-200">
-                              <p className="text-sm text-green-800">{questionFeedback.correctAnswer}</p>
-                            </div>
+                        
+                        {/* Performance Analysis */}
+                        <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                          <h6 className="font-medium mb-3 text-yellow-800 flex items-center gap-2">
+                            📊 Performance Analysis
+                          </h6>
+                          <div className="grid md:grid-cols-2 gap-4 text-sm">
+                            {questionFeedback.strengths && questionFeedback.strengths.length > 0 && (
+                              <div>
+                                <h7 className="font-medium text-green-700 mb-2 block">✅ What You Did Well:</h7>
+                                <ul className="list-disc list-inside text-green-600 space-y-1">
+                                  {questionFeedback.strengths.map((strength, idx) => (
+                                    <li key={idx}>{strength}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                            
+                            {questionFeedback.improvements && questionFeedback.improvements.length > 0 && (
+                              <div>
+                                <h7 className="font-medium text-red-700 mb-2 block">🎯 Areas for Improvement:</h7>
+                                <ul className="list-disc list-inside text-red-600 space-y-1">
+                                  {questionFeedback.improvements.map((improvement, idx) => (
+                                    <li key={idx}>{improvement}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        
+                        {/* Research References */}
+                        {questionFeedback.researchReferences && questionFeedback.researchReferences.length > 0 && (
+                          <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                            <h6 className="font-medium mb-3 text-purple-800 flex items-center gap-2">
+                              📚 Evidence-Based References
+                            </h6>
+                            <ul className="list-disc list-inside text-sm text-purple-700 space-y-1">
+                              {questionFeedback.researchReferences.map((reference, idx) => (
+                                <li key={idx}>{reference}</li>
+                              ))}
+                            </ul>
                           </div>
                         )}
                       </div>
 
-                      {/* AI Analysis */}
-                      <div className="mt-4 p-3 bg-blue-50 rounded border border-blue-200">
-                        <h5 className="font-medium mb-2 text-blue-800 flex items-center gap-2">
+                      {/* AI Clinical Analysis */}
+                      <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                        <h5 className="font-medium mb-3 text-gray-800 flex items-center gap-2">
                           <Brain className="h-4 w-4" />
-                          AI Clinical Analysis
+                          🧠 Detailed Clinical Analysis
                         </h5>
-                        <p className="text-sm text-blue-700 mb-3">{questionFeedback.aiAnalysis}</p>
-                        <p className="text-sm text-blue-600"><strong>Clinical Reasoning:</strong> {questionFeedback.clinicalReasoning}</p>
+                        <div className="space-y-3">
+                          <div>
+                            <h6 className="font-medium text-gray-700 mb-2">Overall Assessment:</h6>
+                            <p className="text-sm text-gray-600 leading-relaxed">{questionFeedback.aiAnalysis}</p>
+                          </div>
+                          <div>
+                            <h6 className="font-medium text-gray-700 mb-2">Clinical Reasoning Quality:</h6>
+                            <p className="text-sm text-gray-600 leading-relaxed">{questionFeedback.clinicalReasoning}</p>
+                          </div>
+                        </div>
                       </div>
 
                       {/* Strengths and Improvements */}
@@ -1569,7 +1627,13 @@ export default function GameCompetitionPage() {
           {/* Question-by-Question Breakdown */}
           {submissionResult.questionFeedbacks && submissionResult.questionFeedbacks.length > 0 && (
             <div className="space-y-4">
-              <h3 className="text-xl font-semibold">📋 Question-by-Question Analysis</h3>
+              <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-4 rounded-lg border border-blue-200">
+                <h3 className="text-xl font-semibold mb-2">📋 Comprehensive AI Analysis</h3>
+                <p className="text-sm text-gray-600">
+                  Compare your responses with AI-generated ideal answers. See detailed analysis of your clinical reasoning, 
+                  evidence-based feedback on strengths and improvements, and research references supporting the assessment.
+                </p>
+              </div>
               
               {submissionResult.questionFeedbacks.map((feedback: any, index: number) => (
                 <div key={index} className={`border rounded-lg p-4 ${

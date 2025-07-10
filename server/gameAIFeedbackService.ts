@@ -6,6 +6,7 @@ export interface QuestionFeedback {
   questionId: string;
   questionText: string;
   userResponse: string;
+  aiIdealResponse: string;
   correctAnswer?: string;
   aiAnalysis: string;
   score: number;
@@ -13,6 +14,7 @@ export interface QuestionFeedback {
   improvements: string[];
   clinicalReasoning: string;
   timeSpent?: number;
+  researchReferences?: string[];
 }
 
 export interface GameFeedbackResult {
@@ -1011,6 +1013,7 @@ Return JSON:
         questionId,
         questionText,
         userResponse: `Red Flags: ${responses.identifiedFlags} | Urgency: ${responses.urgencyLevel} | Actions: ${responses.expectedActions}`,
+        aiIdealResponse: result.idealResponse || `Red Flags: ${caseData.redFlags?.join(', ')} | Urgency: ${caseData.urgency} | Actions: ${caseData.expectedActions?.join(', ')}`,
         correctAnswer: result.idealResponse || `Expected: ${caseData.redFlags?.join(', ')} with ${caseData.urgency} urgency`,
         aiAnalysis: result.aiAnalysis || 'Red flag assessment completed with research analysis',
         score: this.safeScore(result.score, 75),
@@ -1110,6 +1113,7 @@ Return JSON:
         questionId,
         questionText,
         userResponse: `Differentials: ${responses.userDifferentials} | Most Likely: ${responses.mostLikely} | Reasoning: ${responses.clinicalReasoning}`,
+        aiIdealResponse: result.idealResponse || `Differentials: ${caseData.expectedDifferentials?.join(', ')} | Most Likely: ${caseData.mostLikely} | Reasoning: Evidence-based systematic approach considering clinical presentation, patient history, and diagnostic probability ranking`,
         correctAnswer: result.idealResponse || `Expected: ${caseData.expectedDifferentials?.join(', ')} with ${caseData.mostLikely} as most likely`,
         aiAnalysis: result.aiAnalysis || 'Differential diagnosis reasoning analyzed with research support',
         score: this.safeScore(result.score, 75),
@@ -1132,6 +1136,7 @@ Return JSON:
       questionId: 'red_flag_fallback',
       questionText: 'Red Flag Detective Assessment',
       userResponse: 'Red flag assessment completed',
+      aiIdealResponse: 'Systematic identification of serious pathology indicators: neurological deficits, progressive symptoms, systemic signs, constitutional symptoms requiring immediate medical attention and urgent investigation',
       correctAnswer: 'Systematic identification of serious pathology indicators',
       aiAnalysis: 'Red flag identification requires systematic evaluation of serious pathology. Key areas include: neurological deficits, systemic symptoms, progressive pain patterns, and constitutional symptoms requiring immediate medical attention.',
       score: 75,
@@ -1150,6 +1155,7 @@ Return JSON:
       questionId: 'differential_fallback',
       questionText: 'Differential Diagnosis Assessment',
       userResponse: 'Differential diagnosis approach completed',
+      aiIdealResponse: 'Comprehensive evidence-based differential diagnosis list ranked by probability with systematic consideration of clinical presentation, patient history, examination findings, and evidence-based diagnostic criteria',
       correctAnswer: 'Comprehensive evidence-based differential diagnosis list',
       aiAnalysis: 'Effective differential diagnosis requires systematic consideration of multiple potential conditions, ranking by probability based on clinical presentation, and evidence-based diagnostic reasoning.',
       score: 75,
@@ -1240,6 +1246,7 @@ Return JSON:
         questionId,
         questionText,
         userResponse: `Triage Priority: ${responses.triagePriority} | Actions: ${responses.immediateActions}`,
+        aiIdealResponse: result.idealResponse || `Triage Priority: ${caseData.expectedPrioritization} | Actions: Systematic triage assessment following emergency protocols with immediate life-saving interventions prioritized by acuity and resource availability`,
         correctAnswer: result.idealResponse || `Expected: ${caseData.expectedPrioritization}`,
         aiAnalysis: result.aiAnalysis || 'Emergency triage assessment completed with protocol analysis',
         score: this.safeScore(result.score, 75),

@@ -619,16 +619,24 @@ export default function GameCompetitionPage() {
       const timer = setInterval(() => {
         setTimeRemaining(prev => {
           if (prev <= 1) {
-            setGameCompleted(true);
-            submitGame();
-            return 0;
+            // For Diagnosis Duel, don't auto-submit when time runs out
+            // Let users manually submit after completing all cases
+            if (competition?.gameType === 'diagnosis_duel') {
+              setGameCompleted(true);
+              return 0;
+            } else {
+              // For other game types, auto-submit when time runs out
+              setGameCompleted(true);
+              submitGame();
+              return 0;
+            }
           }
           return prev - 1;
         });
       }, 1000);
       return () => clearInterval(timer);
     }
-  }, [gameStarted, timeRemaining, gameCompleted]);
+  }, [gameStarted, timeRemaining, gameCompleted, competition?.gameType]);
 
   const fetchCompetitionData = async () => {
     try {
@@ -1098,7 +1106,7 @@ export default function GameCompetitionPage() {
               disabled={submitting}
               className="px-6 py-2 bg-red-600 text-white rounded-md text-sm disabled:opacity-50 hover:bg-red-700"
             >
-              {submitting ? 'Submitting...' : 'Submit Duel'}
+              {submitting ? 'Submitting...' : (timeRemaining === 0 ? 'Submit Results' : 'Submit Duel')}
             </button>
           )}
         </div>

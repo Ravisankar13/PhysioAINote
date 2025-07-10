@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams } from 'wouter';
+import { useParams, useLocation } from 'wouter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -601,6 +601,7 @@ function CompetitionOverview({ competition, onStart }: { competition: Competitio
 
 export default function GameCompetitionPage() {
   const { id } = useParams();
+  const [location, setLocation] = useLocation();
   const { toast } = useToast();
   const [competition, setCompetition] = useState<Competition | null>(null);
   const [gameContent, setGameContent] = useState<GameContent | null>(null);
@@ -1876,7 +1877,7 @@ export default function GameCompetitionPage() {
           {/* Action Buttons */}
           <div className="flex justify-center space-x-4">
             <button
-              onClick={() => window.location.href = '/game-competitions'}
+              onClick={() => setLocation('/game-competitions')}
               className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
             >
               Back to Competitions
@@ -1945,7 +1946,7 @@ export default function GameCompetitionPage() {
                   This competition is being prepared. Content will be available shortly.
                 </p>
                 <button
-                  onClick={() => window.history.back()}
+                  onClick={() => setLocation('/game-competitions')}
                   className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700"
                 >
                   Back to Competitions

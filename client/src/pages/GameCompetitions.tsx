@@ -101,6 +101,9 @@ function GameCompetitions() {
   const [loading, setLoading] = useState(true);
   const [selectedCompetition, setSelectedCompetition] = useState<GameContent | null>(null);
   const [joiningCompetition, setJoiningCompetition] = useState<number | null>(null);
+  const [selectedBodyPart, setSelectedBodyPart] = useState('all');
+  const [selectedDifficulty, setSelectedDifficulty] = useState('all');
+  const [selectedGameType, setSelectedGameType] = useState('all');
   const { toast } = useToast();
   const [, setLocation] = useLocation();
 

@@ -30,41 +30,27 @@ interface GameContent {
 }
 
 const gameTypeIcons: Record<string, any> = {
-  lightning_diagnosis: Zap,
-  treatment_speed_run: Clock,
-  progressive_diagnostic_challenge: Brain,
-  choose_your_adventure: Play,
-  emergency_room_simulator: Heart,
   red_flag_detective: AlertTriangle,
   differential_diagnosis_duel: Target,
-  journal_club_race: BookOpen,
-  cpg_quiz_master: Award,
-  mystery_patient: Search,
+  lightning_diagnosis: Zap,
+  emergency_room_simulator: Heart,
+  treatment_speed_run: Clock,
 };
 
 const gameTypeNames: Record<string, string> = {
-  lightning_diagnosis: 'Lightning Diagnosis',
-  treatment_speed_run: 'Treatment Speed Run',
-  progressive_diagnostic_challenge: 'Progressive Diagnostic Challenge',
-  choose_your_adventure: 'Choose Your Adventure',
-  emergency_room_simulator: 'Emergency Room Simulator',
   red_flag_detective: 'Red Flag Detective',
-  differential_diagnosis_duel: 'Differential Diagnosis Duel',
-  journal_club_race: 'Journal Club Race',
-  cpg_quiz_master: 'CPG Quiz Master',
-  mystery_patient: 'Mystery Patient',
+  differential_diagnosis_duel: 'Differential Race',
+  lightning_diagnosis: 'Pattern Recognition',
+  emergency_room_simulator: 'Emergency Triage',
+  treatment_speed_run: 'Clinical Treatment Planning',
 };
 
 const gameTypeDescriptions: Record<string, string> = {
-  lightning_diagnosis: 'Rapid-fire diagnosis challenges with 30-second time limits',
-  treatment_speed_run: 'Create comprehensive treatment plans under time pressure',
-  choose_your_adventure: 'Interactive clinical scenarios with branching storylines',
-  emergency_room_simulator: 'Manage multiple patients with limited resources',
-  red_flag_detective: 'Identify serious pathology hidden in routine cases',
-  differential_diagnosis_duel: 'Battle to create the most comprehensive differential lists',
-  journal_club_race: 'Critical appraisal of research papers against the clock',
-  cpg_quiz_master: 'Test knowledge of clinical practice guidelines',
-  mystery_patient: 'Solve complex cases with gradually revealed clues',
+  red_flag_detective: 'Spot dangerous conditions requiring immediate medical attention',
+  differential_diagnosis_duel: 'Generate comprehensive differential diagnosis lists under pressure',
+  lightning_diagnosis: 'Recognize classic clinical patterns and presentations instantly',
+  emergency_room_simulator: 'Make critical triage decisions with multiple patients',
+  treatment_speed_run: 'Design optimal treatment plans and exercise prescriptions',
 };
 
 // Component to display formatted game content
@@ -112,9 +98,6 @@ function GameContentDisplay({ gameType, content }: { gameType: string, content: 
 
 function GameCompetitions() {
   const [competitions, setCompetitions] = useState<GameCompetition[]>([]);
-  const [selectedBodyPart, setSelectedBodyPart] = useState<string>('all');
-  const [selectedDifficulty, setSelectedDifficulty] = useState<string>('all');
-  const [selectedGameType, setSelectedGameType] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [selectedCompetition, setSelectedCompetition] = useState<GameContent | null>(null);
   const [joiningCompetition, setJoiningCompetition] = useState<number | null>(null);
@@ -324,119 +307,138 @@ function GameCompetitions() {
     <div className="container mx-auto py-8 space-y-8">
       {/* Hero Section */}
       <div className="text-center space-y-4">
-        <h1 className="text-4xl font-bold">Clinical Challenge Dashboard</h1>
+        <h1 className="text-4xl font-bold">Elite Clinical Competitions</h1>
         <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
-          Master your clinical skills through gamified challenges. Quick diagnostics, complex detective work, and comprehensive treatment planning.
+          Compete against up to 10 practitioners in high-stakes clinical challenges. Master red flag detection, differential diagnosis, manual therapy selection, and evidence-based treatment planning.
         </p>
+        <div className="flex items-center justify-center gap-4 text-sm text-muted-foreground">
+          <div className="flex items-center gap-1">
+            <Users className="h-4 w-4" />
+            Limited to 10 participants
+          </div>
+          <div className="flex items-center gap-1">
+            <Timer className="h-4 w-4" />
+            Timed challenges
+          </div>
+          <div className="flex items-center gap-1">
+            <Trophy className="h-4 w-4" />
+            Real-time leaderboards
+          </div>
+        </div>
       </div>
 
-      {/* Quick Challenge Section */}
-      <section>
-        <div className="flex items-center gap-3 mb-6">
-          <div className="flex items-center gap-2">
-            <Zap className="h-6 w-6 text-yellow-500" />
-            <h2 className="text-2xl font-bold">Quick Challenges</h2>
-          </div>
-          <Badge variant="secondary" className="text-xs">30 seconds each</Badge>
-        </div>
-        <p className="text-muted-foreground mb-4">
-          Lightning-fast diagnosis challenges. Perfect for quick skill practice and warm-ups.
-        </p>
+      {/* Competition Categories */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         
-        {lightningDiagnosisCompetitions.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {lightningDiagnosisCompetitions.slice(0, 8).map(comp => renderCompetitionCard(comp))}
-          </div>
-        ) : (
-          <Card className="border-dashed">
-            <CardContent className="text-center py-8">
-              <Zap className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-              <p className="text-muted-foreground">No Lightning Diagnosis challenges available</p>
-            </CardContent>
-          </Card>
-        )}
+        {/* Red Flag Detective */}
+        <Card className="border-red-200 dark:border-red-800">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="h-8 w-8 text-red-500" />
+              <div>
+                <CardTitle className="text-red-700 dark:text-red-300">Red Flag Detective</CardTitle>
+                <CardDescription>Spot dangerous conditions requiring immediate attention</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {competitions.filter(c => c.gameType === 'red_flag_detective').map(comp => renderCompetitionCard(comp))}
+            </div>
+          </CardContent>
+        </Card>
 
-        {lightningDiagnosisCompetitions.length > 8 && (
-          <div className="text-center mt-4">
-            <Button variant="outline" size="sm">
-              View All {lightningDiagnosisCompetitions.length} Lightning Challenges
-              <ChevronRight className="h-4 w-4 ml-1" />
-            </Button>
-          </div>
-        )}
-      </section>
+        {/* Differential Race */}
+        <Card className="border-blue-200 dark:border-blue-800">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <Target className="h-8 w-8 text-blue-500" />
+              <div>
+                <CardTitle className="text-blue-700 dark:text-blue-300">Differential Race</CardTitle>
+                <CardDescription>Generate comprehensive differential diagnosis lists</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {competitions.filter(c => c.gameType === 'differential_diagnosis_duel').map(comp => renderCompetitionCard(comp))}
+            </div>
+          </CardContent>
+        </Card>
 
-      {/* Clinical Detective Work Section */}
-      <section>
-        <div className="flex items-center gap-3 mb-6">
-          <div className="flex items-center gap-2">
-            <Brain className="h-6 w-6 text-blue-500" />
-            <h2 className="text-2xl font-bold">Clinical Detective Work</h2>
-          </div>
-          <Badge variant="secondary" className="text-xs">5 minutes each</Badge>
-        </div>
-        <p className="text-muted-foreground mb-4">
-          Complex diagnostic challenges requiring strategic questioning and clinical reasoning under time pressure.
-        </p>
-        
-        {progressiveDiagnosticCompetitions.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {progressiveDiagnosticCompetitions.slice(0, 6).map(comp => renderCompetitionCard(comp))}
-          </div>
-        ) : (
-          <Card className="border-dashed">
-            <CardContent className="text-center py-8">
-              <Brain className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-              <p className="text-muted-foreground">No Progressive Diagnostic challenges available</p>
-            </CardContent>
-          </Card>
-        )}
+        {/* Pattern Recognition */}
+        <Card className="border-yellow-200 dark:border-yellow-800">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <Zap className="h-8 w-8 text-yellow-500" />
+              <div>
+                <CardTitle className="text-yellow-700 dark:text-yellow-300">Pattern Recognition</CardTitle>
+                <CardDescription>Recognize classic clinical presentations instantly</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {competitions.filter(c => c.gameType === 'lightning_diagnosis').map(comp => renderCompetitionCard(comp))}
+            </div>
+          </CardContent>
+        </Card>
 
-        {progressiveDiagnosticCompetitions.length > 6 && (
-          <div className="text-center mt-4">
-            <Button variant="outline" size="sm">
-              View All {progressiveDiagnosticCompetitions.length} Detective Challenges
-              <ChevronRight className="h-4 w-4 ml-1" />
-            </Button>
-          </div>
-        )}
-      </section>
+        {/* Emergency Triage */}
+        <Card className="border-purple-200 dark:border-purple-800">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <Heart className="h-8 w-8 text-purple-500" />
+              <div>
+                <CardTitle className="text-purple-700 dark:text-purple-300">Emergency Triage</CardTitle>
+                <CardDescription>Make critical decisions with multiple patients</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {competitions.filter(c => c.gameType === 'emergency_room_simulator').map(comp => renderCompetitionCard(comp))}
+            </div>
+          </CardContent>
+        </Card>
 
-      {/* Treatment Planning Section */}
-      <section>
-        <div className="flex items-center gap-3 mb-6">
-          <div className="flex items-center gap-2">
-            <Clock className="h-6 w-6 text-green-500" />
-            <h2 className="text-2xl font-bold">Treatment Planning</h2>
-          </div>
-          <Badge variant="secondary" className="text-xs">Comprehensive protocols</Badge>
-        </div>
-        <p className="text-muted-foreground mb-4">
-          Create detailed treatment plans under time pressure. Test your comprehensive clinical planning skills.
-        </p>
-        
-        {treatmentSpeedRunCompetitions.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {treatmentSpeedRunCompetitions.slice(0, 6).map(comp => renderCompetitionCard(comp))}
-          </div>
-        ) : (
-          <Card className="border-dashed">
-            <CardContent className="text-center py-8">
-              <Clock className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-              <p className="text-muted-foreground">No Treatment Speed Run challenges available</p>
-            </CardContent>
-          </Card>
-        )}
+        {/* Manual Therapy Selection */}
+        <Card className="border-green-200 dark:border-green-800">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <Clock className="h-8 w-8 text-green-500" />
+              <div>
+                <CardTitle className="text-green-700 dark:text-green-300">Manual Therapy Selection</CardTitle>
+                <CardDescription>Choose optimal manual therapy techniques</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {competitions.filter(c => c.gameType === 'treatment_speed_run' && c.title.includes('Manual')).map(comp => renderCompetitionCard(comp))}
+            </div>
+          </CardContent>
+        </Card>
 
-        {treatmentSpeedRunCompetitions.length > 6 && (
-          <div className="text-center mt-4">
-            <Button variant="outline" size="sm">
-              View All {treatmentSpeedRunCompetitions.length} Treatment Challenges
-              <ChevronRight className="h-4 w-4 ml-1" />
-            </Button>
-          </div>
-        )}
-      </section>
+        {/* Home Exercise Prescription */}
+        <Card className="border-indigo-200 dark:border-indigo-800">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <Clock className="h-8 w-8 text-indigo-500" />
+              <div>
+                <CardTitle className="text-indigo-700 dark:text-indigo-300">Exercise Prescription</CardTitle>
+                <CardDescription>Design evidence-based home exercise programs</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {competitions.filter(c => c.gameType === 'treatment_speed_run' && c.title.includes('Exercise')).map(comp => renderCompetitionCard(comp))}
+            </div>
+          </CardContent>
+        </Card>
+
+      </div>
 
       {/* Popular This Week Section */}
       {popularCompetitions.length > 0 && (

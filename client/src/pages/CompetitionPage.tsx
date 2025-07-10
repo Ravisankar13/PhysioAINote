@@ -72,6 +72,160 @@ interface ComplexCompetition {
   };
 }
 
+// GameCompetitionsView component for Elite Clinical Competitions
+function GameCompetitionsView() {
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
+  const { user } = useAuth();
+
+  // Fetch game competitions
+  const { data: gameCompetitions = [], isLoading } = useQuery({
+    queryKey: ['/api/game-competitions'],
+    refetchInterval: 30000
+  });
+
+  const getGameTypeIcon = (gameType: string) => {
+    switch (gameType) {
+      case 'red_flag_detective':
+        return <AlertTriangle className="h-5 w-5 text-red-500" />;
+      case 'differential_diagnosis_duel':
+        return <Target className="h-5 w-5 text-blue-500" />;
+      case 'lightning_diagnosis':
+        return <Zap className="h-5 w-5 text-yellow-500" />;
+      case 'emergency_room_simulator':
+        return <Heart className="h-5 w-5 text-purple-500" />;
+      case 'treatment_speed_run':
+        return <Clock className="h-5 w-5 text-green-500" />;
+      default:
+        return <Trophy className="h-5 w-5 text-gray-500" />;
+    }
+  };
+
+  const getGameTypeColor = (gameType: string) => {
+    switch (gameType) {
+      case 'red_flag_detective':
+        return 'border-red-200 bg-red-50/50';
+      case 'differential_diagnosis_duel':
+        return 'border-blue-200 bg-blue-50/50';
+      case 'lightning_diagnosis':
+        return 'border-yellow-200 bg-yellow-50/50';
+      case 'emergency_room_simulator':
+        return 'border-purple-200 bg-purple-50/50';
+      case 'treatment_speed_run':
+        return 'border-green-200 bg-green-50/50';
+      default:
+        return 'border-gray-200 bg-gray-50/50';
+    }
+  };
+
+  const getGameTypeName = (gameType: string) => {
+    switch (gameType) {
+      case 'red_flag_detective':
+        return 'Red Flag Detective';
+      case 'differential_diagnosis_duel':
+        return 'Differential Race';
+      case 'lightning_diagnosis':
+        return 'Pattern Recognition';
+      case 'emergency_room_simulator':
+        return 'Emergency Triage';
+      case 'treatment_speed_run':
+        return 'Speed Challenge';
+      default:
+        return 'Game Competition';
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        <Card>
+          <CardContent className="p-6">
+            <div className="text-center">Loading Elite Competitions...</div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card className="border-2 border-yellow-200 bg-gradient-to-r from-yellow-50 to-orange-50">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Zap className="h-6 w-6 text-yellow-600" />
+            Elite Clinical Competitions
+          </CardTitle>
+          <CardDescription>
+            Specialized clinical challenges limited to 10 participants each. Test your expertise in focused clinical scenarios.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+
+      {gameCompetitions.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {gameCompetitions.map((competition: any) => (
+            <Card key={competition.id} className={`hover:shadow-lg transition-shadow cursor-pointer ${getGameTypeColor(competition.gameType)}`}>
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between">
+                  <div className="space-y-2">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      {getGameTypeIcon(competition.gameType)}
+                      {competition.title}
+                    </CardTitle>
+                    <Badge variant="outline" className="text-xs">
+                      {getGameTypeName(competition.gameType)}
+                    </Badge>
+                  </div>
+                  <Badge variant="default" className="bg-green-100 text-green-700 text-xs">
+                    Active
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <CardDescription className="mb-4">
+                  {competition.description}
+                </CardDescription>
+                <div className="flex items-center gap-4 text-sm text-muted-foreground mb-4">
+                  <div className="flex items-center gap-1">
+                    <Clock className="h-4 w-4" />
+                    {competition.timeLimit}min
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Users className="h-4 w-4" />
+                    {competition.currentParticipants || 0}/{competition.maxParticipants}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Target className="h-4 w-4" />
+                    {competition.difficulty}
+                  </div>
+                </div>
+                <Button
+                  className="w-full"
+                  onClick={() => setLocation(`/game-competition/${competition.id}`)}
+                >
+                  <Play className="h-4 w-4 mr-2" />
+                  Join Competition
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <Card>
+          <CardContent className="p-6">
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                No Elite Competitions available at the moment. New competitions are added regularly - check back soon!
+              </AlertDescription>
+            </Alert>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
 // ComplexCaseCompetitionsView component
 function ComplexCaseCompetitionsView() {
   const [selectedTab, setSelectedTab] = useState('active');
@@ -876,10 +1030,14 @@ export default function CompetitionPage() {
 
         {/* Main Content Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6 lg:w-fit lg:grid-cols-6">
+          <TabsList className="grid w-full grid-cols-7 lg:w-fit lg:grid-cols-7">
             <TabsTrigger value="overview" className="flex items-center gap-2">
               <Target className="h-4 w-4" />
               Overview
+            </TabsTrigger>
+            <TabsTrigger value="game-competitions" className="flex items-center gap-2">
+              <Zap className="h-4 w-4" />
+              Elite Games
             </TabsTrigger>
             <TabsTrigger value="competitions" className="flex items-center gap-2">
               <Trophy className="h-4 w-4" />
@@ -979,7 +1137,7 @@ export default function CompetitionPage() {
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   <Card className="border-red-200 hover:shadow-lg transition-shadow cursor-pointer" 
-                        onClick={() => setActiveTab("competitions")}>
+                        onClick={() => setActiveTab("game-competitions")}>
                     <CardContent className="p-4 text-center">
                       <AlertTriangle className="h-8 w-8 text-red-500 mx-auto mb-2" />
                       <div className="font-semibold text-red-700">Red Flag Detective</div>
@@ -988,7 +1146,7 @@ export default function CompetitionPage() {
                   </Card>
                   
                   <Card className="border-blue-200 hover:shadow-lg transition-shadow cursor-pointer"
-                        onClick={() => setActiveTab("competitions")}>
+                        onClick={() => setActiveTab("game-competitions")}>
                     <CardContent className="p-4 text-center">
                       <Target className="h-8 w-8 text-blue-500 mx-auto mb-2" />
                       <div className="font-semibold text-blue-700">Differential Race</div>
@@ -997,7 +1155,7 @@ export default function CompetitionPage() {
                   </Card>
                   
                   <Card className="border-yellow-200 hover:shadow-lg transition-shadow cursor-pointer"
-                        onClick={() => setActiveTab("competitions")}>
+                        onClick={() => setActiveTab("game-competitions")}>
                     <CardContent className="p-4 text-center">
                       <Zap className="h-8 w-8 text-yellow-500 mx-auto mb-2" />
                       <div className="font-semibold text-yellow-700">Pattern Recognition</div>
@@ -1006,7 +1164,7 @@ export default function CompetitionPage() {
                   </Card>
                   
                   <Card className="border-purple-200 hover:shadow-lg transition-shadow cursor-pointer"
-                        onClick={() => setActiveTab("competitions")}>
+                        onClick={() => setActiveTab("game-competitions")}>
                     <CardContent className="p-4 text-center">
                       <Heart className="h-8 w-8 text-purple-500 mx-auto mb-2" />
                       <div className="font-semibold text-purple-700">Emergency Triage</div>
@@ -1015,7 +1173,7 @@ export default function CompetitionPage() {
                   </Card>
                   
                   <Card className="border-green-200 hover:shadow-lg transition-shadow cursor-pointer"
-                        onClick={() => setActiveTab("competitions")}>
+                        onClick={() => setActiveTab("game-competitions")}>
                     <CardContent className="p-4 text-center">
                       <Clock className="h-8 w-8 text-green-500 mx-auto mb-2" />
                       <div className="font-semibold text-green-700">Manual Therapy</div>
@@ -1024,7 +1182,7 @@ export default function CompetitionPage() {
                   </Card>
                   
                   <Card className="border-indigo-200 hover:shadow-lg transition-shadow cursor-pointer"
-                        onClick={() => setActiveTab("competitions")}>
+                        onClick={() => setActiveTab("game-competitions")}>
                     <CardContent className="p-4 text-center">
                       <Clock className="h-8 w-8 text-indigo-500 mx-auto mb-2" />
                       <div className="font-semibold text-indigo-700">Exercise Prescription</div>
@@ -1035,7 +1193,7 @@ export default function CompetitionPage() {
                 
                 <div className="mt-4 text-center">
                   <Button 
-                    onClick={() => setActiveTab("competitions")}
+                    onClick={() => setActiveTab("game-competitions")}
                     className="bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700"
                   >
                     <Trophy className="h-4 w-4 mr-2" />
@@ -1190,6 +1348,11 @@ export default function CompetitionPage() {
             </Card>
 
 
+          </TabsContent>
+
+          {/* Game Competitions Tab */}
+          <TabsContent value="game-competitions">
+            <GameCompetitionsView />
           </TabsContent>
 
           {/* Complex Cases Tab */}

@@ -1189,6 +1189,15 @@ export default function CompetitionPage() {
                       <div className="text-xs text-indigo-600">Evidence-based programs</div>
                     </CardContent>
                   </Card>
+                  
+                  <Card className="border-orange-200 hover:shadow-lg transition-shadow cursor-pointer"
+                        onClick={() => setActiveTab("game-competitions")}>
+                    <CardContent className="p-4 text-center">
+                      <Zap className="h-8 w-8 text-orange-500 mx-auto mb-2" />
+                      <div className="font-semibold text-orange-700">Diagnosis Duel</div>
+                      <div className="text-xs text-orange-600">10 cases in 60 seconds</div>
+                    </CardContent>
+                  </Card>
                 </div>
                 
                 <div className="mt-4 text-center">

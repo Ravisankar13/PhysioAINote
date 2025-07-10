@@ -89,6 +89,8 @@ export class GameAIFeedbackService {
         return await this.analyzeChooseYourAdventure(responses, gameContent);
       case 'emergency_room_simulator':
         return await this.analyzeEmergencySimulator(responses, gameContent);
+      case 'diagnosis_duel':
+        return await this.analyzeDiagnosisDuel(responses, gameContent);
       default:
         return await this.analyzeGenericGame(responses, gameContent);
     }
@@ -1281,6 +1283,123 @@ Return JSON:
 
   private async analyzeChooseYourAdventure(responses: any, gameContent: any): Promise<QuestionFeedback[]> {
     return this.analyzeGenericGame(responses, gameContent);
+  }
+
+  /**
+   * Analyze Diagnosis Duel responses - 10 rapid cases with progressive difficulty
+   */
+  private async analyzeDiagnosisDuel(responses: any, gameContent: any): Promise<QuestionFeedback[]> {
+    const duelContent = gameContent.diagnosisDuel || {};
+    const cases = duelContent.cases || [];
+    const feedbacks: QuestionFeedback[] = [];
+
+    for (let i = 0; i < cases.length; i++) {
+      const caseData = cases[i];
+      const responseKey = `case_${i}`;
+      const userResponse = responses[responseKey];
+
+      if (caseData && userResponse) {
+        const feedback = await this.analyzeDiagnosisDuelCase(
+          caseData,
+          userResponse,
+          `Rapid Diagnosis Case ${i + 1}: ${caseData.presentation?.substring(0, 50)}...`,
+          responseKey,
+          i + 1
+        );
+        feedbacks.push(feedback);
+      }
+    }
+
+    return feedbacks;
+  }
+
+  /**
+   * Analyze individual Diagnosis Duel case with speed and accuracy focus
+   */
+  private async analyzeDiagnosisDuelCase(
+    caseData: any,
+    userResponse: string,
+    questionText: string,
+    questionId: string,
+    caseNumber: number
+  ): Promise<QuestionFeedback> {
+    const prompt = `Analyze this rapid diagnosis response from a 60-second speed challenge:
+
+Case ${caseNumber}/10 (${caseData.difficulty} difficulty):
+Clinical Presentation: ${caseData.presentation}
+Correct Diagnosis: ${caseData.correctDiagnosis}
+User's Diagnosis: ${userResponse}
+Time Allocation: ${caseData.timeAllocation} seconds
+
+This is case ${caseNumber} of 10 in a progressive difficulty speed challenge. Evaluate based on:
+1. Diagnostic accuracy (70%)
+2. Speed appropriateness for difficulty level (20%) 
+3. Clinical reasoning under time pressure (10%)
+
+Provide feedback tailored to the rapid-fire format and progressive difficulty nature.
+
+Return JSON:
+{
+  "score": number,
+  "aiAnalysis": "Speed-focused analysis with progressive difficulty context",
+  "idealResponse": "Optimal rapid diagnosis approach for this difficulty level",
+  "strengths": ["Speed diagnosis strengths demonstrated"],
+  "improvements": ["Rapid clinical reasoning enhancement areas"],
+  "clinicalReasoning": "Assessment of diagnostic thinking under time pressure",
+  "researchReferences": ["Evidence supporting rapid diagnosis techniques"]
+}`;
+
+    try {
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+      });
+
+      const result = JSON.parse(response.choices[0].message.content || '{}');
+      
+      // Check if diagnosis is correct for scoring
+      const isCorrect = this.isMatchingDiagnosis(userResponse, caseData.correctDiagnosis);
+      const baseScore = isCorrect ? 100 : 0;
+
+      return {
+        questionId,
+        questionText,
+        userResponse: userResponse,
+        aiIdealResponse: result.idealResponse || `${caseData.correctDiagnosis} - Rapid recognition of ${caseData.difficulty} level clinical presentation requiring swift pattern recognition and systematic approach`,
+        correctAnswer: caseData.correctDiagnosis,
+        aiAnalysis: result.aiAnalysis || `Case ${caseNumber}: ${caseData.difficulty} difficulty diagnosis challenge completed in speed format`,
+        score: this.safeScore(result.score || baseScore, baseScore),
+        strengths: result.strengths || ['Rapid diagnosis attempt under time pressure'],
+        improvements: result.improvements || ['Enhance speed diagnosis pattern recognition'],
+        clinicalReasoning: result.clinicalReasoning || 'Rapid clinical reasoning under time constraint assessed',
+        researchReferences: result.researchReferences || [`Rapid diagnosis techniques for ${caseData.difficulty} presentations`]
+      };
+    } catch (error) {
+      console.error('Error analyzing diagnosis duel case:', error);
+      return this.createDiagnosisDuelFallback(caseData, userResponse, questionId, caseNumber);
+    }
+  }
+
+  /**
+   * Create fallback Diagnosis Duel feedback
+   */
+  private createDiagnosisDuelFallback(caseData: any, userResponse: string, questionId: string, caseNumber: number): QuestionFeedback {
+    const isCorrect = this.isMatchingDiagnosis(userResponse, caseData.correctDiagnosis);
+    
+    return {
+      questionId,
+      questionText: `Rapid Diagnosis Case ${caseNumber}`,
+      userResponse: userResponse,
+      aiIdealResponse: `${caseData.correctDiagnosis} - Swift recognition of key clinical patterns for ${caseData.difficulty} level presentation`,
+      correctAnswer: caseData.correctDiagnosis,
+      aiAnalysis: `Case ${caseNumber} (${caseData.difficulty}): ${isCorrect ? 'Correct' : 'Incorrect'} rapid diagnosis in speed challenge format`,
+      score: isCorrect ? 100 : 0,
+      strengths: isCorrect ? ['Accurate rapid diagnosis', 'Effective time management'] : ['Attempted rapid assessment'],
+      improvements: isCorrect ? ['Maintain accuracy at higher difficulty levels'] : ['Review pattern recognition for rapid diagnosis'],
+      clinicalReasoning: `${caseData.difficulty} level rapid reasoning ${isCorrect ? 'successful' : 'requires improvement'}`,
+      researchReferences: [`Clinical pattern recognition studies`, `Rapid diagnosis methodologies`]
+    };
   }
 }
 

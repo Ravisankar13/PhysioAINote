@@ -986,6 +986,126 @@ export default function GameCompetitionPage() {
     );
   };
 
+  const renderDiagnosisDuel = (content: any) => {
+    const duelContent = content?.diagnosisDuel || {};
+    const cases = duelContent.cases || [];
+    const currentCase = cases[currentStage] || cases[0];
+    
+    if (!currentCase || cases.length === 0) {
+      return (
+        <div className="text-center py-8">
+          <p className="text-red-600">No Diagnosis Duel cases available.</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-6">
+        {/* Timer and Progress */}
+        <div className="bg-gradient-to-r from-orange-500 to-red-500 text-white p-6 rounded-lg">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-xl font-bold">Diagnosis Duel</h3>
+              <p className="text-orange-100">Case {currentStage + 1} of {cases.length}</p>
+            </div>
+            <div className="text-right">
+              <div className="text-3xl font-bold">{Math.floor(timeRemaining / 60)}:{(timeRemaining % 60).toString().padStart(2, '0')}</div>
+              <div className="text-orange-100 text-sm">Time Remaining</div>
+            </div>
+          </div>
+          <div className="mt-4">
+            <div className="flex items-center justify-between text-sm text-orange-200 mb-2">
+              <span>Progress</span>
+              <span>{currentStage + 1}/{cases.length}</span>
+            </div>
+            <Progress value={((currentStage + 1) / cases.length) * 100} className="h-2" />
+          </div>
+        </div>
+
+        {/* Case Presentation */}
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="font-semibold text-lg">Clinical Presentation</h4>
+            <Badge variant="outline" className={`
+              ${currentCase.difficulty === 'easy' ? 'border-green-500 text-green-700' : ''}
+              ${currentCase.difficulty === 'moderate' ? 'border-yellow-500 text-yellow-700' : ''}
+              ${currentCase.difficulty === 'hard' ? 'border-red-500 text-red-700' : ''}
+              ${currentCase.difficulty === 'expert' ? 'border-purple-500 text-purple-700' : ''}
+            `}>
+              {currentCase.difficulty?.toUpperCase()}
+            </Badge>
+          </div>
+          
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <p className="text-sm text-gray-800">{currentCase.presentation}</p>
+          </div>
+
+          {/* Diagnosis Options */}
+          <div className="space-y-3">
+            <h5 className="font-medium text-gray-700">Select Your Diagnosis:</h5>
+            
+            {/* Correct diagnosis mixed with distractors */}
+            {[currentCase.correctDiagnosis, ...currentCase.distractors].map((diagnosis, index) => (
+              <label key={index} className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                <input
+                  type="radio"
+                  name={`case_${currentStage}`}
+                  value={diagnosis}
+                  checked={responses[`case_${currentStage}`] === diagnosis}
+                  onChange={(e) => handleResponse(`case_${currentStage}`, e.target.value)}
+                  className="text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-sm">{diagnosis}</span>
+              </label>
+            ))}
+          </div>
+
+          {/* Opponent Status */}
+          {duelContent.multiplayerRules?.showOpponentSubmissions && (
+            <div className="mt-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <Users className="h-4 w-4" />
+                <span>Opponent Progress: {Math.floor(Math.random() * (currentStage + 2))} cases submitted</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Navigation Controls */}
+        <div className="flex justify-between items-center">
+          <button
+            onClick={() => setCurrentStage(Math.max(0, currentStage - 1))}
+            disabled={currentStage === 0}
+            className="px-4 py-2 border border-gray-300 rounded-md text-sm disabled:opacity-50"
+          >
+            Previous
+          </button>
+          
+          <div className="text-sm text-gray-600">
+            Time for this case: {currentCase.timeAllocation}s
+          </div>
+          
+          {currentStage < cases.length - 1 ? (
+            <button
+              onClick={() => setCurrentStage(Math.min(cases.length - 1, currentStage + 1))}
+              className="px-4 py-2 bg-orange-600 text-white rounded-md text-sm hover:bg-orange-700"
+            >
+              Next Case
+            </button>
+          ) : (
+            <button
+              onClick={submitGame}
+              disabled={submitting}
+              className="px-6 py-2 bg-red-600 text-white rounded-md text-sm disabled:opacity-50 hover:bg-red-700"
+            >
+              {submitting ? 'Submitting...' : 'Submit Duel'}
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   const renderTreatmentSpeedRun = (content: any) => {
     // Debug logging to understand data flow
     console.log('renderTreatmentSpeedRun called with:', content);
@@ -1781,6 +1901,10 @@ export default function GameCompetitionPage() {
             
             {competition.gameType === 'emergency_room_simulator' && gameContent && (
               renderEmergencySimulator(gameContent)
+            )}
+            
+            {competition.gameType === 'diagnosis_duel' && gameContent && (
+              renderDiagnosisDuel(gameContent)
             )}
             
             {/* Fallback for missing or empty content */}

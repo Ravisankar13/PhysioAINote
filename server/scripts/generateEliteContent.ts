@@ -166,6 +166,129 @@ const generateEmergencySimulatorContent = () => {
   };
 };
 
+const generateDiagnosisDuelContent = () => {
+  return {
+    diagnosisDuel: {
+      totalTime: 60,
+      totalCases: 10,
+      progressiveDifficulty: true,
+      multiplayerRules: {
+        showOpponentSubmissions: true,
+        enableSpeedBonus: true,
+        penalizeWrongAnswers: true
+      },
+      cases: [
+        // Cases 1-3: Easy (Beginner level)
+        {
+          id: 1,
+          difficulty: "easy",
+          presentation: "25-year-old runner with sharp heel pain worse in morning, first steps out of bed",
+          correctDiagnosis: "Plantar fasciitis",
+          distractors: ["Achilles tendinitis", "Heel spur", "Stress fracture"],
+          timeAllocation: 4
+        },
+        {
+          id: 2,
+          difficulty: "easy", 
+          presentation: "45-year-old office worker with gradual onset lateral elbow pain, worse with gripping",
+          correctDiagnosis: "Lateral epicondylitis",
+          distractors: ["Radial tunnel syndrome", "Posterior interosseous nerve entrapment", "Elbow bursitis"],
+          timeAllocation: 4
+        },
+        {
+          id: 3,
+          difficulty: "easy",
+          presentation: "30-year-old with acute onset severe lower back pain after lifting, pain radiates to buttock",
+          correctDiagnosis: "Lumbar disc herniation",
+          distractors: ["Muscle strain", "Sacroiliac joint dysfunction", "Piriformis syndrome"],
+          timeAllocation: 4
+        },
+        
+        // Cases 4-6: Moderate (Intermediate level)
+        {
+          id: 4,
+          difficulty: "moderate",
+          presentation: "60-year-old with insidious onset knee pain, morning stiffness <30min, crepitus on movement",
+          correctDiagnosis: "Knee osteoarthritis",
+          distractors: ["Meniscal tear", "Patellofemoral syndrome", "Rheumatoid arthritis"],
+          timeAllocation: 6
+        },
+        {
+          id: 5,
+          difficulty: "moderate",
+          presentation: "35-year-old swimmer with deep shoulder ache, positive Hawkins test, pain with overhead activities",
+          correctDiagnosis: "Subacromial impingement syndrome",
+          distractors: ["Rotator cuff tear", "Adhesive capsulitis", "Glenohumeral instability"],
+          timeAllocation: 6
+        },
+        {
+          id: 6,
+          difficulty: "moderate",
+          presentation: "28-year-old with tingling in thumb/index finger, positive Tinel's sign at wrist, worse at night",
+          correctDiagnosis: "Carpal tunnel syndrome",
+          distractors: ["Cubital tunnel syndrome", "Thoracic outlet syndrome", "Cervical radiculopathy"],
+          timeAllocation: 6
+        },
+        
+        // Cases 7-8: Hard (Advanced level)
+        {
+          id: 7,
+          difficulty: "hard",
+          presentation: "55-year-old with progressive bilateral leg weakness, hyperreflexia, positive Babinski, fasciculations",
+          correctDiagnosis: "Amyotrophic lateral sclerosis",
+          distractors: ["Multiple sclerosis", "Cervical myelopathy", "Guillain-Barré syndrome"],
+          timeAllocation: 8
+        },
+        {
+          id: 8,
+          difficulty: "hard",
+          presentation: "40-year-old with intermittent jaw claudication, temporal headaches, elevated ESR, vision changes",
+          correctDiagnosis: "Giant cell arteritis",
+          distractors: ["Tension headache", "Trigeminal neuralgia", "TMJ dysfunction"],
+          timeAllocation: 8
+        },
+        
+        // Cases 9-10: Expert (Very challenging)
+        {
+          id: 9,
+          difficulty: "expert",
+          presentation: "22-year-old athlete with exertional leg pain, compartment pressure >30mmHg post-exercise, normal X-ray",
+          correctDiagnosis: "Chronic exertional compartment syndrome",
+          distractors: ["Stress fracture", "Medial tibial stress syndrome", "Popliteal artery entrapment"],
+          timeAllocation: 10
+        },
+        {
+          id: 10,
+          difficulty: "expert", 
+          presentation: "65-year-old with progressive dysphagia, weight loss, regurgitation, barium swallow shows bird's beak",
+          correctDiagnosis: "Achalasia",
+          distractors: ["Esophageal carcinoma", "Gastroesophageal reflux disease", "Esophageal stricture"],
+          timeAllocation: 10
+        }
+      ],
+      scoringRules: {
+        correctAnswer: 100,
+        speedBonus: (timeRemaining: number, allocated: number) => Math.floor((timeRemaining / allocated) * 50),
+        wrongAnswerPenalty: -25,
+        difficultyMultiplier: {
+          easy: 1.0,
+          moderate: 1.5,
+          hard: 2.0,
+          expert: 3.0
+        }
+      },
+      instructions: [
+        "10 rapid-fire diagnosis cases in 60 seconds total",
+        "Cases get progressively more difficult",
+        "See when your opponent submits answers",
+        "Speed bonus for quick correct answers",
+        "Penalty for wrong diagnoses",
+        "Multiple choice format with clinical distractors"
+      ]
+    }
+  };
+};
+
 async function generateEliteCompetitionContent() {
   console.log('🎯 Generating content for Elite competitions...');
 
@@ -174,7 +297,7 @@ async function generateEliteCompetitionContent() {
     const eliteCompetitions = await db
       .select()
       .from(competitions)
-      .where(inArray(competitions.gameType, ['red_flag_detective', 'differential_diagnosis_duel', 'emergency_room_simulator']));
+      .where(inArray(competitions.gameType, ['red_flag_detective', 'differential_diagnosis_duel', 'emergency_room_simulator', 'diagnosis_duel']));
 
     console.log(`Found ${eliteCompetitions.length} Elite competitions:`, eliteCompetitions.map(c => c.title));
 
@@ -192,6 +315,9 @@ async function generateEliteCompetitionContent() {
           break;
         case 'emergency_room_simulator':
           content = generateEmergencySimulatorContent();
+          break;
+        case 'diagnosis_duel':
+          content = generateDiagnosisDuelContent();
           break;
         default:
           console.log(`⚠️ Unknown game type: ${competition.gameType}`);
@@ -231,7 +357,7 @@ async function generateEliteCompetitionContent() {
       .select({ count: gameContent.competitionId })
       .from(gameContent)
       .innerJoin(competitions, eq(gameContent.competitionId, competitions.id))
-      .where(inArray(competitions.gameType, ['red_flag_detective', 'differential_diagnosis_duel', 'emergency_room_simulator']));
+      .where(inArray(competitions.gameType, ['red_flag_detective', 'differential_diagnosis_duel', 'emergency_room_simulator', 'diagnosis_duel']));
     
     console.log(`📊 Total Elite competitions with content: ${contentCount.length}`);
 

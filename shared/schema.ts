@@ -95,6 +95,7 @@ export const gameTypeEnum = pgEnum("game_type", [
   "journal_club_race",
   "cpg_quiz_master",
   "mystery_patient",
+  "diagnosis_duel",
 ]);
 
 // Competition status enum

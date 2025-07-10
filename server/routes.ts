@@ -8547,7 +8547,10 @@ Respond with only a number between 1-100 representing the relevance score.`;
         .where(or(
           eq(competitions.gameType, "lightning_diagnosis"),
           eq(competitions.gameType, "treatment_speed_run"),
-          eq(competitions.gameType, "progressive_diagnostic_challenge")
+          eq(competitions.gameType, "progressive_diagnostic_challenge"),
+          eq(competitions.gameType, "red_flag_detective"),
+          eq(competitions.gameType, "differential_diagnosis_duel"),
+          eq(competitions.gameType, "emergency_room_simulator")
         ))
         .orderBy(desc(competitions.createdAt));
 

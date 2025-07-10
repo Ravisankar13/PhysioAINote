@@ -1305,6 +1305,138 @@ export default function GameCompetitionPage() {
     );
   };
 
+  // Render function for Red Flag Detective competitions
+  const renderRedFlagDetective = (content: any) => {
+    const redFlagContent = content?.redFlagDetective || content?.red_flag_detective || {};
+    const cases = redFlagContent.cases || [];
+
+    if (!cases || cases.length === 0) {
+      return (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
+          <h3 className="text-lg font-semibold text-yellow-800 mb-2">Red Flag Detective</h3>
+          <p className="text-yellow-700 mb-4">
+            Content is being prepared for this Red Flag Detective challenge.
+          </p>
+        </div>
+      );
+    }
+
+    const currentCase = cases[currentStage] || cases[0];
+    return (
+      <div className="space-y-6">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-red-800 mb-4">🚨 Red Flag Detective</h3>
+          <p className="text-red-700 mb-4">{currentCase?.presentation || "Clinical scenario loading..."}</p>
+          
+          <div className="space-y-3">
+            <h4 className="font-medium">Identify potential red flags:</h4>
+            <textarea
+              className="w-full border border-gray-300 rounded-md p-3 text-sm"
+              rows={4}
+              placeholder="List any red flags you identify and explain your reasoning..."
+              value={responses.redFlags || ''}
+              onChange={(e) => handleResponse('redFlags', e.target.value)}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Render function for Differential Diagnosis competitions
+  const renderDifferentialDiagnosis = (content: any) => {
+    const differentialContent = content?.differentialDiagnosis || content?.differential_diagnosis_duel || {};
+    const cases = differentialContent.cases || [];
+
+    if (!cases || cases.length === 0) {
+      return (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
+          <h3 className="text-lg font-semibold text-yellow-800 mb-2">Differential Race</h3>
+          <p className="text-yellow-700 mb-4">
+            Content is being prepared for this Differential Diagnosis challenge.
+          </p>
+        </div>
+      );
+    }
+
+    const currentCase = cases[currentStage] || cases[0];
+    return (
+      <div className="space-y-6">
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-blue-800 mb-4">🎯 Differential Race</h3>
+          <p className="text-blue-700 mb-4">{currentCase?.presentation || "Clinical scenario loading..."}</p>
+          
+          <div className="space-y-3">
+            <h4 className="font-medium">Generate your differential diagnosis list:</h4>
+            <textarea
+              className="w-full border border-gray-300 rounded-md p-3 text-sm"
+              rows={6}
+              placeholder="List potential diagnoses in order of likelihood with brief reasoning..."
+              value={responses.differentialList || ''}
+              onChange={(e) => handleResponse('differentialList', e.target.value)}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Render function for Emergency Room Simulator competitions
+  const renderEmergencySimulator = (content: any) => {
+    const emergencyContent = content?.emergencySimulator || content?.emergency_room_simulator || {};
+    const cases = emergencyContent.cases || [];
+
+    if (!cases || cases.length === 0) {
+      return (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
+          <h3 className="text-lg font-semibold text-yellow-800 mb-2">Emergency Triage</h3>
+          <p className="text-yellow-700 mb-4">
+            Content is being prepared for this Emergency Triage challenge.
+          </p>
+        </div>
+      );
+    }
+
+    const currentCase = cases[currentStage] || cases[0];
+    return (
+      <div className="space-y-6">
+        <div className="bg-purple-50 border border-purple-200 rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-purple-800 mb-4">🚑 Emergency Triage</h3>
+          <p className="text-purple-700 mb-4">{currentCase?.presentation || "Clinical scenario loading..."}</p>
+          
+          <div className="space-y-4">
+            <div>
+              <h4 className="font-medium mb-2">Triage Priority (1-5):</h4>
+              <select
+                className="w-full border border-gray-300 rounded-md p-2 text-sm"
+                value={responses.triagePriority || ''}
+                onChange={(e) => handleResponse('triagePriority', e.target.value)}
+              >
+                <option value="">Select priority level...</option>
+                <option value="1">1 - Immediate (Life threatening)</option>
+                <option value="2">2 - Urgent (Emergency)</option>
+                <option value="3">3 - Standard (Semi-urgent)</option>
+                <option value="4">4 - Non-urgent</option>
+                <option value="5">5 - Defer</option>
+              </select>
+            </div>
+            
+            <div>
+              <h4 className="font-medium mb-2">Immediate Actions:</h4>
+              <textarea
+                className="w-full border border-gray-300 rounded-md p-3 text-sm"
+                rows={4}
+                placeholder="Describe immediate actions and management priorities..."
+                value={responses.immediateActions || ''}
+                onChange={(e) => handleResponse('immediateActions', e.target.value)}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -1465,6 +1597,39 @@ export default function GameCompetitionPage() {
             
             {competition.gameType === 'progressive_diagnostic_challenge' && gameContent && (
               renderProgressiveDiagnosticChallenge(gameContent)
+            )}
+            
+            {competition.gameType === 'red_flag_detective' && gameContent && (
+              renderRedFlagDetective(gameContent)
+            )}
+            
+            {competition.gameType === 'differential_diagnosis_duel' && gameContent && (
+              renderDifferentialDiagnosis(gameContent)
+            )}
+            
+            {competition.gameType === 'emergency_room_simulator' && gameContent && (
+              renderEmergencySimulator(gameContent)
+            )}
+            
+            {/* Fallback for missing or empty content */}
+            {(!gameContent || Object.keys(gameContent).length === 0) && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
+                <div className="text-yellow-600 mb-4">
+                  <svg className="h-12 w-12 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-yellow-800 mb-2">Competition Content Loading</h3>
+                <p className="text-yellow-700 mb-4">
+                  This competition is being prepared. Content will be available shortly.
+                </p>
+                <button
+                  onClick={() => window.history.back()}
+                  className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700"
+                >
+                  Back to Competitions
+                </button>
+              </div>
             )}
           </div>
 

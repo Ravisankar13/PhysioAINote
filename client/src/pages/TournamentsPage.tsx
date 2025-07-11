@@ -304,7 +304,14 @@ export default function TournamentsPage() {
             </Alert>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {tournaments.map((tournament: Tournament) => (
+              {tournaments.filter(Boolean).map((tournament: Tournament) => {
+                // Safety check to ensure tournament has required properties
+                if (!tournament || !tournament.title) {
+                  console.warn('Invalid tournament object:', tournament);
+                  return null;
+                }
+                
+                return (
                 <Card key={tournament.id} className="cursor-pointer hover:shadow-md transition-shadow">
                   <CardHeader>
                     <div className="flex items-center justify-between">
@@ -379,22 +386,23 @@ export default function TournamentsPage() {
                     </div>
                   </CardContent>
                 </Card>
-              ))}
+                );
+              }).filter(Boolean)}
             </div>
           )}
         </TabsContent>
 
         <TabsContent value="bracket" className="space-y-4">
-          {selectedTournament && tournamentDetails ? (
+          {selectedTournament && tournamentDetails && tournamentDetails.tournament ? (
             <div className="space-y-6">
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Trophy className="h-5 w-5 text-yellow-500" />
-                    {tournamentDetails.tournament.title}
+                    {tournamentDetails.tournament.title || 'Tournament'}
                   </CardTitle>
                   <CardDescription>
-                    {tournamentDetails.tournament.description}
+                    {tournamentDetails.tournament.description || 'Tournament details'}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>

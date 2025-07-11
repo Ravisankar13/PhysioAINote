@@ -315,6 +315,7 @@ export default function TournamentWaitingRoom() {
                   variant="default" 
                   onClick={async () => {
                     try {
+                      console.log('Starting tournament...');
                       const response = await fetch(`/api/tournaments/${tournamentId}/start`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -323,15 +324,20 @@ export default function TournamentWaitingRoom() {
                       
                       if (response.ok) {
                         const result = await response.json();
-                        console.log('Tournament started:', result);
+                        console.log('Tournament started successfully:', result);
                         // Refresh tournament data
                         refetchTournament();
                         refetchParticipants();
+                        // Navigate to tournament page or show success message
+                        alert('Tournament started successfully! Check the tournament page for matches.');
                       } else {
-                        console.error('Failed to start tournament:', await response.text());
+                        const errorText = await response.text();
+                        console.error('Failed to start tournament:', errorText);
+                        alert(`Failed to start tournament: ${errorText}`);
                       }
                     } catch (error) {
                       console.error('Error starting tournament:', error);
+                      alert(`Error starting tournament: ${error.message}`);
                     }
                   }}
                   className="flex-1"

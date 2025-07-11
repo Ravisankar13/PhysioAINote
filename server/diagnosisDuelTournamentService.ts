@@ -245,22 +245,11 @@ export class DiagnosisDuelTournamentService {
       .from(gameContent)
       .where(eq(gameContent.competitionId, 107)); // Tournament content competition ID
     
-    let content;
-    if (existingContent) {
-      content = existingContent;
-    } else {
-      // Fallback: create basic content if tournament content not found
-      const gameContentData = await gameContentGenerator.generateDiagnosisDuelContent(10);
-      const [newContent] = await db
-        .insert(gameContent)
-        .values({
-          competitionId: tournamentId,
-          gameType: 'lightning_diagnosis',
-          content: { lightning_diagnosis: gameContentData },
-        })
-        .returning();
-      content = newContent;
+    if (!existingContent) {
+      throw new Error('Tournament content not found. Please run the tournament content generation script first.');
     }
+    
+    const content = existingContent;
 
     // Pair up participants for matches
     for (let i = 0; i < participants.length; i += 2) {

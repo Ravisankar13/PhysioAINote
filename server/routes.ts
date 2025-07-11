@@ -5397,6 +5397,31 @@ Respond with only a number between 1-100 representing the relevance score.`;
 
   console.log('🔗 Real-time AI WebSocket server started on /ws/soap-ai');
 
+  // Tournament WebSocket Server for real-time 1v1 matches
+  const tournamentWss = new WebSocketServer({ server: httpServer, path: '/ws/tournaments' });
+  
+  tournamentWss.on('connection', async (ws: WebSocket, req) => {
+    const url = new URL(req.url!, `http://${req.headers.host}`);
+    const userId = url.searchParams.get('userId');
+    
+    if (!userId) {
+      ws.close(1000, 'Missing userId');
+      return;
+    }
+    
+    console.log(`Tournament WebSocket client connected: ${userId}`);
+    
+    // Add client to tournament service
+    const { realTimeTournamentService } = await import('./realTimeTournamentService');
+    realTimeTournamentService.addConnection(parseInt(userId), ws);
+    
+    ws.on('close', () => {
+      console.log(`Tournament WebSocket client disconnected: ${userId}`);
+    });
+  });
+
+  console.log('⚔️ Tournament WebSocket server started on /ws/tournaments');
+
   // Competition System Routes
   
   // Get active competitions
@@ -9633,6 +9658,146 @@ Respond in JSON format:
       res.json(soapNotes);
     } catch (error: any) {
       console.error("Error getting session SOAP notes:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // =========================
+  // DIAGNOSIS DUEL TOURNAMENT ROUTES
+  // =========================
+
+  // Get all active tournaments
+  app.get('/api/tournaments', async (req: Request, res: Response) => {
+    try {
+      const { diagnosisDuelTournamentService } = await import('./diagnosisDuelTournamentService');
+      const tournaments = await diagnosisDuelTournamentService.getActiveTournaments();
+      res.json(tournaments);
+    } catch (error: any) {
+      console.error("Error getting tournaments:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get tournament details
+  app.get('/api/tournaments/:id', async (req: Request, res: Response) => {
+    try {
+      const tournamentId = parseInt(req.params.id);
+      const { diagnosisDuelTournamentService } = await import('./diagnosisDuelTournamentService');
+      const tournamentDetails = await diagnosisDuelTournamentService.getTournamentDetails(tournamentId);
+      
+      if (!tournamentDetails) {
+        return res.status(404).json({ error: 'Tournament not found' });
+      }
+      
+      res.json(tournamentDetails);
+    } catch (error: any) {
+      console.error("Error getting tournament details:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Create a new tournament
+  app.post('/api/tournaments', ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const tournamentData = req.body;
+      const { diagnosisDuelTournamentService } = await import('./diagnosisDuelTournamentService');
+      const tournament = await diagnosisDuelTournamentService.createTournament(tournamentData);
+      res.json(tournament);
+    } catch (error: any) {
+      console.error("Error creating tournament:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Register for a tournament
+  app.post('/api/tournaments/:id/register', ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const tournamentId = parseInt(req.params.id);
+      const userId = req.user?.id;
+      
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+      
+      const { diagnosisDuelTournamentService } = await import('./diagnosisDuelTournamentService');
+      const result = await diagnosisDuelTournamentService.registerForTournament(tournamentId, userId);
+      
+      if (!result.success) {
+        return res.status(400).json({ error: result.message });
+      }
+      
+      // Broadcast tournament update to all connected users
+      const { realTimeTournamentService } = await import('./realTimeTournamentService');
+      await realTimeTournamentService.broadcastTournamentUpdate(tournamentId, {
+        type: 'player_registered',
+        message: 'A new player has joined the tournament'
+      });
+      
+      res.json(result);
+    } catch (error: any) {
+      console.error("Error registering for tournament:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Start a tournament
+  app.post('/api/tournaments/:id/start', ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const tournamentId = parseInt(req.params.id);
+      const { diagnosisDuelTournamentService } = await import('./diagnosisDuelTournamentService');
+      const result = await diagnosisDuelTournamentService.startTournament(tournamentId);
+      
+      if (!result.success) {
+        return res.status(400).json({ error: result.message });
+      }
+      
+      // Broadcast tournament start to all connected users
+      const { realTimeTournamentService } = await import('./realTimeTournamentService');
+      await realTimeTournamentService.broadcastTournamentUpdate(tournamentId, {
+        type: 'tournament_started',
+        message: 'Tournament has started! Brackets are live.'
+      });
+      
+      res.json(result);
+    } catch (error: any) {
+      console.error("Error starting tournament:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Submit match results
+  app.post('/api/tournaments/matches/:matchId/submit', ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const matchId = parseInt(req.params.matchId);
+      const { player1Responses, player2Responses, player1Score, player2Score, player1TimeSpent, player2TimeSpent } = req.body;
+      
+      const { diagnosisDuelTournamentService } = await import('./diagnosisDuelTournamentService');
+      const result = await diagnosisDuelTournamentService.submitMatchResults(
+        matchId, 
+        player1Responses, 
+        player2Responses, 
+        player1Score, 
+        player2Score, 
+        player1TimeSpent, 
+        player2TimeSpent
+      );
+      
+      if (!result.success) {
+        return res.status(400).json({ error: result.message });
+      }
+      
+      // Broadcast match results to connected players
+      const { realTimeTournamentService } = await import('./realTimeTournamentService');
+      realTimeTournamentService.broadcastMatchResults(matchId, {
+        player1Score,
+        player2Score,
+        winnerId: result.winnerId,
+        message: 'Match completed!'
+      });
+      
+      res.json(result);
+    } catch (error: any) {
+      console.error("Error submitting match results:", error);
       res.status(500).json({ error: error.message });
     }
   });

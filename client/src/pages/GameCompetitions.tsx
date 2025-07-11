@@ -310,10 +310,25 @@ function GameCompetitions() {
     <div className="container mx-auto py-8 space-y-8">
       {/* Hero Section */}
       <div className="text-center space-y-4">
-        <h1 className="text-4xl font-bold">Elite Clinical Competitions</h1>
-        <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
-          Compete against up to 10 practitioners in high-stakes clinical challenges. Master red flag detection, differential diagnosis, manual therapy selection, and evidence-based treatment planning.
-        </p>
+        <div className="flex items-center justify-between">
+          <div className="flex-1" />
+          <div className="space-y-4">
+            <h1 className="text-4xl font-bold">Elite Clinical Competitions</h1>
+            <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
+              Compete against up to 10 practitioners in high-stakes clinical challenges. Master red flag detection, differential diagnosis, manual therapy selection, and evidence-based treatment planning.
+            </p>
+          </div>
+          <div className="flex-1 flex justify-end">
+            <Button 
+              onClick={() => setLocation('/tournaments')}
+              variant="outline" 
+              className="flex items-center gap-2"
+            >
+              <Trophy className="h-4 w-4" />
+              Tournaments
+            </Button>
+          </div>
+        </div>
         <div className="flex items-center justify-center gap-4 text-sm text-muted-foreground">
           <div className="flex items-center gap-1">
             <Users className="h-4 w-4" />

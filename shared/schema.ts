@@ -123,6 +123,27 @@ export const achievementTypeEnum = pgEnum("achievement_type", [
   "research_master",
 ]);
 
+// Tournament status enum
+export const tournamentStatusEnum = pgEnum("tournament_status", [
+  "registration",
+  "waiting_for_players",
+  "round_1",
+  "round_2", 
+  "round_3",
+  "round_4",
+  "finals",
+  "completed",
+  "cancelled",
+]);
+
+// Match status enum
+export const matchStatusEnum = pgEnum("match_status", [
+  "scheduled",
+  "in_progress",
+  "completed",
+  "cancelled",
+]);
+
 // Session status enum for tracking recording and processing states
 export const sessionStatusEnum = pgEnum("session_status", [
   "draft",
@@ -2074,6 +2095,58 @@ export const tournamentBrackets = pgTable("tournament_brackets", {
   completedAt: timestamp("completed_at"),
 });
 
+// Diagnosis Duel Tournaments (Real-time 1v1 tournaments)
+export const diagnosisDuelTournaments = pgTable("diagnosis_duel_tournaments", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  bodyPart: bodyPartEnum("body_part").default("general").notNull(),
+  difficulty: text("difficulty").default("intermediate").notNull(),
+  status: tournamentStatusEnum("status").default("registration").notNull(),
+  maxParticipants: integer("max_participants").default(32).notNull(),
+  currentParticipants: integer("current_participants").default(0).notNull(),
+  currentRound: integer("current_round").default(1).notNull(),
+  registrationStartTime: timestamp("registration_start_time").defaultNow().notNull(),
+  registrationEndTime: timestamp("registration_end_time").notNull(),
+  tournamentStartTime: timestamp("tournament_start_time").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Tournament participants (for diagnosis duel tournaments)
+export const tournamentParticipants = pgTable("tournament_participants", {
+  id: serial("id").primaryKey(),
+  tournamentId: integer("tournament_id").notNull().references(() => diagnosisDuelTournaments.id, { onDelete: "cascade" }),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  bracketPosition: integer("bracket_position"), // Position in the bracket (1-32)
+  currentRound: integer("current_round").default(1).notNull(),
+  isEliminated: boolean("is_eliminated").default(false).notNull(),
+  joinedAt: timestamp("joined_at").defaultNow().notNull(),
+});
+
+// Tournament matches (1v1 matches within tournaments)
+export const tournamentMatches = pgTable("tournament_matches", {
+  id: serial("id").primaryKey(),
+  tournamentId: integer("tournament_id").notNull().references(() => diagnosisDuelTournaments.id, { onDelete: "cascade" }),
+  round: integer("round").notNull(),
+  matchNumber: integer("match_number").notNull(),
+  player1Id: integer("player1_id").notNull().references(() => users.id),
+  player2Id: integer("player2_id").notNull().references(() => users.id),
+  player1Score: integer("player1_score").default(0),
+  player2Score: integer("player2_score").default(0),
+  player1TimeSpent: integer("player1_time_spent").default(0),
+  player2TimeSpent: integer("player2_time_spent").default(0),
+  winnerId: integer("winner_id").references(() => users.id),
+  status: matchStatusEnum("status").default("scheduled").notNull(),
+  gameContentId: integer("game_content_id").references(() => gameContent.id),
+  scheduledStartTime: timestamp("scheduled_start_time"),
+  actualStartTime: timestamp("actual_start_time"),
+  completedAt: timestamp("completed_at"),
+  player1Responses: json("player1_responses").$type<Record<string, string>>(),
+  player2Responses: json("player2_responses").$type<Record<string, string>>(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // Create insert schemas
 export const insertCompetitionSchema = createInsertSchema(competitions).omit({
   id: true,
@@ -2104,6 +2177,23 @@ export const insertTournamentBracketSchema = createInsertSchema(tournamentBracke
   id: true,
 });
 
+// Tournament insert schemas
+export const insertDiagnosisDuelTournamentSchema = createInsertSchema(diagnosisDuelTournaments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertTournamentParticipantSchema = createInsertSchema(tournamentParticipants).omit({
+  id: true,
+  joinedAt: true,
+});
+
+export const insertTournamentMatchSchema = createInsertSchema(tournamentMatches).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Define types
 export type Competition = typeof competitions.$inferSelect;
 export type InsertCompetition = z.infer<typeof insertCompetitionSchema>;
@@ -2117,6 +2207,14 @@ export type Leaderboard = typeof leaderboards.$inferSelect;
 export type InsertLeaderboard = z.infer<typeof insertLeaderboardSchema>;
 export type TournamentBracket = typeof tournamentBrackets.$inferSelect;
 export type InsertTournamentBracket = z.infer<typeof insertTournamentBracketSchema>;
+
+// Tournament types
+export type DiagnosisDuelTournament = typeof diagnosisDuelTournaments.$inferSelect;
+export type InsertDiagnosisDuelTournament = z.infer<typeof insertDiagnosisDuelTournamentSchema>;
+export type TournamentParticipant = typeof tournamentParticipants.$inferSelect;
+export type InsertTournamentParticipant = z.infer<typeof insertTournamentParticipantSchema>;
+export type TournamentMatch = typeof tournamentMatches.$inferSelect;
+export type InsertTournamentMatch = z.infer<typeof insertTournamentMatchSchema>;
 
 // Define relations
 export const competitionRelations = relations(competitions, ({ many, one }) => ({
@@ -2180,6 +2278,46 @@ export const tournamentBracketRelations = relations(tournamentBrackets, ({ one }
   caseStudy: one(aiCaseStudies, {
     fields: [tournamentBrackets.caseStudyId],
     references: [aiCaseStudies.id],
+  }),
+}));
+
+// Tournament relations
+export const diagnosisDuelTournamentRelations = relations(diagnosisDuelTournaments, ({ many }) => ({
+  participants: many(tournamentParticipants),
+  matches: many(tournamentMatches),
+}));
+
+export const tournamentParticipantRelations = relations(tournamentParticipants, ({ one }) => ({
+  tournament: one(diagnosisDuelTournaments, {
+    fields: [tournamentParticipants.tournamentId],
+    references: [diagnosisDuelTournaments.id],
+  }),
+  user: one(users, {
+    fields: [tournamentParticipants.userId],
+    references: [users.id],
+  }),
+}));
+
+export const tournamentMatchRelations = relations(tournamentMatches, ({ one }) => ({
+  tournament: one(diagnosisDuelTournaments, {
+    fields: [tournamentMatches.tournamentId],
+    references: [diagnosisDuelTournaments.id],
+  }),
+  player1: one(users, {
+    fields: [tournamentMatches.player1Id],
+    references: [users.id],
+  }),
+  player2: one(users, {
+    fields: [tournamentMatches.player2Id],
+    references: [users.id],
+  }),
+  winner: one(users, {
+    fields: [tournamentMatches.winnerId],
+    references: [users.id],
+  }),
+  gameContent: one(gameContent, {
+    fields: [tournamentMatches.gameContentId],
+    references: [gameContent.id],
   }),
 }));
 

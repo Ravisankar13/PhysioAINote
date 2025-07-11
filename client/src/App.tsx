@@ -48,6 +48,7 @@ import CompetitionDiagnosisPage from "@/pages/CompetitionDiagnosisPage";
 import CompetitionResultsPage from "@/pages/CompetitionResultsPage";
 import GameCompetitions from "@/pages/GameCompetitions";
 import GameCompetitionPage from "@/pages/GameCompetitionPage";
+import TournamentsPage from "@/pages/TournamentsPage";
 import BodyScanner from "@/pages/BodyScanner";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
@@ -114,6 +115,9 @@ function Router() {
           </Route>
           <Route path="/game-competition/:id">
             <ProtectedRoute component={GameCompetitionPage} />
+          </Route>
+          <Route path="/tournaments">
+            <ProtectedRoute component={TournamentsPage} />
           </Route>
           <Route path="/body-scanner">
             <ProtectedRoute component={BodyScanner} />

@@ -9678,25 +9678,7 @@ Respond in JSON format:
     }
   });
 
-  // Get tournament details
-  app.get('/api/tournaments/:id', async (req: Request, res: Response) => {
-    try {
-      const tournamentId = parseInt(req.params.id);
-      const { diagnosisDuelTournamentService } = await import('./diagnosisDuelTournamentService');
-      const tournamentDetails = await diagnosisDuelTournamentService.getTournamentDetails(tournamentId);
-      
-      if (!tournamentDetails) {
-        return res.status(404).json({ error: 'Tournament not found' });
-      }
-      
-      res.json(tournamentDetails);
-    } catch (error: any) {
-      console.error("Error getting tournament details:", error);
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // Get user's tournament registrations
+  // Get user's tournament registrations - MUST come before :id route
   app.get('/api/tournaments/my-registrations', ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const userId = req.user?.id;
@@ -9727,6 +9709,24 @@ Respond in JSON format:
       res.json(registrations);
     } catch (error: any) {
       console.error("Error getting user tournament registrations:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get tournament details - MUST come after my-registrations route
+  app.get('/api/tournaments/:id', async (req: Request, res: Response) => {
+    try {
+      const tournamentId = parseInt(req.params.id);
+      const { diagnosisDuelTournamentService } = await import('./diagnosisDuelTournamentService');
+      const tournamentDetails = await diagnosisDuelTournamentService.getTournamentDetails(tournamentId);
+      
+      if (!tournamentDetails) {
+        return res.status(404).json({ error: 'Tournament not found' });
+      }
+      
+      res.json(tournamentDetails);
+    } catch (error: any) {
+      console.error("Error getting tournament details:", error);
       res.status(500).json({ error: error.message });
     }
   });

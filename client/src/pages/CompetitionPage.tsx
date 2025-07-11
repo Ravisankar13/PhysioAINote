@@ -72,15 +72,38 @@ interface ComplexCompetition {
   };
 }
 
+// Interface for tournaments
+interface Tournament {
+  id: number;
+  title: string;
+  description: string;
+  bodyPart: string;
+  difficulty: string;
+  status: string;
+  maxParticipants: number;
+  currentParticipants: number;
+  currentRound: number;
+  registrationEndTime: string;
+  tournamentStartTime: string;
+  createdAt: string;
+}
+
 // GameCompetitionsView component for Elite Clinical Competitions
 function GameCompetitionsView() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { user } = useAuth();
+  const [activeSubTab, setActiveSubTab] = useState('competitions');
 
   // Fetch game competitions
   const { data: gameCompetitions = [], isLoading } = useQuery({
     queryKey: ['/api/game-competitions'],
+    refetchInterval: 30000
+  });
+
+  // Fetch tournaments
+  const { data: tournaments = [], isLoading: tournamentsLoading } = useQuery({
+    queryKey: ['/api/tournaments'],
     refetchInterval: 30000
   });
 
@@ -153,26 +176,65 @@ function GameCompetitionsView() {
     );
   }
 
+  const joinTournament = async (tournamentId: number) => {
+    try {
+      const response = await apiRequest(`/api/tournaments/${tournamentId}/register`, {
+        method: 'POST',
+      });
+      
+      if (response.success) {
+        toast({
+          title: "Tournament Joined!",
+          description: "You've successfully registered for the tournament.",
+        });
+        
+        // Refetch tournaments to update participant count
+        queryClient.invalidateQueries({ queryKey: ['/api/tournaments'] });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Registration Failed",
+        description: error.message || "Failed to join tournament",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Card className="border-2 border-yellow-200 bg-gradient-to-r from-yellow-50 to-orange-50">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Zap className="h-6 w-6 text-yellow-600" />
-            Elite Clinical Competitions
+            Elite Clinical Competitions & Tournaments
           </CardTitle>
           <CardDescription>
-            Specialized clinical challenges limited to 10 participants each. Test your expertise in focused clinical scenarios.
+            Choose between individual competitions or elimination tournaments. Master clinical skills through specialized challenges.
           </CardDescription>
         </CardHeader>
       </Card>
 
-      {gameCompetitions.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {gameCompetitions.map((competition: any) => (
-            <Card key={competition.id} className={`hover:shadow-lg transition-shadow cursor-pointer ${getGameTypeColor(competition.gameType)}`}>
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
+      {/* Sub-tabs for Competitions and Tournaments */}
+      <Tabs value={activeSubTab} onValueChange={setActiveSubTab} className="space-y-4">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="competitions" className="flex items-center gap-2">
+            <Zap className="h-4 w-4" />
+            Individual Competitions
+          </TabsTrigger>
+          <TabsTrigger value="tournaments" className="flex items-center gap-2">
+            <Trophy className="h-4 w-4" />
+            Elimination Tournaments
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Individual Competitions Tab */}
+        <TabsContent value="competitions" className="space-y-6">
+          {gameCompetitions.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {gameCompetitions.map((competition: any) => (
+                <Card key={competition.id} className={`hover:shadow-lg transition-shadow cursor-pointer ${getGameTypeColor(competition.gameType)}`}>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between">
                   <div className="space-y-2">
                     <CardTitle className="text-lg flex items-center gap-2">
                       {getGameTypeIcon(competition.gameType)}
@@ -228,6 +290,89 @@ function GameCompetitionsView() {
           </CardContent>
         </Card>
       )}
+        </TabsContent>
+
+        {/* Tournaments Tab */}
+        <TabsContent value="tournaments" className="space-y-6">
+          {tournaments.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {tournaments.map((tournament: Tournament) => (
+                <Card key={tournament.id} className="hover:shadow-lg transition-shadow border-purple-200 bg-purple-50/50">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between">
+                      <div className="space-y-2">
+                        <CardTitle className="text-lg flex items-center gap-2">
+                          <Trophy className="h-5 w-5 text-purple-600" />
+                          {tournament.title}
+                        </CardTitle>
+                        <div className="flex gap-1">
+                          <Badge variant="outline" className="text-xs">{tournament.bodyPart}</Badge>
+                          <Badge variant="outline" className="text-xs">{tournament.difficulty}</Badge>
+                        </div>
+                      </div>
+                      <Badge 
+                        variant={tournament.status === 'registration' ? 'default' : 'secondary'} 
+                        className="text-xs"
+                      >
+                        {tournament.status === 'registration' ? 'Open' : tournament.status}
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <CardDescription className="mb-4">
+                      {tournament.description}
+                    </CardDescription>
+                    
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-1">
+                          <Users className="h-4 w-4" />
+                          {tournament.currentParticipants}/{tournament.maxParticipants}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Trophy className="h-4 w-4" />
+                          Round {tournament.currentRound}/5
+                        </div>
+                      </div>
+                      
+                      <div className="text-sm space-y-1">
+                        <div className="flex items-center gap-1 text-muted-foreground">
+                          <Clock className="h-3 w-3" />
+                          Registration ends: {format(new Date(tournament.registrationEndTime), 'MMM d, h:mm a')}
+                        </div>
+                        <div className="flex items-center gap-1 text-muted-foreground">
+                          <Timer className="h-3 w-3" />
+                          Tournament starts: {format(new Date(tournament.tournamentStartTime), 'MMM d, h:mm a')}
+                        </div>
+                      </div>
+                      
+                      <Button
+                        className="w-full"
+                        onClick={() => joinTournament(tournament.id)}
+                        disabled={tournament.status !== 'registration'}
+                      >
+                        <Trophy className="h-4 w-4 mr-2" />
+                        {tournament.status === 'registration' ? 'Join Tournament' : 'Tournament Started'}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <Card>
+              <CardContent className="p-6">
+                <Alert>
+                  <Trophy className="h-4 w-4" />
+                  <AlertDescription>
+                    No active tournaments at the moment. New elimination tournaments are scheduled regularly featuring 1v1 diagnosis duels!
+                  </AlertDescription>
+                </Alert>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

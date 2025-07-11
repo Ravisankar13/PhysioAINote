@@ -88,7 +88,27 @@ export default function TournamentMatchPage() {
     enabled: !!match?.gameContentId,
   });
 
-  const questions = gameContent?.content?.lightning_diagnosis?.cases || [];
+  // Get round-specific questions based on match round
+  const getRoundQuestions = () => {
+    if (!gameContent?.content?.lightning_diagnosis) return [];
+    
+    const allCases = gameContent.content.lightning_diagnosis.cases || [];
+    const rounds = gameContent.content.lightning_diagnosis.rounds || {};
+    
+    // Determine which round's questions to use based on match.round
+    const roundKey = `round_${match?.round || 1}`;
+    const roundInfo = rounds[roundKey];
+    
+    if (roundInfo?.questions) {
+      // Filter cases to only include those for this round
+      return allCases.filter(question => roundInfo.questions.includes(question.id));
+    }
+    
+    // Fallback to all questions if round structure not found
+    return allCases;
+  };
+
+  const questions = getRoundQuestions();
   const currentQuestion = questions[currentQuestionIndex];
 
   // Debug logging
@@ -98,7 +118,10 @@ export default function TournamentMatchPage() {
     gameContent,
     questions: questions.length,
     currentQuestion: !!currentQuestion,
-    contentError
+    contentError,
+    round: match?.round,
+    roundQuestions: questions.map(q => q.id),
+    timeLimit: currentQuestion?.time_limit
   });
 
   // Timer effect
@@ -121,10 +144,15 @@ export default function TournamentMatchPage() {
   // Reset timer when question changes
   useEffect(() => {
     if (currentQuestion) {
-      setTimeRemaining(45); // 45 seconds per question
+      // Use round-specific time limit or fallback to question-specific time limit
+      const roundKey = `round_${match?.round || 1}`;
+      const roundInfo = gameContent?.content?.lightning_diagnosis?.rounds?.[roundKey];
+      const timeLimit = roundInfo?.time_limit_per_question || currentQuestion.time_limit || 45;
+      
+      setTimeRemaining(timeLimit);
       setQuestionStartTime(Date.now());
     }
-  }, [currentQuestionIndex]);
+  }, [currentQuestionIndex, match?.round, gameContent]);
 
   const handleTimeUp = () => {
     if (currentQuestion) {
@@ -282,6 +310,15 @@ export default function TournamentMatchPage() {
           <p className="text-muted-foreground mt-2">
             {match.player1Username} vs {match.player2Username} - Round {match.round}
           </p>
+          {(() => {
+            const roundKey = `round_${match.round}`;
+            const roundInfo = gameContent?.content?.lightning_diagnosis?.rounds?.[roundKey];
+            return roundInfo ? (
+              <p className="text-sm text-blue-600 font-medium">
+                {roundInfo.description} ({questions.length} questions, {roundInfo.time_limit_per_question}s each)
+              </p>
+            ) : null;
+          })()}
         </div>
         <div className="text-right">
           <div className="text-2xl font-bold text-red-600">{timeRemaining}s</div>

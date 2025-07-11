@@ -102,7 +102,8 @@ export class DiagnosisDuelTournamentService {
       };
     } catch (error) {
       console.error('Error registering for tournament:', error);
-      return { success: false, message: 'Failed to register for tournament' };
+      console.error('Error details:', error.message, error.stack);
+      return { success: false, message: `Failed to register for tournament: ${error.message}` };
     }
   }
 

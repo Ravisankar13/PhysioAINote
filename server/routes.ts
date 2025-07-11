@@ -9715,23 +9715,34 @@ Respond in JSON format:
       const tournamentId = parseInt(req.params.id);
       const userId = req.user?.id;
       
+      console.log(`Tournament registration attempt: tournamentId=${tournamentId}, userId=${userId}`);
+      
       if (!userId) {
+        console.log("User not authenticated");
         return res.status(401).json({ error: 'User not authenticated' });
       }
       
       const { diagnosisDuelTournamentService } = await import('./diagnosisDuelTournamentService');
       const result = await diagnosisDuelTournamentService.registerForTournament(tournamentId, userId);
       
+      console.log("Tournament registration result:", result);
+      
       if (!result.success) {
+        console.log("Registration failed:", result.message);
         return res.status(400).json({ error: result.message });
       }
       
       // Broadcast tournament update to all connected users
-      const { realTimeTournamentService } = await import('./realTimeTournamentService');
-      await realTimeTournamentService.broadcastTournamentUpdate(tournamentId, {
-        type: 'player_registered',
-        message: 'A new player has joined the tournament'
-      });
+      try {
+        const { realTimeTournamentService } = await import('./realTimeTournamentService');
+        await realTimeTournamentService.broadcastTournamentUpdate(tournamentId, {
+          type: 'player_registered',
+          message: 'A new player has joined the tournament'
+        });
+      } catch (broadcastError) {
+        console.warn("Failed to broadcast tournament update:", broadcastError);
+        // Don't fail the registration if broadcast fails
+      }
       
       res.json(result);
     } catch (error: any) {

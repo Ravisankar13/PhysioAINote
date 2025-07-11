@@ -178,11 +178,13 @@ function GameCompetitionsView() {
 
   const joinTournament = async (tournamentId: number) => {
     try {
-      const response = await apiRequest(`/api/tournaments/${tournamentId}/register`, {
-        method: 'POST',
-      });
+      console.log(`Attempting to join tournament ${tournamentId}`);
+      const response = await apiRequest('POST', `/api/tournaments/${tournamentId}/register`);
+      const result = await response.json();
       
-      if (response.success) {
+      console.log("Tournament registration response:", result);
+      
+      if (result.success) {
         toast({
           title: "Tournament Joined!",
           description: "You've successfully registered for the tournament.",
@@ -190,8 +192,16 @@ function GameCompetitionsView() {
         
         // Refetch tournaments to update participant count
         queryClient.invalidateQueries({ queryKey: ['/api/tournaments'] });
+      } else {
+        // Handle case where response is received but not successful
+        toast({
+          title: "Registration Failed",
+          description: result.message || "Registration was not successful",
+          variant: "destructive",
+        });
       }
     } catch (error: any) {
+      console.error("Tournament registration error:", error);
       toast({
         title: "Registration Failed",
         description: error.message || "Failed to join tournament",

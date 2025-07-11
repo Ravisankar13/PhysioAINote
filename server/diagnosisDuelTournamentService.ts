@@ -433,18 +433,46 @@ export class DiagnosisDuelTournamentService {
           id: tournamentParticipants.id,
           tournamentId: tournamentParticipants.tournamentId,
           userId: tournamentParticipants.userId,
-          username: tournamentParticipants.username,
+          username: users.username,
           bracketPosition: tournamentParticipants.bracketPosition,
           currentRound: tournamentParticipants.currentRound,
           isEliminated: tournamentParticipants.isEliminated,
           joinedAt: tournamentParticipants.joinedAt,
         })
         .from(tournamentParticipants)
+        .leftJoin(users, eq(tournamentParticipants.userId, users.id))
         .where(eq(tournamentParticipants.userId, userId));
 
       return registrations;
     } catch (error) {
       console.error("Error getting user tournament registrations:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get tournament participants
+   */
+  async getTournamentParticipants(tournamentId: number) {
+    try {
+      const participants = await db
+        .select({
+          id: tournamentParticipants.id,
+          tournamentId: tournamentParticipants.tournamentId,
+          userId: tournamentParticipants.userId,
+          username: users.username,
+          bracketPosition: tournamentParticipants.bracketPosition,
+          currentRound: tournamentParticipants.currentRound,
+          isEliminated: tournamentParticipants.isEliminated,
+          joinedAt: tournamentParticipants.joinedAt,
+        })
+        .from(tournamentParticipants)
+        .leftJoin(users, eq(tournamentParticipants.userId, users.id))
+        .where(eq(tournamentParticipants.tournamentId, tournamentId));
+
+      return participants;
+    } catch (error) {
+      console.error("Error getting tournament participants:", error);
       throw error;
     }
   }

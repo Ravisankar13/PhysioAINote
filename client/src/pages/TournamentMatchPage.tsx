@@ -32,18 +32,26 @@ interface GameContent {
   id: number;
   gameType: string;
   content: {
-    questions: Array<{
-      question_id: string;
-      clinical_presentation: string;
-      patient_demographics: string;
-      correct_diagnosis: string;
-      distractors: string[];
-      time_limit: number;
-      body_part: string;
-      rationale: string;
-    }>;
-    timeLimit: number;
-    difficulty: string;
+    lightning_diagnosis?: {
+      cases: Array<{
+        id: string;
+        options: string[];
+        question: string;
+        body_part: string;
+        rationale: string;
+        difficulty: string;
+        time_limit: number;
+        case_number: number;
+        correct_answer: string;
+        clinical_findings: string;
+        patient_presentation: string;
+      }>;
+      rounds: {
+        round_1: { questions: string[]; difficulty: string; time_limit_per_question: number; };
+        round_2: { questions: string[]; difficulty: string; time_limit_per_question: number; };
+        round_3: { questions: string[]; difficulty: string; time_limit_per_question: number; };
+      };
+    };
   };
 }
 
@@ -78,7 +86,7 @@ export default function TournamentMatchPage() {
     enabled: !!match?.gameContentId,
   });
 
-  const questions = gameContent?.content?.questions || [];
+  const questions = gameContent?.content?.lightning_diagnosis?.cases || [];
   const currentQuestion = questions[currentQuestionIndex];
 
   // Timer effect
@@ -110,7 +118,7 @@ export default function TournamentMatchPage() {
     if (currentQuestion) {
       const timeSpent = Math.floor((Date.now() - questionStartTime) / 1000);
       const response: QuestionResponse = {
-        questionId: currentQuestion.question_id,
+        questionId: currentQuestion.id,
         selectedAnswer: '',
         timeSpent,
         isCorrect: false,
@@ -130,10 +138,10 @@ export default function TournamentMatchPage() {
     if (!currentQuestion || isSubmitting) return;
 
     const timeSpent = Math.floor((Date.now() - questionStartTime) / 1000);
-    const isCorrect = selectedAnswer === currentQuestion.correct_diagnosis;
+    const isCorrect = selectedAnswer === currentQuestion.correct_answer;
     
     const response: QuestionResponse = {
-      questionId: currentQuestion.question_id,
+      questionId: currentQuestion.id,
       selectedAnswer,
       timeSpent,
       isCorrect,
@@ -235,7 +243,7 @@ export default function TournamentMatchPage() {
   }
 
   const progressPercentage = ((currentQuestionIndex + 1) / questions.length) * 100;
-  const allAnswerOptions = [currentQuestion.correct_diagnosis, ...currentQuestion.distractors].sort();
+  const allAnswerOptions = currentQuestion?.options || [];
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -284,16 +292,22 @@ export default function TournamentMatchPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Patient Demographics */}
+          {/* Patient Presentation */}
           <div className="bg-blue-50 p-4 rounded-lg">
-            <h3 className="font-semibold text-blue-900 mb-2">Patient Information</h3>
-            <p className="text-blue-800">{currentQuestion.patient_demographics}</p>
+            <h3 className="font-semibold text-blue-900 mb-2">Patient Presentation</h3>
+            <p className="text-blue-800">{currentQuestion.patient_presentation}</p>
           </div>
 
-          {/* Clinical Presentation */}
+          {/* Clinical Findings */}
           <div className="bg-gray-50 p-4 rounded-lg">
-            <h3 className="font-semibold text-gray-900 mb-2">Clinical Presentation</h3>
-            <p className="text-gray-800">{currentQuestion.clinical_presentation}</p>
+            <h3 className="font-semibold text-gray-900 mb-2">Clinical Findings</h3>
+            <p className="text-gray-800">{currentQuestion.clinical_findings}</p>
+          </div>
+
+          {/* Question */}
+          <div className="bg-green-50 p-4 rounded-lg">
+            <h3 className="font-semibold text-green-900 mb-2">Question</h3>
+            <p className="text-green-800 font-medium">{currentQuestion.question}</p>
           </div>
 
           {/* Answer Options */}

@@ -496,10 +496,13 @@ export class DiagnosisDuelTournamentService {
    * Advance tournament to next round
    */
   async advanceToNextRound(tournamentId: number, currentRound: number): Promise<void> {
-    // Get winners from current round
+    console.log(`Advancing tournament ${tournamentId} from round ${currentRound}`);
+    
+    // Get winners from current round with usernames
     const winners = await db
       .select({
         userId: tournamentMatches.winnerId,
+        username: tournamentMatches.player1Username, // We'll get the correct username below
         matchNumber: tournamentMatches.matchNumber,
       })
       .from(tournamentMatches)
@@ -509,8 +512,11 @@ export class DiagnosisDuelTournamentService {
         isNull(tournamentMatches.winnerId).not()
       ));
 
+    console.log(`Found ${winners.length} winners from round ${currentRound}`);
+
     if (winners.length <= 1) {
       // Tournament is complete
+      console.log(`Tournament ${tournamentId} is complete with ${winners.length} winner(s)`);
       await db
         .update(diagnosisDuelTournaments)
         .set({ status: 'completed' })
@@ -518,22 +524,45 @@ export class DiagnosisDuelTournamentService {
       return;
     }
 
+    // Get winner usernames properly
+    const winnersWithUsernames = await db
+      .select({
+        id: users.id,
+        username: users.username,
+      })
+      .from(users)
+      .where(eq(users.id, winners[0].userId!));
+
+    const winnersWithUsernames2 = await db
+      .select({
+        id: users.id,
+        username: users.username,
+      })
+      .from(users)
+      .where(eq(users.id, winners[1].userId!));
+
     // Create next round matches
     const nextRound = currentRound + 1;
     const nextRoundStatus = this.getRoundStatus(nextRound);
     
-    // Create tournament participants for next round (winners only)
-    const nextRoundParticipants: TournamentParticipant[] = winners.map((winner, index) => ({
-      id: 0, // Will be set by database
-      tournamentId,
-      userId: winner.userId!,
-      bracketPosition: index + 1,
-      currentRound: nextRound,
-      isEliminated: false,
-      joinedAt: new Date(),
-    }));
+    console.log(`Creating round ${nextRound} match between winners`);
 
-    await this.createBracketMatches(tournamentId, nextRoundParticipants, nextRound);
+    // Create direct match between winners
+    const match = {
+      tournamentId,
+      round: nextRound,
+      matchNumber: 1,
+      player1Id: winners[0].userId!,
+      player2Id: winners[1].userId!,
+      player1Username: winnersWithUsernames[0]?.username || 'Unknown',
+      player2Username: winnersWithUsernames2[0]?.username || 'Unknown',
+      status: 'scheduled' as const,
+      gameContentId: 103, // Tournament content
+      scheduledStartTime: new Date(),
+      createdAt: new Date(),
+    };
+
+    await db.insert(tournamentMatches).values(match);
 
     // Update tournament status
     await db
@@ -543,6 +572,8 @@ export class DiagnosisDuelTournamentService {
         currentRound: nextRound 
       })
       .where(eq(diagnosisDuelTournaments.id, tournamentId));
+
+    console.log(`Tournament ${tournamentId} advanced to round ${nextRound}`);
   }
 
   /**

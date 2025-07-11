@@ -2118,6 +2118,7 @@ export const tournamentParticipants = pgTable("tournament_participants", {
   id: serial("id").primaryKey(),
   tournamentId: integer("tournament_id").notNull().references(() => diagnosisDuelTournaments.id, { onDelete: "cascade" }),
   userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  username: text("username").notNull(), // Username for display purposes
   bracketPosition: integer("bracket_position"), // Position in the bracket (1-32)
   currentRound: integer("current_round").default(1).notNull(),
   isEliminated: boolean("is_eliminated").default(false).notNull(),

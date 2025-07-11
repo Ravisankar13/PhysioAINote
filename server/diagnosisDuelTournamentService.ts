@@ -36,6 +36,16 @@ export class DiagnosisDuelTournamentService {
    */
   async registerForTournament(tournamentId: number, userId: number): Promise<{ success: boolean; message: string; participant?: TournamentParticipant }> {
     try {
+      // Get user information
+      const [user] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, userId));
+
+      if (!user) {
+        return { success: false, message: 'User not found' };
+      }
+
       // Check if tournament exists and is accepting registrations
       const [tournament] = await db
         .select()
@@ -76,6 +86,7 @@ export class DiagnosisDuelTournamentService {
         .values({
           tournamentId,
           userId,
+          username: user.username,
           bracketPosition,
         })
         .returning();

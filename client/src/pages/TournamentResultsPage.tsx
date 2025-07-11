@@ -120,6 +120,7 @@ export default function TournamentResultsPage() {
   const canContinue = isMatchCompleted && didIWin && nextMatch;
   const isWaitingForOpponent = !isMatchCompleted;
   const isEliminated = isMatchCompleted && !didIWin;
+  const isWaitingForNextRound = isMatchCompleted && didIWin && !nextMatch;
 
   return (
     <div className="container mx-auto p-6 max-w-4xl">
@@ -269,6 +270,22 @@ export default function TournamentResultsPage() {
               <Loader2 className="h-4 w-4 animate-spin" />
               Waiting for Opponent...
             </Button>
+          ) : isWaitingForNextRound ? (
+            <div className="text-center">
+              <Alert className="mb-4">
+                <Clock className="h-4 w-4" />
+                <AlertDescription>
+                  Waiting for all Round {match.round} matches to complete before Round {match.round + 1} begins...
+                </AlertDescription>
+              </Alert>
+              <Button disabled className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Waiting for Other Players...
+              </Button>
+              <Button onClick={handleReturnToTournaments} variant="outline" className="ml-2">
+                Return to Tournaments
+              </Button>
+            </div>
           ) : (
             <Button onClick={handleReturnToTournaments} variant="outline">
               Return to Tournaments

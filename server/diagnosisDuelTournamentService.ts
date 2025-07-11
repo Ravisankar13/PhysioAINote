@@ -12,7 +12,7 @@ import {
   TournamentParticipant,
   TournamentMatch
 } from '@shared/schema';
-import { eq, and, or, isNull, desc } from 'drizzle-orm';
+import { eq, and, or, isNull, desc, gt } from 'drizzle-orm';
 import { gameContentGenerator } from './gameContentGenerator';
 
 export class DiagnosisDuelTournamentService {
@@ -713,7 +713,49 @@ export class DiagnosisDuelTournamentService {
    */
   async getUserNextMatch(tournamentId: number, userId: number) {
     try {
-      // Find the next match for this user
+      // First, find the user's most recent completed match to determine current round
+      const completedMatches = await db
+        .select({
+          round: tournamentMatches.round,
+        })
+        .from(tournamentMatches)
+        .where(
+          and(
+            eq(tournamentMatches.tournamentId, tournamentId),
+            or(
+              eq(tournamentMatches.player1Id, userId),
+              eq(tournamentMatches.player2Id, userId)
+            ),
+            eq(tournamentMatches.status, 'completed')
+          )
+        )
+        .orderBy(desc(tournamentMatches.round))
+        .limit(1);
+
+      const currentRound = completedMatches[0]?.round || 1;
+
+      // Check if all matches in the current round are complete
+      const allCurrentRoundMatches = await db
+        .select({
+          id: tournamentMatches.id,
+          status: tournamentMatches.status,
+        })
+        .from(tournamentMatches)
+        .where(
+          and(
+            eq(tournamentMatches.tournamentId, tournamentId),
+            eq(tournamentMatches.round, currentRound)
+          )
+        );
+
+      const allCurrentRoundComplete = allCurrentRoundMatches.every(match => match.status === 'completed');
+
+      if (!allCurrentRoundComplete) {
+        // Current round is not complete, return null (user must wait)
+        return null;
+      }
+
+      // Current round is complete, find the next match for this user
       const nextMatch = await db
         .select({
           id: tournamentMatches.id,
@@ -746,7 +788,8 @@ export class DiagnosisDuelTournamentService {
               eq(tournamentMatches.player1Id, userId),
               eq(tournamentMatches.player2Id, userId)
             ),
-            eq(tournamentMatches.status, 'scheduled')
+            eq(tournamentMatches.status, 'scheduled'),
+            gt(tournamentMatches.round, currentRound) // Only next round matches
           )
         )
         .orderBy(tournamentMatches.round, tournamentMatches.matchNumber)

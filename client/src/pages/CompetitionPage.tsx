@@ -94,6 +94,9 @@ function GameCompetitionsView() {
   const { toast } = useToast();
   const { user } = useAuth();
   const [activeSubTab, setActiveSubTab] = useState('tournaments');
+  
+  // State to track user's tournament registrations
+  const [userRegistrations, setUserRegistrations] = useState<Set<number>>(new Set());
 
   // Fetch game competitions
   const { data: gameCompetitions = [], isLoading } = useQuery({
@@ -106,6 +109,21 @@ function GameCompetitionsView() {
     queryKey: ['/api/tournaments'],
     refetchInterval: 30000
   });
+
+  // Fetch user's tournament registrations
+  const { data: userTournamentRegistrations } = useQuery({
+    queryKey: ['/api/tournaments/my-registrations'],
+    enabled: !!user, // Only fetch if user is logged in
+    refetchInterval: 10000, // Refetch every 10 seconds
+  });
+
+  // Update userRegistrations when data is fetched
+  useEffect(() => {
+    if (userTournamentRegistrations) {
+      const registeredTournamentIds = new Set(userTournamentRegistrations.map((reg: any) => reg.tournamentId));
+      setUserRegistrations(registeredTournamentIds);
+    }
+  }, [userTournamentRegistrations]);
 
   const getGameTypeIcon = (gameType: string) => {
     switch (gameType) {
@@ -175,24 +193,6 @@ function GameCompetitionsView() {
       </div>
     );
   }
-
-  // State to track user's tournament registrations
-  const [userRegistrations, setUserRegistrations] = useState<Set<number>>(new Set());
-
-  // Fetch user's tournament registrations
-  const { data: userTournamentRegistrations } = useQuery({
-    queryKey: ['/api/tournaments/my-registrations'],
-    enabled: !!user, // Only fetch if user is logged in
-    refetchInterval: 10000, // Refetch every 10 seconds
-  });
-
-  // Update userRegistrations when data is fetched
-  useEffect(() => {
-    if (userTournamentRegistrations) {
-      const registeredTournamentIds = new Set(userTournamentRegistrations.map((reg: any) => reg.tournamentId));
-      setUserRegistrations(registeredTournamentIds);
-    }
-  }, [userTournamentRegistrations]);
 
   const joinTournament = async (tournamentId: number) => {
     try {

@@ -308,6 +308,37 @@ export default function TournamentWaitingRoom() {
                 <XCircle className="h-4 w-4 mr-2" />
                 Leave Tournament
               </Button>
+              
+              {/* Test Start Button - for testing purposes */}
+              {currentParticipants >= 4 && (
+                <Button 
+                  variant="default" 
+                  onClick={async () => {
+                    try {
+                      const response = await fetch(`/api/tournaments/${tournamentId}/start`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include'
+                      });
+                      
+                      if (response.ok) {
+                        const result = await response.json();
+                        console.log('Tournament started:', result);
+                        // Refresh tournament data
+                        refetchTournament();
+                        refetchParticipants();
+                      } else {
+                        console.error('Failed to start tournament:', await response.text());
+                      }
+                    } catch (error) {
+                      console.error('Error starting tournament:', error);
+                    }
+                  }}
+                  className="flex-1"
+                >
+                  🚀 START TOURNAMENT (Test)
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>

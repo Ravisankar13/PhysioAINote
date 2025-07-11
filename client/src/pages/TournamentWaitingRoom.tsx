@@ -67,7 +67,8 @@ export default function TournamentWaitingRoom() {
 
   // Fetch tournament participants
   const { data: participants = [], isLoading: participantsLoading, refetch: refetchParticipants } = useQuery({
-    queryKey: ['/api/tournaments', tournamentId, 'participants'],
+    queryKey: [`/api/tournaments/${tournamentId}/participants`],
+    enabled: !!tournamentId,
     refetchInterval: 2000, // Refresh every 2 seconds for live updates
   });
 
@@ -81,6 +82,14 @@ export default function TournamentWaitingRoom() {
   const currentParticipants = participants?.length || 0;
   const maxParticipants = tournament?.maxParticipants || 8;
   const progressPercentage = (currentParticipants / maxParticipants) * 100;
+
+  // Debug logging to see participant data
+  useEffect(() => {
+    if (participants?.length > 0) {
+      console.log("Participants data:", participants);
+      console.log("First participant:", participants[0]);
+    }
+  }, [participants]);
 
   // Activity feed simulation
   useEffect(() => {

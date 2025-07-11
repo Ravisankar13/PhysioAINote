@@ -424,6 +424,32 @@ export class DiagnosisDuelTournamentService {
   }
 
   /**
+   * Get user's tournament registrations
+   */
+  async getUserTournamentRegistrations(userId: number) {
+    try {
+      const registrations = await db
+        .select({
+          id: tournamentParticipants.id,
+          tournamentId: tournamentParticipants.tournamentId,
+          userId: tournamentParticipants.userId,
+          username: tournamentParticipants.username,
+          bracketPosition: tournamentParticipants.bracketPosition,
+          currentRound: tournamentParticipants.currentRound,
+          isEliminated: tournamentParticipants.isEliminated,
+          joinedAt: tournamentParticipants.joinedAt,
+        })
+        .from(tournamentParticipants)
+        .where(eq(tournamentParticipants.userId, userId));
+
+      return registrations;
+    } catch (error) {
+      console.error("Error getting user tournament registrations:", error);
+      throw error;
+    }
+  }
+
+  /**
    * Helper methods
    */
   private isValidTournamentSize(participantCount: number): boolean {

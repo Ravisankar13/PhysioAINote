@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
@@ -176,6 +176,24 @@ function GameCompetitionsView() {
     );
   }
 
+  // State to track user's tournament registrations
+  const [userRegistrations, setUserRegistrations] = useState<Set<number>>(new Set());
+
+  // Fetch user's tournament registrations
+  const { data: userTournamentRegistrations } = useQuery({
+    queryKey: ['/api/tournaments/my-registrations'],
+    enabled: !!user, // Only fetch if user is logged in
+    refetchInterval: 10000, // Refetch every 10 seconds
+  });
+
+  // Update userRegistrations when data is fetched
+  useEffect(() => {
+    if (userTournamentRegistrations) {
+      const registeredTournamentIds = new Set(userTournamentRegistrations.map((reg: any) => reg.tournamentId));
+      setUserRegistrations(registeredTournamentIds);
+    }
+  }, [userTournamentRegistrations]);
+
   const joinTournament = async (tournamentId: number) => {
     try {
       console.log(`Attempting to join tournament ${tournamentId}`);
@@ -189,6 +207,9 @@ function GameCompetitionsView() {
           title: "Tournament Joined!",
           description: "You've successfully registered for the tournament.",
         });
+        
+        // Update local state to track registration
+        setUserRegistrations(prev => new Set(prev).add(tournamentId));
         
         // Refetch tournaments to update participant count
         queryClient.invalidateQueries({ queryKey: ['/api/tournaments'] });
@@ -208,6 +229,11 @@ function GameCompetitionsView() {
         variant: "destructive",
       });
     }
+  };
+
+  const enterWaitingRoom = (tournamentId: number) => {
+    // Navigate to tournament waiting room
+    setLocation(`/tournament/${tournamentId}/waiting-room`);
   };
 
   return (
@@ -291,14 +317,31 @@ function GameCompetitionsView() {
                         </div>
                       </div>
                       
-                      <Button
-                        className="w-full"
-                        onClick={() => joinTournament(tournament.id)}
-                        disabled={tournament.status !== 'registration'}
-                      >
-                        <Trophy className="h-4 w-4 mr-2" />
-                        {tournament.status === 'registration' ? 'Join Tournament' : 'Tournament Started'}
-                      </Button>
+                      {userRegistrations.has(tournament.id) ? (
+                        <div className="space-y-2">
+                          <Button
+                            className="w-full bg-green-600 hover:bg-green-700"
+                            onClick={() => enterWaitingRoom(tournament.id)}
+                          >
+                            <Users className="h-4 w-4 mr-2" />
+                            Enter Waiting Room
+                          </Button>
+                          <div className="text-center">
+                            <Badge variant="secondary" className="text-xs">
+                              ✓ Registered
+                            </Badge>
+                          </div>
+                        </div>
+                      ) : (
+                        <Button
+                          className="w-full"
+                          onClick={() => joinTournament(tournament.id)}
+                          disabled={tournament.status !== 'registration'}
+                        >
+                          <Trophy className="h-4 w-4 mr-2" />
+                          {tournament.status === 'registration' ? 'Join Tournament' : 'Tournament Started'}
+                        </Button>
+                      )}
                     </div>
                   </CardContent>
                 </Card>

@@ -9696,6 +9696,39 @@ Respond in JSON format:
     }
   });
 
+  // Get user's tournament registrations
+  app.get('/api/tournaments/my-registrations', ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+      
+      const { diagnosisDuelTournamentService } = await import('./diagnosisDuelTournamentService');
+      const registrations = await diagnosisDuelTournamentService.getUserTournamentRegistrations(userId);
+      
+      res.json(registrations);
+    } catch (error: any) {
+      console.error("Error getting user tournament registrations:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get tournament participants
+  app.get('/api/tournaments/:id/participants', async (req: Request, res: Response) => {
+    try {
+      const tournamentId = parseInt(req.params.id);
+      const { diagnosisDuelTournamentService } = await import('./diagnosisDuelTournamentService');
+      const participants = await diagnosisDuelTournamentService.getTournamentParticipants(tournamentId);
+      
+      res.json(participants);
+    } catch (error: any) {
+      console.error("Error getting tournament participants:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Create a new tournament
   app.post('/api/tournaments', ensureAuthenticated, async (req: Request, res: Response) => {
     try {

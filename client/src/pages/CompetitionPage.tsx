@@ -1259,10 +1259,7 @@ export default function CompetitionPage() {
               <Medal className="h-4 w-4" />
               Leaderboards
             </TabsTrigger>
-            <TabsTrigger value="achievements" className="flex items-center gap-2">
-              <Award className="h-4 w-4" />
-              Achievements
-            </TabsTrigger>
+
           </TabsList>
 
           {/* Overview Tab */}
@@ -1588,10 +1585,7 @@ export default function CompetitionPage() {
             <LeaderboardView />
           </TabsContent>
 
-          {/* Achievements Tab */}
-          <TabsContent value="achievements">
-            <AchievementsPanel />
-          </TabsContent>
+
         </Tabs>
       </div>
     </div>

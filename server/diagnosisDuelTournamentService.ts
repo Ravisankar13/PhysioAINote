@@ -239,16 +239,28 @@ export class DiagnosisDuelTournamentService {
   ): Promise<TournamentMatch[]> {
     const matches: InsertTournamentMatch[] = [];
     
-    // Generate game content for this round
-    const gameContentData = await gameContentGenerator.generateDiagnosisDuelContent(10);
-    const [content] = await db
-      .insert(gameContent)
-      .values({
-        competitionId: tournamentId, // Using tournament ID as competition ID for now
-        gameType: 'diagnosis_duel',
-        content: { diagnosisDuel: gameContentData },
-      })
-      .returning();
+    // Get pre-generated tournament Lightning Diagnosis content
+    const [existingContent] = await db
+      .select()
+      .from(gameContent)
+      .where(eq(gameContent.competitionId, 107)); // Tournament content competition ID
+    
+    let content;
+    if (existingContent) {
+      content = existingContent;
+    } else {
+      // Fallback: create basic content if tournament content not found
+      const gameContentData = await gameContentGenerator.generateDiagnosisDuelContent(10);
+      const [newContent] = await db
+        .insert(gameContent)
+        .values({
+          competitionId: tournamentId,
+          gameType: 'lightning_diagnosis',
+          content: { lightning_diagnosis: gameContentData },
+        })
+        .returning();
+      content = newContent;
+    }
 
     // Pair up participants for matches
     for (let i = 0; i < participants.length; i += 2) {

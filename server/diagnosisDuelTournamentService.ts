@@ -316,6 +316,16 @@ export class DiagnosisDuelTournamentService {
    * Get user's current match in a tournament
    */
   async getUserCurrentMatch(tournamentId: number, userId: number) {
+    console.log(`Looking for match: tournament ${tournamentId}, user ${userId}`);
+    
+    // First, let's see all matches for this tournament
+    const allMatches = await db
+      .select()
+      .from(tournamentMatches)
+      .where(eq(tournamentMatches.tournamentId, tournamentId));
+    
+    console.log(`All matches for tournament ${tournamentId}:`, allMatches);
+    
     const match = await db
       .select()
       .from(tournamentMatches)
@@ -331,6 +341,7 @@ export class DiagnosisDuelTournamentService {
       )
       .limit(1);
     
+    console.log(`Found match for user ${userId}:`, match[0] || 'No match found');
     return match[0] || null;
   }
 

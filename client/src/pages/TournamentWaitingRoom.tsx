@@ -329,28 +329,45 @@ export default function TournamentWaitingRoom() {
                         await refetchTournament();
                         await refetchParticipants();
                         
-                        // Check for user's match after tournament starts
-                        setTimeout(async () => {
+                        // Wait for match creation and redirect
+                        let retryCount = 0;
+                        const maxRetries = 10;
+                        
+                        const findAndRedirectToMatch = async () => {
                           try {
+                            console.log(`Attempting to find match (attempt ${retryCount + 1}/${maxRetries})`);
                             const matchResponse = await fetch(`/api/tournaments/${tournamentId}/my-match`, {
                               credentials: 'include'
                             });
                             
                             if (matchResponse.ok) {
                               const match = await matchResponse.json();
+                              console.log('Match response:', match);
+                              
                               if (match && match.id) {
-                                // Redirect to the match page
+                                console.log(`Found match ${match.id}, redirecting...`);
                                 window.location.href = `/tournament/match/${match.id}`;
-                                return;
+                                return true;
                               }
+                            } else {
+                              console.log('Match response not ok:', matchResponse.status, matchResponse.statusText);
                             }
                           } catch (error) {
                             console.error('Error finding match:', error);
                           }
                           
-                          // Fallback to tournaments page
-                          window.location.href = '/tournaments';
-                        }, 2000); // Wait 2 seconds for match creation
+                          retryCount++;
+                          if (retryCount < maxRetries) {
+                            // Try again in 1 second
+                            setTimeout(findAndRedirectToMatch, 1000);
+                          } else {
+                            console.log('Max retries reached, redirecting to tournaments page');
+                            window.location.href = '/tournaments';
+                          }
+                        };
+                        
+                        // Start checking after 1 second
+                        setTimeout(findAndRedirectToMatch, 1000);
                       } else {
                         const errorText = await response.text();
                         console.error('Failed to start tournament:', errorText);

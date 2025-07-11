@@ -9877,7 +9877,10 @@ Respond in JSON format:
       const tournamentId = parseInt(req.params.id);
       const userId = req.user?.id;
 
+      console.log(`Getting match for tournament ${tournamentId}, user ${userId}`);
+
       if (!tournamentId || isNaN(tournamentId)) {
+        console.log('Invalid tournament ID:', req.params.id);
         return res.status(400).json({ error: 'Invalid tournament ID' });
       }
 
@@ -9888,6 +9891,7 @@ Respond in JSON format:
       const { diagnosisDuelTournamentService } = await import('./diagnosisDuelTournamentService');
       const match = await diagnosisDuelTournamentService.getUserCurrentMatch(tournamentId, userId);
       
+      console.log(`Found match for user ${userId}:`, match);
       res.json(match);
     } catch (error: any) {
       console.error("Error getting user match:", error);

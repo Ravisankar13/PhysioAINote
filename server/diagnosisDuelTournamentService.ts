@@ -763,30 +763,9 @@ export class DiagnosisDuelTournamentService {
         .orderBy(desc(tournamentMatches.round))
         .limit(1);
 
-      const currentRound = completedMatches[0]?.round || 1;
+      console.log(`User ${userId} last completed round: ${completedMatches[0]?.round || 'none'}`);
 
-      // Check if all matches in the current round are complete
-      const allCurrentRoundMatches = await db
-        .select({
-          id: tournamentMatches.id,
-          status: tournamentMatches.status,
-        })
-        .from(tournamentMatches)
-        .where(
-          and(
-            eq(tournamentMatches.tournamentId, tournamentId),
-            eq(tournamentMatches.round, currentRound)
-          )
-        );
-
-      const allCurrentRoundComplete = allCurrentRoundMatches.every(match => match.status === 'completed');
-
-      if (!allCurrentRoundComplete) {
-        // Current round is not complete, return null (user must wait)
-        return null;
-      }
-
-      // Current round is complete, find the next match for this user
+      // Simply find any scheduled match for this user, regardless of round logic
       const nextMatch = await db
         .select({
           id: tournamentMatches.id,
@@ -819,13 +798,13 @@ export class DiagnosisDuelTournamentService {
               eq(tournamentMatches.player1Id, userId),
               eq(tournamentMatches.player2Id, userId)
             ),
-            eq(tournamentMatches.status, 'scheduled'),
-            gt(tournamentMatches.round, currentRound) // Only next round matches
+            eq(tournamentMatches.status, 'scheduled') // Any scheduled match
           )
         )
         .orderBy(tournamentMatches.round, tournamentMatches.matchNumber)
         .limit(1);
 
+      console.log(`Found next match for user ${userId}:`, nextMatch[0]);
       return nextMatch[0] || null;
     } catch (error) {
       console.error("Error getting next match:", error);

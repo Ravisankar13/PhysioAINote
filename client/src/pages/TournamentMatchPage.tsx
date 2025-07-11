@@ -67,7 +67,7 @@ export default function TournamentMatchPage() {
   const matchId = params?.matchId ? parseInt(params.matchId) : null;
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [responses, setResponses] = useState<QuestionResponse[]>([]);
-  const [timeRemaining, setTimeRemaining] = useState(30);
+  const [timeRemaining, setTimeRemaining] = useState(45);
   const [matchStartTime] = useState(Date.now());
   const [questionStartTime, setQuestionStartTime] = useState(Date.now());
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -121,7 +121,7 @@ export default function TournamentMatchPage() {
   // Reset timer when question changes
   useEffect(() => {
     if (currentQuestion) {
-      setTimeRemaining(currentQuestion.time_limit || 30);
+      setTimeRemaining(45); // 45 seconds per question
       setQuestionStartTime(Date.now());
     }
   }, [currentQuestionIndex]);
@@ -177,14 +177,15 @@ export default function TournamentMatchPage() {
       const totalScore = responses.reduce((sum, r) => sum + (r.isCorrect ? 1 : 0), 0);
       const totalTimeSpent = Math.floor((Date.now() - matchStartTime) / 1000);
 
-      await apiRequest(`/api/tournaments/matches/${matchId}/submit`, {
-        method: 'POST',
-        body: JSON.stringify({
+      await apiRequest(
+        'POST',
+        `/api/tournaments/matches/${matchId}/submit`,
+        {
           responses: responses.reduce((acc, r) => ({ ...acc, [r.questionId]: r.selectedAnswer }), {}),
           score: totalScore,
           timeSpent: totalTimeSpent,
-        }),
-      });
+        }
+      );
 
       toast({
         title: "Match Submitted",

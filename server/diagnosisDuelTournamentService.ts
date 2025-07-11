@@ -255,7 +255,7 @@ export class DiagnosisDuelTournamentService {
     const [existingContent] = await db
       .select()
       .from(gameContent)
-      .where(eq(gameContent.competitionId, 107)); // Tournament content competition ID
+      .where(eq(gameContent.id, 103)); // Tournament content game content ID
     
     if (!existingContent) {
       throw new Error('Tournament content not found. Please run the tournament content generation script first.');
@@ -885,6 +885,14 @@ export class DiagnosisDuelTournamentService {
    */
   private isValidTournamentSize(participantCount: number): boolean {
     return [4, 8, 16, 32].includes(participantCount);
+  }
+
+  /**
+   * Calculate total rounds needed for elimination tournament
+   * 4 players = 2 rounds, 8 players = 3 rounds, 16 players = 4 rounds, 32 players = 5 rounds
+   */
+  private calculateTotalRounds(participantCount: number): number {
+    return Math.log2(participantCount);
   }
 
   private getRoundStatus(round: number): 'round_1' | 'round_2' | 'round_3' | 'round_4' | 'finals' {

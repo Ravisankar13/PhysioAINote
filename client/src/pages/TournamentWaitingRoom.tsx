@@ -320,7 +320,17 @@ export default function TournamentWaitingRoom() {
                     <div>
                       <div className="font-medium">{participant.username}</div>
                       <div className="text-xs text-muted-foreground">
-                        Joined {new Date(participant.joinedAt).toLocaleTimeString()}
+                        Joined {participant.joinedAt ? 
+                          (() => {
+                            try {
+                              const date = new Date(participant.joinedAt);
+                              return isNaN(date.getTime()) ? 'recently' : date.toLocaleTimeString();
+                            } catch {
+                              return 'recently';
+                            }
+                          })() 
+                          : 'recently'
+                        }
                       </div>
                     </div>
                   </div>

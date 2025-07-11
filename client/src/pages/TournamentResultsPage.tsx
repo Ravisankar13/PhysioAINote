@@ -46,7 +46,7 @@ export default function TournamentResultsPage() {
   });
 
   const { data: match, isLoading: matchLoading } = useQuery({
-    queryKey: ['/api/tournaments/matches', matchId],
+    queryKey: [`/api/tournaments/matches/${matchId}`],
     enabled: !!matchId,
   });
 

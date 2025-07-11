@@ -329,8 +329,28 @@ export default function TournamentWaitingRoom() {
                         await refetchTournament();
                         await refetchParticipants();
                         
-                        // Navigate to tournaments page to see matches
-                        window.location.href = '/tournaments';
+                        // Check for user's match after tournament starts
+                        setTimeout(async () => {
+                          try {
+                            const matchResponse = await fetch(`/api/tournaments/${tournamentId}/my-match`, {
+                              credentials: 'include'
+                            });
+                            
+                            if (matchResponse.ok) {
+                              const match = await matchResponse.json();
+                              if (match && match.id) {
+                                // Redirect to the match page
+                                window.location.href = `/tournament/match/${match.id}`;
+                                return;
+                              }
+                            }
+                          } catch (error) {
+                            console.error('Error finding match:', error);
+                          }
+                          
+                          // Fallback to tournaments page
+                          window.location.href = '/tournaments';
+                        }, 2000); // Wait 2 seconds for match creation
                       } else {
                         const errorText = await response.text();
                         console.error('Failed to start tournament:', errorText);

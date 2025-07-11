@@ -9848,21 +9848,100 @@ Respond in JSON format:
     }
   });
 
+  // Get match details
+  app.get('/api/tournaments/matches/:matchId', ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const matchId = parseInt(req.params.matchId);
+      
+      if (!matchId || isNaN(matchId)) {
+        return res.status(400).json({ error: 'Invalid match ID' });
+      }
+
+      const { diagnosisDuelTournamentService } = await import('./diagnosisDuelTournamentService');
+      const match = await diagnosisDuelTournamentService.getMatchDetails(matchId);
+      
+      if (!match) {
+        return res.status(404).json({ error: 'Match not found' });
+      }
+      
+      res.json(match);
+    } catch (error: any) {
+      console.error("Error getting match details:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get user's current match
+  app.get('/api/tournaments/:id/my-match', ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const tournamentId = parseInt(req.params.id);
+      const userId = req.user?.id;
+
+      if (!tournamentId || isNaN(tournamentId)) {
+        return res.status(400).json({ error: 'Invalid tournament ID' });
+      }
+
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { diagnosisDuelTournamentService } = await import('./diagnosisDuelTournamentService');
+      const match = await diagnosisDuelTournamentService.getUserCurrentMatch(tournamentId, userId);
+      
+      res.json(match);
+    } catch (error: any) {
+      console.error("Error getting user match:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get game content by ID
+  app.get('/api/game-content/:id', async (req: Request, res: Response) => {
+    try {
+      const contentId = parseInt(req.params.id);
+      
+      if (!contentId || isNaN(contentId)) {
+        return res.status(400).json({ error: 'Invalid content ID' });
+      }
+
+      const { db } = await import("./db");
+      const { gameContent } = await import("@shared/schema");
+      const { eq } = await import("drizzle-orm");
+
+      const [content] = await db
+        .select()
+        .from(gameContent)
+        .where(eq(gameContent.id, contentId));
+
+      if (!content) {
+        return res.status(404).json({ error: 'Game content not found' });
+      }
+
+      res.json(content);
+    } catch (error: any) {
+      console.error("Error getting game content:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Submit match results
   app.post('/api/tournaments/matches/:matchId/submit', ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const matchId = parseInt(req.params.matchId);
-      const { player1Responses, player2Responses, player1Score, player2Score, player1TimeSpent, player2TimeSpent } = req.body;
+      const { responses, score, timeSpent } = req.body;
+      const userId = req.user?.id;
       
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
       const { diagnosisDuelTournamentService } = await import('./diagnosisDuelTournamentService');
-      const result = await diagnosisDuelTournamentService.submitMatchResults(
+      const result = await diagnosisDuelTournamentService.submitUserMatchResults(
         matchId, 
-        player1Responses, 
-        player2Responses, 
-        player1Score, 
-        player2Score, 
-        player1TimeSpent, 
-        player2TimeSpent
+        userId,
+        responses,
+        score,
+        timeSpent
       );
       
       if (!result.success) {
@@ -9872,10 +9951,10 @@ Respond in JSON format:
       // Broadcast match results to connected players
       const { realTimeTournamentService } = await import('./realTimeTournamentService');
       realTimeTournamentService.broadcastMatchResults(matchId, {
-        player1Score,
-        player2Score,
-        winnerId: result.winnerId,
-        message: 'Match completed!'
+        userId,
+        score,
+        timeSpent,
+        message: 'Player completed match!'
       });
       
       res.json(result);

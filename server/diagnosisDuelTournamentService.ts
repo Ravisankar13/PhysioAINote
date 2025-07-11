@@ -301,6 +301,119 @@ export class DiagnosisDuelTournamentService {
   }
 
   /**
+   * Get match details by ID
+   */
+  async getMatchDetails(matchId: number) {
+    const [match] = await db
+      .select()
+      .from(tournamentMatches)
+      .where(eq(tournamentMatches.id, matchId));
+    
+    return match;
+  }
+
+  /**
+   * Get user's current match in a tournament
+   */
+  async getUserCurrentMatch(tournamentId: number, userId: number) {
+    const match = await db
+      .select()
+      .from(tournamentMatches)
+      .where(
+        and(
+          eq(tournamentMatches.tournamentId, tournamentId),
+          or(
+            eq(tournamentMatches.player1Id, userId),
+            eq(tournamentMatches.player2Id, userId)
+          ),
+          eq(tournamentMatches.status, 'scheduled')
+        )
+      )
+      .limit(1);
+    
+    return match[0] || null;
+  }
+
+  /**
+   * Submit user match results
+   */
+  async submitUserMatchResults(
+    matchId: number,
+    userId: number,
+    responses: Record<string, string>,
+    score: number,
+    timeSpent: number
+  ): Promise<{ success: boolean; message: string; winnerId?: number }> {
+    try {
+      // Get match details
+      const match = await this.getMatchDetails(matchId);
+      if (!match) {
+        return { success: false, message: 'Match not found' };
+      }
+
+      // Check if user is in this match
+      if (match.player1Id !== userId && match.player2Id !== userId) {
+        return { success: false, message: 'User not in this match' };
+      }
+
+      // Update match with user's results
+      const isPlayer1 = match.player1Id === userId;
+      const updateData: any = {};
+      
+      if (isPlayer1) {
+        updateData.player1Score = score;
+        updateData.player1TimeSpent = timeSpent;
+        updateData.player1Responses = responses;
+      } else {
+        updateData.player2Score = score;
+        updateData.player2TimeSpent = timeSpent;
+        updateData.player2Responses = responses;
+      }
+
+      await db
+        .update(tournamentMatches)
+        .set(updateData)
+        .where(eq(tournamentMatches.id, matchId));
+
+      // Check if both players have completed
+      const updatedMatch = await this.getMatchDetails(matchId);
+      const bothCompleted = updatedMatch.player1Score !== null && updatedMatch.player2Score !== null;
+      
+      if (bothCompleted) {
+        // Determine winner
+        let winnerId: number | undefined;
+        if (updatedMatch.player1Score > updatedMatch.player2Score) {
+          winnerId = updatedMatch.player1Id;
+        } else if (updatedMatch.player2Score > updatedMatch.player1Score) {
+          winnerId = updatedMatch.player2Id;
+        } else {
+          // Tie - winner by time (faster wins)
+          winnerId = updatedMatch.player1TimeSpent < updatedMatch.player2TimeSpent 
+            ? updatedMatch.player1Id 
+            : updatedMatch.player2Id;
+        }
+
+        // Update match status and winner
+        await db
+          .update(tournamentMatches)
+          .set({
+            status: 'completed',
+            winnerId,
+            completedAt: new Date()
+          })
+          .where(eq(tournamentMatches.id, matchId));
+
+        return { success: true, message: 'Match completed', winnerId };
+      } else {
+        return { success: true, message: 'Results submitted, waiting for opponent' };
+      }
+    } catch (error: any) {
+      console.error('Error submitting user match results:', error);
+      return { success: false, message: error.message };
+    }
+  }
+
+  /**
    * Submit match results for both players
    */
   async submitMatchResults(

@@ -117,10 +117,12 @@ export default function TournamentResultsPage() {
   );
 
   const isMatchCompleted = match.status === 'completed';
-  const canContinue = isMatchCompleted && didIWin && nextMatch;
+  const isTournamentComplete = tournament.status === 'completed';
+  const canContinue = isMatchCompleted && didIWin && nextMatch && !isTournamentComplete;
   const isWaitingForOpponent = !isMatchCompleted;
   const isEliminated = isMatchCompleted && !didIWin;
-  const isWaitingForNextRound = isMatchCompleted && didIWin && !nextMatch;
+  const isWaitingForNextRound = isMatchCompleted && didIWin && !nextMatch && !isTournamentComplete;
+  const isTournamentWinner = isMatchCompleted && didIWin && isTournamentComplete;
 
   return (
     <div className="container mx-auto p-6 max-w-4xl">
@@ -270,6 +272,19 @@ export default function TournamentResultsPage() {
               <Loader2 className="h-4 w-4 animate-spin" />
               Waiting for Opponent...
             </Button>
+          ) : isTournamentWinner ? (
+            <div className="text-center">
+              <Alert className="mb-4 border-yellow-300 bg-yellow-50">
+                <Trophy className="h-4 w-4 text-yellow-600" />
+                <AlertDescription className="text-yellow-800">
+                  🎉 <strong>Congratulations!</strong> You have won the entire tournament!
+                </AlertDescription>
+              </Alert>
+              <Button onClick={handleReturnToTournaments} className="bg-yellow-600 hover:bg-yellow-700">
+                <Trophy className="h-4 w-4 mr-2" />
+                Return to Tournaments
+              </Button>
+            </div>
           ) : isWaitingForNextRound ? (
             <div className="text-center">
               <Alert className="mb-4">

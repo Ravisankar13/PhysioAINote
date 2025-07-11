@@ -514,13 +514,18 @@ export class DiagnosisDuelTournamentService {
 
     console.log(`Found ${winners.length} winners from round ${currentRound}`);
 
-    if (winners.length <= 1) {
-      // Tournament is complete
-      console.log(`Tournament ${tournamentId} is complete with ${winners.length} winner(s)`);
+    // Check if tournament should end based on number of winners
+    if (winners.length === 1) {
+      // Tournament is complete - we have a single winner
+      console.log(`Tournament ${tournamentId} is complete with winner: ${winners[0].userId}`);
       await db
         .update(diagnosisDuelTournaments)
         .set({ status: 'completed' })
         .where(eq(diagnosisDuelTournaments.id, tournamentId));
+      return;
+    } else if (winners.length === 0) {
+      // No winners found, something went wrong
+      console.error(`No winners found for tournament ${tournamentId} round ${currentRound}`);
       return;
     }
 

@@ -9968,5 +9968,53 @@ Respond in JSON format:
     }
   });
 
+  // Get user's next match in tournament
+  app.get('/api/tournaments/:id/my-next-match', ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const tournamentId = parseInt(req.params.id);
+      const userId = req.user?.id;
+      
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+      
+      const { diagnosisDuelTournamentService } = await import('./diagnosisDuelTournamentService');
+      const nextMatch = await diagnosisDuelTournamentService.getUserNextMatch(tournamentId, userId);
+      
+      if (!nextMatch) {
+        return res.status(404).json({ error: 'No next match found' });
+      }
+      
+      res.json(nextMatch);
+    } catch (error: any) {
+      console.error('Error fetching next match:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Start a specific match
+  app.post('/api/tournaments/matches/:matchId/start', ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const matchId = parseInt(req.params.matchId);
+      const userId = req.user?.id;
+      
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+      
+      const { diagnosisDuelTournamentService } = await import('./diagnosisDuelTournamentService');
+      const result = await diagnosisDuelTournamentService.startMatch(matchId, userId);
+      
+      if (!result.success) {
+        return res.status(400).json({ error: result.message });
+      }
+      
+      res.json(result);
+    } catch (error: any) {
+      console.error('Error starting match:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   return httpServer;
 }

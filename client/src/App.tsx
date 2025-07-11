@@ -51,6 +51,7 @@ import GameCompetitionPage from "@/pages/GameCompetitionPage";
 import TournamentsPage from "@/pages/TournamentsPage";
 import TournamentWaitingRoom from "@/pages/TournamentWaitingRoom";
 import TournamentMatchPage from "@/pages/TournamentMatchPage";
+import TournamentResultsPage from "@/pages/TournamentResultsPage";
 import BodyScanner from "@/pages/BodyScanner";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
@@ -167,6 +168,12 @@ function Router() {
           </Route>
           <Route path="/tournaments/:id/waiting-room">
             <ProtectedRoute component={TournamentWaitingRoom} />
+          </Route>
+          <Route path="/tournament/match/:matchId">
+            <ProtectedRoute component={TournamentMatchPage} />
+          </Route>
+          <Route path="/tournament/results/:matchId">
+            <ProtectedRoute component={TournamentResultsPage} />
           </Route>
           <Route path="/test-audio-transcription" component={TestAudioTranscription} />
           <Route path="/test-note-generator" component={TestNoteGenerator} />

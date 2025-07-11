@@ -692,6 +692,113 @@ export class DiagnosisDuelTournamentService {
   }
 
   /**
+   * Get tournament by ID with details
+   */
+  async getTournamentById(tournamentId: number): Promise<DiagnosisDuelTournament | null> {
+    try {
+      const [tournament] = await db
+        .select()
+        .from(diagnosisDuelTournaments)
+        .where(eq(diagnosisDuelTournaments.id, tournamentId));
+
+      return tournament || null;
+    } catch (error) {
+      console.error("Error getting tournament by ID:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get user's next match in tournament
+   */
+  async getUserNextMatch(tournamentId: number, userId: number) {
+    try {
+      // Find the next match for this user
+      const nextMatch = await db
+        .select({
+          id: tournamentMatches.id,
+          tournamentId: tournamentMatches.tournamentId,
+          round: tournamentMatches.round,
+          matchNumber: tournamentMatches.matchNumber,
+          player1Id: tournamentMatches.player1Id,
+          player2Id: tournamentMatches.player2Id,
+          player1Username: tournamentMatches.player1Username,
+          player2Username: tournamentMatches.player2Username,
+          player1Score: tournamentMatches.player1Score,
+          player2Score: tournamentMatches.player2Score,
+          player1TimeSpent: tournamentMatches.player1TimeSpent,
+          player2TimeSpent: tournamentMatches.player2TimeSpent,
+          winnerId: tournamentMatches.winnerId,
+          status: tournamentMatches.status,
+          gameContentId: tournamentMatches.gameContentId,
+          scheduledStartTime: tournamentMatches.scheduledStartTime,
+          actualStartTime: tournamentMatches.actualStartTime,
+          completedAt: tournamentMatches.completedAt,
+          player1Responses: tournamentMatches.player1Responses,
+          player2Responses: tournamentMatches.player2Responses,
+          createdAt: tournamentMatches.createdAt,
+        })
+        .from(tournamentMatches)
+        .where(
+          and(
+            eq(tournamentMatches.tournamentId, tournamentId),
+            or(
+              eq(tournamentMatches.player1Id, userId),
+              eq(tournamentMatches.player2Id, userId)
+            ),
+            eq(tournamentMatches.status, 'scheduled')
+          )
+        )
+        .orderBy(tournamentMatches.round, tournamentMatches.matchNumber)
+        .limit(1);
+
+      return nextMatch[0] || null;
+    } catch (error) {
+      console.error("Error getting next match:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Start a specific match
+   */
+  async startMatch(matchId: number, userId: number): Promise<{ success: boolean; message: string }> {
+    try {
+      // Verify the user is part of this match
+      const [match] = await db
+        .select()
+        .from(tournamentMatches)
+        .where(eq(tournamentMatches.id, matchId));
+
+      if (!match) {
+        return { success: false, message: 'Match not found' };
+      }
+
+      if (match.player1Id !== userId && match.player2Id !== userId) {
+        return { success: false, message: 'You are not a participant in this match' };
+      }
+
+      if (match.status !== 'scheduled') {
+        return { success: false, message: 'Match is not ready to start' };
+      }
+
+      // Update match status to active
+      await db
+        .update(tournamentMatches)
+        .set({
+          status: 'active',
+          actualStartTime: new Date(),
+        })
+        .where(eq(tournamentMatches.id, matchId));
+
+      return { success: true, message: 'Match started successfully' };
+    } catch (error) {
+      console.error("Error starting match:", error);
+      throw error;
+    }
+  }
+
+  /**
    * Helper methods
    */
   private isValidTournamentSize(participantCount: number): boolean {

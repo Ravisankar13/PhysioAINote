@@ -192,8 +192,8 @@ export default function TournamentMatchPage() {
         description: `You scored ${totalScore}/${questions.length} correct answers!`,
       });
 
-      // Redirect to tournaments page to see results
-      window.location.href = '/tournaments';
+      // Redirect to results page
+      window.location.href = `/tournament/results/${matchId}`;
     } catch (error: any) {
       console.error('Error submitting match:', error);
       toast({

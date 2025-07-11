@@ -35,7 +35,7 @@ import { realTimeAIService } from "./realtimeAIService";
 import { virtualPatientService } from "./virtualPatientService";
 import { soapVirtualPatientService } from "./soapVirtualPatientService";
 import { documentGenerationService } from "./documentGenerationService";
-import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, exercises, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, insertSoapNoteSchema, bodyScans, insertBodyScanSchema } from "@shared/schema";
+import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, exercises, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, insertSoapNoteSchema, bodyScans, insertBodyScanSchema, tournamentParticipants } from "@shared/schema";
 import { ZodError, z } from "zod";
 import { fromZodError } from "zod-validation-error";
 import multer from "multer";
@@ -9705,9 +9705,25 @@ Respond in JSON format:
         return res.status(401).json({ error: 'User not authenticated' });
       }
       
-      const { diagnosisDuelTournamentService } = await import('./diagnosisDuelTournamentService');
-      const registrations = await diagnosisDuelTournamentService.getUserTournamentRegistrations(userId);
+      console.log("Getting registrations for user ID:", userId);
       
+      // Direct database query to avoid complex service method
+      const registrations = await db
+        .select({
+          id: tournamentParticipants.id,
+          tournamentId: tournamentParticipants.tournamentId,
+          userId: tournamentParticipants.userId,
+          username: users.username,
+          bracketPosition: tournamentParticipants.bracketPosition,
+          currentRound: tournamentParticipants.currentRound,
+          isEliminated: tournamentParticipants.isEliminated,
+          joinedAt: tournamentParticipants.joinedAt,
+        })
+        .from(tournamentParticipants)
+        .leftJoin(users, eq(tournamentParticipants.userId, users.id))
+        .where(eq(tournamentParticipants.userId, userId));
+      
+      console.log("Found registrations:", registrations);
       res.json(registrations);
     } catch (error: any) {
       console.error("Error getting user tournament registrations:", error);

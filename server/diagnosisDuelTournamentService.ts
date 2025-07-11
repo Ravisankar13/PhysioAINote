@@ -367,6 +367,13 @@ export class DiagnosisDuelTournamentService {
     participants: (TournamentParticipant & { username: string })[];
     matches: (TournamentMatch & { player1Username: string; player2Username: string })[];
   } | null> {
+    console.log("Getting tournament details for ID:", tournamentId);
+    
+    // Validate tournamentId is a proper number
+    if (!tournamentId || isNaN(tournamentId)) {
+      throw new Error(`Invalid tournament ID: ${tournamentId}`);
+    }
+    
     const [tournament] = await db
       .select()
       .from(diagnosisDuelTournaments)
@@ -428,6 +435,13 @@ export class DiagnosisDuelTournamentService {
    */
   async getUserTournamentRegistrations(userId: number) {
     try {
+      console.log("Getting tournament registrations for user ID:", userId);
+      
+      // Validate userId is a proper number
+      if (!userId || isNaN(userId)) {
+        throw new Error(`Invalid user ID: ${userId}`);
+      }
+      
       const registrations = await db
         .select({
           id: tournamentParticipants.id,
@@ -443,6 +457,7 @@ export class DiagnosisDuelTournamentService {
         .leftJoin(users, eq(tournamentParticipants.userId, users.id))
         .where(eq(tournamentParticipants.userId, userId));
 
+      console.log("Found registrations:", registrations);
       return registrations;
     } catch (error) {
       console.error("Error getting user tournament registrations:", error);

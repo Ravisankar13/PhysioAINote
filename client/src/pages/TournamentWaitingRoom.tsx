@@ -70,6 +70,12 @@ export default function TournamentWaitingRoom() {
     queryKey: [`/api/tournaments/${tournamentId}/participants`],
     enabled: !!tournamentId,
     refetchInterval: 2000, // Refresh every 2 seconds for live updates
+    onSuccess: (data) => {
+      console.log("Participants fetched successfully:", data);
+    },
+    onError: (error) => {
+      console.error("Error fetching participants:", error);
+    }
   });
 
   // Fetch tournament details
@@ -85,11 +91,13 @@ export default function TournamentWaitingRoom() {
 
   // Debug logging to see participant data
   useEffect(() => {
+    console.log("Participants state:", participants);
+    console.log("Participants loading:", participantsLoading);
+    console.log("Tournament ID:", tournamentId);
     if (participants?.length > 0) {
-      console.log("Participants data:", participants);
       console.log("First participant:", participants[0]);
     }
-  }, [participants]);
+  }, [participants, participantsLoading, tournamentId]);
 
   // Activity feed simulation
   useEffect(() => {
@@ -317,7 +325,7 @@ export default function TournamentWaitingRoom() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {participants.map((participant: TournamentParticipant, index: number) => (
+              {participants && participants.length > 0 ? participants.map((participant: TournamentParticipant, index: number) => (
                 <div 
                   key={participant.id} 
                   className="flex items-center justify-between p-3 border rounded-lg"
@@ -327,19 +335,19 @@ export default function TournamentWaitingRoom() {
                       {index + 1}
                     </div>
                     <div>
-                      <div className="font-medium">{participant.username}</div>
+                      <div className="font-medium">{participant.username || 'Anonymous'}</div>
                       <div className="text-xs text-muted-foreground">
-                        Joined {participant.joinedAt ? 
-                          (() => {
-                            try {
-                              const date = new Date(participant.joinedAt);
-                              return isNaN(date.getTime()) ? 'recently' : date.toLocaleTimeString();
-                            } catch {
-                              return 'recently';
-                            }
-                          })() 
-                          : 'recently'
-                        }
+                        Joined {(() => {
+                          try {
+                            if (!participant.joinedAt) return 'recently';
+                            const date = new Date(participant.joinedAt);
+                            if (isNaN(date.getTime())) return 'recently';
+                            return date.toLocaleTimeString();
+                          } catch (error) {
+                            console.error('Date parsing error:', error, participant.joinedAt);
+                            return 'recently';
+                          }
+                        })()}
                       </div>
                     </div>
                   </div>
@@ -347,10 +355,14 @@ export default function TournamentWaitingRoom() {
                     {index === 0 && isReady ? "Ready" : "Waiting"}
                   </Badge>
                 </div>
-              ))}
+              )) : (
+                <div className="text-center py-4 text-muted-foreground">
+                  {participantsLoading ? 'Loading participants...' : 'No participants yet'}
+                </div>
+              )}
               
               {/* Empty slots */}
-              {Array.from({ length: maxParticipants - currentParticipants }).map((_, index) => (
+              {participants && participants.length > 0 && Array.from({ length: maxParticipants - currentParticipants }).map((_, index) => (
                 <div 
                   key={`empty-${index}`} 
                   className="flex items-center gap-3 p-3 border rounded-lg opacity-50"

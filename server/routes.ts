@@ -9717,14 +9717,19 @@ Respond in JSON format:
   app.get('/api/tournaments/:id', async (req: Request, res: Response) => {
     try {
       const tournamentId = parseInt(req.params.id);
-      const { diagnosisDuelTournamentService } = await import('./diagnosisDuelTournamentService');
-      const tournamentDetails = await diagnosisDuelTournamentService.getTournamentDetails(tournamentId);
       
-      if (!tournamentDetails) {
+      if (isNaN(tournamentId)) {
+        return res.status(400).json({ error: 'Invalid tournament ID' });
+      }
+      
+      const { diagnosisDuelTournamentService } = await import('./diagnosisDuelTournamentService');
+      const tournament = await diagnosisDuelTournamentService.getTournamentById(tournamentId);
+      
+      if (!tournament) {
         return res.status(404).json({ error: 'Tournament not found' });
       }
       
-      res.json(tournamentDetails);
+      res.json(tournament);
     } catch (error: any) {
       console.error("Error getting tournament details:", error);
       res.status(500).json({ error: error.message });

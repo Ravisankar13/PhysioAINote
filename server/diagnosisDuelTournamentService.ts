@@ -760,6 +760,45 @@ export class DiagnosisDuelTournamentService {
   }
 
   /**
+   * Get match details by ID
+   */
+  async getMatchDetails(matchId: number) {
+    try {
+      const [match] = await db
+        .select({
+          id: tournamentMatches.id,
+          tournamentId: tournamentMatches.tournamentId,
+          round: tournamentMatches.round,
+          matchNumber: tournamentMatches.matchNumber,
+          player1Id: tournamentMatches.player1Id,
+          player2Id: tournamentMatches.player2Id,
+          player1Username: tournamentMatches.player1Username,
+          player2Username: tournamentMatches.player2Username,
+          player1Score: tournamentMatches.player1Score,
+          player2Score: tournamentMatches.player2Score,
+          player1TimeSpent: tournamentMatches.player1TimeSpent,
+          player2TimeSpent: tournamentMatches.player2TimeSpent,
+          winnerId: tournamentMatches.winnerId,
+          status: tournamentMatches.status,
+          gameContentId: tournamentMatches.gameContentId,
+          scheduledStartTime: tournamentMatches.scheduledStartTime,
+          actualStartTime: tournamentMatches.actualStartTime,
+          completedAt: tournamentMatches.completedAt,
+          player1Responses: tournamentMatches.player1Responses,
+          player2Responses: tournamentMatches.player2Responses,
+          createdAt: tournamentMatches.createdAt,
+        })
+        .from(tournamentMatches)
+        .where(eq(tournamentMatches.id, matchId));
+
+      return match || null;
+    } catch (error) {
+      console.error("Error getting match details:", error);
+      throw error;
+    }
+  }
+
+  /**
    * Start a specific match
    */
   async startMatch(matchId: number, userId: number): Promise<{ success: boolean; message: string }> {

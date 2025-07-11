@@ -51,12 +51,12 @@ export default function TournamentResultsPage() {
   });
 
   const { data: tournament, isLoading: tournamentLoading } = useQuery({
-    queryKey: ['/api/tournaments', match?.tournamentId],
+    queryKey: [`/api/tournaments/${match?.tournamentId}`],
     enabled: !!match?.tournamentId,
   });
 
   const { data: nextMatch, isLoading: nextMatchLoading } = useQuery({
-    queryKey: ['/api/tournaments', match?.tournamentId, 'my-next-match'],
+    queryKey: [`/api/tournaments/${match?.tournamentId}/my-next-match`],
     enabled: !!match?.tournamentId && match?.status === 'completed' && !!match?.winnerId,
   });
 

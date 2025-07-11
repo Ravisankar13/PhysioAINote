@@ -2133,6 +2133,8 @@ export const tournamentMatches = pgTable("tournament_matches", {
   matchNumber: integer("match_number").notNull(),
   player1Id: integer("player1_id").notNull().references(() => users.id),
   player2Id: integer("player2_id").notNull().references(() => users.id),
+  player1Username: text("player1_username").notNull(),
+  player2Username: text("player2_username").notNull(),
   player1Score: integer("player1_score").default(0),
   player2Score: integer("player2_score").default(0),
   player1TimeSpent: integer("player1_time_spent").default(0),

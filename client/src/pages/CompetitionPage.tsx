@@ -1234,7 +1234,7 @@ export default function CompetitionPage() {
 
         {/* Main Content Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-7 lg:w-fit lg:grid-cols-7">
+          <TabsList className="grid w-full grid-cols-6 lg:w-fit lg:grid-cols-6">
             <TabsTrigger value="overview" className="flex items-center gap-2">
               <Target className="h-4 w-4" />
               Overview
@@ -1243,10 +1243,7 @@ export default function CompetitionPage() {
               <Zap className="h-4 w-4" />
               Elite Games
             </TabsTrigger>
-            <TabsTrigger value="competitions" className="flex items-center gap-2">
-              <Trophy className="h-4 w-4" />
-              Competitions
-            </TabsTrigger>
+
             <TabsTrigger value="complex-cases" className="flex items-center gap-2">
               <Brain className="h-4 w-4" />
               Practice Case Studies
@@ -1483,9 +1480,9 @@ export default function CompetitionPage() {
                 <div className="mt-4 text-center">
                   <Button 
                     variant="outline"
-                    onClick={() => setActiveTab("competitions")}
+                    onClick={() => setActiveTab("complex-cases")}
                   >
-                    View All Competitions
+                    View All Complex Cases
                   </Button>
                 </div>
               </CardContent>
@@ -1513,9 +1510,9 @@ export default function CompetitionPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     <Button 
                       variant="outline"
-                      onClick={() => setActiveTab("competitions")}
+                      onClick={() => setActiveTab("complex-cases")}
                     >
-                      View Complex Case Competitions
+                      View Complex Cases
                     </Button>
                     <Button 
                       variant="outline"
@@ -1575,10 +1572,7 @@ export default function CompetitionPage() {
             <DailyChallengeCard />
           </TabsContent>
 
-          {/* Competitions Tab */}
-          <TabsContent value="competitions">
-            <ComplexCaseCompetitionsView />
-          </TabsContent>
+
 
           {/* Leaderboards Tab */}
           <TabsContent value="leaderboards">

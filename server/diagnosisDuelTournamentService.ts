@@ -133,6 +133,62 @@ export class DiagnosisDuelTournamentService {
   }
 
   /**
+   * Leave a tournament
+   */
+  async leaveTournament(tournamentId: number, userId: number): Promise<{ success: boolean; message: string }> {
+    try {
+      // Check if tournament exists
+      const [tournament] = await db
+        .select()
+        .from(diagnosisDuelTournaments)
+        .where(eq(diagnosisDuelTournaments.id, tournamentId));
+
+      if (!tournament) {
+        return { success: false, message: 'Tournament not found' };
+      }
+
+      // Check if tournament has started
+      if (tournament.status === 'active' || tournament.status === 'completed') {
+        return { success: false, message: 'Cannot leave a tournament that has already started' };
+      }
+
+      // Check if user is registered
+      const [participant] = await db
+        .select()
+        .from(tournamentParticipants)
+        .where(and(
+          eq(tournamentParticipants.tournamentId, tournamentId),
+          eq(tournamentParticipants.userId, userId)
+        ));
+
+      if (!participant) {
+        return { success: false, message: 'You are not registered for this tournament' };
+      }
+
+      // Remove the participant
+      await db
+        .delete(tournamentParticipants)
+        .where(and(
+          eq(tournamentParticipants.tournamentId, tournamentId),
+          eq(tournamentParticipants.userId, userId)
+        ));
+
+      // Update tournament participant count
+      await db
+        .update(diagnosisDuelTournaments)
+        .set({ 
+          currentParticipants: tournament.currentParticipants - 1 
+        })
+        .where(eq(diagnosisDuelTournaments.id, tournamentId));
+
+      return { success: true, message: 'Successfully left tournament' };
+    } catch (error) {
+      console.error('Error leaving tournament:', error);
+      return { success: false, message: 'Failed to leave tournament' };
+    }
+  }
+
+  /**
    * Start a tournament and create the bracket
    */
   async startTournament(tournamentId: number): Promise<{ success: boolean; message: string }> {
@@ -406,19 +462,13 @@ export class DiagnosisDuelTournamentService {
         player2Id: tournamentMatches.player2Id,
         player1Score: tournamentMatches.player1Score,
         player2Score: tournamentMatches.player2Score,
-        player1TimeSpent: tournamentMatches.player1TimeSpent,
-        player2TimeSpent: tournamentMatches.player2TimeSpent,
         winnerId: tournamentMatches.winnerId,
         status: tournamentMatches.status,
-        gameContentId: tournamentMatches.gameContentId,
         scheduledStartTime: tournamentMatches.scheduledStartTime,
-        actualStartTime: tournamentMatches.actualStartTime,
         completedAt: tournamentMatches.completedAt,
-        player1Responses: tournamentMatches.player1Responses,
-        player2Responses: tournamentMatches.player2Responses,
         createdAt: tournamentMatches.createdAt,
-        player1Username: { username: '' } as any,
-        player2Username: { username: '' } as any,
+        player1Username: tournamentMatches.player1Username,
+        player2Username: tournamentMatches.player2Username,
       })
       .from(tournamentMatches)
       .where(eq(tournamentMatches.tournamentId, tournamentId));

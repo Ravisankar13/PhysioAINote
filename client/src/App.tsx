@@ -161,6 +161,9 @@ function Router() {
           <Route path="/admin">
             <ProtectedRoute component={AdminDashboard} />
           </Route>
+          <Route path="/tournaments/:id/waiting-room">
+            <ProtectedRoute component={TournamentWaitingRoom} />
+          </Route>
           <Route path="/test-audio-transcription" component={TestAudioTranscription} />
           <Route path="/test-note-generator" component={TestNoteGenerator} />
           <Route path="/test-case-studies" component={TestCaseStudiesPage} />

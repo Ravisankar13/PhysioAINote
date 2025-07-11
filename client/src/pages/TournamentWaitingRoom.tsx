@@ -1,35 +1,31 @@
 import { useState, useEffect } from "react";
+import { useParams, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { useAuth } from "@/hooks/use-auth";
-import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Separator } from "@/components/ui/separator";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { useToast } from "@/hooks/use-toast";
 import { 
-  Trophy, 
   Users, 
   Clock, 
-  Timer,
-  ArrowLeft,
+  Trophy, 
+  Target, 
   Crown,
-  Zap
+  CheckCircle,
+  XCircle,
+  Loader2,
+  ArrowLeft,
+  AlertTriangle,
+  Zap,
+  Activity,
+  Timer,
+  UserCheck,
+  UserX
 } from "lucide-react";
-import { format } from 'date-fns';
-
-interface Tournament {
-  id: number;
-  title: string;
-  description: string;
-  bodyPart: string;
-  difficulty: string;
-  status: string;
-  maxParticipants: number;
-  currentParticipants: number;
-  currentRound: number;
-  registrationEndTime: string;
-  tournamentStartTime: string;
-  createdAt: string;
-}
 
 interface TournamentParticipant {
   id: number;
@@ -42,44 +38,131 @@ interface TournamentParticipant {
   joinedAt: string;
 }
 
+interface Tournament {
+  id: number;
+  title: string;
+  description: string;
+  status: string;
+  maxParticipants: number;
+  gameType: string;
+  difficulty: string;
+  timeLimit: number;
+  createdAt: string;
+  scheduledStartTime?: string;
+}
+
 export default function TournamentWaitingRoom() {
-  const { user } = useAuth();
+  const { id } = useParams();
   const [, setLocation] = useLocation();
-  const [tournamentId, setTournamentId] = useState<number | null>(null);
-
-  // Extract tournament ID from URL
-  useEffect(() => {
-    const path = window.location.pathname;
-    const match = path.match(/\/tournament\/(\d+)\/waiting-room/);
-    if (match) {
-      setTournamentId(parseInt(match[1]));
-    }
-  }, []);
-
-  // Fetch tournament details
-  const { data: tournament, isLoading: tournamentLoading } = useQuery<Tournament>({
-    queryKey: [`/api/tournaments/${tournamentId}`],
-    enabled: !!tournamentId,
-    refetchInterval: 5000, // Refetch every 5 seconds
-  });
+  const { toast } = useToast();
+  const [isReady, setIsReady] = useState(false);
+  const [activityFeed, setActivityFeed] = useState<Array<{
+    id: string;
+    message: string;
+    timestamp: Date;
+    type: 'join' | 'leave' | 'ready' | 'system';
+  }>>([]);
+  
+  const tournamentId = parseInt(id || "0");
 
   // Fetch tournament participants
-  const { data: participants, isLoading: participantsLoading } = useQuery<TournamentParticipant[]>({
-    queryKey: [`/api/tournaments/${tournamentId}/participants`],
-    enabled: !!tournamentId,
-    refetchInterval: 3000, // Refetch every 3 seconds
+  const { data: participants = [], isLoading: participantsLoading, refetch: refetchParticipants } = useQuery({
+    queryKey: ['/api/tournaments', tournamentId, 'participants'],
+    refetchInterval: 2000, // Refresh every 2 seconds for live updates
   });
 
-  const goBack = () => {
-    setLocation('/competitions');
+  // Fetch tournament details
+  const { data: tournament, isLoading: tournamentLoading, refetch: refetchTournament } = useQuery({
+    queryKey: ['/api/tournaments', tournamentId],
+    enabled: !!tournamentId,
+    refetchInterval: 5000, // Refresh every 5 seconds
+  });
+
+  const currentParticipants = participants?.length || 0;
+  const maxParticipants = tournament?.maxParticipants || 8;
+  const progressPercentage = (currentParticipants / maxParticipants) * 100;
+
+  // Activity feed simulation
+  useEffect(() => {
+    if (participants.length > 0) {
+      // Check for new participants and add to activity feed
+      const now = new Date();
+      participants.forEach((participant: TournamentParticipant) => {
+        const joinTime = new Date(participant.joinedAt);
+        const timeDiff = now.getTime() - joinTime.getTime();
+        
+        // If they joined within the last 30 seconds, add to activity feed
+        if (timeDiff < 30000) {
+          const existingActivity = activityFeed.find(activity => 
+            activity.message.includes(participant.username) && activity.type === 'join'
+          );
+          
+          if (!existingActivity) {
+            setActivityFeed(prev => [
+              {
+                id: `join-${participant.id}-${joinTime.getTime()}`,
+                message: `${participant.username} joined the tournament`,
+                timestamp: joinTime,
+                type: 'join'
+              },
+              ...prev.slice(0, 9) // Keep last 10 activities
+            ]);
+          }
+        }
+      });
+    }
+  }, [participants, activityFeed]);
+
+  const handleLeaveTournament = async () => {
+    try {
+      const response = await fetch(`/api/tournaments/${tournamentId}/leave`, {
+        method: 'POST',
+      });
+
+      if (response.ok) {
+        toast({
+          title: "Left Tournament",
+          description: "You have successfully left the tournament.",
+        });
+        setLocation('/competitions');
+      } else {
+        const error = await response.json();
+        toast({
+          title: "Error",
+          description: error.error || "Failed to leave tournament",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to leave tournament",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const toggleReady = () => {
+    setIsReady(!isReady);
+    
+    // Add activity to feed
+    setActivityFeed(prev => [
+      {
+        id: `ready-${Date.now()}`,
+        message: isReady ? "You marked yourself as not ready" : "You marked yourself as ready",
+        timestamp: new Date(),
+        type: 'ready'
+      },
+      ...prev.slice(0, 9)
+    ]);
   };
 
   if (tournamentLoading || participantsLoading) {
     return (
-      <div className="container mx-auto p-6 flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading tournament details...</p>
+      <div className="container mx-auto p-6">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin" />
+          <span className="ml-2">Loading tournament...</span>
         </div>
       </div>
     );
@@ -88,183 +171,266 @@ export default function TournamentWaitingRoom() {
   if (!tournament) {
     return (
       <div className="container mx-auto p-6">
-        <Card>
-          <CardContent className="p-6 text-center">
-            <Trophy className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-xl font-semibold mb-2">Tournament Not Found</h3>
-            <p className="text-muted-foreground mb-4">
-              The tournament you're looking for doesn't exist or has been removed.
-            </p>
-            <Button onClick={goBack}>
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Competitions
-            </Button>
-          </CardContent>
-        </Card>
+        <Alert>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            Tournament not found or you don't have access to this tournament.
+          </AlertDescription>
+        </Alert>
       </div>
     );
   }
 
-  const userParticipant = participants?.find(p => p.userId === user?.id);
-  const isRegistered = !!userParticipant;
+  const canStart = currentParticipants >= 4; // Minimum participants needed
+  const isFull = currentParticipants >= maxParticipants;
 
   return (
     <div className="container mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Trophy className="h-8 w-8 text-yellow-500" />
-            Tournament Waiting Room
-          </h1>
-          <p className="text-muted-foreground mt-2">
-            Waiting for tournament to start...
-          </p>
-        </div>
-        <Button variant="outline" onClick={goBack}>
+      {/* Header */}
+      <div className="flex items-center gap-4">
+        <Button variant="outline" onClick={() => setLocation('/competitions')}>
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Competitions
         </Button>
+        <div>
+          <h1 className="text-3xl font-bold">{tournament.title}</h1>
+          <p className="text-muted-foreground">{tournament.description}</p>
+        </div>
       </div>
 
-      {/* Tournament Info */}
-      <Card className="border-2 border-purple-200 bg-purple-50/50">
-        <CardHeader>
-          <div className="flex items-start justify-between">
-            <div className="space-y-2">
-              <CardTitle className="text-2xl flex items-center gap-2">
-                <Crown className="h-6 w-6 text-purple-600" />
-                {tournament.title}
-              </CardTitle>
-              <CardDescription className="text-base">
-                {tournament.description}
-              </CardDescription>
-              <div className="flex gap-2">
-                <Badge variant="outline">{tournament.bodyPart}</Badge>
-                <Badge variant="outline">{tournament.difficulty}</Badge>
-                <Badge 
-                  variant={tournament.status === 'registration' ? 'default' : 'secondary'}
-                >
-                  {tournament.status}
-                </Badge>
-              </div>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="flex items-center gap-2">
-              <Users className="h-5 w-5 text-muted-foreground" />
-              <div>
-                <p className="font-semibold">{tournament.currentParticipants}/{tournament.maxParticipants}</p>
-                <p className="text-sm text-muted-foreground">Participants</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Clock className="h-5 w-5 text-muted-foreground" />
-              <div>
-                <p className="font-semibold">
-                  {format(new Date(tournament.registrationEndTime), 'MMM d, h:mm a')}
-                </p>
-                <p className="text-sm text-muted-foreground">Registration Ends</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Timer className="h-5 w-5 text-muted-foreground" />
-              <div>
-                <p className="font-semibold">
-                  {format(new Date(tournament.tournamentStartTime), 'MMM d, h:mm a')}
-                </p>
-                <p className="text-sm text-muted-foreground">Tournament Starts</p>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Registration Status */}
-      {isRegistered ? (
-        <Card className="border-2 border-green-200 bg-green-50/50">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Main Tournament Info */}
+        <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2 text-green-700">
-              <Zap className="h-5 w-5" />
-              You're Registered!
+            <CardTitle className="flex items-center gap-2">
+              <Trophy className="h-5 w-5 text-yellow-600" />
+              Tournament Status
             </CardTitle>
+            <CardDescription>
+              Waiting for players to join before starting
+            </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-6">
+            {/* Participant Progress */}
             <div className="space-y-2">
-              <p className="text-green-700">
-                <strong>Bracket Position:</strong> #{userParticipant.bracketPosition}
-              </p>
-              <p className="text-green-700">
-                <strong>Registered:</strong> {format(new Date(userParticipant.joinedAt), 'MMM d, h:mm a')}
-              </p>
-              <p className="text-sm text-green-600">
-                You'll be notified when the tournament starts and matches begin!
-              </p>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Participants</span>
+                <span className="text-sm text-muted-foreground">
+                  {currentParticipants} / {maxParticipants}
+                </span>
+              </div>
+              <Progress value={progressPercentage} className="h-2" />
+              {!canStart && (
+                <p className="text-sm text-muted-foreground">
+                  Need at least 4 players to start the tournament
+                </p>
+              )}
+            </div>
+
+            {/* Tournament Details */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="text-center p-3 bg-muted rounded-lg">
+                <Clock className="h-5 w-5 mx-auto mb-1 text-blue-600" />
+                <div className="text-sm font-medium">{tournament.timeLimit}min</div>
+                <div className="text-xs text-muted-foreground">Time Limit</div>
+              </div>
+              <div className="text-center p-3 bg-muted rounded-lg">
+                <Target className="h-5 w-5 mx-auto mb-1 text-green-600" />
+                <div className="text-sm font-medium">{tournament.difficulty}</div>
+                <div className="text-xs text-muted-foreground">Difficulty</div>
+              </div>
+              <div className="text-center p-3 bg-muted rounded-lg">
+                <Zap className="h-5 w-5 mx-auto mb-1 text-purple-600" />
+                <div className="text-sm font-medium">Elimination</div>
+                <div className="text-xs text-muted-foreground">Format</div>
+              </div>
+              <div className="text-center p-3 bg-muted rounded-lg">
+                <Crown className="h-5 w-5 mx-auto mb-1 text-yellow-600" />
+                <div className="text-sm font-medium">Winner</div>
+                <div className="text-xs text-muted-foreground">Takes All</div>
+              </div>
+            </div>
+
+            {/* Tournament Rules */}
+            <div className="space-y-3">
+              <h4 className="font-semibold">Tournament Rules</h4>
+              <ul className="text-sm space-y-1 text-muted-foreground">
+                <li>• Single elimination tournament format</li>
+                <li>• Each match consists of rapid-fire diagnosis challenges</li>
+                <li>• Best diagnostic accuracy and speed wins each round</li>
+                <li>• Tournament begins automatically when enough players join</li>
+                <li>• Winners advance to the next round until final champion</li>
+              </ul>
+            </div>
+
+            {/* Action Buttons */}
+            <Separator />
+            <div className="flex gap-3">
+              <Button 
+                onClick={toggleReady}
+                variant={isReady ? "default" : "outline"}
+                className="flex-1"
+              >
+                {isReady ? (
+                  <>
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    Ready to Play
+                  </>
+                ) : (
+                  <>
+                    <Clock className="h-4 w-4 mr-2" />
+                    Mark as Ready
+                  </>
+                )}
+              </Button>
+              <Button 
+                variant="destructive" 
+                onClick={handleLeaveTournament}
+                className="flex-1"
+              >
+                <XCircle className="h-4 w-4 mr-2" />
+                Leave Tournament
+              </Button>
             </div>
           </CardContent>
         </Card>
-      ) : (
-        <Card className="border-2 border-red-200 bg-red-50/50">
+
+        {/* Participants List */}
+        <Card>
           <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2 text-red-700">
-              <AlertTriangle className="h-5 w-5" />
-              Not Registered
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-blue-600" />
+              Participants ({currentParticipants})
             </CardTitle>
+            <CardDescription>
+              Players in the waiting room
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-red-700 mb-4">
-              You are not registered for this tournament. Please go back and register before the deadline.
-            </p>
-            <Button onClick={goBack} variant="outline">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Register
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Participants List */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" />
-            Registered Participants ({participants?.length || 0})
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {participants && participants.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {participants.map((participant) => (
+            <div className="space-y-3">
+              {participants.map((participant: TournamentParticipant, index: number) => (
                 <div 
                   key={participant.id} 
-                  className={`p-3 rounded-lg border ${
-                    participant.userId === user?.id 
-                      ? 'border-green-300 bg-green-50' 
-                      : 'border-gray-200 bg-gray-50'
-                  }`}
+                  className="flex items-center justify-between p-3 border rounded-lg"
                 >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-semibold">{participant.username}</p>
-                      <p className="text-sm text-muted-foreground">
-                        Position #{participant.bracketPosition}
-                      </p>
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-sm font-bold">
+                      {index + 1}
                     </div>
-                    {participant.userId === user?.id && (
-                      <Badge variant="secondary" className="text-xs">
-                        You
-                      </Badge>
-                    )}
+                    <div>
+                      <div className="font-medium">{participant.username}</div>
+                      <div className="text-xs text-muted-foreground">
+                        Joined {new Date(participant.joinedAt).toLocaleTimeString()}
+                      </div>
+                    </div>
                   </div>
+                  <Badge variant={index === 0 && isReady ? "default" : "secondary"}>
+                    {index === 0 && isReady ? "Ready" : "Waiting"}
+                  </Badge>
+                </div>
+              ))}
+              
+              {/* Empty slots */}
+              {Array.from({ length: maxParticipants - currentParticipants }).map((_, index) => (
+                <div 
+                  key={`empty-${index}`} 
+                  className="flex items-center gap-3 p-3 border rounded-lg opacity-50"
+                >
+                  <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-sm">
+                    {currentParticipants + index + 1}
+                  </div>
+                  <div className="text-muted-foreground">Waiting for player...</div>
                 </div>
               ))}
             </div>
-          ) : (
-            <p className="text-muted-foreground text-center py-8">
-              No participants registered yet.
+
+            {/* Tournament Status */}
+            <Separator className="my-4" />
+            <div className="text-center space-y-2">
+              {!canStart ? (
+                <Alert>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription className="text-center">
+                    Waiting for more players to join (minimum 4 needed)
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <Alert>
+                  <CheckCircle className="h-4 w-4" />
+                  <AlertDescription className="text-center">
+                    {isFull ? "Tournament is full! Starting soon..." : "Ready to start when full or timer expires"}
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Activity Feed */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Activity className="h-5 w-5 text-green-600" />
+              Activity Feed
+            </CardTitle>
+            <CardDescription>
+              Live tournament updates
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ScrollArea className="h-64">
+              {activityFeed.length > 0 ? (
+                <div className="space-y-3">
+                  {activityFeed.map((activity) => (
+                    <div key={activity.id} className="flex items-start gap-3 p-2 rounded-lg bg-muted/50">
+                      <div className="flex-shrink-0 mt-1">
+                        {activity.type === 'join' && <UserCheck className="h-4 w-4 text-green-600" />}
+                        {activity.type === 'leave' && <UserX className="h-4 w-4 text-red-600" />}
+                        {activity.type === 'ready' && <CheckCircle className="h-4 w-4 text-blue-600" />}
+                        {activity.type === 'system' && <Trophy className="h-4 w-4 text-purple-600" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-foreground">{activity.message}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {activity.timestamp.toLocaleTimeString()}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Activity className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No recent activity</p>
+                  <p className="text-xs">Tournament updates will appear here</p>
+                </div>
+              )}
+            </ScrollArea>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Bracket Preview */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Crown className="h-5 w-5 text-purple-600" />
+            Tournament Bracket Preview
+          </CardTitle>
+          <CardDescription>
+            Single elimination bracket structure
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center p-8 bg-muted rounded-lg">
+            <Trophy className="h-12 w-12 mx-auto mb-4 text-yellow-600" />
+            <h3 className="text-lg font-semibold mb-2">Bracket Generation</h3>
+            <p className="text-muted-foreground">
+              Tournament bracket will be automatically generated when the tournament starts.
+              <br />
+              Players will be matched based on their join order and skill level.
             </p>
-          )}
+          </div>
         </CardContent>
       </Card>
     </div>

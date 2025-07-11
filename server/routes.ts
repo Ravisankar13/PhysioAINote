@@ -9800,6 +9800,29 @@ Respond in JSON format:
     }
   });
 
+  // Leave tournament
+  app.post('/api/tournaments/:id/leave', ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const tournamentId = parseInt(req.params.id);
+      const userId = req.user?.id;
+
+      if (!tournamentId || isNaN(tournamentId)) {
+        return res.status(400).json({ error: 'Invalid tournament ID' });
+      }
+
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { diagnosisDuelTournamentService } = await import('./diagnosisDuelTournamentService');
+      const result = await diagnosisDuelTournamentService.leaveTournament(tournamentId, userId);
+      res.json(result);
+    } catch (error: any) {
+      console.error('Error leaving tournament:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Start a tournament
   app.post('/api/tournaments/:id/start', ensureAuthenticated, async (req: Request, res: Response) => {
     try {

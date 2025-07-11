@@ -233,7 +233,7 @@ function GameCompetitionsView() {
 
   const enterWaitingRoom = (tournamentId: number) => {
     // Navigate to tournament waiting room
-    setLocation(`/tournament/${tournamentId}/waiting-room`);
+    setLocation(`/tournaments/${tournamentId}/waiting-room`);
   };
 
   return (

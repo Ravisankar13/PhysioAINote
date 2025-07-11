@@ -326,14 +326,22 @@ export default function TournamentWaitingRoom() {
                         const result = await response.json();
                         console.log('Tournament started successfully:', result);
                         // Refresh tournament data
-                        refetchTournament();
-                        refetchParticipants();
-                        // Navigate to tournament page or show success message
-                        alert('Tournament started successfully! Check the tournament page for matches.');
+                        await refetchTournament();
+                        await refetchParticipants();
+                        
+                        // Navigate to tournaments page to see matches
+                        window.location.href = '/tournaments';
                       } else {
                         const errorText = await response.text();
                         console.error('Failed to start tournament:', errorText);
-                        alert(`Failed to start tournament: ${errorText}`);
+                        
+                        // Try to parse error as JSON for better display
+                        try {
+                          const errorObj = JSON.parse(errorText);
+                          alert(`Failed to start tournament: ${errorObj.error || errorText}`);
+                        } catch {
+                          alert(`Failed to start tournament: ${errorText}`);
+                        }
                       }
                     } catch (error) {
                       console.error('Error starting tournament:', error);

@@ -77,17 +77,29 @@ export default function TournamentMatchPage() {
   // Fetch match details
   const { data: match, isLoading: matchLoading } = useQuery({
     queryKey: ['/api/tournaments/matches', matchId],
+    queryFn: () => fetch(`/api/tournaments/matches/${matchId}`).then(res => res.json()),
     enabled: !!matchId,
   });
 
   // Fetch game content
-  const { data: gameContent, isLoading: contentLoading } = useQuery({
+  const { data: gameContent, isLoading: contentLoading, error: contentError } = useQuery({
     queryKey: ['/api/game-content', match?.gameContentId],
+    queryFn: () => fetch(`/api/game-content/${match?.gameContentId}`).then(res => res.json()),
     enabled: !!match?.gameContentId,
   });
 
   const questions = gameContent?.content?.lightning_diagnosis?.cases || [];
   const currentQuestion = questions[currentQuestionIndex];
+
+  // Debug logging
+  console.log('Tournament Match Debug:', {
+    matchId,
+    match,
+    gameContent,
+    questions: questions.length,
+    currentQuestion: !!currentQuestion,
+    contentError
+  });
 
   // Timer effect
   useEffect(() => {
@@ -209,7 +221,19 @@ export default function TournamentMatchPage() {
       <div className="container mx-auto p-6">
         <Alert>
           <AlertDescription>
-            Tournament match not found or no questions available.
+            <div className="space-y-2">
+              <div>Tournament match not found or no questions available.</div>
+              <div className="text-xs text-gray-600">
+                Debug Info:
+                <div>Match ID: {matchId}</div>
+                <div>Match Found: {!!match ? 'Yes' : 'No'}</div>
+                <div>Game Content Found: {!!gameContent ? 'Yes' : 'No'}</div>
+                <div>Game Content ID: {match?.gameContentId}</div>
+                <div>Questions Length: {questions.length}</div>
+                {contentError && <div>Content Error: {JSON.stringify(contentError)}</div>}
+                {gameContent && <div>Content Structure: {JSON.stringify(Object.keys(gameContent.content || {}))}</div>}
+              </div>
+            </div>
           </AlertDescription>
         </Alert>
       </div>

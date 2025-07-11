@@ -223,6 +223,8 @@ export class DiagnosisDuelTournamentService {
         .where(eq(tournamentParticipants.tournamentId, tournamentId))
         .orderBy(tournamentParticipants.bracketPosition);
 
+      console.log('Debug participants data:', JSON.stringify(participants, null, 2));
+
       // Create bracket matches for Round 1
       const matches = await this.createBracketMatches(tournamentId, participants, 1);
 

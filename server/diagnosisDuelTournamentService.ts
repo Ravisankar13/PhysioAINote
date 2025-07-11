@@ -246,7 +246,7 @@ export class DiagnosisDuelTournamentService {
    */
   async createBracketMatches(
     tournamentId: number, 
-    participants: TournamentParticipant[], 
+    participants: any[], 
     round: number
   ): Promise<TournamentMatch[]> {
     const matches: InsertTournamentMatch[] = [];
@@ -267,7 +267,7 @@ export class DiagnosisDuelTournamentService {
     for (let i = 0; i < participants.length; i += 2) {
       if (i + 1 < participants.length) {
         const matchNumber = Math.floor(i / 2) + 1;
-        matches.push({
+        const match = {
           tournamentId,
           round,
           matchNumber,
@@ -276,10 +276,18 @@ export class DiagnosisDuelTournamentService {
           player1Username: participants[i].username,
           player2Username: participants[i + 1].username,
           gameContentId: content.id,
-          status: 'scheduled',
+          status: 'scheduled' as const,
           scheduledStartTime: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes from now
           actualStartTime: new Date(), // Set to current time
+        };
+        
+        console.log(`Creating match ${matchNumber}:`, {
+          player1: { id: participants[i].userId, username: participants[i].username },
+          player2: { id: participants[i + 1].userId, username: participants[i + 1].username },
+          match: match
         });
+        
+        matches.push(match);
       }
     }
 

@@ -261,8 +261,12 @@ export class DiagnosisDuelTournamentService {
           matchNumber,
           player1Id: participants[i].userId,
           player2Id: participants[i + 1].userId,
+          player1Username: participants[i].username,
+          player2Username: participants[i + 1].username,
           gameContentId: content.id,
+          status: 'scheduled',
           scheduledStartTime: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes from now
+          actualStartTime: new Date(), // Set to current time
         });
       }
     }

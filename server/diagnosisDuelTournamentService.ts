@@ -206,10 +206,20 @@ export class DiagnosisDuelTournamentService {
         return { success: false, message: 'Invalid number of participants' };
       }
 
-      // Get all participants
+      // Get all participants with usernames
       const participants = await db
-        .select()
+        .select({
+          id: tournamentParticipants.id,
+          tournamentId: tournamentParticipants.tournamentId,
+          userId: tournamentParticipants.userId,
+          username: users.username,
+          bracketPosition: tournamentParticipants.bracketPosition,
+          currentRound: tournamentParticipants.currentRound,
+          isEliminated: tournamentParticipants.isEliminated,
+          joinedAt: tournamentParticipants.joinedAt,
+        })
         .from(tournamentParticipants)
+        .innerJoin(users, eq(tournamentParticipants.userId, users.id))
         .where(eq(tournamentParticipants.tournamentId, tournamentId))
         .orderBy(tournamentParticipants.bracketPosition);
 

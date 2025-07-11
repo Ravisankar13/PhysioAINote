@@ -93,7 +93,7 @@ function GameCompetitionsView() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { user } = useAuth();
-  const [activeSubTab, setActiveSubTab] = useState('competitions');
+  const [activeSubTab, setActiveSubTab] = useState('tournaments');
 
   // Fetch game competitions
   const { data: gameCompetitions = [], isLoading } = useQuery({
@@ -217,80 +217,15 @@ function GameCompetitionsView() {
       {/* Sub-tabs for Competitions and Tournaments */}
       <Tabs value={activeSubTab} onValueChange={setActiveSubTab} className="space-y-4">
         <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="competitions" className="flex items-center gap-2">
-            <Zap className="h-4 w-4" />
-            Individual Competitions
-          </TabsTrigger>
           <TabsTrigger value="tournaments" className="flex items-center gap-2">
             <Trophy className="h-4 w-4" />
             Elimination Tournaments
           </TabsTrigger>
+          <TabsTrigger value="competitions" className="flex items-center gap-2">
+            <Zap className="h-4 w-4" />
+            Individual Competitions
+          </TabsTrigger>
         </TabsList>
-
-        {/* Individual Competitions Tab */}
-        <TabsContent value="competitions" className="space-y-6">
-          {gameCompetitions.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {gameCompetitions.map((competition: any) => (
-                <Card key={competition.id} className={`hover:shadow-lg transition-shadow cursor-pointer ${getGameTypeColor(competition.gameType)}`}>
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between">
-                  <div className="space-y-2">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      {getGameTypeIcon(competition.gameType)}
-                      {competition.title}
-                    </CardTitle>
-                    <Badge variant="outline" className="text-xs">
-                      {getGameTypeName(competition.gameType)}
-                    </Badge>
-                  </div>
-                  <Badge variant="default" className="bg-green-100 text-green-700 text-xs">
-                    Active
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <CardDescription className="mb-4">
-                  {competition.description}
-                </CardDescription>
-                <div className="flex items-center gap-4 text-sm text-muted-foreground mb-4">
-                  <div className="flex items-center gap-1">
-                    <Clock className="h-4 w-4" />
-                    {competition.timeLimit}min
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Users className="h-4 w-4" />
-                    {competition.currentParticipants || 0}/{competition.maxParticipants}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Target className="h-4 w-4" />
-                    {competition.difficulty}
-                  </div>
-                </div>
-                <Button
-                  className="w-full"
-                  onClick={() => setLocation(`/game-competition/${competition.id}`)}
-                >
-                  <Play className="h-4 w-4 mr-2" />
-                  Join Competition
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      ) : (
-        <Card>
-          <CardContent className="p-6">
-            <Alert>
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                No Elite Competitions available at the moment. New competitions are added regularly - check back soon!
-              </AlertDescription>
-            </Alert>
-          </CardContent>
-        </Card>
-      )}
-        </TabsContent>
 
         {/* Tournaments Tab */}
         <TabsContent value="tournaments" className="space-y-6">
@@ -371,6 +306,71 @@ function GameCompetitionsView() {
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+
+        {/* Individual Competitions Tab */}
+        <TabsContent value="competitions" className="space-y-6">
+          {gameCompetitions.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {gameCompetitions.map((competition: any) => (
+                <Card key={competition.id} className={`hover:shadow-lg transition-shadow cursor-pointer ${getGameTypeColor(competition.gameType)}`}>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between">
+                  <div className="space-y-2">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      {getGameTypeIcon(competition.gameType)}
+                      {competition.title}
+                    </CardTitle>
+                    <Badge variant="outline" className="text-xs">
+                      {getGameTypeName(competition.gameType)}
+                    </Badge>
+                  </div>
+                  <Badge variant="default" className="bg-green-100 text-green-700 text-xs">
+                    Active
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <CardDescription className="mb-4">
+                  {competition.description}
+                </CardDescription>
+                <div className="flex items-center gap-4 text-sm text-muted-foreground mb-4">
+                  <div className="flex items-center gap-1">
+                    <Clock className="h-4 w-4" />
+                    {competition.timeLimit}min
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Users className="h-4 w-4" />
+                    {competition.currentParticipants || 0}/{competition.maxParticipants}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Target className="h-4 w-4" />
+                    {competition.difficulty}
+                  </div>
+                </div>
+                <Button
+                  className="w-full"
+                  onClick={() => setLocation(`/game-competition/${competition.id}`)}
+                >
+                  <Play className="h-4 w-4 mr-2" />
+                  Join Competition
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <Card>
+          <CardContent className="p-6">
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                No Elite Competitions available at the moment. New competitions are added regularly - check back soon!
+              </AlertDescription>
+            </Alert>
+          </CardContent>
+        </Card>
+      )}
         </TabsContent>
       </Tabs>
     </div>

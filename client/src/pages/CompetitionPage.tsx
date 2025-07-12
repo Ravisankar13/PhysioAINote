@@ -1873,6 +1873,14 @@ export default function CompetitionPage() {
                                 </CardDescription>
                               </CardHeader>
                               <CardContent className="space-y-4">
+                                {(() => {
+                                  console.log("Tournament content:", tournament.content);
+                                  console.log("Lightning diagnosis:", tournament.content?.lightning_diagnosis);
+                                  console.log("LightningDiagnosis:", tournament.content?.lightningDiagnosis);
+                                  const rounds = tournament.content?.lightning_diagnosis?.rounds || tournament.content?.lightningDiagnosis?.rounds;
+                                  console.log("Rounds:", rounds);
+                                  return null;
+                                })()}
                                 {(tournament.content?.lightning_diagnosis?.rounds || tournament.content?.lightningDiagnosis?.rounds) && Array.isArray(tournament.content.lightning_diagnosis?.rounds || tournament.content.lightningDiagnosis?.rounds) ? (
                                   <div className="space-y-4">
                                     {(tournament.content.lightning_diagnosis?.rounds || tournament.content.lightningDiagnosis?.rounds || []).map((round: any, roundIndex: number) => (

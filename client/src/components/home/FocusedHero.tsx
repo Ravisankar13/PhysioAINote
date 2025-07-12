@@ -59,7 +59,7 @@ const FocusedHero = () => {
                     </Button>
                   </Link>
                   <Link href="/motion-capture">
-                    <Button size="lg" variant="outline" className="w-full sm:w-auto border-white/30 text-white hover:bg-white/10">
+                    <Button size="lg" variant="outline" className="w-full sm:w-auto border-white/50 text-white hover:bg-white/20 hover:text-white bg-white/10">
                       Start Motion Capture
                       <ArrowRight className="h-4 w-4 ml-2" />
                     </Button>

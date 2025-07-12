@@ -1506,6 +1506,7 @@ export default function CompetitionPage() {
   const [activeTab, setActiveTab] = useState("overview");
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { user } = useAuth();
 
   // Fetch user stats and achievements  
   const { data: achievements } = useQuery({
@@ -1523,6 +1524,18 @@ export default function CompetitionPage() {
   // Fetch active complex case competitions for overview
   const { data: activeComplexCompetitions } = useQuery({
     queryKey: ['/api/complex-competitions/active']
+  });
+
+  // Fetch tournaments
+  const { data: tournaments = [], isLoading: loadingTournaments } = useQuery({
+    queryKey: ['/api/tournaments'],
+    refetchInterval: 30000,
+  });
+
+  // Fetch admin tournament content
+  const { data: adminTournamentContent = [], isLoading: loadingAdminContent } = useQuery({
+    queryKey: ['/api/tournaments/admin/all-content'],
+    enabled: user && ["Fateofjustice"].includes(user.username),
   });
 
   const completedCompetitions = Array.isArray(userHistory) ? userHistory.filter((h: any) => h.completedAt)?.length || 0 : 0;

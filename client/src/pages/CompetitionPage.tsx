@@ -1875,7 +1875,7 @@ export default function CompetitionPage() {
                                 </CardDescription>
                               </CardHeader>
                               <CardContent className="space-y-4">
-                                {tournament.content?.lightning_diagnosis?.rounds && (
+                                {tournament.content?.lightning_diagnosis?.rounds && Array.isArray(tournament.content.lightning_diagnosis.rounds) ? (
                                   <div className="space-y-4">
                                     {tournament.content.lightning_diagnosis.rounds.map((round: any, roundIndex: number) => (
                                       <div key={roundIndex} className="border rounded-lg p-4">
@@ -1883,17 +1883,24 @@ export default function CompetitionPage() {
                                           Round {roundIndex + 1}: {round.name} ({round.questions?.length || 0} questions)
                                         </h4>
                                         <div className="grid gap-3">
-                                          {round.questions?.map((question: any, qIndex: number) => (
+                                          {Array.isArray(round.questions) ? round.questions.map((question: any, qIndex: number) => (
                                             <div key={qIndex} className="border-l-2 border-gray-200 pl-3">
                                               <p className="font-medium">Q{qIndex + 1}: {question.scenario}</p>
                                               <p className="text-sm text-green-600 mt-1">
                                                 <strong>Answer:</strong> {question.correctDiagnosis}
                                               </p>
                                             </div>
-                                          ))}
+                                          )) : (
+                                            <p className="text-sm text-muted-foreground">No questions available</p>
+                                          )}
                                         </div>
                                       </div>
                                     ))}
+                                  </div>
+                                ) : (
+                                  <div className="text-center py-4 text-muted-foreground">
+                                    <p>Tournament content structure not available</p>
+                                    <pre className="text-xs mt-2 text-left">{JSON.stringify(tournament.content, null, 2)}</pre>
                                   </div>
                                 )}
                               </CardContent>

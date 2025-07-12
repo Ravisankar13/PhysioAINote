@@ -7926,6 +7926,50 @@ Respond with only a number between 1-100 representing the relevance score.`;
     }
   });
 
+  // Transcribe audio and generate SOAP sections (Enhanced SOAP Notes)
+  app.post("/api/soap-notes/transcribe-and-generate", ensureAuthenticated, upload.single('audio'), async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const audioFile = req.file;
+      const sessionId = req.body.sessionId;
+
+      if (!audioFile) {
+        return res.status(400).json({ error: 'Audio file is required' });
+      }
+
+      // Create or get session for this recording
+      const session = await soapNotesService.createSession(userId, sessionId);
+
+      // Process the audio file - transcribe and generate SOAP sections
+      const result = await soapNotesService.processAudioForSession(
+        session.sessionId,
+        audioFile.buffer,
+        audioFile.originalname
+      );
+
+      // Return transcript and SOAP sections
+      res.json({
+        transcript: result.fullTranscription,
+        soapSections: {
+          subjective: result.subjective,
+          objective: result.objective,
+          assessment: result.assessment,
+          plan: result.plan
+        },
+        confidence: result.confidence,
+        sessionId: result.sessionId
+      });
+
+    } catch (error: any) {
+      console.error("Error transcribing and generating SOAP:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // ============================================================================
   // VIRTUAL PATIENT API ROUTES (From SOAP Notes)
   // ============================================================================

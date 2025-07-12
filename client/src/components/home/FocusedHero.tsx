@@ -117,20 +117,20 @@ const FocusedHero = () => {
             </CardContent>
           </Card>
 
-          {/* PhysioGPT */}
-          <Card className="bg-white/10 border-white/20 text-white backdrop-blur-sm group hover:bg-white/15 transition-all duration-300">
+          {/* PhysioGPT - Enhanced */}
+          <Card className="bg-white/15 border-white/30 text-white backdrop-blur-sm group hover:bg-white/20 transition-all duration-300 ring-2 ring-emerald-400/30">
             <CardHeader className="pb-3">
-              <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center mb-3">
-                <Brain className="h-5 w-5" />
+              <div className="w-12 h-12 rounded-lg bg-emerald-400/30 flex items-center justify-center mb-3">
+                <Brain className="h-6 w-6" />
               </div>
-              <CardTitle className="text-lg">PhysioGPT</CardTitle>
-              <CardDescription className="text-white/70">
-                Instant clinical consultation with AI expertise
+              <CardTitle className="text-xl font-bold">PhysioGPT</CardTitle>
+              <CardDescription className="text-emerald-100 font-medium">
+                🧠 Instant AI Clinical Consultation
               </CardDescription>
             </CardHeader>
             <CardContent>
               <Link href="/physiogpt">
-                <Button variant="secondary" size="sm" className="w-full group-hover:scale-105 transition-transform">
+                <Button variant="secondary" size="sm" className="w-full group-hover:scale-105 transition-transform bg-emerald-500 hover:bg-emerald-400 text-white font-semibold">
                   Ask PhysioGPT
                 </Button>
               </Link>

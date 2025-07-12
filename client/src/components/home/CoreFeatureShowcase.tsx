@@ -236,9 +236,62 @@ const CoreFeatureShowcase = () => {
           {mainFeature && <MainFeatureCard feature={mainFeature} />}
         </div>
 
+        {/* PhysioGPT - Secondary Feature */}
+        <div className="mb-12">
+          {(() => {
+            const physioGPTFeature = otherFeatures.find(f => f.id === "physiogpt");
+            if (!physioGPTFeature) return null;
+            
+            return (
+              <Card className="border-none shadow-xl overflow-hidden">
+                <div className="grid md:grid-cols-3 gap-0">
+                  <div className={`bg-gradient-to-br ${physioGPTFeature.bgGradient} text-white p-8 md:p-10 md:col-span-2`}>
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-14 h-14 rounded-xl bg-white/20 flex items-center justify-center">
+                        {physioGPTFeature.icon}
+                      </div>
+                      <div>
+                        <h3 className="text-2xl md:text-3xl font-bold">{physioGPTFeature.title}</h3>
+                        <p className="text-white/80">{physioGPTFeature.subtitle}</p>
+                      </div>
+                    </div>
+                    <p className="text-lg text-white/90 mb-6 leading-relaxed">
+                      {physioGPTFeature.description}
+                    </p>
+                    <Link href={physioGPTFeature.primaryAction.href}>
+                      <Button size="lg" variant="secondary" className="group">
+                        {physioGPTFeature.primaryAction.icon}
+                        <span className="ml-2">{physioGPTFeature.primaryAction.text}</span>
+                        <ArrowRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                      </Button>
+                    </Link>
+                  </div>
+                  <div className="bg-gray-50 p-8 md:p-10 flex items-center justify-center">
+                    <div className="text-center">
+                      <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-emerald-100 flex items-center justify-center">
+                        <Brain className="h-12 w-12 text-emerald-600" />
+                      </div>
+                      <div className="space-y-3 text-sm">
+                        {physioGPTFeature.keyFeatures.map((keyFeature, index) => (
+                          <div key={index} className="flex items-center gap-2 justify-center">
+                            <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                              <div className="w-2 h-2 rounded-full bg-emerald-600"></div>
+                            </div>
+                            <span className="text-foreground/80 text-center">{keyFeature}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            );
+          })()}
+        </div>
+
         {/* Other Core Features */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {otherFeatures.map((feature) => (
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {otherFeatures.filter(f => f.id !== "physiogpt").map((feature) => (
             <FeatureCard key={feature.id} feature={feature} />
           ))}
         </div>

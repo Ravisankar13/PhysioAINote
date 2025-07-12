@@ -1048,9 +1048,7 @@ function TournamentCard({ tournament }: { tournament: Tournament }) {
 
   const registerMutation = useMutation({
     mutationFn: async (tournamentId: number) => {
-      return await apiRequest(`/api/tournaments/${tournamentId}/register`, {
-        method: 'POST',
-      });
+      return await apiRequest('POST', `/api/tournaments/${tournamentId}/register`, {});
     },
     onSuccess: () => {
       toast({
@@ -1897,10 +1895,19 @@ export default function CompetitionPage() {
                                       </div>
                                     ))}
                                   </div>
+                                ) : tournament.content ? (
+                                  <div className="text-center py-4">
+                                    <p className="text-muted-foreground mb-4">Content structure needs to be processed</p>
+                                    <details className="text-left">
+                                      <summary className="cursor-pointer text-sm font-medium text-blue-600 mb-2">View Raw Content</summary>
+                                      <div className="bg-gray-50 p-4 rounded border text-xs overflow-auto max-h-96">
+                                        <pre>{JSON.stringify(tournament.content, null, 2)}</pre>
+                                      </div>
+                                    </details>
+                                  </div>
                                 ) : (
                                   <div className="text-center py-4 text-muted-foreground">
-                                    <p>Tournament content structure not available</p>
-                                    <pre className="text-xs mt-2 text-left">{JSON.stringify(tournament.content, null, 2)}</pre>
+                                    <p>No tournament content available</p>
                                   </div>
                                 )}
                               </CardContent>

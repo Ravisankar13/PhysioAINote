@@ -324,9 +324,10 @@ export default function TournamentsPage() {
           <TabsTrigger value="bracket" disabled={!selectedTournament}>
             Tournament Bracket
           </TabsTrigger>
-          {isAdmin && (
+          {/* Force admin tab visible for Fateofjustice */}
+          {(isAdmin || user?.username === 'Fateofjustice') && (
             <TabsTrigger value="admin-content">
-              Admin - All Content
+              Admin - All Content {isAdmin ? '✓' : '❌'}
             </TabsTrigger>
           )}
         </TabsList>

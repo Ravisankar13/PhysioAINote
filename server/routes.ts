@@ -9755,39 +9755,69 @@ Respond in JSON format:
                     roundNumber: 1,
                     difficulty: "easy",
                     timePerQuestion: 10,
-                    questions: Array.from({length: 15}, (_, i) => ({
-                      id: i + 1,
-                      scenario: `Clinical case ${i + 1} - Easy difficulty shoulder pain presentation`,
-                      correctDiagnosis: `Shoulder Impingement Syndrome`,
-                      bodyPart: "shoulder",
-                      timeLimit: 10
-                    }))
+                    questions: [
+                      { id: 1, scenario: "45-year-old swimmer presents with gradual onset anterior shoulder pain worsened by overhead activities", correctDiagnosis: "Shoulder Impingement Syndrome", bodyPart: "shoulder", timeLimit: 10 },
+                      { id: 2, scenario: "32-year-old tennis player reports deep aching shoulder pain after serving", correctDiagnosis: "Rotator Cuff Strain", bodyPart: "shoulder", timeLimit: 10 },
+                      { id: 3, scenario: "58-year-old office worker with insidious onset shoulder stiffness and night pain", correctDiagnosis: "Adhesive Capsulitis", bodyPart: "shoulder", timeLimit: 10 },
+                      { id: 4, scenario: "28-year-old weightlifter with sharp anterior shoulder pain during bench press", correctDiagnosis: "Biceps Tendinopathy", bodyPart: "shoulder", timeLimit: 10 },
+                      { id: 5, scenario: "42-year-old painter with lateral shoulder pain radiating down arm", correctDiagnosis: "Subacromial Bursitis", bodyPart: "shoulder", timeLimit: 10 },
+                      { id: 6, scenario: "35-year-old baseball pitcher with posterior shoulder tightness", correctDiagnosis: "Posterior Capsule Tightness", bodyPart: "shoulder", timeLimit: 10 },
+                      { id: 7, scenario: "50-year-old construction worker unable to reach behind back", correctDiagnosis: "Internal Rotation Deficit", bodyPart: "shoulder", timeLimit: 10 },
+                      { id: 8, scenario: "26-year-old swimmer with clicking sensation during arm circles", correctDiagnosis: "Labral Irritation", bodyPart: "shoulder", timeLimit: 10 },
+                      { id: 9, scenario: "39-year-old yoga instructor with anterior shoulder instability", correctDiagnosis: "Anterior Shoulder Instability", bodyPart: "shoulder", timeLimit: 10 },
+                      { id: 10, scenario: "55-year-old gardener with progressive weakness lifting objects overhead", correctDiagnosis: "Rotator Cuff Weakness", bodyPart: "shoulder", timeLimit: 10 },
+                      { id: 11, scenario: "33-year-old rock climber with superior shoulder pain during pull-ups", correctDiagnosis: "Superior Labral Tear", bodyPart: "shoulder", timeLimit: 10 },
+                      { id: 12, scenario: "47-year-old nurse with burning shoulder pain after long shifts", correctDiagnosis: "Myofascial Pain Syndrome", bodyPart: "shoulder", timeLimit: 10 },
+                      { id: 13, scenario: "29-year-old volleyball player with shoulder pain during spiking", correctDiagnosis: "Posterior Impingement", bodyPart: "shoulder", timeLimit: 10 },
+                      { id: 14, scenario: "41-year-old mechanic with chronic anterior shoulder ache", correctDiagnosis: "Chronic Impingement", bodyPart: "shoulder", timeLimit: 10 },
+                      { id: 15, scenario: "36-year-old golfer with shoulder pain at top of backswing", correctDiagnosis: "Golf-Related Shoulder Strain", bodyPart: "shoulder", timeLimit: 10 }
+                    ]
                   },
                   {
                     name: "Round 2 - Medium", 
                     roundNumber: 2,
                     difficulty: "medium",
                     timePerQuestion: 10,
-                    questions: Array.from({length: 15}, (_, i) => ({
-                      id: i + 16,
-                      scenario: `Clinical case ${i + 16} - Medium difficulty knee pain presentation`,
-                      correctDiagnosis: `Patellofemoral Pain Syndrome`,
-                      bodyPart: "knee",
-                      timeLimit: 10
-                    }))
+                    questions: [
+                      { id: 16, scenario: "25-year-old runner with anterior knee pain during downhill running", correctDiagnosis: "Patellofemoral Pain Syndrome", bodyPart: "knee", timeLimit: 10 },
+                      { id: 17, scenario: "19-year-old soccer player with medial knee pain after tackle", correctDiagnosis: "MCL Sprain", bodyPart: "knee", timeLimit: 10 },
+                      { id: 18, scenario: "45-year-old hiker with lateral knee pain on uneven terrain", correctDiagnosis: "IT Band Syndrome", bodyPart: "knee", timeLimit: 10 },
+                      { id: 19, scenario: "32-year-old basketball player with knee instability and popping", correctDiagnosis: "ACL Injury", bodyPart: "knee", timeLimit: 10 },
+                      { id: 20, scenario: "38-year-old cyclist with posterior knee pain during pedaling", correctDiagnosis: "Popliteal Cyst", bodyPart: "knee", timeLimit: 10 },
+                      { id: 21, scenario: "22-year-old dancer with medial knee pain during grand pliés", correctDiagnosis: "Medial Meniscus Tear", bodyPart: "knee", timeLimit: 10 },
+                      { id: 22, scenario: "41-year-old tennis player with lateral knee pain during pivoting", correctDiagnosis: "Lateral Meniscus Injury", bodyPart: "knee", timeLimit: 10 },
+                      { id: 23, scenario: "28-year-old weightlifter with anterior knee pain below patella", correctDiagnosis: "Patellar Tendinopathy", bodyPart: "knee", timeLimit: 10 },
+                      { id: 24, scenario: "35-year-old marathon runner with diffuse knee aching", correctDiagnosis: "Knee Osteoarthritis", bodyPart: "knee", timeLimit: 10 },
+                      { id: 25, scenario: "16-year-old athlete with knee pain during growth spurt", correctDiagnosis: "Osgood-Schlatter Disease", bodyPart: "knee", timeLimit: 10 },
+                      { id: 26, scenario: "43-year-old office worker with knee stiffness after sitting", correctDiagnosis: "Patellofemoral Arthritis", bodyPart: "knee", timeLimit: 10 },
+                      { id: 27, scenario: "29-year-old skier with knee pain after fall on slopes", correctDiagnosis: "LCL Sprain", bodyPart: "knee", timeLimit: 10 },
+                      { id: 28, scenario: "37-year-old jogger with medial knee pain on inclines", correctDiagnosis: "Pes Anserine Bursitis", bodyPart: "knee", timeLimit: 10 },
+                      { id: 29, scenario: "24-year-old volleyball player with knee pain during jumping", correctDiagnosis: "Jumper's Knee", bodyPart: "knee", timeLimit: 10 },
+                      { id: 30, scenario: "46-year-old gardener with knee pain when kneeling", correctDiagnosis: "Prepatellar Bursitis", bodyPart: "knee", timeLimit: 10 }
+                    ]
                   },
                   {
                     name: "Round 3 - Hard",
                     roundNumber: 3,
                     difficulty: "hard", 
                     timePerQuestion: 10,
-                    questions: Array.from({length: 15}, (_, i) => ({
-                      id: i + 31,
-                      scenario: `Clinical case ${i + 31} - Hard difficulty lower back pain presentation`,
-                      correctDiagnosis: `Lumbar Disc Herniation`,
-                      bodyPart: "back",
-                      timeLimit: 10
-                    }))
+                    questions: [
+                      { id: 31, scenario: "52-year-old office worker with radiating leg pain and positive straight leg raise", correctDiagnosis: "Lumbar Disc Herniation", bodyPart: "back", timeLimit: 10 },
+                      { id: 32, scenario: "67-year-old retiree with bilateral leg claudication and neurogenic symptoms", correctDiagnosis: "Spinal Stenosis", bodyPart: "back", timeLimit: 10 },
+                      { id: 33, scenario: "34-year-old weightlifter with acute onset severe lower back pain", correctDiagnosis: "Acute Lumbar Strain", bodyPart: "back", timeLimit: 10 },
+                      { id: 34, scenario: "45-year-old nurse with chronic lower back pain and morning stiffness", correctDiagnosis: "Lumbar Spondylosis", bodyPart: "back", timeLimit: 10 },
+                      { id: 35, scenario: "28-year-old dancer with unilateral lower back pain and muscle spasm", correctDiagnosis: "Sacroiliac Joint Dysfunction", bodyPart: "back", timeLimit: 10 },
+                      { id: 36, scenario: "58-year-old carpenter with burning pain down posterior thigh", correctDiagnosis: "Sciatica", bodyPart: "back", timeLimit: 10 },
+                      { id: 37, scenario: "41-year-old truck driver with deep aching back pain after long drives", correctDiagnosis: "Lumbar Facet Joint Syndrome", bodyPart: "back", timeLimit: 10 },
+                      { id: 38, scenario: "36-year-old gymnast with localized back pain and point tenderness", correctDiagnosis: "Spondylolysis", bodyPart: "back", timeLimit: 10 },
+                      { id: 39, scenario: "49-year-old gardener with sharp back pain radiating to groin", correctDiagnosis: "L1-L2 Disc Protrusion", bodyPart: "back", timeLimit: 10 },
+                      { id: 40, scenario: "31-year-old CrossFit athlete with central back pain and muscle guarding", correctDiagnosis: "Lumbar Muscle Strain", bodyPart: "back", timeLimit: 10 },
+                      { id: 41, scenario: "55-year-old factory worker with chronic back pain and leg numbness", correctDiagnosis: "Lumbar Radiculopathy", bodyPart: "back", timeLimit: 10 },
+                      { id: 42, scenario: "26-year-old soccer player with back pain during hyperextension", correctDiagnosis: "Spondylolisthesis", bodyPart: "back", timeLimit: 10 },
+                      { id: 43, scenario: "63-year-old with back pain, fever, and recent infection history", correctDiagnosis: "Spinal Infection", bodyPart: "back", timeLimit: 10 },
+                      { id: 44, scenario: "39-year-old with sudden severe back pain and bowel/bladder changes", correctDiagnosis: "Cauda Equina Syndrome", bodyPart: "back", timeLimit: 10 },
+                      { id: 45, scenario: "47-year-old with chronic back pain and widespread muscle tenderness", correctDiagnosis: "Fibromyalgia", bodyPart: "back", timeLimit: 10 }
+                    ]
                   }
                 ]
               }
@@ -9806,39 +9836,69 @@ Respond in JSON format:
                     roundNumber: 1,
                     difficulty: "easy",
                     timePerQuestion: 10,
-                    questions: Array.from({length: 15}, (_, i) => ({
-                      id: i + 46,
-                      scenario: `Clinical case ${i + 46} - Easy difficulty ankle pain presentation`,
-                      correctDiagnosis: `Ankle Sprain`,
-                      bodyPart: "ankle",
-                      timeLimit: 10
-                    }))
+                    questions: [
+                      { id: 46, scenario: "24-year-old basketball player with lateral ankle pain after landing awkwardly", correctDiagnosis: "Lateral Ankle Sprain", bodyPart: "ankle", timeLimit: 10 },
+                      { id: 47, scenario: "32-year-old hiker with medial ankle pain and swelling", correctDiagnosis: "Medial Ankle Sprain", bodyPart: "ankle", timeLimit: 10 },
+                      { id: 48, scenario: "28-year-old runner with chronic lateral ankle instability", correctDiagnosis: "Chronic Ankle Instability", bodyPart: "ankle", timeLimit: 10 },
+                      { id: 49, scenario: "35-year-old soccer player with high ankle pain after tackle", correctDiagnosis: "Syndesmosis Sprain", bodyPart: "ankle", timeLimit: 10 },
+                      { id: 50, scenario: "42-year-old with deep posterior ankle pain during plantarflexion", correctDiagnosis: "Posterior Impingement", bodyPart: "ankle", timeLimit: 10 },
+                      { id: 51, scenario: "26-year-old dancer with anterior ankle pain during dorsiflexion", correctDiagnosis: "Anterior Impingement", bodyPart: "ankle", timeLimit: 10 },
+                      { id: 52, scenario: "38-year-old with medial ankle pain and arch collapse", correctDiagnosis: "Posterior Tibial Tendinopathy", bodyPart: "ankle", timeLimit: 10 },
+                      { id: 53, scenario: "31-year-old runner with lateral ankle pain over fibula", correctDiagnosis: "Peroneal Tendinopathy", bodyPart: "ankle", timeLimit: 10 },
+                      { id: 54, scenario: "45-year-old with anterior ankle pain and morning stiffness", correctDiagnosis: "Ankle Osteoarthritis", bodyPart: "ankle", timeLimit: 10 },
+                      { id: 55, scenario: "29-year-old gymnast with posteromedial ankle pain", correctDiagnosis: "Flexor Hallucis Longus Tendinopathy", bodyPart: "ankle", timeLimit: 10 },
+                      { id: 56, scenario: "33-year-old with ankle pain and clicking during movement", correctDiagnosis: "Osteochondral Lesion", bodyPart: "ankle", timeLimit: 10 },
+                      { id: 57, scenario: "27-year-old surfer with chronic ankle stiffness", correctDiagnosis: "Ankle Joint Restriction", bodyPart: "ankle", timeLimit: 10 },
+                      { id: 58, scenario: "36-year-old with lateral ankle pain radiating up leg", correctDiagnosis: "Sural Nerve Entrapment", bodyPart: "ankle", timeLimit: 10 },
+                      { id: 59, scenario: "41-year-old with medial ankle numbness and tingling", correctDiagnosis: "Tarsal Tunnel Syndrome", bodyPart: "ankle", timeLimit: 10 },
+                      { id: 60, scenario: "30-year-old with recurrent ankle giving way episodes", correctDiagnosis: "Functional Ankle Instability", bodyPart: "ankle", timeLimit: 10 }
+                    ]
                   },
                   {
                     name: "Round 2 - Medium",
                     roundNumber: 2,
                     difficulty: "medium",
                     timePerQuestion: 10,
-                    questions: Array.from({length: 15}, (_, i) => ({
-                      id: i + 61,
-                      scenario: `Clinical case ${i + 61} - Medium difficulty hip pain presentation`,
-                      correctDiagnosis: `Hip Osteoarthritis`,
-                      bodyPart: "hip",
-                      timeLimit: 10
-                    }))
+                    questions: [
+                      { id: 61, scenario: "55-year-old with deep groin pain and morning stiffness", correctDiagnosis: "Hip Osteoarthritis", bodyPart: "hip", timeLimit: 10 },
+                      { id: 62, scenario: "28-year-old runner with lateral hip pain during running", correctDiagnosis: "Greater Trochanteric Bursitis", bodyPart: "hip", timeLimit: 10 },
+                      { id: 63, scenario: "22-year-old dancer with anterior hip pain during high kicks", correctDiagnosis: "Hip Impingement", bodyPart: "hip", timeLimit: 10 },
+                      { id: 64, scenario: "35-year-old with clicking hip and catching sensation", correctDiagnosis: "Labral Tear", bodyPart: "hip", timeLimit: 10 },
+                      { id: 65, scenario: "45-year-old with deep buttock pain radiating down leg", correctDiagnosis: "Piriformis Syndrome", bodyPart: "hip", timeLimit: 10 },
+                      { id: 66, scenario: "19-year-old athlete with groin pain during sprinting", correctDiagnosis: "Adductor Strain", bodyPart: "hip", timeLimit: 10 },
+                      { id: 67, scenario: "42-year-old with lateral hip pain lying on affected side", correctDiagnosis: "Iliotibial Band Syndrome", bodyPart: "hip", timeLimit: 10 },
+                      { id: 68, scenario: "31-year-old with anterior hip pain and limited flexion", correctDiagnosis: "Hip Flexor Strain", bodyPart: "hip", timeLimit: 10 },
+                      { id: 69, scenario: "48-year-old with posterior hip pain and stiffness", correctDiagnosis: "Sacroiliac Joint Dysfunction", bodyPart: "hip", timeLimit: 10 },
+                      { id: 70, scenario: "26-year-old with sharp groin pain during kicking", correctDiagnosis: "Sports Hernia", bodyPart: "hip", timeLimit: 10 },
+                      { id: 71, scenario: "38-year-old with hip pain and giving way episodes", correctDiagnosis: "Hip Instability", bodyPart: "hip", timeLimit: 10 },
+                      { id: 72, scenario: "52-year-old with progressive hip pain and limping", correctDiagnosis: "Avascular Necrosis", bodyPart: "hip", timeLimit: 10 },
+                      { id: 73, scenario: "29-year-old with lateral hip numbness and tingling", correctDiagnosis: "Meralgia Paresthetica", bodyPart: "hip", timeLimit: 10 },
+                      { id: 74, scenario: "41-year-old with deep hip ache and night pain", correctDiagnosis: "Hip Capsulitis", bodyPart: "hip", timeLimit: 10 },
+                      { id: 75, scenario: "33-year-old with hip pain radiating to knee", correctDiagnosis: "Referred Hip Pain", bodyPart: "hip", timeLimit: 10 }
+                    ]
                   },
                   {
                     name: "Round 3 - Hard",
                     roundNumber: 3,
                     difficulty: "hard",
                     timePerQuestion: 10,
-                    questions: Array.from({length: 15}, (_, i) => ({
-                      id: i + 76,
-                      scenario: `Clinical case ${i + 76} - Hard difficulty cervical spine presentation`,
-                      correctDiagnosis: `Cervical Radiculopathy`,
-                      bodyPart: "neck",
-                      timeLimit: 10
-                    }))
+                    questions: [
+                      { id: 76, scenario: "47-year-old with neck pain radiating down arm with numbness", correctDiagnosis: "Cervical Radiculopathy", bodyPart: "neck", timeLimit: 10 },
+                      { id: 77, scenario: "34-year-old office worker with chronic neck stiffness and headaches", correctDiagnosis: "Cervical Spondylosis", bodyPart: "neck", timeLimit: 10 },
+                      { id: 78, scenario: "28-year-old after car accident with neck pain and muscle spasm", correctDiagnosis: "Whiplash Associated Disorder", bodyPart: "neck", timeLimit: 10 },
+                      { id: 79, scenario: "52-year-old with neck pain and bilateral arm symptoms", correctDiagnosis: "Cervical Myelopathy", bodyPart: "neck", timeLimit: 10 },
+                      { id: 80, scenario: "39-year-old with unilateral neck pain and restricted rotation", correctDiagnosis: "Cervical Facet Joint Dysfunction", bodyPart: "neck", timeLimit: 10 },
+                      { id: 81, scenario: "45-year-old with neck pain and frequent headaches", correctDiagnosis: "Cervicogenic Headache", bodyPart: "neck", timeLimit: 10 },
+                      { id: 82, scenario: "31-year-old with neck pain and shoulder blade symptoms", correctDiagnosis: "Cervical Disc Herniation", bodyPart: "neck", timeLimit: 10 },
+                      { id: 83, scenario: "56-year-old with progressive neck stiffness and arm weakness", correctDiagnosis: "Cervical Stenosis", bodyPart: "neck", timeLimit: 10 },
+                      { id: 84, scenario: "27-year-old athlete with acute neck pain after tackle", correctDiagnosis: "Acute Cervical Strain", bodyPart: "neck", timeLimit: 10 },
+                      { id: 85, scenario: "42-year-old with chronic neck pain and muscle trigger points", correctDiagnosis: "Myofascial Pain Syndrome", bodyPart: "neck", timeLimit: 10 },
+                      { id: 86, scenario: "36-year-old with neck pain and upper limb neural symptoms", correctDiagnosis: "Thoracic Outlet Syndrome", bodyPart: "neck", timeLimit: 10 },
+                      { id: 87, scenario: "49-year-old with neck pain worse in morning", correctDiagnosis: "Cervical Osteoarthritis", bodyPart: "neck", timeLimit: 10 },
+                      { id: 88, scenario: "33-year-old with neck pain and dizziness episodes", correctDiagnosis: "Cervical Vertigo", bodyPart: "neck", timeLimit: 10 },
+                      { id: 89, scenario: "44-year-old with neck pain and clicking sounds", correctDiagnosis: "Cervical Joint Dysfunction", bodyPart: "neck", timeLimit: 10 },
+                      { id: 90, scenario: "38-year-old with neck pain radiating to temporal region", correctDiagnosis: "Upper Cervical Dysfunction", bodyPart: "neck", timeLimit: 10 }
+                    ]
                   }
                 ]
               }
@@ -9857,39 +9917,69 @@ Respond in JSON format:
                     roundNumber: 1,
                     difficulty: "easy",
                     timePerQuestion: 10,
-                    questions: Array.from({length: 15}, (_, i) => ({
-                      id: i + 91,
-                      scenario: `Clinical case ${i + 91} - Easy difficulty wrist pain presentation`,
-                      correctDiagnosis: `Carpal Tunnel Syndrome`,
-                      bodyPart: "wrist",
-                      timeLimit: 10
-                    }))
+                    questions: [
+                      { id: 91, scenario: "35-year-old office worker with numbness in thumb and index finger", correctDiagnosis: "Carpal Tunnel Syndrome", bodyPart: "wrist", timeLimit: 10 },
+                      { id: 92, scenario: "28-year-old hairdresser with pain over thumb side of wrist", correctDiagnosis: "De Quervain's Tenosynovitis", bodyPart: "wrist", timeLimit: 10 },
+                      { id: 93, scenario: "42-year-old construction worker with dorsal wrist pain", correctDiagnosis: "Wrist Extensor Tendinopathy", bodyPart: "wrist", timeLimit: 10 },
+                      { id: 94, scenario: "31-year-old gymnast with ulnar-sided wrist pain", correctDiagnosis: "TFCC Tear", bodyPart: "wrist", timeLimit: 10 },
+                      { id: 95, scenario: "39-year-old with wrist pain after fall on outstretched hand", correctDiagnosis: "Scaphoid Fracture", bodyPart: "wrist", timeLimit: 10 },
+                      { id: 96, scenario: "26-year-old rock climber with chronic wrist stiffness", correctDiagnosis: "Wrist Arthritis", bodyPart: "wrist", timeLimit: 10 },
+                      { id: 97, scenario: "45-year-old with painful clicking on ulnar side of wrist", correctDiagnosis: "ECU Tendinopathy", bodyPart: "wrist", timeLimit: 10 },
+                      { id: 98, scenario: "33-year-old violinist with radial wrist pain", correctDiagnosis: "Intersection Syndrome", bodyPart: "wrist", timeLimit: 10 },
+                      { id: 99, scenario: "47-year-old with dorsal wrist ganglion and discomfort", correctDiagnosis: "Ganglion Cyst", bodyPart: "wrist", timeLimit: 10 },
+                      { id: 100, scenario: "29-year-old with wrist pain and morning stiffness", correctDiagnosis: "Rheumatoid Arthritis", bodyPart: "wrist", timeLimit: 10 },
+                      { id: 101, scenario: "38-year-old with median nerve compression symptoms", correctDiagnosis: "Pronator Teres Syndrome", bodyPart: "wrist", timeLimit: 10 },
+                      { id: 102, scenario: "24-year-old with ulnar nerve tingling in little finger", correctDiagnosis: "Ulnar Tunnel Syndrome", bodyPart: "wrist", timeLimit: 10 },
+                      { id: 103, scenario: "41-year-old with radial nerve pain over dorsal wrist", correctDiagnosis: "Radial Tunnel Syndrome", bodyPart: "wrist", timeLimit: 10 },
+                      { id: 104, scenario: "36-year-old with volar wrist pain and flexor symptoms", correctDiagnosis: "Flexor Carpi Radialis Tendinopathy", bodyPart: "wrist", timeLimit: 10 },
+                      { id: 105, scenario: "32-year-old with chronic wrist instability after injury", correctDiagnosis: "Scapholunate Ligament Injury", bodyPart: "wrist", timeLimit: 10 }
+                    ]
                   },
                   {
                     name: "Round 2 - Medium",
                     roundNumber: 2,
                     difficulty: "medium",
                     timePerQuestion: 10,
-                    questions: Array.from({length: 15}, (_, i) => ({
-                      id: i + 106,
-                      scenario: `Clinical case ${i + 106} - Medium difficulty elbow pain presentation`,
-                      correctDiagnosis: `Lateral Epicondylitis`,
-                      bodyPart: "elbow",
-                      timeLimit: 10
-                    }))
+                    questions: [
+                      { id: 106, scenario: "38-year-old tennis player with lateral elbow pain during backhand", correctDiagnosis: "Lateral Epicondylitis", bodyPart: "elbow", timeLimit: 10 },
+                      { id: 107, scenario: "32-year-old golfer with medial elbow pain during swing", correctDiagnosis: "Medial Epicondylitis", bodyPart: "elbow", timeLimit: 10 },
+                      { id: 108, scenario: "29-year-old baseball pitcher with posterior elbow pain", correctDiagnosis: "Olecranon Impingement", bodyPart: "elbow", timeLimit: 10 },
+                      { id: 109, scenario: "25-year-old gymnast with elbow locking and catching", correctDiagnosis: "Loose Body in Elbow", bodyPart: "elbow", timeLimit: 10 },
+                      { id: 110, scenario: "41-year-old with ulnar nerve tingling in ring and little fingers", correctDiagnosis: "Cubital Tunnel Syndrome", bodyPart: "elbow", timeLimit: 10 },
+                      { id: 111, scenario: "35-year-old weightlifter with anterior elbow pain", correctDiagnosis: "Biceps Tendinopathy", bodyPart: "elbow", timeLimit: 10 },
+                      { id: 112, scenario: "27-year-old with elbow instability after dislocation", correctDiagnosis: "Elbow Instability", bodyPart: "elbow", timeLimit: 10 },
+                      { id: 113, scenario: "44-year-old with progressive elbow stiffness", correctDiagnosis: "Elbow Arthritis", bodyPart: "elbow", timeLimit: 10 },
+                      { id: 114, scenario: "19-year-old baseball player with medial elbow instability", correctDiagnosis: "UCL Injury", bodyPart: "elbow", timeLimit: 10 },
+                      { id: 115, scenario: "36-year-old with posterior elbow swelling and pain", correctDiagnosis: "Olecranon Bursitis", bodyPart: "elbow", timeLimit: 10 },
+                      { id: 116, scenario: "31-year-old with radiating pain from lateral elbow", correctDiagnosis: "Radial Tunnel Syndrome", bodyPart: "elbow", timeLimit: 10 },
+                      { id: 117, scenario: "28-year-old with elbow pain after repetitive gripping", correctDiagnosis: "Flexor-Pronator Strain", bodyPart: "elbow", timeLimit: 10 },
+                      { id: 118, scenario: "42-year-old with chronic elbow pain and weakness", correctDiagnosis: "Triceps Tendinopathy", bodyPart: "elbow", timeLimit: 10 },
+                      { id: 119, scenario: "33-year-old with elbow pain and morning stiffness", correctDiagnosis: "Elbow Capsulitis", bodyPart: "elbow", timeLimit: 10 },
+                      { id: 120, scenario: "37-year-old with clicking elbow and range limitations", correctDiagnosis: "Elbow Impingement", bodyPart: "elbow", timeLimit: 10 }
+                    ]
                   },
                   {
                     name: "Round 3 - Hard",
                     roundNumber: 3,
                     difficulty: "hard",
                     timePerQuestion: 10,
-                    questions: Array.from({length: 15}, (_, i) => ({
-                      id: i + 121,
-                      scenario: `Clinical case ${i + 121} - Hard difficulty foot pain presentation`,
-                      correctDiagnosis: `Plantar Fasciitis with Heel Spur`,
-                      bodyPart: "foot",
-                      timeLimit: 10
-                    }))
+                    questions: [
+                      { id: 121, scenario: "45-year-old runner with heel pain worse in morning", correctDiagnosis: "Plantar Fasciitis", bodyPart: "foot", timeLimit: 10 },
+                      { id: 122, scenario: "52-year-old with burning pain between 3rd and 4th toes", correctDiagnosis: "Morton's Neuroma", bodyPart: "foot", timeLimit: 10 },
+                      { id: 123, scenario: "28-year-old dancer with medial arch pain and swelling", correctDiagnosis: "Posterior Tibial Tendinopathy", bodyPart: "foot", timeLimit: 10 },
+                      { id: 124, scenario: "35-year-old with lateral foot pain after ankle sprain", correctDiagnosis: "Peroneal Tendinopathy", bodyPart: "foot", timeLimit: 10 },
+                      { id: 125, scenario: "41-year-old with pain over 2nd metatarsal head", correctDiagnosis: "Metatarsalgia", bodyPart: "foot", timeLimit: 10 },
+                      { id: 126, scenario: "19-year-old basketball player with 5th metatarsal pain", correctDiagnosis: "Jones Fracture", bodyPart: "foot", timeLimit: 10 },
+                      { id: 127, scenario: "48-year-old with big toe pain and limited motion", correctDiagnosis: "Hallux Rigidus", bodyPart: "foot", timeLimit: 10 },
+                      { id: 128, scenario: "33-year-old with medial heel numbness and tingling", correctDiagnosis: "Tarsal Tunnel Syndrome", bodyPart: "foot", timeLimit: 10 },
+                      { id: 129, scenario: "39-year-old with dorsal foot pain and swelling", correctDiagnosis: "Extensor Tendinopathy", bodyPart: "foot", timeLimit: 10 },
+                      { id: 130, scenario: "26-year-old with lateral foot pain and instability", correctDiagnosis: "Cuboid Syndrome", bodyPart: "foot", timeLimit: 10 },
+                      { id: 131, scenario: "44-year-old with progressive big toe deviation", correctDiagnosis: "Hallux Valgus", bodyPart: "foot", timeLimit: 10 },
+                      { id: 132, scenario: "31-year-old with deep foot ache and arch collapse", correctDiagnosis: "Flat Foot Deformity", bodyPart: "foot", timeLimit: 10 },
+                      { id: 133, scenario: "37-year-old with heel pain radiating to calf", correctDiagnosis: "Calcaneal Stress Fracture", bodyPart: "foot", timeLimit: 10 },
+                      { id: 134, scenario: "42-year-old with toe pain and joint swelling", correctDiagnosis: "Gout", bodyPart: "foot", timeLimit: 10 },
+                      { id: 135, scenario: "29-year-old with midfoot pain after twisting injury", correctDiagnosis: "Lisfranc Injury", bodyPart: "foot", timeLimit: 10 }
+                    ]
                   }
                 ]
               }

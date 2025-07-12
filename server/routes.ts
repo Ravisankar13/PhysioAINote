@@ -7078,6 +7078,22 @@ Respond with only a number between 1-100 representing the relevance score.`;
     }
   });
 
+  // Create 5 Diagnosis Duel tournaments with proper scheduling
+  app.post("/api/create-diagnosis-duel-tournaments", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { createDiagnosisDuelTournaments } = await import('./createDiagnosisDuelTournaments');
+      const tournaments = await createDiagnosisDuelTournaments();
+      res.json({ 
+        success: true, 
+        message: "Successfully created 5 Diagnosis Duel tournaments",
+        tournaments: tournaments 
+      });
+    } catch (error: any) {
+      console.error("Error creating Diagnosis Duel tournaments:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Competition Scheduler Management Routes
   
   // Manual trigger for scheduler (admin only)

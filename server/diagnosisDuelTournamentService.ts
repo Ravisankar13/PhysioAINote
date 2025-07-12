@@ -251,14 +251,28 @@ export class DiagnosisDuelTournamentService {
   ): Promise<TournamentMatch[]> {
     const matches: InsertTournamentMatch[] = [];
     
-    // Get pre-generated tournament Lightning Diagnosis content
+    // Map tournament IDs to their corresponding competition IDs
+    const tournamentCompetitionMapping: { [key: number]: number } = {
+      3: 107, // Tournament 1 -> Competition 107
+      4: 118, // Tournament 2 -> Competition 118
+      5: 119, // Tournament 3 -> Competition 119
+      6: 120, // Tournament 4 -> Competition 120
+      7: 121  // Tournament 5 -> Competition 121
+    };
+
+    const competitionId = tournamentCompetitionMapping[tournamentId];
+    if (!competitionId) {
+      throw new Error(`No competition mapping found for tournament ${tournamentId}`);
+    }
+
+    // Get tournament Lightning Diagnosis content for the specific tournament
     const [existingContent] = await db
       .select()
       .from(gameContent)
-      .where(eq(gameContent.id, 103)); // Tournament content game content ID
+      .where(eq(gameContent.competitionId, competitionId));
     
     if (!existingContent) {
-      throw new Error('Tournament content not found. Please run the tournament content generation script first.');
+      throw new Error(`Tournament content not found for tournament ${tournamentId}. Please run the tournament content generation script first.`);
     }
     
     const content = existingContent;

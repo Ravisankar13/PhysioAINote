@@ -1873,9 +1873,9 @@ export default function CompetitionPage() {
                                 </CardDescription>
                               </CardHeader>
                               <CardContent className="space-y-4">
-                                {tournament.content?.lightning_diagnosis?.rounds && Array.isArray(tournament.content.lightning_diagnosis.rounds) ? (
+                                {(tournament.content?.lightning_diagnosis?.rounds || tournament.content?.lightningDiagnosis?.rounds) && Array.isArray(tournament.content.lightning_diagnosis?.rounds || tournament.content.lightningDiagnosis?.rounds) ? (
                                   <div className="space-y-4">
-                                    {tournament.content.lightning_diagnosis.rounds.map((round: any, roundIndex: number) => (
+                                    {(tournament.content.lightning_diagnosis?.rounds || tournament.content.lightningDiagnosis?.rounds || []).map((round: any, roundIndex: number) => (
                                       <div key={roundIndex} className="border rounded-lg p-4">
                                         <h4 className="font-semibold mb-3 text-lg">
                                           Round {roundIndex + 1}: {round.name} ({round.questions?.length || 0} questions)

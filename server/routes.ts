@@ -35,7 +35,7 @@ import { realTimeAIService } from "./realtimeAIService";
 import { virtualPatientService } from "./virtualPatientService";
 import { soapVirtualPatientService } from "./soapVirtualPatientService";
 import { documentGenerationService } from "./documentGenerationService";
-import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, exercises, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, insertSoapNoteSchema, bodyScans, insertBodyScanSchema, tournamentParticipants } from "@shared/schema";
+import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, exercises, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, insertSoapNoteSchema, bodyScans, insertBodyScanSchema, tournamentParticipants, diagnosisDuelTournaments, gameContent } from "@shared/schema";
 import { ZodError, z } from "zod";
 import { fromZodError } from "zod-validation-error";
 import multer from "multer";
@@ -9690,6 +9690,52 @@ Respond in JSON format:
       res.json(tournaments);
     } catch (error: any) {
       console.error("Error getting tournaments:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Admin route to get all tournament content (Fateofjustice only)
+  app.get('/api/tournaments/admin/all-content', ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      const username = req.user?.username;
+      
+      if (!userId || username !== 'Fateofjustice') {
+        return res.status(403).json({ error: 'Admin access required' });
+      }
+      
+      // Get all tournaments with their content
+      const tournamentData = await db
+        .select({
+          id: diagnosisDuelTournaments.id,
+          title: diagnosisDuelTournaments.title,
+          competitionId: sql<number>`CASE 
+            WHEN ${diagnosisDuelTournaments.id} = 3 THEN 107
+            WHEN ${diagnosisDuelTournaments.id} = 4 THEN 118
+            WHEN ${diagnosisDuelTournaments.id} = 5 THEN 119
+            WHEN ${diagnosisDuelTournaments.id} = 6 THEN 120
+            WHEN ${diagnosisDuelTournaments.id} = 7 THEN 121
+            ELSE NULL
+          END`.as('competitionId'),
+          gameContentId: gameContent.id,
+          content: gameContent.content,
+        })
+        .from(diagnosisDuelTournaments)
+        .leftJoin(gameContent, sql`
+          ${gameContent.competitionId} = CASE 
+            WHEN ${diagnosisDuelTournaments.id} = 3 THEN 107
+            WHEN ${diagnosisDuelTournaments.id} = 4 THEN 118
+            WHEN ${diagnosisDuelTournaments.id} = 5 THEN 119
+            WHEN ${diagnosisDuelTournaments.id} = 6 THEN 120
+            WHEN ${diagnosisDuelTournaments.id} = 7 THEN 121
+            ELSE NULL
+          END
+        `)
+        .orderBy(diagnosisDuelTournaments.id);
+      
+      res.json(tournamentData);
+    } catch (error: any) {
+      console.error("Error getting tournament content:", error);
       res.status(500).json({ error: error.message });
     }
   });

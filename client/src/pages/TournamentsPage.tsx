@@ -63,6 +63,14 @@ export default function TournamentsPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // Fetch current user
+  const { data: user } = useQuery({
+    queryKey: ['/api/user'],
+  });
+
+  // Check if current user is admin
+  const isAdmin = user?.username === 'Fateofjustice';
+
   // Fetch active tournaments
   const { data: tournaments, isLoading } = useQuery({
     queryKey: ['/api/tournaments'],
@@ -74,6 +82,17 @@ export default function TournamentsPage() {
     queryKey: ['/api/tournaments', selectedTournament],
     enabled: !!selectedTournament,
     refetchInterval: 10000, // Refetch every 10 seconds for live bracket updates
+  });
+
+  // Fetch all tournament content for admin view
+  const { data: allTournamentContent } = useQuery({
+    queryKey: ['/api/tournaments/admin/all-content'],
+    enabled: isAdmin,
+    queryFn: async () => {
+      const response = await fetch('/api/tournaments/admin/all-content');
+      if (!response.ok) throw new Error('Failed to fetch tournament content');
+      return response.json();
+    },
   });
 
   // Register for tournament mutation
@@ -288,11 +307,16 @@ export default function TournamentsPage() {
       </div>
 
       <Tabs defaultValue="tournaments" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-3' : 'grid-cols-2'}`}>
           <TabsTrigger value="tournaments">Active Tournaments</TabsTrigger>
           <TabsTrigger value="bracket" disabled={!selectedTournament}>
             Tournament Bracket
           </TabsTrigger>
+          {isAdmin && (
+            <TabsTrigger value="admin-content">
+              Admin - All Content
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="tournaments" className="space-y-4">
@@ -475,6 +499,90 @@ export default function TournamentsPage() {
             </Alert>
           )}
         </TabsContent>
+
+        {/* Admin Content Tab */}
+        {isAdmin && (
+          <TabsContent value="admin-content" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Trophy className="h-5 w-5 text-yellow-500" />
+                  Admin - All Tournament Content
+                </CardTitle>
+                <CardDescription>
+                  Preview all questions from all 5 tournaments (3 rounds each with 15 questions)
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {allTournamentContent ? (
+                  <div className="space-y-6">
+                    {allTournamentContent.map((tournament: any) => (
+                      <Card key={tournament.id} className="border-l-4 border-l-blue-500">
+                        <CardHeader>
+                          <CardTitle className="text-xl">{tournament.title}</CardTitle>
+                          <CardDescription>
+                            Competition ID: {tournament.competitionId} | Game Content ID: {tournament.gameContentId}
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          {tournament.content?.lightning_diagnosis?.rounds && (
+                            <div className="space-y-4">
+                              {Object.entries(tournament.content.lightning_diagnosis.rounds).map(([roundKey, roundData]: [string, any]) => (
+                                <Card key={roundKey} className="border-dashed">
+                                  <CardHeader className="pb-3">
+                                    <CardTitle className="text-lg capitalize">
+                                      {roundData.description || `${roundKey.replace('_', ' ')}`}
+                                    </CardTitle>
+                                    <CardDescription>
+                                      Difficulty: {roundData.difficulty} | Time per question: {roundData.time_limit_per_question}s | Questions: {roundData.questions?.length || 0}
+                                    </CardDescription>
+                                  </CardHeader>
+                                  <CardContent>
+                                    <div className="grid gap-3">
+                                      {roundData.questions?.slice(0, 5).map((questionId: string) => {
+                                        const question = tournament.content.lightning_diagnosis.cases?.find((q: any) => q.id === questionId);
+                                        return question ? (
+                                          <div key={questionId} className="p-3 bg-gray-50 rounded-lg">
+                                            <div className="font-medium text-sm mb-2">
+                                              Case #{question.case_number}: {question.body_part}
+                                            </div>
+                                            <div className="text-sm mb-2">
+                                              <strong>Presentation:</strong> {question.patient_presentation}
+                                            </div>
+                                            <div className="text-sm mb-2">
+                                              <strong>Question:</strong> {question.question}
+                                            </div>
+                                            <div className="text-sm text-green-600 font-medium">
+                                              <strong>Answer:</strong> {question.correct_answer}
+                                            </div>
+                                          </div>
+                                        ) : null;
+                                      })}
+                                      {roundData.questions?.length > 5 && (
+                                        <div className="text-sm text-muted-foreground italic">
+                                          ... and {roundData.questions.length - 5} more questions
+                                        </div>
+                                      )}
+                                    </div>
+                                  </CardContent>
+                                </Card>
+                              ))}
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                    Loading tournament content...
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

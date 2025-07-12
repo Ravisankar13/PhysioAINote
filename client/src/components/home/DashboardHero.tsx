@@ -211,8 +211,8 @@ const DashboardHero = () => {
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-white/80">Total Participants</span>
                   <span className="font-semibold">
-                    {competitions.reduce((total, comp) => total + comp.participantCount, 0) + 
-                     tournaments.reduce((total, tour) => total + tour.participantCount, 0)}
+                    {(competitions.reduce((total, comp) => total + (comp.participantCount || 0), 0) + 
+                     tournaments.reduce((total, tour) => total + (tour.participantCount || 0), 0)) || 0}
                   </span>
                 </div>
                 <Link href="/competitions">

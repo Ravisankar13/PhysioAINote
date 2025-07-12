@@ -1,7 +1,6 @@
 import { Helmet } from "react-helmet";
-import DashboardHero from "@/components/home/DashboardHero";
-import PlatformFeatures from "@/components/home/PlatformFeatures";
-import LiveActivity from "@/components/home/LiveActivity";
+import FocusedHero from "@/components/home/FocusedHero";
+import CoreFeatureShowcase from "@/components/home/CoreFeatureShowcase";
 import BenefitsSection from "@/components/sections/BenefitsSection";
 import CTASection from "@/components/sections/CTASection";
 import TrialBanner from "@/components/TrialBanner";
@@ -26,9 +25,8 @@ const Home = () => {
       <div className="container mx-auto px-4 py-4">
         <TrialBanner />
       </div>
-      <DashboardHero />
-      <PlatformFeatures />
-      <LiveActivity />
+      <FocusedHero />
+      <CoreFeatureShowcase />
       <BenefitsSection />
       <CTASection />
     </>

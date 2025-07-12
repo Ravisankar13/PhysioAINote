@@ -846,88 +846,89 @@ export default function VirtualPatientsPage() {
         </div>
       </div>
 
-      {/* Main Content Area */}
+      {/* Main Content Area - Redesigned Layout */}
       <div className="max-w-7xl mx-auto px-4 py-4">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           
-          {/* Left Panel - Patient Profile */}
-          <div className="lg:col-span-1 space-y-4 max-h-[calc(100vh-200px)] overflow-y-auto">
+          {/* Left Panel - Patient Profile & Clinical Data */}
+          <div className="lg:col-span-3 space-y-4">
             
             {/* Patient Demographics */}
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <User className="h-4 w-4" />
-                  Demographics
+                <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                  <User className="h-5 w-5 text-blue-600" />
+                  Patient Profile
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Age:</span>
-                  <span>{enhancedProfile?.demographics.age || selectedPatient.age}</span>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-500 font-medium">Age</span>
+                    <p className="text-gray-900">{enhancedProfile?.demographics.age || selectedPatient.age}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 font-medium">Gender</span>
+                    <p className="text-gray-900 capitalize">{enhancedProfile?.demographics.gender || selectedPatient.gender}</p>
+                  </div>
+                  <div className="col-span-2">
+                    <span className="text-gray-500 font-medium">Body Part</span>
+                    <p className="text-gray-900 capitalize">{selectedPatient.body_part}</p>
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Gender:</span>
-                  <span>{enhancedProfile?.demographics.gender || selectedPatient.gender}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Body Part:</span>
-                  <span className="capitalize">{selectedPatient.body_part}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Chief Complaint:</span>
-                  <span className="text-right text-xs">{selectedPatient.chief_complaint}</span>
+                <Separator />
+                <div>
+                  <span className="text-gray-500 font-medium">Chief Complaint</span>
+                  <p className="text-gray-900 text-sm mt-1">{selectedPatient.chief_complaint}</p>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Clinical Timeline */}
+            {/* Clinical Notes */}
             <Card>
-              <CardHeader>
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <Calendar className="h-4 w-4" />
-                  Clinical Timeline
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                  <Stethoscope className="h-5 w-5 text-emerald-600" />
+                  Clinical Notes
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {selectedPatient.symptoms_description && (
+                  <div className="bg-yellow-50 p-3 rounded-lg border-l-4 border-yellow-400">
+                    <p className="font-medium text-yellow-800 text-sm">Symptoms</p>
+                    <p className="text-yellow-700 text-sm mt-1">{selectedPatient.symptoms_description}</p>
+                  </div>
+                )}
+                {selectedPatient.past_medical_history && (
+                  <div className="bg-gray-50 p-3 rounded-lg border-l-4 border-gray-400">
+                    <p className="font-medium text-gray-800 text-sm">Medical History</p>
+                    <p className="text-gray-700 text-sm mt-1">{selectedPatient.past_medical_history}</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Pain Map */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                  <Target className="h-5 w-5 text-red-600" />
+                  Pain Assessment
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {enhancedProfile?.clinicalTimeline.map((session, index) => (
-                    <div key={index} className="border-l-2 border-blue-200 pl-3 pb-3">
-                      <div className="flex justify-between items-start mb-1">
-                        <span className="text-xs font-medium text-blue-600">{session.date}</span>
-                        <Badge variant="outline" className="text-xs">
-                          Pain: {session.painLevel}/10
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-gray-600">{session.session}</p>
-                      <p className="text-xs text-gray-800 mt-1">{session.findings}</p>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Pain Map Visualization */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <Target className="h-4 w-4" />
-                  Pain Map
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
                   {enhancedProfile?.painMap.regions.map((region, index) => (
                     <div key={index} className="flex items-center justify-between">
-                      <span className="text-sm capitalize">{region.bodyPart}</span>
-                      <div className="flex items-center gap-2">
-                        <div className="w-20 bg-gray-200 rounded-full h-2">
+                      <span className="text-sm font-medium capitalize">{region.bodyPart}</span>
+                      <div className="flex items-center gap-3">
+                        <div className="w-24 bg-gray-200 rounded-full h-2">
                           <div 
-                            className="bg-red-500 h-2 rounded-full" 
+                            className="bg-red-500 h-2 rounded-full transition-all duration-300" 
                             style={{ width: `${(region.intensity / 10) * 100}%` }}
                           />
                         </div>
-                        <span className="text-xs text-gray-600">{region.intensity}/10</span>
+                        <span className="text-sm font-semibold text-red-600">{region.intensity}/10</span>
                       </div>
                     </div>
                   ))}
@@ -935,23 +936,150 @@ export default function VirtualPatientsPage() {
               </CardContent>
             </Card>
 
+          </div>
+
+          {/* Center Panel - 3D Animation (Larger) */}
+          <div className="lg:col-span-6">
+            <Card className="h-[600px]">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                  <Activity className="h-5 w-5 text-purple-600" />
+                  3D Movement Visualization
+                  {(() => {
+                    const animationData = getAnimationData(selectedPatient);
+                    if (animationData) {
+                      return (
+                        <Badge variant="secondary" className="ml-2">
+                          {animationData.source} ({animationData.frames?.length || animationData.animationSequences?.length || 0} frames)
+                        </Badge>
+                      );
+                    }
+                    return null;
+                  })()}
+                </CardTitle>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={`${animationBlendMode === 'text-only' ? 'bg-green-600 text-white' : ''}`}
+                    onClick={() => setAnimationBlendMode('text-only')}
+                  >
+                    SOAP Text
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={`${animationBlendMode === 'motion-only' ? 'bg-blue-600 text-white' : ''}`}
+                    onClick={() => setAnimationBlendMode('motion-only')}
+                    disabled={!selectedPatient?.motionData}
+                  >
+                    Motion Only
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={`${animationBlendMode === 'hybrid' ? 'bg-purple-600 text-white' : ''}`}
+                    onClick={() => setAnimationBlendMode('hybrid')}
+                    disabled={!selectedPatient?.motionData}
+                  >
+                    Hybrid
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="h-[520px] relative">
+                {(() => {
+                  const animationData = getAnimationData(selectedPatient);
+                  if (selectedPatient && animationData && animationData.frames?.length > 0) {
+                    return (
+                      <div className="w-full h-full bg-gray-900 rounded-lg flex items-center justify-center relative overflow-hidden">
+                        <AIAnimationPlayer
+                          animationFrames={animationData.frames}
+                          isPlaying={isPlaying}
+                          className="w-full h-full"
+                          onPlayPauseToggle={() => setIsPlaying(!isPlaying)}
+                        />
+                        {/* Animation Source Badge */}
+                        <div className="absolute top-4 left-4 z-10">
+                          <Badge className={animationData.source === 'Motion Capture' ? 'bg-blue-600' : 'bg-emerald-600'}>
+                            {animationData.source}
+                          </Badge>
+                        </div>
+                        {/* Play Controls */}
+                        <div className="absolute bottom-4 left-4 z-10 flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setIsPlaying(!isPlaying)}
+                            className="bg-black/20 text-white border-white/20 hover:bg-black/30"
+                          >
+                            {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  } else if (selectedPatient) {
+                    return (
+                      <div className="w-full h-full bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg flex items-center justify-center">
+                        <div className="text-center text-gray-600">
+                          <Activity className="h-16 w-16 mx-auto mb-4 text-gray-400" />
+                          <p className="text-lg font-medium mb-2">AI Animation System Ready</p>
+                          <p className="text-sm">Motion capture or text description will generate enhanced skeleton visualization</p>
+                          {animationSequence && (
+                            <div className="mt-4">
+                              <Badge className="bg-green-600">
+                                Animation Generated ({animationSequence.frames?.length || 0} frames)
+                              </Badge>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  } else {
+                    return (
+                      <div className="w-full h-full bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg flex items-center justify-center">
+                        <div className="text-center text-gray-600">
+                          <Activity className="h-16 w-16 mx-auto mb-4 text-gray-400" />
+                          <p className="text-lg font-medium mb-2">Select a Virtual Patient</p>
+                          <p className="text-sm">Choose a patient from the list to view their digital twin</p>
+                        </div>
+                      </div>
+                    );
+                  }
+                })()}
+                
+                {/* Loading overlay when generating animation */}
+                {isLoadingAnimation && (
+                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10 rounded-lg">
+                    <div className="text-center text-white">
+                      <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
+                      <p className="text-sm">Generating AI Movement...</p>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Right Panel - Functional Scores & Progress */}
+          <div className="lg:col-span-3 space-y-4">
+            
             {/* Functional Scores */}
             <Card>
-              <CardHeader>
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <Activity className="h-4 w-4" />
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-blue-600" />
                   Functional Scores
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {Object.entries(enhancedProfile?.functionalScores || {}).map(([metric, score]) => (
                     <div key={metric}>
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="text-sm capitalize">{metric}</span>
-                        <span className="text-sm font-medium">{score}%</span>
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm font-medium capitalize">{metric}</span>
+                        <span className="text-lg font-bold text-blue-600">{score}%</span>
                       </div>
-                      <Progress value={score} className="h-2" />
+                      <Progress value={score} className="h-3" />
                     </div>
                   ))}
                 </div>
@@ -960,23 +1088,23 @@ export default function VirtualPatientsPage() {
 
             {/* Progress Tracking */}
             <Card>
-              <CardHeader>
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4" />
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                  <Clock className="h-5 w-5 text-emerald-600" />
                   Progress Tracking
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {enhancedProfile?.progressTracking.map((metric, index) => (
-                    <div key={index} className="space-y-1">
-                      <div className="flex justify-between text-xs">
-                        <span>{metric.metric}</span>
-                        <span>{metric.current}/{metric.target}</span>
+                    <div key={index} className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="font-medium">{metric.metric}</span>
+                        <span className="font-bold">{metric.current}/{metric.target}</span>
                       </div>
-                      <div className="flex items-center gap-1 text-xs">
-                        <span className="text-gray-500">Baseline: {metric.baseline}</span>
-                        <span className="text-green-600">
+                      <div className="flex items-center gap-2 text-xs text-gray-500">
+                        <span>Baseline: {metric.baseline}</span>
+                        <span className="text-green-600 font-medium">
                           +{((metric.current - metric.baseline) / metric.baseline * 100).toFixed(0)}%
                         </span>
                       </div>
@@ -989,159 +1117,34 @@ export default function VirtualPatientsPage() {
                 </div>
               </CardContent>
             </Card>
-          </div>
-        </div>
 
-        {/* Center Panel - 3D Animation */}
-        <div className="lg:col-span-2">
-          <Card className="h-[500px]">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Activity className="h-4 w-4" />
-                3D Movement Animation
-                {(() => {
-                  const animationData = getAnimationData(selectedPatient);
-                  if (animationData) {
-                    return (
-                      <Badge variant="secondary" className="text-xs">
-                        {animationData.source} ({animationData.frames?.length || animationData.animationSequences?.length || 0} frames)
-                      </Badge>
-                    );
-                  }
-                  return null;
-                })()}
-              </CardTitle>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className={`text-xs ${animationBlendMode === 'text-only' ? 'bg-green-600 text-white' : ''}`}
-                  onClick={() => setAnimationBlendMode('text-only')}
-                >
-                  SOAP Text
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className={`text-xs ${animationBlendMode === 'motion-only' ? 'bg-blue-600 text-white' : ''}`}
-                  onClick={() => setAnimationBlendMode('motion-only')}
-                  disabled={!selectedPatient?.motionData}
-                >
-                  Motion Only
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className={`text-xs ${animationBlendMode === 'hybrid' ? 'bg-purple-600 text-white' : ''}`}
-                  onClick={() => setAnimationBlendMode('hybrid')}
-                  disabled={!selectedPatient?.motionData}
-                >
-                  Hybrid
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="h-[430px] relative">
-              {(() => {
-                const animationData = getAnimationData(selectedPatient);
-                if (selectedPatient && animationData && animationData.frames?.length > 0) {
-                  return (
-                    <div className="w-full h-full bg-gray-900 rounded-lg flex items-center justify-center relative overflow-hidden">
-                      <AIAnimationPlayer
-                        animationFrames={animationData.frames}
-                        isPlaying={isPlaying}
-                        className="w-full h-full"
-                        onPlayPauseToggle={() => setIsPlaying(!isPlaying)}
-                      />
-                      {/* Animation Source Badge */}
-                      <div className="absolute top-2 left-2 z-10">
-                        <Badge className={animationData.source === 'Motion Capture' ? 'bg-blue-600' : 'bg-emerald-600'}>
-                          {animationData.source}
+            {/* Clinical Timeline */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                  <Calendar className="h-5 w-5 text-purple-600" />
+                  Clinical Timeline
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="max-h-64 overflow-y-auto">
+                <div className="space-y-3">
+                  {enhancedProfile?.clinicalTimeline.map((session, index) => (
+                    <div key={index} className="border-l-4 border-purple-200 pl-4 pb-3">
+                      <div className="flex justify-between items-start mb-1">
+                        <span className="text-sm font-medium text-purple-600">{session.date}</span>
+                        <Badge variant="outline" className="text-xs">
+                          Pain: {session.painLevel}/10
                         </Badge>
                       </div>
-                      {/* Play Controls */}
-                      <div className="absolute bottom-2 left-2 z-10 flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setIsPlaying(!isPlaying)}
-                          className="bg-black/20 text-white border-white/20"
-                        >
-                          {isPlaying ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
-                        </Button>
-                      </div>
+                      <p className="text-sm font-medium text-gray-700">{session.session}</p>
+                      <p className="text-xs text-gray-600 mt-1">{session.findings}</p>
                     </div>
-                  );
-                } else if (selectedPatient) {
-                  return (
-                    <div className="w-full h-full bg-gray-100 rounded-lg flex items-center justify-center">
-                      <div className="text-center text-gray-600">
-                        <Activity className="h-12 w-12 mx-auto mb-4" />
-                        <p className="mb-4">AI Animation System Ready</p>
-                        <p className="text-sm">Motion capture or text description will generate enhanced skeleton visualization</p>
-                        {animationSequence && (
-                          <div className="mt-4">
-                            <Badge className="bg-green-600">
-                              Animation Generated ({animationSequence.frames?.length || 0} frames)
-                            </Badge>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                } else {
-                  return (
-                    <div className="w-full h-full bg-gray-100 rounded-lg flex items-center justify-center">
-                      <div className="text-center text-gray-600">
-                        <Activity className="h-12 w-12 mx-auto mb-4" />
-                        <p className="mb-4">Select a Virtual Patient</p>
-                        <p className="text-sm">Choose a patient from the list to view their digital twin</p>
-                      </div>
-                    </div>
-                  );
-                }
-              })()}
-              
-              {/* Loading overlay when generating animation */}
-              {isLoadingAnimation && (
-                <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10">
-                  <div className="text-center text-white">
-                    <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
-                    <p className="text-sm">Generating AI Movement...</p>
-                  </div>
+                  ))}
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+              </CardContent>
+            </Card>
 
-        {/* Right Panel - Clinical Analysis */}
-        <div className="lg:col-span-1 space-y-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Stethoscope className="h-4 w-4" />
-                Clinical Notes
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              <div className="bg-blue-50 p-3 rounded-lg">
-                <p className="font-medium text-blue-800">Chief Complaint</p>
-                <p className="text-blue-600 text-xs mt-1">{selectedPatient.chief_complaint}</p>
-              </div>
-              {selectedPatient.symptoms_description && (
-                <div className="bg-yellow-50 p-3 rounded-lg">
-                  <p className="font-medium text-yellow-800">Symptoms</p>
-                  <p className="text-yellow-600 text-xs mt-1">{selectedPatient.symptoms_description}</p>
-                </div>
-              )}
-              {selectedPatient.past_medical_history && (
-                <div className="bg-gray-50 p-3 rounded-lg">
-                  <p className="font-medium text-gray-800">History</p>
-                  <p className="text-gray-600 text-xs mt-1">{selectedPatient.past_medical_history}</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          </div>
         </div>
       </div>
 

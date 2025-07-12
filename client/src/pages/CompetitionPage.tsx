@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
@@ -38,7 +38,8 @@ import {
   Search,
   FileText,
   Clipboard,
-  Send
+  Send,
+  Sword
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
@@ -49,6 +50,54 @@ import ActiveCompetitions from "@/components/competition/ActiveCompetitions";
 import LeaderboardView from "@/components/competition/LeaderboardView";
 import AchievementsPanel from "@/components/competition/AchievementsPanel";
 import CompetitionHistory from "@/components/competition/CompetitionHistory";
+
+// Tournament interfaces
+interface Tournament {
+  id: number;
+  title: string;
+  description: string;
+  bodyPart: string;
+  difficulty: string;
+  status: string;
+  maxParticipants: number;
+  currentParticipants: number;
+  currentRound: number;
+  registrationEndTime: string;
+  tournamentStartTime: string;
+  createdAt: string;
+}
+
+interface TournamentParticipant {
+  id: number;
+  userId: number;
+  username: string;
+  bracketPosition: number;
+  currentRound: number;
+  isEliminated: boolean;
+  joinedAt: string;
+}
+
+interface TournamentMatch {
+  id: number;
+  round: number;
+  matchNumber: number;
+  player1Id: number;
+  player2Id: number;
+  player1Username: string;
+  player2Username: string;
+  player1Score: number;
+  player2Score: number;
+  winnerId?: number;
+  status: string;
+  scheduledStartTime?: string;
+  completedAt?: string;
+}
+
+interface TournamentDetails {
+  tournament: Tournament;
+  participants: TournamentParticipant[];
+  matches: TournamentMatch[];
+}
 
 // Interface for complex case competitions
 interface ComplexCompetition {
@@ -668,6 +717,18 @@ function ComplexCaseCompetitionsView() {
   // Check if user is admin
   const isAdmin = user && ["Fateofjustice"].includes(user.username);
 
+  // Fetch tournaments
+  const { data: tournaments = [], isLoading: loadingTournaments } = useQuery({
+    queryKey: ['/api/tournaments'],
+    refetchInterval: 30000,
+  });
+
+  // Fetch admin tournament content
+  const { data: adminTournamentContent = [], isLoading: loadingAdminContent } = useQuery({
+    queryKey: ['/api/tournaments/admin/all-content'],
+    enabled: isAdmin,
+  });
+
   return (
     <div className="space-y-6">
       <div className="text-center space-y-4">
@@ -682,7 +743,7 @@ function ComplexCaseCompetitionsView() {
       </div>
 
       <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
-        <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-6' : 'grid-cols-5'}`}>
+        <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-7' : 'grid-cols-6'}`}>
           <TabsTrigger value="active" className="flex items-center gap-2">
             <Play className="h-4 w-4" />
             Live ({activeCompetitions.length})
@@ -690,6 +751,10 @@ function ComplexCaseCompetitionsView() {
           <TabsTrigger value="upcoming" className="flex items-center gap-2">
             <Calendar className="h-4 w-4" />
             Upcoming ({upcomingCompetitions.length})
+          </TabsTrigger>
+          <TabsTrigger value="tournaments" className="flex items-center gap-2">
+            <Sword className="h-4 w-4" />
+            Tournaments
           </TabsTrigger>
           <TabsTrigger value="my-registrations" className="flex items-center gap-2">
             <User className="h-4 w-4" />
@@ -794,6 +859,141 @@ function ComplexCaseCompetitionsView() {
           </div>
         </TabsContent>
 
+        <TabsContent value="tournaments" className="space-y-6">
+          <div className="text-center space-y-4 mb-8">
+            <div className="flex items-center justify-center gap-2">
+              <Sword className="h-8 w-8 text-orange-600" />
+              <h2 className="text-3xl font-bold">Diagnosis Duel Tournaments</h2>
+            </div>
+            <p className="text-muted-foreground max-w-2xl mx-auto">
+              Compete head-to-head in elimination bracket tournaments. Battle through multiple rounds
+              of clinical diagnosis challenges to claim the championship title!
+            </p>
+          </div>
+
+          <Tabs defaultValue="tournaments" className="w-full">
+            <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-2' : 'grid-cols-1'}`}>
+              <TabsTrigger value="tournaments" className="flex items-center gap-2">
+                <Sword className="h-4 w-4" />
+                Active Tournaments ({tournaments?.length || 0})
+              </TabsTrigger>
+              {isAdmin && (
+                <TabsTrigger value="admin-all-content" className="flex items-center gap-2">
+                  <Settings className="h-4 w-4" />
+                  Admin - All Content ✓
+                </TabsTrigger>
+              )}
+            </TabsList>
+
+            <TabsContent value="tournaments" className="space-y-6">
+              {loadingTournaments ? (
+                <div className="text-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600 mx-auto"></div>
+                  <p className="mt-2 text-muted-foreground">Loading tournaments...</p>
+                </div>
+              ) : tournaments.length === 0 ? (
+                <div className="text-center py-12">
+                  <Sword className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-xl font-semibold mb-2">No Active Tournaments</h3>
+                  <p className="text-muted-foreground">
+                    New tournaments will be scheduled soon. Check back later!
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {tournaments.map((tournament: Tournament) => (
+                    <TournamentCard key={tournament.id} tournament={tournament} />
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+
+            {isAdmin && (
+              <TabsContent value="admin-all-content" className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Settings className="h-5 w-5 text-orange-600" />
+                      <span className="text-orange-600">Admin Tournament Content Preview</span>
+                      <Badge variant="secondary">FOR ADMIN REVIEW</Badge>
+                    </CardTitle>
+                    <CardDescription>
+                      Complete tournament question database for administrative review
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {loadingAdminContent ? (
+                      <div className="text-center py-8">
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-orange-600 mx-auto"></div>
+                        <p className="mt-2 text-sm text-muted-foreground">Loading admin content...</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-6">
+                        {adminTournamentContent.map((tournament: any, tourneyIndex: number) => (
+                          <Card key={tournament.id} className="border-l-4 border-l-orange-600">
+                            <CardHeader>
+                              <CardTitle className="text-lg flex items-center gap-2">
+                                <Crown className="h-5 w-5 text-orange-600" />
+                                {tournament.title}
+                              </CardTitle>
+                              <CardDescription>
+                                {tournament.bodyPart} • {tournament.difficulty} • {tournament.description}
+                              </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="space-y-4">
+                                {tournament.rounds?.map((round: any, roundIndex: number) => (
+                                  <div key={roundIndex} className="space-y-3">
+                                    <div className="flex items-center gap-2">
+                                      <Badge variant="outline" className="bg-orange-50">
+                                        Round {round.roundNumber} - {round.difficulty}
+                                      </Badge>
+                                      <span className="text-sm text-muted-foreground">
+                                        {round.questions?.length || 0} questions
+                                      </span>
+                                    </div>
+                                    
+                                    <div className="grid gap-3">
+                                      {round.questions?.slice(0, 3).map((question: any, qIndex: number) => (
+                                        <Card key={qIndex} className="border border-orange-200">
+                                          <CardContent className="p-4">
+                                            <div className="space-y-2">
+                                              <div className="flex items-start gap-2">
+                                                <Badge variant="secondary" className="text-xs mt-1">
+                                                  Q{qIndex + 1}
+                                                </Badge>
+                                                <div className="flex-1">
+                                                  <p className="text-sm font-medium">{question.clinicalPresentation}</p>
+                                                  <p className="text-xs text-muted-foreground mt-1">
+                                                    <strong>Correct:</strong> {question.correctDiagnosis}
+                                                  </p>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </CardContent>
+                                        </Card>
+                                      ))}
+                                      {round.questions?.length > 3 && (
+                                        <p className="text-xs text-muted-foreground text-center">
+                                          ... and {round.questions.length - 3} more questions
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            )}
+          </Tabs>
+        </TabsContent>
+
         {isAdmin && (
           <TabsContent value="admin-preview" className="space-y-6">
             <Card>
@@ -838,6 +1038,160 @@ function ComplexCaseCompetitionsView() {
         )}
       </Tabs>
     </div>
+  );
+}
+
+// TournamentCard component
+function TournamentCard({ tournament }: { tournament: Tournament }) {
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
+
+  const registerMutation = useMutation({
+    mutationFn: async (tournamentId: number) => {
+      return await apiRequest(`/api/tournaments/${tournamentId}/register`, {
+        method: 'POST',
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Tournament Registration Successful!",
+        description: "You have been registered for the tournament. Good luck!",
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/tournaments'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Registration Failed",
+        description: error.message || "Failed to register for tournament",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleRegister = () => {
+    registerMutation.mutate(tournament.id);
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'registration': return 'bg-blue-100 text-blue-700';
+      case 'active': return 'bg-green-100 text-green-700';
+      case 'completed': return 'bg-gray-100 text-gray-700';
+      default: return 'bg-gray-100 text-gray-700';
+    }
+  };
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'registration': return 'Open Registration';
+      case 'active': return 'Tournament Active';
+      case 'completed': return 'Completed';
+      default: return status;
+    }
+  };
+
+  return (
+    <Card className="hover:shadow-lg transition-shadow border-l-4 border-l-orange-600">
+      <CardHeader>
+        <div className="flex items-start justify-between">
+          <div className="space-y-2">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Sword className="h-5 w-5 text-orange-600" />
+              {tournament.title}
+            </CardTitle>
+            <CardDescription>{tournament.description}</CardDescription>
+          </div>
+          <Badge variant="outline" className={getStatusColor(tournament.status)}>
+            {getStatusText(tournament.status)}
+          </Badge>
+        </div>
+      </CardHeader>
+
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 gap-4 text-sm">
+          <div className="flex items-center gap-2">
+            <Target className="h-4 w-4 text-muted-foreground" />
+            <span className="capitalize">{tournament.bodyPart}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Clock className="h-4 w-4 text-muted-foreground" />
+            <span className="capitalize">{tournament.difficulty}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Users className="h-4 w-4 text-muted-foreground" />
+            <span>{tournament.currentParticipants}/{tournament.maxParticipants}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Trophy className="h-4 w-4 text-muted-foreground" />
+            <span>Round {tournament.currentRound || 1}</span>
+          </div>
+        </div>
+
+        <div>
+          <div className="flex justify-between text-sm mb-2">
+            <span>Participants</span>
+            <span>{tournament.currentParticipants}/{tournament.maxParticipants}</span>
+          </div>
+          <Progress 
+            value={(tournament.currentParticipants / tournament.maxParticipants) * 100} 
+            className="h-2"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-sm">
+            <Clock className="h-4 w-4 text-muted-foreground" />
+            <span>Registration ends: {format(new Date(tournament.registrationEndTime), 'MMM d, h:mm a')}</span>
+          </div>
+          <div className="flex items-center gap-2 text-sm">
+            <Zap className="h-4 w-4 text-muted-foreground" />
+            <span>Tournament starts: {format(new Date(tournament.tournamentStartTime), 'MMM d, h:mm a')}</span>
+          </div>
+        </div>
+      </CardContent>
+
+      <CardFooter>
+        {tournament.status === 'registration' && (
+          tournament.currentParticipants < tournament.maxParticipants ? (
+            <Button 
+              onClick={handleRegister}
+              disabled={registerMutation.isPending}
+              className="w-full bg-orange-600 hover:bg-orange-700"
+            >
+              {registerMutation.isPending ? (
+                "Registering..."
+              ) : (
+                <>
+                  <Sword className="h-4 w-4 mr-2" />
+                  Join Tournament
+                </>
+              )}
+            </Button>
+          ) : (
+            <Button disabled className="w-full">
+              Tournament Full
+            </Button>
+          )
+        )}
+        
+        {tournament.status === 'active' && (
+          <Button 
+            className="w-full bg-green-600 hover:bg-green-700"
+            onClick={() => setLocation(`/tournaments/${tournament.id}`)}
+          >
+            <Play className="h-4 w-4 mr-2" />
+            Enter Tournament
+          </Button>
+        )}
+
+        {tournament.status === 'completed' && (
+          <Button variant="outline" className="w-full">
+            <Trophy className="h-4 w-4 mr-2" />
+            View Results
+          </Button>
+        )}
+      </CardFooter>
+    </Card>
   );
 }
 

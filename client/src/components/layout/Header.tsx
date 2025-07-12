@@ -28,6 +28,7 @@ import {
   Camera,
   Scan,
   Trophy,
+  Sword,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Link, useLocation } from "wouter";
@@ -142,6 +143,16 @@ const Header = () => {
                 <span>Competitions</span>
                 <span className="absolute -top-1 -right-1 bg-yellow-400 text-yellow-900 text-xs font-bold px-1.5 py-0.5 rounded-full">
                   NEW
+                </span>
+              </Button>
+            </Link>
+            
+            <Link to="/tournaments">
+              <Button className="bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700 text-white font-semibold shadow-sm flex items-center gap-2 relative">
+                <Sword className="h-4 w-4" />
+                <span>Tournaments</span>
+                <span className="absolute -top-1 -right-1 bg-red-400 text-red-900 text-xs font-bold px-1.5 py-0.5 rounded-full">
+                  1v1
                 </span>
               </Button>
             </Link>

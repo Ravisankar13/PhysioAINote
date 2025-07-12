@@ -78,7 +78,15 @@ export default function TournamentsPage() {
   // Alert for debugging
   if (user?.username === 'Fateofjustice') {
     console.log('🔧 ADMIN USER DETECTED - Tab should be visible!');
+    console.log('Current page: TournamentsPage, isAdmin:', isAdmin);
   }
+  
+  // Force alert for debugging
+  useEffect(() => {
+    if (user?.username === 'Fateofjustice') {
+      console.log('🚨 TOURNAMENTS PAGE: Admin user detected, isAdmin =', isAdmin);
+    }
+  }, [user, isAdmin]);
 
   // Fetch active tournaments
   const { data: tournaments, isLoading } = useQuery({

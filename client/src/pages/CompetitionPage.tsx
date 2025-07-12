@@ -1588,7 +1588,7 @@ export default function CompetitionPage() {
 
         {/* Main Content Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6 lg:w-fit lg:grid-cols-6">
+          <TabsList className="grid w-full grid-cols-7 lg:w-fit lg:grid-cols-7">
             <TabsTrigger value="overview" className="flex items-center gap-2">
               <Target className="h-4 w-4" />
               Overview
@@ -1597,7 +1597,10 @@ export default function CompetitionPage() {
               <Zap className="h-4 w-4" />
               Elite Games
             </TabsTrigger>
-
+            <TabsTrigger value="tournaments" className="flex items-center gap-2">
+              <Sword className="h-4 w-4" />
+              Tournaments
+            </TabsTrigger>
             <TabsTrigger value="complex-cases" className="flex items-center gap-2">
               <Brain className="h-4 w-4" />
               Practice Case Studies
@@ -1777,6 +1780,123 @@ export default function CompetitionPage() {
           {/* Game Competitions Tab */}
           <TabsContent value="game-competitions">
             <GameCompetitionsView />
+          </TabsContent>
+
+          {/* Tournaments Tab */}
+          <TabsContent value="tournaments" className="space-y-6">
+            <div className="text-center space-y-4">
+              <div className="flex items-center justify-center gap-2">
+                <Sword className="h-8 w-8 text-orange-600" />
+                <h2 className="text-3xl font-bold">Diagnosis Duel Tournaments</h2>
+              </div>
+              <p className="text-muted-foreground max-w-2xl mx-auto">
+                Real-time 1v1 elimination brackets. Face off against other clinicians in rapid diagnostic challenges with progressive difficulty rounds.
+              </p>
+            </div>
+
+            <Tabs defaultValue="tournaments" className="w-full">
+              <TabsList className={`grid w-full ${user && ["Fateofjustice"].includes(user.username) ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                <TabsTrigger value="tournaments" className="flex items-center gap-2">
+                  <Sword className="h-4 w-4" />
+                  Active Tournaments ({tournaments?.length || 0})
+                </TabsTrigger>
+                {user && ["Fateofjustice"].includes(user.username) && (
+                  <TabsTrigger value="admin-all-content" className="flex items-center gap-2">
+                    <Settings className="h-4 w-4" />
+                    Admin - All Content ✓
+                  </TabsTrigger>
+                )}
+              </TabsList>
+
+              {/* Active Tournaments Tab */}
+              <TabsContent value="tournaments" className="space-y-6">
+                {loadingTournaments ? (
+                  <div className="text-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600 mx-auto"></div>
+                    <p className="mt-2 text-muted-foreground">Loading tournaments...</p>
+                  </div>
+                ) : tournaments.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Sword className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+                    <h3 className="text-xl font-semibold mb-2">No Active Tournaments</h3>
+                    <p className="text-muted-foreground">
+                      New tournaments will be scheduled soon. Check back later!
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {tournaments.map((tournament: Tournament) => (
+                      <TournamentCard key={tournament.id} tournament={tournament} />
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+
+              {/* Admin Content Tab */}
+              {user && ["Fateofjustice"].includes(user.username) && (
+                <TabsContent value="admin-all-content" className="space-y-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Trophy className="h-5 w-5 text-yellow-500" />
+                        Admin - All Tournament Content
+                      </CardTitle>
+                      <CardDescription>
+                        Preview all questions from all 5 tournaments (3 rounds each with 15 questions)
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      {loadingAdminContent ? (
+                        <div className="flex items-center justify-center py-8">
+                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-orange-600 mr-2"></div>
+                          Loading tournament content...
+                        </div>
+                      ) : adminTournamentContent && adminTournamentContent.length > 0 ? (
+                        <div className="space-y-6">
+                          {adminTournamentContent.map((tournament: any) => (
+                            <Card key={tournament.id} className="border-l-4 border-l-blue-500">
+                              <CardHeader>
+                                <CardTitle className="text-xl">{tournament.title}</CardTitle>
+                                <CardDescription>
+                                  Competition ID: {tournament.competitionId} | Game Content ID: {tournament.gameContentId}
+                                </CardDescription>
+                              </CardHeader>
+                              <CardContent className="space-y-4">
+                                {tournament.content?.lightning_diagnosis?.rounds && (
+                                  <div className="space-y-4">
+                                    {tournament.content.lightning_diagnosis.rounds.map((round: any, roundIndex: number) => (
+                                      <div key={roundIndex} className="border rounded-lg p-4">
+                                        <h4 className="font-semibold mb-3 text-lg">
+                                          Round {roundIndex + 1}: {round.name} ({round.questions?.length || 0} questions)
+                                        </h4>
+                                        <div className="grid gap-3">
+                                          {round.questions?.map((question: any, qIndex: number) => (
+                                            <div key={qIndex} className="border-l-2 border-gray-200 pl-3">
+                                              <p className="font-medium">Q{qIndex + 1}: {question.scenario}</p>
+                                              <p className="text-sm text-green-600 mt-1">
+                                                <strong>Answer:</strong> {question.correctDiagnosis}
+                                              </p>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 text-muted-foreground">
+                          No tournament content available
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+              )}
+            </Tabs>
           </TabsContent>
 
           {/* Complex Cases Tab */}

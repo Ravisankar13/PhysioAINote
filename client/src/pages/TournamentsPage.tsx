@@ -74,6 +74,11 @@ export default function TournamentsPage() {
   // Debug logging
   console.log('User data:', user);
   console.log('Is admin:', isAdmin, 'Username:', user?.username);
+  
+  // Alert for debugging
+  if (user?.username === 'Fateofjustice') {
+    console.log('🔧 ADMIN USER DETECTED - Tab should be visible!');
+  }
 
   // Fetch active tournaments
   const { data: tournaments, isLoading } = useQuery({
@@ -92,11 +97,6 @@ export default function TournamentsPage() {
   const { data: allTournamentContent } = useQuery({
     queryKey: ['/api/tournaments/admin/all-content'],
     enabled: isAdmin,
-    queryFn: async () => {
-      const response = await fetch('/api/tournaments/admin/all-content');
-      if (!response.ok) throw new Error('Failed to fetch tournament content');
-      return response.json();
-    },
   });
 
   // Register for tournament mutation

@@ -70,6 +70,10 @@ export default function TournamentsPage() {
 
   // Check if current user is admin
   const isAdmin = user?.username === 'Fateofjustice';
+  
+  // Debug logging
+  console.log('User data:', user);
+  console.log('Is admin:', isAdmin, 'Username:', user?.username);
 
   // Fetch active tournaments
   const { data: tournaments, isLoading } = useQuery({

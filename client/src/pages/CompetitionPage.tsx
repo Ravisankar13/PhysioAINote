@@ -1874,36 +1874,43 @@ export default function CompetitionPage() {
                               </CardHeader>
                               <CardContent className="space-y-4">
                                 {(() => {
-                                  console.log("Tournament content:", tournament.content);
-                                  console.log("Lightning diagnosis:", tournament.content?.lightning_diagnosis);
-                                  console.log("LightningDiagnosis:", tournament.content?.lightningDiagnosis);
-                                  const rounds = tournament.content?.lightning_diagnosis?.rounds || tournament.content?.lightningDiagnosis?.rounds;
-                                  console.log("Rounds:", rounds);
-                                  return null;
-                                })()}
-                                {(tournament.content?.lightning_diagnosis?.rounds || tournament.content?.lightningDiagnosis?.rounds) && Array.isArray(tournament.content.lightning_diagnosis?.rounds || tournament.content.lightningDiagnosis?.rounds) ? (
-                                  <div className="space-y-4">
-                                    {(tournament.content.lightning_diagnosis?.rounds || tournament.content.lightningDiagnosis?.rounds || []).map((round: any, roundIndex: number) => (
-                                      <div key={roundIndex} className="border rounded-lg p-4">
-                                        <h4 className="font-semibold mb-3 text-lg">
-                                          Round {roundIndex + 1}: {round.name} ({round.questions?.length || 0} questions)
-                                        </h4>
-                                        <div className="grid gap-3">
-                                          {Array.isArray(round.questions) ? round.questions.map((question: any, qIndex: number) => (
-                                            <div key={qIndex} className="border-l-2 border-gray-200 pl-3">
-                                              <p className="font-medium">Q{qIndex + 1}: {question.scenario}</p>
-                                              <p className="text-sm text-green-600 mt-1">
-                                                <strong>Answer:</strong> {question.correctDiagnosis}
-                                              </p>
-                                            </div>
-                                          )) : (
-                                            <p className="text-sm text-muted-foreground">No questions available</p>
-                                          )}
+                                  const lightningDiag = tournament.content?.lightning_diagnosis || tournament.content?.lightningDiagnosis;
+                                  const rounds = lightningDiag?.rounds;
+                                  
+                                  // Handle both array and object rounds
+                                  let roundsArray = [];
+                                  if (Array.isArray(rounds)) {
+                                    roundsArray = rounds;
+                                  } else if (rounds && typeof rounds === 'object') {
+                                    // Convert object to array for object-based rounds
+                                    roundsArray = Object.values(rounds);
+                                  }
+                                  
+                                  return roundsArray.length > 0 ? (
+                                    <div className="space-y-4">
+                                      {roundsArray.map((round: any, roundIndex: number) => (
+                                        <div key={roundIndex} className="border rounded-lg p-4">
+                                          <h4 className="font-semibold mb-3 text-lg">
+                                            Round {roundIndex + 1}: {round.name || `${round.difficulty} - ${round.roundNumber}`} ({round.questions?.length || 0} questions)
+                                          </h4>
+                                          <div className="grid gap-3">
+                                            {Array.isArray(round.questions) ? round.questions.map((question: any, qIndex: number) => (
+                                              <div key={qIndex} className="border-l-2 border-gray-200 pl-3">
+                                                <p className="font-medium">Q{qIndex + 1}: {question.scenario || question.clinicalPresentation}</p>
+                                                <p className="text-sm text-green-600 mt-1">
+                                                  <strong>Answer:</strong> {question.correctDiagnosis}
+                                                </p>
+                                              </div>
+                                            )) : (
+                                              <p className="text-sm text-muted-foreground">No questions available</p>
+                                            )}
+                                          </div>
                                         </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                ) : tournament.content ? (
+                                      ))}
+                                    </div>
+                                  ) : null;
+                                })()}
+                                {!tournament.content?.lightning_diagnosis?.rounds && !tournament.content?.lightningDiagnosis?.rounds && tournament.content ? (
                                   <div className="text-center py-4">
                                     <p className="text-muted-foreground mb-4">Content structure needs to be processed</p>
                                     <details className="text-left">

@@ -60,6 +60,9 @@ import {
   soapVirtualPatients,
   type SoapVirtualPatient,
   type InsertSoapVirtualPatient,
+  continuousRecordingSessions,
+  type ContinuousRecordingSession,
+  type InsertContinuousRecordingSession,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, isNull, sql, ilike } from "drizzle-orm";
@@ -2128,6 +2131,114 @@ export class DatabaseStorage implements IStorage {
       return result[0];
     } catch (error) {
       console.error("Error getting SOAP virtual patient:", error);
+      throw error;
+    }
+  }
+
+  // Continuous Recording Session Methods
+  async createContinuousRecordingSession(data: InsertContinuousRecordingSession): Promise<ContinuousRecordingSession> {
+    try {
+      const [session] = await db
+        .insert(continuousRecordingSessions)
+        .values(data)
+        .returning();
+      
+      return session;
+    } catch (error) {
+      console.error("Error creating continuous recording session:", error);
+      throw error;
+    }
+  }
+
+  async getContinuousRecordingSession(id: number): Promise<ContinuousRecordingSession | undefined> {
+    try {
+      const [session] = await db
+        .select()
+        .from(continuousRecordingSessions)
+        .where(eq(continuousRecordingSessions.id, id))
+        .limit(1);
+      
+      return session;
+    } catch (error) {
+      console.error("Error getting continuous recording session:", error);
+      throw error;
+    }
+  }
+
+  async getContinuousRecordingSessionBySessionId(sessionId: string): Promise<ContinuousRecordingSession | undefined> {
+    try {
+      const [session] = await db
+        .select()
+        .from(continuousRecordingSessions)
+        .where(eq(continuousRecordingSessions.sessionId, sessionId))
+        .limit(1);
+      
+      return session;
+    } catch (error) {
+      console.error("Error getting continuous recording session by session ID:", error);
+      throw error;
+    }
+  }
+
+  async updateContinuousRecordingSession(id: number, data: Partial<ContinuousRecordingSession>): Promise<ContinuousRecordingSession> {
+    try {
+      const [session] = await db
+        .update(continuousRecordingSessions)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(continuousRecordingSessions.id, id))
+        .returning();
+      
+      return session;
+    } catch (error) {
+      console.error("Error updating continuous recording session:", error);
+      throw error;
+    }
+  }
+
+  async getActiveContinuousRecordingSession(userId: number): Promise<ContinuousRecordingSession | undefined> {
+    try {
+      const [session] = await db
+        .select()
+        .from(continuousRecordingSessions)
+        .where(and(
+          eq(continuousRecordingSessions.userId, userId),
+          eq(continuousRecordingSessions.isActive, true)
+        ))
+        .limit(1);
+      
+      return session;
+    } catch (error) {
+      console.error("Error getting active continuous recording session:", error);
+      throw error;
+    }
+  }
+
+  async getSoapNotesBySessionId(sessionId: string): Promise<SoapNote[]> {
+    try {
+      const notes = await db
+        .select()
+        .from(soapNotes)
+        .where(eq(soapNotes.sessionId, sessionId))
+        .orderBy(desc(soapNotes.createdAt));
+      
+      return notes;
+    } catch (error) {
+      console.error("Error getting SOAP notes by session ID:", error);
+      throw error;
+    }
+  }
+
+  async getSoapNotesByContinuousSessionId(continuousSessionId: number): Promise<SoapNote[]> {
+    try {
+      const notes = await db
+        .select()
+        .from(soapNotes)
+        .where(eq(soapNotes.continuousRecordingSessionId, continuousSessionId))
+        .orderBy(soapNotes.patientSequenceNumber);
+      
+      return notes;
+    } catch (error) {
+      console.error("Error getting SOAP notes by continuous session ID:", error);
       throw error;
     }
   }

@@ -32,6 +32,7 @@ import { competitionAnalyticsService } from "./competitionAnalyticsService";
 import { soapNotesService } from "./soapNotesService";
 import { bodyScannerService, SymptomData } from "./bodyScannerService";
 import { realTimeAIService } from "./realtimeAIService";
+import { continuousRecordingService } from "./continuousRecordingService";
 import { virtualPatientService } from "./virtualPatientService";
 import { soapVirtualPatientService } from "./soapVirtualPatientService";
 import { documentGenerationService } from "./documentGenerationService";
@@ -9322,6 +9323,101 @@ Respond in JSON format:
       res.json(soapSections);
     } catch (error: any) {
       console.error("Error generating SOAP sections:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ============================================================================
+  // CONTINUOUS MULTI-PATIENT RECORDING ROUTES
+  // ============================================================================
+  
+  // Start continuous recording session
+  app.post("/api/continuous-recording/start", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: "User not authenticated" });
+      }
+
+      const session = await continuousRecordingService.startContinuousSession(userId);
+      res.json({
+        success: true,
+        session,
+        message: "Continuous recording session started"
+      });
+    } catch (error: any) {
+      console.error("Error starting continuous recording session:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Process transcript chunk during continuous recording
+  app.post("/api/continuous-recording/:sessionId/transcript", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { sessionId } = req.params;
+      const { transcriptChunk } = req.body;
+
+      if (!transcriptChunk) {
+        return res.status(400).json({ error: "Transcript chunk required" });
+      }
+
+      const result = await continuousRecordingService.processTranscriptChunk(sessionId, transcriptChunk);
+      res.json(result);
+    } catch (error: any) {
+      console.error("Error processing transcript chunk:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Manual patient switch
+  app.post("/api/continuous-recording/:sessionId/switch-patient", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { sessionId } = req.params;
+      const { newPatientName } = req.body;
+
+      const result = await continuousRecordingService.manualPatientSwitch(sessionId, newPatientName);
+      res.json(result);
+    } catch (error: any) {
+      console.error("Error switching patient:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // End continuous recording session
+  app.post("/api/continuous-recording/:sessionId/end", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { sessionId } = req.params;
+
+      const result = await continuousRecordingService.endContinuousSession(sessionId);
+      res.json(result);
+    } catch (error: any) {
+      console.error("Error ending continuous recording session:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get active continuous recording session
+  app.get("/api/continuous-recording/active", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const activeSession = continuousRecordingService.getActiveSession();
+      res.json({
+        activeSession,
+        currentPatients: continuousRecordingService.getCurrentPatientSegments()
+      });
+    } catch (error: any) {
+      console.error("Error getting active session:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get completed SOAP notes for session
+  app.get("/api/continuous-recording/:sessionId/soap-notes", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { sessionId } = req.params;
+      const soapNotes = await continuousRecordingService.getCompletedSoapNotes(sessionId);
+      res.json(soapNotes);
+    } catch (error: any) {
+      console.error("Error getting SOAP notes:", error);
       res.status(500).json({ error: error.message });
     }
   });

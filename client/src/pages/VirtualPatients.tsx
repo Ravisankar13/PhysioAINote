@@ -992,7 +992,7 @@ export default function VirtualPatientsPage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           
           {/* Left Panel - Patient Profile & Clinical Data */}
-          <div className="lg:col-span-3 space-y-4">
+          <div className="lg:col-span-2 space-y-4">
             
             {/* Patient Demographics */}
             <Card>
@@ -1079,7 +1079,7 @@ export default function VirtualPatientsPage() {
 
           </div>
 
-          {/* Center Panel - 3D Animation (Larger) */}
+          {/* Center Panel - 3D Animation */}
           <div className="lg:col-span-6">
             <Card className="h-[600px]">
               <CardHeader className="pb-3">
@@ -1334,7 +1334,7 @@ export default function VirtualPatientsPage() {
           </div>
 
           {/* Right Panel - Clinical Correlation */}
-          <div className="space-y-6">
+          <div className="lg:col-span-4 space-y-6">
             {/* Clinical Notes */}
             <Card>
               <CardHeader className="pb-3">

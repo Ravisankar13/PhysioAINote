@@ -1869,8 +1869,8 @@ export default function VirtualPatientsPage() {
                       AI Video Generation
                     </h4>
                     
-                    {/* Clinical Animation Display - Always show for selected patient */}
-                    {selectedPatient && (
+                    {/* Clinical Animation Display - Only show for selected patient with valid condition */}
+                    {selectedPatient && (selectedPatient?.clinicalPresentation?.chiefComplaint || selectedPatient?.chief_complaint) && (
                       <div className="mb-3 p-2 bg-blue-50 rounded-lg border border-blue-200">
                         <h5 className="text-xs font-semibold text-blue-800 mb-1">Clinical Movement Analysis</h5>
                         <div className="relative">
@@ -1880,7 +1880,7 @@ export default function VirtualPatientsPage() {
                             patientCondition={
                               selectedPatient?.clinicalPresentation?.chiefComplaint || 
                               selectedPatient?.chief_complaint || 
-                              'Pain and restricted movement in the left shoulder'
+                              ''
                             }
                             className="w-full h-64 rounded border bg-white"
                           />

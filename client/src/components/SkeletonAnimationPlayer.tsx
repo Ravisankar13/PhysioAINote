@@ -51,16 +51,24 @@ export default function SkeletonAnimationPlayer({
 
   // Get movement limitations based on patient condition
   const getMovementLimitations = (condition: string) => {
+    if (!condition || condition.trim() === '') {
+      return {
+        shoulderRange: 1.0,
+        armElevation: 1.0,
+        kneeFlexion: 1.0,
+        legMovement: 1.0,
+        spinalFlexion: 1.0,
+        bodyRotation: 1.0,
+        movementType: 'normal_movement',
+        painPattern: 'no_limitation'
+      };
+    }
+    
     const lowerCondition = condition.toLowerCase();
-    console.log('Analyzing patient condition:', condition);
-    console.log('Lowercase condition:', lowerCondition);
     
     // Shoulder-specific conditions
-    if (lowerCondition.includes('shoulder') || lowerCondition.includes('rotator cuff') || lowerCondition.includes('impingement')) {
-      console.log('Detected shoulder condition!');
-      
+    if (lowerCondition.includes('shoulder') || lowerCondition.includes('rotator cuff') || lowerCondition.includes('impingement') || lowerCondition.includes('arm')) {
       if (lowerCondition.includes('frozen') || lowerCondition.includes('adhesive capsulitis')) {
-        console.log('Frozen shoulder detected');
         return {
           shoulderRange: 0.1, // Severely limited
           armElevation: 0.05,
@@ -68,7 +76,6 @@ export default function SkeletonAnimationPlayer({
           painPattern: 'severe_restriction'
         };
       } else if (lowerCondition.includes('tear') || lowerCondition.includes('rupture')) {
-        console.log('Rotator cuff tear detected');
         return {
           shoulderRange: 0.2,
           armElevation: 0.1,
@@ -76,7 +83,6 @@ export default function SkeletonAnimationPlayer({
           painPattern: 'weakness_limitation'
         };
       } else if (lowerCondition.includes('impingement') || lowerCondition.includes('subacromial')) {
-        console.log('Shoulder impingement detected');
         return {
           shoulderRange: 0.4,
           armElevation: 0.3,
@@ -84,15 +90,12 @@ export default function SkeletonAnimationPlayer({
           painPattern: 'overhead_limitation'
         };
       } else {
-        console.log('General shoulder pain detected');
-        const result = {
+        return {
           shoulderRange: 0.3,
           armElevation: 0.2,
           movementType: 'shoulder_pain',
           painPattern: 'general_limitation'
         };
-        console.log('Returning shoulder pain result:', result);
-        return result;
       }
     }
     
@@ -168,7 +171,7 @@ export default function SkeletonAnimationPlayer({
       };
     }
     
-    const result = {
+    return {
       shoulderRange: 1.0,
       armElevation: 1.0,
       kneeFlexion: 1.0,
@@ -178,9 +181,6 @@ export default function SkeletonAnimationPlayer({
       movementType: 'normal_movement',
       painPattern: 'no_limitation'
     };
-    
-    console.log('Movement limitations result:', result);
-    return result;
   };
 
   // Calculate skeleton positions for current frame

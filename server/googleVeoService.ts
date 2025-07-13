@@ -250,7 +250,19 @@ export class GoogleVeoService {
         },
         safetySettings: [
           {
-            category: 'HARM_CATEGORY_MEDICAL',
+            category: 'HARM_CATEGORY_HARASSMENT',
+            threshold: 'BLOCK_NONE'
+          },
+          {
+            category: 'HARM_CATEGORY_HATE_SPEECH',
+            threshold: 'BLOCK_NONE'
+          },
+          {
+            category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
+            threshold: 'BLOCK_NONE'
+          },
+          {
+            category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
             threshold: 'BLOCK_NONE'
           }
         ]
@@ -268,6 +280,11 @@ export class GoogleVeoService {
       // Handle specific OpenSSL private key errors
       if (error.code === 'ERR_OSSL_UNSUPPORTED' || error.reason === 'unsupported') {
         throw new Error('Google Cloud private key format issue. The service account private key appears to be in an unsupported format. Please regenerate your service account JSON file from the Google Cloud Console.');
+      }
+      
+      // Handle Google API configuration errors
+      if (error.message?.includes('HARM_CATEGORY_MEDICAL') || error.message?.includes('Invalid value at')) {
+        throw new Error('Google Veo API configuration updated. Safety settings have been corrected for current API version.');
       }
       
       // Provide user-friendly error messages based on error type

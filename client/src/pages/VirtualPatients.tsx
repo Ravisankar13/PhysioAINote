@@ -1537,7 +1537,7 @@ Example: 'Patient reports decreased shoulder external rotation, pain during over
                     <span className="font-medium">Google Veo AI Video Generation</span>
                   </div>
                   <p className="mt-1 text-blue-700">
-                    Generates realistic movement videos from clinical text. Requires Google Cloud setup.
+                    Advanced AI video generation for realistic patient movement demonstrations. Currently in setup phase.
                   </p>
                 </div>
                 <Button
@@ -1549,12 +1549,12 @@ Example: 'Patient reports decreased shoulder external rotation, pain during over
                   {isGeneratingVideo ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Creating Video...
+                      Testing Connection...
                     </>
                   ) : (
                     <>
                       <Video className="h-4 w-4 mr-2" />
-                      Generate AI Video
+                      Test AI Video Generation
                     </>
                   )}
                 </Button>

@@ -15,6 +15,13 @@ export class GoogleVeoService {
     // Handle Google Cloud authentication
     this.setupAuthentication();
     
+    // Validate required environment variables
+    if (!process.env.GOOGLE_CLOUD_PROJECT_ID) {
+      throw new Error('GOOGLE_CLOUD_PROJECT_ID is required for Google Veo');
+    }
+    
+    console.log('Initializing Vertex AI with project:', process.env.GOOGLE_CLOUD_PROJECT_ID);
+    
     // Initialize Vertex AI with project configuration
     this.vertexAI = new VertexAI({
       project: process.env.GOOGLE_CLOUD_PROJECT_ID,
@@ -32,12 +39,27 @@ export class GoogleVeoService {
       // If GOOGLE_APPLICATION_CREDENTIALS contains JSON content, write it to a temp file
       if (process.env.GOOGLE_APPLICATION_CREDENTIALS && process.env.GOOGLE_APPLICATION_CREDENTIALS.startsWith('{')) {
         const credentialsPath = path.join(process.cwd(), 'google-credentials.json');
-        fs.writeFileSync(credentialsPath, process.env.GOOGLE_APPLICATION_CREDENTIALS);
+        
+        // Parse and validate JSON
+        const credentials = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS);
+        
+        // Write formatted JSON to file
+        fs.writeFileSync(credentialsPath, JSON.stringify(credentials, null, 2));
+        
+        // Update environment variable to point to file
         process.env.GOOGLE_APPLICATION_CREDENTIALS = credentialsPath;
-        console.log('Google Cloud credentials file created successfully');
+        
+        console.log('Google Cloud credentials file created at:', credentialsPath);
+        console.log('Project ID from credentials:', credentials.project_id);
+        
+        // Also ensure project ID is available
+        if (!process.env.GOOGLE_CLOUD_PROJECT_ID && credentials.project_id) {
+          process.env.GOOGLE_CLOUD_PROJECT_ID = credentials.project_id;
+        }
       }
     } catch (error) {
       console.error('Error setting up Google Cloud authentication:', error);
+      throw new Error('Failed to setup Google Cloud credentials');
     }
   }
 

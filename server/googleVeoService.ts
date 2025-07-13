@@ -10,6 +10,7 @@ import * as path from 'path';
 export class GoogleVeoService {
   private vertexAI: VertexAI;
   private model: any;
+  private configured: boolean = false;
 
   constructor() {
     // Handle Google Cloud authentication
@@ -19,40 +20,107 @@ export class GoogleVeoService {
     if (this.isConfigured()) {
       console.log('Initializing Vertex AI with project:', process.env.GOOGLE_CLOUD_PROJECT_ID);
       
-      // Initialize Vertex AI with project configuration
-      this.vertexAI = new VertexAI({
-        project: process.env.GOOGLE_CLOUD_PROJECT_ID,
-        location: process.env.GOOGLE_CLOUD_LOCATION || 'us-central1'
-      });
-      
-      // Initialize Veo model
-      this.model = this.vertexAI.getGenerativeModel({
-        model: 'veo-001'
-      });
+      try {
+        // Initialize Vertex AI with project configuration
+        this.vertexAI = new VertexAI({
+          project: process.env.GOOGLE_CLOUD_PROJECT_ID,
+          location: process.env.GOOGLE_CLOUD_LOCATION || 'us-central1'
+        });
+        
+        // Initialize Veo model
+        this.model = this.vertexAI.getGenerativeModel({
+          model: 'veo-001'
+        });
+        
+        this.configured = true;
+        console.log('Google Veo service successfully initialized');
+      } catch (error) {
+        console.error('Failed to initialize Google Veo service:', error);
+        this.configured = false;
+      }
     } else {
       console.log('Google Veo not configured - video generation will be unavailable');
     }
   }
 
   private isConfigured(): boolean {
-    return !!(process.env.GOOGLE_CLOUD_PROJECT_ID && 
-              process.env.GOOGLE_APPLICATION_CREDENTIALS &&
-              process.env.GOOGLE_CLOUD_PROJECT_ID.length < 100); // Project ID shouldn't be huge
+    const hasProjectId = process.env.GOOGLE_CLOUD_PROJECT_ID && process.env.GOOGLE_CLOUD_PROJECT_ID.length < 100;
+    const hasCredentials = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    const isValid = hasProjectId && hasCredentials && this.configured !== false;
+    
+    console.log('Configuration check:', {
+      hasProjectId: !!hasProjectId,
+      projectIdLength: process.env.GOOGLE_CLOUD_PROJECT_ID?.length,
+      hasCredentials: !!hasCredentials,
+      configured: this.configured,
+      isValid
+    });
+    
+    return isValid;
   }
 
   private setupAuthentication() {
     try {
+      console.log('Setting up Google Cloud authentication...');
+      console.log('Current GOOGLE_CLOUD_PROJECT_ID length:', process.env.GOOGLE_CLOUD_PROJECT_ID?.length);
+      
+      // Check if GOOGLE_CLOUD_PROJECT_ID itself contains JSON data (incorrect setup)
+      // Also check for longer strings that might contain JSON
+      if (process.env.GOOGLE_CLOUD_PROJECT_ID && 
+          (process.env.GOOGLE_CLOUD_PROJECT_ID.startsWith('{') || process.env.GOOGLE_CLOUD_PROJECT_ID.length > 100)) {
+        console.log('GOOGLE_CLOUD_PROJECT_ID appears to contain credential data - attempting to extract project_id...');
+        
+        // The data doesn't start with { so it might be in a different format
+        // Let's try to find JSON structure within the data
+        const dataStr = process.env.GOOGLE_CLOUD_PROJECT_ID;
+        
+        // Look for JSON patterns in the data
+        const jsonMatch = dataStr.match(/\{[^}]+\}/);
+        if (jsonMatch) {
+          try {
+            const credentials = JSON.parse(jsonMatch[0]);
+            if (credentials.project_id) {
+              console.log('Extracted project ID from embedded JSON:', credentials.project_id);
+              process.env.GOOGLE_CLOUD_PROJECT_ID = credentials.project_id;
+              this.configured = true;
+              return;
+            }
+          } catch (parseError) {
+            console.log('No valid JSON found in data');
+          }
+        }
+        
+        // If no JSON found, check if this could be a file path or project ID directly
+        console.log('Checking if data contains project identifier...');
+        
+        // Look for potential project ID patterns (usually project-name-number format)
+        const projectMatch = dataStr.match(/([a-z][a-z0-9\-]{4,28}[a-z0-9])/);
+        if (projectMatch) {
+          console.log('Found potential project ID:', projectMatch[1]);
+          process.env.GOOGLE_CLOUD_PROJECT_ID = projectMatch[1];
+          this.configured = true;
+          return;
+        }
+        
+        console.log('Could not extract valid project ID from GOOGLE_CLOUD_PROJECT_ID');
+        this.configured = false;
+      }
+      
       // Check if GOOGLE_APPLICATION_CREDENTIALS contains JSON content
       if (process.env.GOOGLE_APPLICATION_CREDENTIALS && process.env.GOOGLE_APPLICATION_CREDENTIALS.startsWith('{')) {
         const credentialsPath = path.join(process.cwd(), 'google-credentials.json');
         
-        // Parse and validate JSON
+        console.log('Parsing Google Cloud credentials JSON from GOOGLE_APPLICATION_CREDENTIALS...');
         const credentials = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS);
         
         // Validate required credential fields
         if (!credentials.type || !credentials.project_id || !credentials.private_key || !credentials.client_email) {
+          console.error('Missing required credential fields. Available keys:', Object.keys(credentials));
           throw new Error('Invalid Google Cloud credentials format');
         }
+        
+        console.log('Credentials validated successfully');
+        console.log('Project ID from credentials:', credentials.project_id);
         
         // Write formatted JSON to file
         fs.writeFileSync(credentialsPath, JSON.stringify(credentials, null, 2));
@@ -60,23 +128,30 @@ export class GoogleVeoService {
         // Update environment variable to point to file
         process.env.GOOGLE_APPLICATION_CREDENTIALS = credentialsPath;
         
-        console.log('Google Cloud credentials file created successfully');
-        console.log('Project ID from credentials:', credentials.project_id);
+        // Set the actual project ID from credentials
+        process.env.GOOGLE_CLOUD_PROJECT_ID = credentials.project_id;
         
-        // Ensure project ID is correctly set (not the credential data)
-        if (credentials.project_id && credentials.project_id !== process.env.GOOGLE_CLOUD_PROJECT_ID) {
-          console.log('Using project ID from credentials file:', credentials.project_id);
-          process.env.GOOGLE_CLOUD_PROJECT_ID = credentials.project_id;
+        console.log('Google Cloud credentials file created successfully at:', credentialsPath);
+        console.log('Project ID set to:', credentials.project_id);
+        
+        this.configured = true;
+        
+      } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS && !process.env.GOOGLE_APPLICATION_CREDENTIALS.startsWith('{')) {
+        console.log('Using file-based Google Cloud credentials:', process.env.GOOGLE_APPLICATION_CREDENTIALS);
+        // Check if we have a valid project ID
+        if (process.env.GOOGLE_CLOUD_PROJECT_ID && process.env.GOOGLE_CLOUD_PROJECT_ID.length < 100) {
+          this.configured = true;
+        } else {
+          console.error('Invalid or missing project ID');
+          this.configured = false;
         }
       } else {
-        // Check if we have both required environment variables
-        if (!process.env.GOOGLE_CLOUD_PROJECT_ID || !process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-          throw new Error('Missing required Google Cloud environment variables');
-        }
+        console.log('No Google Cloud credentials found');
+        this.configured = false;
       }
     } catch (error) {
       console.error('Error setting up Google Cloud authentication:', error);
-      // Don't throw error, just log it - we'll handle this gracefully
+      this.configured = false;
     }
   }
 

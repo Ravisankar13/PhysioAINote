@@ -170,33 +170,65 @@ const RealisticHumanModel: React.FC<RealisticHumanModelProps> = ({
     if (!animationFrames.length || !humanModelRef.current) return;
     
     const frame = animationFrames[frameIndex % animationFrames.length];
-    if (!frame || !frame.landmarks) return;
+    if (!frame || !frame.landmarks) {
+      console.log('Invalid frame or landmarks:', { frame, frameIndex });
+      return;
+    }
 
     // Map pose landmarks to body parts with movement restrictions
     const landmarks = frame.landmarks;
+    console.log('Applying animation frame:', frameIndex, 'landmarks count:', landmarks.length);
     
     // Apply realistic movement with restrictions
     humanModelRef.current.children.forEach((child) => {
-      if (child.name === 'leftThigh' && landmarks[23]) {
-        // Simulate knee restriction by limiting thigh rotation
-        const restriction = Math.sin(frameIndex * 0.1) * 0.2; // Simulated restriction
-        child.rotation.x = landmarks[23].y * 0.3 + restriction;
+      const childName = child.name;
+      
+      // Enhanced movement patterns for various body parts
+      if (childName === 'leftThigh' && landmarks[23]) {
+        const restriction = Math.sin(frameIndex * 0.1) * 0.3;
+        child.rotation.x = landmarks[23].y * 0.5 + restriction;
+        child.position.y = 0.4 + landmarks[23].z * 0.1;
       }
       
-      if (child.name === 'rightThigh' && landmarks[24]) {
-        const restriction = Math.sin(frameIndex * 0.1) * 0.2;
-        child.rotation.x = landmarks[24].y * 0.3 + restriction;
+      if (childName === 'rightThigh' && landmarks[24]) {
+        const restriction = Math.sin(frameIndex * 0.1) * 0.3;
+        child.rotation.x = landmarks[24].y * 0.5 + restriction;
+        child.position.y = 0.4 + landmarks[24].z * 0.1;
       }
       
-      // Apply shoulder restrictions
-      if (child.name === 'leftUpperArm' && landmarks[11]) {
-        const shoulderRestriction = Math.sin(frameIndex * 0.08) * 0.15;
-        child.rotation.z = landmarks[11].x * 0.4 + shoulderRestriction;
+      if (childName === 'leftShin' && landmarks[25]) {
+        child.rotation.x = landmarks[25].y * 0.4;
+        child.position.y = 0.15 + landmarks[25].z * 0.1;
       }
       
-      if (child.name === 'rightUpperArm' && landmarks[12]) {
-        const shoulderRestriction = Math.sin(frameIndex * 0.08) * 0.15;
-        child.rotation.z = landmarks[12].x * -0.4 + shoulderRestriction;
+      if (childName === 'rightShin' && landmarks[26]) {
+        child.rotation.x = landmarks[26].y * 0.4;
+        child.position.y = 0.15 + landmarks[26].z * 0.1;
+      }
+      
+      // Enhanced shoulder movement
+      if (childName === 'leftUpperArm' && landmarks[11]) {
+        const shoulderRestriction = Math.sin(frameIndex * 0.08) * 0.2;
+        child.rotation.z = landmarks[11].x * 0.6 + shoulderRestriction;
+        child.rotation.x = landmarks[11].y * 0.4;
+      }
+      
+      if (childName === 'rightUpperArm' && landmarks[12]) {
+        const shoulderRestriction = Math.sin(frameIndex * 0.08) * 0.2;
+        child.rotation.z = landmarks[12].x * -0.6 + shoulderRestriction;
+        child.rotation.x = landmarks[12].y * 0.4;
+      }
+      
+      // Add torso movement
+      if (childName === 'chest' && landmarks[0]) {
+        child.rotation.y = landmarks[0].x * 0.1;
+        child.rotation.x = landmarks[0].y * 0.1;
+      }
+      
+      // Add head movement
+      if (childName === 'head' && landmarks[0]) {
+        child.rotation.y = landmarks[0].x * 0.2;
+        child.rotation.x = landmarks[0].y * 0.2;
       }
     });
   };
@@ -263,8 +295,8 @@ const RealisticHumanModel: React.FC<RealisticHumanModelProps> = ({
         applyAnimationFrame(currentFrame);
       }
       
-      // Gentle rotation for better viewing
-      if (humanModelRef.current) {
+      // Gentle rotation for better viewing (only when not playing animation)
+      if (humanModelRef.current && !isPlaying) {
         humanModelRef.current.rotation.y += 0.005;
       }
       

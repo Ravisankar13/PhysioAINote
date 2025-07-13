@@ -174,8 +174,23 @@ export default function VirtualPatientsPage() {
   const [isGeneratingFromText, setIsGeneratingFromText] = useState(false);
   const [textAnimationResult, setTextAnimationResult] = useState<any>(null);
   const [isGeneratingMovement, setIsGeneratingMovement] = useState(false);
+  const [currentAnimationFrame, setCurrentAnimationFrame] = useState(0);
 
   const { toast } = useToast();
+
+  // Animation frame progression
+  useEffect(() => {
+    if (!isPlaying) return;
+    
+    const animationData = getAnimationData(selectedPatient);
+    if (!animationData?.frames?.length) return;
+    
+    const interval = setInterval(() => {
+      setCurrentAnimationFrame(prev => (prev + 1) % animationData.frames.length);
+    }, 100); // 10 FPS animation
+    
+    return () => clearInterval(interval);
+  }, [isPlaying, selectedPatient]);
   const queryClient = useQueryClient();
 
   // Helper functions for clinical scoring display
@@ -686,6 +701,17 @@ export default function VirtualPatientsPage() {
           aiGenerated: true
         };
         setSelectedPatient(updatedPatient);
+        
+        // Automatically start playing the animation
+        setIsPlaying(true);
+        setCurrentAnimationFrame(0);
+        
+        console.log('Functional movement applied:', {
+          movement: movementId,
+          framesCount: result.movementData.frames.length,
+          firstFrame: result.movementData.frames[0],
+          lastFrame: result.movementData.frames[result.movementData.frames.length - 1]
+        });
       }
 
       toast({
@@ -1059,6 +1085,8 @@ export default function VirtualPatientsPage() {
                         <RealisticHumanModel
                           animationFrames={animationData.frames}
                           isPlaying={isPlaying}
+                          currentFrame={currentAnimationFrame}
+                          onFrameChange={setCurrentAnimationFrame}
                           className="w-full h-full"
                         />
                         {/* Animation Source Badge */}

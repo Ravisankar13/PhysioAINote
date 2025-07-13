@@ -165,6 +165,55 @@ const RealisticHumanModel: React.FC<RealisticHumanModelProps> = ({
     return humanGroup;
   };
 
+  // Set neutral standing position for human model
+  const setNeutralStandingPose = (humanModel: THREE.Group) => {
+    humanModel.children.forEach((child) => {
+      const childName = child.name;
+      
+      // Reset to neutral standing positions
+      if (childName === 'hip') {
+        child.position.set(0, 0.78, 0);
+        child.rotation.set(0, 0, 0);
+      } else if (childName === 'leftThigh') {
+        child.position.set(-0.1, 0.55, 0);
+        child.rotation.set(0, 0, 0);
+      } else if (childName === 'rightThigh') {
+        child.position.set(0.1, 0.55, 0);
+        child.rotation.set(0, 0, 0);
+      } else if (childName === 'leftShin') {
+        child.position.set(-0.1, 0.25, 0);
+        child.rotation.set(0, 0, 0);
+      } else if (childName === 'rightShin') {
+        child.position.set(0.1, 0.25, 0);
+        child.rotation.set(0, 0, 0);
+      } else if (childName === 'leftFoot') {
+        child.position.set(-0.1, 0.05, 0);
+        child.rotation.set(0, 0, 0);
+      } else if (childName === 'rightFoot') {
+        child.position.set(0.1, 0.05, 0);
+        child.rotation.set(0, 0, 0);
+      } else if (childName === 'chest') {
+        child.position.set(0, 1.2, 0);
+        child.rotation.set(0, 0, 0);
+      } else if (childName === 'head') {
+        child.position.set(0, 1.65, 0);
+        child.rotation.set(0, 0, 0);
+      } else if (childName === 'leftUpperArm') {
+        child.position.set(-0.25, 1.05, 0);
+        child.rotation.set(0, 0, 0);
+      } else if (childName === 'rightUpperArm') {
+        child.position.set(0.25, 1.05, 0);
+        child.rotation.set(0, 0, 0);
+      } else if (childName === 'leftForearm') {
+        child.position.set(-0.25, 0.75, 0);
+        child.rotation.set(0, 0, 0);
+      } else if (childName === 'rightForearm') {
+        child.position.set(0.25, 0.75, 0);
+        child.rotation.set(0, 0, 0);
+      }
+    });
+  };
+
   // Apply animation frame to human model
   const applyAnimationFrame = (frameIndex: number) => {
     if (!animationFrames.length || !humanModelRef.current) return;
@@ -317,6 +366,9 @@ const RealisticHumanModel: React.FC<RealisticHumanModelProps> = ({
     humanModelRef.current = humanModel;
     scene.add(humanModel);
 
+    // Set initial neutral standing position
+    setNeutralStandingPose(humanModel);
+
     // Ground plane
     const planeGeometry = new THREE.PlaneGeometry(5, 5);
     const planeMaterial = new THREE.MeshLambertMaterial({ color: 0xe8e8e8 });
@@ -370,10 +422,13 @@ const RealisticHumanModel: React.FC<RealisticHumanModelProps> = ({
 
   // Update animation when frames or playing state changes
   useEffect(() => {
-    if (animationFrames.length > 0) {
+    if (animationFrames.length > 0 && humanModelRef.current) {
       applyAnimationFrame(currentFrame);
+    } else if (humanModelRef.current && !isPlaying) {
+      // Reset to neutral pose when not playing
+      setNeutralStandingPose(humanModelRef.current);
     }
-  }, [currentFrame, animationFrames]);
+  }, [currentFrame, animationFrames, isPlaying]);
 
   return (
     <div 

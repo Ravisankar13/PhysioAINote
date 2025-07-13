@@ -795,28 +795,53 @@ ENSURE the analysis is SPECIFICALLY tailored to the clinical text provided. Diff
         x: 0, y: 0, z: 0, visibility: 1
       }));
       
+      // Initialize all landmarks with neutral standing positions first
+      landmarks[0] = { x: 0, y: 1.65, z: 0, visibility: 1 }; // Head
+      landmarks[11] = { x: -0.25, y: 1.05, z: 0, visibility: 1 }; // Left shoulder
+      landmarks[12] = { x: 0.25, y: 1.05, z: 0, visibility: 1 }; // Right shoulder
+      landmarks[13] = { x: -0.25, y: 0.75, z: 0, visibility: 1 }; // Left elbow
+      landmarks[14] = { x: 0.25, y: 0.75, z: 0, visibility: 1 }; // Right elbow
+      landmarks[15] = { x: -0.25, y: 0.45, z: 0, visibility: 1 }; // Left wrist
+      landmarks[16] = { x: 0.25, y: 0.45, z: 0, visibility: 1 }; // Right wrist
+      landmarks[23] = { x: -0.1, y: 0.78, z: 0, visibility: 1 }; // Left hip
+      landmarks[24] = { x: 0.1, y: 0.78, z: 0, visibility: 1 }; // Right hip
+      landmarks[25] = { x: -0.1, y: 0.3, z: 0, visibility: 1 }; // Left knee
+      landmarks[26] = { x: 0.1, y: 0.3, z: 0, visibility: 1 }; // Right knee
+      landmarks[27] = { x: -0.1, y: 0.05, z: 0, visibility: 1 }; // Left ankle
+      landmarks[28] = { x: 0.1, y: 0.05, z: 0, visibility: 1 }; // Right ankle
+
+      // Apply squat movement modifications
       // Hip movement (landmarks 23, 24)
-      landmarks[23] = { x: -0.1, y: 0.78 - squatPhase * 0.33, z: -squatPhase * 0.15, visibility: 1 };
-      landmarks[24] = { x: 0.1, y: 0.78 - squatPhase * 0.33, z: -squatPhase * 0.15, visibility: 1 };
+      landmarks[23].y = 0.78 - squatPhase * 0.33;
+      landmarks[23].z = -squatPhase * 0.15;
+      landmarks[24].y = 0.78 - squatPhase * 0.33;
+      landmarks[24].z = -squatPhase * 0.15;
       
       // Knee movement (landmarks 25, 26)
-      landmarks[25] = { x: -0.1, y: 0.3 - squatPhase * 0.15, z: squatPhase * 0.15, visibility: 1 };
-      landmarks[26] = { x: 0.1, y: 0.3 - squatPhase * 0.15, z: squatPhase * 0.15, visibility: 1 };
+      landmarks[25].y = 0.3 - squatPhase * 0.15;
+      landmarks[25].z = squatPhase * 0.15;
+      landmarks[26].y = 0.3 - squatPhase * 0.15;
+      landmarks[26].z = squatPhase * 0.15;
       
       // Ankle movement (landmarks 27, 28)
-      landmarks[27] = { x: -0.1, y: 0.05, z: squatPhase * 0.1, visibility: 1 };
-      landmarks[28] = { x: 0.1, y: 0.05, z: squatPhase * 0.1, visibility: 1 };
+      landmarks[27].z = squatPhase * 0.1;
+      landmarks[28].z = squatPhase * 0.1;
       
       // Shoulder movement for counterbalance (landmarks 11, 12)
-      landmarks[11] = { x: -0.25, y: 1.05 - squatPhase * 0.05, z: squatPhase * 0.2, visibility: 1 };
-      landmarks[12] = { x: 0.25, y: 1.05 - squatPhase * 0.05, z: squatPhase * 0.2, visibility: 1 };
+      landmarks[11].y = 1.05 - squatPhase * 0.05;
+      landmarks[11].z = squatPhase * 0.2;
+      landmarks[12].y = 1.05 - squatPhase * 0.05;
+      landmarks[12].z = squatPhase * 0.2;
       
       // Arms for balance (landmarks 13, 14)
-      landmarks[13] = { x: -0.25, y: 0.8 - squatPhase * 0.05, z: squatPhase * 0.3, visibility: 1 };
-      landmarks[14] = { x: 0.25, y: 0.8 - squatPhase * 0.05, z: squatPhase * 0.3, visibility: 1 };
+      landmarks[13].y = 0.75 - squatPhase * 0.05;
+      landmarks[13].z = squatPhase * 0.3;
+      landmarks[14].y = 0.75 - squatPhase * 0.05;
+      landmarks[14].z = squatPhase * 0.3;
       
       // Head movement (landmark 0)
-      landmarks[0] = { x: 0, y: 1.65 - squatPhase * 0.05, z: squatPhase * 0.1, visibility: 1 };
+      landmarks[0].y = 1.65 - squatPhase * 0.05;
+      landmarks[0].z = squatPhase * 0.1;
       
       frames.push({
         timestamp: i * 33,
@@ -849,12 +874,31 @@ ENSURE the analysis is SPECIFICALLY tailored to the clinical text provided. Diff
       const landmarks = new Array(33).fill(null).map(() => ({
         x: 0, y: 0, z: 0, visibility: 1
       }));
+
+      // Initialize all landmarks with neutral standing positions first
+      landmarks[0] = { x: 0, y: 1.65, z: 0, visibility: 1 }; // Head
+      landmarks[11] = { x: -0.25, y: 1.05, z: 0, visibility: 1 }; // Left shoulder
+      landmarks[12] = { x: 0.25, y: 1.05, z: 0, visibility: 1 }; // Right shoulder
+      landmarks[13] = { x: -0.25, y: 0.75, z: 0, visibility: 1 }; // Left elbow
+      landmarks[14] = { x: 0.25, y: 0.75, z: 0, visibility: 1 }; // Right elbow
+      landmarks[15] = { x: -0.25, y: 0.45, z: 0, visibility: 1 }; // Left wrist
+      landmarks[16] = { x: 0.25, y: 0.45, z: 0, visibility: 1 }; // Right wrist
+      landmarks[23] = { x: -0.1, y: 0.78, z: 0, visibility: 1 }; // Left hip
+      landmarks[24] = { x: 0.1, y: 0.78, z: 0, visibility: 1 }; // Right hip
+      landmarks[25] = { x: -0.1, y: 0.3, z: 0, visibility: 1 }; // Left knee
+      landmarks[26] = { x: 0.1, y: 0.3, z: 0, visibility: 1 }; // Right knee
+      landmarks[27] = { x: -0.1, y: 0.05, z: 0, visibility: 1 }; // Left ankle
+      landmarks[28] = { x: 0.1, y: 0.05, z: 0, visibility: 1 }; // Right ankle
       
-      // Left leg forward lunge
-      landmarks[23] = { x: -0.1, y: 0.78 - lungePhase * 0.18, z: lungePhase * 0.1, visibility: 1 };
-      landmarks[24] = { x: 0.1, y: 0.78 - lungePhase * 0.18, z: -lungePhase * 0.05, visibility: 1 };
-      landmarks[25] = { x: -0.1, y: 0.3 - lungePhase * 0.15, z: lungePhase * 0.3, visibility: 1 };
-      landmarks[26] = { x: 0.1, y: 0.3 - lungePhase * 0.15, z: -lungePhase * 0.1, visibility: 1 };
+      // Apply lunge movement modifications
+      landmarks[23].y = 0.78 - lungePhase * 0.18;
+      landmarks[23].z = lungePhase * 0.1;
+      landmarks[24].y = 0.78 - lungePhase * 0.18;
+      landmarks[24].z = -lungePhase * 0.05;
+      landmarks[25].y = 0.3 - lungePhase * 0.15;
+      landmarks[25].z = lungePhase * 0.3;
+      landmarks[26].y = 0.3 - lungePhase * 0.15;
+      landmarks[26].z = -lungePhase * 0.1;
       
       frames.push({ timestamp: i * 33, landmarks });
     }
@@ -876,19 +920,36 @@ ENSURE the analysis is SPECIFICALLY tailored to the clinical text provided. Diff
       const landmarks = new Array(33).fill(null).map(() => ({
         x: 0, y: 0, z: 0, visibility: 1
       }));
+
+      // Initialize all landmarks with neutral standing positions first
+      landmarks[0] = { x: 0, y: 1.65, z: 0, visibility: 1 }; // Head
+      landmarks[11] = { x: -0.25, y: 1.05, z: 0, visibility: 1 }; // Left shoulder
+      landmarks[12] = { x: 0.25, y: 1.05, z: 0, visibility: 1 }; // Right shoulder
+      landmarks[13] = { x: -0.25, y: 0.75, z: 0, visibility: 1 }; // Left elbow
+      landmarks[14] = { x: 0.25, y: 0.75, z: 0, visibility: 1 }; // Right elbow
+      landmarks[15] = { x: -0.25, y: 0.45, z: 0, visibility: 1 }; // Left wrist
+      landmarks[16] = { x: 0.25, y: 0.45, z: 0, visibility: 1 }; // Right wrist
+      landmarks[23] = { x: -0.1, y: 0.78, z: 0, visibility: 1 }; // Left hip
+      landmarks[24] = { x: 0.1, y: 0.78, z: 0, visibility: 1 }; // Right hip
+      landmarks[25] = { x: -0.1, y: 0.3, z: 0, visibility: 1 }; // Left knee
+      landmarks[26] = { x: 0.1, y: 0.3, z: 0, visibility: 1 }; // Right knee
+      landmarks[27] = { x: -0.1, y: 0.05, z: 0, visibility: 1 }; // Left ankle
+      landmarks[28] = { x: 0.1, y: 0.05, z: 0, visibility: 1 }; // Right ankle
       
-      // Alternating leg movement
+      // Apply walking movement modifications
       const leftLegPhase = Math.sin(walkCycle * Math.PI * 2);
       const rightLegPhase = Math.sin((walkCycle + 0.5) * Math.PI * 2);
       
-      landmarks[23] = { x: -0.1, y: 0.78, z: leftLegPhase * 0.1, visibility: 1 };
-      landmarks[24] = { x: 0.1, y: 0.78, z: rightLegPhase * 0.1, visibility: 1 };
-      landmarks[25] = { x: -0.1, y: 0.3 + Math.abs(leftLegPhase) * 0.1, z: leftLegPhase * 0.1, visibility: 1 };
-      landmarks[26] = { x: 0.1, y: 0.3 + Math.abs(rightLegPhase) * 0.1, z: rightLegPhase * 0.1, visibility: 1 };
+      landmarks[23].z = leftLegPhase * 0.1;
+      landmarks[24].z = rightLegPhase * 0.1;
+      landmarks[25].y = 0.3 + Math.abs(leftLegPhase) * 0.1;
+      landmarks[25].z = leftLegPhase * 0.1;
+      landmarks[26].y = 0.3 + Math.abs(rightLegPhase) * 0.1;
+      landmarks[26].z = rightLegPhase * 0.1;
       
       // Coordinated arm swing
-      landmarks[11] = { x: -0.25, y: 1.05, z: rightLegPhase * 0.1, visibility: 1 };
-      landmarks[12] = { x: 0.25, y: 1.05, z: leftLegPhase * 0.1, visibility: 1 };
+      landmarks[11].z = rightLegPhase * 0.1;
+      landmarks[12].z = leftLegPhase * 0.1;
       
       frames.push({ timestamp: i * 33, landmarks });
     }
@@ -910,17 +971,28 @@ ENSURE the analysis is SPECIFICALLY tailored to the clinical text provided. Diff
       const landmarks = new Array(33).fill(null).map(() => ({
         x: 0, y: 0, z: 0, visibility: 1
       }));
+
+      // Initialize all landmarks with neutral standing positions first
+      landmarks[0] = { x: 0, y: 1.65, z: 0, visibility: 1 }; // Head
+      landmarks[11] = { x: -0.25, y: 1.05, z: 0, visibility: 1 }; // Left shoulder
+      landmarks[12] = { x: 0.25, y: 1.05, z: 0, visibility: 1 }; // Right shoulder
+      landmarks[13] = { x: -0.25, y: 0.75, z: 0, visibility: 1 }; // Left elbow
+      landmarks[14] = { x: 0.25, y: 0.75, z: 0, visibility: 1 }; // Right elbow
+      landmarks[15] = { x: -0.25, y: 0.45, z: 0, visibility: 1 }; // Left wrist
+      landmarks[16] = { x: 0.25, y: 0.45, z: 0, visibility: 1 }; // Right wrist
+      landmarks[23] = { x: -0.1, y: 0.78, z: 0, visibility: 1 }; // Left hip
+      landmarks[24] = { x: 0.1, y: 0.78, z: 0, visibility: 1 }; // Right hip
+      landmarks[25] = { x: -0.1, y: 0.3, z: 0, visibility: 1 }; // Left knee
+      landmarks[26] = { x: 0.1, y: 0.3, z: 0, visibility: 1 }; // Right knee
+      landmarks[27] = { x: -0.1, y: 0.05, z: 0, visibility: 1 }; // Left ankle
+      landmarks[28] = { x: 0.1, y: 0.05, z: 0, visibility: 1 }; // Right ankle
       
-      // Shoulder elevation
-      landmarks[11] = { x: -0.25, y: 1.05 + reachPhase * 0.25, z: 0, visibility: 1 };
-      landmarks[12] = { x: 0.25, y: 1.05 + reachPhase * 0.25, z: 0, visibility: 1 };
-      
-      // Arm extension
-      landmarks[13] = { x: -0.25, y: 1.3 + reachPhase * 0.25, z: 0, visibility: 1 };
-      landmarks[14] = { x: 0.25, y: 1.3 + reachPhase * 0.25, z: 0, visibility: 1 };
-      
-      // Slight trunk extension
-      landmarks[0] = { x: 0, y: 1.65, z: -reachPhase * 0.05, visibility: 1 };
+      // Apply overhead reach movement modifications
+      landmarks[11].y = 1.05 + reachPhase * 0.25;
+      landmarks[12].y = 1.05 + reachPhase * 0.25;
+      landmarks[13].y = 0.75 + reachPhase * 0.55; // More dramatic arm elevation
+      landmarks[14].y = 0.75 + reachPhase * 0.55;
+      landmarks[0].z = -reachPhase * 0.05; // Slight trunk extension
       
       frames.push({ timestamp: i * 33, landmarks });
     }

@@ -173,6 +173,7 @@ export default function VirtualPatientsPage() {
   const [textToAnimationInput, setTextToAnimationInput] = useState("");
   const [isGeneratingFromText, setIsGeneratingFromText] = useState(false);
   const [textAnimationResult, setTextAnimationResult] = useState<any>(null);
+  const [isGeneratingMovement, setIsGeneratingMovement] = useState(false);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -642,6 +643,68 @@ export default function VirtualPatientsPage() {
     }
   };
 
+  const generateFunctionalMovement = async (movementId: string) => {
+    if (!selectedPatient) {
+      return;
+    }
+
+    setIsGeneratingMovement(true);
+    
+    try {
+      const response = await apiRequest(
+        'POST', 
+        `/api/virtual-patients/${selectedPatient.id}/functional-movement`, 
+        { movementId }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Functional movement generation failed: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      console.log('Functional movement result:', result);
+      
+      // Update the animation sequence with functional movement
+      if (result.movementData?.frames) {
+        setAnimationSequence({
+          frames: result.movementData.frames,
+          movementPatterns: result.movementData.movementPatterns,
+          clinicalCorrelation: result.movementData.clinicalCorrelation
+        });
+        
+        // Update the selected patient to include functional movement data
+        const updatedPatient = {
+          ...selectedPatient,
+          motionData: {
+            frames: result.movementData.frames,
+            movementPatterns: result.movementData.movementPatterns,
+            clinicalCorrelation: result.movementData.clinicalCorrelation,
+            animationSource: `functional-${movementId}`,
+            generatedAt: new Date().toISOString()
+          },
+          hasMotionData: true,
+          aiGenerated: true
+        };
+        setSelectedPatient(updatedPatient);
+      }
+
+      toast({
+        title: "Functional Movement Generated",
+        description: `Successfully generated ${movementId.replace('_', ' ')} movement pattern with ${result.framesGenerated} frames`,
+      });
+
+    } catch (error: any) {
+      console.error("Functional movement generation error:", error);
+      toast({
+        title: "Generation Error",
+        description: error.message || "Failed to generate functional movement",
+        variant: "destructive"
+      });
+    } finally {
+      setIsGeneratingMovement(false);
+    }
+  };
+
   if (patientsLoading) {
     return (
       <div className="container mx-auto py-8 px-4">
@@ -1056,6 +1119,121 @@ export default function VirtualPatientsPage() {
                     </div>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+
+            {/* Functional Movement Assessment Buttons */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                  <Activity className="h-5 w-5 text-orange-600" />
+                  Functional Movement Assessment
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {/* Lower Body Movements */}
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-700 mb-2">Lower Body</h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => generateFunctionalMovement('squat')}
+                        disabled={isGeneratingMovement}
+                        className="text-xs"
+                      >
+                        Squat
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => generateFunctionalMovement('step_up')}
+                        disabled={isGeneratingMovement}
+                        className="text-xs"
+                      >
+                        Step Up
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => generateFunctionalMovement('lunge')}
+                        disabled={isGeneratingMovement}
+                        className="text-xs"
+                      >
+                        Lunge
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => generateFunctionalMovement('single_leg_stand')}
+                        disabled={isGeneratingMovement}
+                        className="text-xs"
+                      >
+                        Balance
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Upper Body Movements */}
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-700 mb-2">Upper Body</h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => generateFunctionalMovement('overhead_reach')}
+                        disabled={isGeneratingMovement}
+                        className="text-xs"
+                      >
+                        Overhead Reach
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => generateFunctionalMovement('cross_body_reach')}
+                        disabled={isGeneratingMovement}
+                        className="text-xs"
+                      >
+                        Cross Body
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Functional Activities */}
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-700 mb-2">Functional Activities</h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => generateFunctionalMovement('walking_gait')}
+                        disabled={isGeneratingMovement}
+                        className="text-xs"
+                      >
+                        Walking
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => generateFunctionalMovement('sit_to_stand')}
+                        disabled={isGeneratingMovement}
+                        className="text-xs"
+                      >
+                        Sit to Stand
+                      </Button>
+                    </div>
+                  </div>
+
+                  {isGeneratingMovement && (
+                    <div className="text-center py-2">
+                      <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Generating movement pattern...
+                      </div>
+                    </div>
+                  )}
+                </div>
               </CardContent>
             </Card>
           </div>

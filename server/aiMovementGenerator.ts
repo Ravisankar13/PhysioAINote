@@ -7,6 +7,7 @@
 
 import OpenAI from "openai";
 import { SoapNote } from "@shared/schema";
+import { FUNCTIONAL_MOVEMENTS, getFunctionalMovement, getMovementsAffectedByCondition, type FunctionalMovement } from "./functionalMovementLibrary";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -494,6 +495,196 @@ ENSURE the analysis is SPECIFICALLY tailored to the clinical text provided. Diff
         expectedLimitations: ['No specific limitations identified']
       }
     };
+  }
+
+  /**
+   * Generate functional movement animation for specific movement pattern
+   */
+  async generateFunctionalMovement(
+    movementId: string,
+    patientCondition?: string,
+    clinicalText?: string
+  ): Promise<GeneratedMovementData> {
+    try {
+      console.log(`Generating functional movement: ${movementId} for condition: ${patientCondition}`);
+      
+      const baseMovement = getFunctionalMovement(movementId);
+      if (!baseMovement) {
+        throw new Error(`Functional movement ${movementId} not found`);
+      }
+      
+      // Apply condition-specific modifications to base movement
+      const modifiedFrames = await this.applyConditionModifications(
+        baseMovement,
+        patientCondition,
+        clinicalText
+      );
+      
+      // Generate movement patterns based on condition
+      const movementPatterns = await this.generateConditionSpecificPatterns(
+        baseMovement,
+        patientCondition,
+        clinicalText
+      );
+      
+      console.log(`Functional movement generated: ${modifiedFrames.length} frames`);
+      
+      return {
+        frames: modifiedFrames,
+        movementPatterns,
+        clinicalCorrelation: {
+          soapFindings: [`Functional assessment: ${baseMovement.name}`],
+          movementHypotheses: baseMovement.assessmentPoints,
+          expectedLimitations: baseMovement.commonCompensations
+        }
+      };
+    } catch (error) {
+      console.error('Error generating functional movement:', error);
+      return this.getFallbackMovement();
+    }
+  }
+
+  /**
+   * Apply condition-specific modifications to base functional movement
+   */
+  private async applyConditionModifications(
+    baseMovement: FunctionalMovement,
+    patientCondition?: string,
+    clinicalText?: string
+  ): Promise<GeneratedMovementData['frames']> {
+    const modifiedFrames: GeneratedMovementData['frames'] = [];
+    
+    for (const frame of baseMovement.baselineFrames) {
+      const modifiedLandmarks = frame.landmarks.map((landmark, index) => {
+        let { x, y, z } = landmark;
+        
+        // Apply condition-specific modifications
+        if (patientCondition && baseMovement.affectedByConditions.includes(patientCondition)) {
+          const severity = this.getConditionSeverity(patientCondition, clinicalText);
+          
+          // Apply movement restrictions based on condition type
+          if (patientCondition.includes('knee') && baseMovement.id === 'squat') {
+            // Reduce knee flexion for knee conditions
+            if (index >= 25 && index <= 26) { // Knee landmarks
+              y += severity * 0.2; // Less knee bend
+            }
+          }
+          
+          if (patientCondition.includes('shoulder') && baseMovement.id === 'overhead_reach') {
+            // Reduce shoulder elevation for shoulder conditions
+            if (index >= 11 && index <= 16) { // Arm landmarks
+              y -= severity * 0.3; // Limited elevation
+            }
+          }
+          
+          if (patientCondition.includes('hip') && baseMovement.id === 'squat') {
+            // Hip restrictions affect squat depth
+            if (index >= 23 && index <= 24) { // Hip landmarks
+              y += severity * 0.15; // Less hip flexion
+            }
+          }
+          
+          if (patientCondition.includes('ankle') && baseMovement.id === 'squat') {
+            // Ankle stiffness affects squat mechanics
+            if (index >= 27 && index <= 28) { // Ankle landmarks
+              z -= severity * 0.1; // Less dorsiflexion
+            }
+          }
+        }
+        
+        return { x, y, z, visibility: landmark.visibility };
+      });
+      
+      modifiedFrames.push({
+        timestamp: frame.timestamp,
+        landmarks: modifiedLandmarks
+      });
+    }
+    
+    return modifiedFrames;
+  }
+
+  /**
+   * Generate condition-specific movement patterns for functional movements
+   */
+  private async generateConditionSpecificPatterns(
+    baseMovement: FunctionalMovement,
+    patientCondition?: string,
+    clinicalText?: string
+  ): Promise<GeneratedMovementData['movementPatterns']> {
+    const patterns: GeneratedMovementData['movementPatterns'] = {
+      restrictions: [],
+      compensations: [],
+      painResponses: []
+    };
+    
+    if (patientCondition) {
+      // Add condition-specific restrictions
+      if (patientCondition.includes('knee')) {
+        patterns.restrictions.push({
+          bodyPart: 'knee',
+          limitationType: 'flexion_limited',
+          severity: this.getConditionSeverity(patientCondition, clinicalText),
+          description: `${baseMovement.name} limited by knee pain/stiffness`
+        });
+        
+        patterns.compensations.push({
+          primaryRestriction: 'knee flexion limitation',
+          compensatoryMovement: 'increased hip flexion',
+          bodyPartsInvolved: ['hip', 'trunk']
+        });
+      }
+      
+      if (patientCondition.includes('shoulder')) {
+        patterns.restrictions.push({
+          bodyPart: 'shoulder',
+          limitationType: 'elevation_limited',
+          severity: this.getConditionSeverity(patientCondition, clinicalText),
+          description: `${baseMovement.name} limited by shoulder impingement/pain`
+        });
+        
+        patterns.compensations.push({
+          primaryRestriction: 'shoulder elevation limitation',
+          compensatoryMovement: 'trunk side bending',
+          bodyPartsInvolved: ['trunk', 'opposite_shoulder']
+        });
+      }
+      
+      if (patientCondition.includes('hip')) {
+        patterns.restrictions.push({
+          bodyPart: 'hip',
+          limitationType: 'flexion_limited',
+          severity: this.getConditionSeverity(patientCondition, clinicalText),
+          description: `${baseMovement.name} limited by hip stiffness/pain`
+        });
+      }
+      
+      // Add pain responses
+      patterns.painResponses.push({
+        trigger: `${baseMovement.name} movement`,
+        response: 'protective guarding',
+        affectedRegions: [patientCondition.split('_')[0]] // Extract body part
+      });
+    }
+    
+    return patterns;
+  }
+
+  /**
+   * Get condition severity from clinical text
+   */
+  private getConditionSeverity(condition: string, clinicalText?: string): number {
+    if (!clinicalText) return 5; // Default moderate severity
+    
+    const text = clinicalText.toLowerCase();
+    
+    // Check for severity indicators
+    if (text.includes('severe') || text.includes('unable')) return 8;
+    if (text.includes('moderate') || text.includes('difficulty')) return 6;
+    if (text.includes('mild') || text.includes('slight')) return 3;
+    if (text.includes('significant') || text.includes('marked')) return 7;
+    
+    return 5; // Default
   }
 
   /**

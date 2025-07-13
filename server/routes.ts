@@ -10532,5 +10532,109 @@ Respond in JSON format:
     }
   });
 
+  // Functional movement generation route
+  app.post('/api/virtual-patients/:id/functional-movement', ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const patientId = parseInt(req.params.id);
+      const { movementId } = req.body;
+      const userId = req.user?.id;
+      
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+      
+      console.log(`Generating functional movement ${movementId} for patient ${patientId}`);
+      
+      // Try both virtual patient tables
+      let patient = await storage.getSoapVirtualPatient(patientId);
+      let isRegularVirtualPatient = false;
+      
+      if (!patient) {
+        patient = await storage.getVirtualPatient(patientId);
+        isRegularVirtualPatient = true;
+      }
+      
+      if (!patient || patient.userId !== userId) {
+        return res.status(404).json({ error: 'Virtual patient not found' });
+      }
+
+      // Extract condition from patient data
+      let bodyPart, chiefComplaint, clinicalText;
+      
+      if (isRegularVirtualPatient) {
+        bodyPart = patient.bodyPart;
+        chiefComplaint = patient.chief_complaint || '';
+        clinicalText = `${chiefComplaint}. ${patient.history_present_illness || ''}`;
+      } else {
+        bodyPart = patient.bodyPart;
+        chiefComplaint = patient.clinicalPresentation?.chiefComplaint || '';
+        clinicalText = `${chiefComplaint}. ${patient.physicalFindings?.observation || ''}`;
+      }
+      
+      // Determine condition type from body part and complaint
+      let conditionType = bodyPart;
+      if (chiefComplaint.toLowerCase().includes('pain')) {
+        conditionType = `${bodyPart}_pain`;
+      }
+      if (chiefComplaint.toLowerCase().includes('stiff')) {
+        conditionType = `${bodyPart}_stiffness`;
+      }
+
+      // Import the AI movement generator
+      const { aiMovementGenerator } = await import('./aiMovementGenerator');
+      
+      // Generate functional movement
+      const movementData = await aiMovementGenerator.generateFunctionalMovement(
+        movementId,
+        conditionType,
+        clinicalText
+      );
+
+      res.json({
+        success: true,
+        movementData,
+        movementId,
+        conditionType,
+        framesGenerated: movementData.frames.length
+      });
+
+    } catch (error: any) {
+      console.error('Functional movement generation error:', error);
+      res.status(500).json({ 
+        error: 'Failed to generate functional movement',
+        details: error.message 
+      });
+    }
+  });
+
+  // Get available functional movements
+  app.get('/api/functional-movements', (req: Request, res: Response) => {
+    try {
+      const { category, condition } = req.query;
+      
+      // Import functional movements
+      const { FUNCTIONAL_MOVEMENTS } = require('./functionalMovementLibrary');
+      
+      let movements = FUNCTIONAL_MOVEMENTS;
+      
+      if (category) {
+        movements = movements.filter((m: any) => m.category === category);
+      }
+      
+      if (condition) {
+        movements = movements.filter((m: any) => 
+          m.affectedByConditions.some((affected: string) => 
+            condition.toString().toLowerCase().includes(affected.toLowerCase())
+          )
+        );
+      }
+      
+      res.json(movements);
+    } catch (error: any) {
+      console.error('Error getting functional movements:', error);
+      res.status(500).json({ error: 'Failed to get functional movements' });
+    }
+  });
+
   return httpServer;
 }

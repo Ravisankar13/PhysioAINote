@@ -39,7 +39,7 @@ const ThreeDSkeletonPlayer: React.FC<ThreeDSkeletonPlayerProps> = ({
   const animationRef = useRef<number>();
   const clockRef = useRef<THREE.Clock>(new THREE.Clock());
   const [currentFrame, setCurrentFrame] = useState(0);
-  const [animationSpeed, setAnimationSpeed] = useState(0.5); // Slower animation for smooth motion
+  const [animationSpeed, setAnimationSpeed] = useState(0.8); // Enhanced animation speed for realistic motion
 
   // Bone structure for human skeleton
   const boneConnections = [

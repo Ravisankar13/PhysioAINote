@@ -738,16 +738,25 @@ ENSURE the analysis is SPECIFICALLY tailored to the clinical text provided. Diff
   ): Array<{ timestamp: number; landmarks: Array<{ x: number; y: number; z: number; visibility: number }> }> {
     const frames: Array<{ timestamp: number; landmarks: Array<{ x: number; y: number; z: number; visibility: number }> }> = [];
     
-    // Movement templates with coordinated body segments
+    // Enhanced movement templates with clinical specificity
     const movementTemplates = {
       squat: this.generateSquatMovement(),
       lunge: this.generateLungeMovement(),
       walking_gait: this.generateWalkingMovement(),
+      gait_analysis: this.generateGaitAnalysisMovement(),
       overhead_reach: this.generateOverheadReachMovement(),
       balance_test: this.generateBalanceMovement(),
       step_up: this.generateStepUpMovement(),
       sit_to_stand: this.generateSitToStandMovement(),
-      forward_reach: this.generateForwardReachMovement()
+      forward_reach: this.generateForwardReachMovement(),
+      functional_reaching: this.generateFunctionalReachingMovement(),
+      shoulder_elevation: this.generateShoulderElevationMovement(),
+      spinal_flexion: this.generateSpinalFlexionMovement(),
+      shoulder_abduction: this.generateShoulderElevationMovement(), // Use elevation as base
+      neck_rotation: this.generateFunctionalReachingMovement(), // Use reaching as base
+      hip_flexion: this.generateLungeMovement(), // Use lunge as base
+      knee_extension: this.generateSquatMovement(), // Use squat as base
+      ankle_dorsiflexion: this.generateWalkingMovement() // Use walking as base
     };
 
     const template = movementTemplates[movementType] || movementTemplates.squat;
@@ -1072,6 +1081,210 @@ ENSURE the analysis is SPECIFICALLY tailored to the clinical text provided. Diff
       // Rising motion
       landmarks[23] = { x: -0.1, y: 0.4 + standPhase * 0.38, z: -0.2 + standPhase * 0.2, visibility: 1 };
       landmarks[24] = { x: 0.1, y: 0.4 + standPhase * 0.38, z: -0.2 + standPhase * 0.2, visibility: 1 };
+      
+      frames.push({ timestamp: i * 33, landmarks });
+    }
+    
+    return frames;
+  }
+
+  /**
+   * Generate shoulder elevation movement pattern with clinical restrictions
+   */
+  private generateShoulderElevationMovement() {
+    const frames = [];
+    const frameCount = 120; // Longer for detailed movement
+    
+    for (let i = 0; i < frameCount; i++) {
+      const progress = i / frameCount;
+      const elevationPhase = Math.sin(progress * Math.PI); // 0 to 1 to 0
+      
+      const landmarks = new Array(33).fill(null).map(() => ({
+        x: 0, y: 0, z: 0, visibility: 1
+      }));
+
+      // Initialize neutral positions
+      landmarks[0] = { x: 0, y: 1.65, z: 0, visibility: 1 }; // Head
+      landmarks[11] = { x: -0.25, y: 1.05, z: 0, visibility: 1 }; // Left shoulder
+      landmarks[12] = { x: 0.25, y: 1.05, z: 0, visibility: 1 }; // Right shoulder
+      landmarks[13] = { x: -0.25, y: 0.75, z: 0, visibility: 1 }; // Left elbow
+      landmarks[14] = { x: 0.25, y: 0.75, z: 0, visibility: 1 }; // Right elbow
+      landmarks[15] = { x: -0.25, y: 0.45, z: 0, visibility: 1 }; // Left wrist
+      landmarks[16] = { x: 0.25, y: 0.45, z: 0, visibility: 1 }; // Right wrist
+
+      // Enhanced shoulder elevation with clinical realism
+      // Left shoulder elevation (affected side)
+      landmarks[11].y = 1.05 + elevationPhase * 0.6; // Progressive elevation
+      landmarks[11].z = -elevationPhase * 0.1; // Slight anterior movement
+      landmarks[11].x = -0.25 + elevationPhase * 0.05; // Scapular upward rotation
+      
+      // Left elbow follows shoulder with restriction pattern
+      landmarks[13].y = 0.75 + elevationPhase * 0.5; // Restricted elevation
+      landmarks[13].z = -elevationPhase * 0.15; // Forward compensation
+      landmarks[13].x = -0.25 + elevationPhase * 0.1; // Compensation pattern
+      
+      // Left wrist shows limitation
+      landmarks[15].y = 0.45 + elevationPhase * 0.4; // Limited reach
+      landmarks[15].z = -elevationPhase * 0.2; // Anterior compensation
+      
+      // Compensatory patterns in opposite shoulder
+      landmarks[12].y = 1.05 + elevationPhase * 0.1; // Mild elevation
+      landmarks[12].x = 0.25 - elevationPhase * 0.05; // Compensatory lean
+      
+      // Head/neck compensation
+      landmarks[0].z = elevationPhase * 0.05; // Forward head posture
+      landmarks[0].x = -elevationPhase * 0.02; // Lateral lean
+      
+      frames.push({ timestamp: i * 33, landmarks });
+    }
+    
+    return frames;
+  }
+
+  /**
+   * Generate spinal flexion movement with restriction patterns
+   */
+  private generateSpinalFlexionMovement() {
+    const frames = [];
+    const frameCount = 100;
+    
+    for (let i = 0; i < frameCount; i++) {
+      const progress = i / frameCount;
+      const flexionPhase = Math.sin(progress * Math.PI);
+      
+      const landmarks = new Array(33).fill(null).map(() => ({
+        x: 0, y: 0, z: 0, visibility: 1
+      }));
+
+      // Initialize positions
+      landmarks[0] = { x: 0, y: 1.65, z: 0, visibility: 1 }; // Head
+      landmarks[11] = { x: -0.25, y: 1.05, z: 0, visibility: 1 }; // Left shoulder
+      landmarks[12] = { x: 0.25, y: 1.05, z: 0, visibility: 1 }; // Right shoulder
+      landmarks[23] = { x: -0.1, y: 0.78, z: 0, visibility: 1 }; // Left hip
+      landmarks[24] = { x: 0.1, y: 0.78, z: 0, visibility: 1 }; // Right hip
+
+      // Progressive spinal flexion with restrictions
+      // Head and neck movement
+      landmarks[0].z = flexionPhase * 0.3; // Forward head movement
+      landmarks[0].y = 1.65 - flexionPhase * 0.2; // Head drops slightly
+      
+      // Shoulder movement showing restricted spinal mobility
+      landmarks[11].z = flexionPhase * 0.25; // Limited forward movement
+      landmarks[11].y = 1.05 - flexionPhase * 0.15; // Shoulder drop
+      landmarks[12].z = flexionPhase * 0.25;
+      landmarks[12].y = 1.05 - flexionPhase * 0.15;
+      
+      // Hip strategy compensation
+      landmarks[23].z = flexionPhase * 0.15; // Hip flexion compensation
+      landmarks[23].y = 0.78 - flexionPhase * 0.1;
+      landmarks[24].z = flexionPhase * 0.15;
+      landmarks[24].y = 0.78 - flexionPhase * 0.1;
+      
+      frames.push({ timestamp: i * 33, landmarks });
+    }
+    
+    return frames;
+  }
+
+  /**
+   * Generate gait analysis with clinical compensations
+   */
+  private generateGaitAnalysisMovement() {
+    const frames = [];
+    const frameCount = 120; // Full gait cycle
+    
+    for (let i = 0; i < frameCount; i++) {
+      const progress = i / frameCount;
+      const gaitCycle = (progress * 2) % 1; // Two steps per cycle
+      
+      const landmarks = new Array(33).fill(null).map(() => ({
+        x: 0, y: 0, z: 0, visibility: 1
+      }));
+
+      // Initialize positions
+      landmarks[0] = { x: 0, y: 1.65, z: 0, visibility: 1 }; // Head
+      landmarks[11] = { x: -0.25, y: 1.05, z: 0, visibility: 1 }; // Left shoulder
+      landmarks[12] = { x: 0.25, y: 1.05, z: 0, visibility: 1 }; // Right shoulder
+      landmarks[23] = { x: -0.1, y: 0.78, z: 0, visibility: 1 }; // Left hip
+      landmarks[24] = { x: 0.1, y: 0.78, z: 0, visibility: 1 }; // Right hip
+      landmarks[25] = { x: -0.1, y: 0.3, z: 0, visibility: 1 }; // Left knee
+      landmarks[26] = { x: 0.1, y: 0.3, z: 0, visibility: 1 }; // Right knee
+      landmarks[27] = { x: -0.1, y: 0.05, z: 0, visibility: 1 }; // Left ankle
+      landmarks[28] = { x: 0.1, y: 0.05, z: 0, visibility: 1 }; // Right ankle
+
+      // Complex gait cycle with compensations
+      const leftStance = gaitCycle < 0.6;
+      const rightStance = gaitCycle > 0.4;
+      
+      if (leftStance) {
+        // Left leg stance phase with limitations
+        landmarks[23].y = 0.78 - Math.sin(gaitCycle * Math.PI) * 0.05; // Hip drop
+        landmarks[25].z = Math.sin(gaitCycle * Math.PI) * 0.1; // Knee tracking
+        landmarks[27].z = -Math.sin(gaitCycle * Math.PI) * 0.05; // Ankle limitation
+        
+        // Compensatory trunk lean
+        landmarks[11].x = -0.25 - Math.sin(gaitCycle * Math.PI) * 0.08;
+        landmarks[12].x = 0.25 - Math.sin(gaitCycle * Math.PI) * 0.08;
+      }
+      
+      if (rightStance) {
+        // Right leg stance with different pattern
+        landmarks[24].y = 0.78 - Math.sin((gaitCycle - 0.4) * Math.PI * 1.67) * 0.03;
+        landmarks[26].z = Math.sin((gaitCycle - 0.4) * Math.PI * 1.67) * 0.08;
+        landmarks[28].z = -Math.sin((gaitCycle - 0.4) * Math.PI * 1.67) * 0.03;
+      }
+      
+      // Reciprocal arm swing with restrictions
+      landmarks[11].z = Math.sin(gaitCycle * Math.PI * 2) * 0.1;
+      landmarks[12].z = -Math.sin(gaitCycle * Math.PI * 2) * 0.1;
+      
+      frames.push({ timestamp: i * 33, landmarks });
+    }
+    
+    return frames;
+  }
+
+  /**
+   * Generate functional reaching movement
+   */
+  private generateFunctionalReachingMovement() {
+    const frames = [];
+    const frameCount = 90;
+    
+    for (let i = 0; i < frameCount; i++) {
+      const progress = i / frameCount;
+      const reachPhase = Math.sin(progress * Math.PI);
+      
+      const landmarks = new Array(33).fill(null).map(() => ({
+        x: 0, y: 0, z: 0, visibility: 1
+      }));
+
+      // Initialize positions
+      landmarks[0] = { x: 0, y: 1.65, z: 0, visibility: 1 }; // Head
+      landmarks[11] = { x: -0.25, y: 1.05, z: 0, visibility: 1 }; // Left shoulder
+      landmarks[12] = { x: 0.25, y: 1.05, z: 0, visibility: 1 }; // Right shoulder
+      landmarks[13] = { x: -0.25, y: 0.75, z: 0, visibility: 1 }; // Left elbow
+      landmarks[14] = { x: 0.25, y: 0.75, z: 0, visibility: 1 }; // Right elbow
+      landmarks[15] = { x: -0.25, y: 0.45, z: 0, visibility: 1 }; // Left wrist
+      landmarks[16] = { x: 0.25, y: 0.45, z: 0, visibility: 1 }; // Right wrist
+
+      // Functional reaching with compensation patterns
+      // Primary reaching arm (right)
+      landmarks[12].x = 0.25 + reachPhase * 0.4; // Forward reach
+      landmarks[12].z = reachPhase * 0.3;
+      landmarks[12].y = 1.05 + reachPhase * 0.1;
+      
+      landmarks[14].x = 0.25 + reachPhase * 0.5; // Elbow extension
+      landmarks[14].z = reachPhase * 0.4;
+      landmarks[14].y = 0.75 + reachPhase * 0.15;
+      
+      landmarks[16].x = 0.25 + reachPhase * 0.6; // Maximum reach
+      landmarks[16].z = reachPhase * 0.5;
+      landmarks[16].y = 0.45 + reachPhase * 0.2;
+      
+      // Compensatory movements
+      landmarks[11].x = -0.25 - reachPhase * 0.1; // Opposite shoulder compensation
+      landmarks[0].z = reachPhase * 0.08; // Forward head posture
       
       frames.push({ timestamp: i * 33, landmarks });
     }

@@ -239,7 +239,7 @@ export class ContinuousRecordingService {
         userId: this.activeSession!.userId,
         continuousRecordingSessionId: this.activeSession!.id,
         patientSequenceNumber: patientSegment.patientNumber,
-        sessionId: `${this.activeSession!.sessionId}-patient-${patientSegment.patientNumber}`,
+        sessionId: this.activeSession!.sessionId, // Use main session ID so notes can be found by the API
         patientId: `patient-${this.activeSession!.sessionId}-${patientSegment.patientNumber}`,
         patientName: patientSegment.patientName || `Patient ${patientSegment.patientNumber}`,
         dateOfVisit: new Date().toISOString().split('T')[0],

@@ -404,8 +404,18 @@ Format as JSON:
    * Manual patient switch trigger
    */
   async manualPatientSwitch(sessionId: string, newPatientName?: string): Promise<PatientDetectionResult> {
-    if (!this.activeSession || this.activeSession.sessionId !== sessionId) {
+    console.log("manualPatientSwitch called with sessionId:", sessionId);
+    console.log("Active session:", this.activeSession);
+    
+    if (!this.activeSession) {
       throw new Error("No active session found");
+    }
+
+    // Check session ID - handle both string and number IDs
+    const activeSessionId = this.activeSession.sessionId || this.activeSession.id?.toString();
+    if (activeSessionId !== sessionId) {
+      console.log("Session ID mismatch. Expected:", sessionId, "Got:", activeSessionId);
+      throw new Error(`Session ID mismatch. Active: ${activeSessionId}, Requested: ${sessionId}`);
     }
 
     // Complete current patient

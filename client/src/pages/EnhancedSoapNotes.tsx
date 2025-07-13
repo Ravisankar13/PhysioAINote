@@ -137,6 +137,14 @@ export default function EnhancedSoapNotesPage() {
     }
   }, [sessionSoapNotes]);
 
+  // Set active session when available
+  useEffect(() => {
+    if (activeContinuousSession && !continuousSession) {
+      setContinuousSession(activeContinuousSession);
+      setCurrentPatientNumber(activeContinuousSession.currentPatientNumber || 1);
+    }
+  }, [activeContinuousSession, continuousSession]);
+
   const startContinuousRecordingMutation = useMutation({
     mutationFn: async (sessionName?: string) => {
       const response = await fetch('/api/continuous-recording/start', {

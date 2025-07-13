@@ -9375,6 +9375,9 @@ Respond in JSON format:
       const { sessionId } = req.params;
       const { newPatientName } = req.body;
 
+      console.log("Manual patient switch requested for session:", sessionId);
+      console.log("Active session:", continuousRecordingService.getActiveSession());
+
       const result = await continuousRecordingService.manualPatientSwitch(sessionId, newPatientName);
       res.json(result);
     } catch (error: any) {
@@ -9384,9 +9387,13 @@ Respond in JSON format:
   });
 
   // End continuous recording session
-  app.post("/api/continuous-recording/:sessionId/end", ensureAuthenticated, async (req: Request, res: Response) => {
+  app.post("/api/continuous-recording/end", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
-      const { sessionId } = req.params;
+      const { sessionId } = req.body;
+
+      if (!sessionId) {
+        return res.status(400).json({ error: "Session ID is required" });
+      }
 
       const result = await continuousRecordingService.endContinuousSession(sessionId);
       res.json(result);

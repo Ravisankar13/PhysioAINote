@@ -124,12 +124,7 @@ const Header = () => {
                 <span>Research</span>
               </Button>
             </Link>
-            <Link to="/motion-capture">
-              <Button className="bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-sm flex items-center gap-2">
-                <Camera className="h-4 w-4" />
-                <span>Motion Capture</span>
-              </Button>
-            </Link>
+
 
             <Link to="/intelligent-assessment">
               <Button className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold shadow-sm flex items-center gap-2">

@@ -772,9 +772,27 @@ export default function VirtualPatientsPage() {
       }
     } catch (error: any) {
       console.error('Error generating clinical video:', error);
+      
+      // Parse error message for better user feedback
+      let errorMessage = "Failed to generate clinical video";
+      let errorTitle = "Video Generation Failed";
+      
+      if (error.message?.includes('authentication')) {
+        errorTitle = "Setup Required";
+        errorMessage = "Google Cloud credentials need to be configured. Please contact support for video generation setup.";
+      } else if (error.message?.includes('network') || error.message?.includes('ECONNREFUSED')) {
+        errorTitle = "Connection Error";
+        errorMessage = "Unable to connect to video generation service. Please try again later.";
+      } else if (error.message?.includes('project')) {
+        errorTitle = "Configuration Error";
+        errorMessage = "Video generation service is not properly configured.";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
-        title: "Video Generation Failed",
-        description: error.message || "Failed to generate clinical video",
+        title: errorTitle,
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
@@ -1513,6 +1531,15 @@ Example: 'Patient reports decreased shoulder external rotation, pain during over
               </div>
               
               <div className="space-y-2">
+                <div className="text-xs text-blue-600 bg-blue-50 p-2 rounded border border-blue-200 mb-2">
+                  <div className="flex items-center gap-1">
+                    <Video className="h-3 w-3" />
+                    <span className="font-medium">Google Veo AI Video Generation</span>
+                  </div>
+                  <p className="mt-1 text-blue-700">
+                    Generates realistic movement videos from clinical text. Requires Google Cloud setup.
+                  </p>
+                </div>
                 <Button
                   onClick={() => generateClinicalVideo(textToAnimationInput)}
                   disabled={!textToAnimationInput.trim() || isGeneratingVideo}

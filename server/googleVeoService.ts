@@ -67,7 +67,21 @@ export class GoogleVeoService {
 
     } catch (error) {
       console.error('Error generating video with Google Veo:', error);
-      throw new Error(`Video generation failed: ${error.message}`);
+      
+      // Provide user-friendly error messages
+      if (error.message?.includes('GoogleAuthError') || error.message?.includes('authentication')) {
+        throw new Error('Google Cloud authentication required. Please configure API credentials.');
+      }
+      
+      if (error.message?.includes('ECONNREFUSED')) {
+        throw new Error('Google Cloud service unavailable. Please check network connection.');
+      }
+      
+      if (error.message?.includes('project')) {
+        throw new Error('Google Cloud project not configured. Please set GOOGLE_CLOUD_PROJECT_ID.');
+      }
+      
+      throw new Error(`Video generation failed: ${error.message || 'Unknown error'}`);
     }
   }
 

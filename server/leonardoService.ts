@@ -331,13 +331,24 @@ export class LeonardoService {
     let clinicalDescription = customPrompt;
     
     if (!clinicalDescription) {
-      // Generate description from patient data
-      const age = patient.age || 'middle-aged';
-      const gender = patient.gender || 'adult';
-      const complaint = patient.chief_complaint || 'movement limitation';
-      const symptoms = patient.symptoms_description || 'difficulty with movement';
+      // Handle both SOAP virtual patients and original virtual patients
+      let age, gender, complaint, symptoms;
       
-      clinicalDescription = `${age} year old ${gender} patient with ${complaint}. Clinical presentation: ${symptoms}. Patient demonstrates movement limitations during assessment.`;
+      if (patient.patientProfile) {
+        // SOAP virtual patient structure
+        age = patient.patientProfile.age || 'middle-aged';
+        gender = patient.patientProfile.gender || 'adult';
+        complaint = patient.clinicalPresentation?.chiefComplaint || 'movement limitation';
+        symptoms = patient.clinicalPresentation?.historyOfPresentIllness || 'difficulty with movement';
+      } else {
+        // Original virtual patient structure
+        age = patient.age || 'middle-aged';
+        gender = patient.gender || 'adult';
+        complaint = patient.chief_complaint || 'movement limitation';
+        symptoms = patient.symptoms_description || 'difficulty with movement';
+      }
+      
+      clinicalDescription = `${age} year old ${gender} patient with ${complaint}. Clinical presentation: ${symptoms}. Patient demonstrates movement limitations during physiotherapy assessment.`;
     }
 
     return this.generateClinicalVideo(clinicalDescription, movementType);

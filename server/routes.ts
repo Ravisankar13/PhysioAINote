@@ -10966,19 +10966,30 @@ Respond in JSON format:
 
       console.log(`Generating Leonardo AI video for virtual patient: ${patientId}`);
 
-      // Get virtual patient data
-      const [virtualPatient] = await db
-        .select()
-        .from(virtualPatients)
-        .where(eq(virtualPatients.id, patientId));
+      // Try to get virtual patient from both storage systems
+      let virtualPatient;
+      
+      try {
+        // First try SOAP virtual patients
+        virtualPatient = await soapVirtualPatientService.getVirtualPatient(patientId, userId);
+      } catch (error) {
+        // Fallback to original virtual patients
+        const [patient] = await db
+          .select()
+          .from(virtualPatients)
+          .where(eq(virtualPatients.id, patientId));
+          
+        if (patient) {
+          // Check ownership for original virtual patients
+          if (patient.userId !== userId) {
+            return res.status(403).json({ error: 'Access denied' });
+          }
+          virtualPatient = patient;
+        }
+      }
 
       if (!virtualPatient) {
         return res.status(404).json({ error: 'Virtual patient not found' });
-      }
-
-      // Check ownership (skip for SOAP virtual patients which don't have userId field)
-      if (virtualPatient.userId && virtualPatient.userId !== userId) {
-        return res.status(403).json({ error: 'Access denied' });
       }
 
       const videoResponse = await leonardoService.generatePatientVideo(

@@ -1,4 +1,7 @@
 import { VertexAI } from '@google-cloud/vertexai';
+import { GoogleAuth } from 'google-auth-library';
+import * as fs from 'fs';
+import * as path from 'path';
 
 /**
  * Google Veo Video Generation Service
@@ -9,6 +12,9 @@ export class GoogleVeoService {
   private model: any;
 
   constructor() {
+    // Handle Google Cloud authentication
+    this.setupAuthentication();
+    
     // Initialize Vertex AI with project configuration
     this.vertexAI = new VertexAI({
       project: process.env.GOOGLE_CLOUD_PROJECT_ID,
@@ -19,6 +25,20 @@ export class GoogleVeoService {
     this.model = this.vertexAI.getGenerativeModel({
       model: 'veo-001'
     });
+  }
+
+  private setupAuthentication() {
+    try {
+      // If GOOGLE_APPLICATION_CREDENTIALS contains JSON content, write it to a temp file
+      if (process.env.GOOGLE_APPLICATION_CREDENTIALS && process.env.GOOGLE_APPLICATION_CREDENTIALS.startsWith('{')) {
+        const credentialsPath = path.join(process.cwd(), 'google-credentials.json');
+        fs.writeFileSync(credentialsPath, process.env.GOOGLE_APPLICATION_CREDENTIALS);
+        process.env.GOOGLE_APPLICATION_CREDENTIALS = credentialsPath;
+        console.log('Google Cloud credentials file created successfully');
+      }
+    } catch (error) {
+      console.error('Error setting up Google Cloud authentication:', error);
+    }
   }
 
   /**

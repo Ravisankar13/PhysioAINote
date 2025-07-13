@@ -207,6 +207,8 @@ export default function EnhancedSoapNotesPage() {
       return response.json();
     },
     onSuccess: (result) => {
+      console.log("✓ Patient switch SUCCESS:", result);
+      console.log("Setting current patient number to:", result.currentPatientNumber);
       setCurrentPatientNumber(result.currentPatientNumber);
       setNewPatientName("");
       setShowPatientSwitchDialog(false);

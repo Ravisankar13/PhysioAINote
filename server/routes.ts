@@ -9379,6 +9379,7 @@ Respond in JSON format:
       console.log("Active session:", continuousRecordingService.getActiveSession());
 
       const result = await continuousRecordingService.manualPatientSwitch(sessionId, newPatientName);
+      console.log("Patient switch result:", result);
       res.json(result);
     } catch (error: any) {
       console.error("Error switching patient:", error);

@@ -51,6 +51,7 @@ import type { SoapVirtualPatient } from "@shared/schema";
 import MotionCapture from "@/components/MotionCapture";
 import ThreeDSkeletonPlayer from "@/components/ThreeDSkeletonPlayer";
 import InteractiveSkeleton from "@/components/virtualPatient/InteractiveSkeleton";
+import SkeletonAnimationPlayer from "@/components/SkeletonAnimationPlayer";
 
 // Enhanced Virtual Patient interface for left panel
 interface EnhancedPatientProfile {
@@ -532,9 +533,8 @@ export default function VirtualPatientsPage() {
       const animationData = await animationResponse.json();
       setVideoGenerationProgress(50);
       
-      // Create animated skeleton video using your provided skeleton style
-      const videoUrl = await createSkeletonVideo(animationData.animationSequence, patient);
-      setGeneratedVideoUrl(videoUrl);
+      // Show the animated skeleton player
+      setGeneratedVideoUrl('animation_player');
       setVideoGenerationProgress(100);
       setIsGeneratingVideo(false);
       
@@ -546,9 +546,8 @@ export default function VirtualPatientsPage() {
     } catch (error: any) {
       console.error('3D Skeleton video generation error:', error);
       
-      // Create a default skeleton animation video
-      const defaultVideoUrl = await createDefaultSkeletonVideo();
-      setGeneratedVideoUrl(defaultVideoUrl);
+      // Show animation player instead of URL-based video
+      setGeneratedVideoUrl('animation_player');
       setIsGeneratingVideo(false);
       
       toast({
@@ -903,9 +902,8 @@ export default function VirtualPatientsPage() {
     setGeneratedVideoUrl(null);
     
     try {
-      // Create custom skeleton animation based on prompt
-      const skeletonVideo = await createCustomSkeletonVideo(customVideoPrompt);
-      setGeneratedVideoUrl(skeletonVideo);
+      // Show the animated skeleton player with custom condition
+      setGeneratedVideoUrl('animation_player');
       setVideoGenerationProgress(100);
       setIsGeneratingVideo(false);
       
@@ -1876,24 +1874,12 @@ export default function VirtualPatientsPage() {
                       <div className="mb-3 p-2 bg-blue-50 rounded-lg border border-blue-200">
                         <h5 className="text-xs font-semibold text-blue-800 mb-1">3D Skeleton Animation Video</h5>
                         <div className="relative">
-                          {generatedVideoUrl.startsWith('data:image/svg') ? (
-                            <div 
-                              className="w-full h-64 rounded border bg-white"
-                              style={{ minHeight: '256px' }}
-                              dangerouslySetInnerHTML={{ __html: atob(generatedVideoUrl.split(',')[1]) }}
-                            />
-                          ) : (
-                            <video 
-                              src={generatedVideoUrl} 
-                              controls
-                              loop
-                              className="w-full h-64 object-contain rounded border bg-white"
-                              style={{ minHeight: '256px' }}
-                              poster="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgZmlsbD0iIzI2M2Y3MyIvPjx0ZXh0IHg9IjUwJSIgeT0iNDAlIiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjE4cHgiPjNEIFNrZWxldG9uIEFuaW1hdGlvbjwvdGV4dD48Y2lyY2xlIGN4PSI1MCUiIGN5PSI2MCUiIHI9IjIwIiBmaWxsPSJ3aGl0ZSIgb3BhY2l0eT0iMC44Ii8+PHBvbHlnb24gcG9pbnRzPSIxOTAsMTgwIDIxMCwxODAsMjAwLDE2MCIgZmlsbD0id2hpdGUiLz48L3N2Zz4="
-                              onError={(e) => console.log('Video load error:', e)}
-                              onLoadedData={() => console.log('Video loaded successfully')}
-                            />
-                          )}
+                          <SkeletonAnimationPlayer
+                            width={400}
+                            height={256}
+                            patientCondition={selectedPatient?.chief_complaint || 'general'}
+                            className="w-full h-64 rounded border bg-white"
+                          />
                           <Badge className="absolute top-2 right-2 bg-green-600 text-white text-xs flex items-center gap-1">
                             <Video className="h-3 w-3" />
                             3D Skeleton Animation

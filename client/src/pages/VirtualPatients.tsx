@@ -1869,10 +1869,10 @@ export default function VirtualPatientsPage() {
                       AI Video Generation
                     </h4>
                     
-                    {/* Generated Image Display */}
-                    {generatedVideoUrl && (
+                    {/* Clinical Animation Display - Always show for selected patient */}
+                    {selectedPatient && (
                       <div className="mb-3 p-2 bg-blue-50 rounded-lg border border-blue-200">
-                        <h5 className="text-xs font-semibold text-blue-800 mb-1">3D Skeleton Animation Video</h5>
+                        <h5 className="text-xs font-semibold text-blue-800 mb-1">Clinical Movement Analysis</h5>
                         <div className="relative">
                           <SkeletonAnimationPlayer
                             width={400}
@@ -1886,9 +1886,12 @@ export default function VirtualPatientsPage() {
                           />
                           <Badge className="absolute top-2 right-2 bg-green-600 text-white text-xs flex items-center gap-1">
                             <Video className="h-3 w-3" />
-                            3D Skeleton Animation
+                            Clinical Animation
                           </Badge>
                         </div>
+                        <p className="text-xs text-gray-600 mt-2">
+                          Animation demonstrates specific movement limitations based on: "{selectedPatient?.clinicalPresentation?.chiefComplaint || selectedPatient?.chief_complaint}"
+                        </p>
                       </div>
                     )}
                     

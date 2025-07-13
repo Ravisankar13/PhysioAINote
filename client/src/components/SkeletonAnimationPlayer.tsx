@@ -52,10 +52,15 @@ export default function SkeletonAnimationPlayer({
   // Get movement limitations based on patient condition
   const getMovementLimitations = (condition: string) => {
     const lowerCondition = condition.toLowerCase();
+    console.log('Analyzing patient condition:', condition);
+    console.log('Lowercase condition:', lowerCondition);
     
     // Shoulder-specific conditions
     if (lowerCondition.includes('shoulder') || lowerCondition.includes('rotator cuff') || lowerCondition.includes('impingement')) {
+      console.log('Detected shoulder condition!');
+      
       if (lowerCondition.includes('frozen') || lowerCondition.includes('adhesive capsulitis')) {
+        console.log('Frozen shoulder detected');
         return {
           shoulderRange: 0.1, // Severely limited
           armElevation: 0.05,
@@ -63,6 +68,7 @@ export default function SkeletonAnimationPlayer({
           painPattern: 'severe_restriction'
         };
       } else if (lowerCondition.includes('tear') || lowerCondition.includes('rupture')) {
+        console.log('Rotator cuff tear detected');
         return {
           shoulderRange: 0.2,
           armElevation: 0.1,
@@ -70,6 +76,7 @@ export default function SkeletonAnimationPlayer({
           painPattern: 'weakness_limitation'
         };
       } else if (lowerCondition.includes('impingement') || lowerCondition.includes('subacromial')) {
+        console.log('Shoulder impingement detected');
         return {
           shoulderRange: 0.4,
           armElevation: 0.3,
@@ -77,12 +84,15 @@ export default function SkeletonAnimationPlayer({
           painPattern: 'overhead_limitation'
         };
       } else {
-        return {
+        console.log('General shoulder pain detected');
+        const result = {
           shoulderRange: 0.3,
           armElevation: 0.2,
           movementType: 'shoulder_pain',
           painPattern: 'general_limitation'
         };
+        console.log('Returning shoulder pain result:', result);
+        return result;
       }
     }
     
@@ -158,7 +168,7 @@ export default function SkeletonAnimationPlayer({
       };
     }
     
-    return {
+    const result = {
       shoulderRange: 1.0,
       armElevation: 1.0,
       kneeFlexion: 1.0,
@@ -168,6 +178,9 @@ export default function SkeletonAnimationPlayer({
       movementType: 'normal_movement',
       painPattern: 'no_limitation'
     };
+    
+    console.log('Movement limitations result:', result);
+    return result;
   };
 
   // Calculate skeleton positions for current frame
@@ -185,56 +198,111 @@ export default function SkeletonAnimationPlayer({
     
     // Shoulder condition animations
     if (limitations.movementType.includes('shoulder') || limitations.movementType.includes('frozen') || limitations.movementType.includes('rotator')) {
-      // Demonstrate shoulder limitation - attempting to lift arm but restricted
+      
+      // Determine which side is affected (default to left, but check for "right" in condition)
+      const isRightSide = patientCondition.toLowerCase().includes('right');
+      const isLeftSide = patientCondition.toLowerCase().includes('left') || !isRightSide; // Default to left
+      
+      // Create movement limitation pattern
       const attempt = Math.sin(time * 0.5); // Slow attempt cycle
-      const restriction = attempt > 0 ? attempt * limitations.shoulderRange : 0; // Can only lift when trying
+      const movementRange = limitations.shoulderRange || 0.3;
       
       if (limitations.movementType === 'frozen_shoulder') {
         // Very minimal movement, mostly static with slight attempt
-        leftShoulderOffset = Math.sin(time * 0.3) * 3;
-        leftElbowOffset = {
-          x: Math.sin(time * 0.3) * 5 * limitations.shoulderRange,
-          y: Math.max(0, Math.sin(time * 0.3) * 3) // Cannot elevate
-        };
-        leftHandOffset = {
-          x: Math.sin(time * 0.3) * 8 * limitations.shoulderRange,
-          y: Math.max(0, Math.sin(time * 0.3) * 5)
-        };
+        if (isLeftSide) {
+          leftElbowOffset = {
+            x: Math.sin(time * 0.3) * 3 * movementRange,
+            y: Math.max(0, Math.sin(time * 0.3) * 2) // Barely moves up
+          };
+          leftHandOffset = {
+            x: Math.sin(time * 0.3) * 5 * movementRange,
+            y: Math.max(0, Math.sin(time * 0.3) * 3)
+          };
+          // Right side compensates
+          rightElbowOffset = {
+            x: -Math.sin(time * 0.4) * 15,
+            y: Math.sin(time * 0.4) * 12
+          };
+          rightHandOffset = {
+            x: -Math.sin(time * 0.4) * 25,
+            y: Math.sin(time * 0.4) * 20
+          };
+        } else {
+          rightElbowOffset = {
+            x: -Math.sin(time * 0.3) * 3 * movementRange,
+            y: Math.max(0, Math.sin(time * 0.3) * 2)
+          };
+          rightHandOffset = {
+            x: -Math.sin(time * 0.3) * 5 * movementRange,
+            y: Math.max(0, Math.sin(time * 0.3) * 3)
+          };
+        }
       } else if (limitations.movementType === 'shoulder_impingement') {
         // Can start movement but stops abruptly at impingement point
-        const impingementPoint = 0.4; // Stop at 40% range
-        const movement = Math.sin(time * 0.8);
+        const impingementPoint = 0.4;
+        const movement = Math.sin(time * 0.7);
         const clampedMovement = movement > impingementPoint ? impingementPoint : movement;
         
-        leftElbowOffset = {
-          x: clampedMovement * 20,
-          y: Math.max(0, clampedMovement * 15) // Stops at impingement
-        };
-        leftHandOffset = {
-          x: clampedMovement * 30,
-          y: Math.max(0, clampedMovement * 25)
-        };
-        
-        // Show compensation - right side overworks
-        rightElbowOffset = {
-          x: -Math.sin(time * 0.8) * 25,
-          y: Math.sin(time * 0.8) * 20
-        };
-        rightHandOffset = {
-          x: -Math.sin(time * 0.8) * 35,
-          y: Math.sin(time * 0.8) * 30
-        };
+        if (isLeftSide) {
+          leftElbowOffset = {
+            x: clampedMovement * 18,
+            y: Math.max(0, clampedMovement * 12) // Stops at impingement
+          };
+          leftHandOffset = {
+            x: clampedMovement * 28,
+            y: Math.max(0, clampedMovement * 20)
+          };
+          // Right side overcompensates
+          rightElbowOffset = {
+            x: -Math.sin(time * 0.7) * 22,
+            y: Math.sin(time * 0.7) * 18
+          };
+          rightHandOffset = {
+            x: -Math.sin(time * 0.7) * 32,
+            y: Math.sin(time * 0.7) * 25
+          };
+        } else {
+          rightElbowOffset = {
+            x: -clampedMovement * 18,
+            y: Math.max(0, clampedMovement * 12)
+          };
+          rightHandOffset = {
+            x: -clampedMovement * 28,
+            y: Math.max(0, clampedMovement * 20)
+          };
+        }
       } else {
         // General shoulder pain - hesitant, guarded movement
-        const hesitantMovement = Math.sin(time * 0.6) * limitations.shoulderRange;
-        leftElbowOffset = {
-          x: hesitantMovement * 15,
-          y: Math.max(0, hesitantMovement * 10)
-        };
-        leftHandOffset = {
-          x: hesitantMovement * 25,
-          y: Math.max(0, hesitantMovement * 18)
-        };
+        const hesitantMovement = Math.sin(time * 0.6) * movementRange;
+        
+        if (isLeftSide) {
+          leftElbowOffset = {
+            x: hesitantMovement * 12,
+            y: Math.max(0, hesitantMovement * 8) // Limited upward movement
+          };
+          leftHandOffset = {
+            x: hesitantMovement * 20,
+            y: Math.max(0, hesitantMovement * 15)
+          };
+          // Normal movement on right side
+          rightElbowOffset = {
+            x: -Math.sin(time) * 18,
+            y: Math.sin(time * 0.8) * 10
+          };
+          rightHandOffset = {
+            x: -Math.sin(time * 1.2) * 25,
+            y: Math.sin(time * 1.2) * 15
+          };
+        } else {
+          rightElbowOffset = {
+            x: -hesitantMovement * 12,
+            y: Math.max(0, hesitantMovement * 8)
+          };
+          rightHandOffset = {
+            x: -hesitantMovement * 20,
+            y: Math.max(0, hesitantMovement * 15)
+          };
+        }
       }
     } else {
       // Normal arm movement for non-shoulder conditions

@@ -9430,6 +9430,27 @@ Respond in JSON format:
     }
   });
 
+  // Get completed SOAP notes for active session
+  app.get("/api/continuous-recording/completed-notes", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const activeSession = continuousRecordingService.getActiveSession();
+      if (!activeSession?.session?.sessionId) {
+        return res.json([]); // Return empty array if no active session
+      }
+
+      const soapNotes = await continuousRecordingService.getCompletedSoapNotes(activeSession.session.sessionId);
+      res.json(soapNotes);
+    } catch (error: any) {
+      console.error("Error getting completed SOAP notes:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Get completed SOAP notes for session
   app.get("/api/continuous-recording/:sessionId/soap-notes", ensureAuthenticated, async (req: Request, res: Response) => {
     try {

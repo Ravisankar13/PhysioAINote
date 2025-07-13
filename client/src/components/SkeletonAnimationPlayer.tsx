@@ -53,23 +53,108 @@ export default function SkeletonAnimationPlayer({
   const getMovementLimitations = (condition: string) => {
     const lowerCondition = condition.toLowerCase();
     
-    if (lowerCondition.includes('shoulder')) {
+    // Shoulder-specific conditions
+    if (lowerCondition.includes('shoulder') || lowerCondition.includes('rotator cuff') || lowerCondition.includes('impingement')) {
+      if (lowerCondition.includes('frozen') || lowerCondition.includes('adhesive capsulitis')) {
+        return {
+          shoulderRange: 0.1, // Severely limited
+          armElevation: 0.05,
+          movementType: 'frozen_shoulder',
+          painPattern: 'severe_restriction'
+        };
+      } else if (lowerCondition.includes('tear') || lowerCondition.includes('rupture')) {
+        return {
+          shoulderRange: 0.2,
+          armElevation: 0.1,
+          movementType: 'rotator_cuff_tear',
+          painPattern: 'weakness_limitation'
+        };
+      } else if (lowerCondition.includes('impingement') || lowerCondition.includes('subacromial')) {
+        return {
+          shoulderRange: 0.4,
+          armElevation: 0.3,
+          movementType: 'shoulder_impingement',
+          painPattern: 'overhead_limitation'
+        };
+      } else {
+        return {
+          shoulderRange: 0.3,
+          armElevation: 0.2,
+          movementType: 'shoulder_pain',
+          painPattern: 'general_limitation'
+        };
+      }
+    }
+    
+    // Knee-specific conditions
+    else if (lowerCondition.includes('knee') || lowerCondition.includes('acl') || lowerCondition.includes('meniscus')) {
+      if (lowerCondition.includes('acl') || lowerCondition.includes('ligament')) {
+        return {
+          kneeFlexion: 0.3,
+          legMovement: 0.2,
+          movementType: 'knee_instability',
+          painPattern: 'instability_pattern'
+        };
+      } else if (lowerCondition.includes('meniscus') || lowerCondition.includes('cartilage')) {
+        return {
+          kneeFlexion: 0.4,
+          legMovement: 0.3,
+          movementType: 'knee_mechanical',
+          painPattern: 'mechanical_block'
+        };
+      } else {
+        return {
+          kneeFlexion: 0.4,
+          legMovement: 0.3,
+          movementType: 'knee_limitation',
+          painPattern: 'general_knee_pain'
+        };
+      }
+    }
+    
+    // Back/spine conditions
+    else if (lowerCondition.includes('back') || lowerCondition.includes('spine') || lowerCondition.includes('disc')) {
+      if (lowerCondition.includes('disc') || lowerCondition.includes('herniat') || lowerCondition.includes('bulg')) {
+        return {
+          spinalFlexion: 0.1,
+          bodyRotation: 0.05,
+          movementType: 'disc_herniation',
+          painPattern: 'flexion_intolerant'
+        };
+      } else if (lowerCondition.includes('stenosis') || lowerCondition.includes('arthriti')) {
+        return {
+          spinalFlexion: 0.2,
+          bodyRotation: 0.1,
+          movementType: 'spinal_stenosis',
+          painPattern: 'extension_intolerant'
+        };
+      } else {
+        return {
+          spinalFlexion: 0.2,
+          bodyRotation: 0.1,
+          movementType: 'back_limitation',
+          painPattern: 'general_back_pain'
+        };
+      }
+    }
+    
+    // Ankle/foot conditions
+    else if (lowerCondition.includes('ankle') || lowerCondition.includes('foot') || lowerCondition.includes('achilles')) {
       return {
-        shoulderRange: 0.3, // Reduced range
-        armElevation: 0.2,
-        movementType: 'shoulder_limitation'
+        ankleRange: 0.3,
+        footMovement: 0.2,
+        movementType: 'ankle_limitation',
+        painPattern: 'weight_bearing_limitation'
       };
-    } else if (lowerCondition.includes('knee')) {
+    }
+    
+    // Hip conditions
+    else if (lowerCondition.includes('hip') || lowerCondition.includes('groin')) {
       return {
-        kneeFlexion: 0.4,
-        legMovement: 0.3,
-        movementType: 'knee_limitation'
-      };
-    } else if (lowerCondition.includes('back') || lowerCondition.includes('spine')) {
-      return {
-        spinalFlexion: 0.2,
-        bodyRotation: 0.1,
-        movementType: 'back_limitation'
+        hipFlexion: 0.3,
+        hipRotation: 0.2,
+        movementType: 'hip_limitation',
+        painPattern: 'hip_restriction'
       };
     }
     
@@ -80,24 +165,152 @@ export default function SkeletonAnimationPlayer({
       legMovement: 1.0,
       spinalFlexion: 1.0,
       bodyRotation: 1.0,
-      movementType: 'normal_movement'
+      movementType: 'normal_movement',
+      painPattern: 'no_limitation'
     };
   };
 
   // Calculate skeleton positions for current frame
   const calculateSkeleton = (frameNumber: number): Skeleton => {
-    const time = frameNumber * 0.1; // Animation speed
+    const time = frameNumber * 0.08; // Slower animation for clinical realism
     const limitations = getMovementLimitations(patientCondition);
     
     // Base positions (centered in canvas)
     const centerX = width / 2;
     const centerY = height / 2;
 
-    // Calculate animated positions with clinical limitations
+    // Create realistic clinical movement patterns based on condition
+    let leftShoulderOffset, rightShoulderOffset, leftElbowOffset, rightElbowOffset;
+    let leftHandOffset, rightHandOffset;
+    
+    // Shoulder condition animations
+    if (limitations.movementType.includes('shoulder') || limitations.movementType.includes('frozen') || limitations.movementType.includes('rotator')) {
+      // Demonstrate shoulder limitation - attempting to lift arm but restricted
+      const attempt = Math.sin(time * 0.5); // Slow attempt cycle
+      const restriction = attempt > 0 ? attempt * limitations.shoulderRange : 0; // Can only lift when trying
+      
+      if (limitations.movementType === 'frozen_shoulder') {
+        // Very minimal movement, mostly static with slight attempt
+        leftShoulderOffset = Math.sin(time * 0.3) * 3;
+        leftElbowOffset = {
+          x: Math.sin(time * 0.3) * 5 * limitations.shoulderRange,
+          y: Math.max(0, Math.sin(time * 0.3) * 3) // Cannot elevate
+        };
+        leftHandOffset = {
+          x: Math.sin(time * 0.3) * 8 * limitations.shoulderRange,
+          y: Math.max(0, Math.sin(time * 0.3) * 5)
+        };
+      } else if (limitations.movementType === 'shoulder_impingement') {
+        // Can start movement but stops abruptly at impingement point
+        const impingementPoint = 0.4; // Stop at 40% range
+        const movement = Math.sin(time * 0.8);
+        const clampedMovement = movement > impingementPoint ? impingementPoint : movement;
+        
+        leftElbowOffset = {
+          x: clampedMovement * 20,
+          y: Math.max(0, clampedMovement * 15) // Stops at impingement
+        };
+        leftHandOffset = {
+          x: clampedMovement * 30,
+          y: Math.max(0, clampedMovement * 25)
+        };
+        
+        // Show compensation - right side overworks
+        rightElbowOffset = {
+          x: -Math.sin(time * 0.8) * 25,
+          y: Math.sin(time * 0.8) * 20
+        };
+        rightHandOffset = {
+          x: -Math.sin(time * 0.8) * 35,
+          y: Math.sin(time * 0.8) * 30
+        };
+      } else {
+        // General shoulder pain - hesitant, guarded movement
+        const hesitantMovement = Math.sin(time * 0.6) * limitations.shoulderRange;
+        leftElbowOffset = {
+          x: hesitantMovement * 15,
+          y: Math.max(0, hesitantMovement * 10)
+        };
+        leftHandOffset = {
+          x: hesitantMovement * 25,
+          y: Math.max(0, hesitantMovement * 18)
+        };
+      }
+    } else {
+      // Normal arm movement for non-shoulder conditions
+      leftElbowOffset = {
+        x: Math.sin(time) * 20,
+        y: Math.sin(time * 0.8) * 12
+      };
+      leftHandOffset = {
+        x: Math.sin(time * 1.2) * 30,
+        y: Math.sin(time * 1.2) * 20
+      };
+      rightElbowOffset = {
+        x: -Math.sin(time) * 20,
+        y: Math.sin(time * 0.8) * 12
+      };
+      rightHandOffset = {
+        x: -Math.sin(time * 1.2) * 30,
+        y: Math.sin(time * 1.2) * 20
+      };
+    }
+
+    // Leg movement patterns
+    let leftKneeOffset, rightKneeOffset, leftFootOffset, rightFootOffset;
+    
+    if (limitations.movementType.includes('knee')) {
+      // Demonstrate knee limitation
+      const kneeMovement = Math.sin(time * 0.7) * limitations.kneeFlexion;
+      leftKneeOffset = {
+        x: kneeMovement * 5,
+        y: Math.max(0, kneeMovement * 8) // Limited flexion
+      };
+      leftFootOffset = {
+        x: kneeMovement * 8,
+        y: Math.max(0, kneeMovement * 6)
+      };
+      
+      // Compensation in other leg
+      rightKneeOffset = {
+        x: -kneeMovement * 3,
+        y: kneeMovement * 10
+      };
+      rightFootOffset = {
+        x: -kneeMovement * 6,
+        y: kneeMovement * 8
+      };
+    } else {
+      // Normal leg movement
+      leftKneeOffset = {
+        x: Math.sin(time * 1.5) * 6,
+        y: Math.sin(time * 1.3) * 10
+      };
+      leftFootOffset = {
+        x: Math.sin(time * 2) * 10,
+        y: Math.sin(time * 1.8) * 8
+      };
+      rightKneeOffset = {
+        x: -Math.sin(time * 1.5) * 6,
+        y: Math.sin(time * 1.3) * 10
+      };
+      rightFootOffset = {
+        x: -Math.sin(time * 2) * 10,
+        y: Math.sin(time * 1.8) * 8
+      };
+    }
+
+    // Apply defaults if not set
+    leftElbowOffset = leftElbowOffset || { x: Math.sin(time) * 20, y: Math.sin(time * 0.8) * 12 };
+    rightElbowOffset = rightElbowOffset || { x: -Math.sin(time) * 20, y: Math.sin(time * 0.8) * 12 };
+    leftHandOffset = leftHandOffset || { x: Math.sin(time * 1.2) * 30, y: Math.sin(time * 1.2) * 20 };
+    rightHandOffset = rightHandOffset || { x: -Math.sin(time * 1.2) * 30, y: Math.sin(time * 1.2) * 20 };
+
+    // Calculate final skeleton positions
     const skeleton: Skeleton = {
       head: {
         x: centerX,
-        y: centerY - 120 + Math.sin(time * 2) * 2,
+        y: centerY - 120 + Math.sin(time * 1.5) * 2,
         color: colors[0]
       },
       neck: {
@@ -121,23 +334,23 @@ export default function SkeletonAnimationPlayer({
         color: colors[4]
       },
       leftElbow: {
-        x: centerX - 30 + Math.sin(time) * 25 * limitations.shoulderRange,
-        y: centerY - 50 + Math.cos(time) * 15 * limitations.armElevation,
+        x: centerX - 30 + leftElbowOffset.x,
+        y: centerY - 50 + leftElbowOffset.y,
         color: colors[5]
       },
       rightElbow: {
-        x: centerX + 30 - Math.sin(time) * 25 * limitations.shoulderRange,
-        y: centerY - 50 + Math.cos(time) * 15 * limitations.armElevation,
+        x: centerX + 30 + rightElbowOffset.x,
+        y: centerY - 50 + rightElbowOffset.y,
         color: colors[6]
       },
       leftHand: {
-        x: centerX - 30 + Math.sin(time * 1.2) * 35 * limitations.shoulderRange,
-        y: centerY - 20 + Math.cos(time * 1.2) * 25 * limitations.armElevation,
+        x: centerX - 30 + leftHandOffset.x,
+        y: centerY - 20 + leftHandOffset.y,
         color: colors[0]
       },
       rightHand: {
-        x: centerX + 30 - Math.sin(time * 1.2) * 35 * limitations.shoulderRange,
-        y: centerY - 20 + Math.cos(time * 1.2) * 25 * limitations.armElevation,
+        x: centerX + 30 + rightHandOffset.x,
+        y: centerY - 20 + rightHandOffset.y,
         color: colors[1]
       },
       chest: {
@@ -166,23 +379,23 @@ export default function SkeletonAnimationPlayer({
         color: colors[6]
       },
       leftKnee: {
-        x: centerX - 20 + Math.sin(time * 1.5) * 8 * limitations.legMovement,
-        y: centerY + 80 + Math.cos(time) * 12 * limitations.kneeFlexion,
+        x: centerX - 20 + (leftKneeOffset?.x || 0),
+        y: centerY + 80 + (leftKneeOffset?.y || 0),
         color: colors[0]
       },
       rightKnee: {
-        x: centerX + 20 - Math.sin(time * 1.5) * 8 * limitations.legMovement,
-        y: centerY + 80 - Math.cos(time) * 12 * limitations.kneeFlexion,
+        x: centerX + 20 + (rightKneeOffset?.x || 0),
+        y: centerY + 80 + (rightKneeOffset?.y || 0),
         color: colors[1]
       },
       leftFoot: {
-        x: centerX - 20 + Math.sin(time * 2) * 12 * limitations.legMovement,
-        y: centerY + 120 + Math.cos(time * 1.5) * 8 * limitations.kneeFlexion,
+        x: centerX - 20 + (leftFootOffset?.x || 0),
+        y: centerY + 120 + (leftFootOffset?.y || 0),
         color: colors[2]
       },
       rightFoot: {
-        x: centerX + 20 - Math.sin(time * 2) * 12 * limitations.legMovement,
-        y: centerY + 120 - Math.cos(time * 1.5) * 8 * limitations.kneeFlexion,
+        x: centerX + 20 + (rightFootOffset?.x || 0),
+        y: centerY + 120 + (rightFootOffset?.y || 0),
         color: colors[3]
       }
     };
@@ -248,13 +461,40 @@ export default function SkeletonAnimationPlayer({
       ctx.fill();
     });
 
-    // Add movement limitation indicator
+    // Add clinical pattern indicator
     const limitations = getMovementLimitations(patientCondition);
     if (limitations.movementType !== 'normal_movement') {
       ctx.fillStyle = '#e74c3c';
-      ctx.font = '12px Arial';
+      ctx.font = '11px Arial';
       ctx.textAlign = 'center';
-      ctx.fillText(`${limitations.movementType.replace('_', ' ')}`, width / 2, height - 20);
+      
+      // Show specific clinical pattern
+      let displayText = limitations.movementType.replace(/_/g, ' ').toUpperCase();
+      if (limitations.movementType === 'shoulder_impingement') {
+        displayText = 'IMPINGEMENT - LIMITED OVERHEAD REACH';
+      } else if (limitations.movementType === 'frozen_shoulder') {
+        displayText = 'FROZEN SHOULDER - SEVERE RESTRICTION';
+      } else if (limitations.movementType === 'rotator_cuff_tear') {
+        displayText = 'ROTATOR CUFF TEAR - WEAKNESS PATTERN';
+      } else if (limitations.movementType === 'shoulder_pain') {
+        displayText = 'SHOULDER PAIN - GUARDED MOVEMENT';
+      }
+      
+      ctx.fillText(displayText, width / 2, height - 15);
+      
+      // Add movement description
+      ctx.fillStyle = '#7f8c8d';
+      ctx.font = '9px Arial';
+      if (limitations.movementType.includes('shoulder')) {
+        ctx.fillText('Attempting to lift arm - watch for limitation', width / 2, height - 5);
+      } else if (limitations.movementType.includes('knee')) {
+        ctx.fillText('Weight bearing with knee limitation', width / 2, height - 5);
+      }
+    } else {
+      ctx.fillStyle = '#2ecc71';
+      ctx.font = '11px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('NORMAL MOVEMENT PATTERN', width / 2, height - 15);
     }
   };
 

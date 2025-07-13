@@ -1877,7 +1877,11 @@ export default function VirtualPatientsPage() {
                           <SkeletonAnimationPlayer
                             width={400}
                             height={256}
-                            patientCondition={selectedPatient?.chief_complaint || 'general'}
+                            patientCondition={
+                              selectedPatient?.clinicalPresentation?.chiefComplaint || 
+                              selectedPatient?.chief_complaint || 
+                              'Pain and restricted movement in the left shoulder'
+                            }
                             className="w-full h-64 rounded border bg-white"
                           />
                           <Badge className="absolute top-2 right-2 bg-green-600 text-white text-xs flex items-center gap-1">

@@ -15,33 +15,44 @@ export class GoogleVeoService {
     // Handle Google Cloud authentication
     this.setupAuthentication();
     
-    // Validate required environment variables
-    if (!process.env.GOOGLE_CLOUD_PROJECT_ID) {
-      throw new Error('GOOGLE_CLOUD_PROJECT_ID is required for Google Veo');
+    // Only initialize if we have valid credentials
+    if (this.isConfigured()) {
+      console.log('Initializing Vertex AI with project:', process.env.GOOGLE_CLOUD_PROJECT_ID);
+      
+      // Initialize Vertex AI with project configuration
+      this.vertexAI = new VertexAI({
+        project: process.env.GOOGLE_CLOUD_PROJECT_ID,
+        location: process.env.GOOGLE_CLOUD_LOCATION || 'us-central1'
+      });
+      
+      // Initialize Veo model
+      this.model = this.vertexAI.getGenerativeModel({
+        model: 'veo-001'
+      });
+    } else {
+      console.log('Google Veo not configured - video generation will be unavailable');
     }
-    
-    console.log('Initializing Vertex AI with project:', process.env.GOOGLE_CLOUD_PROJECT_ID);
-    
-    // Initialize Vertex AI with project configuration
-    this.vertexAI = new VertexAI({
-      project: process.env.GOOGLE_CLOUD_PROJECT_ID,
-      location: process.env.GOOGLE_CLOUD_LOCATION || 'us-central1'
-    });
-    
-    // Initialize Veo model
-    this.model = this.vertexAI.getGenerativeModel({
-      model: 'veo-001'
-    });
+  }
+
+  private isConfigured(): boolean {
+    return !!(process.env.GOOGLE_CLOUD_PROJECT_ID && 
+              process.env.GOOGLE_APPLICATION_CREDENTIALS &&
+              process.env.GOOGLE_CLOUD_PROJECT_ID.length < 100); // Project ID shouldn't be huge
   }
 
   private setupAuthentication() {
     try {
-      // If GOOGLE_APPLICATION_CREDENTIALS contains JSON content, write it to a temp file
+      // Check if GOOGLE_APPLICATION_CREDENTIALS contains JSON content
       if (process.env.GOOGLE_APPLICATION_CREDENTIALS && process.env.GOOGLE_APPLICATION_CREDENTIALS.startsWith('{')) {
         const credentialsPath = path.join(process.cwd(), 'google-credentials.json');
         
         // Parse and validate JSON
         const credentials = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS);
+        
+        // Validate required credential fields
+        if (!credentials.type || !credentials.project_id || !credentials.private_key || !credentials.client_email) {
+          throw new Error('Invalid Google Cloud credentials format');
+        }
         
         // Write formatted JSON to file
         fs.writeFileSync(credentialsPath, JSON.stringify(credentials, null, 2));
@@ -49,17 +60,23 @@ export class GoogleVeoService {
         // Update environment variable to point to file
         process.env.GOOGLE_APPLICATION_CREDENTIALS = credentialsPath;
         
-        console.log('Google Cloud credentials file created at:', credentialsPath);
+        console.log('Google Cloud credentials file created successfully');
         console.log('Project ID from credentials:', credentials.project_id);
         
-        // Also ensure project ID is available
-        if (!process.env.GOOGLE_CLOUD_PROJECT_ID && credentials.project_id) {
+        // Ensure project ID is correctly set (not the credential data)
+        if (credentials.project_id && credentials.project_id !== process.env.GOOGLE_CLOUD_PROJECT_ID) {
+          console.log('Using project ID from credentials file:', credentials.project_id);
           process.env.GOOGLE_CLOUD_PROJECT_ID = credentials.project_id;
+        }
+      } else {
+        // Check if we have both required environment variables
+        if (!process.env.GOOGLE_CLOUD_PROJECT_ID || !process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+          throw new Error('Missing required Google Cloud environment variables');
         }
       }
     } catch (error) {
       console.error('Error setting up Google Cloud authentication:', error);
-      throw new Error('Failed to setup Google Cloud credentials');
+      // Don't throw error, just log it - we'll handle this gracefully
     }
   }
 
@@ -71,6 +88,15 @@ export class GoogleVeoService {
     movementType: string = 'functional_movement',
     duration: number = 5
   ): Promise<{ videoUrl: string; generationId: string }> {
+    // Check if service is properly configured
+    if (!this.isConfigured()) {
+      throw new Error('Google Veo service is not properly configured. Video generation requires valid Google Cloud credentials and project ID.');
+    }
+    
+    if (!this.model) {
+      throw new Error('Google Veo model not initialized. Please check Google Cloud configuration.');
+    }
+
     try {
       console.log(`Generating video for: ${clinicalDescription}`);
 

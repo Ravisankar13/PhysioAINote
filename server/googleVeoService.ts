@@ -62,10 +62,36 @@ export class GoogleVeoService {
   private setupAuthentication() {
     try {
       console.log('Setting up Google Cloud authentication...');
+      
+      // First check if we have a valid credentials file 
+      const credentialsPath = path.join(process.cwd(), 'google-credentials.json');
+      if (fs.existsSync(credentialsPath)) {
+        console.log('Found credentials file, using it...');
+        
+        try {
+          const credentialsContent = fs.readFileSync(credentialsPath, 'utf8');
+          const credentials = JSON.parse(credentialsContent);
+          
+          if (credentials.type && credentials.project_id && credentials.private_key && credentials.client_email) {
+            console.log('Valid credentials file found');
+            console.log('Project ID:', credentials.project_id);
+            
+            // Set environment variables properly
+            process.env.GOOGLE_APPLICATION_CREDENTIALS = credentialsPath;
+            process.env.GOOGLE_CLOUD_PROJECT_ID = credentials.project_id;
+            
+            this.configured = true;
+            return;
+          }
+        } catch (error) {
+          console.log('Error reading credentials file:', error.message);
+        }
+      }
+      
       console.log('GOOGLE_CLOUD_PROJECT_ID length:', process.env.GOOGLE_CLOUD_PROJECT_ID?.length);
       console.log('GOOGLE_APPLICATION_CREDENTIALS value:', process.env.GOOGLE_APPLICATION_CREDENTIALS);
       
-      // Check if GOOGLE_CLOUD_PROJECT_ID contains the actual JSON credentials (common misconfig)
+      // Check if GOOGLE_CLOUD_PROJECT_ID contains the actual JSON credentials (legacy)
       if (process.env.GOOGLE_CLOUD_PROJECT_ID && process.env.GOOGLE_CLOUD_PROJECT_ID.length > 100) {
         console.log('GOOGLE_CLOUD_PROJECT_ID appears to contain credential data - attempting to parse...');
         

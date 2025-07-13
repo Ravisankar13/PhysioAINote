@@ -1617,8 +1617,26 @@ export default function VirtualPatientsPage() {
                   <div className="mt-6 pt-4 border-t border-gray-200">
                     <h4 className="text-sm font-semibold text-blue-700 mb-2 flex items-center gap-2">
                       <Video className="h-4 w-4" />
-                      AI Video Generation
+                      AI Image Generation
                     </h4>
+                    
+                    {/* Generated Image Display */}
+                    {generatedVideoUrl && (
+                      <div className="mb-3 p-2 bg-blue-50 rounded-lg border border-blue-200">
+                        <h5 className="text-xs font-semibold text-blue-800 mb-1">Generated Clinical Image</h5>
+                        <div className="relative">
+                          <img 
+                            src={generatedVideoUrl} 
+                            alt="Generated clinical image"
+                            className="w-full h-32 object-cover rounded border"
+                          />
+                          <Badge className="absolute top-1 right-1 bg-blue-600 text-white text-xs">
+                            Leonardo AI
+                          </Badge>
+                        </div>
+                      </div>
+                    )}
+                    
                     <div className="space-y-2">
                       <Button
                         onClick={() => selectedPatient && generateLeonardoVideo(selectedPatient)}
@@ -1661,27 +1679,7 @@ export default function VirtualPatientsPage() {
                         </Button>
                       </div>
                       
-                      {generatedVideoUrl && (
-                        <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Video className="h-4 w-4 text-blue-600" />
-                            <span className="text-blue-700 text-sm font-medium">AI Video Generated</span>
-                          </div>
-                          <video 
-                            src={generatedVideoUrl} 
-                            controls 
-                            className="w-full h-32 bg-black rounded"
-                            poster="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzMzMzMzMyIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iIGZvbnQtZmFtaWx5PSJBcmlhbCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNHB4Ij5BSSBNb3ZlbWVudCBWaWRlbzwvdGV4dD48L3N2Zz4="
-                          >
-                            Your browser does not support video playback.
-                          </video>
-                          {videoTaskId && (
-                            <div className="text-xs text-gray-500 mt-1">
-                              Task ID: {videoTaskId}
-                            </div>
-                          )}
-                        </div>
-                      )}
+
                       
                       {/* Custom Video Generation */}
                       <div className="mt-4 pt-3 border-t border-gray-200">

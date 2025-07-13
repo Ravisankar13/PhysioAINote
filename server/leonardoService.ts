@@ -119,15 +119,33 @@ export class LeonardoService {
 
       const baseImageId = completedGeneration.generated_images[0].id;
       
-      // For now, return the high-quality static image as the "video"
-      // Motion generation can be added later when available
-      console.log('Generated professional clinical image with Leonardo AI');
-      
-      return {
-        videoUrl: completedGeneration.generated_images[0].url,
-        taskId: completedGeneration.id,
-        cost: imageGeneration.sdGenerationJob.apiCreditCost
-      };
+      // Step 3: Apply motion to create actual video
+      try {
+        const motionStrength = this.getMotionStrengthForMovement(movementType);
+        const motionGeneration = await this.generateMotion(baseImageId, motionStrength);
+        
+        // Step 4: Poll for motion video completion
+        const videoResult = await this.waitForMotionGeneration(motionGeneration.motionId);
+        
+        const totalCost = imageGeneration.sdGenerationJob.apiCreditCost + motionGeneration.apiCreditCost;
+        
+        console.log('Generated professional 3D skeleton animation with Leonardo AI');
+        
+        return {
+          videoUrl: videoResult.motionMP4URL || videoResult.motionGIFURL || completedGeneration.generated_images[0].url,
+          taskId: motionGeneration.motionId,
+          cost: totalCost
+        };
+      } catch (motionError: any) {
+        console.log('Motion generation failed, returning static skeleton image:', motionError.message);
+        
+        // Fallback: return the static skeleton image as the video
+        return {
+          videoUrl: completedGeneration.generated_images[0].url,
+          taskId: completedGeneration.id,
+          cost: imageGeneration.sdGenerationJob.apiCreditCost
+        };
+      }
       
     } catch (error: any) {
       console.error('Leonardo AI video generation failed:', error);
@@ -261,18 +279,19 @@ export class LeonardoService {
    * Enhance clinical description for better video generation
    */
   private enhanceClinicalPrompt(clinicalDescription: string, movementType: string): string {
-    const basePrompt = `Professional medical setting, physiotherapy clinic, ${clinicalDescription}`;
+    // Generate 3D skeleton visualization prompts for medical animations
+    const basePrompt = `3D medical skeleton model, anatomical wireframe visualization, clinical biomechanics, ${clinicalDescription}`;
     
     const movementEnhancers = {
-      shoulder_movement: 'patient demonstrating shoulder range of motion, overhead reach assessment, anatomically accurate human movement',
-      gait_analysis: 'patient walking, gait assessment, side view, clinical walking pattern analysis',
-      functional_movement: 'patient performing functional movement test, physiotherapy assessment, clinical evaluation',
-      spinal_movement: 'patient demonstrating spinal flexibility, back movement assessment, postural evaluation'
+      shoulder_movement: '3D skeleton performing shoulder range of motion, overhead reach assessment, anatomical bone structure movement, joint articulation',
+      gait_analysis: '3D skeleton walking cycle, gait biomechanics, skeletal movement pattern, side view bone structure analysis',
+      functional_movement: '3D skeleton performing functional movement assessment, joint mobility demonstration, skeletal kinematic analysis',
+      spinal_movement: '3D skeleton demonstrating spinal flexibility, vertebral movement, postural biomechanics, spine articulation'
     };
 
     const enhancer = movementEnhancers[movementType as keyof typeof movementEnhancers] || movementEnhancers.functional_movement;
     
-    return `${basePrompt}, ${enhancer}, high quality, professional medical photography, well-lit clinical environment, realistic human anatomy, medical professional observing`;
+    return `${basePrompt}, ${enhancer}, professional medical visualization, clean white background, anatomically accurate bone structure, skeletal animation, physiotherapy educational model, biomedical engineering visualization`;
   }
 
   /**

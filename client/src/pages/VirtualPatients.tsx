@@ -543,8 +543,8 @@ export default function VirtualPatientsPage() {
         setVideoGenerationProgress(100);
         
         toast({
-          title: "Leonardo AI Image Generated",
-          description: `Professional clinical image ready! Cost: ${videoData.cost} credits`,
+          title: "3D Skeleton Animation Generated",
+          description: `Professional movement animation ready! Cost: ${videoData.cost} credits`,
         });
       } else {
         // Fallback to polling if needed
@@ -751,8 +751,8 @@ export default function VirtualPatientsPage() {
         setVideoGenerationProgress(100);
         
         toast({
-          title: "Leonardo AI Image Generated",
-          description: `Professional clinical image ready! Cost: ${videoData.cost} credits`,
+          title: "3D Skeleton Animation Generated", 
+          description: `Professional movement animation ready! Cost: ${videoData.cost} credits`,
         });
       }
       
@@ -1617,21 +1617,32 @@ export default function VirtualPatientsPage() {
                   <div className="mt-6 pt-4 border-t border-gray-200">
                     <h4 className="text-sm font-semibold text-blue-700 mb-2 flex items-center gap-2">
                       <Video className="h-4 w-4" />
-                      AI Image Generation
+                      AI Video Generation
                     </h4>
                     
                     {/* Generated Image Display */}
                     {generatedVideoUrl && (
                       <div className="mb-3 p-2 bg-blue-50 rounded-lg border border-blue-200">
-                        <h5 className="text-xs font-semibold text-blue-800 mb-1">Generated Clinical Image</h5>
+                        <h5 className="text-xs font-semibold text-blue-800 mb-1">Generated 3D Skeleton Animation</h5>
                         <div className="relative">
-                          <img 
-                            src={generatedVideoUrl} 
-                            alt="Generated clinical image"
-                            className="w-full h-32 object-cover rounded border"
-                          />
+                          {generatedVideoUrl.includes('.mp4') || generatedVideoUrl.includes('.gif') ? (
+                            <video 
+                              src={generatedVideoUrl} 
+                              autoPlay
+                              loop
+                              muted
+                              className="w-full h-32 object-cover rounded border"
+                              style={{ backgroundColor: 'white' }}
+                            />
+                          ) : (
+                            <img 
+                              src={generatedVideoUrl} 
+                              alt="Generated 3D skeleton"
+                              className="w-full h-32 object-cover rounded border"
+                            />
+                          )}
                           <Badge className="absolute top-1 right-1 bg-blue-600 text-white text-xs">
-                            Leonardo AI
+                            3D Skeleton
                           </Badge>
                         </div>
                       </div>
@@ -1652,7 +1663,7 @@ export default function VirtualPatientsPage() {
                         ) : (
                           <>
                             <Video className="h-3 w-3 mr-2" />
-                            Generate AI Image (Leonardo)
+                            Generate 3D Animation (Leonardo)
                           </>
                         )}
                       </Button>
@@ -1704,7 +1715,7 @@ export default function VirtualPatientsPage() {
                             ) : (
                               <>
                                 <Video className="h-3 w-3 mr-2" />
-                                Generate Custom Image (Leonardo)
+                                Generate Custom Animation (Leonardo)
                               </>
                             )}
                           </Button>

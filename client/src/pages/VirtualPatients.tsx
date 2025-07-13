@@ -176,6 +176,9 @@ export default function VirtualPatientsPage() {
   const [textAnimationResult, setTextAnimationResult] = useState<any>(null);
   const [isGeneratingMovement, setIsGeneratingMovement] = useState(false);
   const [currentAnimationFrame, setCurrentAnimationFrame] = useState(0);
+  const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
+  const [generatedVideoUrl, setGeneratedVideoUrl] = useState<string | null>(null);
+  const [videoGenerationId, setVideoGenerationId] = useState<string | null>(null);
 
   const { toast } = useToast();
 
@@ -678,57 +681,103 @@ export default function VirtualPatientsPage() {
       }
 
       const result = await response.json();
-      console.log('Functional movement result:', result);
+      console.log('Functional movement generated:', result);
       
-      // Update the animation sequence with functional movement
-      if (result.movementData?.frames) {
-        setAnimationSequence({
-          frames: result.movementData.frames,
-          movementPatterns: result.movementData.movementPatterns,
-          clinicalCorrelation: result.movementData.clinicalCorrelation
-        });
-        
-        // Update the selected patient to include functional movement data
-        const updatedPatient = {
-          ...selectedPatient,
-          motionData: {
-            frames: result.movementData.frames,
-            movementPatterns: result.movementData.movementPatterns,
-            clinicalCorrelation: result.movementData.clinicalCorrelation,
-            animationSource: `functional-${movementId}`,
-            generatedAt: new Date().toISOString()
-          },
-          hasMotionData: true,
-          aiGenerated: true
-        };
-        setSelectedPatient(updatedPatient);
-        
-        // Automatically start playing the animation
-        setIsPlaying(true);
-        setCurrentAnimationFrame(0);
-        
-        console.log('Functional movement applied:', {
-          movement: movementId,
-          framesCount: result.movementData.frames.length,
-          firstFrame: result.movementData.frames[0],
-          lastFrame: result.movementData.frames[result.movementData.frames.length - 1]
-        });
-      }
-
       toast({
-        title: "Functional Movement Generated",
-        description: `Successfully generated ${movementId.replace('_', ' ')} movement pattern with ${result.framesGenerated} frames`,
+        title: "Success",
+        description: "Functional movement generated successfully!",
       });
-
+      
     } catch (error: any) {
-      console.error("Functional movement generation error:", error);
+      console.error('Error generating functional movement:', error);
       toast({
-        title: "Generation Error",
+        title: "Movement Generation Failed",
         description: error.message || "Failed to generate functional movement",
         variant: "destructive"
       });
     } finally {
       setIsGeneratingMovement(false);
+    }
+  };
+
+  // Generate Google Veo video from clinical description
+  const generateVeoVideo = async (patientId: number, movementType: string = 'functional_movement') => {
+    setIsGeneratingVideo(true);
+    setGeneratedVideoUrl(null);
+    setVideoGenerationId(null);
+    
+    try {
+      console.log('Generating Google Veo video for patient:', patientId);
+      
+      const response = await apiRequest('POST', `/api/virtual-patients/${patientId}/generate-veo-video`, {
+        movementType,
+        clinicalDescription: `Patient demonstrates ${movementType} with clinical limitations`
+      });
+      
+      const result = await response.json();
+      console.log('Google Veo video result:', result);
+      
+      if (result.success) {
+        setGeneratedVideoUrl(result.videoUrl);
+        setVideoGenerationId(result.generationId);
+        
+        toast({
+          title: "Success",
+          description: "AI movement video generated successfully!",
+        });
+      } else {
+        throw new Error(result.error || 'Video generation failed');
+      }
+    } catch (error: any) {
+      console.error('Error generating Google Veo video:', error);
+      toast({
+        title: "Video Generation Failed",
+        description: error.message || "Failed to generate AI movement video",
+        variant: "destructive"
+      });
+    } finally {
+      setIsGeneratingVideo(false);
+    }
+  };
+
+  // Generate video from clinical text
+  const generateClinicalVideo = async (clinicalDescription: string) => {
+    setIsGeneratingVideo(true);
+    setGeneratedVideoUrl(null);
+    setVideoGenerationId(null);
+    
+    try {
+      console.log('Generating clinical video from text:', clinicalDescription);
+      
+      const response = await apiRequest('POST', '/api/generate-clinical-video', {
+        clinicalDescription,
+        movementType: 'functional_movement',
+        duration: 5
+      });
+      
+      const result = await response.json();
+      console.log('Clinical video result:', result);
+      
+      if (result.success) {
+        setGeneratedVideoUrl(result.videoUrl);
+        setVideoGenerationId(result.generationId);
+        
+        toast({
+          title: "Success",
+          description: "Clinical movement video generated successfully!",
+        });
+      } else {
+        throw new Error(result.error || 'Video generation failed');
+      }
+    } catch (error: any) {
+      console.error('Error generating clinical video:', error);
+      toast({
+        title: "Video Generation Failed",
+        description: error.message || "Failed to generate clinical video",
+        variant: "destructive"
+      });
+    } finally {
+      setIsGeneratingVideo(false);
     }
   };
 
@@ -1220,219 +1269,264 @@ export default function VirtualPatientsPage() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => generateFunctionalMovement('cross_body_reach')}
+                        onClick={() => generateFunctionalMovement('shoulder_rotation')}
                         disabled={isGeneratingMovement}
                         className="text-xs"
                       >
-                        Cross Body
+                        Shoulder Rotation
                       </Button>
                     </div>
                   </div>
 
-                  {/* Functional Activities */}
-                  <div>
-                    <h4 className="text-sm font-semibold text-gray-700 mb-2">Functional Activities</h4>
-                    <div className="grid grid-cols-2 gap-2">
+                  {/* AI Video Generation */}
+                  <div className="mt-6 pt-4 border-t border-gray-200">
+                    <h4 className="text-sm font-semibold text-blue-700 mb-2 flex items-center gap-2">
+                      <Video className="h-4 w-4" />
+                      AI Video Generation
+                    </h4>
+                    <div className="space-y-2">
                       <Button
-                        variant="outline"
+                        onClick={() => selectedPatient && generateVeoVideo(selectedPatient.id, 'shoulder_movement')}
+                        disabled={!selectedPatient || isGeneratingVideo}
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs"
                         size="sm"
-                        onClick={() => generateFunctionalMovement('walking_gait')}
-                        disabled={isGeneratingMovement}
-                        className="text-xs"
                       >
-                        Walking
+                        {isGeneratingVideo ? (
+                          <>
+                            <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                            Generating Video...
+                          </>
+                        ) : (
+                          <>
+                            <Video className="h-3 w-3 mr-2" />
+                            Generate Movement Video
+                          </>
+                        )}
                       </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => generateFunctionalMovement('sit_to_stand')}
-                        disabled={isGeneratingMovement}
-                        className="text-xs"
-                      >
-                        Sit to Stand
-                      </Button>
+                      
+                      {generatedVideoUrl && (
+                        <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Video className="h-4 w-4 text-blue-600" />
+                            <span className="text-blue-700 text-sm font-medium">AI Video Generated</span>
+                          </div>
+                          <video 
+                            src={generatedVideoUrl} 
+                            controls 
+                            className="w-full h-32 bg-black rounded"
+                            poster="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzMzMzMzMyIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iIGZvbnQtZmFtaWx5PSJBcmlhbCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNHB4Ij5BSSBNb3ZlbWVudCBWaWRlbzwvdGV4dD48L3N2Zz4="
+                          >
+                            Your browser does not support video playback.
+                          </video>
+                          {videoGenerationId && (
+                            <div className="text-xs text-gray-500 mt-1">
+                              ID: {videoGenerationId}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
-
-                  {isGeneratingMovement && (
-                    <div className="text-center py-2">
-                      <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Generating movement pattern...
-                      </div>
-                    </div>
-                  )}
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          {/* Right Panel - Functional Scores & Progress */}
-          <div className="lg:col-span-3 space-y-4">
-            
-            {/* Functional Scores */}
+          {/* Right Panel - Clinical Correlation */}
+          <div className="space-y-6">
+            {/* Clinical Notes */}
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5 text-blue-600" />
-                  Functional Scores
+                  <Stethoscope className="h-5 w-5 text-red-600" />
+                  Clinical Notes
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {Object.entries(enhancedProfile?.functionalScores || {}).map(([metric, score]) => (
-                    <div key={metric}>
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-sm font-medium capitalize">{metric}</span>
-                        <span className="text-lg font-bold text-blue-600">{score}%</span>
-                      </div>
-                      <Progress value={score} className="h-3" />
+                {selectedPatient ? (
+                  <div className="space-y-3">
+                    <div className="p-3 bg-red-50 rounded-lg border border-red-200">
+                      <h4 className="text-sm font-semibold text-red-800 mb-1">Chief Complaint</h4>
+                      <p className="text-sm text-red-700">
+                        {selectedPatient.chief_complaint || selectedPatient.clinicalPresentation?.chiefComplaint || 'Not specified'}
+                      </p>
                     </div>
-                  ))}
-                </div>
+                    
+                    {(selectedPatient.symptoms_description || selectedPatient.clinicalPresentation?.symptomsTimeline) && (
+                      <div className="p-3 bg-orange-50 rounded-lg border border-orange-200">
+                        <h4 className="text-sm font-semibold text-orange-800 mb-1">Symptoms</h4>
+                        <p className="text-sm text-orange-700">
+                          {selectedPatient.symptoms_description || selectedPatient.clinicalPresentation?.symptomsTimeline}
+                        </p>
+                      </div>
+                    )}
+                    
+                    {(selectedPatient.diagnosis || selectedPatient.physicalFindings?.diagnosis) && (
+                      <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                        <h4 className="text-sm font-semibold text-green-800 mb-1">Assessment</h4>
+                        <p className="text-sm text-green-700">
+                          {selectedPatient.diagnosis || selectedPatient.physicalFindings?.diagnosis}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center text-gray-500 py-4">
+                    <Stethoscope className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                    <p className="text-sm">Select a patient to view clinical notes</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
-            {/* Progress Tracking */}
+            {/* Text-to-Video Generation */}
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                  <Clock className="h-5 w-5 text-emerald-600" />
-                  Progress Tracking
+                  <Video className="h-5 w-5 text-purple-600" />
+                  Text-to-Video Generation
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {enhancedProfile?.progressTracking.map((metric, index) => (
-                    <div key={index} className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="font-medium">{metric.metric}</span>
-                        <span className="font-bold">{metric.current}/{metric.target}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-gray-500">
-                        <span>Baseline: {metric.baseline}</span>
-                        <span className="text-green-600 font-medium">
-                          +{((metric.current - metric.baseline) / metric.baseline * 100).toFixed(0)}%
-                        </span>
-                      </div>
-                      <Progress 
-                        value={(metric.current / metric.target) * 100} 
-                        className="h-2"
-                      />
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Clinical Timeline */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                  <Calendar className="h-5 w-5 text-purple-600" />
-                  Clinical Timeline
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="max-h-64 overflow-y-auto">
                 <div className="space-y-3">
-                  {enhancedProfile?.clinicalTimeline.map((session, index) => (
-                    <div key={index} className="border-l-4 border-purple-200 pl-4 pb-3">
-                      <div className="flex justify-between items-start mb-1">
-                        <span className="text-sm font-medium text-purple-600">{session.date}</span>
-                        <Badge variant="outline" className="text-xs">
-                          Pain: {session.painLevel}/10
+                  <textarea
+                    placeholder="Describe movement limitations:
+e.g., 'Patient has shoulder pain and cannot lift left arm above head due to impingement'"
+                    value={textToAnimationInput}
+                    onChange={(e) => setTextToAnimationInput(e.target.value)}
+                    className="w-full h-20 px-3 py-2 bg-white text-gray-800 placeholder-gray-500 rounded-md border border-purple-300 focus:border-purple-500 focus:outline-none resize-none text-sm"
+                  />
+                  <Button
+                    onClick={() => generateClinicalVideo(textToAnimationInput)}
+                    disabled={!textToAnimationInput.trim() || isGeneratingVideo}
+                    className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+                    size="sm"
+                  >
+                    {isGeneratingVideo ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <Video className="h-4 w-4 mr-2" />
+                        Generate Video from Text
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* SOAP Integration Panel */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                  <Brain className="h-5 w-5 text-teal-600" />
+                  AI Clinical Insights
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {clinicalData ? (
+                  <div className="space-y-4">
+                    {clinicalData.soapIntegration.map((item, index) => (
+                      <div key={index} className="p-3 bg-teal-50 rounded-lg border border-teal-200">
+                        <h4 className="text-sm font-semibold text-teal-800">{item.complaint}</h4>
+                        <p className="text-sm text-teal-700 mt-1">{item.movementCorrelation}</p>
+                        <Badge variant="outline" className="mt-2 text-xs border-teal-400 text-teal-600">
+                          {item.severity}
                         </Badge>
                       </div>
-                      <p className="text-sm font-medium text-gray-700">{session.session}</p>
-                      <p className="text-xs text-gray-600 mt-1">{session.findings}</p>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                    
+                    {clinicalData.aiInsights.map((insight, index) => (
+                      <div key={index} className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                        <div className="flex items-center justify-between mb-1">
+                          <h4 className="text-sm font-semibold text-blue-800">AI Finding</h4>
+                          <Badge className="bg-blue-600 text-xs">
+                            {insight.confidence}% confidence
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-blue-700 mb-2">{insight.finding}</p>
+                        <p className="text-xs text-blue-600">{insight.recommendation}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center text-gray-500 py-4">
+                    <Brain className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                    <p className="text-sm">AI insights will appear here after analysis</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
-
           </div>
         </div>
-      </div>
 
-      {/* Clinical Correlations Row - Below 3D Animation */}
-      <div className="mt-6 px-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Heart className="h-4 w-4" />
-              Clinical Correlations
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-              <div className="bg-red-50 p-3 rounded-lg">
-                <p className="font-medium text-red-800">Pain Report Correlation</p>
-                <p className="text-red-600 text-xs mt-1">
-                  "Right shoulder pain" → Compensated reaching pattern detected in motion data
-                </p>
-              </div>
-              
-              <div className="bg-orange-50 p-3 rounded-lg">
-                <p className="font-medium text-orange-800">Movement Limitation</p>
-                <p className="text-orange-600 text-xs mt-1">
-                  "Limited ankle dorsiflexion" → Forward trunk lean compensation in squat analysis
-                </p>
-              </div>
-              
-              <div className="bg-green-50 p-3 rounded-lg">
-                <p className="font-medium text-green-800">Progress Indicator</p>
-                <p className="text-green-600 text-xs mt-1">
-                  "Improved pain scores" → Movement patterns show 25% quality improvement
-                </p>
-              </div>
+        {/* Bottom Panel - Text-to-Digital Patient & Interactive Controls */}
+        <div className="bg-white border-t border-gray-200 px-6 py-4">
+          {/* Text-to-Digital Patient Interface */}
+          <div className="mb-6 p-4 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-lg border border-emerald-200">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-gray-800 font-medium flex items-center gap-2">
+                <FileText className="h-4 w-4 text-emerald-600" />
+                Text-to-Digital Patient
+              </h3>
+              <Badge variant="outline" className="text-xs text-emerald-600 border-emerald-400">
+                AI Powered
+              </Badge>
             </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Bottom Panel - Text-to-Digital Patient & Interactive Controls */}
-      <div className="bg-white border-t border-gray-200 px-6 py-4">
-        {/* Text-to-Digital Patient Interface */}
-        <div className="mb-6 p-4 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-lg border border-emerald-200">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-gray-800 font-medium flex items-center gap-2">
-              <FileText className="h-4 w-4 text-emerald-600" />
-              Text-to-Digital Patient
-            </h3>
-            <Badge variant="outline" className="text-xs text-emerald-600 border-emerald-400">
-              AI Powered
-            </Badge>
-          </div>
-          
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="lg:col-span-2">
-              <textarea
-                placeholder="Describe patient symptoms, movement patterns, or clinical findings...
+            
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <div className="lg:col-span-2">
+                <textarea
+                  placeholder="Describe patient symptoms, movement patterns, or clinical findings...
 Example: 'Patient reports decreased shoulder external rotation, pain during overhead movements, visible compensation with hip hiking during arm elevation'"
-                value={textToAnimationInput}
-                onChange={(e) => setTextToAnimationInput(e.target.value)}
-                className="w-full h-20 px-3 py-2 bg-white text-gray-800 placeholder-gray-500 rounded-md border border-emerald-300 focus:border-emerald-500 focus:outline-none resize-none text-sm"
-              />
-              <div className="flex items-center justify-between mt-2">
-                <div className="text-xs text-gray-500">
-                  {textToAnimationInput.length} characters
+                  value={textToAnimationInput}
+                  onChange={(e) => setTextToAnimationInput(e.target.value)}
+                  className="w-full h-20 px-3 py-2 bg-white text-gray-800 placeholder-gray-500 rounded-md border border-emerald-300 focus:border-emerald-500 focus:outline-none resize-none text-sm"
+                />
+                <div className="flex items-center justify-between mt-2">
+                  <div className="text-xs text-gray-500">
+                    {textToAnimationInput.length} characters
+                  </div>
+                  <Button
+                    onClick={() => generateAnimationFromText(textToAnimationInput)}
+                    disabled={!textToAnimationInput.trim() || isGeneratingFromText}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                    size="sm"
+                  >
+                    {isGeneratingFromText ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="h-4 w-4 mr-2" />
+                        Generate Digital Twin
+                      </>
+                    )}
+                  </Button>
                 </div>
+              </div>
+              
+              <div className="space-y-2">
                 <Button
-                  onClick={() => generateAnimationFromText(textToAnimationInput)}
-                  disabled={!textToAnimationInput.trim() || isGeneratingFromText}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                  onClick={() => generateClinicalVideo(textToAnimationInput)}
+                  disabled={!textToAnimationInput.trim() || isGeneratingVideo}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white"
                   size="sm"
                 >
-                  {isGeneratingFromText ? (
+                  {isGeneratingVideo ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Generating...
+                      Creating Video...
                     </>
                   ) : (
                     <>
-                      <Zap className="h-4 w-4 mr-2" />
-                      Generate Digital Twin
+                      <Video className="h-4 w-4 mr-2" />
+                      Generate AI Video
                     </>
                   )}
                 </Button>
@@ -1440,134 +1534,158 @@ Example: 'Patient reports decreased shoulder external rotation, pain during over
             </div>
             
             {textAnimationResult && (
-              <div className="bg-emerald-100 border border-emerald-300 rounded-md p-3">
+              <div className="bg-emerald-100 border border-emerald-300 rounded-md p-3 mt-4">
                 <div className="flex items-center gap-2 mb-2">
                   <Check className="h-4 w-4 text-emerald-600" />
                   <span className="text-emerald-700 text-sm font-medium">Digital Patient Generated</span>
                 </div>
                 <div className="text-xs text-gray-600 space-y-1">
                   <div>Movement Patterns: {textAnimationResult.movementPatterns?.restrictions?.length || 0} identified</div>
-                  <div>Animation Frames: {textAnimationResult.frames?.length || 0} generated</div>
-                  <div>Clinical Correlations: {textAnimationResult.clinicalCorrelation?.soapFindings?.length || 0} found</div>
+                  <div>Animation Frames: {textAnimationResult.animationSequence?.frames?.length || 0} generated</div>
+                  <div>Clinical Correlation: Available</div>
                 </div>
               </div>
             )}
           </div>
-        </div>
 
-        <div className="flex items-center justify-between">
-          
-          {/* Movement Playback Controls */}
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
+          {/* Interactive Controls & Action Buttons */}
+          <div className="bg-gray-50 px-6 py-4 rounded-lg mt-6">
+            <div className="flex flex-wrap gap-3 justify-center">
               <Button
+                onClick={() => setShowMotionCapture(true)}
+                disabled={!selectedPatient}
                 variant="outline"
-                size="sm"
-                onClick={() => setPlaybackTime(0)}
-                disabled={!selectedPatient?.threeDVisualization?.animationSequences?.length}
+                className="flex items-center gap-2"
               >
-                <SkipBack className="h-4 w-4" />
+                <Camera className="h-4 w-4" />
+                {selectedPatient?.threeDVisualization ? "Recapture Motion" : "Motion Capture"}
               </Button>
               
               <Button
+                onClick={() => selectedPatient && generateAnimation(selectedPatient)}
+                disabled={!selectedPatient || isLoadingAnimation}
                 variant="outline"
-                size="sm"
-                onClick={togglePlayback}
-                disabled={!selectedPatient?.threeDVisualization?.animationSequences?.length}
+                className="flex items-center gap-2"
               >
-                {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                {isLoadingAnimation ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Zap className="h-4 w-4" />
+                    Generate AI Animation
+                  </>
+                )}
               </Button>
-              
+
               <Button
+                onClick={performAIAnalysis}
+                disabled={!selectedPatient || isLoadingAnalysis}
                 variant="outline"
-                size="sm"
-                onClick={resetPlayback}
-                disabled={!selectedPatient?.threeDVisualization?.animationSequences?.length}
+                className="flex items-center gap-2"
               >
-                <RotateCcw className="h-4 w-4" />
+                {isLoadingAnalysis ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Analyzing...
+                  </>
+                ) : (
+                  <>
+                    <Brain className="h-4 w-4" />
+                    AI Analysis
+                  </>
+                )}
+              </Button>
+
+              <Button
+                onClick={findRelevantResearch}
+                disabled={!selectedPatient || isLoadingResearch}
+                variant="outline"
+                className="flex items-center gap-2"
+              >
+                {isLoadingResearch ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Searching...
+                  </>
+                ) : (
+                  <>
+                    <BookOpen className="h-4 w-4" />
+                    Find Research
+                  </>
+                )}
               </Button>
             </div>
-
-            {/* Timeline Scrubber */}
-            <div className="flex items-center gap-2 w-64">
-              <span className="text-xs text-gray-500">
-                {Math.floor(playbackTime / 30)}:{(Math.floor(playbackTime) % 30).toString().padStart(2, '0')}
-              </span>
-              <Slider
-                value={[playbackTime]}
-                onValueChange={(value) => setPlaybackTime(value[0])}
-                max={selectedPatient?.threeDVisualization?.animationSequences?.length || 100}
-                step={1}
-                disabled={!selectedPatient?.threeDVisualization?.animationSequences?.length}
-                className="flex-1"
-              />
-              <span className="text-xs text-gray-500">
-                {Math.floor((selectedPatient?.threeDVisualization?.animationSequences?.length || 90) / 30)}:
-                {(Math.floor((selectedPatient?.threeDVisualization?.animationSequences?.length || 90)) % 30).toString().padStart(2, '0')}
-              </span>
-            </div>
-
-            {/* Speed Controls */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500">Speed:</span>
-              <select 
-                value={playbackSpeed} 
-                onChange={(e) => setPlaybackSpeed(parseFloat(e.target.value))}
-                className="text-xs border rounded px-2 py-1"
-                disabled={!movementData}
-              >
-                <option value={0.25}>0.25x</option>
-                <option value={0.5}>0.5x</option>
-                <option value={1}>1x</option>
-                <option value={2}>2x</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Data Integration Tools */}
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowComparisonMode(!showComparisonMode)}
-              disabled={!movementData}
-            >
-              <Target className="h-4 w-4 mr-2" />
-              {showComparisonMode ? 'Hide' : 'Show'} Comparison
-            </Button>
-            
-            <select 
-              value={selectedMovement} 
-              onChange={(e) => setSelectedMovement(e.target.value)}
-              className="text-sm border rounded px-3 py-1"
-              disabled={!movementData}
-            >
-              <option value="all">All Movements</option>
-              <option value="walking">Walking</option>
-              <option value="squatting">Squatting</option>
-              <option value="reaching">Reaching</option>
-            </select>
-            
-            <Button variant="outline" size="sm" disabled={!movementData}>
-              <FileText className="h-4 w-4 mr-2" />
-              Export Report
-            </Button>
           </div>
         </div>
       </div>
 
-      {/* Recapture Confirmation Dialog */}
-      <Dialog open={showRecaptureConfirm} onOpenChange={setShowRecaptureConfirm}>
-        <DialogContent className="max-w-md">
+      {/* Dialogs and Modals */}
+      {/* Patient Name Edit Dialog */}
+      <Dialog open={showPatientNameDialog} onOpenChange={setShowPatientNameDialog}>
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle>Recapture Motion Data?</DialogTitle>
+            <DialogTitle>Edit Patient Name</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <p className="text-sm text-gray-600">
-              This will replace the existing 3D visualization and movement analysis for this patient. 
-              The current motion data will be permanently overwritten.
+            <Input
+              value={editingName}
+              onChange={(e) => setEditingName(e.target.value)}
+              placeholder="Enter patient name"
+              className="w-full"
+            />
+            <div className="flex gap-2 justify-end">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowPatientNameDialog(false);
+                  setEditingName('');
+                  setEditingPatientId(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  if (editingPatientId && editingName.trim()) {
+                    updatePatientMutation.mutate({ 
+                      id: editingPatientId, 
+                      name: editingName.trim() 
+                    });
+                  }
+                }}
+                disabled={!editingName.trim() || updatePatientMutation.isPending}
+              >
+                {updatePatientMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  'Update'
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Recapture Confirmation Dialog */}
+      <Dialog open={showRecaptureConfirm} onOpenChange={setShowRecaptureConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Camera className="h-5 w-5 text-orange-600" />
+              Confirm Motion Recapture
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-gray-700">
+              This will replace the existing 3D visualization with new motion data. The current animation and analysis will be overwritten.
             </p>
-            <div className="flex justify-end gap-2">
+            <div className="flex gap-2 justify-end">
               <Button
                 variant="outline"
                 onClick={() => setShowRecaptureConfirm(false)}
@@ -1722,56 +1840,27 @@ Example: 'Patient reports decreased shoulder external rotation, pain during over
               AI Clinical Analysis
             </DialogTitle>
           </DialogHeader>
-          
-          {aiAnalysisData && (
-            <div className="space-y-4">
-              <div>
-                <h3 className="font-semibold mb-2">Clinical Summary</h3>
-                <p className="text-gray-700 text-sm">{aiAnalysisData.clinicalSummary}</p>
-              </div>
-              
-              <Separator />
-              
-              <div>
-                <h3 className="font-semibold mb-2">Diagnostic Analysis</h3>
-                <p className="text-gray-700 text-sm">{aiAnalysisData.diagnosticAnalysis}</p>
-              </div>
-              
-              <Separator />
-              
-              <div>
-                <h3 className="font-semibold mb-2">Treatment Recommendations</h3>
-                <p className="text-gray-700 text-sm">{aiAnalysisData.treatmentRecommendations}</p>
-              </div>
-              
-              {aiAnalysisData.keyInsights && (
-                <>
-                  <Separator />
-                  <div>
-                    <h3 className="font-semibold mb-2">Key Insights</h3>
-                    <ul className="space-y-1">
-                      {aiAnalysisData.keyInsights.map((insight: string, index: number) => (
-                        <li key={index} className="text-gray-700 text-sm flex items-start gap-2">
-                          <span className="text-blue-600 mt-1">•</span>
-                          {insight}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </>
-              )}
-              
-              {aiAnalysisData.confidenceScore && (
-                <div className="bg-blue-50 p-3 rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium">AI Confidence Score</span>
-                    <span className="text-sm font-bold text-blue-600">{aiAnalysisData.confidenceScore}%</span>
-                  </div>
-                  <Progress value={aiAnalysisData.confidenceScore} className="h-2" />
+          <div className="space-y-4">
+            {aiAnalysisData ? (
+              <div className="space-y-4">
+                <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <h3 className="font-semibold text-blue-800 mb-2">AI Analysis Results</h3>
+                  <p className="text-sm text-blue-700">{aiAnalysisData.analysis || "Analysis completed successfully"}</p>
                 </div>
-              )}
-            </div>
-          )}
+                {aiAnalysisData.recommendations && (
+                  <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                    <h3 className="font-semibold text-green-800 mb-2">Recommendations</h3>
+                    <p className="text-sm text-green-700">{aiAnalysisData.recommendations}</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <Brain className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                <p className="text-gray-600">AI analysis results will appear here</p>
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -1780,60 +1869,35 @@ Example: 'Patient reports decreased shoulder external rotation, pain during over
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <BookOpen className="h-5 w-5 text-blue-600" />
-              Relevant Research Papers
+              <BookOpen className="h-5 w-5 text-green-600" />
+              Relevant Research Articles
             </DialogTitle>
           </DialogHeader>
-          
-          <ScrollArea className="max-h-96">
-            <div className="space-y-4">
-              {relevantResearch.map((paper, index) => (
-                <Card key={index} className="hover:shadow-md transition-shadow">
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <CardTitle className="text-base leading-tight pr-4">
-                        {paper.title}
-                      </CardTitle>
-                      {paper.relevanceScore && (
-                        <Badge variant="secondary" className="flex-shrink-0">
-                          {paper.relevanceScore}% match
-                        </Badge>
-                      )}
+          <div className="space-y-4">
+            {relevantResearch && relevantResearch.length > 0 ? (
+              <div className="space-y-4">
+                {relevantResearch.map((article: any, index: number) => (
+                  <div key={index} className="p-4 bg-green-50 rounded-lg border border-green-200">
+                    <h3 className="font-semibold text-green-800 mb-2">{article.title}</h3>
+                    <p className="text-sm text-green-700 mb-2">{article.summary}</p>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-green-600">{article.authors}</span>
+                      <Badge className="bg-green-600">{article.year}</Badge>
                     </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      <p className="text-sm text-gray-600">
-                        <strong>Authors:</strong> {paper.authors}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        <strong>Journal:</strong> {paper.journal}
-                      </p>
-                      {paper.abstract && (
-                        <p className="text-sm text-gray-700 line-clamp-3">
-                          {paper.abstract}
-                        </p>
-                      )}
-                      {paper.bodyPart && (
-                        <Badge variant="outline" className="text-xs">
-                          {paper.bodyPart}
-                        </Badge>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-              
-              {relevantResearch.length === 0 && (
-                <div className="text-center py-8">
-                  <BookOpen className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                  <p className="text-gray-600">No relevant research papers found for this patient case.</p>
-                </div>
-              )}
-            </div>
-          </ScrollArea>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <BookOpen className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                <p className="text-gray-600">Research articles will appear here</p>
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>
   );
 }
+
+

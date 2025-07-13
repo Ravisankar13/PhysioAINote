@@ -36,6 +36,7 @@ import { continuousRecordingService } from "./continuousRecordingService";
 import { virtualPatientService } from "./virtualPatientService";
 import { soapVirtualPatientService } from "./soapVirtualPatientService";
 import { documentGenerationService } from "./documentGenerationService";
+import { googleVeoService } from "./googleVeoService";
 import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, exercises, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, insertSoapNoteSchema, bodyScans, insertBodyScanSchema, tournamentParticipants, diagnosisDuelTournaments, gameContent } from "@shared/schema";
 import { ZodError, z } from "zod";
 import { fromZodError } from "zod-validation-error";
@@ -10633,6 +10634,119 @@ Respond in JSON format:
     } catch (error: any) {
       console.error('Error getting functional movements:', error);
       res.status(500).json({ error: 'Failed to get functional movements' });
+    }
+  });
+
+  // Generate Google Veo video for virtual patient movement
+  app.post("/api/virtual-patients/:id/generate-veo-video", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const virtualPatientId = parseInt(req.params.id);
+      if (isNaN(virtualPatientId)) {
+        return res.status(400).json({ error: 'Invalid virtual patient ID' });
+      }
+
+      const { movementType, clinicalDescription } = req.body;
+      if (!movementType) {
+        return res.status(400).json({ error: 'Movement type is required' });
+      }
+
+      console.log(`Generating Google Veo video for ${movementType} movement, patient ${virtualPatientId}`);
+
+      // Get virtual patient from both storage systems
+      let virtualPatient;
+      try {
+        virtualPatient = await soapVirtualPatientService.getVirtualPatient(virtualPatientId, userId);
+      } catch (error) {
+        virtualPatient = await storage.getVirtualPatient(virtualPatientId);
+        if (!virtualPatient || virtualPatient.userId !== userId) {
+          return res.status(404).json({ error: 'Virtual patient not found' });
+        }
+      }
+
+      // Generate video using Google Veo
+      const videoData = await googleVeoService.generatePatientMovementVideo(
+        virtualPatient,
+        movementType
+      );
+
+      console.log(`Google Veo video generated: ${videoData.generationId}`);
+
+      res.json({
+        success: true,
+        videoUrl: videoData.videoUrl,
+        generationId: videoData.generationId,
+        movementType,
+        source: 'google-veo',
+        generatedAt: new Date()
+      });
+
+    } catch (error) {
+      console.error('Error generating Google Veo video:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Generate Google Veo video from clinical text description
+  app.post("/api/generate-clinical-video", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { clinicalDescription, movementType = 'functional_movement', duration = 5 } = req.body;
+      if (!clinicalDescription) {
+        return res.status(400).json({ error: 'Clinical description is required' });
+      }
+
+      console.log(`Generating clinical video from text: ${clinicalDescription.substring(0, 100)}...`);
+
+      // Generate video using Google Veo
+      const videoData = await googleVeoService.generateClinicalVideo(
+        clinicalDescription,
+        movementType,
+        duration
+      );
+
+      console.log(`Clinical video generated: ${videoData.generationId}`);
+
+      res.json({
+        success: true,
+        videoUrl: videoData.videoUrl,
+        generationId: videoData.generationId,
+        clinicalDescription,
+        movementType,
+        duration,
+        source: 'google-veo',
+        generatedAt: new Date()
+      });
+
+    } catch (error) {
+      console.error('Error generating clinical video:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Test Google Veo configuration
+  app.get("/api/google-veo/status", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const isConfigured = await googleVeoService.validateConfiguration();
+      
+      res.json({
+        configured: isConfigured,
+        hasProjectId: !!process.env.GOOGLE_CLOUD_PROJECT_ID,
+        hasLocation: !!process.env.GOOGLE_CLOUD_LOCATION,
+        location: process.env.GOOGLE_CLOUD_LOCATION || 'us-central1'
+      });
+
+    } catch (error) {
+      console.error('Error checking Google Veo status:', error);
+      res.status(500).json({ error: error.message });
     }
   });
 

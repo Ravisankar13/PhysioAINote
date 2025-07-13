@@ -16,7 +16,8 @@ import {
   Clock, Users, User, CheckCircle2, FileCheck, Shield, 
   DollarSign, Calendar, Copy, ChevronDown, ChevronUp, 
   Star, AlertTriangle, BookOpen, Copy as CopyIcon,
-  BarChart3, Briefcase, Camera, X, StopCircle, Loader2
+  BarChart3, Briefcase, Camera, X, StopCircle, Loader2,
+  UserPlus, CheckCircle, AlertCircle, Split
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import MotionCapture from "@/components/MotionCapture";

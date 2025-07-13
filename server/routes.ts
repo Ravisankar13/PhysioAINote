@@ -9402,13 +9402,18 @@ Respond in JSON format:
   // End continuous recording session
   app.post("/api/continuous-recording/end", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
       const { sessionId } = req.body;
 
       if (!sessionId) {
         return res.status(400).json({ error: "Session ID is required" });
       }
 
-      const result = await continuousRecordingService.endContinuousSession(sessionId);
+      const result = await continuousRecordingService.endContinuousSession(sessionId, userId);
       res.json(result);
     } catch (error: any) {
       console.error("Error ending continuous recording session:", error);

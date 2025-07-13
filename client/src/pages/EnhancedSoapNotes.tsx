@@ -176,7 +176,7 @@ export default function EnhancedSoapNotesPage() {
       if (!response.ok) throw new Error('Failed to end continuous recording');
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       setContinuousSession(null);
       setIsContinuousMode(false);
       setIsRecording(false);
@@ -184,9 +184,13 @@ export default function EnhancedSoapNotesPage() {
       setSessionStartTime(null);
       setTotalSessionTime(0);
       setRecordingTime(0);
+      
+      // Invalidate completed notes query to refresh the list (should be empty now)
+      queryClient.invalidateQueries({ queryKey: ['/api/continuous-recording/completed-notes'] });
+      
       toast({
-        title: "Continuous Recording Ended",
-        description: "All patient notes have been processed and saved.",
+        title: "Clinic Day Session Ended",
+        description: result.deletedNotesCount ? "All patient notes have been cleared for privacy." : "Session ended successfully.",
       });
     },
   });

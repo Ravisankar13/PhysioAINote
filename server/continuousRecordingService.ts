@@ -321,9 +321,10 @@ Format as JSON:
   /**
    * End continuous recording session
    */
-  async endContinuousSession(sessionId: string): Promise<{
+  async endContinuousSession(sessionId: string, userId?: number): Promise<{
     completedSession: ContinuousRecordingSession;
     finalSoapNotes: SoapNote[];
+    deletedNotesCount?: number;
   }> {
     if (!this.activeSession || this.activeSession.sessionId !== sessionId) {
       throw new Error("No active session found");
@@ -338,6 +339,18 @@ Format as JSON:
       currentPatient.isCompleted = true;
       const finalSoap = await this.generateSoapNoteForPatient(currentPatient);
       finalSoapNotes.push(finalSoap);
+    }
+
+    // Delete all completed SOAP notes for this user when ending clinic day session
+    let deletedNotesCount = 0;
+    if (userId) {
+      try {
+        await storage.deleteAllCompletedSoapNotes(userId);
+        console.log(`🗑️ Deleted all completed SOAP notes for user ${userId} on clinic day session end`);
+        deletedNotesCount = 1; // Indicate notes were deleted
+      } catch (error) {
+        console.error("Error deleting completed notes on session end:", error);
+      }
     }
 
     // Update session
@@ -360,7 +373,8 @@ Format as JSON:
 
     return {
       completedSession: updatedSession,
-      finalSoapNotes
+      finalSoapNotes,
+      deletedNotesCount
     };
   }
 

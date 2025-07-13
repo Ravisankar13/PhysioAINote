@@ -284,7 +284,12 @@ export class GoogleVeoService {
       
       // Handle Google API permissions errors
       if (error.code === 403 || error.status === 'PERMISSION_DENIED' || error.message?.includes('Permission') || error.message?.includes('aiplatform.endpoints.predict')) {
-        throw new Error('Google Cloud permissions issue: The service account needs Vertex AI User permissions and the Vertex AI API must be enabled in your Google Cloud project. Please check your project settings and service account permissions.');
+        throw new Error('Google Veo model access issue: This could be due to regional availability (Veo is not available in all regions yet) or missing permissions. Please verify your region supports Veo or enable required permissions.');
+      }
+      
+      // Handle model not found or regional availability
+      if (error.message?.includes('veo-001') || error.message?.includes('may not exist')) {
+        throw new Error('Google Veo model not available in your region. Veo is currently limited to specific regions (primarily US). Consider switching to a US-based Google Cloud project or using alternative video generation methods.');
       }
       
       // Handle Google API configuration errors

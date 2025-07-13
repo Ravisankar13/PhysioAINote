@@ -543,8 +543,8 @@ export default function VirtualPatientsPage() {
         setVideoGenerationProgress(100);
         
         toast({
-          title: "Video Generated Successfully",
-          description: `Professional movement video ready! Cost: ${videoData.cost} credits`,
+          title: "Leonardo AI Image Generated",
+          description: `Professional clinical image ready! Cost: ${videoData.cost} credits`,
         });
       } else {
         // Fallback to polling if needed
@@ -751,8 +751,8 @@ export default function VirtualPatientsPage() {
         setVideoGenerationProgress(100);
         
         toast({
-          title: "Custom Video Generated",
-          description: `Professional video ready! Cost: ${videoData.cost} credits`,
+          title: "Leonardo AI Image Generated",
+          description: `Professional clinical image ready! Cost: ${videoData.cost} credits`,
         });
       }
       
@@ -1634,7 +1634,7 @@ export default function VirtualPatientsPage() {
                         ) : (
                           <>
                             <Video className="h-3 w-3 mr-2" />
-                            Generate AI Video (Leonardo)
+                            Generate AI Image (Leonardo)
                           </>
                         )}
                       </Button>
@@ -1706,7 +1706,7 @@ export default function VirtualPatientsPage() {
                             ) : (
                               <>
                                 <Video className="h-3 w-3 mr-2" />
-                                Generate Custom Video (Leonardo)
+                                Generate Custom Image (Leonardo)
                               </>
                             )}
                           </Button>

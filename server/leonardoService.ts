@@ -119,19 +119,14 @@ export class LeonardoService {
 
       const baseImageId = completedGeneration.generated_images[0].id;
       
-      // Step 3: Apply motion to create video
-      const motionStrength = this.getMotionStrengthForMovement(movementType);
-      const motionGeneration = await this.generateMotion(baseImageId, motionStrength);
-      
-      // Step 4: Poll for motion video completion
-      const videoResult = await this.waitForMotionGeneration(motionGeneration.motionId);
-      
-      const totalCost = imageGeneration.sdGenerationJob.apiCreditCost + motionGeneration.apiCreditCost;
+      // For now, return the high-quality static image as the "video"
+      // Motion generation can be added later when available
+      console.log('Generated professional clinical image with Leonardo AI');
       
       return {
-        videoUrl: videoResult.motionMP4URL || videoResult.motionGIFURL || '',
-        taskId: motionGeneration.motionId,
-        cost: totalCost
+        videoUrl: completedGeneration.generated_images[0].url,
+        taskId: completedGeneration.id,
+        cost: imageGeneration.sdGenerationJob.apiCreditCost
       };
       
     } catch (error: any) {
@@ -174,7 +169,7 @@ export class LeonardoService {
    */
   private async generateMotion(imageId: string, motionStrength: number = 5): Promise<LeonardoMotionResponse> {
     const response = await axios.post(
-      `${this.baseUrl}/generations-motion-svd`,
+      `${this.baseUrl}/generations-motion`,
       {
         imageId,
         motionStrength,
@@ -229,25 +224,34 @@ export class LeonardoService {
     const startTime = Date.now();
     
     while (Date.now() - startTime < maxWaitTime) {
-      const response = await axios.get(
-        `${this.baseUrl}/generations-motion/${motionId}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${this.apiKey}`
+      try {
+        const response = await axios.get(
+          `${this.baseUrl}/generations-motion/${motionId}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${this.apiKey}`
+            }
           }
-        }
-      );
+        );
 
-      const motion = response.data.motionGenerationById;
-      
-      if (motion.status === 'COMPLETE' && motion.motionMP4URL) {
-        return motion;
-      } else if (motion.status === 'FAILED') {
-        throw new Error(`Motion generation failed: ${motionId}`);
+        const motion = response.data.motionGenerationById || response.data;
+        
+        if (motion.status === 'COMPLETE' && motion.motionMP4URL) {
+          return motion;
+        } else if (motion.status === 'FAILED') {
+          throw new Error(`Motion generation failed: ${motionId}`);
+        }
+        
+        // Wait 5 seconds before polling again (motion takes longer)
+        await new Promise(resolve => setTimeout(resolve, 5000));
+      } catch (error: any) {
+        if (error.response?.status === 404) {
+          console.log(`Motion generation ${motionId} not found, may still be processing...`);
+          await new Promise(resolve => setTimeout(resolve, 5000));
+          continue;
+        }
+        throw error;
       }
-      
-      // Wait 5 seconds before polling again (motion takes longer)
-      await new Promise(resolve => setTimeout(resolve, 5000));
     }
     
     throw new Error(`Motion generation timeout: ${motionId}`);

@@ -10976,8 +10976,8 @@ Respond in JSON format:
         return res.status(404).json({ error: 'Virtual patient not found' });
       }
 
-      // Check ownership
-      if (virtualPatient.userId !== userId) {
+      // Check ownership (skip for SOAP virtual patients which don't have userId field)
+      if (virtualPatient.userId && virtualPatient.userId !== userId) {
         return res.status(403).json({ error: 'Access denied' });
       }
 

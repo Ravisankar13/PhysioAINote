@@ -347,12 +347,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       };
 
-      // Try transcribing with a short timeout to handle connection issues gracefully
+      // Try transcribing with appropriate timeout based on file size
       let transcription;
       try {
-        // Create a promise that resolves after a timeout
+        // Calculate timeout based on file size (longer files need more time)
+        const fileSizeMB = req.file.size / (1024 * 1024);
+        const timeoutMs = Math.max(15000, Math.min(60000, fileSizeMB * 10000)); // 15s to 60s based on file size
+        
+        console.log(`File size: ${fileSizeMB.toFixed(2)}MB, using timeout: ${timeoutMs}ms`);
+        
+        // Create a promise that resolves after the calculated timeout
         const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error("Transcription timeout")), 5000);
+          setTimeout(() => reject(new Error("Transcription timeout")), timeoutMs);
         });
 
         // Race the transcription against the timeout
@@ -362,8 +368,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ]);
       } catch (transcriptionError) {
         console.log('Transcription error or timeout, using fallback text:', transcriptionError);
-        // Return the fallback response immediately rather than continuing to try other steps
-        return res.json(fallbackResponse);
+        // For longer files, provide a more specific message
+        const fileSizeMB = req.file.size / (1024 * 1024);
+        const updatedFallback = {
+          ...fallbackResponse,
+          transcription: fileSizeMB > 1 
+            ? "Long audio recording received successfully. Processing longer recordings may take additional time. Please try a shorter recording for faster results, or proceed with manual note creation."
+            : fallbackResponse.transcription,
+          soapNote: {
+            ...fallbackResponse.soapNote,
+            subjective: fileSizeMB > 1
+              ? "Long audio recording received but transcription timeout occurred. Consider shorter recordings for automatic processing."
+              : fallbackResponse.soapNote.subjective
+          }
+        };
+        return res.json(updatedFallback);
       }
 
       // If we got here, transcription worked, so try insights

@@ -265,6 +265,11 @@ export class GoogleVeoService {
     } catch (error) {
       console.error('Error generating video with Google Veo:', error);
       
+      // Handle specific OpenSSL private key errors
+      if (error.code === 'ERR_OSSL_UNSUPPORTED' || error.reason === 'unsupported') {
+        throw new Error('Google Cloud private key format issue. The service account private key appears to be in an unsupported format. Please regenerate your service account JSON file from the Google Cloud Console.');
+      }
+      
       // Provide user-friendly error messages based on error type
       if (error.message?.includes('GoogleAuthError') || 
           error.message?.includes('authentication') ||

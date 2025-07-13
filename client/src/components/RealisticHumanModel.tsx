@@ -220,95 +220,79 @@ const RealisticHumanModel: React.FC<RealisticHumanModelProps> = ({
     });
   };
 
-  // Apply animation frame to human model
+  // Apply animation frame to human model with proper coordinate mapping
   const applyAnimationFrame = (frameIndex: number) => {
     if (!animationFrames.length || !humanModelRef.current) return;
     
     const frame = animationFrames[frameIndex % animationFrames.length];
-    if (!frame || !frame.landmarks) {
-      console.log('Invalid frame or landmarks:', { frame, frameIndex });
-      return;
-    }
+    if (!frame || !frame.landmarks) return;
 
-    // Map pose landmarks to body parts with movement restrictions
     const landmarks = frame.landmarks;
-    console.log('Applying animation frame:', frameIndex, 'landmarks count:', landmarks.length);
     
-    // Apply comprehensive kinematic chain movement patterns
+    // Apply animation while maintaining proper body structure
     humanModelRef.current.children.forEach((child) => {
       const childName = child.name;
       
-      // Enhanced coordinated movement patterns
+      // Only apply selective movements that maintain proper body structure
+      if (childName === 'head' && landmarks[0]) {
+        child.position.set(landmarks[0].x, landmarks[0].y, landmarks[0].z);
+      }
       
-      // Hip movement coordination (pelvis)
+      if (childName === 'chest' && landmarks[11] && landmarks[12]) {
+        const chestCenter = {
+          x: (landmarks[11].x + landmarks[12].x) / 2,
+          y: (landmarks[11].y + landmarks[12].y) / 2 - 0.15,
+          z: (landmarks[11].z + landmarks[12].z) / 2
+        };
+        child.position.set(chestCenter.x, chestCenter.y, chestCenter.z);
+      }
+      
       if (childName === 'pelvis' && landmarks[23] && landmarks[24]) {
-        const hipCenter = {
+        const pelvisCenter = {
           x: (landmarks[23].x + landmarks[24].x) / 2,
-          y: (landmarks[23].y + landmarks[24].y) / 2,
+          y: (landmarks[23].y + landmarks[24].y) / 2 + 0.07,
           z: (landmarks[23].z + landmarks[24].z) / 2
         };
-        child.position.set(hipCenter.x, hipCenter.y + 0.07, hipCenter.z); // Offset for pelvis height
-        child.rotation.x = hipCenter.y * 0.3; // Hip flexion
+        child.position.set(pelvisCenter.x, pelvisCenter.y, pelvisCenter.z);
       }
       
-      // Coordinated thigh movement with hip
-      if (childName === 'leftThigh' && landmarks[23] && landmarks[25]) {
-        child.position.set(landmarks[23].x, landmarks[23].y, landmarks[23].z);
-        // Calculate thigh rotation based on hip-to-knee vector
-        const thighAngle = Math.atan2(landmarks[25].y - landmarks[23].y, landmarks[25].z - landmarks[23].z);
-        child.rotation.x = thighAngle;
-        child.rotation.z = landmarks[23].x * 0.2; // Hip abduction
-      }
-      
-      if (childName === 'rightThigh' && landmarks[24] && landmarks[26]) {
-        child.position.set(landmarks[24].x, landmarks[24].y, landmarks[24].z);
-        const thighAngle = Math.atan2(landmarks[26].y - landmarks[24].y, landmarks[26].z - landmarks[24].z);
-        child.rotation.x = thighAngle;
-        child.rotation.z = landmarks[24].x * 0.2;
-      }
-      
-      // Coordinated knee/shin movement
-      if (childName === 'leftShin' && landmarks[25] && landmarks[27]) {
-        child.position.set(landmarks[25].x, landmarks[25].y, landmarks[25].z);
-        const shinAngle = Math.atan2(landmarks[27].y - landmarks[25].y, landmarks[27].z - landmarks[25].z);
-        child.rotation.x = shinAngle;
-      }
-      
-      if (childName === 'rightShin' && landmarks[26] && landmarks[28]) {
-        child.position.set(landmarks[26].x, landmarks[26].y, landmarks[26].z);
-        const shinAngle = Math.atan2(landmarks[28].y - landmarks[26].y, landmarks[28].z - landmarks[26].z);
-        child.rotation.x = shinAngle;
-      }
-      
-      // Coordinated shoulder and arm movement
+      // Arms - use center points for stability
       if (childName === 'leftUpperArm' && landmarks[11] && landmarks[13]) {
-        child.position.set(landmarks[11].x, landmarks[11].y, landmarks[11].z);
-        const armAngle = Math.atan2(landmarks[13].y - landmarks[11].y, landmarks[13].x - landmarks[11].x);
-        child.rotation.z = armAngle;
-        child.rotation.y = landmarks[11].z * 0.3; // Arm internal/external rotation
+        const armCenter = {
+          x: (landmarks[11].x + landmarks[13].x) / 2,
+          y: (landmarks[11].y + landmarks[13].y) / 2,
+          z: (landmarks[11].z + landmarks[13].z) / 2
+        };
+        child.position.set(armCenter.x, armCenter.y, armCenter.z);
       }
       
       if (childName === 'rightUpperArm' && landmarks[12] && landmarks[14]) {
-        child.position.set(landmarks[12].x, landmarks[12].y, landmarks[12].z);
-        const armAngle = Math.atan2(landmarks[14].y - landmarks[12].y, landmarks[14].x - landmarks[12].x);
-        child.rotation.z = armAngle;
-        child.rotation.y = landmarks[12].z * 0.3;
+        const armCenter = {
+          x: (landmarks[12].x + landmarks[14].x) / 2,
+          y: (landmarks[12].y + landmarks[14].y) / 2,
+          z: (landmarks[12].z + landmarks[14].z) / 2
+        };
+        child.position.set(armCenter.x, armCenter.y, armCenter.z);
       }
       
-      // Coordinated forearm movement
       if (childName === 'leftForearm' && landmarks[13] && landmarks[15]) {
-        child.position.set(landmarks[13].x, landmarks[13].y, landmarks[13].z);
-        const forearmAngle = Math.atan2(landmarks[15].y - landmarks[13].y, landmarks[15].x - landmarks[13].x);
-        child.rotation.z = forearmAngle;
+        const forearmCenter = {
+          x: (landmarks[13].x + landmarks[15].x) / 2,
+          y: (landmarks[13].y + landmarks[15].y) / 2,
+          z: (landmarks[13].z + landmarks[15].z) / 2
+        };
+        child.position.set(forearmCenter.x, forearmCenter.y, forearmCenter.z);
       }
       
       if (childName === 'rightForearm' && landmarks[14] && landmarks[16]) {
-        child.position.set(landmarks[14].x, landmarks[14].y, landmarks[14].z);
-        const forearmAngle = Math.atan2(landmarks[16].y - landmarks[14].y, landmarks[16].x - landmarks[14].x);
-        child.rotation.z = forearmAngle;
+        const forearmCenter = {
+          x: (landmarks[14].x + landmarks[16].x) / 2,
+          y: (landmarks[14].y + landmarks[16].y) / 2,
+          z: (landmarks[14].z + landmarks[16].z) / 2
+        };
+        child.position.set(forearmCenter.x, forearmCenter.y, forearmCenter.z);
       }
-
-      // Hand positioning
+      
       if (childName === 'leftHand' && landmarks[15]) {
         child.position.set(landmarks[15].x, landmarks[15].y, landmarks[15].z);
       }
@@ -317,23 +301,49 @@ const RealisticHumanModel: React.FC<RealisticHumanModelProps> = ({
         child.position.set(landmarks[16].x, landmarks[16].y, landmarks[16].z);
       }
       
-      // Coordinated torso movement
-      if (childName === 'chest' && landmarks[11] && landmarks[12]) {
-        const chestCenter = {
-          x: (landmarks[11].x + landmarks[12].x) / 2,
-          y: (landmarks[11].y + landmarks[12].y) / 2,
-          z: (landmarks[11].z + landmarks[12].z) / 2
+      // Legs - use center points for stability  
+      if (childName === 'leftThigh' && landmarks[23] && landmarks[25]) {
+        const thighCenter = {
+          x: (landmarks[23].x + landmarks[25].x) / 2,
+          y: (landmarks[23].y + landmarks[25].y) / 2,
+          z: (landmarks[23].z + landmarks[25].z) / 2
         };
-        child.position.set(chestCenter.x, chestCenter.y, chestCenter.z);
-        child.rotation.y = (landmarks[12].x - landmarks[11].x) * 0.3; // Torso rotation
-        child.rotation.x = chestCenter.z * 0.2; // Forward/backward lean
+        child.position.set(thighCenter.x, thighCenter.y, thighCenter.z);
       }
       
-      // Coordinated head movement
-      if (childName === 'head' && landmarks[0]) {
-        child.position.set(landmarks[0].x, landmarks[0].y, landmarks[0].z);
-        child.rotation.y = landmarks[0].x * 0.2; // Head rotation
-        child.rotation.x = landmarks[0].z * 0.2; // Head tilt
+      if (childName === 'rightThigh' && landmarks[24] && landmarks[26]) {
+        const thighCenter = {
+          x: (landmarks[24].x + landmarks[26].x) / 2,
+          y: (landmarks[24].y + landmarks[26].y) / 2,
+          z: (landmarks[24].z + landmarks[26].z) / 2
+        };
+        child.position.set(thighCenter.x, thighCenter.y, thighCenter.z);
+      }
+      
+      if (childName === 'leftShin' && landmarks[25] && landmarks[27]) {
+        const shinCenter = {
+          x: (landmarks[25].x + landmarks[27].x) / 2,
+          y: (landmarks[25].y + landmarks[27].y) / 2,
+          z: (landmarks[25].z + landmarks[27].z) / 2
+        };
+        child.position.set(shinCenter.x, shinCenter.y, shinCenter.z);
+      }
+      
+      if (childName === 'rightShin' && landmarks[26] && landmarks[28]) {
+        const shinCenter = {
+          x: (landmarks[26].x + landmarks[28].x) / 2,
+          y: (landmarks[26].y + landmarks[28].y) / 2,
+          z: (landmarks[26].z + landmarks[28].z) / 2
+        };
+        child.position.set(shinCenter.x, shinCenter.y, shinCenter.z);
+      }
+      
+      if (childName === 'leftFoot' && landmarks[27]) {
+        child.position.set(landmarks[27].x, landmarks[27].y, landmarks[27].z + 0.05);
+      }
+      
+      if (childName === 'rightFoot' && landmarks[28]) {
+        child.position.set(landmarks[28].x, landmarks[28].y, landmarks[28].z + 0.05);
       }
     });
   };

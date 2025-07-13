@@ -37,7 +37,8 @@ import { virtualPatientService } from "./virtualPatientService";
 import { soapVirtualPatientService } from "./soapVirtualPatientService";
 import { documentGenerationService } from "./documentGenerationService";
 import { googleVeoService } from "./googleVeoService";
-import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, exercises, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, insertSoapNoteSchema, bodyScans, insertBodyScanSchema, tournamentParticipants, diagnosisDuelTournaments, gameContent } from "@shared/schema";
+import { runwayService } from "./runwayService";
+import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, exercises, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, insertSoapNoteSchema, bodyScans, insertBodyScanSchema, tournamentParticipants, diagnosisDuelTournaments, gameContent, virtualPatients } from "@shared/schema";
 import { ZodError, z } from "zod";
 import { fromZodError } from "zod-validation-error";
 import multer from "multer";
@@ -10746,6 +10747,205 @@ Respond in JSON format:
 
     } catch (error) {
       console.error('Error checking Google Veo status:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ======================= RUNWAY ML API ROUTES =======================
+
+  // Generate Runway ML video for virtual patient
+  app.post("/api/virtual-patients/:id/generate-runway-video", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const patientId = parseInt(req.params.id);
+      const { movementType = 'functional_movement', customPrompt } = req.body;
+
+      console.log(`Generating Runway ML video for virtual patient: ${patientId}`);
+
+      // Get virtual patient data
+      const [virtualPatient] = await db
+        .select()
+        .from(virtualPatients)
+        .where(eq(virtualPatients.id, patientId));
+
+      if (!virtualPatient) {
+        return res.status(404).json({ error: 'Virtual patient not found' });
+      }
+
+      // Check ownership
+      if (virtualPatient.userId !== userId) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      let videoResponse;
+
+      if (customPrompt) {
+        // Use custom prompt
+        videoResponse = await runwayService.generateClinicalVideo(customPrompt);
+      } else {
+        // Generate from patient profile
+        const bodyPart = virtualPatient.bodyPart || 'general';
+        const condition = virtualPatient.assessmentPlan?.primaryDiagnosis || 'movement limitation';
+        
+        videoResponse = await runwayService.generateMovementVideo(
+          bodyPart,
+          condition,
+          movementType,
+          virtualPatient.patientProfile
+        );
+      }
+
+      console.log(`Runway ML video generation started: ${videoResponse.id}`);
+
+      res.json({
+        success: true,
+        taskId: videoResponse.id,
+        status: videoResponse.status,
+        patientId,
+        movementType,
+        source: 'runway-ml',
+        generatedAt: new Date()
+      });
+
+    } catch (error) {
+      console.error('Error generating Runway ML video:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Generate Runway ML video from clinical text description
+  app.post("/api/generate-runway-video", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { 
+        clinicalDescription, 
+        duration = 5, 
+        seed,
+        watermark = false 
+      } = req.body;
+
+      if (!clinicalDescription) {
+        return res.status(400).json({ error: 'Clinical description is required' });
+      }
+
+      console.log(`Generating Runway ML video from text: ${clinicalDescription.substring(0, 100)}...`);
+
+      // Generate video using Runway ML
+      const videoResponse = await runwayService.generateClinicalVideo(
+        clinicalDescription,
+        { duration, seed, watermark }
+      );
+
+      console.log(`Runway ML video generation started: ${videoResponse.id}`);
+
+      res.json({
+        success: true,
+        taskId: videoResponse.id,
+        status: videoResponse.status,
+        clinicalDescription,
+        duration,
+        source: 'runway-ml',
+        generatedAt: new Date()
+      });
+
+    } catch (error) {
+      console.error('Error generating Runway ML video:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Check Runway ML video generation status
+  app.get("/api/runway-video/:taskId/status", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { taskId } = req.params;
+
+      console.log(`Checking Runway ML video status: ${taskId}`);
+
+      const videoStatus = await runwayService.getVideoStatus(taskId);
+
+      res.json({
+        taskId,
+        status: videoStatus.status,
+        progress: videoStatus.progress || 0,
+        eta: videoStatus.eta,
+        videoUrl: videoStatus.output?.[0],
+        failure_reason: videoStatus.failure_reason
+      });
+
+    } catch (error) {
+      console.error('Error checking Runway ML video status:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Generate functional movement video with Runway ML
+  app.post("/api/generate-functional-runway-video", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { 
+        movementName, 
+        restrictions = [], 
+        patientProfile = {},
+        duration = 8 
+      } = req.body;
+
+      if (!movementName) {
+        return res.status(400).json({ error: 'Movement name is required' });
+      }
+
+      console.log(`Generating functional movement video: ${movementName}`);
+
+      const videoResponse = await runwayService.generateFunctionalMovement(
+        movementName,
+        restrictions,
+        patientProfile
+      );
+
+      console.log(`Functional movement video generation started: ${videoResponse.id}`);
+
+      res.json({
+        success: true,
+        taskId: videoResponse.id,
+        status: videoResponse.status,
+        movementName,
+        restrictions,
+        duration,
+        source: 'runway-ml',
+        generatedAt: new Date()
+      });
+
+    } catch (error) {
+      console.error('Error generating functional movement video:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Test Runway ML configuration
+  app.get("/api/runway/status", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const status = await runwayService.getServiceStatus();
+      
+      res.json({
+        configured: status.configured,
+        apiKey: status.apiKey,
+        operational: status.operational,
+        hasApiKey: !!process.env.RUNWAY_API_KEY
+      });
+
+    } catch (error) {
+      console.error('Error checking Runway ML status:', error);
       res.status(500).json({ error: error.message });
     }
   });

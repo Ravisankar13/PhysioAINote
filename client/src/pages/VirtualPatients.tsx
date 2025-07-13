@@ -173,13 +173,15 @@ export default function VirtualPatientsPage() {
 
   // Text-to-Digital Patient state
   const [textToAnimationInput, setTextToAnimationInput] = useState("");
-  const [isGeneratingFromText, setIsGeneratingFromText] = useState(false);
-  const [textAnimationResult, setTextAnimationResult] = useState<any>(null);
+
+  // Runway ML video generation state
+  const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
+  const [videoGenerationProgress, setVideoGenerationProgress] = useState(0);
+  const [generatedVideoUrl, setGeneratedVideoUrl] = useState<string | null>(null);
+  const [videoTaskId, setVideoTaskId] = useState<string | null>(null);
+  const [customVideoPrompt, setCustomVideoPrompt] = useState("");
   const [isGeneratingMovement, setIsGeneratingMovement] = useState(false);
   const [currentAnimationFrame, setCurrentAnimationFrame] = useState(0);
-  const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
-  const [generatedVideoUrl, setGeneratedVideoUrl] = useState<string | null>(null);
-  const [videoGenerationId, setVideoGenerationId] = useState<string | null>(null);
 
   const { toast } = useToast();
 
@@ -502,6 +504,157 @@ export default function VirtualPatientsPage() {
       console.log('Animation request completed with potential backend optimization needed');
     } finally {
       setIsLoadingAnimation(false);
+    }
+  };
+
+  // Generate Runway ML video
+  const generateRunwayVideo = async (patient: SoapVirtualPatient, customPrompt?: string) => {
+    if (!patient) return;
+    
+    setIsGeneratingVideo(true);
+    setVideoGenerationProgress(0);
+    setGeneratedVideoUrl(null);
+    
+    try {
+      const response = await apiRequest(
+        'POST',
+        `/api/virtual-patients/${patient.id}/generate-runway-video`,
+        { 
+          movementType: 'functional_movement',
+          customPrompt: customPrompt || undefined
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const videoData = await response.json();
+      setVideoTaskId(videoData.taskId);
+      
+      console.log('Runway ML video generation started:', videoData.taskId);
+      
+      toast({
+        title: "Video Generation Started",
+        description: "Creating realistic clinical movement video...",
+      });
+
+      // Start polling for video status
+      pollVideoStatus(videoData.taskId);
+      
+    } catch (error: any) {
+      console.error('Video generation error:', error);
+      toast({
+        title: "Video Generation Error",
+        description: error.message || "Failed to start video generation",
+        variant: "destructive"
+      });
+      setIsGeneratingVideo(false);
+    }
+  };
+
+  // Poll video generation status
+  const pollVideoStatus = async (taskId: string) => {
+    try {
+      const response = await apiRequest('GET', `/api/runway-video/${taskId}/status`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const statusData = await response.json();
+      
+      // Update progress
+      setVideoGenerationProgress(statusData.progress || 0);
+      
+      if (statusData.status === 'SUCCEEDED' && statusData.videoUrl) {
+        // Video is ready!
+        setGeneratedVideoUrl(statusData.videoUrl);
+        setIsGeneratingVideo(false);
+        
+        toast({
+          title: "Video Generated Successfully",
+          description: "Realistic clinical movement video is ready!",
+        });
+        
+      } else if (statusData.status === 'FAILED') {
+        // Video generation failed
+        setIsGeneratingVideo(false);
+        
+        toast({
+          title: "Video Generation Failed",
+          description: statusData.failure_reason || "Unknown error occurred",
+          variant: "destructive"
+        });
+        
+      } else if (statusData.status === 'RUNNING' || statusData.status === 'PENDING') {
+        // Still processing, continue polling
+        setTimeout(() => pollVideoStatus(taskId), 3000); // Poll every 3 seconds
+      }
+      
+    } catch (error: any) {
+      console.error('Error checking video status:', error);
+      setIsGeneratingVideo(false);
+      
+      toast({
+        title: "Status Check Error",
+        description: error.message || "Failed to check video status",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Generate custom clinical video
+  const generateCustomVideo = async () => {
+    if (!customVideoPrompt.trim()) {
+      toast({
+        title: "Prompt Required",
+        description: "Please enter a clinical description for video generation",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setIsGeneratingVideo(true);
+    setVideoGenerationProgress(0);
+    setGeneratedVideoUrl(null);
+    
+    try {
+      const response = await apiRequest(
+        'POST',
+        '/api/generate-runway-video',
+        { 
+          clinicalDescription: customVideoPrompt,
+          duration: 8,
+          watermark: false
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const videoData = await response.json();
+      setVideoTaskId(videoData.taskId);
+      
+      console.log('Custom video generation started:', videoData.taskId);
+      
+      toast({
+        title: "Custom Video Generation Started",
+        description: "Creating video from your clinical description...",
+      });
+
+      // Start polling for video status
+      pollVideoStatus(videoData.taskId);
+      
+    } catch (error: any) {
+      console.error('Custom video generation error:', error);
+      toast({
+        title: "Video Generation Error",
+        description: error.message || "Failed to start custom video generation",
+        variant: "destructive"
+      });
+      setIsGeneratingVideo(false);
     }
   };
 
@@ -1305,7 +1458,7 @@ export default function VirtualPatientsPage() {
                     </h4>
                     <div className="space-y-2">
                       <Button
-                        onClick={() => selectedPatient && generateVeoVideo(selectedPatient.id, 'shoulder_movement')}
+                        onClick={() => selectedPatient && generateRunwayVideo(selectedPatient)}
                         disabled={!selectedPatient || isGeneratingVideo}
                         className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs"
                         size="sm"
@@ -1313,7 +1466,7 @@ export default function VirtualPatientsPage() {
                         {isGeneratingVideo ? (
                           <>
                             <Loader2 className="h-3 w-3 mr-2 animate-spin" />
-                            Generating Video...
+                            Generating Video ({videoGenerationProgress}%)...
                           </>
                         ) : (
                           <>
@@ -1337,13 +1490,43 @@ export default function VirtualPatientsPage() {
                           >
                             Your browser does not support video playback.
                           </video>
-                          {videoGenerationId && (
+                          {videoTaskId && (
                             <div className="text-xs text-gray-500 mt-1">
-                              ID: {videoGenerationId}
+                              Task ID: {videoTaskId}
                             </div>
                           )}
                         </div>
                       )}
+                      
+                      {/* Custom Video Generation */}
+                      <div className="mt-4 pt-3 border-t border-gray-200">
+                        <div className="space-y-2">
+                          <Input
+                            value={customVideoPrompt}
+                            onChange={(e) => setCustomVideoPrompt(e.target.value)}
+                            placeholder="Describe clinical movement (e.g., 'Patient showing shoulder limitation during overhead reach')"
+                            className="text-xs"
+                          />
+                          <Button
+                            onClick={generateCustomVideo}
+                            disabled={isGeneratingVideo || !customVideoPrompt.trim()}
+                            className="w-full bg-purple-600 hover:bg-purple-700 text-white text-xs"
+                            size="sm"
+                          >
+                            {isGeneratingVideo ? (
+                              <>
+                                <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                                Creating Custom Video...
+                              </>
+                            ) : (
+                              <>
+                                <Video className="h-3 w-3 mr-2" />
+                                Generate Custom Video
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>

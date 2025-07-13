@@ -130,11 +130,17 @@ export class LeonardoService {
         const totalCost = imageGeneration.sdGenerationJob.apiCreditCost + motionGeneration.apiCreditCost;
         
         console.log('Generated professional 3D skeleton animation with Leonardo AI');
+        console.log('Final video result:', {
+          videoURL: videoResult.motionMP4URL || videoResult.motionGIFURL,
+          isActualVideo: !!(videoResult.motionMP4URL || videoResult.motionGIFURL),
+          fallbackImage: completedGeneration.generated_images[0].url
+        });
         
         return {
           videoUrl: videoResult.motionMP4URL || videoResult.motionGIFURL || completedGeneration.generated_images[0].url,
           taskId: motionGeneration.motionId,
-          cost: totalCost
+          cost: totalCost,
+          isVideo: !!(videoResult.motionMP4URL || videoResult.motionGIFURL)
         };
       } catch (motionError: any) {
         console.log('Motion generation failed, returning static skeleton image:', motionError.message);
@@ -254,7 +260,13 @@ export class LeonardoService {
 
         const motion = response.data.motionGenerationById || response.data;
         
-        if (motion.status === 'COMPLETE' && motion.motionMP4URL) {
+        if (motion.status === 'COMPLETE') {
+          console.log('Motion generation completed successfully!');
+          console.log('Available URLs:', {
+            motionMP4URL: motion.motionMP4URL,
+            motionGIFURL: motion.motionGIFURL,
+            hasVideoURL: !!(motion.motionMP4URL || motion.motionGIFURL)
+          });
           return motion;
         } else if (motion.status === 'FAILED') {
           throw new Error(`Motion generation failed: ${motionId}`);

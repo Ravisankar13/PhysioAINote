@@ -543,8 +543,8 @@ export default function VirtualPatientsPage() {
         setVideoGenerationProgress(100);
         
         toast({
-          title: "3D Skeleton Animation Generated",
-          description: `Professional movement animation ready! Cost: ${videoData.cost} credits`,
+          title: videoData.isVideo ? "3D Skeleton Video Generated!" : "3D Skeleton Image Generated",
+          description: `${videoData.isVideo ? 'Animated movement video' : 'Static skeleton image'} ready! Cost: ${videoData.cost} credits`,
         });
       } else {
         // Fallback to polling if needed
@@ -1625,25 +1625,36 @@ export default function VirtualPatientsPage() {
                       <div className="mb-3 p-2 bg-blue-50 rounded-lg border border-blue-200">
                         <h5 className="text-xs font-semibold text-blue-800 mb-1">Generated 3D Skeleton Animation</h5>
                         <div className="relative">
-                          {generatedVideoUrl.includes('.mp4') || generatedVideoUrl.includes('.gif') ? (
-                            <video 
-                              src={generatedVideoUrl} 
-                              autoPlay
-                              loop
-                              muted
-                              className="w-full h-32 object-cover rounded border"
-                              style={{ backgroundColor: 'white' }}
-                            />
+                          {generatedVideoUrl.includes('.mp4') || generatedVideoUrl.includes('.gif') || generatedVideoUrl.includes('motionMP4') || generatedVideoUrl.includes('motionGIF') ? (
+                            <div className="relative">
+                              <video 
+                                src={generatedVideoUrl} 
+                                autoPlay
+                                loop
+                                muted
+                                controls
+                                className="w-full h-64 object-contain rounded border bg-white"
+                                style={{ minHeight: '256px' }}
+                                onError={(e) => console.log('Video load error:', e)}
+                                onLoadedData={() => console.log('Video loaded successfully')}
+                              />
+                              <Badge className="absolute top-2 right-2 bg-green-600 text-white text-xs">
+                                VIDEO - 3D Animation
+                              </Badge>
+                            </div>
                           ) : (
-                            <img 
-                              src={generatedVideoUrl} 
-                              alt="Generated 3D skeleton"
-                              className="w-full h-32 object-cover rounded border"
-                            />
+                            <div className="relative">
+                              <img 
+                                src={generatedVideoUrl} 
+                                alt="Generated 3D skeleton"
+                                className="w-full h-64 object-contain rounded border bg-white"
+                                style={{ minHeight: '256px' }}
+                              />
+                              <Badge className="absolute top-2 right-2 bg-blue-600 text-white text-xs">
+                                IMAGE - 3D Skeleton
+                              </Badge>
+                            </div>
                           )}
-                          <Badge className="absolute top-1 right-1 bg-blue-600 text-white text-xs">
-                            3D Skeleton
-                          </Badge>
                         </div>
                       </div>
                     )}

@@ -180,6 +180,8 @@ export default function VirtualPatientsPage() {
   const [generatedVideoUrl, setGeneratedVideoUrl] = useState<string | null>(null);
   const [videoTaskId, setVideoTaskId] = useState<string | null>(null);
   const [customVideoPrompt, setCustomVideoPrompt] = useState("");
+  const [isGeneratingFromText, setIsGeneratingFromText] = useState(false);
+  const [textAnimationResult, setTextAnimationResult] = useState<any>(null);
   const [isGeneratingMovement, setIsGeneratingMovement] = useState(false);
   const [currentAnimationFrame, setCurrentAnimationFrame] = useState(0);
 
@@ -507,7 +509,60 @@ export default function VirtualPatientsPage() {
     }
   };
 
-  // Generate Runway ML video
+  // Generate Leonardo AI video (better alternative to Runway ML)
+  const generateLeonardoVideo = async (patient: SoapVirtualPatient, customPrompt?: string) => {
+    if (!patient) return;
+    
+    setIsGeneratingVideo(true);
+    setVideoGenerationProgress(0);
+    setGeneratedVideoUrl(null);
+    
+    try {
+      const response = await apiRequest(
+        'POST',
+        `/api/virtual-patients/${patient.id}/generate-leonardo-video`,
+        { 
+          movementType: 'functional_movement',
+          customPrompt: customPrompt || undefined
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const videoData = await response.json();
+      setVideoTaskId(videoData.taskId);
+      
+      console.log('Leonardo AI video generation completed:', videoData.taskId);
+      
+      if (videoData.videoUrl) {
+        // Leonardo AI returns video immediately
+        setGeneratedVideoUrl(videoData.videoUrl);
+        setIsGeneratingVideo(false);
+        setVideoGenerationProgress(100);
+        
+        toast({
+          title: "Video Generated Successfully",
+          description: `Professional movement video ready! Cost: ${videoData.cost} credits`,
+        });
+      } else {
+        // Fallback to polling if needed
+        pollLeonardoVideoStatus(videoData.taskId);
+      }
+      
+    } catch (error: any) {
+      console.error('Leonardo AI video generation error:', error);
+      toast({
+        title: "Video Generation Error",
+        description: error.message || "Failed to start video generation",
+        variant: "destructive"
+      });
+      setIsGeneratingVideo(false);
+    }
+  };
+
+  // Generate Runway ML video (fallback option)
   const generateRunwayVideo = async (patient: SoapVirtualPatient, customPrompt?: string) => {
     if (!patient) return;
     
@@ -553,7 +608,58 @@ export default function VirtualPatientsPage() {
     }
   };
 
-  // Poll video generation status
+  // Poll Leonardo AI video generation status
+  const pollLeonardoVideoStatus = async (taskId: string) => {
+    try {
+      const response = await apiRequest('GET', `/api/leonardo-video/${taskId}/status`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const statusData = await response.json();
+      
+      // Update progress
+      setVideoGenerationProgress(statusData.progress || 0);
+      
+      if (statusData.status === 'COMPLETE' && statusData.videoUrl) {
+        // Video is ready!
+        setGeneratedVideoUrl(statusData.videoUrl);
+        setIsGeneratingVideo(false);
+        
+        toast({
+          title: "Leonardo AI Video Ready",
+          description: "Professional clinical movement video generated successfully!",
+        });
+        
+      } else if (statusData.status === 'FAILED') {
+        // Video generation failed
+        setIsGeneratingVideo(false);
+        
+        toast({
+          title: "Video Generation Failed",
+          description: statusData.failure_reason || "Unknown error occurred",
+          variant: "destructive"
+        });
+        
+      } else if (statusData.status === 'PENDING') {
+        // Still processing, continue polling
+        setTimeout(() => pollLeonardoVideoStatus(taskId), 3000); // Poll every 3 seconds
+      }
+      
+    } catch (error: any) {
+      console.error('Error checking Leonardo AI video status:', error);
+      setIsGeneratingVideo(false);
+      
+      toast({
+        title: "Status Check Error",
+        description: error.message || "Failed to check video status",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Poll Runway ML video generation status (fallback)
   const pollVideoStatus = async (taskId: string) => {
     try {
       const response = await apiRequest('GET', `/api/runway-video/${taskId}/status`);
@@ -604,7 +710,64 @@ export default function VirtualPatientsPage() {
     }
   };
 
-  // Generate custom clinical video
+  // Generate custom clinical video with Leonardo AI
+  const generateCustomLeonardoVideo = async () => {
+    if (!customVideoPrompt.trim()) {
+      toast({
+        title: "Prompt Required",
+        description: "Please enter a clinical description for video generation",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setIsGeneratingVideo(true);
+    setVideoGenerationProgress(0);
+    setGeneratedVideoUrl(null);
+    
+    try {
+      const response = await apiRequest(
+        'POST',
+        '/api/generate-leonardo-video',
+        { 
+          clinicalDescription: customVideoPrompt,
+          movementType: 'functional_movement'
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const videoData = await response.json();
+      setVideoTaskId(videoData.taskId);
+      
+      console.log('Leonardo AI custom video generated:', videoData.taskId);
+      
+      if (videoData.videoUrl) {
+        // Leonardo AI returns video immediately
+        setGeneratedVideoUrl(videoData.videoUrl);
+        setIsGeneratingVideo(false);
+        setVideoGenerationProgress(100);
+        
+        toast({
+          title: "Custom Video Generated",
+          description: `Professional video ready! Cost: ${videoData.cost} credits`,
+        });
+      }
+      
+    } catch (error: any) {
+      console.error('Leonardo AI custom video generation error:', error);
+      toast({
+        title: "Video Generation Error",
+        description: error.message || "Failed to start custom video generation",
+        variant: "destructive"
+      });
+      setIsGeneratingVideo(false);
+    }
+  };
+
+  // Generate custom clinical video with Runway ML (fallback)
   const generateCustomVideo = async () => {
     if (!customVideoPrompt.trim()) {
       toast({
@@ -1458,7 +1621,7 @@ export default function VirtualPatientsPage() {
                     </h4>
                     <div className="space-y-2">
                       <Button
-                        onClick={() => selectedPatient && generateRunwayVideo(selectedPatient)}
+                        onClick={() => selectedPatient && generateLeonardoVideo(selectedPatient)}
                         disabled={!selectedPatient || isGeneratingVideo}
                         className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs"
                         size="sm"
@@ -1471,10 +1634,32 @@ export default function VirtualPatientsPage() {
                         ) : (
                           <>
                             <Video className="h-3 w-3 mr-2" />
-                            Generate Movement Video
+                            Generate AI Video (Leonardo)
                           </>
                         )}
                       </Button>
+                      
+                      {/* Alternative Video Generation Options */}
+                      <div className="grid grid-cols-2 gap-1 mt-2">
+                        <Button
+                          onClick={() => selectedPatient && generateRunwayVideo(selectedPatient)}
+                          disabled={!selectedPatient || isGeneratingVideo}
+                          className="w-full bg-purple-600 hover:bg-purple-700 text-white text-xs"
+                          size="sm"
+                          variant="outline"
+                        >
+                          Runway ML
+                        </Button>
+                        <Button
+                          onClick={() => generateFunctionalMovement('squat')}
+                          disabled={isGeneratingMovement}
+                          className="w-full bg-green-600 hover:bg-green-700 text-white text-xs"
+                          size="sm"
+                          variant="outline"
+                        >
+                          3D Animation
+                        </Button>
+                      </div>
                       
                       {generatedVideoUrl && (
                         <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
@@ -1508,7 +1693,7 @@ export default function VirtualPatientsPage() {
                             className="text-xs"
                           />
                           <Button
-                            onClick={generateCustomVideo}
+                            onClick={generateCustomLeonardoVideo}
                             disabled={isGeneratingVideo || !customVideoPrompt.trim()}
                             className="w-full bg-purple-600 hover:bg-purple-700 text-white text-xs"
                             size="sm"
@@ -1521,9 +1706,20 @@ export default function VirtualPatientsPage() {
                             ) : (
                               <>
                                 <Video className="h-3 w-3 mr-2" />
-                                Generate Custom Video
+                                Generate Custom Video (Leonardo)
                               </>
                             )}
+                          </Button>
+                          
+                          {/* Alternative custom video generation */}
+                          <Button
+                            onClick={generateCustomVideo}
+                            disabled={isGeneratingVideo || !customVideoPrompt.trim()}
+                            className="w-full bg-gray-600 hover:bg-gray-700 text-white text-xs mt-1"
+                            size="sm"
+                            variant="outline"
+                          >
+                            {isGeneratingVideo ? "Generating..." : "Use Runway ML Instead"}
                           </Button>
                         </div>
                       </div>

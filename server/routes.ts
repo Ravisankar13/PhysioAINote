@@ -38,6 +38,7 @@ import { soapVirtualPatientService } from "./soapVirtualPatientService";
 import { documentGenerationService } from "./documentGenerationService";
 import { googleVeoService } from "./googleVeoService";
 import { runwayService } from "./runwayService";
+import { leonardoService } from "./leonardoService";
 import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, exercises, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, insertSoapNoteSchema, bodyScans, insertBodyScanSchema, tournamentParticipants, diagnosisDuelTournaments, gameContent, virtualPatients } from "@shared/schema";
 import { ZodError, z } from "zod";
 import { fromZodError } from "zod-validation-error";
@@ -10946,6 +10947,164 @@ Respond in JSON format:
 
     } catch (error) {
       console.error('Error checking Runway ML status:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ======================= LEONARDO AI API ROUTES =======================
+
+  // Generate Leonardo AI video for virtual patient
+  app.post("/api/virtual-patients/:id/generate-leonardo-video", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const patientId = parseInt(req.params.id);
+      const { movementType = 'functional_movement', customPrompt } = req.body;
+
+      console.log(`Generating Leonardo AI video for virtual patient: ${patientId}`);
+
+      // Get virtual patient data
+      const [virtualPatient] = await db
+        .select()
+        .from(virtualPatients)
+        .where(eq(virtualPatients.id, patientId));
+
+      if (!virtualPatient) {
+        return res.status(404).json({ error: 'Virtual patient not found' });
+      }
+
+      // Check ownership
+      if (virtualPatient.userId !== userId) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      const videoResponse = await leonardoService.generatePatientVideo(
+        virtualPatient,
+        movementType,
+        customPrompt
+      );
+
+      console.log(`Leonardo AI video generation started: ${videoResponse.taskId}`);
+
+      res.json({
+        success: true,
+        taskId: videoResponse.taskId,
+        status: 'PENDING',
+        videoUrl: videoResponse.videoUrl,
+        cost: videoResponse.cost,
+        patientId,
+        movementType,
+        source: 'leonardo-ai',
+        generatedAt: new Date()
+      });
+
+    } catch (error) {
+      console.error('Error generating Leonardo AI video:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Generate Leonardo AI video from clinical text description
+  app.post("/api/generate-leonardo-video", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { 
+        clinicalDescription, 
+        movementType = 'functional_movement'
+      } = req.body;
+
+      if (!clinicalDescription) {
+        return res.status(400).json({ error: 'Clinical description is required' });
+      }
+
+      console.log(`Generating Leonardo AI video from text: ${clinicalDescription.substring(0, 100)}...`);
+
+      // Generate video using Leonardo AI
+      const videoResponse = await leonardoService.generateClinicalVideo(
+        clinicalDescription,
+        movementType
+      );
+
+      console.log(`Leonardo AI video generation completed: ${videoResponse.taskId}`);
+
+      res.json({
+        success: true,
+        taskId: videoResponse.taskId,
+        status: 'COMPLETE',
+        videoUrl: videoResponse.videoUrl,
+        cost: videoResponse.cost,
+        clinicalDescription,
+        source: 'leonardo-ai',
+        generatedAt: new Date()
+      });
+
+    } catch (error) {
+      console.error('Error generating Leonardo AI video:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Check Leonardo AI generation status
+  app.get("/api/leonardo-video/:taskId/status", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { taskId } = req.params;
+
+      console.log(`Checking Leonardo AI video status: ${taskId}`);
+
+      const videoStatus = await leonardoService.getGenerationStatus(taskId);
+
+      res.json({
+        taskId,
+        status: videoStatus.status,
+        progress: videoStatus.progress || 0,
+        videoUrl: videoStatus.videoUrl,
+        failure_reason: videoStatus.failure_reason
+      });
+
+    } catch (error) {
+      console.error('Error checking Leonardo AI video status:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get Leonardo AI user info and credits
+  app.get("/api/leonardo/user-info", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userInfo = await leonardoService.getUserInfo();
+      
+      res.json({
+        configured: leonardoService.isConfigured(),
+        userInfo,
+        hasApiKey: !!process.env.LEONARDO_API_KEY
+      });
+
+    } catch (error) {
+      console.error('Error getting Leonardo AI user info:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Test Leonardo AI configuration
+  app.get("/api/leonardo/status", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const configured = leonardoService.isConfigured();
+      
+      res.json({
+        configured,
+        hasApiKey: !!process.env.LEONARDO_API_KEY,
+        service: 'leonardo-ai',
+        pricing: '$9/month for 3,500 API credits'
+      });
+
+    } catch (error) {
+      console.error('Error checking Leonardo AI status:', error);
       res.status(500).json({ error: error.message });
     }
   });

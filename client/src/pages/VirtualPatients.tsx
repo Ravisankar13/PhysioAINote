@@ -44,6 +44,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import AIAnimationPlayer from '../components/AIAnimationPlayer';
+import RealisticHumanModel from '../components/RealisticHumanModel';
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { SoapVirtualPatient } from "@shared/schema";
 import MotionCapture from "@/components/MotionCapture";
@@ -991,12 +992,11 @@ export default function VirtualPatientsPage() {
                   const animationData = getAnimationData(selectedPatient);
                   if (selectedPatient && animationData && animationData.frames?.length > 0) {
                     return (
-                      <div className="w-full h-full bg-gray-900 rounded-lg flex items-center justify-center relative overflow-hidden">
-                        <AIAnimationPlayer
+                      <div className="w-full h-full relative overflow-hidden">
+                        <RealisticHumanModel
                           animationFrames={animationData.frames}
                           isPlaying={isPlaying}
                           className="w-full h-full"
-                          onPlayPauseToggle={() => setIsPlaying(!isPlaying)}
                         />
                         {/* Animation Source Badge */}
                         <div className="absolute top-4 left-4 z-10">

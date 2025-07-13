@@ -9387,6 +9387,18 @@ Respond in JSON format:
     }
   });
 
+  // Get completed SOAP notes for continuous recording session
+  app.get("/api/continuous-recording/:sessionId/completed-notes", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { sessionId } = req.params;
+      const notes = await continuousRecordingService.getCompletedSoapNotes(sessionId);
+      res.json(notes);
+    } catch (error: any) {
+      console.error("Error getting completed SOAP notes:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // End continuous recording session
   app.post("/api/continuous-recording/end", ensureAuthenticated, async (req: Request, res: Response) => {
     try {

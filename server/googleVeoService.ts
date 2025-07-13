@@ -282,6 +282,11 @@ export class GoogleVeoService {
         throw new Error('Google Cloud private key format issue. The service account private key appears to be in an unsupported format. Please regenerate your service account JSON file from the Google Cloud Console.');
       }
       
+      // Handle Google API permissions errors
+      if (error.code === 403 || error.status === 'PERMISSION_DENIED' || error.message?.includes('Permission') || error.message?.includes('aiplatform.endpoints.predict')) {
+        throw new Error('Google Cloud permissions issue: The service account needs Vertex AI User permissions and the Vertex AI API must be enabled in your Google Cloud project. Please check your project settings and service account permissions.');
+      }
+      
       // Handle Google API configuration errors
       if (error.message?.includes('HARM_CATEGORY_MEDICAL') || error.message?.includes('Invalid value at')) {
         throw new Error('Google Veo API configuration updated. Safety settings have been corrected for current API version.');
@@ -300,7 +305,7 @@ export class GoogleVeoService {
       }
       
       if (error.message?.includes('project')) {
-        throw new Error('Google Cloud project not configured. Please set GOOGLE_CLOUD_PROJECT_ID.');
+        throw new Error('Google Cloud project configuration issue. Please verify your project ID and ensure Vertex AI API is enabled.');
       }
       
       if (error.message?.includes('lstat') || error.message?.includes('spatial-conduit')) {

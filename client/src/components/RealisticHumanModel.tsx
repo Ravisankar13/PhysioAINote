@@ -170,33 +170,12 @@ const RealisticHumanModel: React.FC<RealisticHumanModelProps> = ({
     humanModel.children.forEach((child) => {
       const childName = child.name;
       
-      // Reset to neutral standing positions
-      if (childName === 'hip') {
-        child.position.set(0, 0.78, 0);
-        child.rotation.set(0, 0, 0);
-      } else if (childName === 'leftThigh') {
-        child.position.set(-0.1, 0.55, 0);
-        child.rotation.set(0, 0, 0);
-      } else if (childName === 'rightThigh') {
-        child.position.set(0.1, 0.55, 0);
-        child.rotation.set(0, 0, 0);
-      } else if (childName === 'leftShin') {
-        child.position.set(-0.1, 0.25, 0);
-        child.rotation.set(0, 0, 0);
-      } else if (childName === 'rightShin') {
-        child.position.set(0.1, 0.25, 0);
-        child.rotation.set(0, 0, 0);
-      } else if (childName === 'leftFoot') {
-        child.position.set(-0.1, 0.05, 0);
-        child.rotation.set(0, 0, 0);
-      } else if (childName === 'rightFoot') {
-        child.position.set(0.1, 0.05, 0);
+      // Reset to neutral standing positions using exact body part names from createHumanBody
+      if (childName === 'head') {
+        child.position.set(0, 1.65, 0);
         child.rotation.set(0, 0, 0);
       } else if (childName === 'chest') {
         child.position.set(0, 1.2, 0);
-        child.rotation.set(0, 0, 0);
-      } else if (childName === 'head') {
-        child.position.set(0, 1.65, 0);
         child.rotation.set(0, 0, 0);
       } else if (childName === 'leftUpperArm') {
         child.position.set(-0.25, 1.05, 0);
@@ -209,6 +188,33 @@ const RealisticHumanModel: React.FC<RealisticHumanModelProps> = ({
         child.rotation.set(0, 0, 0);
       } else if (childName === 'rightForearm') {
         child.position.set(0.25, 0.75, 0);
+        child.rotation.set(0, 0, 0);
+      } else if (childName === 'leftHand') {
+        child.position.set(-0.25, 0.55, 0);
+        child.rotation.set(0, 0, 0);
+      } else if (childName === 'rightHand') {
+        child.position.set(0.25, 0.55, 0);
+        child.rotation.set(0, 0, 0);
+      } else if (childName === 'pelvis') {
+        child.position.set(0, 0.85, 0);
+        child.rotation.set(0, 0, 0);
+      } else if (childName === 'leftThigh') {
+        child.position.set(-0.1, 0.5, 0);
+        child.rotation.set(0, 0, 0);
+      } else if (childName === 'rightThigh') {
+        child.position.set(0.1, 0.5, 0);
+        child.rotation.set(0, 0, 0);
+      } else if (childName === 'leftShin') {
+        child.position.set(-0.1, 0.15, 0);
+        child.rotation.set(0, 0, 0);
+      } else if (childName === 'rightShin') {
+        child.position.set(0.1, 0.15, 0);
+        child.rotation.set(0, 0, 0);
+      } else if (childName === 'leftFoot') {
+        child.position.set(-0.1, 0.02, 0.05);
+        child.rotation.set(0, 0, 0);
+      } else if (childName === 'rightFoot') {
+        child.position.set(0.1, 0.02, 0.05);
         child.rotation.set(0, 0, 0);
       }
     });
@@ -234,14 +240,14 @@ const RealisticHumanModel: React.FC<RealisticHumanModelProps> = ({
       
       // Enhanced coordinated movement patterns
       
-      // Hip movement coordination
-      if (childName === 'hip' && landmarks[23] && landmarks[24]) {
+      // Hip movement coordination (pelvis)
+      if (childName === 'pelvis' && landmarks[23] && landmarks[24]) {
         const hipCenter = {
           x: (landmarks[23].x + landmarks[24].x) / 2,
           y: (landmarks[23].y + landmarks[24].y) / 2,
           z: (landmarks[23].z + landmarks[24].z) / 2
         };
-        child.position.set(hipCenter.x, hipCenter.y, hipCenter.z);
+        child.position.set(hipCenter.x, hipCenter.y + 0.07, hipCenter.z); // Offset for pelvis height
         child.rotation.x = hipCenter.y * 0.3; // Hip flexion
       }
       
@@ -300,6 +306,15 @@ const RealisticHumanModel: React.FC<RealisticHumanModelProps> = ({
         child.position.set(landmarks[14].x, landmarks[14].y, landmarks[14].z);
         const forearmAngle = Math.atan2(landmarks[16].y - landmarks[14].y, landmarks[16].x - landmarks[14].x);
         child.rotation.z = forearmAngle;
+      }
+
+      // Hand positioning
+      if (childName === 'leftHand' && landmarks[15]) {
+        child.position.set(landmarks[15].x, landmarks[15].y, landmarks[15].z);
+      }
+      
+      if (childName === 'rightHand' && landmarks[16]) {
+        child.position.set(landmarks[16].x, landmarks[16].y, landmarks[16].z);
       }
       
       // Coordinated torso movement
@@ -368,6 +383,8 @@ const RealisticHumanModel: React.FC<RealisticHumanModelProps> = ({
 
     // Set initial neutral standing position
     setNeutralStandingPose(humanModel);
+    
+    console.log('Human model created with neutral pose:', humanModel.children.map(child => ({ name: child.name, position: child.position })));
 
     // Ground plane
     const planeGeometry = new THREE.PlaneGeometry(5, 5);
@@ -422,13 +439,22 @@ const RealisticHumanModel: React.FC<RealisticHumanModelProps> = ({
 
   // Update animation when frames or playing state changes
   useEffect(() => {
-    if (animationFrames.length > 0 && humanModelRef.current) {
+    if (animationFrames.length > 0 && humanModelRef.current && isPlaying) {
       applyAnimationFrame(currentFrame);
-    } else if (humanModelRef.current && !isPlaying) {
-      // Reset to neutral pose when not playing
+    } else if (humanModelRef.current && !isPlaying && animationFrames.length === 0) {
+      // Reset to neutral pose when not playing and no animation loaded
+      console.log('Resetting to neutral pose');
       setNeutralStandingPose(humanModelRef.current);
     }
   }, [currentFrame, animationFrames, isPlaying]);
+
+  // Set initial neutral pose when component first loads
+  useEffect(() => {
+    if (humanModelRef.current && animationFrames.length === 0) {
+      console.log('Setting initial neutral pose on mount');
+      setNeutralStandingPose(humanModelRef.current);
+    }
+  }, []);
 
   return (
     <div 

@@ -58,80 +58,62 @@ config();
 
 // Helper functions for research article relevance scoring and note processing
 
-// Generate SOAP note sections from clinical insights text
-function generateSoapSectionsFromInsights(transcript: string, insights: string): {
+// Generate SOAP note sections using AI from transcript
+async function generateAISoapSections(transcript: string): Promise<{
   subjective: string;
   objective: string;
   assessment: string;
   plan: string;
-} {
+}> {
   try {
-    const lines = insights.trim().split('\n');
-    let currentSection = '';
-    const sections: Record<string, string[]> = {
-      'subjective': [],
-      'objective': [],
-      'assessment': [],
-      'plan': []
-    };
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+      messages: [
+        {
+          role: "system",
+          content: `You are an expert physiotherapist. Convert the following patient consultation transcript into proper SOAP note format. 
 
-    for (const line of lines) {
-      const trimmedLine = line.trim();
-      if (trimmedLine.toLowerCase().startsWith('subjective:')) {
-        currentSection = 'subjective';
-        sections[currentSection].push(trimmedLine.substring('subjective:'.length).trim());
-      } else if (trimmedLine.toLowerCase().startsWith('objective:')) {
-        currentSection = 'objective';
-        sections[currentSection].push(trimmedLine.substring('objective:'.length).trim());
-      } else if (trimmedLine.toLowerCase().startsWith('assessment:')) {
-        currentSection = 'assessment';
-        sections[currentSection].push(trimmedLine.substring('assessment:'.length).trim());
-      } else if (trimmedLine.toLowerCase().startsWith('plan:')) {
-        currentSection = 'plan';
-        sections[currentSection].push(trimmedLine.substring('plan:'.length).trim());
-      } else if (currentSection && trimmedLine) {
-        sections[currentSection].push(trimmedLine);
-      }
-    }
+IMPORTANT: Do NOT copy the transcript directly. Instead:
+- Subjective: Summarize the patient's complaints, symptoms, and history in clinical terminology
+- Objective: Extract any mentioned physical examination findings, observations, or measurements  
+- Assessment: Provide clinical reasoning and potential diagnoses based on the information
+- Plan: Suggest appropriate treatment approaches and next steps
 
-    const soapNote = {
-      subjective: sections['subjective'].join('\n').trim(),
-      objective: sections['objective'].join('\n').trim(),
-      assessment: sections['assessment'].join('\n').trim(),
-      plan: sections['plan'].join('\n').trim()
-    };
+Format your response as valid JSON:
+{
+  "subjective": "...",
+  "objective": "...", 
+  "assessment": "...",
+  "plan": "..."
+}`
+        },
+        {
+          role: "user",
+          content: `Please convert this consultation transcript into a professional SOAP note:\n\n${transcript}`
+        }
+      ],
+      response_format: { type: "json_object" },
+      max_tokens: 1000
+    });
 
-    // If we couldn't parse the insights properly, generate proper SOAP sections from transcript
-    if (!soapNote.subjective && !soapNote.objective && !soapNote.assessment && !soapNote.plan) {
-      // Always populate with meaningful content
-      soapNote.subjective = transcript || 'Patient consultation recorded.';
-      soapNote.objective = 'Physical examination findings to be documented during consultation.';
-      
-      // Generate assessment based on transcript content
-      if (transcript.toLowerCase().includes('back pain')) {
-        soapNote.assessment = 'Patient presents with lower back pain. Further assessment required to determine underlying cause and severity.';
-      } else if (transcript.toLowerCase().includes('pain')) {
-        soapNote.assessment = 'Patient presents with pain. Clinical assessment and examination required.';
-      } else {
-        soapNote.assessment = 'Clinical assessment based on patient presentation. Further evaluation needed.';
-      }
-      
-      // Generate plan based on transcript content
-      if (transcript.toLowerCase().includes('physiotherapy')) {
-        soapNote.plan = 'Physiotherapy treatment indicated. Initial assessment and treatment plan to be developed.';
-      } else {
-        soapNote.plan = 'Treatment plan to be developed based on clinical findings and assessment.';
-      }
-    }
-
-    return soapNote;
-  } catch (error) {
-    console.error('Error parsing SOAP note from insights:', error);
+    const result = JSON.parse(response.choices[0].message.content || '{}');
+    
     return {
-      subjective: 'Error extracting subjective information.',
-      objective: 'Error extracting objective information.',
-      assessment: 'Error extracting assessment information.',
-      plan: 'Error extracting plan information.'
+      subjective: result.subjective || 'Patient consultation documented.',
+      objective: result.objective || 'Physical examination findings to be documented.',
+      assessment: result.assessment || 'Clinical assessment pending.',
+      plan: result.plan || 'Treatment plan to be developed.'
+    };
+  } catch (error) {
+    console.error('Error generating AI SOAP sections:', error);
+    // Fallback to basic structure if AI fails
+    return {
+      subjective: 'Patient consultation recorded. AI processing temporarily unavailable.',
+      objective: 'Physical examination findings to be documented.',
+      assessment: 'Clinical assessment pending review.',
+      plan: 'Treatment plan to be developed based on assessment.'
     };
   }
 }
@@ -396,20 +378,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
       }
 
-      // Generate SOAP structure even with fallback insights
+      // Generate SOAP structure using AI from transcript
       let soapNote;
       try {
-        // Extract the clinical insights string from the insights object
-        const insightsText = typeof insights === 'string' ? insights : 
-          (insights?.clinicalInsights || insights?.transcription || '');
-        soapNote = generateSoapSectionsFromInsights(transcription, insightsText);
+        console.log('Generating AI SOAP sections from transcript...');
+        soapNote = await generateAISoapSections(transcription);
+        console.log('AI SOAP sections generated successfully');
       } catch (soapError) {
-        console.log('SOAP generation error, using basic structure:', soapError);
+        console.log('AI SOAP generation error, using basic structure:', soapError);
         soapNote = {
-          subjective: transcription,
-          objective: "",
-          assessment: "",
-          plan: ""
+          subjective: 'Patient consultation recorded. AI processing temporarily unavailable.',
+          objective: 'Physical examination findings to be documented.',
+          assessment: 'Clinical assessment pending review.',
+          plan: 'Treatment plan to be developed based on assessment.'
         };
       }
 

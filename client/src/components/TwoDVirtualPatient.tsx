@@ -39,43 +39,44 @@ const TwoDVirtualPatient: React.FC<TwoDVirtualPatientProps> = ({
       return;
     }
 
-    // Scale and position landmarks for canvas
-    const scaledLandmarks = landmarks.map(landmark => ({
-      x: landmark.x * canvasWidth + canvasWidth / 2,
-      y: landmark.y * canvasHeight + canvasHeight / 4,
-      visibility: landmark.visibility
-    }));
+    // Simplified coordinate mapping for better movement visibility
+    const scaledLandmarks = landmarks.map(landmark => {
+      // Map coordinates directly to canvas with proper scaling
+      const x = landmark.x * canvasWidth;
+      const y = landmark.y * canvasHeight;
+      
+      return {
+        x: Math.max(20, Math.min(canvasWidth - 20, x)),
+        y: Math.max(20, Math.min(canvasHeight - 20, y)),
+        visibility: landmark.visibility || 1
+      };
+    });
 
     // Set drawing style
     ctx.strokeStyle = '#2563eb';
     ctx.lineWidth = 3;
     ctx.fillStyle = '#ef4444';
 
-    // Draw connections between body parts
+    // Simplified connections for better visibility
     const connections = [
-      // Head to shoulders
+      // Head to neck/shoulders
       [0, 11], [0, 12],
-      // Shoulders
+      // Shoulder line
       [11, 12],
-      // Left arm
-      [11, 13], [13, 15],
-      // Right arm  
-      [12, 14], [14, 16],
+      // Arms
+      [11, 13], [13, 15], // Left arm
+      [12, 14], [14, 16], // Right arm
       // Torso
-      [11, 23], [12, 24],
-      [23, 24],
-      // Left leg
-      [23, 25], [25, 27],
-      // Right leg
-      [24, 26], [26, 28],
-      // Feet
-      [27, 31], [28, 32]
+      [11, 23], [12, 24], // Shoulders to hips
+      [23, 24], // Hip line
+      // Legs
+      [23, 25], [25, 27], // Left leg
+      [24, 26], [26, 28], // Right leg
     ];
 
-    // Draw lines
+    // Draw connections
     connections.forEach(([start, end]) => {
-      if (scaledLandmarks[start] && scaledLandmarks[end] && 
-          scaledLandmarks[start].visibility > 0.5 && scaledLandmarks[end].visibility > 0.5) {
+      if (scaledLandmarks[start] && scaledLandmarks[end]) {
         ctx.beginPath();
         ctx.moveTo(scaledLandmarks[start].x, scaledLandmarks[start].y);
         ctx.lineTo(scaledLandmarks[end].x, scaledLandmarks[end].y);
@@ -83,9 +84,10 @@ const TwoDVirtualPatient: React.FC<TwoDVirtualPatientProps> = ({
       }
     });
 
-    // Draw joint points
-    [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28].forEach(index => {
-      if (scaledLandmarks[index] && scaledLandmarks[index].visibility > 0.5) {
+    // Draw key joints as circles
+    const keyJoints = [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28];
+    keyJoints.forEach(index => {
+      if (scaledLandmarks[index]) {
         ctx.beginPath();
         ctx.arc(scaledLandmarks[index].x, scaledLandmarks[index].y, 4, 0, 2 * Math.PI);
         ctx.fill();
@@ -168,12 +170,19 @@ const TwoDVirtualPatient: React.FC<TwoDVirtualPatientProps> = ({
     });
   };
 
-  // Animation loop
+  // Animation loop with slower frame rate for better visibility
   useEffect(() => {
     if (isPlaying && animationFrames.length > 0) {
-      const animate = () => {
-        if (onFrameChange) {
-          onFrameChange((currentFrame + 1) % animationFrames.length);
+      const frameRate = 15; // 15 FPS for smoother movement visualization
+      const frameInterval = 1000 / frameRate;
+      let lastTime = 0;
+      
+      const animate = (currentTime: number) => {
+        if (currentTime - lastTime >= frameInterval) {
+          if (onFrameChange) {
+            onFrameChange((currentFrame + 1) % animationFrames.length);
+          }
+          lastTime = currentTime;
         }
         animationRef.current = requestAnimationFrame(animate);
       };

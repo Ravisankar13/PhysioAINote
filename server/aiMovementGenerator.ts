@@ -304,7 +304,7 @@ ENSURE the analysis is SPECIFICALLY tailored to the clinical text provided. Diff
   }
 
   /**
-   * Apply movement restrictions to landmark positions
+   * Apply movement restrictions to landmark positions - optimized for 2D visualization
    */
   private applyMovementRestrictions(
     landmark: SkeletonLandmark,
@@ -317,7 +317,11 @@ ENSURE the analysis is SPECIFICALLY tailored to the clinical text provided. Diff
   ): [number, number, number] {
     let [x, y, z] = landmark.defaultPosition;
     
-    // Create unique movement patterns based on condition type and body part
+    // Normalize coordinates for 2D canvas display (-1 to 1 range)
+    x = (x - 0.5) * 0.8; // Scale and center
+    y = (y - 0.85) * 0.8; // Adjust for standing figure
+    z = z * 0.2; // Minimal depth for 2D
+    
     const timeProgress = frameIndex / totalFrames;
     const phaseIntensity = movementPhase === 'restricted' ? 1 : 
                           movementPhase === 'attempt' ? 0.6 : 

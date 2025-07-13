@@ -163,6 +163,7 @@ export default function VirtualPatientsPage() {
   const [editingPatientId, setEditingPatientId] = useState<number | null>(null);
   const [editingName, setEditingName] = useState<string>('');
   const [showRecaptureConfirm, setShowRecaptureConfirm] = useState(false);
+  const [showPatientNameDialog, setShowPatientNameDialog] = useState(false);
   
   // Animation state for AI-generated skeleton movement
   const [selectedBodyRegion, setSelectedBodyRegion] = useState<string>('');

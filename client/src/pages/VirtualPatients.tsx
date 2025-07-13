@@ -45,6 +45,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import AIAnimationPlayer from '../components/AIAnimationPlayer';
 import RealisticHumanModel from '../components/RealisticHumanModel';
+import TwoDVirtualPatient from '../components/TwoDVirtualPatient';
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { SoapVirtualPatient } from "@shared/schema";
 import MotionCapture from "@/components/MotionCapture";
@@ -1082,7 +1083,7 @@ export default function VirtualPatientsPage() {
                   if (selectedPatient && animationData && animationData.frames?.length > 0) {
                     return (
                       <div className="w-full h-full relative overflow-hidden">
-                        <RealisticHumanModel
+                        <TwoDVirtualPatient
                           animationFrames={animationData.frames}
                           isPlaying={isPlaying}
                           currentFrame={currentAnimationFrame}

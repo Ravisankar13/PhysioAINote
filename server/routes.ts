@@ -398,7 +398,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Generate SOAP structure even with fallback insights
       let soapNote;
       try {
-        soapNote = generateSoapSectionsFromInsights(transcription, insights);
+        // Extract the clinical insights string from the insights object
+        const insightsText = typeof insights === 'string' ? insights : 
+          (insights?.clinicalInsights || insights?.transcription || '');
+        soapNote = generateSoapSectionsFromInsights(transcription, insightsText);
       } catch (soapError) {
         console.log('SOAP generation error, using basic structure:', soapError);
         soapNote = {

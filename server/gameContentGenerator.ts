@@ -474,6 +474,155 @@ Format as JSON:
   }
 
   /**
+   * Generate Manual Therapy Mastery content
+   */
+  async generateManualTherapyMastery(request: GameContentRequest) {
+    const prompt = `Generate elite manual therapy challenges for ${request.bodyPart || 'general'} conditions.
+
+Create 5 advanced manual therapy scenarios covering:
+- Complex patient presentations requiring manual therapy expertise
+- Technique selection and modification decisions
+- Contraindication identification
+- Treatment progression strategies
+- Outcome assessment
+
+Format as JSON:
+{
+  "challenges": [
+    {
+      "id": "mt_001",
+      "scenario": "65-year-old with chronic cervical pain, history of disc herniation C5-6, reports increased pain with rotation",
+      "presentation": {
+        "symptoms": "Deep aching neck pain, occasional arm tingling",
+        "examination": "Limited cervical rotation 30°, positive Spurling's test",
+        "imaging": "MRI shows mild disc protrusion C5-6",
+        "redFlags": "None identified"
+      },
+      "challenge": "Select appropriate manual therapy techniques",
+      "options": [
+        {
+          "technique": "High velocity thrust manipulation to C5-6",
+          "rationale": "Direct targeting of restricted segment",
+          "safety": "contraindicated",
+          "points": 0,
+          "feedback": "Contraindicated due to disc pathology and positive neural signs"
+        },
+        {
+          "technique": "Gentle mobilization grades I-II to adjacent segments",
+          "rationale": "Reduce protective muscle guarding and improve regional mobility",
+          "safety": "appropriate",
+          "points": 8,
+          "feedback": "Excellent choice - addresses regional restrictions while respecting tissue pathology"
+        },
+        {
+          "technique": "Soft tissue techniques to suboccipital muscles",
+          "rationale": "Release muscle tension contributing to symptoms",
+          "safety": "appropriate",
+          "points": 6,
+          "feedback": "Good supportive technique but not addressing primary movement restriction"
+        }
+      ],
+      "learningPoints": [
+        "Disc pathology with neural signs is contraindication for thrust techniques",
+        "Graded mobilization approach respects tissue healing",
+        "Regional treatment may be more appropriate than local"
+      ],
+      "timeLimit": 180,
+      "difficulty": "advanced"
+    }
+  ]
+}`;
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+      messages: [{ role: "user", content: prompt }],
+      response_format: { type: "json_object" },
+    });
+
+    return JSON.parse(response.choices[0].message.content || '{}');
+  }
+
+  /**
+   * Generate Exercise Prescription Expert content
+   */
+  async generateExercisePrescriptionExpert(request: GameContentRequest) {
+    const prompt = `Generate advanced exercise prescription challenges for ${request.bodyPart || 'general'} rehabilitation.
+
+Create 5 complex exercise prescription scenarios requiring:
+- Evidence-based exercise selection
+- Load progression strategies
+- Exercise modification for specific populations
+- Outcome prediction and monitoring
+- Integration with manual therapy
+
+Format as JSON:
+{
+  "challenges": [
+    {
+      "id": "ep_001",
+      "patientProfile": {
+        "age": 42,
+        "gender": "female",
+        "occupation": "desk worker",
+        "condition": "Chronic low back pain with hip weakness",
+        "history": "18 months duration, previous physiotherapy with limited success",
+        "currentFunction": "Struggles with prolonged sitting, difficulty with stairs"
+      },
+      "assessmentFindings": {
+        "movement": "Hip hike during single leg stance, lumbar flexion pattern in squatting",
+        "strength": "Hip abductors 3/5, deep abdominals poor recruitment",
+        "endurance": "Cannot hold plank >30 seconds",
+        "pain": "4/10 constant, increases to 7/10 with prolonged sitting"
+      },
+      "challenge": "Design 6-week progressive exercise program",
+      "options": [
+        {
+          "program": "High-intensity strengthening focus",
+          "exercises": ["Weighted squats", "Deadlifts", "Planks to fatigue"],
+          "rationale": "Build strength quickly",
+          "appropriateness": "inappropriate",
+          "points": 2,
+          "feedback": "Too aggressive for chronic pain - likely to increase symptoms and reduce compliance"
+        },
+        {
+          "program": "Motor control and graded strengthening",
+          "exercises": ["Dead bug progression", "Clamshells", "Modified squats", "Functional movements"],
+          "rationale": "Address movement patterns before loading, build confidence",
+          "appropriateness": "excellent",
+          "points": 10,
+          "feedback": "Evidence-based approach addressing motor control deficits and graded exposure"
+        },
+        {
+          "program": "Stretching and mobility only",
+          "exercises": ["Hip flexor stretches", "Spinal rotation", "General mobility"],
+          "rationale": "Improve flexibility first",
+          "appropriateness": "insufficient",
+          "points": 4,
+          "feedback": "Passive approach unlikely to address strength deficits and motor patterns"
+        }
+      ],
+      "progressionMarkers": [
+        "Week 1-2: Perfect form with bodyweight",
+        "Week 3-4: Add light resistance/longer holds",
+        "Week 5-6: Functional integration and load challenges"
+      ],
+      "outcomesMeasures": ["Pain VAS", "Oswestry Disability Index", "Single leg stance time", "Work productivity"],
+      "timeLimit": 300,
+      "difficulty": "advanced"
+    }
+  ]
+}`;
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+      messages: [{ role: "user", content: prompt }],
+      response_format: { type: "json_object" },
+    });
+
+    return JSON.parse(response.choices[0].message.content || '{}');
+  }
+
+  /**
    * Main method to generate content based on game type
    */
   async generateGameContent(request: GameContentRequest): Promise<any> {
@@ -498,6 +647,10 @@ Format as JSON:
         return await this.generateCpgQuizMaster(request);
       case 'mystery_patient':
         return await this.generateMysteryPatient(request);
+      case 'manual_therapy_mastery':
+        return await this.generateManualTherapyMastery(request);
+      case 'exercise_prescription_expert':
+        return await this.generateExercisePrescriptionExpert(request);
       default:
         throw new Error(`Unsupported game type: ${request.gameType}`);
     }

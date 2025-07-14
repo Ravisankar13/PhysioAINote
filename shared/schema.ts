@@ -96,6 +96,8 @@ export const gameTypeEnum = pgEnum("game_type", [
   "cpg_quiz_master",
   "mystery_patient",
   "diagnosis_duel",
+  "manual_therapy_mastery",
+  "exercise_prescription_expert",
 ]);
 
 // Competition status enum

@@ -1443,27 +1443,41 @@ Return JSON:
       gameContentKeys: Object.keys(gameContent)
     });
 
-    // Manual therapy responses
-    const assessmentResponse = responses.assessmentApproach || '';
-    const treatmentResponse = responses.treatmentPlan || '';
+    // Manual therapy responses - handle both old and new field names
+    const techniqueResponse = responses.techniqueSelection || responses.assessmentApproach || '';
+    const progressionResponse = responses.treatmentProgression || responses.treatmentPlan || '';
     const reasoningResponse = responses.clinicalReasoning || '';
     const outcomesResponse = responses.expectedOutcomes || '';
 
-    if (challenges.length > 0 && (assessmentResponse || treatmentResponse || reasoningResponse || outcomesResponse)) {
+    if (challenges.length > 0 && (techniqueResponse || progressionResponse || reasoningResponse || outcomesResponse)) {
       const challenge = challenges[0]; // Use the first challenge for analysis
       
       const feedback = await this.analyzeManualTherapyCase(
         challenge,
         {
-          assessment: assessmentResponse,
-          treatment: treatmentResponse,
+          assessment: techniqueResponse,
+          treatment: progressionResponse,
           reasoning: reasoningResponse,
           outcomes: outcomesResponse
         },
-        `Manual Therapy Challenge: ${challenge.scenario}`,
+        `Manual Therapy Challenge: ${challenge.scenario || challenge.challenge}`,
         'manual_therapy_response'
       );
       feedbacks.push(feedback);
+    } else {
+      // Create fallback feedback if no responses found
+      const fallbackFeedback = this.createManualTherapyFallback(
+        challenges[0] || {},
+        {
+          assessment: techniqueResponse,
+          treatment: progressionResponse,
+          reasoning: reasoningResponse,
+          outcomes: outcomesResponse
+        },
+        'manual_therapy_fallback',
+        'Manual Therapy Assessment'
+      );
+      feedbacks.push(fallbackFeedback);
     }
 
     console.log('Manual Therapy Mastery feedbacks generated:', feedbacks.length);
@@ -1521,37 +1535,42 @@ Return JSON:
   ): Promise<QuestionFeedback> {
     const prompt = `Analyze this manual therapy clinical response:
 
-CASE: ${caseData.scenario}
+CLINICAL SCENARIO: ${caseData.scenario || caseData.challenge || 'Manual therapy case'}
 
-CORRECT APPROACH: ${caseData.correctApproach}
-PROGRESSION PLAN: ${caseData.progressionPlan}
+EXAMINATION FINDINGS: ${caseData.presentation?.examination || caseData.presentation?.symptoms || 'Clinical findings available'}
+
+CORRECT APPROACH: ${caseData.correctApproach || 'Evidence-based manual therapy approach'}
+PROGRESSION PLAN: ${caseData.progressionPlan || 'Progressive manual therapy protocol'}
+
+AVAILABLE TECHNIQUE OPTIONS:
+${caseData.techniqueOptions ? caseData.techniqueOptions.map((opt: string, i: number) => `${i + 1}. ${opt}`).join('\n') : 'Various manual therapy techniques available'}
 
 USER RESPONSES:
-Assessment Approach: ${userResponses.assessment}
-Treatment Plan: ${userResponses.treatment}
-Clinical Reasoning: ${userResponses.reasoning}
-Expected Outcomes: ${userResponses.outcomes}
+Technique Selection: ${userResponses.assessment || 'Not provided'}
+Treatment Progression: ${userResponses.treatment || 'Not provided'}
+Clinical Reasoning: ${userResponses.reasoning || 'Not provided'}
+Expected Outcomes: ${userResponses.outcomes || 'Not provided'}
 
-Rate each component (0-100):
-1. Assessment selection appropriateness
-2. Treatment technique safety and efficacy
-3. Clinical reasoning quality
-4. Expected outcomes realism
+Evaluate the response quality and provide educational feedback. Consider:
+1. Technique selection appropriateness for the condition
+2. Safety considerations and contraindications
+3. Progression planning and dosage
+4. Clinical reasoning and evidence base
 
 Provide detailed feedback in JSON format:
 {
   "overallScore": 0-100,
-  "aiAnalysis": "Comprehensive analysis of manual therapy decisions",
-  "idealResponse": "Expert manual therapy approach for this case",
-  "strengths": ["What the user did well"],
-  "improvements": ["Specific manual therapy areas to improve"],
-  "clinicalReasoning": "Educational explanation of correct manual therapy approach",
-  "researchReferences": ["Evidence-based manual therapy sources"]
+  "aiAnalysis": "Comprehensive analysis of manual therapy approach and technique selection",
+  "idealResponse": "Expert manual therapy approach for this specific case presentation",
+  "strengths": ["What the clinician did well in their approach"],
+  "improvements": ["Specific areas for improvement in manual therapy decision-making"],
+  "clinicalReasoning": "Educational explanation of optimal manual therapy approach and reasoning",
+  "researchReferences": ["Relevant evidence-based manual therapy sources"]
 }`;
 
     try {
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
         messages: [{ role: "user", content: prompt }],
         response_format: { type: "json_object" },
       });
@@ -1561,14 +1580,14 @@ Provide detailed feedback in JSON format:
       return {
         questionId,
         questionText,
-        userResponse: `Assessment: ${userResponses.assessment} | Treatment: ${userResponses.treatment}`,
-        aiIdealResponse: result.idealResponse || caseData.correctApproach,
-        aiAnalysis: result.aiAnalysis || 'Manual therapy approach analyzed',
-        score: this.safeScore(result.overallScore),
+        userResponse: `Technique: ${userResponses.assessment || 'Not specified'} | Progression: ${userResponses.treatment || 'Not specified'}`,
+        aiIdealResponse: result.idealResponse || caseData.correctApproach || 'Evidence-based manual therapy approach',
+        aiAnalysis: result.aiAnalysis || 'Manual therapy technique selection and progression evaluated',
+        score: this.safeScore(result.overallScore, 75), // Default to 75 if no score provided
         strengths: result.strengths || ['Attempted manual therapy assessment'],
-        improvements: result.improvements || ['Review manual therapy evidence'],
-        clinicalReasoning: result.clinicalReasoning || 'Manual therapy requires evidence-based technique selection',
-        researchReferences: result.researchReferences || ['Manual therapy research', 'Clinical practice guidelines']
+        improvements: result.improvements || ['Review manual therapy evidence and technique selection'],
+        clinicalReasoning: result.clinicalReasoning || 'Manual therapy requires careful technique selection based on clinical presentation and safety considerations',
+        researchReferences: result.researchReferences || ['Manual therapy research', 'Clinical practice guidelines', 'Technique safety studies']
       };
     } catch (error) {
       console.error('Error analyzing manual therapy case:', error);

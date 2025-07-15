@@ -2315,7 +2315,7 @@ Consider: Life support priorities, surgical needs, monitoring requirements, and 
                   This competition is being prepared. Content will be available shortly.
                 </p>
                 <button
-                  onClick={() => setLocation('/game-competitions')}
+                  onClick={() => setLocation('/competitions')}
                   className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700"
                 >
                   Back to Competitions

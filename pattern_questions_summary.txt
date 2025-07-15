@@ -1,0 +1,107 @@
+PATTERN RECOGNITION GAME - 100 CLINICAL QUESTIONS
+
+Game Rules:
+- Total Questions: 100
+- Time Limit: 5 minutes (300 seconds)
+- Max Score: 100
+- Format: Multiple choice with 4 options each
+- Difficulty Levels: Easy, Medium, Hard
+
+Here are the first 30 questions as examples:
+
+EASY QUESTIONS (1-10):
+
+1. Ankle - Soccer player with inversion injury
+   Q: 22-year-old soccer player with immediate lateral ankle pain after inversion injury. Tender over ATFL, positive anterior drawer test.
+   Options: Lateral ankle sprain, Achilles tendinopathy, Peroneal tendon subluxation, Ankle fracture
+   Answer: Lateral ankle sprain
+
+2. Shoulder - Office worker with overhead pain
+   Q: 45-year-old office worker with shoulder pain during overhead activities. Painful arc 60-120°, positive Hawkins test.
+   Options: Subacromial impingement, Rotator cuff tear, Frozen shoulder, AC joint arthritis
+   Answer: Subacromial impingement
+
+3. Foot - Runner with heel pain
+   Q: 35-year-old runner with morning heel pain, worse after rest. Point tenderness at medial calcaneal tuberosity.
+   Options: Plantar fasciitis, Achilles tendinopathy, Calcaneal stress fracture, Tarsal tunnel syndrome
+   Answer: Plantar fasciitis
+
+4. Elbow - Tennis player
+   Q: 28-year-old tennis player with lateral elbow pain. Tenderness over lateral epicondyle, pain with resisted wrist extension.
+   Options: Lateral epicondylitis, Medial epicondylitis, Radial tunnel syndrome, Cubital tunnel syndrome
+   Answer: Lateral epicondylitis
+
+5. Knee - Student with anterior pain
+   Q: 19-year-old student with anterior knee pain worse going down stairs and after prolonged sitting. Positive J-sign.
+   Options: Patellofemoral pain syndrome, Patellar tendinopathy, IT band syndrome, Meniscus tear
+   Answer: Patellofemoral pain syndrome
+
+6. Wrist - Numbness and tingling
+   Q: 50-year-old with numbness in thumb and first two fingers, worse at night. Positive Tinel's sign at wrist.
+   Options: Carpal tunnel syndrome, De Quervain's tenosynovitis, Trigger finger, Cubital tunnel syndrome
+   Answer: Carpal tunnel syndrome
+
+7. Back - Weightlifter injury
+   Q: 25-year-old weightlifter with acute lower back pain after deadlifting. Pain with forward flexion, no neurological signs.
+   Options: Mechanical low back pain, Disc herniation, Spinal stenosis, Spondylolisthesis
+   Answer: Mechanical low back pain
+
+8. Hip - Elderly with stiffness
+   Q: 65-year-old with gradual hip pain and morning stiffness <30 minutes. Reduced internal rotation, crepitus.
+   Options: Hip osteoarthritis, Hip flexor strain, Labral tear, Trochanteric bursitis
+   Answer: Hip osteoarthritis
+
+9. Neck - MVA patient
+   Q: 42-year-old after MVA with neck pain and headaches. Reduced cervical ROM, upper trap spasm.
+   Options: Whiplash-associated disorder, Cervical radiculopathy, Cervical myelopathy, Torticollis
+   Answer: Whiplash-associated disorder
+
+10. Calf - Runner injury
+    Q: 40-year-old runner with sudden calf pain during sprint. Palpable defect in medial gastrocnemius.
+    Options: Calf muscle strain, Achilles tendinopathy, DVT, Compartment syndrome
+    Answer: Calf muscle strain
+
+MEDIUM QUESTIONS (11-20):
+
+11. Knee - Middle-aged with catching
+    Q: 55-year-old with knee pain and catching sensation. Joint line tenderness, positive McMurray test, mild effusion.
+    Answer: Meniscal tear
+
+12. Back - Radicular symptoms
+    Q: 38-year-old with lower back pain radiating to leg. Positive SLR at 45°, weakness in big toe extension.
+    Answer: L5 radiculopathy
+
+13. Hip - Basketball player groin pain
+    Q: 29-year-old basketball player with groin pain. Pain with resisted hip adduction, positive squeeze test.
+    Answer: Adductor strain
+
+14. Hand - Symmetrical joint swelling
+    Q: 52-year-old with symmetrical hand joint swelling in MCPs and PIPs. Morning stiffness >1 hour.
+    Answer: Rheumatoid arthritis
+
+15. Hip - Runner with lateral pain
+    Q: 44-year-old runner with lateral hip pain when lying on side. Positive Trendelenburg test.
+    Answer: Greater trochanteric pain syndrome
+
+...and 80 more questions covering all body regions and difficulty levels!
+
+HARD QUESTIONS include:
+- Complex shoulder conditions (posterior impingement, instability)
+- Spinal stenosis vs other claudication causes
+- Rare foot conditions (Jones fractures, posterior impingement)
+- Advanced hip pathology (FAI, labral tears)
+- Inflammatory conditions (ankylosing spondylitis)
+- Nerve entrapments and neuropathies
+
+The game tests rapid pattern recognition across:
+- Ankle/Foot: 15+ questions
+- Shoulder: 15+ questions  
+- Knee: 15+ questions
+- Back/Spine: 15+ questions
+- Hip: 10+ questions
+- Elbow: 8+ questions
+- Wrist/Hand: 8+ questions
+- Neck: 6+ questions
+- General/Other: 8+ questions
+
+Each question includes detailed explanations of the correct diagnosis and clinical reasoning.

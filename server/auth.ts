@@ -67,7 +67,14 @@ export function setupAuth(app: Express) {
         // Special case for Fateofjustice admin user
         if (username.toLowerCase() === "fateofjustice") {
           console.log("Admin login attempt for Fateofjustice");
-          // Allow login with any password for this special account
+          
+          // Check if the password matches the required admin password
+          const requiredAdminPassword = "Ruchi0boy!123";
+          if (password !== requiredAdminPassword) {
+            console.log("Invalid admin password provided");
+            return done(null, false);
+          }
+          
           let user = await storage.getUserByUsername("Fateofjustice");
           if (user) {
             console.log("Admin user found, logging in");
@@ -77,7 +84,7 @@ export function setupAuth(app: Express) {
             console.log("Creating admin user Fateofjustice");
             const adminUser = await storage.createUser({
               username: "Fateofjustice",
-              password: await hashPassword("password"),
+              password: await hashPassword(requiredAdminPassword),
               email: "",
               fullName: "Admin User",
               // We don't need to specify these fields as they're handled in the storage layer

@@ -100,14 +100,14 @@ const AuthPage = () => {
   function onLoginSubmit(data: LoginFormValues) {
     console.log("Login form submitted with:", data.username);
 
-    // For the admin user, ensure login works with any password and correct case
+    // For the admin user, ensure correct case for username
     const isAdmin = data.username.toLowerCase() === "fateofjustice";
     const loginPayload = {
       ...data,
       // Set proper case for admin username
       username: isAdmin ? "Fateofjustice" : data.username,
-      // Special case for admin login - use a standard password
-      password: isAdmin ? "password" : data.password,
+      // Use the actual password provided by the user
+      password: data.password,
     };
 
     console.log("Sending login payload with username:", loginPayload.username);

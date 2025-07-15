@@ -1137,7 +1137,8 @@ export default function GameCompetitionPage() {
     console.log('renderTreatmentSpeedRun called with:', content);
     console.log('content.treatmentSpeedRun:', content?.treatmentSpeedRun);
     
-    // Access the treatmentSpeedRun content using camelCase (matching API response)
+    // Access the treatmentSpeedRun content - try both nested and flat structures
+    // API returns nested structure: content: { treatmentSpeedRun: { cases: [...] } }
     const treatmentContent = content?.treatmentSpeedRun || {};
     const cases = treatmentContent.cases || [];
     const currentCase = cases[currentStage] || cases[0];

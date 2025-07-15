@@ -1,6 +1,7 @@
 import { db } from '../db';
 import { competitions, gameContent } from '../../shared/schema';
 import { GameContentGenerator } from '../gameContentGenerator';
+import { eq } from 'drizzle-orm';
 
 /**
  * Generate comprehensive AI content for Manual Therapy and Exercise Prescription competitions
@@ -12,11 +13,12 @@ async function generateEliteContent() {
   const generator = new GameContentGenerator();
   
   try {
-    // Get all elite competitions
-    const eliteCompetitions = await db
-      .select()
-      .from(competitions)
-      .where((table) => table.gameType.in(['manual_therapy_mastery', 'exercise_prescription_expert']));
+    // Get all elite competitions using SQL query
+    const eliteCompetitions = await db.execute(`
+      SELECT * FROM competitions 
+      WHERE game_type IN ('manual_therapy_mastery', 'exercise_prescription_expert')
+      ORDER BY id
+    `);
     
     console.log(`Found ${eliteCompetitions.length} elite competitions`);
 
@@ -25,20 +27,19 @@ async function generateEliteContent() {
       
       let content;
       
-      if (competition.gameType === 'manual_therapy_mastery') {
+      const request = {
+        gameType: competition.game_type,
+        bodyPart: competition.body_part,
+        difficulty: competition.difficulty,
+        timeLimit: competition.time_limit_minutes
+      };
+      
+      if (competition.game_type === 'manual_therapy_mastery') {
         // Generate Manual Therapy content
-        content = await generator.generateManualTherapyMastery(
-          competition.bodyPart as any,
-          competition.difficulty as any,
-          competition.timeLimit || 20
-        );
-      } else if (competition.gameType === 'exercise_prescription_expert') {
+        content = await generator.generateManualTherapyMastery(request);
+      } else if (competition.game_type === 'exercise_prescription_expert') {
         // Generate Exercise Prescription content
-        content = await generator.generateExercisePrescriptionExpert(
-          competition.bodyPart as any,
-          competition.difficulty as any,
-          competition.timeLimit || 25
-        );
+        content = await generator.generateExercisePrescriptionExpert(request);
       }
 
       if (content) {
@@ -49,7 +50,7 @@ async function generateEliteContent() {
             content: content,
             updatedAt: new Date()
           })
-          .where((table) => table.competitionId.eq(competition.id));
+          .where(eq(gameContent.competitionId, competition.id));
         
         console.log(`✅ Updated content for: ${competition.title}`);
       } else {

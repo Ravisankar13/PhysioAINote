@@ -1652,6 +1652,166 @@ export default function GameCompetitionPage() {
     );
   };
 
+  // Render function for Manual Therapy Mastery competitions
+  const renderManualTherapyMastery = (content: any) => {
+    const challenges = content?.challenges || [];
+    
+    if (!challenges || challenges.length === 0) {
+      return (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
+          <h3 className="text-lg font-semibold text-yellow-800 mb-2">Manual Therapy Mastery</h3>
+          <p className="text-yellow-700 mb-4">
+            Content is being prepared for this Manual Therapy challenge.
+          </p>
+        </div>
+      );
+    }
+
+    const currentChallenge = challenges[currentStage] || challenges[0];
+    return (
+      <div className="space-y-6">
+        <div className="bg-purple-50 border border-purple-200 rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-purple-800 mb-4">🤲 Manual Therapy Mastery</h3>
+          <p className="text-purple-700 mb-4">{currentChallenge?.scenario || "Clinical scenario loading..."}</p>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Technique Selection & Approach
+              </label>
+              <textarea
+                className="w-full border border-gray-300 rounded-md p-3 text-sm"
+                rows={4}
+                placeholder="Describe your manual therapy technique selection and approach..."
+                value={responses.techniqueSelection || ''}
+                onChange={(e) => handleResponse('techniqueSelection', e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Safety Considerations & Contraindications
+              </label>
+              <textarea
+                className="w-full border border-gray-300 rounded-md p-3 text-sm"
+                rows={3}
+                placeholder="Identify safety considerations and contraindications..."
+                value={responses.safetyConsiderations || ''}
+                onChange={(e) => handleResponse('safetyConsiderations', e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Treatment Progression & Modification
+              </label>
+              <textarea
+                className="w-full border border-gray-300 rounded-md p-3 text-sm"
+                rows={3}
+                placeholder="Describe treatment progression and potential modifications..."
+                value={responses.treatmentProgression || ''}
+                onChange={(e) => handleResponse('treatmentProgression', e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Evidence Base & Clinical Reasoning
+              </label>
+              <textarea
+                className="w-full border border-gray-300 rounded-md p-3 text-sm"
+                rows={3}
+                placeholder="Explain the evidence base and clinical reasoning..."
+                value={responses.evidenceBase || ''}
+                onChange={(e) => handleResponse('evidenceBase', e.target.value)}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Render function for Exercise Prescription Expert competitions
+  const renderExercisePrescriptionExpert = (content: any) => {
+    const challenges = content?.challenges || [];
+    
+    if (!challenges || challenges.length === 0) {
+      return (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
+          <h3 className="text-lg font-semibold text-yellow-800 mb-2">Exercise Prescription Expert</h3>
+          <p className="text-yellow-700 mb-4">
+            Content is being prepared for this Exercise Prescription challenge.
+          </p>
+        </div>
+      );
+    }
+
+    const currentChallenge = challenges[currentStage] || challenges[0];
+    return (
+      <div className="space-y-6">
+        <div className="bg-green-50 border border-green-200 rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-green-800 mb-4">💪 Exercise Prescription Expert</h3>
+          <p className="text-green-700 mb-4">{currentChallenge?.patientProfile?.condition || "Clinical scenario loading..."}</p>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Exercise Program Design
+              </label>
+              <textarea
+                className="w-full border border-gray-300 rounded-md p-3 text-sm"
+                rows={4}
+                placeholder="Design a comprehensive exercise program with specific exercises, sets, reps, and progressions..."
+                value={responses.exerciseProgram || ''}
+                onChange={(e) => handleResponse('exerciseProgram', e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Loading Parameters & Progression
+              </label>
+              <textarea
+                className="w-full border border-gray-300 rounded-md p-3 text-sm"
+                rows={3}
+                placeholder="Specify loading parameters, progression criteria, and timeline..."
+                value={responses.loadingParameters || ''}
+                onChange={(e) => handleResponse('loadingParameters', e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Outcome Measures & Monitoring
+              </label>
+              <textarea
+                className="w-full border border-gray-300 rounded-md p-3 text-sm"
+                rows={3}
+                placeholder="Identify appropriate outcome measures and monitoring strategies..."
+                value={responses.outcomeMonitoring || ''}
+                onChange={(e) => handleResponse('outcomeMonitoring', e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Evidence Base & Modifications
+              </label>
+              <textarea
+                className="w-full border border-gray-300 rounded-md p-3 text-sm"
+                rows={3}
+                placeholder="Explain evidence base and potential modifications for different populations..."
+                value={responses.evidenceModifications || ''}
+                onChange={(e) => handleResponse('evidenceModifications', e.target.value)}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -1931,6 +2091,14 @@ export default function GameCompetitionPage() {
             
             {competition.gameType === 'diagnosis_duel' && gameContent && (
               renderDiagnosisDuel(gameContent)
+            )}
+            
+            {competition.gameType === 'manual_therapy_mastery' && gameContent && (
+              renderManualTherapyMastery(gameContent)
+            )}
+            
+            {competition.gameType === 'exercise_prescription_expert' && gameContent && (
+              renderExercisePrescriptionExpert(gameContent)
             )}
             
             {/* Fallback for missing or empty content */}

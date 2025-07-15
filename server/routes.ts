@@ -7545,24 +7545,32 @@ Respond with only a number between 1-100 representing the relevance score.`;
   // Get featured competitions for home page
   app.get('/api/home/featured-competitions', async (req, res) => {
     try {
-      const featuredCompetitions = await db
-        .select({
-          id: competitions.id,
-          title: competitions.title,
-          description: competitions.description,
-          gameType: competitions.gameType,
-          bodyPart: competitions.bodyPart,
-          difficulty: competitions.difficulty,
-          timeLimit: competitions.timeLimit,
-          maxParticipants: competitions.maxParticipants,
-          currentParticipants: competitions.currentParticipants,
-          status: competitions.status
-        })
-        .from(competitions)
-        .where(eq(competitions.status, 'active'))
-        .orderBy(competitions.currentParticipants)
-        .limit(4);
+      // Get priority competitions with raw SQL to avoid Drizzle issues
+      const result = await db.execute(sql`
+        SELECT id, title, description, game_type, body_part, difficulty, 
+               time_limit_minutes, max_participants, current_participants, status
+        FROM competitions 
+        WHERE status = 'active'
+        ORDER BY 
+          CASE WHEN id IN (107, 108) THEN 0 ELSE 1 END,
+          current_participants
+        LIMIT 4
+      `);
 
+      // Map the results to expected format
+      const featuredCompetitions = result.rows.map((row: any) => ({
+        id: row.id,
+        title: row.title,
+        description: row.description,
+        gameType: row.game_type,
+        bodyPart: row.body_part,
+        difficulty: row.difficulty,
+        timeLimit: row.time_limit_minutes,
+        maxParticipants: row.max_participants,
+        currentParticipants: row.current_participants,
+        status: row.status
+      }));
+      
       res.json(featuredCompetitions);
     } catch (error) {
       console.error('Error fetching featured competitions:', error);

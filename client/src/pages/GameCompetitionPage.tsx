@@ -1175,10 +1175,10 @@ export default function GameCompetitionPage() {
           </h3>
           
           <div className="space-y-4">
-            {/* Patient Profile */}
+            {/* Patient Presentation */}
             <div>
-              <h4 className="font-medium text-sm text-gray-700 mb-2">Patient Profile</h4>
-              <p className="text-sm bg-gray-50 p-3 rounded">{currentCase.patientProfile}</p>
+              <h4 className="font-medium text-sm text-gray-700 mb-2">Patient Presentation</h4>
+              <p className="text-sm bg-gray-50 p-3 rounded">{currentCase.patientPresentation}</p>
             </div>
 
             {/* Required Components */}
@@ -1196,15 +1196,30 @@ export default function GameCompetitionPage() {
               </div>
             )}
 
-            {/* Scoring Criteria */}
-            {currentCase.scoringCriteria && currentCase.scoringCriteria.length > 0 && (
+            {/* Grading Criteria */}
+            {currentCase.gradingCriteria && Object.keys(currentCase.gradingCriteria).length > 0 && (
               <div>
-                <h4 className="font-medium text-sm text-gray-700 mb-2">Key Scoring Areas</h4>
+                <h4 className="font-medium text-sm text-gray-700 mb-2">Key Grading Areas</h4>
                 <ul className="text-sm space-y-1">
-                  {currentCase.scoringCriteria.map((criteria: string, index: number) => (
+                  {Object.entries(currentCase.gradingCriteria).map(([key, value], index) => (
                     <li key={index} className="flex items-start">
                       <span className="text-green-600 mr-2">✓</span>
-                      {criteria}
+                      <strong>{key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}:</strong> {value}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Optimal Techniques */}
+            {currentCase.optimalTechniques && currentCase.optimalTechniques.length > 0 && (
+              <div>
+                <h4 className="font-medium text-sm text-gray-700 mb-2">Recommended Techniques</h4>
+                <ul className="text-sm space-y-1">
+                  {currentCase.optimalTechniques.map((technique: string, index: number) => (
+                    <li key={index} className="flex items-start">
+                      <span className="text-purple-600 mr-2">🔧</span>
+                      {technique}
                     </li>
                   ))}
                 </ul>

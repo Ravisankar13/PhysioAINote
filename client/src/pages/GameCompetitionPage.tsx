@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Clock, Users, Trophy, Timer, CheckCircle, XCircle, Brain, TrendingUp, BookOpen, ArrowRight, Lightbulb, Target, AlertTriangle } from 'lucide-react';
+import { Clock, Users, Trophy, Timer, CheckCircle, XCircle, Brain, TrendingUp, BookOpen, ArrowRight, Lightbulb, Target, AlertTriangle, ArrowLeft } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
@@ -527,15 +527,29 @@ function GameResults({ competitionId }: { competitionId: string }) {
 }
 
 function CompetitionOverview({ competition, onStart }: { competition: Competition; onStart: () => void }) {
+  const [, setLocation] = useLocation();
+  
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Brain className="h-6 w-6 text-blue-600" />
-            {competition.title}
-          </CardTitle>
-          <CardDescription>{competition.description}</CardDescription>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Brain className="h-6 w-6 text-blue-600" />
+              <div>
+                <CardTitle>{competition.title}</CardTitle>
+                <CardDescription>{competition.description}</CardDescription>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              onClick={() => setLocation('/competitions')}
+              className="flex items-center gap-2"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to Competitions
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="grid md:grid-cols-2 gap-6">
@@ -2078,9 +2092,19 @@ export default function GameCompetitionPage() {
           {/* Game Header */}
           <div className="bg-white border border-gray-200 rounded-lg p-6">
             <div className="flex justify-between items-center">
-              <div>
-                <h1 className="text-2xl font-bold">{competition.title}</h1>
-                <p className="text-gray-600">{competition.description}</p>
+              <div className="flex items-center gap-4">
+                <Button
+                  variant="outline"
+                  onClick={() => setLocation('/competitions')}
+                  className="flex items-center gap-2"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Back to Competitions
+                </Button>
+                <div>
+                  <h1 className="text-2xl font-bold">{competition.title}</h1>
+                  <p className="text-gray-600">{competition.description}</p>
+                </div>
               </div>
               <div className="text-right">
                 <div className="text-2xl font-bold text-blue-600">

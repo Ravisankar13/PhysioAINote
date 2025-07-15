@@ -39,7 +39,7 @@ import { documentGenerationService } from "./documentGenerationService";
 import { googleVeoService } from "./googleVeoService";
 import { runwayService } from "./runwayService";
 import { leonardoService } from "./leonardoService";
-import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, exercises, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, insertSoapNoteSchema, bodyScans, insertBodyScanSchema, tournamentParticipants, diagnosisDuelTournaments, gameContent, virtualPatients } from "@shared/schema";
+import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, exercises, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, competitionParticipants, soapNotes, insertSoapNoteSchema, bodyScans, insertBodyScanSchema, tournamentParticipants, diagnosisDuelTournaments, gameContent, virtualPatients } from "@shared/schema";
 import { ZodError, z } from "zod";
 import { fromZodError } from "zod-validation-error";
 import multer from "multer";
@@ -7535,6 +7535,102 @@ Respond with only a number between 1-100 representing the relevance score.`;
     } catch (error: any) {
       console.error("Error fetching competition insights:", error);
       res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ============================================================================
+  // HOME PAGE API ROUTES
+  // ============================================================================
+
+  // Get featured competitions for home page
+  app.get('/api/home/featured-competitions', async (req, res) => {
+    try {
+      const featuredCompetitions = await db
+        .select({
+          id: competitions.id,
+          title: competitions.title,
+          description: competitions.description,
+          gameType: competitions.gameType,
+          bodyPart: competitions.bodyPart,
+          difficulty: competitions.difficulty,
+          timeLimit: competitions.timeLimit,
+          maxParticipants: competitions.maxParticipants,
+          currentParticipants: competitions.currentParticipants,
+          status: competitions.status
+        })
+        .from(competitions)
+        .where(eq(competitions.status, 'active'))
+        .orderBy(competitions.currentParticipants)
+        .limit(4);
+
+      res.json(featuredCompetitions);
+    } catch (error) {
+      console.error('Error fetching featured competitions:', error);
+      res.status(500).json({ message: 'Failed to fetch featured competitions' });
+    }
+  });
+
+  // Get global leaderboard for home page
+  app.get('/api/home/global-leaderboard', async (req, res) => {
+    try {
+      // Get top performers across all competitions
+      const topPerformers = await db.execute(sql`
+        SELECT 
+          u.username,
+          u.id as user_id,
+          COUNT(cp.id) as total_competitions,
+          AVG(cp.total_score) as avg_score,
+          MAX(cp.total_score) as best_score,
+          MAX(cp.completed_at) as last_activity
+        FROM ${users} u
+        JOIN ${competitionParticipants} cp ON u.id = cp.user_id
+        WHERE cp.completed_at IS NOT NULL
+        GROUP BY u.id, u.username
+        ORDER BY avg_score DESC, total_competitions DESC
+        LIMIT 10
+      `);
+
+      res.json(topPerformers.rows);
+    } catch (error) {
+      console.error('Error fetching global leaderboard:', error);
+      res.status(500).json({ message: 'Failed to fetch global leaderboard' });
+    }
+  });
+
+  // Get platform statistics for home page
+  app.get('/api/home/platform-stats', async (req, res) => {
+    try {
+      const stats = await Promise.all([
+        // Total users
+        db.select({ count: sql<number>`count(*)` }).from(users),
+        
+        // Total competitions completed
+        db.select({ count: sql<number>`count(*)` })
+          .from(competitionParticipants)
+          .where(sql`completed_at IS NOT NULL`),
+        
+        // Total SOAP notes created
+        db.select({ count: sql<number>`count(*)` })
+          .from(soapNotes),
+        
+        // Total virtual patients created
+        db.select({ count: sql<number>`count(*)` }).from(virtualPatients)
+      ]);
+
+      res.json({
+        totalUsers: stats[0][0]?.count || 0,
+        totalCompetitions: stats[1][0]?.count || 0,
+        totalSoapNotes: stats[2][0]?.count || 0,
+        totalVirtualPatients: stats[3][0]?.count || 0
+      });
+    } catch (error) {
+      console.error('Error fetching platform stats:', error);
+      res.status(500).json({ 
+        totalUsers: 0,
+        totalCompetitions: 0,
+        totalSoapNotes: 0,
+        totalVirtualPatients: 0
+      });
     }
   });
 

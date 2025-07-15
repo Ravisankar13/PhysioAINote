@@ -8644,7 +8644,9 @@ Respond with only a number between 1-100 representing the relevance score.`;
           eq(competitions.gameType, "red_flag_detective"),
           eq(competitions.gameType, "differential_diagnosis_duel"),
           eq(competitions.gameType, "emergency_room_simulator"),
-          eq(competitions.gameType, "diagnosis_duel")
+          eq(competitions.gameType, "diagnosis_duel"),
+          eq(competitions.gameType, "manual_therapy_mastery"),
+          eq(competitions.gameType, "exercise_prescription_expert")
         ))
         .orderBy(desc(competitions.createdAt));
 

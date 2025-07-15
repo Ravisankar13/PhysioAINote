@@ -28,10 +28,26 @@ interface Competition {
 }
 
 const FeaturedCompetitions = () => {
-  const { data: competitions, isLoading } = useQuery<Competition[]>({
+  const { data: allCompetitions, isLoading } = useQuery<Competition[]>({
     queryKey: ['/api/home/featured-competitions'],
     staleTime: 1000 * 60 * 5 // 5 minutes
   });
+
+  // Filter to only show the 4 approved competition types
+  const allowedCompetitionTypes = [
+    'emergency_triage',
+    'manual_therapy_mastery',
+    'exercise_prescription_expert',
+    'pattern_recognition'
+  ];
+
+  const competitions = allCompetitions?.filter(competition => 
+    allowedCompetitionTypes.includes(competition.gameType) ||
+    competition.title.toLowerCase().includes('emergency triage') ||
+    competition.title.toLowerCase().includes('manual therapy mastery') ||
+    competition.title.toLowerCase().includes('exercise prescription') ||
+    competition.title.toLowerCase().includes('pattern recognition')
+  ) || [];
 
   const getGameIcon = (gameType: string) => {
     switch (gameType) {
@@ -43,6 +59,8 @@ const FeaturedCompetitions = () => {
         return <Brain className="h-6 w-6" />;
       case 'manual_therapy_mastery':
         return <Trophy className="h-6 w-6" />;
+      case 'exercise_prescription_expert':
+        return <Play className="h-6 w-6" />;
       default:
         return <Brain className="h-6 w-6" />;
     }

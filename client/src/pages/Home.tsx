@@ -32,12 +32,6 @@ const Home = () => {
       {/* Hero Section */}
       <FocusedHero />
       
-      {/* Primary Clinical Tools Section */}
-      <CoreFeatureShowcase />
-      
-      {/* Featured Competitions Section */}
-      <FeaturedCompetitions />
-      
       {/* Pattern Recognition Leaderboard */}
       <section className="bg-gray-50 py-16">
         <div className="container mx-auto px-4">
@@ -47,6 +41,12 @@ const Home = () => {
           </div>
         </div>
       </section>
+      
+      {/* Primary Clinical Tools Section */}
+      <CoreFeatureShowcase />
+      
+      {/* Featured Competitions Section */}
+      <FeaturedCompetitions />
       
       {/* Benefits and Call-to-Action */}
       <BenefitsSection />

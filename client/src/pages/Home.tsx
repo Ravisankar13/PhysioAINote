@@ -3,6 +3,7 @@ import FocusedHero from "@/components/home/FocusedHero";
 import CoreFeatureShowcase from "@/components/home/CoreFeatureShowcase";
 import FeaturedCompetitions from "@/components/home/FeaturedCompetitions";
 import GlobalLeaderboard from "@/components/home/GlobalLeaderboard";
+import { PatternRecognitionLeaderboard } from "@/components/home/PatternRecognitionLeaderboard";
 import BenefitsSection from "@/components/sections/BenefitsSection";
 import CTASection from "@/components/sections/CTASection";
 import TrialBanner from "@/components/TrialBanner";
@@ -37,8 +38,15 @@ const Home = () => {
       {/* Featured Competitions Section */}
       <FeaturedCompetitions />
       
-      {/* Community & Performance Section */}
-      <GlobalLeaderboard />
+      {/* Pattern Recognition Leaderboard */}
+      <section className="bg-gray-50 py-16">
+        <div className="container mx-auto px-4">
+          <div className="grid lg:grid-cols-2 gap-8">
+            <PatternRecognitionLeaderboard />
+            <GlobalLeaderboard />
+          </div>
+        </div>
+      </section>
       
       {/* Benefits and Call-to-Action */}
       <BenefitsSection />

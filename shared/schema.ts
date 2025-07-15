@@ -820,6 +820,37 @@ export const insertResearchProjectSchema = createInsertSchema(researchProjects).
 export type InsertResearchProject = z.infer<typeof insertResearchProjectSchema>;
 export type ResearchProject = typeof researchProjects.$inferSelect;
 
+// Pattern Recognition Scores Table
+export const patternRecognitionScores = pgTable("pattern_recognition_scores", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  score: integer("score").notNull(), // 0-100
+  timeTaken: integer("time_taken").notNull(), // seconds
+  questionsCorrect: integer("questions_correct").notNull(), // 0-100
+  streakLength: integer("streak_length").notNull(), // consecutive correct before first mistake
+  totalQuestions: integer("total_questions").default(100).notNull(),
+  completionDate: timestamp("completion_date").defaultNow().notNull(),
+  gameSessionId: text("game_session_id"), // for tracking individual sessions
+});
+
+export const insertPatternRecognitionScoreSchema = createInsertSchema(patternRecognitionScores).omit({
+  id: true,
+  completionDate: true,
+});
+
+export type InsertPatternRecognitionScore = z.infer<typeof insertPatternRecognitionScoreSchema>;
+export type PatternRecognitionScore = typeof patternRecognitionScores.$inferSelect;
+
+// Pattern Recognition Score Relations
+export const patternRecognitionScoreRelations = relations(patternRecognitionScores, ({ one }) => ({
+  user: one(users, {
+    fields: [patternRecognitionScores.userId],
+    references: [users.id],
+  }),
+}));
+
 // Research Project Collaborators
 export const researchCollaborators = pgTable("research_collaborators", {
   id: serial("id").primaryKey(),

@@ -1142,12 +1142,15 @@ export default function GameCompetitionPage() {
 
     try {
       const timeSpent = 300 - patternRecognitionTimer; // Time spent in seconds
+      const questionsCorrect = consecutiveCorrect; // Since game ends on wrong answer, consecutive = correct
+      const totalQuestions = gameContent?.patternRecognition?.questions?.length || 100;
       
+      // Submit to competition system
       const submissionData = {
         competitionId: id,
         responses: { 
           score: consecutiveCorrect,
-          totalQuestions: gameContent?.patternRecognition?.questions?.length || 100,
+          totalQuestions: totalQuestions,
           timeSpent: timeSpent
         },
         timeSpent: timeSpent
@@ -1170,9 +1173,38 @@ export default function GameCompetitionPage() {
       setSubmissionResult(result);
       setShowResults(true);
 
+      // Submit to Pattern Recognition leaderboard
+      try {
+        const leaderboardData = {
+          score: consecutiveCorrect,
+          timeTaken: timeSpent,
+          questionsCorrect: questionsCorrect,
+          streakLength: consecutiveCorrect, // Same as score since game ends on wrong answer
+          gameSessionId: `${id}-${Date.now()}`, // Unique session identifier
+        };
+
+        const leaderboardResponse = await fetch('/api/pattern-recognition/submit-score', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          body: JSON.stringify(leaderboardData),
+        });
+
+        if (leaderboardResponse.ok) {
+          console.log('Score successfully submitted to Pattern Recognition leaderboard');
+        } else {
+          console.warn('Failed to submit to Pattern Recognition leaderboard, but competition submission succeeded');
+        }
+      } catch (leaderboardError) {
+        console.warn('Error submitting to Pattern Recognition leaderboard:', leaderboardError);
+        // Don't fail the entire submission if leaderboard fails
+      }
+
       toast({
         title: "Challenge Complete!",
-        description: `You scored ${consecutiveCorrect} consecutive correct answers!`,
+        description: `You scored ${consecutiveCorrect} consecutive correct answers! Check the leaderboard to see your ranking.`,
       });
     } catch (error: any) {
       console.error('Error submitting Pattern Recognition game:', error);

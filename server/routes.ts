@@ -39,7 +39,7 @@ import { documentGenerationService } from "./documentGenerationService";
 import { googleVeoService } from "./googleVeoService";
 import { runwayService } from "./runwayService";
 import { leonardoService } from "./leonardoService";
-import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, exercises, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, competitionParticipants, soapNotes, insertSoapNoteSchema, bodyScans, insertBodyScanSchema, tournamentParticipants, diagnosisDuelTournaments, gameContent, virtualPatients } from "@shared/schema";
+import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, exercises, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, competitionParticipants, soapNotes, insertSoapNoteSchema, bodyScans, insertBodyScanSchema, tournamentParticipants, diagnosisDuelTournaments, gameContent, virtualPatients, patternRecognitionScores } from "@shared/schema";
 import { ZodError, z } from "zod";
 import { fromZodError } from "zod-validation-error";
 import multer from "multer";
@@ -7535,6 +7535,158 @@ Respond with only a number between 1-100 representing the relevance score.`;
     } catch (error: any) {
       console.error("Error fetching competition insights:", error);
       res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ============================================================================
+  // PATTERN RECOGNITION LEADERBOARD API ROUTES
+  // ============================================================================
+
+  // Submit Pattern Recognition score
+  app.post('/api/pattern-recognition/submit-score', ensureAuthenticated, async (req, res) => {
+    try {
+      const { score, timeTaken, questionsCorrect, streakLength, gameSessionId } = req.body;
+      
+      // Validate input
+      if (typeof score !== 'number' || score < 0 || score > 100) {
+        return res.status(400).json({ message: 'Invalid score' });
+      }
+      if (typeof timeTaken !== 'number' || timeTaken < 0) {
+        return res.status(400).json({ message: 'Invalid time taken' });
+      }
+      if (typeof questionsCorrect !== 'number' || questionsCorrect < 0 || questionsCorrect > 100) {
+        return res.status(400).json({ message: 'Invalid questions correct count' });
+      }
+      
+      const newScore = await db
+        .insert(patternRecognitionScores)
+        .values({
+          userId: req.user.id,
+          score,
+          timeTaken,
+          questionsCorrect,
+          streakLength: streakLength || 0,
+          gameSessionId: gameSessionId || null,
+        })
+        .returning();
+      
+      res.json({ success: true, scoreId: newScore[0].id });
+    } catch (error) {
+      console.error('Error submitting Pattern Recognition score:', error);
+      res.status(500).json({ message: 'Failed to submit score' });
+    }
+  });
+
+  // Get Pattern Recognition leaderboard
+  app.get('/api/pattern-recognition/leaderboard', async (req, res) => {
+    try {
+      const result = await db.execute(sql`
+        SELECT 
+          u.username,
+          prs.score,
+          prs.time_taken,
+          prs.questions_correct,
+          prs.streak_length,
+          prs.completion_date,
+          ROW_NUMBER() OVER (ORDER BY prs.score DESC, prs.time_taken ASC) as rank
+        FROM pattern_recognition_scores prs
+        JOIN users u ON prs.user_id = u.id
+        WHERE prs.id IN (
+          SELECT id FROM (
+            SELECT id, ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY score DESC, time_taken ASC) as rn
+            FROM pattern_recognition_scores
+          ) ranked WHERE rn = 1
+        )
+        ORDER BY prs.score DESC, prs.time_taken ASC
+        LIMIT 10
+      `);
+
+      const leaderboard = result.rows.map((row: any) => ({
+        rank: row.rank,
+        username: row.username,
+        score: row.score,
+        timeTaken: row.time_taken,
+        questionsCorrect: row.questions_correct,
+        streakLength: row.streak_length,
+        completionDate: row.completion_date,
+      }));
+      
+      res.json(leaderboard);
+    } catch (error) {
+      console.error('Error fetching Pattern Recognition leaderboard:', error);
+      res.status(500).json({ message: 'Failed to fetch leaderboard' });
+    }
+  });
+
+  // Get user's personal best Pattern Recognition score
+  app.get('/api/pattern-recognition/user-best', ensureAuthenticated, async (req, res) => {
+    try {
+      const result = await db.execute(sql`
+        SELECT 
+          score,
+          time_taken,
+          questions_correct,
+          streak_length,
+          completion_date,
+          (SELECT COUNT(*) + 1 FROM pattern_recognition_scores prs2 
+           JOIN users u2 ON prs2.user_id = u2.id
+           WHERE prs2.id IN (
+             SELECT id FROM (
+               SELECT id, ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY score DESC, time_taken ASC) as rn
+               FROM pattern_recognition_scores
+             ) ranked WHERE rn = 1
+           ) AND (prs2.score > prs.score OR (prs2.score = prs.score AND prs2.time_taken < prs.time_taken))
+          ) as global_rank
+        FROM pattern_recognition_scores prs
+        WHERE prs.user_id = ${req.user.id}
+        ORDER BY prs.score DESC, prs.time_taken ASC
+        LIMIT 1
+      `);
+
+      if (result.rows.length === 0) {
+        return res.json({ hasPlayed: false });
+      }
+
+      const best = result.rows[0] as any;
+      res.json({
+        hasPlayed: true,
+        score: best.score,
+        timeTaken: best.time_taken,
+        questionsCorrect: best.questions_correct,
+        streakLength: best.streak_length,
+        completionDate: best.completion_date,
+        globalRank: best.global_rank,
+      });
+    } catch (error) {
+      console.error('Error fetching user best score:', error);
+      res.status(500).json({ message: 'Failed to fetch user best score' });
+    }
+  });
+
+  // Get Pattern Recognition stats for home page
+  app.get('/api/pattern-recognition/stats', async (req, res) => {
+    try {
+      const result = await db.execute(sql`
+        SELECT 
+          COUNT(DISTINCT user_id) as total_players,
+          COUNT(*) as total_attempts,
+          ROUND(AVG(score), 1) as average_score,
+          MAX(score) as highest_score,
+          COUNT(CASE WHEN completion_date >= CURRENT_DATE THEN 1 END) as attempts_today
+        FROM pattern_recognition_scores
+      `);
+
+      const stats = result.rows[0] as any;
+      res.json({
+        totalPlayers: parseInt(stats.total_players) || 0,
+        totalAttempts: parseInt(stats.total_attempts) || 0,
+        averageScore: parseFloat(stats.average_score) || 0,
+        highestScore: parseInt(stats.highest_score) || 0,
+        attemptsToday: parseInt(stats.attempts_today) || 0,
+      });
+    } catch (error) {
+      console.error('Error fetching Pattern Recognition stats:', error);
+      res.status(500).json({ message: 'Failed to fetch stats' });
     }
   });
 

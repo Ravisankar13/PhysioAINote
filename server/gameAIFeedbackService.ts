@@ -1282,21 +1282,29 @@ USER'S RESOURCE MANAGEMENT:
 ${resourceManagement}
 
 EVALUATION CRITERIA (0-100 points):
-1. Patient Prioritization Accuracy (40%) - Correct identification of most urgent patients first
-2. Clinical Reasoning Quality (35%) - Understanding of triage principles, life-threatening conditions, urgency factors
-3. Resource Management (25%) - Efficient allocation of limited emergency resources
+1. Patient Prioritization Accuracy (40%) - Correct identification of life-threatening vs urgent vs semi-urgent vs non-urgent cases
+2. Clinical Reasoning Quality (35%) - Understanding of ABC principles, pathophysiology, deterioration risk, pediatric considerations
+3. Resource Management (25%) - Efficient allocation of limited emergency resources, staff utilization, equipment prioritization
 
-Analyze the user's emergency triage decision-making and provide comprehensive feedback. Focus on the quality of their reasoning and decision-making process rather than just correctness.
+Analyze the user's emergency triage decision-making for this 10-patient mass casualty scenario. Evaluate their systematic approach to multi-patient prioritization, clinical reasoning depth, and resource allocation strategy. Focus on quality of decision-making process and emergency medicine principles.
+
+Key Assessment Areas:
+- ABC (Airway, Breathing, Circulation) priority recognition
+- Life-threatening condition identification
+- Pediatric emergency considerations
+- Time-sensitive intervention recognition  
+- Resource constraint management
+- Triage accuracy across all 10 patients
 
 Return JSON format:
 {
   "score": number (0-100),
-  "aiAnalysis": "Detailed analysis of triage decision-making with specific examples focusing on reasoning quality (200+ words)",
-  "idealResponse": "Comprehensive emergency triage approach with optimal clinical reasoning and resource management strategies",
-  "strengths": ["Specific strengths in emergency assessment and reasoning"],
-  "improvements": ["Specific areas for emergency triage improvement with actionable recommendations"],
-  "clinicalReasoning": "Assessment of emergency clinical decision-making skills and reasoning quality",
-  "researchReferences": ["Emergency medicine guidelines and triage protocols"],
+  "aiAnalysis": "Comprehensive analysis of 10-patient triage decision-making with specific examples, ABC assessment quality, emergency medicine principles application, and resource management evaluation (250+ words)",
+  "idealResponse": "Optimal emergency triage approach for mass casualty scenario: systematic ABC assessment, immediate life threat identification, appropriate resource allocation, and justification for 10-patient prioritization",
+  "strengths": ["Specific strengths in emergency assessment, clinical reasoning, and triage decision-making"],
+  "improvements": ["Specific areas for emergency triage improvement with actionable recommendations for mass casualty scenarios"],
+  "clinicalReasoning": "Assessment of emergency clinical decision-making skills, systematic approach quality, and reasoning depth for complex multi-patient scenarios",
+  "researchReferences": ["Emergency medicine guidelines, mass casualty protocols, and triage best practices"],
   "correctPrioritization": "${correctPrioritizationDesc}",
   "triageAccuracy": number (0-100)
 }`;
@@ -1317,8 +1325,8 @@ Return JSON format:
         questionId,
         questionText,
         userResponse: `Patient Prioritization:\n${userPrioritizationDesc}\n\nClinical Reasoning: ${clinicalReasoning}\n\nResource Management: ${resourceManagement}`,
-        aiIdealResponse: result.idealResponse || `Optimal Emergency Triage Approach:\n\nSystematic assessment of life-threatening conditions, resource requirements, and time-sensitive interventions. Prioritize immediate life threats (airway, breathing, circulation), then urgent conditions requiring rapid intervention, followed by less urgent but important cases. Consider patient deterioration risk, available resources, and treatment complexity when making triage decisions.`,
-        correctAnswer: `Optimal Triage Approach:\n\nSystematic emergency assessment prioritizing life-threatening conditions, considering patient stability, resource requirements, and potential for deterioration. Focus on ABC assessment (Airway, Breathing, Circulation) and time-sensitive interventions.`,
+        aiIdealResponse: result.idealResponse || `Optimal 10-Patient Mass Casualty Triage Approach:\n\n1. IMMEDIATE PRIORITY (Priority 1): Focus on life-threatening conditions requiring immediate intervention:\n   - Unconscious head trauma with increased ICP signs\n   - Pediatric respiratory failure (special consideration for children)\n   - Chest crush injury with hemodynamic compromise\n\n2. URGENT PRIORITY (Priority 2): Critical conditions requiring rapid intervention:\n   - Acute MI with cardiogenic shock\n   - Penetrating abdominal trauma with bleeding risk\n   - Open fractures with embolism/infection risk\n\n3. SEMI-URGENT PRIORITY (Priority 3): Serious but stable conditions:\n   - Orthopedic injuries requiring prompt but not immediate care\n   - Spinal injury concerns requiring assessment\n\n4. NON-URGENT PRIORITY (Priority 4): Minor injuries suitable for delayed treatment\n\nSystematic ABC assessment, pediatric considerations, resource allocation, and deterioration risk evaluation are essential for optimal outcomes.`,
+        correctAnswer: `Optimal 10-Patient Triage Strategy:\n\n**PRIORITY 1 (Immediate - Life-threatening):**\n- Head trauma with neurological compromise\n- Pediatric respiratory failure\n- Chest crush injury with shock\n\n**PRIORITY 2 (Urgent - Critical):**\n- Acute MI with cardiogenic shock\n- Penetrating abdominal trauma\n- Open femur fracture\n\n**PRIORITY 3 (Semi-urgent - Serious):**\n- Shoulder dislocation\n- Spinal injury concern\n- Ankle fracture\n\n**PRIORITY 4 (Non-urgent - Minor):**\n- Wrist sprain\n\n**KEY PRINCIPLES:** ABC assessment, pediatric priority, hemodynamic stability, resource optimization, and systematic multi-patient evaluation.`,
         aiAnalysis: result.aiAnalysis || `Emergency triage assessment completed. Triage accuracy: ${triageAccuracy}%. Focus on systematic patient prioritization based on severity, urgency, and resource requirements.`,
         score: this.safeScore(result.score, 75),
         strengths: result.strengths || ['Emergency triage assessment attempted', 'Clinical reasoning provided'],

@@ -1768,26 +1768,72 @@ export default function GameCompetitionPage() {
 
             {/* Clinical Reasoning Section */}
             <div>
-              <h4 className="font-semibold text-red-800 mb-3">Clinical Reasoning & Justification</h4>
+              <h4 className="font-semibold text-red-800 mb-3">
+                🧠 Clinical Reasoning & Triage Justification (Required - 250+ words)
+              </h4>
+              <div className="mb-2">
+                <div className="text-sm text-gray-600 space-y-1">
+                  <p><strong>Key considerations:</strong> ABC principles, life-threatening conditions, pediatric priority, hemodynamic stability, time-sensitive interventions</p>
+                  <p><strong>Address:</strong> Why each patient was ranked in their position, clinical decision-making process, emergency medicine principles</p>
+                </div>
+              </div>
               <textarea
                 className="w-full border border-gray-300 rounded-md p-4 text-sm"
-                rows={6}
-                placeholder="Justify your triage decisions. Explain why you prioritized patients in this order, considering factors like severity, urgency, resource requirements, and potential for deterioration..."
+                rows={8}
+                placeholder="Provide comprehensive justification for your 10-patient triage ranking:
+
+1. Explain your systematic approach to emergency triage
+2. Justify each patient's priority level and position
+3. Discuss ABC assessment, life-threatening conditions, and urgency factors
+4. Address pediatric considerations and special populations
+5. Explain how you identified immediate vs urgent vs semi-urgent vs non-urgent cases
+6. Discuss potential for patient deterioration and time-sensitive interventions
+
+Example: 'I prioritized Patient X first because of [specific clinical findings] indicating [life-threatening condition] requiring immediate [intervention type]...'"
                 value={responses.clinicalReasoning || ''}
                 onChange={(e) => handleResponse('clinicalReasoning', e.target.value)}
               />
+              <div className="text-sm text-gray-500 mt-1 flex justify-between">
+                <span>Characters: {(responses.clinicalReasoning || '').length} / 250+ recommended</span>
+                <span className={`${(responses.clinicalReasoning || '').length >= 250 ? 'text-green-600' : 'text-orange-600'}`}>
+                  {(responses.clinicalReasoning || '').length >= 250 ? '✓ Good length' : 'More detail needed'}
+                </span>
+              </div>
             </div>
 
             {/* Resource Management Section */}
             <div>
-              <h4 className="font-semibold text-red-800 mb-3">Resource Allocation & Management</h4>
+              <h4 className="font-semibold text-red-800 mb-3">
+                🏥 Resource Allocation Strategy (Required - 200+ words)
+              </h4>
+              <div className="mb-2">
+                <div className="text-sm text-gray-600 space-y-1">
+                  <p><strong>Available resources:</strong> 3 emergency bays, 2 doctors, 3 nurses, limited equipment</p>
+                  <p><strong>Address:</strong> Resource allocation, patient flow management, equipment prioritization, staffing decisions</p>
+                </div>
+              </div>
               <textarea
                 className="w-full border border-gray-300 rounded-md p-4 text-sm"
-                rows={4}
-                placeholder="Describe how you would allocate limited resources (beds, staff, equipment) and manage the flow of these patients through the emergency department..."
+                rows={6}
+                placeholder="Describe your comprehensive resource management strategy for this 10-patient mass casualty scenario:
+
+1. How will you allocate the 3 emergency bays among 10 patients?
+2. How will you assign the 2 doctors and 3 nurses?
+3. Which patients get priority for equipment (ventilator, defibrillator, imaging)?
+4. How will you manage patient flow and prevent emergency department overcrowding?
+5. What is your contingency plan if resources become further limited?
+6. How will you communicate with families and manage the overall situation?
+
+Consider: Life support priorities, surgical needs, monitoring requirements, and efficient patient throughput."
                 value={responses.resourceManagement || ''}
                 onChange={(e) => handleResponse('resourceManagement', e.target.value)}
               />
+              <div className="text-sm text-gray-500 mt-1 flex justify-between">
+                <span>Characters: {(responses.resourceManagement || '').length} / 200+ recommended</span>
+                <span className={`${(responses.resourceManagement || '').length >= 200 ? 'text-green-600' : 'text-orange-600'}`}>
+                  {(responses.resourceManagement || '').length >= 200 ? '✓ Good length' : 'More detail needed'}
+                </span>
+              </div>
             </div>
           </div>
         </div>

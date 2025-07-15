@@ -231,37 +231,119 @@ Format as JSON:
    * Generate Emergency Room Simulator content
    */
   async generateEmergencyRoomSimulator(request: GameContentRequest) {
-    const prompt = `Create an emergency physiotherapy scenario with multiple patients arriving simultaneously.
+    const prompt = `Create a comprehensive emergency triage scenario with 10 patients arriving simultaneously, requiring critical decision-making and prioritization.
 
-Include:
-- 5-6 patients with different urgency levels
-- Limited resources (beds, staff, equipment)
-- Time-sensitive decisions
-- Vital signs and presentations
-- Expected treatment times
+Create realistic, diverse clinical presentations covering:
+- Life-threatening conditions (Priority 1 - Immediate)
+- Urgent conditions (Priority 2 - Urgent) 
+- Semi-urgent conditions (Priority 3 - Semi-urgent)
+- Non-urgent conditions (Priority 4 - Non-urgent)
+
+Each patient should have:
+- Age and brief clinical presentation
+- Key symptoms/findings
+- Vital signs (if relevant)
+- Mechanism of injury/onset
+- Current stability status
 
 Format as JSON:
 {
-  "patients": [
-    {
-      "id": "er_p001",
-      "name": "Patient A",
-      "urgency": "critical",
-      "presentation": "Fall from height, suspected spinal injury, unable to move legs",
-      "vitalSigns": {
-        "BP": "90/60",
-        "HR": "120",
-        "RR": "22",
-        "SpO2": "96%"
-      },
-      "arrivalTime": 0,
-      "expectedTreatmentTime": 45
-    }
-  ],
-  "resources": {
-    "beds": 3,
-    "staff": 2,
-    "equipment": ["Cervical collar", "Backboard", "Ultrasound", "X-ray access"]
+  "emergencySimulator": {
+    "cases": [
+      {
+        "id": 1,
+        "presentation": "Mass casualty scenario with 10 patients arriving simultaneously at emergency department",
+        "patients": [
+          {
+            "age": 45,
+            "condition": "Unconscious after head trauma, GCS 6, irregular breathing",
+            "vitalSigns": "BP: 180/100, HR: 55, RR: irregular",
+            "mechanism": "Motor vehicle accident, head impact",
+            "priority": 1,
+            "reasoning": "Life-threatening traumatic brain injury with signs of increased intracranial pressure"
+          },
+          {
+            "age": 8,
+            "condition": "Severe respiratory distress, wheezing, cyanotic",
+            "vitalSigns": "BP: 90/60, HR: 150, RR: 40, SpO2: 85%",
+            "mechanism": "Severe asthma exacerbation",
+            "priority": 1,
+            "reasoning": "Pediatric respiratory failure requiring immediate intervention"
+          },
+          {
+            "age": 32,
+            "condition": "Crush injury to chest, difficulty breathing, coughing blood",
+            "vitalSigns": "BP: 85/50, HR: 120, RR: 28",
+            "mechanism": "Trapped under vehicle",
+            "priority": 1,
+            "reasoning": "Potential pneumothorax/hemothorax with hemodynamic compromise"
+          },
+          {
+            "age": 67,
+            "condition": "Severe chest pain, diaphoretic, nauseous",
+            "vitalSigns": "BP: 90/60, HR: 110, irregular",
+            "mechanism": "Acute onset during activity",
+            "priority": 2,
+            "reasoning": "Acute myocardial infarction with cardiogenic shock"
+          },
+          {
+            "age": 28,
+            "condition": "Penetrating abdominal wound, conscious but pale",
+            "vitalSigns": "BP: 100/70, HR: 110, RR: 24",
+            "mechanism": "Stab wound to abdomen",
+            "priority": 2,
+            "reasoning": "Potential internal bleeding requiring urgent surgical evaluation"
+          },
+          {
+            "age": 55,
+            "condition": "Fractured femur, severe pain, unable to move leg",
+            "vitalSigns": "BP: 120/80, HR: 100, RR: 20",
+            "mechanism": "Fall from ladder",
+            "priority": 2,
+            "reasoning": "Risk of fat embolism and blood loss from femoral fracture"
+          },
+          {
+            "age": 19,
+            "condition": "Dislocated shoulder, significant pain",
+            "vitalSigns": "BP: 130/85, HR: 90, RR: 18",
+            "mechanism": "Sports injury during football",
+            "priority": 3,
+            "reasoning": "Painful but stable orthopedic injury"
+          },
+          {
+            "age": 42,
+            "condition": "Severe lower back pain, cannot walk",
+            "vitalSigns": "BP: 140/90, HR: 85, RR: 16",
+            "mechanism": "Lifting heavy object",
+            "priority": 3,
+            "reasoning": "Acute back injury requiring pain management and assessment"
+          },
+          {
+            "age": 35,
+            "condition": "Ankle fracture, swollen and deformed",
+            "vitalSigns": "BP: 125/75, HR: 80, RR: 16",
+            "mechanism": "Fall down stairs",
+            "priority": 3,
+            "reasoning": "Closed fracture requiring orthopedic management"
+          },
+          {
+            "age": 24,
+            "condition": "Sprained wrist, mild swelling",
+            "vitalSigns": "Normal",
+            "mechanism": "Trip and fall on outstretched hand",
+            "priority": 4,
+            "reasoning": "Minor injury suitable for delayed treatment"
+          }
+        ],
+        "resources": {
+          "emergencyBays": 3,
+          "staff": "2 doctors, 3 nurses",
+          "equipment": ["Ventilator", "Defibrillator", "X-ray", "CT scanner", "Ultrasound"]
+        },
+        "timeConstraint": "All patients arrived within 5 minutes",
+        "expectedPrioritization": "Priority 1: Patients 1,2,3 → Priority 2: Patients 4,5,6 → Priority 3: Patients 7,8,9 → Priority 4: Patient 10"
+      }
+    ]
   }
 }`;
 

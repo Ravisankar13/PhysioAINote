@@ -1657,10 +1657,15 @@ export default function GameCompetitionPage() {
     const currentCase = cases[currentStage] || cases[0];
     const patients = currentCase?.patients || [];
     
-    // Initialize patient rankings if not set
+    // Initialize patient rankings if not set - randomize initial order
     if (!responses.patientRankings && patients.length > 0) {
-      const initialRankings = patients.map((_, index) => index);
-      handleResponse('patientRankings', initialRankings);
+      const shuffledIndexes = patients.map((_, index) => index);
+      // Fisher-Yates shuffle to randomize initial patient order
+      for (let i = shuffledIndexes.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffledIndexes[i], shuffledIndexes[j]] = [shuffledIndexes[j], shuffledIndexes[i]];
+      }
+      handleResponse('patientRankings', shuffledIndexes);
     }
 
     const handleDragStart = (e: any, patientIndex: number) => {
@@ -1732,7 +1737,7 @@ export default function GameCompetitionPage() {
                               {patient.age}-year-old: {patient.condition}
                             </div>
                             <div className="text-sm text-gray-600">
-                              Expected Priority: {patient.priority} | Reasoning: {patient.reasoning}
+                              {patient.presentation}
                             </div>
                           </div>
                         </div>

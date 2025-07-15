@@ -1255,10 +1255,10 @@ Return JSON:
       return `${rank + 1}. ${patient?.age}-year-old: ${patient?.condition}`;
     }).join('\n');
 
-    // Create correct prioritization description  
+    // Create correct prioritization description without revealing answers
     const correctPrioritizationDesc = correctPrioritization.map((index: number, rank: number) => {
       const patient = patients[index];
-      return `${rank + 1}. ${patient?.age}-year-old: ${patient?.condition} (Priority ${patient?.priority}: ${patient?.reasoning})`;
+      return `${rank + 1}. ${patient?.age}-year-old: ${patient?.condition}`;
     }).join('\n');
 
     const prompt = `Analyze this Emergency Triage response based on established emergency medicine protocols and triage principles:
@@ -1267,7 +1267,7 @@ CLINICAL SCENARIO:
 ${caseData.presentation || 'Multiple patient emergency scenario'}
 
 PATIENT DETAILS:
-${patients.map((p: any, i: number) => `Patient ${i + 1}: ${p.age}-year-old with ${p.condition} (Expected Priority: ${p.priority} - ${p.reasoning})`).join('\n')}
+${patients.map((p: any, i: number) => `Patient ${i + 1}: ${p.age}-year-old with ${p.condition} (${p.presentation || 'Clinical presentation'})`).join('\n')}
 
 USER'S PATIENT PRIORITIZATION:
 ${userPrioritizationDesc}
@@ -1286,16 +1286,16 @@ EVALUATION CRITERIA (0-100 points):
 2. Clinical Reasoning Quality (35%) - Understanding of triage principles, life-threatening conditions, urgency factors
 3. Resource Management (25%) - Efficient allocation of limited emergency resources
 
-Analyze the user's emergency triage decision-making and provide comprehensive feedback.
+Analyze the user's emergency triage decision-making and provide comprehensive feedback. Focus on the quality of their reasoning and decision-making process rather than just correctness.
 
 Return JSON format:
 {
   "score": number (0-100),
-  "aiAnalysis": "Detailed analysis of triage decision-making with specific examples (200+ words)",
-  "idealResponse": "Perfect emergency triage approach with correct prioritization and reasoning",
-  "strengths": ["Specific strengths in emergency assessment"],
-  "improvements": ["Specific areas for emergency triage improvement"],
-  "clinicalReasoning": "Assessment of emergency clinical decision-making skills",
+  "aiAnalysis": "Detailed analysis of triage decision-making with specific examples focusing on reasoning quality (200+ words)",
+  "idealResponse": "Comprehensive emergency triage approach with optimal clinical reasoning and resource management strategies",
+  "strengths": ["Specific strengths in emergency assessment and reasoning"],
+  "improvements": ["Specific areas for emergency triage improvement with actionable recommendations"],
+  "clinicalReasoning": "Assessment of emergency clinical decision-making skills and reasoning quality",
   "researchReferences": ["Emergency medicine guidelines and triage protocols"],
   "correctPrioritization": "${correctPrioritizationDesc}",
   "triageAccuracy": number (0-100)
@@ -1317,8 +1317,8 @@ Return JSON format:
         questionId,
         questionText,
         userResponse: `Patient Prioritization:\n${userPrioritizationDesc}\n\nClinical Reasoning: ${clinicalReasoning}\n\nResource Management: ${resourceManagement}`,
-        aiIdealResponse: result.idealResponse || `Correct Patient Prioritization:\n${correctPrioritizationDesc}\n\nOptimal emergency triage requires systematic assessment of life-threatening conditions, resource requirements, and time-sensitive interventions. Prioritize immediate life threats, then urgent conditions requiring rapid intervention, followed by less urgent but important cases.`,
-        correctAnswer: `Correct Prioritization:\n${correctPrioritizationDesc}`,
+        aiIdealResponse: result.idealResponse || `Optimal Emergency Triage Approach:\n\nSystematic assessment of life-threatening conditions, resource requirements, and time-sensitive interventions. Prioritize immediate life threats (airway, breathing, circulation), then urgent conditions requiring rapid intervention, followed by less urgent but important cases. Consider patient deterioration risk, available resources, and treatment complexity when making triage decisions.`,
+        correctAnswer: `Optimal Triage Approach:\n\nSystematic emergency assessment prioritizing life-threatening conditions, considering patient stability, resource requirements, and potential for deterioration. Focus on ABC assessment (Airway, Breathing, Circulation) and time-sensitive interventions.`,
         aiAnalysis: result.aiAnalysis || `Emergency triage assessment completed. Triage accuracy: ${triageAccuracy}%. Focus on systematic patient prioritization based on severity, urgency, and resource requirements.`,
         score: this.safeScore(result.score, 75),
         strengths: result.strengths || ['Emergency triage assessment attempted', 'Clinical reasoning provided'],

@@ -1657,14 +1657,16 @@ export default function GameCompetitionPage() {
     const currentCase = cases[currentStage] || cases[0];
     const patients = currentCase?.patients || [];
     
-    // Initialize patient rankings if not set - randomize initial order
-    if (!responses.patientRankings && patients.length > 0) {
+    // Initialize patient rankings if not set or if patient count changed - randomize initial order
+    if ((!responses.patientRankings && patients.length > 0) || 
+        (responses.patientRankings && patients.length > 0 && responses.patientRankings.length !== patients.length)) {
       const shuffledIndexes = patients.map((_, index) => index);
       // Fisher-Yates shuffle to randomize initial patient order
       for (let i = shuffledIndexes.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [shuffledIndexes[i], shuffledIndexes[j]] = [shuffledIndexes[j], shuffledIndexes[i]];
       }
+      console.log(`Initializing ${patients.length} patients for emergency triage:`, shuffledIndexes);
       handleResponse('patientRankings', shuffledIndexes);
     }
 
@@ -1710,7 +1712,7 @@ export default function GameCompetitionPage() {
                 Rank Patients by Priority (Drag to reorder or use arrows)
               </h4>
               <p className="text-sm text-red-600 mb-4">
-                Most urgent first → least urgent last
+                Most urgent first → least urgent last ({patients.length} patients total)
               </p>
               
               <div className="space-y-3">

@@ -91,6 +91,10 @@ export class GameAIFeedbackService {
         return await this.analyzeEmergencySimulator(responses, gameContent);
       case 'diagnosis_duel':
         return await this.analyzeDiagnosisDuel(responses, gameContent);
+      case 'manual_therapy_mastery':
+        return await this.analyzeManualTherapyMastery(responses, gameContent);
+      case 'exercise_prescription_expert':
+        return await this.analyzeExercisePrescriptionExpert(responses, gameContent);
       default:
         return await this.analyzeGenericGame(responses, gameContent);
     }
@@ -1423,6 +1427,254 @@ Return JSON:
       improvements: isCorrect ? ['Maintain accuracy at higher difficulty levels'] : ['Review pattern recognition for rapid diagnosis'],
       clinicalReasoning: `${caseData.difficulty} level rapid reasoning ${isCorrect ? 'successful' : 'requires improvement'}`,
       researchReferences: [`Clinical pattern recognition studies`, `Rapid diagnosis methodologies`]
+    };
+  }
+
+  /**
+   * Analyze Manual Therapy Mastery responses
+   */
+  private async analyzeManualTherapyMastery(responses: any, gameContent: any): Promise<QuestionFeedback[]> {
+    const challenges = gameContent.challenges || [];
+    const feedbacks: QuestionFeedback[] = [];
+
+    console.log('Manual Therapy Mastery Analysis Debug:', {
+      challengesLength: challenges.length,
+      responsesKeys: Object.keys(responses),
+      gameContentKeys: Object.keys(gameContent)
+    });
+
+    // Manual therapy responses
+    const assessmentResponse = responses.assessmentApproach || '';
+    const treatmentResponse = responses.treatmentPlan || '';
+    const reasoningResponse = responses.clinicalReasoning || '';
+    const outcomesResponse = responses.expectedOutcomes || '';
+
+    if (challenges.length > 0 && (assessmentResponse || treatmentResponse || reasoningResponse || outcomesResponse)) {
+      const challenge = challenges[0]; // Use the first challenge for analysis
+      
+      const feedback = await this.analyzeManualTherapyCase(
+        challenge,
+        {
+          assessment: assessmentResponse,
+          treatment: treatmentResponse,
+          reasoning: reasoningResponse,
+          outcomes: outcomesResponse
+        },
+        `Manual Therapy Challenge: ${challenge.scenario}`,
+        'manual_therapy_response'
+      );
+      feedbacks.push(feedback);
+    }
+
+    console.log('Manual Therapy Mastery feedbacks generated:', feedbacks.length);
+    return feedbacks;
+  }
+
+  /**
+   * Analyze Exercise Prescription Expert responses
+   */
+  private async analyzeExercisePrescriptionExpert(responses: any, gameContent: any): Promise<QuestionFeedback[]> {
+    const challenges = gameContent.challenges || [];
+    const feedbacks: QuestionFeedback[] = [];
+
+    console.log('Exercise Prescription Expert Analysis Debug:', {
+      challengesLength: challenges.length,
+      responsesKeys: Object.keys(responses),
+      gameContentKeys: Object.keys(gameContent)
+    });
+
+    // Exercise prescription responses
+    const assessmentResponse = responses.assessmentApproach || '';
+    const treatmentResponse = responses.treatmentPlan || '';
+    const reasoningResponse = responses.clinicalReasoning || '';
+    const outcomesResponse = responses.expectedOutcomes || '';
+
+    if (challenges.length > 0 && (assessmentResponse || treatmentResponse || reasoningResponse || outcomesResponse)) {
+      const challenge = challenges[0]; // Use the first challenge for analysis
+      
+      const feedback = await this.analyzeExercisePrescriptionCase(
+        challenge,
+        {
+          assessment: assessmentResponse,
+          treatment: treatmentResponse,
+          reasoning: reasoningResponse,
+          outcomes: outcomesResponse
+        },
+        `Exercise Prescription Challenge: ${challenge.scenario}`,
+        'exercise_prescription_response'
+      );
+      feedbacks.push(feedback);
+    }
+
+    console.log('Exercise Prescription Expert feedbacks generated:', feedbacks.length);
+    return feedbacks;
+  }
+
+  /**
+   * Analyze manual therapy case with AI
+   */
+  private async analyzeManualTherapyCase(
+    caseData: any,
+    userResponses: any,
+    questionText: string,
+    questionId: string
+  ): Promise<QuestionFeedback> {
+    const prompt = `Analyze this manual therapy clinical response:
+
+CASE: ${caseData.scenario}
+
+CORRECT APPROACH: ${caseData.correctApproach}
+PROGRESSION PLAN: ${caseData.progressionPlan}
+
+USER RESPONSES:
+Assessment Approach: ${userResponses.assessment}
+Treatment Plan: ${userResponses.treatment}
+Clinical Reasoning: ${userResponses.reasoning}
+Expected Outcomes: ${userResponses.outcomes}
+
+Rate each component (0-100):
+1. Assessment selection appropriateness
+2. Treatment technique safety and efficacy
+3. Clinical reasoning quality
+4. Expected outcomes realism
+
+Provide detailed feedback in JSON format:
+{
+  "overallScore": 0-100,
+  "aiAnalysis": "Comprehensive analysis of manual therapy decisions",
+  "idealResponse": "Expert manual therapy approach for this case",
+  "strengths": ["What the user did well"],
+  "improvements": ["Specific manual therapy areas to improve"],
+  "clinicalReasoning": "Educational explanation of correct manual therapy approach",
+  "researchReferences": ["Evidence-based manual therapy sources"]
+}`;
+
+    try {
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+      });
+
+      const result = JSON.parse(response.choices[0].message.content || '{}');
+
+      return {
+        questionId,
+        questionText,
+        userResponse: `Assessment: ${userResponses.assessment} | Treatment: ${userResponses.treatment}`,
+        aiIdealResponse: result.idealResponse || caseData.correctApproach,
+        aiAnalysis: result.aiAnalysis || 'Manual therapy approach analyzed',
+        score: this.safeScore(result.overallScore),
+        strengths: result.strengths || ['Attempted manual therapy assessment'],
+        improvements: result.improvements || ['Review manual therapy evidence'],
+        clinicalReasoning: result.clinicalReasoning || 'Manual therapy requires evidence-based technique selection',
+        researchReferences: result.researchReferences || ['Manual therapy research', 'Clinical practice guidelines']
+      };
+    } catch (error) {
+      console.error('Error analyzing manual therapy case:', error);
+      return this.createManualTherapyFallback(caseData, userResponses, questionId, questionText);
+    }
+  }
+
+  /**
+   * Analyze exercise prescription case with AI
+   */
+  private async analyzeExercisePrescriptionCase(
+    caseData: any,
+    userResponses: any,
+    questionText: string,
+    questionId: string
+  ): Promise<QuestionFeedback> {
+    const prompt = `Analyze this exercise prescription clinical response:
+
+CASE: ${caseData.scenario}
+
+CORRECT APPROACH: ${caseData.correctApproach || 'Evidence-based exercise prescription'}
+PROGRESSION PLAN: ${caseData.progressionPlan || 'Progressive loading protocol'}
+
+USER RESPONSES:
+Assessment Approach: ${userResponses.assessment}
+Treatment Plan: ${userResponses.treatment}
+Clinical Reasoning: ${userResponses.reasoning}
+Expected Outcomes: ${userResponses.outcomes}
+
+Rate each component (0-100):
+1. Exercise selection appropriateness
+2. Progression planning quality
+3. Clinical reasoning for exercise choice
+4. Expected outcomes and timelines
+
+Provide detailed feedback in JSON format:
+{
+  "overallScore": 0-100,
+  "aiAnalysis": "Comprehensive analysis of exercise prescription decisions",
+  "idealResponse": "Expert exercise prescription approach for this case",
+  "strengths": ["What the user did well"],
+  "improvements": ["Specific exercise prescription areas to improve"],
+  "clinicalReasoning": "Educational explanation of correct exercise prescription approach",
+  "researchReferences": ["Evidence-based exercise prescription sources"]
+}`;
+
+    try {
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+      });
+
+      const result = JSON.parse(response.choices[0].message.content || '{}');
+
+      return {
+        questionId,
+        questionText,
+        userResponse: `Assessment: ${userResponses.assessment} | Treatment: ${userResponses.treatment}`,
+        aiIdealResponse: result.idealResponse || 'Evidence-based exercise prescription with progressive loading',
+        aiAnalysis: result.aiAnalysis || 'Exercise prescription approach analyzed',
+        score: this.safeScore(result.overallScore),
+        strengths: result.strengths || ['Attempted exercise prescription'],
+        improvements: result.improvements || ['Review exercise prescription evidence'],
+        clinicalReasoning: result.clinicalReasoning || 'Exercise prescription requires evidence-based selection and progression',
+        researchReferences: result.researchReferences || ['Exercise prescription research', 'Progressive loading studies']
+      };
+    } catch (error) {
+      console.error('Error analyzing exercise prescription case:', error);
+      return this.createExercisePrescriptionFallback(caseData, userResponses, questionId, questionText);
+    }
+  }
+
+  /**
+   * Create fallback manual therapy feedback
+   */
+  private createManualTherapyFallback(caseData: any, userResponses: any, questionId: string, questionText: string): QuestionFeedback {
+    return {
+      questionId,
+      questionText,
+      userResponse: `Assessment: ${userResponses.assessment} | Treatment: ${userResponses.treatment}`,
+      aiIdealResponse: caseData.correctApproach || 'Evidence-based manual therapy approach',
+      aiAnalysis: 'Manual therapy response evaluated - consider evidence-based technique selection',
+      score: 75,
+      strengths: ['Attempted manual therapy assessment'],
+      improvements: ['Review manual therapy evidence', 'Consider contraindications'],
+      clinicalReasoning: 'Manual therapy requires careful technique selection based on clinical presentation',
+      researchReferences: ['Manual therapy research', 'Clinical practice guidelines']
+    };
+  }
+
+  /**
+   * Create fallback exercise prescription feedback
+   */
+  private createExercisePrescriptionFallback(caseData: any, userResponses: any, questionId: string, questionText: string): QuestionFeedback {
+    return {
+      questionId,
+      questionText,
+      userResponse: `Assessment: ${userResponses.assessment} | Treatment: ${userResponses.treatment}`,
+      aiIdealResponse: 'Evidence-based exercise prescription with progressive loading',
+      aiAnalysis: 'Exercise prescription response evaluated - consider evidence-based selection and progression',
+      score: 75,
+      strengths: ['Attempted exercise prescription'],
+      improvements: ['Review exercise prescription evidence', 'Consider progression planning'],
+      clinicalReasoning: 'Exercise prescription requires evidence-based selection and progressive loading principles',
+      researchReferences: ['Exercise prescription research', 'Progressive loading studies']
     };
   }
 }

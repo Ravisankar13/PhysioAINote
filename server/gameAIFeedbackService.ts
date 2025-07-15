@@ -1180,26 +1180,45 @@ Return JSON:
   }
 
   /**
-   * Analyze Emergency Room Simulator responses with triage assessment
+   * Analyze Emergency Room Simulator responses with patient prioritization and clinical reasoning
    */
   private async analyzeEmergencySimulator(responses: any, gameContent: any): Promise<QuestionFeedback[]> {
     const emergencyContent = gameContent.emergencySimulator || {};
     const cases = emergencyContent.cases || [];
     const feedbacks: QuestionFeedback[] = [];
 
+    console.log('Emergency Simulator Analysis Debug:', {
+      casesLength: cases.length,
+      responsesKeys: Object.keys(responses),
+      hasPatientRankings: !!responses.patientRankings,
+      hasClinicalReasoning: !!responses.clinicalReasoning,
+      hasResourceManagement: !!responses.resourceManagement
+    });
+
     for (let i = 0; i < cases.length; i++) {
       const caseData = cases[i];
+      
+      // Handle new patient ranking system and legacy triage priority system
+      const patientRankings = responses.patientRankings || [];
+      const clinicalReasoning = responses.clinicalReasoning || '';
+      const resourceManagement = responses.resourceManagement || '';
+      
+      // Legacy support for old format
       const triagePriority = responses[`triagePriority_${i}`] || responses.triagePriority || '';
       const immediateActions = responses[`immediateActions_${i}`] || responses.immediateActions || '';
 
-      if (caseData && (triagePriority || immediateActions)) {
+      if (caseData && (patientRankings.length > 0 || clinicalReasoning || triagePriority)) {
         const feedback = await this.analyzeEmergencyCase(
           caseData,
           {
+            patientRankings,
+            clinicalReasoning,
+            resourceManagement,
+            // Legacy support
             triagePriority,
             immediateActions
           },
-          `Emergency Triage Case ${i + 1}: Critical Decision Making`,
+          `Emergency Triage Case ${i + 1}: Patient Prioritization & Clinical Decision Making`,
           `emergency_${i}`
         );
         feedbacks.push(feedback);
@@ -1210,7 +1229,7 @@ Return JSON:
   }
 
   /**
-   * Analyze individual Emergency Simulator case with triage protocols
+   * Analyze individual Emergency Simulator case with patient prioritization and clinical reasoning
    */
   private async analyzeEmergencyCase(
     caseData: any,
@@ -1218,55 +1237,95 @@ Return JSON:
     questionText: string,
     questionId: string
   ): Promise<QuestionFeedback> {
-    const prompt = `Analyze this Emergency Triage response based on established triage protocols:
+    // Prepare patient information for analysis
+    const patients = caseData.patients || [];
+    const userRankings = responses.patientRankings || [];
+    const clinicalReasoning = responses.clinicalReasoning || '';
+    const resourceManagement = responses.resourceManagement || '';
+    
+    // Generate correct prioritization for comparison
+    const correctPrioritization = patients
+      .map((patient: any, index: number) => ({ ...patient, originalIndex: index }))
+      .sort((a: any, b: any) => a.priority - b.priority)
+      .map((patient: any) => patient.originalIndex);
 
-Multi-Patient Emergency Scenario: ${caseData.presentation || 'Multiple patient emergency'}
-Expected Patient Prioritization: ${caseData.expectedPrioritization || 'Systematic triage approach'}
-Patient Details: ${JSON.stringify(caseData.patients || [])}
+    // Create user prioritization description
+    const userPrioritizationDesc = userRankings.map((index: number, rank: number) => {
+      const patient = patients[index];
+      return `${rank + 1}. ${patient?.age}-year-old: ${patient?.condition}`;
+    }).join('\n');
 
-User's Emergency Assessment:
-- Triage Priority Level: ${responses.triagePriority}
-- Immediate Actions: ${responses.immediateActions}
+    // Create correct prioritization description  
+    const correctPrioritizationDesc = correctPrioritization.map((index: number, rank: number) => {
+      const patient = patients[index];
+      return `${rank + 1}. ${patient?.age}-year-old: ${patient?.condition} (Priority ${patient?.priority}: ${patient?.reasoning})`;
+    }).join('\n');
 
-Evaluate emergency decision-making (0-100) based on:
-1. Accurate triage prioritization (50%)
-2. Appropriate immediate actions (30%)
-3. Resource allocation efficiency (20%)
+    const prompt = `Analyze this Emergency Triage response based on established emergency medicine protocols and triage principles:
 
-Include research references for triage protocols and emergency management guidelines.
+CLINICAL SCENARIO:
+${caseData.presentation || 'Multiple patient emergency scenario'}
 
-Return JSON:
+PATIENT DETAILS:
+${patients.map((p: any, i: number) => `Patient ${i + 1}: ${p.age}-year-old with ${p.condition} (Expected Priority: ${p.priority} - ${p.reasoning})`).join('\n')}
+
+USER'S PATIENT PRIORITIZATION:
+${userPrioritizationDesc}
+
+CORRECT PRIORITIZATION:
+${correctPrioritizationDesc}
+
+USER'S CLINICAL REASONING:
+${clinicalReasoning}
+
+USER'S RESOURCE MANAGEMENT:
+${resourceManagement}
+
+EVALUATION CRITERIA (0-100 points):
+1. Patient Prioritization Accuracy (40%) - Correct identification of most urgent patients first
+2. Clinical Reasoning Quality (35%) - Understanding of triage principles, life-threatening conditions, urgency factors
+3. Resource Management (25%) - Efficient allocation of limited emergency resources
+
+Analyze the user's emergency triage decision-making and provide comprehensive feedback.
+
+Return JSON format:
 {
-  "score": number,
-  "aiAnalysis": "Emergency triage analysis with protocol references",
-  "idealResponse": "Evidence-based emergency management approach",
-  "strengths": ["Emergency assessment strengths"],
-  "improvements": ["Triage improvement recommendations"],
-  "clinicalReasoning": "Emergency clinical reasoning assessment",
-  "researchReferences": ["Emergency medicine guidelines and triage protocols"]
+  "score": number (0-100),
+  "aiAnalysis": "Detailed analysis of triage decision-making with specific examples (200+ words)",
+  "idealResponse": "Perfect emergency triage approach with correct prioritization and reasoning",
+  "strengths": ["Specific strengths in emergency assessment"],
+  "improvements": ["Specific areas for emergency triage improvement"],
+  "clinicalReasoning": "Assessment of emergency clinical decision-making skills",
+  "researchReferences": ["Emergency medicine guidelines and triage protocols"],
+  "correctPrioritization": "${correctPrioritizationDesc}",
+  "triageAccuracy": number (0-100)
 }`;
 
     try {
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
         messages: [{ role: "user", content: prompt }],
         response_format: { type: "json_object" },
       });
 
       const result = JSON.parse(response.choices[0].message.content || '{}');
 
+      // Calculate triage accuracy based on position matching
+      const triageAccuracy = this.calculateTriageAccuracy(userRankings, correctPrioritization);
+
       return {
         questionId,
         questionText,
-        userResponse: `Triage Priority: ${responses.triagePriority} | Actions: ${responses.immediateActions}`,
-        aiIdealResponse: result.idealResponse || `Triage Priority: ${caseData.expectedPrioritization} | Actions: Systematic triage assessment following emergency protocols with immediate life-saving interventions prioritized by acuity and resource availability`,
-        correctAnswer: result.idealResponse || `Expected: ${caseData.expectedPrioritization}`,
-        aiAnalysis: result.aiAnalysis || 'Emergency triage assessment completed with protocol analysis',
+        userResponse: `Patient Prioritization:\n${userPrioritizationDesc}\n\nClinical Reasoning: ${clinicalReasoning}\n\nResource Management: ${resourceManagement}`,
+        aiIdealResponse: result.idealResponse || `Correct Patient Prioritization:\n${correctPrioritizationDesc}\n\nOptimal emergency triage requires systematic assessment of life-threatening conditions, resource requirements, and time-sensitive interventions. Prioritize immediate life threats, then urgent conditions requiring rapid intervention, followed by less urgent but important cases.`,
+        correctAnswer: `Correct Prioritization:\n${correctPrioritizationDesc}`,
+        aiAnalysis: result.aiAnalysis || `Emergency triage assessment completed. Triage accuracy: ${triageAccuracy}%. Focus on systematic patient prioritization based on severity, urgency, and resource requirements.`,
         score: this.safeScore(result.score, 75),
-        strengths: result.strengths || ['Emergency triage attempted'],
-        improvements: result.improvements || ['Review triage protocols'],
-        clinicalReasoning: result.clinicalReasoning || 'Emergency decision-making assessed',
-        researchReferences: result.researchReferences || []
+        strengths: result.strengths || ['Emergency triage assessment attempted', 'Clinical reasoning provided'],
+        improvements: result.improvements || ['Review emergency triage protocols', 'Practice multi-patient prioritization'],
+        clinicalReasoning: result.clinicalReasoning || `Emergency decision-making assessed. Triage accuracy: ${triageAccuracy}%`,
+        researchReferences: result.researchReferences || ['Emergency Severity Index (ESI)', 'ATS Triage Guidelines', 'CTAS Emergency Triage Protocols'],
+        triageAccuracy
       };
     } catch (error) {
       console.error('Error analyzing emergency case:', error);
@@ -1275,20 +1334,38 @@ Return JSON:
   }
 
   /**
+   * Calculate triage accuracy based on patient ranking positions
+   */
+  private calculateTriageAccuracy(userRankings: number[], correctRankings: number[]): number {
+    if (!userRankings || !correctRankings || userRankings.length === 0) return 0;
+    
+    let correctPositions = 0;
+    const totalPositions = Math.min(userRankings.length, correctRankings.length);
+    
+    for (let i = 0; i < totalPositions; i++) {
+      if (userRankings[i] === correctRankings[i]) {
+        correctPositions++;
+      }
+    }
+    
+    return Math.round((correctPositions / totalPositions) * 100);
+  }
+
+  /**
    * Create fallback Emergency Simulator feedback
    */
   private async createEmergencyFallback(): Promise<QuestionFeedback> {
     return {
       questionId: 'emergency_fallback',
-      questionText: 'Emergency Triage Assessment',
-      userResponse: 'Emergency triage decision completed',
-      correctAnswer: 'Systematic emergency triage prioritization',
-      aiAnalysis: 'Emergency triage requires systematic patient prioritization based on severity, time-sensitivity, and resource requirements. Key principles include immediate life-threat assessment, resource allocation, and multi-patient management.',
+      questionText: 'Emergency Triage: Patient Prioritization Assessment',
+      userResponse: 'Emergency triage prioritization and clinical reasoning provided',
+      correctAnswer: 'Systematic emergency triage prioritization based on severity, urgency, and resource requirements',
+      aiAnalysis: 'Emergency triage assessment completed. Effective emergency triage requires systematic patient prioritization based on severity, time-sensitivity, and resource requirements. Key principles include immediate life-threat assessment, rapid evaluation of hemodynamic stability, airway compromise, and potential for clinical deterioration. Consider resource allocation and patient flow management.',
       score: 75,
-      strengths: ['Emergency assessment attempted', 'Triage approach applied'],
-      improvements: ['Review emergency triage protocols', 'Practice multi-patient scenarios'],
-      clinicalReasoning: 'Emergency decision-making skills require continued development',
-      researchReferences: ['Emergency triage guidelines', 'Multi-patient management protocols']
+      strengths: ['Emergency triage assessment attempted', 'Patient prioritization provided', 'Clinical reasoning demonstrated'],
+      improvements: ['Review emergency severity index (ESI) criteria', 'Practice multi-patient prioritization scenarios', 'Study emergency medicine triage protocols'],
+      clinicalReasoning: 'Emergency decision-making skills demonstrate understanding of triage principles with room for refinement',
+      researchReferences: ['Emergency Severity Index (ESI) Guidelines', 'ATS Emergency Triage Guidelines', 'CTAS Emergency Department Triage Protocols']
     };
   }
 

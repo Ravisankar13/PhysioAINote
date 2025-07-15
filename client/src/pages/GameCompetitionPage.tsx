@@ -1655,37 +1655,133 @@ export default function GameCompetitionPage() {
     }
 
     const currentCase = cases[currentStage] || cases[0];
+    const patients = currentCase?.patients || [];
+    
+    // Initialize patient rankings if not set
+    if (!responses.patientRankings && patients.length > 0) {
+      const initialRankings = patients.map((_, index) => index);
+      handleResponse('patientRankings', initialRankings);
+    }
+
+    const handleDragStart = (e: any, patientIndex: number) => {
+      e.dataTransfer.setData('text/plain', patientIndex.toString());
+    };
+
+    const handleDragOver = (e: any) => {
+      e.preventDefault();
+    };
+
+    const handleDrop = (e: any, dropIndex: number) => {
+      e.preventDefault();
+      const draggedIndex = parseInt(e.dataTransfer.getData('text/plain'));
+      const currentRankings = responses.patientRankings || [];
+      const newRankings = [...currentRankings];
+      
+      // Remove dragged item and insert at drop position
+      const [draggedItem] = newRankings.splice(draggedIndex, 1);
+      newRankings.splice(dropIndex, 0, draggedItem);
+      
+      handleResponse('patientRankings', newRankings);
+    };
+
+    const movePatient = (fromIndex: number, toIndex: number) => {
+      const currentRankings = responses.patientRankings || [];
+      const newRankings = [...currentRankings];
+      const [movedItem] = newRankings.splice(fromIndex, 1);
+      newRankings.splice(toIndex, 0, movedItem);
+      handleResponse('patientRankings', newRankings);
+    };
+
     return (
       <div className="space-y-6">
-        <div className="bg-purple-50 border border-purple-200 rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-purple-800 mb-4">🚑 Emergency Triage</h3>
-          <p className="text-purple-700 mb-4">{currentCase?.presentation || "Clinical scenario loading..."}</p>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-red-800 mb-4">🚑 Emergency Triage: Patient Prioritization</h3>
+          <p className="text-red-700 mb-6">{currentCase?.presentation || "Clinical scenario loading..."}</p>
           
-          <div className="space-y-4">
+          <div className="space-y-6">
+            {/* Patient Ranking Section */}
             <div>
-              <h4 className="font-medium mb-2">Triage Priority (1-5):</h4>
-              <select
-                className="w-full border border-gray-300 rounded-md p-2 text-sm"
-                value={responses.triagePriority || ''}
-                onChange={(e) => handleResponse('triagePriority', e.target.value)}
-              >
-                <option value="">Select priority level...</option>
-                <option value="1">1 - Immediate (Life threatening)</option>
-                <option value="2">2 - Urgent (Emergency)</option>
-                <option value="3">3 - Standard (Semi-urgent)</option>
-                <option value="4">4 - Non-urgent</option>
-                <option value="5">5 - Defer</option>
-              </select>
+              <h4 className="font-semibold text-red-800 mb-3">
+                Rank Patients by Priority (Drag to reorder or use arrows)
+              </h4>
+              <p className="text-sm text-red-600 mb-4">
+                Most urgent first → least urgent last
+              </p>
+              
+              <div className="space-y-3">
+                {(responses.patientRankings || []).map((patientIndex: number, rankIndex: number) => {
+                  const patient = patients[patientIndex];
+                  if (!patient) return null;
+                  
+                  return (
+                    <div
+                      key={`${patientIndex}-${rankIndex}`}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, rankIndex)}
+                      onDragOver={handleDragOver}
+                      onDrop={(e) => handleDrop(e, rankIndex)}
+                      className="bg-white border border-gray-300 rounded-lg p-4 cursor-move hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="bg-red-100 text-red-800 font-bold px-3 py-1 rounded">
+                            #{rankIndex + 1}
+                          </div>
+                          <div>
+                            <div className="font-medium text-gray-900">
+                              {patient.age}-year-old: {patient.condition}
+                            </div>
+                            <div className="text-sm text-gray-600">
+                              Expected Priority: {patient.priority} | Reasoning: {patient.reasoning}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <button
+                            type="button"
+                            onClick={() => rankIndex > 0 && movePatient(rankIndex, rankIndex - 1)}
+                            disabled={rankIndex === 0}
+                            className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-30"
+                          >
+                            ↑
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => rankIndex < (responses.patientRankings?.length || 0) - 1 && movePatient(rankIndex, rankIndex + 1)}
+                            disabled={rankIndex === (responses.patientRankings?.length || 0) - 1}
+                            className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-30"
+                          >
+                            ↓
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-            
+
+            {/* Clinical Reasoning Section */}
             <div>
-              <h4 className="font-medium mb-2">Immediate Actions:</h4>
+              <h4 className="font-semibold text-red-800 mb-3">Clinical Reasoning & Justification</h4>
               <textarea
-                className="w-full border border-gray-300 rounded-md p-3 text-sm"
+                className="w-full border border-gray-300 rounded-md p-4 text-sm"
+                rows={6}
+                placeholder="Justify your triage decisions. Explain why you prioritized patients in this order, considering factors like severity, urgency, resource requirements, and potential for deterioration..."
+                value={responses.clinicalReasoning || ''}
+                onChange={(e) => handleResponse('clinicalReasoning', e.target.value)}
+              />
+            </div>
+
+            {/* Resource Management Section */}
+            <div>
+              <h4 className="font-semibold text-red-800 mb-3">Resource Allocation & Management</h4>
+              <textarea
+                className="w-full border border-gray-300 rounded-md p-4 text-sm"
                 rows={4}
-                placeholder="Describe immediate actions and management priorities..."
-                value={responses.immediateActions || ''}
-                onChange={(e) => handleResponse('immediateActions', e.target.value)}
+                placeholder="Describe how you would allocate limited resources (beds, staff, equipment) and manage the flow of these patients through the emergency department..."
+                value={responses.resourceManagement || ''}
+                onChange={(e) => handleResponse('resourceManagement', e.target.value)}
               />
             </div>
           </div>

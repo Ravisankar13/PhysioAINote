@@ -623,6 +623,13 @@ export default function GameCompetitionPage() {
   const [gameStarted, setGameStarted] = useState(false);
   const [gameCompleted, setGameCompleted] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState(0);
+  
+  // Pattern Recognition specific state
+  const [patternRecognitionStarted, setPatternRecognitionStarted] = useState(false);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [gameOver, setGameOver] = useState(false);
+  const [consecutiveCorrect, setConsecutiveCorrect] = useState(0);
+  const [patternRecognitionTimer, setPatternRecognitionTimer] = useState(300); // 5 minutes
   const [currentStage, setCurrentStage] = useState(0);
   const [responses, setResponses] = useState<any>({});
   const [submitting, setSubmitting] = useState(false);
@@ -669,6 +676,25 @@ export default function GameCompetitionPage() {
       return () => clearInterval(timer);
     }
   }, [gameStarted, timeRemaining, gameCompleted, competition?.gameType]);
+
+  // Pattern Recognition timer
+  useEffect(() => {
+    if (patternRecognitionStarted && patternRecognitionTimer > 0 && !gameOver && !gameCompleted) {
+      const timer = setInterval(() => {
+        setPatternRecognitionTimer(prev => {
+          if (prev <= 1) {
+            // Time's up - end the game
+            setGameOver(true);
+            setGameCompleted(true);
+            submitPatternRecognitionGame();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      return () => clearInterval(timer);
+    }
+  }, [patternRecognitionStarted, patternRecognitionTimer, gameOver, gameCompleted]);
 
   const fetchCompetitionData = async () => {
     try {
@@ -912,8 +938,261 @@ export default function GameCompetitionPage() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const renderPatternRecognition = (content: any) => {
+    const questions = content?.questions || [];
+    const gameRules = content?.gameRules || {};
+    const instructions = content?.instructions || [];
+
+    if (!patternRecognitionStarted) {
+      return (
+        <div className="max-w-4xl mx-auto space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Brain className="h-6 w-6 text-purple-600" />
+                Pattern Recognition: Classic Presentations
+              </CardTitle>
+              <CardDescription>
+                Test your clinical pattern recognition skills with 100 rapid-fire multiple choice questions
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Game Rules */}
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                <h4 className="font-semibold mb-3 text-amber-800 flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5" />
+                  Game Rules
+                </h4>
+                <ul className="text-sm text-amber-700 space-y-2">
+                  <li>• 100 multiple choice questions covering classic physiotherapy presentations</li>
+                  <li>• 5-minute time limit - answer as many as possible</li>
+                  <li>• <strong>Game over on wrong answer</strong> - you must answer consecutively correctly</li>
+                  <li>• Your score equals the number of consecutive correct answers</li>
+                  <li>• Maximum possible score: 100 points</li>
+                </ul>
+              </div>
+
+              {/* Instructions */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h4 className="font-semibold mb-3 text-blue-800">Instructions</h4>
+                <ul className="text-sm text-blue-700 space-y-1">
+                  {instructions.map((instruction, index) => (
+                    <li key={index}>• {instruction}</li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="text-center">
+                <Button 
+                  onClick={() => {
+                    setPatternRecognitionStarted(true);
+                    setGameStarted(true);
+                  }}
+                  size="lg"
+                  className="px-8 py-3 bg-purple-600 hover:bg-purple-700"
+                >
+                  Start Challenge
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+
+    if (gameOver) {
+      return (
+        <div className="max-w-4xl mx-auto space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-red-600">
+                <XCircle className="h-6 w-6" />
+                Game Over
+              </CardTitle>
+              <CardDescription>
+                You answered {consecutiveCorrect} questions correctly in a row
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="text-center">
+                <div className="text-6xl font-bold text-red-600 mb-4">{consecutiveCorrect}</div>
+                <p className="text-lg text-gray-600">Consecutive Correct Answers</p>
+                <p className="text-sm text-gray-500 mt-2">
+                  Time: {formatTime(300 - patternRecognitionTimer)}
+                </p>
+              </div>
+
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                <h4 className="font-semibold text-red-800 mb-2">Challenge Complete</h4>
+                <p className="text-sm text-red-700">
+                  The challenge ends when you answer a question incorrectly. 
+                  Your final score is your consecutive correct answer streak.
+                </p>
+              </div>
+
+              <div className="text-center">
+                <Button onClick={() => setLocation('/competitions')} variant="outline">
+                  Back to Competitions
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+
+    const currentQuestion = questions[currentQuestionIndex];
+    if (!currentQuestion) {
+      return (
+        <div className="text-center py-8">
+          <p className="text-red-600">No questions available</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="max-w-4xl mx-auto space-y-6">
+        {/* Timer and Progress */}
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-sm font-medium text-gray-600">
+                  Question {currentQuestionIndex + 1} of {questions.length}
+                </span>
+                <div className="text-sm text-gray-500">
+                  Consecutive Correct: <span className="font-bold text-green-600">{consecutiveCorrect}</span>
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-purple-600">
+                  {formatTime(patternRecognitionTimer)}
+                </div>
+                <div className="text-sm text-gray-500">Time Remaining</div>
+              </div>
+            </div>
+            <Progress 
+              value={(currentQuestionIndex / questions.length) * 100} 
+              className="mt-3 h-2" 
+            />
+          </CardContent>
+        </Card>
+
+        {/* Question Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Clinical Scenario</CardTitle>
+            <Badge variant="outline" className="w-fit">
+              {currentQuestion.bodyPart} · {currentQuestion.difficulty}
+            </Badge>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+              <p className="text-gray-800 leading-relaxed">{currentQuestion.question}</p>
+            </div>
+
+            <div className="space-y-3">
+              <h5 className="font-medium text-gray-700">Select your answer:</h5>
+              {currentQuestion.options.map((option, index) => (
+                <button
+                  key={index}
+                  onClick={() => handlePatternRecognitionAnswer(option)}
+                  className="w-full text-left p-4 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-purple-300 transition-colors"
+                >
+                  <span className="font-medium text-gray-700 mr-3">
+                    {String.fromCharCode(65 + index)}.
+                  </span>
+                  <span>{option}</span>
+                </button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  };
+
+  const handlePatternRecognitionAnswer = (selectedAnswer: string) => {
+    const currentQuestion = gameContent?.patternRecognition?.questions[currentQuestionIndex];
+    if (!currentQuestion) return;
+
+    if (selectedAnswer === currentQuestion.correctAnswer) {
+      // Correct answer - continue to next question
+      setConsecutiveCorrect(prev => prev + 1);
+      
+      if (currentQuestionIndex < gameContent.patternRecognition.questions.length - 1) {
+        setCurrentQuestionIndex(prev => prev + 1);
+      } else {
+        // All questions completed - perfect score!
+        setGameOver(true);
+        setGameCompleted(true);
+        submitPatternRecognitionGame();
+      }
+    } else {
+      // Wrong answer - game over
+      setGameOver(true);
+      setGameCompleted(true);
+      submitPatternRecognitionGame();
+    }
+  };
+
+  const submitPatternRecognitionGame = async () => {
+    if (submitting) return;
+    setSubmitting(true);
+
+    try {
+      const timeSpent = 300 - patternRecognitionTimer; // Time spent in seconds
+      
+      const submissionData = {
+        competitionId: id,
+        responses: { 
+          score: consecutiveCorrect,
+          totalQuestions: gameContent?.patternRecognition?.questions?.length || 100,
+          timeSpent: timeSpent
+        },
+        timeSpent: timeSpent
+      };
+
+      const response = await fetch(`/api/game-competitions/${id}/submit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify(submissionData),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to submit Pattern Recognition game');
+      }
+
+      const result = await response.json();
+      setSubmissionResult(result);
+      setShowResults(true);
+
+      toast({
+        title: "Challenge Complete!",
+        description: `You scored ${consecutiveCorrect} consecutive correct answers!`,
+      });
+    } catch (error: any) {
+      console.error('Error submitting Pattern Recognition game:', error);
+      toast({
+        title: "Submission Error",
+        description: "Failed to submit your results. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const renderLightningDiagnosis = (content: any) => {
     console.log('renderLightningDiagnosis called with:', content);
+    
+    // Check for Pattern Recognition format first
+    if (content?.patternRecognition) {
+      return renderPatternRecognition(content.patternRecognition);
+    }
     
     // Access the lightning diagnosis content
     const lightningContent = content?.lightningDiagnosis || content?.lightning_diagnosis || {};

@@ -1143,10 +1143,10 @@ export default function GameCompetitionPage() {
     const cases = treatmentContent.cases || [];
     const currentCase = cases[currentStage] || cases[0];
     
-    console.log('treatmentContent:', treatmentContent);
-    console.log('cases:', cases);
-    console.log('currentCase:', currentCase);
-    console.log('currentStage:', currentStage);
+    // Debug logging for treatment content structure
+    // console.log('treatmentContent:', treatmentContent);
+    // console.log('cases:', cases);
+    // console.log('currentCase:', currentCase);
     
     // If no currentCase found, display debug info and return error message
     if (!currentCase || cases.length === 0) {
@@ -1178,7 +1178,19 @@ export default function GameCompetitionPage() {
             {/* Patient Presentation */}
             <div>
               <h4 className="font-medium text-sm text-gray-700 mb-2">Patient Presentation</h4>
-              <p className="text-sm bg-gray-50 p-3 rounded">{currentCase.patientPresentation}</p>
+              <div className="text-sm bg-gray-50 p-4 rounded border-l-4 border-blue-400">
+                {currentCase.patientPresentation ? (
+                  <p className="whitespace-pre-wrap leading-relaxed">
+                    {currentCase.patientPresentation}
+                  </p>
+                ) : (
+                  <p className="text-red-500 italic">No patient presentation available</p>
+                )}
+              </div>
+              {/* Debug info */}
+              <div className="text-xs text-gray-400 mt-1">
+                Patient presentation length: {currentCase.patientPresentation?.length || 0} characters
+              </div>
             </div>
 
             {/* Required Components */}

@@ -1497,27 +1497,41 @@ Return JSON:
       gameContentKeys: Object.keys(gameContent)
     });
 
-    // Exercise prescription responses
-    const assessmentResponse = responses.assessmentApproach || '';
-    const treatmentResponse = responses.treatmentPlan || '';
-    const reasoningResponse = responses.clinicalReasoning || '';
-    const outcomesResponse = responses.expectedOutcomes || '';
+    // Exercise prescription responses - handle actual frontend field names
+    const exerciseProgramResponse = responses.exerciseProgram || responses.assessmentApproach || '';
+    const loadingParametersResponse = responses.loadingParameters || responses.treatmentPlan || '';
+    const outcomeMonitoringResponse = responses.outcomeMonitoring || responses.clinicalReasoning || '';
+    const evidenceModificationsResponse = responses.evidenceModifications || responses.expectedOutcomes || '';
 
-    if (challenges.length > 0 && (assessmentResponse || treatmentResponse || reasoningResponse || outcomesResponse)) {
+    if (challenges.length > 0 && (exerciseProgramResponse || loadingParametersResponse || outcomeMonitoringResponse || evidenceModificationsResponse)) {
       const challenge = challenges[0]; // Use the first challenge for analysis
       
       const feedback = await this.analyzeExercisePrescriptionCase(
         challenge,
         {
-          assessment: assessmentResponse,
-          treatment: treatmentResponse,
-          reasoning: reasoningResponse,
-          outcomes: outcomesResponse
+          exerciseProgram: exerciseProgramResponse,
+          loadingParameters: loadingParametersResponse,
+          outcomeMonitoring: outcomeMonitoringResponse,
+          evidenceModifications: evidenceModificationsResponse
         },
-        `Exercise Prescription Challenge: ${challenge.scenario}`,
+        `Exercise Prescription Challenge: ${challenge.scenario || challenge.challenge}`,
         'exercise_prescription_response'
       );
       feedbacks.push(feedback);
+    } else {
+      // Create fallback feedback if no responses found
+      const fallbackFeedback = this.createExercisePrescriptionFallback(
+        challenges[0] || {},
+        {
+          exerciseProgram: exerciseProgramResponse,
+          loadingParameters: loadingParametersResponse,
+          outcomeMonitoring: outcomeMonitoringResponse,
+          evidenceModifications: evidenceModificationsResponse
+        },
+        'exercise_prescription_fallback',
+        'Exercise Prescription Assessment'
+      );
+      feedbacks.push(fallbackFeedback);
     }
 
     console.log('Exercise Prescription Expert feedbacks generated:', feedbacks.length);
@@ -1606,37 +1620,39 @@ Provide detailed feedback in JSON format:
   ): Promise<QuestionFeedback> {
     const prompt = `Analyze this exercise prescription clinical response:
 
-CASE: ${caseData.scenario}
+CLINICAL SCENARIO: ${caseData.scenario || caseData.challenge || 'Exercise prescription case'}
+
+PATIENT PRESENTATION: ${caseData.presentation?.symptoms || caseData.presentation?.examination || 'Clinical presentation available'}
 
 CORRECT APPROACH: ${caseData.correctApproach || 'Evidence-based exercise prescription'}
 PROGRESSION PLAN: ${caseData.progressionPlan || 'Progressive loading protocol'}
 
 USER RESPONSES:
-Assessment Approach: ${userResponses.assessment}
-Treatment Plan: ${userResponses.treatment}
-Clinical Reasoning: ${userResponses.reasoning}
-Expected Outcomes: ${userResponses.outcomes}
+Exercise Program: ${userResponses.exerciseProgram || 'Not provided'}
+Loading Parameters: ${userResponses.loadingParameters || 'Not provided'}
+Outcome Monitoring: ${userResponses.outcomeMonitoring || 'Not provided'}
+Evidence Modifications: ${userResponses.evidenceModifications || 'Not provided'}
 
-Rate each component (0-100):
-1. Exercise selection appropriateness
-2. Progression planning quality
-3. Clinical reasoning for exercise choice
-4. Expected outcomes and timelines
+Evaluate the exercise prescription quality and provide educational feedback. Consider:
+1. Exercise selection appropriateness for the specific condition
+2. Loading parameter precision and safety
+3. Outcome monitoring effectiveness and clinical relevance
+4. Evidence-based modifications and progression planning
 
 Provide detailed feedback in JSON format:
 {
   "overallScore": 0-100,
-  "aiAnalysis": "Comprehensive analysis of exercise prescription decisions",
-  "idealResponse": "Expert exercise prescription approach for this case",
-  "strengths": ["What the user did well"],
-  "improvements": ["Specific exercise prescription areas to improve"],
-  "clinicalReasoning": "Educational explanation of correct exercise prescription approach",
-  "researchReferences": ["Evidence-based exercise prescription sources"]
+  "aiAnalysis": "Comprehensive analysis of exercise prescription approach and clinical reasoning",
+  "idealResponse": "Expert exercise prescription approach for this specific case presentation",
+  "strengths": ["What the clinician did well in their exercise prescription"],
+  "improvements": ["Specific areas for improvement in exercise prescription decision-making"],
+  "clinicalReasoning": "Educational explanation of optimal exercise prescription approach and rationale",
+  "researchReferences": ["Relevant evidence-based exercise prescription sources"]
 }`;
 
     try {
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
         messages: [{ role: "user", content: prompt }],
         response_format: { type: "json_object" },
       });
@@ -1646,14 +1662,14 @@ Provide detailed feedback in JSON format:
       return {
         questionId,
         questionText,
-        userResponse: `Assessment: ${userResponses.assessment} | Treatment: ${userResponses.treatment}`,
-        aiIdealResponse: result.idealResponse || 'Evidence-based exercise prescription with progressive loading',
-        aiAnalysis: result.aiAnalysis || 'Exercise prescription approach analyzed',
-        score: this.safeScore(result.overallScore),
-        strengths: result.strengths || ['Attempted exercise prescription'],
-        improvements: result.improvements || ['Review exercise prescription evidence'],
-        clinicalReasoning: result.clinicalReasoning || 'Exercise prescription requires evidence-based selection and progression',
-        researchReferences: result.researchReferences || ['Exercise prescription research', 'Progressive loading studies']
+        userResponse: `Program: ${userResponses.exerciseProgram || 'Not specified'} | Parameters: ${userResponses.loadingParameters || 'Not specified'}`,
+        aiIdealResponse: result.idealResponse || caseData.correctApproach || 'Evidence-based exercise prescription approach',
+        aiAnalysis: result.aiAnalysis || 'Exercise prescription approach and clinical reasoning evaluated',
+        score: this.safeScore(result.overallScore, 75), // Default to 75 if no score provided
+        strengths: result.strengths || ['Attempted exercise prescription assessment'],
+        improvements: result.improvements || ['Review exercise prescription evidence and loading parameters'],
+        clinicalReasoning: result.clinicalReasoning || 'Exercise prescription requires careful selection based on clinical presentation and evidence-based protocols',
+        researchReferences: result.researchReferences || ['Exercise prescription research', 'Clinical practice guidelines', 'Loading parameter studies']
       };
     } catch (error) {
       console.error('Error analyzing exercise prescription case:', error);
@@ -1686,14 +1702,14 @@ Provide detailed feedback in JSON format:
     return {
       questionId,
       questionText,
-      userResponse: `Assessment: ${userResponses.assessment} | Treatment: ${userResponses.treatment}`,
-      aiIdealResponse: 'Evidence-based exercise prescription with progressive loading',
-      aiAnalysis: 'Exercise prescription response evaluated - consider evidence-based selection and progression',
+      userResponse: `Program: ${userResponses.exerciseProgram || 'Not specified'} | Parameters: ${userResponses.loadingParameters || 'Not specified'}`,
+      aiIdealResponse: caseData.correctApproach || 'Evidence-based exercise prescription with progressive loading',
+      aiAnalysis: 'Exercise prescription response evaluated - consider evidence-based selection, loading parameters, and outcome monitoring',
       score: 75,
-      strengths: ['Attempted exercise prescription'],
-      improvements: ['Review exercise prescription evidence', 'Consider progression planning'],
-      clinicalReasoning: 'Exercise prescription requires evidence-based selection and progressive loading principles',
-      researchReferences: ['Exercise prescription research', 'Progressive loading studies']
+      strengths: ['Attempted exercise prescription assessment'],
+      improvements: ['Review exercise prescription evidence', 'Consider loading parameters', 'Enhance outcome monitoring'],
+      clinicalReasoning: 'Exercise prescription requires evidence-based selection, appropriate loading parameters, and comprehensive outcome monitoring',
+      researchReferences: ['Exercise prescription research', 'Progressive loading studies', 'Outcome monitoring protocols']
     };
   }
 }

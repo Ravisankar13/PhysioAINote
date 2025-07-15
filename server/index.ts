@@ -141,10 +141,10 @@ app.use((req, res, next) => {
         log('Competition scheduler failed to start:', error instanceof Error ? error.message : 'Unknown error');
       }
 
-      // Real-time WebSocket server
+      // Real-time WebSocket server - temporarily disabled
       try {
-        realTimeCompetitionService.setupWebSocket(server);
-        log('✓ Real-time competition WebSocket server started');
+        // realTimeCompetitionService.setupWebSocket(server);
+        log('✓ Real-time competition WebSocket server temporarily disabled');
       } catch (error) {
         log('Real-time WebSocket setup failed:', error instanceof Error ? error.message : 'Unknown error');
       }

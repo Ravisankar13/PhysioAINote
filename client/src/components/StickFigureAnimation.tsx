@@ -389,23 +389,41 @@ export function StickFigureAnimation({
       const vertebraeCount = Math.floor(length / 15);
       
       for (let i = 0; i < vertebraeCount; i++) {
-        const y = (i * length) / vertebraeCount;
+        const progress = i / (vertebraeCount - 1 || 1);
+        const x = progress * length;
         
-        // Vertebral body
+        // Vertebral body (centered on the spine line, perpendicular to spine direction)
         ctx.beginPath();
-        ctx.roundRect(-6, y, 12, 10, 2);
+        ctx.roundRect(x - 5, -6, 10, 12, 2);
         ctx.fill();
         
-        // Spinous process
+        // Spinous process (pointing backward from vertebral body)
         ctx.beginPath();
-        ctx.roundRect(-2, y + 2, 4, 12, 1);
+        ctx.roundRect(x - 2, -2, 4, 8, 1);
         ctx.fill();
+        
+        // Add outline for each vertebra
+        ctx.strokeStyle = isAffected ? '#dc2626' : '#8b5a2b';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.roundRect(x - 5, -6, 10, 12, 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.roundRect(x - 2, -2, 4, 8, 1);
+        ctx.stroke();
       }
       
       if (isAffected) {
+        // Additional red highlighting for affected spine
         ctx.strokeStyle = '#dc2626';
-        ctx.lineWidth = 2;
-        ctx.stroke();
+        ctx.lineWidth = 3;
+        for (let i = 0; i < vertebraeCount; i++) {
+          const progress = i / (vertebraeCount - 1 || 1);
+          const x = progress * length;
+          ctx.beginPath();
+          ctx.roundRect(x - 6, -7, 12, 14, 2);
+          ctx.stroke();
+        }
       }
     };
 

@@ -905,8 +905,8 @@ export default function VirtualPatientsPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                {patients && patients.length > 0 ? (
-                  patients.map((patient) => (
+                {virtualPatients && virtualPatients.length > 0 ? (
+                  virtualPatients.map((patient) => (
                     <Card 
                       key={patient.id} 
                       className={`cursor-pointer transition-all hover:shadow-md group ${

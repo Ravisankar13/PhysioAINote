@@ -95,7 +95,7 @@ const CompactPatternRecognitionLeaderboard = () => {
             topThree.map((entry, index) => (
               <div key={entry.rank} className="flex items-center justify-between p-2 bg-white/10 rounded-lg hover:bg-white/20 transition-colors">
                 <div className="flex items-center gap-2">
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white ${
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-black text-white shadow-lg ${
                     index === 0 ? 'bg-yellow-500' : index === 1 ? 'bg-gray-400' : 'bg-orange-500'
                   }`}>
                     {entry.rank}

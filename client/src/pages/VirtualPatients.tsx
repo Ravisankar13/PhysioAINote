@@ -835,41 +835,70 @@ export default function VirtualPatientsPage() {
       const frame = JSON.parse(JSON.stringify(baseFrame));
       
       // Apply movement patterns based on clinical text
-      if (lowerText.includes('shoulder') || lowerText.includes('arm')) {
-        // Shoulder movement animation
+      if (lowerText.includes('shoulder') || lowerText.includes('arm') || lowerText.includes('flexion')) {
+        // Shoulder movement animation - create actual range of motion
+        const shoulderCycle = Math.sin(progress * Math.PI * 2); // -1 to 1
+        const maxRange = lowerText.includes('limited') || lowerText.includes('restricted') ? 30 : 60;
+        const range = shoulderCycle * maxRange;
+        
         frame.keypoints.forEach(kp => {
-          if (kp.name.includes('shoulder') || kp.name.includes('elbow') || kp.name.includes('wrist')) {
-            kp.y += Math.sin(progress * Math.PI * 2) * 20;
-            if (lowerText.includes('limited') || lowerText.includes('restricted')) {
-              kp.y += Math.sin(progress * Math.PI) * 10; // Reduced range
-            }
+          if (kp.name.includes('shoulder')) {
+            kp.y += range * 0.3; // Shoulder elevation
+          }
+          if (kp.name.includes('elbow')) {
+            kp.y += range * 0.5; // Elbow follows shoulder
+            kp.x += range * 0.2; // Slight forward movement
+          }
+          if (kp.name.includes('wrist')) {
+            kp.y += range * 0.7; // Wrist follows elbow
+            kp.x += range * 0.3; // More forward movement
           }
         });
       } else if (lowerText.includes('knee') || lowerText.includes('leg')) {
-        // Knee movement animation
+        // Knee movement animation - walking or squatting motion
+        const kneeCycle = Math.sin(progress * Math.PI * 4); // Faster cycle for walking
+        const maxBend = lowerText.includes('pain') || lowerText.includes('stiff') ? 20 : 40;
+        const bend = kneeCycle * maxBend;
+        
         frame.keypoints.forEach(kp => {
-          if (kp.name.includes('knee') || kp.name.includes('ankle')) {
-            kp.x += Math.sin(progress * Math.PI * 2) * 15;
-            if (lowerText.includes('pain') || lowerText.includes('stiff')) {
-              kp.x += Math.sin(progress * Math.PI) * 5; // Reduced movement
-            }
+          if (kp.name.includes('knee')) {
+            kp.y += Math.abs(bend); // Knees move up during flexion
+          }
+          if (kp.name.includes('ankle')) {
+            kp.y += Math.abs(bend) * 0.5; // Ankles follow knees
+          }
+          if (kp.name.includes('hip')) {
+            kp.y += bend * 0.3; // Hips drop slightly during squat
           }
         });
       } else if (lowerText.includes('back') || lowerText.includes('spine')) {
-        // Spine movement animation
+        // Spine movement animation - flexion/extension
+        const spineCycle = Math.sin(progress * Math.PI * 2);
+        const maxFlex = lowerText.includes('limited') || lowerText.includes('stiff') ? 15 : 30;
+        const flexion = spineCycle * maxFlex;
+        
         frame.keypoints.forEach(kp => {
-          if (kp.name === 'spine' || kp.name.includes('shoulder')) {
-            kp.x += Math.sin(progress * Math.PI * 2) * 10;
-            if (lowerText.includes('limited') || lowerText.includes('stiff')) {
-              kp.x += Math.sin(progress * Math.PI) * 3; // Very limited movement
-            }
+          if (kp.name === 'spine') {
+            kp.x += flexion * 0.5; // Forward flexion
+            kp.y += Math.abs(flexion) * 0.3; // Slight drop
+          }
+          if (kp.name === 'head') {
+            kp.x += flexion * 0.8; // Head follows spine
+            kp.y += Math.abs(flexion) * 0.5;
+          }
+          if (kp.name.includes('shoulder')) {
+            kp.x += flexion * 0.6; // Shoulders follow spine
+            kp.y += Math.abs(flexion) * 0.2;
           }
         });
       } else {
-        // General movement animation
+        // General movement animation - subtle swaying
+        const swayCycle = Math.sin(progress * Math.PI * 2);
+        const swayAmount = 8;
+        
         frame.keypoints.forEach(kp => {
-          kp.x += Math.sin(progress * Math.PI * 2) * 8;
-          kp.y += Math.cos(progress * Math.PI * 2) * 5;
+          kp.x += swayCycle * swayAmount * 0.5;
+          kp.y += Math.cos(progress * Math.PI * 3) * 3; // Slight breathing motion
         });
       }
       

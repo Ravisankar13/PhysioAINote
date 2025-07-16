@@ -65,8 +65,11 @@ export function StickFigureAnimation({
   const drawStickFigure = (frame: any, ctx: CanvasRenderingContext2D) => {
     ctx.clearRect(0, 0, 400, 400);
     
-    console.log('Drawing frame:', frame);
-    console.log('Frame keys:', Object.keys(frame || {}));
+    // Reduced logging to avoid console spam
+    if (currentFrame === 0) {
+      console.log('Animation started - Frame structure:', frame);
+      console.log('Frame keys:', Object.keys(frame || {}));
+    }
     
     if (!frame?.keypoints?.length) {
       // Draw fallback message

@@ -694,6 +694,12 @@ export default function VirtualPatientsPage() {
     setIsPlaying(false);
   };
 
+  // Handle patient selection
+  const handlePatientSelect = (patient: SoapVirtualPatient) => {
+    setSelectedPatient(patient);
+    loadEnhancedPatientData(patient);
+  };
+
   // Helper functions for editing patient names
   const startEditing = (patient: SoapVirtualPatient) => {
     setEditingPatientId(patient.id!);
@@ -904,9 +910,11 @@ export default function VirtualPatientsPage() {
                   Patient Selection
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
-                {virtualPatients && virtualPatients.length > 0 ? (
-                  virtualPatients.map((patient) => (
+              <CardContent className="p-0">
+                <ScrollArea className="h-96 px-4">
+                  <div className="space-y-3 py-4">
+                    {virtualPatients && virtualPatients.length > 0 ? (
+                      virtualPatients.map((patient) => (
                     <Card 
                       key={patient.id} 
                       className={`cursor-pointer transition-all hover:shadow-md group ${
@@ -972,16 +980,18 @@ export default function VirtualPatientsPage() {
                             Digital Twin
                           </Badge>
                         )}
-                      </CardContent>
-                    </Card>
-                  ))
-                ) : (
-                  <div className="text-center text-gray-500 py-8">
-                    <FileUser className="h-12 w-12 mx-auto mb-3 text-gray-400" />
-                    <p className="text-sm">No virtual patients available</p>
-                    <p className="text-xs text-gray-400">Use Motion Capture to create your first patient</p>
+                        </CardContent>
+                      </Card>
+                    ))
+                  ) : (
+                    <div className="text-center text-gray-500 py-8">
+                      <FileUser className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+                      <p className="text-sm">No virtual patients available</p>
+                      <p className="text-xs text-gray-400">Use Motion Capture to create your first patient</p>
+                    </div>
+                  )}
                   </div>
-                )}
+                </ScrollArea>
               </CardContent>
             </Card>
           </div>

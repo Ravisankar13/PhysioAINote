@@ -65,12 +65,16 @@ export function StickFigureAnimation({
   const drawStickFigure = (frame: any, ctx: CanvasRenderingContext2D) => {
     ctx.clearRect(0, 0, 400, 400);
     
+    console.log('Drawing frame:', frame);
+    console.log('Frame keys:', Object.keys(frame || {}));
+    
     if (!frame?.keypoints?.length) {
       // Draw fallback message
       ctx.fillStyle = '#666';
       ctx.font = '16px Arial';
       ctx.textAlign = 'center';
-      ctx.fillText('No animation data', 200, 200);
+      ctx.fillText('No keypoints found', 200, 200);
+      console.log('No keypoints in frame, showing fallback');
       return;
     }
 

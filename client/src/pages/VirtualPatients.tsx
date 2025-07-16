@@ -46,6 +46,7 @@ import { useToast } from "@/hooks/use-toast";
 import AIAnimationPlayer from '../components/AIAnimationPlayer';
 import RealisticHumanModel from '../components/RealisticHumanModel';
 import TwoDVirtualPatient from '../components/TwoDVirtualPatient';
+import { StickFigureAnimation } from '../components/StickFigureAnimation';
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { SoapVirtualPatient } from "@shared/schema";
 import MotionCapture from "@/components/MotionCapture";
@@ -175,12 +176,9 @@ export default function VirtualPatientsPage() {
   // Text-to-Digital Patient state
   const [textToAnimationInput, setTextToAnimationInput] = useState("");
 
-  // Runway ML video generation state
-  const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
-  const [videoGenerationProgress, setVideoGenerationProgress] = useState(0);
-  const [generatedVideoUrl, setGeneratedVideoUrl] = useState<string | null>(null);
-  const [videoTaskId, setVideoTaskId] = useState<string | null>(null);
-  const [customVideoPrompt, setCustomVideoPrompt] = useState("");
+  // Stick figure animation state
+  const [isGeneratingAnimation, setIsGeneratingAnimation] = useState(false);
+  const [animationDescription, setAnimationDescription] = useState("");
   const [isGeneratingFromText, setIsGeneratingFromText] = useState(false);
   const [textAnimationResult, setTextAnimationResult] = useState<any>(null);
   const [isGeneratingMovement, setIsGeneratingMovement] = useState(false);
@@ -510,178 +508,25 @@ export default function VirtualPatientsPage() {
     }
   };
 
-  // Generate 3D Skeleton Animation Video (using the skeleton style you provided)
-  const generateLeonardoVideo = async (patient: SoapVirtualPatient, customPrompt?: string) => {
+  // Generate stick figure animation from patient description
+  const generateStickFigureAnimation = async (patient: SoapVirtualPatient) => {
     if (!patient) return;
     
-    setIsGeneratingVideo(true);
-    setVideoGenerationProgress(0);
-    setGeneratedVideoUrl(null);
+    // Set animation description from patient data
+    const description = `${patient.chief_complaint || ''} ${patient.symptoms_description || ''} ${patient.assessment_plan?.primaryDiagnosis || ''}`.trim();
+    setAnimationDescription(description);
     
-    try {
-      // Generate animation sequence first
-      const animationResponse = await apiRequest(
-        'POST', 
-        `/api/virtual-patients/${patient.id}/animation`,
-        { blendMode: 'ai_generated' }
-      );
-      
-      if (!animationResponse.ok) {
-        throw new Error(`Animation generation failed: ${animationResponse.statusText}`);
-      }
-      
-      const animationData = await animationResponse.json();
-      setVideoGenerationProgress(50);
-      
-      // Show the animated skeleton player
-      setGeneratedVideoUrl('animation_player');
-      setVideoGenerationProgress(100);
-      setIsGeneratingVideo(false);
-      
-      toast({
-        title: "3D Skeleton Video Generated!",
-        description: "Created animated skeleton movement with play controls",
-      });
-      
-    } catch (error: any) {
-      console.error('3D Skeleton video generation error:', error);
-      
-      // Show animation player instead of URL-based video
-      setGeneratedVideoUrl('animation_player');
-      setIsGeneratingVideo(false);
-      
-      toast({
-        title: "3D Skeleton Animation Created",
-        description: "Generated default skeletal movement animation",
-      });
-    }
+    toast({
+      title: "Animation Ready",
+      description: "Use the controls below to generate stick figure animation",
+    });
   };
 
   // Create skeleton video using your provided skeleton style
-  const createSkeletonVideo = async (animationSequence: any, patient: SoapVirtualPatient): Promise<string> => {
-    return new Promise((resolve) => {
-      const canvas = document.createElement('canvas');
-      canvas.width = 400;
-      canvas.height = 600;
-      const ctx = canvas.getContext('2d');
-      
-      if (!ctx) {
-        resolve(createDefaultSkeletonVideo());
-        return;
-      }
-      
-      // Create frames for skeleton animation matching your provided image style
-      const frames: string[] = [];
-      const frameCount = 60; // 2 seconds at 30fps
-      
-      // Generate animation frames
-      for (let i = 0; i < frameCount; i++) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = '#f8f9fa';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        // Draw animated skeleton in your style (colorful joints connected by lines)
-        drawAnimatedSkeleton(ctx, i, frameCount, patient);
-        
-        frames.push(canvas.toDataURL());
-      }
-      
-      // Convert frames to video-like format (animated WebP or create actual video)
-      createVideoFromFrames(frames).then(resolve);
-    });
-  };
 
   // Draw skeleton animation frame in your provided style
-  const drawAnimatedSkeleton = (ctx: CanvasRenderingContext2D, frame: number, totalFrames: number, patient: SoapVirtualPatient) => {
-    const progress = frame / totalFrames;
-    const time = progress * Math.PI * 2; // Full cycle
-    
-    // Color palette from your skeleton image
-    const colors = ['#e74c3c', '#f39c12', '#f1c40f', '#2ecc71', '#3498db', '#9b59b6', '#e91e63'];
-    
-    // Skeleton joint positions (matching your image structure)
-    const joints = {
-      // Head
-      head: { x: 200, y: 80 + Math.sin(time * 2) * 3 },
-      
-      // Spine
-      neck: { x: 200, y: 120 },
-      shoulder: { x: 200, y: 160 },
-      chest: { x: 200, y: 200 },
-      waist: { x: 200, y: 250 },
-      pelvis: { x: 200, y: 300 },
-      
-      // Arms (with shoulder limitation if patient has shoulder issues)
-      leftShoulder: { x: 160, y: 160 },
-      rightShoulder: { x: 240, y: 160 },
-      leftElbow: { x: 130 + Math.sin(time) * 15, y: 200 + Math.cos(time) * 10 },
-      rightElbow: { x: 270 - Math.sin(time) * 15, y: 200 + Math.cos(time) * 10 },
-      leftHand: { x: 110 + Math.sin(time * 1.5) * 20, y: 240 + Math.cos(time * 1.5) * 15 },
-      rightHand: { x: 290 - Math.sin(time * 1.5) * 20, y: 240 + Math.cos(time * 1.5) * 15 },
-      
-      // Legs
-      leftHip: { x: 180, y: 300 },
-      rightHip: { x: 220, y: 300 },
-      leftKnee: { x: 175 + Math.sin(time * 1.5) * 5, y: 380 + Math.cos(time) * 8 },
-      rightKnee: { x: 225 - Math.sin(time * 1.5) * 5, y: 380 - Math.cos(time) * 8 },
-      leftFoot: { x: 170 + Math.sin(time * 2) * 8, y: 460 + Math.cos(time * 1.5) * 6 },
-      rightFoot: { x: 230 - Math.sin(time * 2) * 8, y: 460 - Math.cos(time * 1.5) * 6 }
-    };
-    
-    // Apply clinical limitations based on patient condition
-    if (patient.chief_complaint?.toLowerCase().includes('shoulder')) {
-      // Reduce shoulder movement range
-      joints.leftElbow.x = 130 + Math.sin(time) * 5; // Reduced from 15
-      joints.rightElbow.x = 270 - Math.sin(time) * 5;
-    }
-    
-    // Draw connections (bones) in your style
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = '#34495e';
-    
-    const connections = [
-      ['head', 'neck'], ['neck', 'shoulder'], ['shoulder', 'chest'],
-      ['chest', 'waist'], ['waist', 'pelvis'],
-      ['shoulder', 'leftShoulder'], ['shoulder', 'rightShoulder'],
-      ['leftShoulder', 'leftElbow'], ['leftElbow', 'leftHand'],
-      ['rightShoulder', 'rightElbow'], ['rightElbow', 'rightHand'],
-      ['pelvis', 'leftHip'], ['pelvis', 'rightHip'],
-      ['leftHip', 'leftKnee'], ['leftKnee', 'leftFoot'],
-      ['rightHip', 'rightKnee'], ['rightKnee', 'rightFoot']
-    ];
-    
-    connections.forEach(([joint1, joint2]) => {
-      const j1 = joints[joint1 as keyof typeof joints];
-      const j2 = joints[joint2 as keyof typeof joints];
-      
-      ctx.beginPath();
-      ctx.moveTo(j1.x, j1.y);
-      ctx.lineTo(j2.x, j2.y);
-      ctx.stroke();
-    });
-    
-    // Draw joints as colorful circles (matching your image)
-    Object.values(joints).forEach((joint, index) => {
-      const color = colors[index % colors.length];
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.arc(joint.x, joint.y, 8, 0, Math.PI * 2);
-      ctx.fill();
-      
-      // Add subtle glow effect
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 10;
-      ctx.fill();
-      ctx.shadowBlur = 0;
-    });
-  };
 
   // Convert frames to video format
-  const createVideoFromFrames = async (frames: string[]): Promise<string> => {
-    // Create animated WebP or return first frame for now
-    // In a full implementation, this would create an actual MP4
-    return frames[0]; // For now, return static frame, but structure is ready for animation
-  };
 
   // Create default skeleton video
   const createDefaultSkeletonVideo = async (): Promise<string> => {
@@ -739,189 +584,8 @@ export default function VirtualPatientsPage() {
   };
 
   // Generate Runway ML video (fallback option)
-  const generateRunwayVideo = async (patient: SoapVirtualPatient, customPrompt?: string) => {
-    if (!patient) return;
-    
-    setIsGeneratingVideo(true);
-    setVideoGenerationProgress(0);
-    setGeneratedVideoUrl(null);
-    
-    try {
-      const response = await apiRequest(
-        'POST',
-        `/api/virtual-patients/${patient.id}/generate-runway-video`,
-        { 
-          movementType: 'functional_movement',
-          customPrompt: customPrompt || undefined
-        }
-      );
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      
-      const videoData = await response.json();
-      setVideoTaskId(videoData.taskId);
-      
-      console.log('Runway ML video generation started:', videoData.taskId);
-      
-      toast({
-        title: "Video Generation Started",
-        description: "Creating realistic clinical movement video...",
-      });
 
-      // Start polling for video status
-      pollVideoStatus(videoData.taskId);
-      
-    } catch (error: any) {
-      console.error('Video generation error:', error);
-      toast({
-        title: "Video Generation Error",
-        description: error.message || "Failed to start video generation",
-        variant: "destructive"
-      });
-      setIsGeneratingVideo(false);
-    }
-  };
 
-  // Poll Leonardo AI video generation status
-  const pollLeonardoVideoStatus = async (taskId: string) => {
-    try {
-      const response = await apiRequest('GET', `/api/leonardo-video/${taskId}/status`);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      
-      const statusData = await response.json();
-      
-      // Update progress
-      setVideoGenerationProgress(statusData.progress || 0);
-      
-      if (statusData.status === 'COMPLETE' && statusData.videoUrl) {
-        // Video is ready!
-        setGeneratedVideoUrl(statusData.videoUrl);
-        setIsGeneratingVideo(false);
-        
-        toast({
-          title: "Leonardo AI Video Ready",
-          description: "Professional clinical movement video generated successfully!",
-        });
-        
-      } else if (statusData.status === 'FAILED') {
-        // Video generation failed
-        setIsGeneratingVideo(false);
-        
-        toast({
-          title: "Video Generation Failed",
-          description: statusData.failure_reason || "Unknown error occurred",
-          variant: "destructive"
-        });
-        
-      } else if (statusData.status === 'PENDING') {
-        // Still processing, continue polling
-        setTimeout(() => pollLeonardoVideoStatus(taskId), 3000); // Poll every 3 seconds
-      }
-      
-    } catch (error: any) {
-      console.error('Error checking Leonardo AI video status:', error);
-      setIsGeneratingVideo(false);
-      
-      toast({
-        title: "Status Check Error",
-        description: error.message || "Failed to check video status",
-        variant: "destructive"
-      });
-    }
-  };
-
-  // Poll Runway ML video generation status (fallback)
-  const pollVideoStatus = async (taskId: string) => {
-    try {
-      const response = await apiRequest('GET', `/api/runway-video/${taskId}/status`);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      
-      const statusData = await response.json();
-      
-      // Update progress
-      setVideoGenerationProgress(statusData.progress || 0);
-      
-      if (statusData.status === 'SUCCEEDED' && statusData.videoUrl) {
-        // Video is ready!
-        setGeneratedVideoUrl(statusData.videoUrl);
-        setIsGeneratingVideo(false);
-        
-        toast({
-          title: "Video Generated Successfully",
-          description: "Realistic clinical movement video is ready!",
-        });
-        
-      } else if (statusData.status === 'FAILED') {
-        // Video generation failed
-        setIsGeneratingVideo(false);
-        
-        toast({
-          title: "Video Generation Failed",
-          description: statusData.failure_reason || "Unknown error occurred",
-          variant: "destructive"
-        });
-        
-      } else if (statusData.status === 'RUNNING' || statusData.status === 'PENDING') {
-        // Still processing, continue polling
-        setTimeout(() => pollVideoStatus(taskId), 3000); // Poll every 3 seconds
-      }
-      
-    } catch (error: any) {
-      console.error('Error checking video status:', error);
-      setIsGeneratingVideo(false);
-      
-      toast({
-        title: "Status Check Error",
-        description: error.message || "Failed to check video status",
-        variant: "destructive"
-      });
-    }
-  };
-
-  // Generate custom clinical video with Leonardo AI
-  const generateCustomLeonardoVideo = async () => {
-    if (!customVideoPrompt.trim()) {
-      toast({
-        title: "Prompt Required",
-        description: "Please enter a clinical description for video generation",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    setIsGeneratingVideo(true);
-    setVideoGenerationProgress(0);
-    setGeneratedVideoUrl(null);
-    
-    try {
-      // Show the animated skeleton player with custom condition
-      setGeneratedVideoUrl('animation_player');
-      setVideoGenerationProgress(100);
-      setIsGeneratingVideo(false);
-      
-      toast({
-        title: "3D Skeleton Video Generated!", 
-        description: "Created custom skeletal movement animation",
-      });
-      
-    } catch (error: any) {
-      console.error('3D Skeleton custom video generation error:', error);
-      toast({
-        title: "Video Generation Error",
-        description: error.message || "Failed to generate custom skeleton animation",
-        variant: "destructive"
-      });
-      setIsGeneratingVideo(false);
-    }
-  };
 
   // Create custom skeleton video based on text prompt
   const createCustomSkeletonVideo = async (prompt: string): Promise<string> => {
@@ -1016,84 +680,8 @@ export default function VirtualPatientsPage() {
     `);
   };
 
-  // Generate custom clinical video with Runway ML (fallback)
-  const generateCustomVideo = async () => {
-    if (!customVideoPrompt.trim()) {
-      toast({
-        title: "Prompt Required",
-        description: "Please enter a clinical description for video generation",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    setIsGeneratingVideo(true);
-    setVideoGenerationProgress(0);
-    setGeneratedVideoUrl(null);
-    
-    try {
-      const response = await apiRequest(
-        'POST',
-        '/api/generate-runway-video',
-        { 
-          clinicalDescription: customVideoPrompt,
-          duration: 8,
-          watermark: false
-        }
-      );
+  // Removed generateCustomVideo function - replaced with stick figure animation
       
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      
-      const videoData = await response.json();
-      setVideoTaskId(videoData.taskId);
-      
-      console.log('Custom video generation started:', videoData.taskId);
-      
-      toast({
-        title: "Custom Video Generation Started",
-        description: "Creating video from your clinical description...",
-      });
-
-      // Start polling for video status
-      pollVideoStatus(videoData.taskId);
-      
-    } catch (error: any) {
-      console.error('Custom video generation error:', error);
-      toast({
-        title: "Video Generation Error",
-        description: error.message || "Failed to start custom video generation",
-        variant: "destructive"
-      });
-      setIsGeneratingVideo(false);
-    }
-  };
-
-  // Find Relevant Research function
-  const findRelevantResearch = async () => {
-    if (!selectedPatient) return;
-    
-    setIsLoadingResearch(true);
-    try {
-      const response = await apiRequest(
-        'POST',
-        `/api/virtual-patients/${selectedPatient.id}/relevant-research`,
-        {}
-      );
-      const researchData = await response.json();
-      setRelevantResearch(researchData || []);
-      setShowResearchDialog(true);
-    } catch (error: any) {
-      toast({
-        title: "Research Error",
-        description: error.message || "Failed to find relevant research",
-        variant: "destructive"
-      });
-    } finally {
-      setIsLoadingResearch(false);
-    }
-  };
 
   // Playback controls
   const togglePlayback = () => {
@@ -1266,1276 +854,312 @@ export default function VirtualPatientsPage() {
     }
   };
 
-  // Generate Google Veo video from clinical description
-  const generateVeoVideo = async (patientId: number, movementType: string = 'functional_movement') => {
-    setIsGeneratingVideo(true);
-    setGeneratedVideoUrl(null);
-    setVideoGenerationId(null);
-    
-    try {
-      console.log('Generating Google Veo video for patient:', patientId);
-      
-      const response = await apiRequest('POST', `/api/virtual-patients/${patientId}/generate-veo-video`, {
-        movementType,
-        clinicalDescription: `Patient demonstrates ${movementType} with clinical limitations`
-      });
-      
-      const result = await response.json();
-      console.log('Google Veo video result:', result);
-      
-      if (result.success) {
-        setGeneratedVideoUrl(result.videoUrl);
-        setVideoGenerationId(result.generationId);
-        
-        toast({
-          title: "Success",
-          description: "AI movement video generated successfully!",
-        });
-      } else {
-        throw new Error(result.error || 'Video generation failed');
-      }
-    } catch (error: any) {
-      console.error('Error generating Google Veo video:', error);
-      toast({
-        title: "Video Generation Failed",
-        description: error.message || "Failed to generate AI movement video",
-        variant: "destructive"
-      });
-    } finally {
-      setIsGeneratingVideo(false);
-    }
-  };
-
-  // Generate video from clinical text
-  const generateClinicalVideo = async (clinicalDescription: string) => {
-    setIsGeneratingVideo(true);
-    setGeneratedVideoUrl(null);
-    setVideoGenerationId(null);
-    
-    try {
-      console.log('Generating clinical video from text:', clinicalDescription);
-      
-      const response = await apiRequest('POST', '/api/generate-clinical-video', {
-        clinicalDescription,
-        movementType: 'functional_movement',
-        duration: 5
-      });
-      
-      const result = await response.json();
-      console.log('Clinical video result:', result);
-      
-      if (result.success) {
-        setGeneratedVideoUrl(result.videoUrl);
-        setVideoGenerationId(result.generationId);
-        
-        toast({
-          title: "Success",
-          description: "Clinical movement video generated successfully!",
-        });
-      } else {
-        throw new Error(result.error || 'Video generation failed');
-      }
-    } catch (error: any) {
-      console.error('Error generating clinical video:', error);
-      
-      // Parse error message for better user feedback
-      let errorMessage = "Failed to generate clinical video";
-      let errorTitle = "Video Generation Failed";
-      
-      if (error.message?.includes('authentication')) {
-        errorTitle = "Setup Required";
-        errorMessage = "Google Cloud credentials need to be configured. Please contact support for video generation setup.";
-      } else if (error.message?.includes('network') || error.message?.includes('ECONNREFUSED')) {
-        errorTitle = "Connection Error";
-        errorMessage = "Unable to connect to video generation service. Please try again later.";
-      } else if (error.message?.includes('project')) {
-        errorTitle = "Configuration Error";
-        errorMessage = "Video generation service is not properly configured.";
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-      
-      toast({
-        title: errorTitle,
-        description: errorMessage,
-        variant: "destructive"
-      });
-    } finally {
-      setIsGeneratingVideo(false);
-    }
-  };
-
   if (patientsLoading) {
     return (
       <div className="container mx-auto py-8 px-4">
         <div className="max-w-7xl mx-auto">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Enhanced Virtual Patients</h1>
-            <p className="text-gray-600">Loading your virtual patient profiles...</p>
-          </div>
-          <div className="flex items-center justify-center h-64">
-            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          <div className="text-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+            <p className="text-gray-600">Loading virtual patients...</p>
           </div>
         </div>
       </div>
     );
   }
 
-  if (!selectedPatient) {
-    return (
-      <div className="container mx-auto py-8 px-4">
-        <div className="max-w-7xl mx-auto">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Enhanced Virtual Patients</h1>
-            <p className="text-gray-600">Select a patient to view their comprehensive digital twin</p>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {virtualPatients.map((patient: SoapVirtualPatient) => (
-              <Card 
-                key={patient.id} 
-                className="hover:shadow-lg transition-shadow cursor-pointer group"
-                onClick={() => loadEnhancedPatientData(patient)}
-              >
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <User className="h-5 w-5 text-blue-600" />
-                      {editingPatientId === patient.id ? (
-                        <div className="flex items-center gap-2 flex-1">
-                          <Input
-                            value={editingName}
-                            onChange={(e) => setEditingName(e.target.value)}
-                            onKeyDown={handleKeyPress}
-                            className="text-lg font-semibold"
-                            autoFocus
-                          />
-                          <Button
-                            size="sm"
-                            onClick={savePatientName}
-                            disabled={updatePatientMutation.isPending}
-                            className="flex items-center gap-1"
-                          >
-                            {updatePatientMutation.isPending ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : (
-                              <Check className="h-3 w-3" />
-                            )}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={cancelEditing}
-                            disabled={updatePatientMutation.isPending}
-                          >
-                            <X className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2 flex-1">
-                          <CardTitle className="text-lg">
-                            {patient.patient_name || `Patient ${patient.id}`}
-                          </CardTitle>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              startEditing(patient);
-                            }}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
-                            <Edit2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                    {patient.motionData && (
-                      <Badge variant="secondary" className="bg-green-100 text-green-800">
-                        Digital Twin
-                      </Badge>
-                    )}
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <Calendar className="h-4 w-4" />
-                      <span>{new Date(patient.created_at || Date.now()).toLocaleDateString()}</span>
-                    </div>
-                    
-                    {patient.body_part && (
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <Target className="h-4 w-4" />
-                        <span className="capitalize">{patient.body_part}</span>
-                      </div>
-                    )}
-                    
-                    {patient.chief_complaint && (
-                      <div className="flex items-start gap-2 text-sm text-gray-600">
-                        <Heart className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                        <span className="line-clamp-2">{patient.chief_complaint}</span>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-          
-          <div className="mt-8">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Camera className="h-5 w-5 text-blue-600" />
-                  Create New Digital Twin
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-600 mb-4">
-                  Capture patient movements to create a comprehensive digital twin combining clinical documentation with biomechanical analysis.
-                </p>
-                <Button onClick={() => setShowMotionCapture(true)} className="flex items-center gap-2">
-                  <Video className="h-4 w-4" />
-                  Start Motion Capture
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Enhanced Virtual Patient View - Main Layout
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setSelectedPatient(null)}
-              className="flex items-center gap-2"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to Patients
-            </Button>
-            <div className="flex items-center gap-2">
-              <User className="h-5 w-5 text-blue-600" />
-              <h1 className="text-lg font-semibold">
-                {enhancedProfile?.demographics.name || selectedPatient.patient_name || 'Patient Profile'}
+    <div className="container mx-auto py-8 px-4">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+                <Users className="h-8 w-8 text-blue-600" />
+                Virtual Patients
               </h1>
-              {movementData && (
-                <Badge variant="secondary" className="bg-green-100 text-green-800 text-xs">
-                  {movementData.source}
-                </Badge>
-              )}
+              <p className="text-gray-600 mt-2">
+                Create and analyze digital patient twins with AI-powered movement visualization
+              </p>
             </div>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={performAIAnalysis}
-              disabled={isLoadingAnalysis}
-              className="flex items-center gap-2"
+            <Button 
+              onClick={() => setShowMotionCapture(true)}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
             >
-              {isLoadingAnalysis ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Brain className="h-4 w-4" />
-              )}
-              AI Analysis
-            </Button>
-            
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={findRelevantResearch}
-              disabled={isLoadingResearch}
-              className="flex items-center gap-2"
-            >
-              {isLoadingResearch ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <BookOpen className="h-4 w-4" />
-              )}
-              Find Research
+              <Camera className="h-4 w-4 mr-2" />
+              Motion Capture
             </Button>
           </div>
         </div>
-      </div>
 
-      {/* Main Content Area - Redesigned Layout */}
-      <div className="max-w-7xl mx-auto px-4 py-4">
+        {/* Main Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          
-          {/* Left Panel - Patient Profile & Clinical Data */}
-          <div className="lg:col-span-2 space-y-4">
-            
-            {/* Patient Demographics */}
+          {/* Left Panel - Patient Selection */}
+          <div className="lg:col-span-4">
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                  <User className="h-5 w-5 text-blue-600" />
-                  Patient Profile
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-gray-500 font-medium">Age</span>
-                    <p className="text-gray-900">{enhancedProfile?.demographics.age || selectedPatient.age}</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-500 font-medium">Gender</span>
-                    <p className="text-gray-900 capitalize">{enhancedProfile?.demographics.gender || selectedPatient.gender}</p>
-                  </div>
-                  <div className="col-span-2">
-                    <span className="text-gray-500 font-medium">Body Part</span>
-                    <p className="text-gray-900 capitalize">{selectedPatient.body_part}</p>
-                  </div>
-                </div>
-                <Separator />
-                <div>
-                  <span className="text-gray-500 font-medium">Chief Complaint</span>
-                  <p className="text-gray-900 text-sm mt-1">{selectedPatient.chief_complaint}</p>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Clinical Notes */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                  <Stethoscope className="h-5 w-5 text-emerald-600" />
-                  Clinical Notes
+                  <FileUser className="h-5 w-5 text-blue-600" />
+                  Patient Selection
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                {selectedPatient.symptoms_description && (
-                  <div className="bg-yellow-50 p-3 rounded-lg border-l-4 border-yellow-400">
-                    <p className="font-medium text-yellow-800 text-sm">Symptoms</p>
-                    <p className="text-yellow-700 text-sm mt-1">{selectedPatient.symptoms_description}</p>
-                  </div>
-                )}
-                {selectedPatient.past_medical_history && (
-                  <div className="bg-gray-50 p-3 rounded-lg border-l-4 border-gray-400">
-                    <p className="font-medium text-gray-800 text-sm">Medical History</p>
-                    <p className="text-gray-700 text-sm mt-1">{selectedPatient.past_medical_history}</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Pain Map */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                  <Target className="h-5 w-5 text-red-600" />
-                  Pain Assessment
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {enhancedProfile?.painMap.regions.map((region, index) => (
-                    <div key={index} className="flex items-center justify-between">
-                      <span className="text-sm font-medium capitalize">{region.bodyPart}</span>
-                      <div className="flex items-center gap-3">
-                        <div className="w-24 bg-gray-200 rounded-full h-2">
-                          <div 
-                            className="bg-red-500 h-2 rounded-full transition-all duration-300" 
-                            style={{ width: `${(region.intensity / 10) * 100}%` }}
-                          />
-                        </div>
-                        <span className="text-sm font-semibold text-red-600">{region.intensity}/10</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-          </div>
-
-          {/* Center Panel - 3D Animation */}
-          <div className="lg:col-span-6">
-            <Card className="h-[600px]">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                  <Activity className="h-5 w-5 text-purple-600" />
-                  3D Movement Visualization
-                  {(() => {
-                    const animationData = getAnimationData(selectedPatient);
-                    if (animationData) {
-                      return (
-                        <Badge variant="secondary" className="ml-2">
-                          {animationData.source} ({animationData.frames?.length || animationData.animationSequences?.length || 0} frames)
-                        </Badge>
-                      );
-                    }
-                    return null;
-                  })()}
-                </CardTitle>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className={`${animationBlendMode === 'text-only' ? 'bg-green-600 text-white' : ''}`}
-                    onClick={() => setAnimationBlendMode('text-only')}
-                  >
-                    SOAP Text
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className={`${animationBlendMode === 'motion-only' ? 'bg-blue-600 text-white' : ''}`}
-                    onClick={() => setAnimationBlendMode('motion-only')}
-                    disabled={!selectedPatient?.motionData}
-                  >
-                    Motion Only
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className={`${animationBlendMode === 'hybrid' ? 'bg-purple-600 text-white' : ''}`}
-                    onClick={() => setAnimationBlendMode('hybrid')}
-                    disabled={!selectedPatient?.motionData}
-                  >
-                    Hybrid
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="h-[520px] relative">
-                {(() => {
-                  const animationData = getAnimationData(selectedPatient);
-                  if (selectedPatient && animationData && animationData.frames?.length > 0) {
-                    return (
-                      <div className="w-full h-full relative overflow-hidden">
-                        <TwoDVirtualPatient
-                          animationFrames={animationData.frames}
-                          isPlaying={isPlaying}
-                          currentFrame={currentAnimationFrame}
-                          onFrameChange={setCurrentAnimationFrame}
-                          className="w-full h-full"
-                        />
-                        {/* Animation Source Badge */}
-                        <div className="absolute top-4 left-4 z-10">
-                          <Badge className={animationData.source === 'Motion Capture' ? 'bg-blue-600' : 'bg-emerald-600'}>
-                            {animationData.source}
-                          </Badge>
-                        </div>
-                        {/* Play Controls */}
-                        <div className="absolute bottom-4 left-4 z-10 flex gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setIsPlaying(!isPlaying)}
-                            className="bg-black/20 text-white border-white/20 hover:bg-black/30"
-                          >
-                            {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                          </Button>
-                        </div>
-                      </div>
-                    );
-                  } else if (selectedPatient) {
-                    return (
-                      <div className="w-full h-full bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg flex items-center justify-center">
-                        <div className="text-center text-gray-600">
-                          <Activity className="h-16 w-16 mx-auto mb-4 text-gray-400" />
-                          <p className="text-lg font-medium mb-2">AI Animation System Ready</p>
-                          <p className="text-sm">Motion capture or text description will generate enhanced skeleton visualization</p>
-                          {animationSequence && (
-                            <div className="mt-4">
-                              <Badge className="bg-green-600">
-                                Animation Generated ({animationSequence.frames?.length || 0} frames)
-                              </Badge>
+                {patients && patients.length > 0 ? (
+                  patients.map((patient) => (
+                    <Card 
+                      key={patient.id} 
+                      className={`cursor-pointer transition-all hover:shadow-md group ${
+                        selectedPatient?.id === patient.id ? 'ring-2 ring-blue-500 bg-blue-50' : 'hover:bg-gray-50'
+                      }`}
+                      onClick={() => handlePatientSelect(patient)}
+                    >
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          {editingPatientId === patient.id ? (
+                            <div className="flex items-center gap-2 flex-1">
+                              <input
+                                value={editingName}
+                                onChange={(e) => setEditingName(e.target.value)}
+                                className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
+                                autoFocus
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') savePatientName();
+                                  if (e.key === 'Escape') cancelEditing();
+                                }}
+                              />
+                              <Button
+                                size="sm"
+                                onClick={savePatientName}
+                                disabled={updatePatientMutation.isPending}
+                              >
+                                {updatePatientMutation.isPending ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <Check className="h-3 w-3" />
+                                )}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={cancelEditing}
+                                disabled={updatePatientMutation.isPending}
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 flex-1">
+                              <CardTitle className="text-lg">
+                                {patient.patient_name || `Patient ${patient.id}`}
+                              </CardTitle>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  startEditing(patient);
+                                }}
+                                className="opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                <Edit2 className="h-3 w-3" />
+                              </Button>
                             </div>
                           )}
                         </div>
-                      </div>
-                    );
-                  } else {
-                    return (
-                      <div className="w-full h-full bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg flex items-center justify-center">
-                        <div className="text-center text-gray-600">
-                          <Activity className="h-16 w-16 mx-auto mb-4 text-gray-400" />
-                          <p className="text-lg font-medium mb-2">Select a Virtual Patient</p>
-                          <p className="text-sm">Choose a patient from the list to view their digital twin</p>
-                        </div>
-                      </div>
-                    );
-                  }
-                })()}
-                
-                {/* Loading overlay when generating animation */}
-                {isLoadingAnimation && (
-                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10 rounded-lg">
-                    <div className="text-center text-white">
-                      <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
-                      <p className="text-sm">Generating AI Movement...</p>
-                    </div>
+                        {patient.motionData && (
+                          <Badge variant="secondary" className="bg-green-100 text-green-800 mt-2">
+                            Digital Twin
+                          </Badge>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))
+                ) : (
+                  <div className="text-center text-gray-500 py-8">
+                    <FileUser className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+                    <p className="text-sm">No virtual patients available</p>
+                    <p className="text-xs text-gray-400">Use Motion Capture to create your first patient</p>
                   </div>
                 )}
-              </CardContent>
-            </Card>
-
-            {/* Functional Movement Assessment Buttons */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                  <Activity className="h-5 w-5 text-orange-600" />
-                  Functional Movement Assessment
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {/* Lower Body Movements */}
-                  <div>
-                    <h4 className="text-sm font-semibold text-gray-700 mb-2">Lower Body</h4>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => generateFunctionalMovement('squat')}
-                        disabled={isGeneratingMovement}
-                        className="text-xs"
-                      >
-                        Squat
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => generateFunctionalMovement('step_up')}
-                        disabled={isGeneratingMovement}
-                        className="text-xs"
-                      >
-                        Step Up
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => generateFunctionalMovement('lunge')}
-                        disabled={isGeneratingMovement}
-                        className="text-xs"
-                      >
-                        Lunge
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => generateFunctionalMovement('single_leg_stand')}
-                        disabled={isGeneratingMovement}
-                        className="text-xs"
-                      >
-                        Balance
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Upper Body Movements */}
-                  <div>
-                    <h4 className="text-sm font-semibold text-gray-700 mb-2">Upper Body</h4>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => generateFunctionalMovement('overhead_reach')}
-                        disabled={isGeneratingMovement}
-                        className="text-xs"
-                      >
-                        Overhead Reach
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => generateFunctionalMovement('shoulder_rotation')}
-                        disabled={isGeneratingMovement}
-                        className="text-xs"
-                      >
-                        Shoulder Rotation
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* AI Video Generation */}
-                  <div className="mt-6 pt-4 border-t border-gray-200">
-                    <h4 className="text-sm font-semibold text-blue-700 mb-2 flex items-center gap-2">
-                      <Video className="h-4 w-4" />
-                      AI Video Generation
-                    </h4>
-                    
-
-                    <div className="space-y-2">
-                      <Button
-                        onClick={() => selectedPatient && generateLeonardoVideo(selectedPatient)}
-                        disabled={!selectedPatient || isGeneratingVideo}
-                        className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs"
-                        size="sm"
-                      >
-                        {isGeneratingVideo ? (
-                          <>
-                            <Loader2 className="h-3 w-3 mr-2 animate-spin" />
-                            Generating Video ({videoGenerationProgress}%)...
-                          </>
-                        ) : (
-                          <>
-                            <Video className="h-3 w-3 mr-2" />
-                            Generate 3D Skeleton Video
-                          </>
-                        )}
-                      </Button>
-                      
-                      {/* Alternative Video Generation Options */}
-                      <div className="grid grid-cols-2 gap-1 mt-2">
-                        <Button
-                          onClick={() => selectedPatient && generateRunwayVideo(selectedPatient)}
-                          disabled={!selectedPatient || isGeneratingVideo}
-                          className="w-full bg-purple-600 hover:bg-purple-700 text-white text-xs"
-                          size="sm"
-                          variant="outline"
-                        >
-                          Runway ML
-                        </Button>
-                        <Button
-                          onClick={() => generateFunctionalMovement('squat')}
-                          disabled={isGeneratingMovement}
-                          className="w-full bg-green-600 hover:bg-green-700 text-white text-xs"
-                          size="sm"
-                          variant="outline"
-                        >
-                          3D Animation
-                        </Button>
-                      </div>
-                      
-
-                      
-                      {/* Custom Video Generation */}
-                      <div className="mt-4 pt-3 border-t border-gray-200">
-                        <div className="space-y-2">
-                          <Input
-                            value={customVideoPrompt}
-                            onChange={(e) => setCustomVideoPrompt(e.target.value)}
-                            placeholder="Describe clinical movement (e.g., 'Patient showing shoulder limitation during overhead reach')"
-                            className="text-xs"
-                          />
-                          <Button
-                            onClick={generateCustomLeonardoVideo}
-                            disabled={isGeneratingVideo || !customVideoPrompt.trim()}
-                            className="w-full bg-purple-600 hover:bg-purple-700 text-white text-xs"
-                            size="sm"
-                          >
-                            {isGeneratingVideo ? (
-                              <>
-                                <Loader2 className="h-3 w-3 mr-2 animate-spin" />
-                                Creating Custom Video...
-                              </>
-                            ) : (
-                              <>
-                                <Video className="h-3 w-3 mr-2" />
-                                Generate Custom Skeleton Video
-                              </>
-                            )}
-                          </Button>
-                          
-                          {/* Alternative custom video generation */}
-                          <Button
-                            onClick={generateCustomVideo}
-                            disabled={isGeneratingVideo || !customVideoPrompt.trim()}
-                            className="w-full bg-gray-600 hover:bg-gray-700 text-white text-xs mt-1"
-                            size="sm"
-                            variant="outline"
-                          >
-                            {isGeneratingVideo ? "Generating..." : "Use Runway ML Instead"}
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
               </CardContent>
             </Card>
           </div>
 
-          {/* Right Panel - Clinical Correlation */}
-          <div className="lg:col-span-4 space-y-6">
-            {/* Clinical Notes */}
-            <Card>
+          {/* Center Panel - Stick Figure Animation */}
+          <div className="lg:col-span-4">
+            <Card className="h-full">
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                  <Stethoscope className="h-5 w-5 text-red-600" />
-                  Clinical Notes
+                  <Activity className="h-5 w-5 text-green-600" />
+                  Movement Visualization
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                {selectedPatient ? (
-                  <div className="space-y-3">
-                    <div className="p-3 bg-red-50 rounded-lg border border-red-200">
-                      <h4 className="text-sm font-semibold text-red-800 mb-1">Chief Complaint</h4>
-                      <p className="text-sm text-red-700">
-                        {selectedPatient.chief_complaint || selectedPatient.clinicalPresentation?.chiefComplaint || 'Not specified'}
-                      </p>
-                    </div>
-                    
-                    {(selectedPatient.symptoms_description || selectedPatient.clinicalPresentation?.symptomsTimeline) && (
-                      <div className="p-3 bg-orange-50 rounded-lg border border-orange-200">
-                        <h4 className="text-sm font-semibold text-orange-800 mb-1">Symptoms</h4>
-                        <p className="text-sm text-orange-700">
-                          {selectedPatient.symptoms_description || selectedPatient.clinicalPresentation?.symptomsTimeline}
-                        </p>
-                      </div>
-                    )}
-                    
-                    {(selectedPatient.diagnosis || selectedPatient.physicalFindings?.diagnosis) && (
-                      <div className="p-3 bg-green-50 rounded-lg border border-green-200">
-                        <h4 className="text-sm font-semibold text-green-800 mb-1">Assessment</h4>
-                        <p className="text-sm text-green-700">
-                          {selectedPatient.diagnosis || selectedPatient.physicalFindings?.diagnosis}
-                        </p>
-                      </div>
-                    )}
-                  </div>
+              <CardContent className="p-4">
+                {selectedPatient && animationData ? (
+                  <StickFigureAnimation 
+                    animationData={animationData}
+                    isPlaying={isPlaying}
+                    onTogglePlay={togglePlayback}
+                    onReset={resetPlayback}
+                  />
                 ) : (
-                  <div className="text-center text-gray-500 py-4">
-                    <Stethoscope className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                    <p className="text-sm">Select a patient to view clinical notes</p>
+                  <div className="text-center text-gray-500 py-12">
+                    <Activity className="h-16 w-16 mx-auto mb-4 text-gray-400" />
+                    <p className="text-lg mb-2">No Animation Data</p>
+                    <p className="text-sm text-gray-400">
+                      {!selectedPatient 
+                        ? "Select a patient to view animations" 
+                        : "Generate animation from patient data or text description"
+                      }
+                    </p>
                   </div>
                 )}
               </CardContent>
             </Card>
+          </div>
 
-            {/* Text-to-Video Generation */}
+          {/* Right Panel - Clinical Correlations */}
+          <div className="lg:col-span-4 space-y-4">
+            
+            {/* Text-to-Digital Patient */}
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                  <Video className="h-5 w-5 text-purple-600" />
-                  Text-to-Video Generation
+                  <FileText className="h-5 w-5 text-emerald-600" />
+                  Text-to-Digital Patient
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Clinical Description</label>
                   <textarea
-                    placeholder="Describe movement limitations:
-e.g., 'Patient has shoulder pain and cannot lift left arm above head due to impingement'"
                     value={textToAnimationInput}
                     onChange={(e) => setTextToAnimationInput(e.target.value)}
-                    className="w-full h-20 px-3 py-2 bg-white text-gray-800 placeholder-gray-500 rounded-md border border-purple-300 focus:border-purple-500 focus:outline-none resize-none text-sm"
+                    placeholder="Describe patient movement patterns, limitations, or compensations..."
+                    className="w-full p-3 border border-gray-300 rounded-lg text-sm resize-none"
+                    rows={4}
                   />
                   <Button
-                    onClick={() => generateClinicalVideo(textToAnimationInput)}
-                    disabled={!textToAnimationInput.trim() || isGeneratingVideo}
-                    className="w-full bg-purple-600 hover:bg-purple-700 text-white"
-                    size="sm"
-                  >
-                    {isGeneratingVideo ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Generating...
-                      </>
-                    ) : (
-                      <>
-                        <Video className="h-4 w-4 mr-2" />
-                        Generate Video from Text
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* SOAP Integration Panel */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                  <Brain className="h-5 w-5 text-teal-600" />
-                  AI Clinical Insights
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {clinicalData ? (
-                  <div className="space-y-4">
-                    {clinicalData.soapIntegration.map((item, index) => (
-                      <div key={index} className="p-3 bg-teal-50 rounded-lg border border-teal-200">
-                        <h4 className="text-sm font-semibold text-teal-800">{item.complaint}</h4>
-                        <p className="text-sm text-teal-700 mt-1">{item.movementCorrelation}</p>
-                        <Badge variant="outline" className="mt-2 text-xs border-teal-400 text-teal-600">
-                          {item.severity}
-                        </Badge>
-                      </div>
-                    ))}
-                    
-                    {clinicalData.aiInsights.map((insight, index) => (
-                      <div key={index} className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-                        <div className="flex items-center justify-between mb-1">
-                          <h4 className="text-sm font-semibold text-blue-800">AI Finding</h4>
-                          <Badge className="bg-blue-600 text-xs">
-                            {insight.confidence}% confidence
-                          </Badge>
-                        </div>
-                        <p className="text-sm text-blue-700 mb-2">{insight.finding}</p>
-                        <p className="text-xs text-blue-600">{insight.recommendation}</p>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center text-gray-500 py-4">
-                    <Brain className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                    <p className="text-sm">AI insights will appear here after analysis</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-
-        {/* Bottom Panel - Text-to-Digital Patient & Interactive Controls */}
-        <div className="bg-white border-t border-gray-200 px-6 py-4">
-          {/* Text-to-Digital Patient Interface */}
-          <div className="mb-6 p-4 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-lg border border-emerald-200">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-gray-800 font-medium flex items-center gap-2">
-                <FileText className="h-4 w-4 text-emerald-600" />
-                Text-to-Digital Patient
-              </h3>
-              <Badge variant="outline" className="text-xs text-emerald-600 border-emerald-400">
-                AI Powered
-              </Badge>
-            </div>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              <div className="lg:col-span-2">
-                <textarea
-                  placeholder="Describe patient symptoms, movement patterns, or clinical findings...
-Example: 'Patient reports decreased shoulder external rotation, pain during overhead movements, visible compensation with hip hiking during arm elevation'"
-                  value={textToAnimationInput}
-                  onChange={(e) => setTextToAnimationInput(e.target.value)}
-                  className="w-full h-20 px-3 py-2 bg-white text-gray-800 placeholder-gray-500 rounded-md border border-emerald-300 focus:border-emerald-500 focus:outline-none resize-none text-sm"
-                />
-                <div className="flex items-center justify-between mt-2">
-                  <div className="text-xs text-gray-500">
-                    {textToAnimationInput.length} characters
-                  </div>
-                  <Button
                     onClick={() => generateAnimationFromText(textToAnimationInput)}
-                    disabled={!textToAnimationInput.trim() || isGeneratingFromText}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                    disabled={!textToAnimationInput.trim() || isGeneratingFromText || !selectedPatient}
+                    className="w-full"
                     size="sm"
                   >
                     {isGeneratingFromText ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Generating...
+                        Generating Animation...
                       </>
                     ) : (
                       <>
                         <Zap className="h-4 w-4 mr-2" />
-                        Generate Digital Twin
+                        Generate Animation
                       </>
                     )}
                   </Button>
                 </div>
-              </div>
-              
-              <div className="space-y-2">
-                <div className="text-xs text-blue-600 bg-blue-50 p-2 rounded border border-blue-200 mb-2">
-                  <div className="flex items-center gap-1">
-                    <Video className="h-3 w-3" />
-                    <span className="font-medium">Google Veo AI Video Generation</span>
+              </CardContent>
+            </Card>
+
+            {/* Clinical Correlations */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                  <Brain className="h-5 w-5 text-blue-600" />
+                  Clinical Correlations
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {clinicalData && (
+                  <div className="space-y-3">
+                    {/* SOAP Integration */}
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-700 mb-2">SOAP Integration</h4>
+                      {clinicalData.soapIntegration.map((item, index) => (
+                        <div key={index} className="bg-blue-50 p-3 rounded-lg border-l-4 border-blue-400 mb-2">
+                          <p className="font-medium text-blue-800 text-sm">{item.complaint}</p>
+                          <p className="text-blue-700 text-sm">{item.movementCorrelation}</p>
+                          <Badge variant="secondary" className="mt-1">{item.severity}</Badge>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* AI Insights */}
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-700 mb-2">AI Insights</h4>
+                      {clinicalData.aiInsights.map((insight, index) => (
+                        <div key={index} className="bg-purple-50 p-3 rounded-lg border-l-4 border-purple-400 mb-2">
+                          <p className="font-medium text-purple-800 text-sm">{insight.finding}</p>
+                          <p className="text-purple-700 text-sm">{insight.recommendation}</p>
+                          <div className="flex items-center gap-2 mt-2">
+                            <span className="text-xs text-purple-600">Confidence:</span>
+                            <div className="w-16 bg-purple-200 rounded-full h-2">
+                              <div 
+                                className="bg-purple-600 h-2 rounded-full transition-all duration-300" 
+                                style={{ width: `${insight.confidence}%` }}
+                              />
+                            </div>
+                            <span className="text-xs text-purple-600">{insight.confidence}%</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Treatment Response */}
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-700 mb-2">Treatment Response</h4>
+                      {clinicalData.treatmentResponse.map((response, index) => (
+                        <div key={index} className="bg-green-50 p-3 rounded-lg border-l-4 border-green-400 mb-2">
+                          <p className="font-medium text-green-800 text-sm">{response.intervention}</p>
+                          <p className="text-green-700 text-sm">{response.outcome}</p>
+                          <div className="flex items-center gap-2 mt-2">
+                            <span className="text-xs text-green-600">Improvement:</span>
+                            <div className="w-20 bg-green-200 rounded-full h-2">
+                              <div 
+                                className="bg-green-600 h-2 rounded-full transition-all duration-300" 
+                                style={{ width: `${response.movementImprovement}%` }}
+                              />
+                            </div>
+                            <span className="text-xs text-green-600">{response.movementImprovement}%</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <p className="mt-1 text-blue-700">
-                    Advanced AI video generation for realistic patient movement demonstrations. Currently in setup phase.
-                  </p>
-                </div>
-                <Button
-                  onClick={() => generateClinicalVideo(textToAnimationInput)}
-                  disabled={!textToAnimationInput.trim() || isGeneratingVideo}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                  size="sm"
-                >
-                  {isGeneratingVideo ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Testing Connection...
-                    </>
-                  ) : (
-                    <>
-                      <Video className="h-4 w-4 mr-2" />
-                      Test AI Video Generation
-                    </>
-                  )}
-                </Button>
-              </div>
-            </div>
-            
-            {textAnimationResult && (
-              <div className="bg-emerald-100 border border-emerald-300 rounded-md p-3 mt-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Check className="h-4 w-4 text-emerald-600" />
-                  <span className="text-emerald-700 text-sm font-medium">Digital Patient Generated</span>
-                </div>
-                <div className="text-xs text-gray-600 space-y-1">
-                  <div>Movement Patterns: {textAnimationResult.movementPatterns?.restrictions?.length || 0} identified</div>
-                  <div>Animation Frames: {textAnimationResult.animationSequence?.frames?.length || 0} generated</div>
-                  <div>Clinical Correlation: Available</div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Interactive Controls & Action Buttons */}
-          <div className="bg-gray-50 px-6 py-4 rounded-lg mt-6">
-            <div className="flex flex-wrap gap-3 justify-center">
-              <Button
-                onClick={() => setShowMotionCapture(true)}
-                disabled={!selectedPatient}
-                variant="outline"
-                className="flex items-center gap-2"
-              >
-                <Camera className="h-4 w-4" />
-                {selectedPatient?.threeDVisualization ? "Recapture Motion" : "Motion Capture"}
-              </Button>
-              
-              <Button
-                onClick={() => selectedPatient && generateAnimation(selectedPatient)}
-                disabled={!selectedPatient || isLoadingAnimation}
-                variant="outline"
-                className="flex items-center gap-2"
-              >
-                {isLoadingAnimation ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <Zap className="h-4 w-4" />
-                    Generate AI Animation
-                  </>
                 )}
-              </Button>
 
-              <Button
-                onClick={performAIAnalysis}
-                disabled={!selectedPatient || isLoadingAnalysis}
-                variant="outline"
-                className="flex items-center gap-2"
-              >
-                {isLoadingAnalysis ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Analyzing...
-                  </>
-                ) : (
-                  <>
-                    <Brain className="h-4 w-4" />
-                    AI Analysis
-                  </>
+                {!clinicalData && (
+                  <div className="text-center text-gray-500 py-8">
+                    <Brain className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+                    <p className="text-sm">No clinical correlations available</p>
+                    <p className="text-xs text-gray-400">Generate animation data to view correlations</p>
+                  </div>
                 )}
-              </Button>
+              </CardContent>
+            </Card>
 
-              <Button
-                onClick={findRelevantResearch}
-                disabled={!selectedPatient || isLoadingResearch}
-                variant="outline"
-                className="flex items-center gap-2"
-              >
-                {isLoadingResearch ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Searching...
-                  </>
-                ) : (
-                  <>
-                    <BookOpen className="h-4 w-4" />
-                    Find Research
-                  </>
-                )}
-              </Button>
-            </div>
           </div>
         </div>
       </div>
 
-      {/* Dialogs and Modals */}
-      {/* Patient Name Edit Dialog */}
-      <Dialog open={showPatientNameDialog} onOpenChange={setShowPatientNameDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Patient Name</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <Input
-              value={editingName}
-              onChange={(e) => setEditingName(e.target.value)}
-              placeholder="Enter patient name"
-              className="w-full"
-            />
-            <div className="flex gap-2 justify-end">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowPatientNameDialog(false);
-                  setEditingName('');
-                  setEditingPatientId(null);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={() => {
-                  if (editingPatientId && editingName.trim()) {
-                    updatePatientMutation.mutate({ 
-                      id: editingPatientId, 
-                      name: editingName.trim() 
-                    });
-                  }
-                }}
-                disabled={!editingName.trim() || updatePatientMutation.isPending}
-              >
-                {updatePatientMutation.isPending ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Updating...
-                  </>
-                ) : (
-                  'Update'
-                )}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Recapture Confirmation Dialog */}
-      <Dialog open={showRecaptureConfirm} onOpenChange={setShowRecaptureConfirm}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Camera className="h-5 w-5 text-orange-600" />
-              Confirm Motion Recapture
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <p className="text-gray-700">
-              This will replace the existing 3D visualization with new motion data. The current animation and analysis will be overwritten.
-            </p>
-            <div className="flex gap-2 justify-end">
-              <Button
-                variant="outline"
-                onClick={() => setShowRecaptureConfirm(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={() => {
-                  setShowRecaptureConfirm(false);
-                  setShowMotionCapture(true);
-                }}
-                className="bg-orange-600 hover:bg-orange-700"
-              >
-                <Video className="h-4 w-4 mr-2" />
-                Recapture Motion
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Motion Capture Dialog */}
-      <Dialog open={showMotionCapture} onOpenChange={setShowMotionCapture}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Camera className="h-5 w-5" />
-              {selectedPatient?.threeDVisualization ? "Recapture Motion Data" : "Motion Capture for 3D Digital Twin"}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-{selectedPatient?.threeDVisualization ? (
-              <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
-                <h4 className="font-semibold text-orange-800 mb-2">Overriding Existing Data</h4>
-                <p className="text-sm text-orange-700">
-                  This will replace the current 3D visualization with new motion data:
-                </p>
-                <ul className="text-sm text-orange-700 mt-2 space-y-1">
-                  <li>• Previous motion sequences will be deleted</li>
-                  <li>• New 3D skeletal animation will be generated</li>
-                  <li>• Updated movement analysis and problem areas</li>
-                  <li>• Fresh clinical correlation data</li>
-                  <li>• Improved biomechanical insights</li>
-                </ul>
-              </div>
-            ) : (
-              <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                <h4 className="font-semibold text-blue-800 mb-2">3D Visualization Creation</h4>
-                <p className="text-sm text-blue-700">
-                  Capture patient movements to generate comprehensive 3D digital twin with:
-                </p>
-                <ul className="text-sm text-blue-700 mt-2 space-y-1">
-                  <li>• Real-time skeletal mesh reconstruction</li>
-                  <li>• Animation sequences from captured movement</li>
-                  <li>• Movement heatmaps showing problem areas</li>
-                  <li>• Clinical annotations on dysfunction patterns</li>
-                  <li>• 3D biomechanical analysis integration</li>
-                </ul>
-              </div>
-            )}
+      {/* Motion Capture Modal */}
+      {showMotionCapture && (
+        <Dialog open={showMotionCapture} onOpenChange={setShowMotionCapture}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Motion Capture & Analysis</DialogTitle>
+            </DialogHeader>
             <MotionCapture 
-              onComplete={async (data) => {
-                try {
-                  setIsLoadingAnalysis(true);
-                  
-                  // Process and save 3D visualization data
-                  console.log('Motion capture complete, data received:', data);
-                  if (data.motionData && data.motionData.length > 0 && selectedPatient) {
-                    toast({
-                      title: "Processing 3D Visualization",
-                      description: "Converting motion data into 3D digital twin...",
-                    });
-
-                    // Save motion capture data with 3D visualization
-                    const response = await apiRequest(
-                      'POST', 
-                      `/api/virtual-patients/${selectedPatient.id}/save-3d-visualization`,
-                      {
-                        motionData: data.motionData,
-                        analysis: data.analysis,
-                        clinicalCorrelations: data.staticPosturalCorrelations || []
-                      }
-                    );
-
-                    if (response.ok) {
-                      const result = await response.json();
-                      toast({
-                        title: "3D Digital Twin Created",
-                        description: "Motion capture data saved with 3D visualization successfully!",
-                      });
-                      
-                      setShowMotionCapture(false);
-                      
-                      // IMMEDIATE UPDATE: Set the patient to show 3D visualization instantly
-                      if (selectedPatient && result.threeDVisualization) {
-                        const updatedPatient = {
-                          ...selectedPatient,
-                          threeDVisualization: result.threeDVisualization,
-                          hasMotionData: true
-                        };
-                        console.log('Updated patient with 3D visualization:', updatedPatient);
-                        setSelectedPatient(updatedPatient);
-                        
-                        // Force immediate enhanced profile reload with new 3D data
-                        loadEnhancedPatientData(updatedPatient);
-                      } else {
-                        console.log('No 3D visualization data received or no selected patient');
-                        console.log('selectedPatient:', selectedPatient);
-                        console.log('result:', result);
-                      }
-                      
-                      // Background data refresh for persistence
-                      queryClient.invalidateQueries({ queryKey: ['/api/virtual-patients'] });
-                      
-                      // Force re-render by updating patient list
-                      if (refetch) {
-                        refetch();
-                      }
-                    } else {
-                      throw new Error('Failed to save 3D visualization');
-                    }
-                  } else {
-                    console.log('No motion data - selectedPatient:', selectedPatient, 'data:', data);
-                    toast({
-                      title: "No Motion Data",
-                      description: "Please capture some movement data first.",
-                      variant: "destructive"
-                    });
-                  }
-                } catch (error: any) {
-                  console.error('3D Visualization Error:', error);
-                  toast({
-                    title: "3D Visualization Error", 
-                    description: error.message || "Failed to create 3D visualization",
-                    variant: "destructive"
-                  });
-                } finally {
-                  setIsLoadingAnalysis(false);
-                }
+              onCaptureComplete={(captureData) => {
+                console.log("Motion capture completed:", captureData);
+                setShowMotionCapture(false);
+                // Refresh patients list to show new patient
+                refetch();
               }}
             />
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* AI Analysis Dialog */}
-      <Dialog open={showAIAnalysis} onOpenChange={setShowAIAnalysis}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Brain className="h-5 w-5 text-blue-600" />
-              AI Clinical Analysis
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            {aiAnalysisData ? (
-              <div className="space-y-4">
-                <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                  <h3 className="font-semibold text-blue-800 mb-2">AI Analysis Results</h3>
-                  <p className="text-sm text-blue-700">{aiAnalysisData.analysis || "Analysis completed successfully"}</p>
-                </div>
-                {aiAnalysisData.recommendations && (
-                  <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-                    <h3 className="font-semibold text-green-800 mb-2">Recommendations</h3>
-                    <p className="text-sm text-green-700">{aiAnalysisData.recommendations}</p>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <Brain className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-                <p className="text-gray-600">AI analysis results will appear here</p>
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Research Dialog */}
-      <Dialog open={showResearchDialog} onOpenChange={setShowResearchDialog}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <BookOpen className="h-5 w-5 text-green-600" />
-              Relevant Research Articles
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            {relevantResearch && relevantResearch.length > 0 ? (
-              <div className="space-y-4">
-                {relevantResearch.map((article: any, index: number) => (
-                  <div key={index} className="p-4 bg-green-50 rounded-lg border border-green-200">
-                    <h3 className="font-semibold text-green-800 mb-2">{article.title}</h3>
-                    <p className="text-sm text-green-700 mb-2">{article.summary}</p>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-green-600">{article.authors}</span>
-                      <Badge className="bg-green-600">{article.year}</Badge>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <BookOpen className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-                <p className="text-gray-600">Research articles will appear here</p>
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
-
-

@@ -36,7 +36,6 @@ import { continuousRecordingService } from "./continuousRecordingService";
 import { virtualPatientService } from "./virtualPatientService";
 import { soapVirtualPatientService } from "./soapVirtualPatientService";
 import { documentGenerationService } from "./documentGenerationService";
-import { aiMovementGenerator } from "./aiMovementGenerator";
 
 import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, exercises, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, competitionParticipants, soapNotes, insertSoapNoteSchema, bodyScans, insertBodyScanSchema, tournamentParticipants, diagnosisDuelTournaments, gameContent, virtualPatients, patternRecognitionScores } from "@shared/schema";
 import { ZodError, z } from "zod";
@@ -10993,6 +10992,206 @@ Respond in JSON format:
 
 
 
+  // ======================= RUNWAY ML API ROUTES =======================
+
+  // Generate Runway ML video for virtual patient
+  app.post("/api/virtual-patients/:id/generate-runway-video", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const patientId = parseInt(req.params.id);
+      const { movementType = 'functional_movement', customPrompt } = req.body;
+
+      console.log(`Generating Runway ML video for virtual patient: ${patientId}`);
+
+      // Get virtual patient data
+      const [virtualPatient] = await db
+        .select()
+        .from(virtualPatients)
+        .where(eq(virtualPatients.id, patientId));
+
+      if (!virtualPatient) {
+        return res.status(404).json({ error: 'Virtual patient not found' });
+      }
+
+      // Check ownership
+      if (virtualPatient.userId !== userId) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      let videoResponse;
+
+      if (customPrompt) {
+        // Use custom prompt
+        videoResponse = await runwayService.generateClinicalVideo(customPrompt);
+      } else {
+        // Generate from patient profile
+        const bodyPart = virtualPatient.bodyPart || 'general';
+        const condition = virtualPatient.assessmentPlan?.primaryDiagnosis || 'movement limitation';
+        
+        videoResponse = await runwayService.generateMovementVideo(
+          bodyPart,
+          condition,
+          movementType,
+          virtualPatient.patientProfile
+        );
+      }
+
+      console.log(`Runway ML video generation started: ${videoResponse.id}`);
+
+      res.json({
+        success: true,
+        taskId: videoResponse.id,
+        status: videoResponse.status,
+        patientId,
+        movementType,
+        source: 'runway-ml',
+        generatedAt: new Date()
+      });
+
+    } catch (error) {
+      console.error('Error generating Runway ML video:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Generate Runway ML video from clinical text description
+  app.post("/api/generate-runway-video", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { 
+        clinicalDescription, 
+        duration = 5, 
+        seed,
+        watermark = false 
+      } = req.body;
+
+      if (!clinicalDescription) {
+        return res.status(400).json({ error: 'Clinical description is required' });
+      }
+
+      console.log(`Generating Runway ML video from text: ${clinicalDescription.substring(0, 100)}...`);
+
+      // Generate video using Runway ML
+      const videoResponse = await runwayService.generateClinicalVideo(
+        clinicalDescription,
+        { duration, seed, watermark }
+      );
+
+      console.log(`Runway ML video generation started: ${videoResponse.id}`);
+
+      res.json({
+        success: true,
+        taskId: videoResponse.id,
+        status: videoResponse.status,
+        clinicalDescription,
+        duration,
+        source: 'runway-ml',
+        generatedAt: new Date()
+      });
+
+    } catch (error) {
+      console.error('Error generating Runway ML video:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Check Runway ML video generation status
+  app.get("/api/runway-video/:taskId/status", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { taskId } = req.params;
+
+      console.log(`Checking Runway ML video status: ${taskId}`);
+
+      const videoStatus = await runwayService.getVideoStatus(taskId);
+
+      res.json({
+        taskId,
+        status: videoStatus.status,
+        progress: videoStatus.progress || 0,
+        eta: videoStatus.eta,
+        videoUrl: videoStatus.output?.[0],
+        failure_reason: videoStatus.failure_reason
+      });
+
+    } catch (error) {
+      console.error('Error checking Runway ML video status:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Generate functional movement video with Runway ML
+  app.post("/api/generate-functional-runway-video", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { 
+        movementName, 
+        restrictions = [], 
+        patientProfile = {},
+        duration = 8 
+      } = req.body;
+
+      if (!movementName) {
+        return res.status(400).json({ error: 'Movement name is required' });
+      }
+
+      console.log(`Generating functional movement video: ${movementName}`);
+
+      const videoResponse = await runwayService.generateFunctionalMovement(
+        movementName,
+        restrictions,
+        patientProfile
+      );
+
+      console.log(`Functional movement video generation started: ${videoResponse.id}`);
+
+      res.json({
+        success: true,
+        taskId: videoResponse.id,
+        status: videoResponse.status,
+        movementName,
+        restrictions,
+        duration,
+        source: 'runway-ml',
+        generatedAt: new Date()
+      });
+
+    } catch (error) {
+      console.error('Error generating functional movement video:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Test Runway ML configuration
+  app.get("/api/runway/status", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const status = await runwayService.getServiceStatus();
+      
+      res.json({
+        configured: status.configured,
+        apiKey: status.apiKey,
+        operational: status.operational,
+        hasApiKey: !!process.env.RUNWAY_API_KEY
+      });
+
+    } catch (error) {
+      console.error('Error checking Runway ML status:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ======================= LEONARDO AI API ROUTES =======================
 
   // Generate Leonardo AI video for virtual patient
   app.post("/api/virtual-patients/:id/generate-leonardo-video", ensureAuthenticated, async (req: Request, res: Response) => {
@@ -11162,48 +11361,6 @@ Respond in JSON format:
   });
 
 
-  // ======================= STICK FIGURE ANIMATION SYSTEM =======================
-
-  // Generate stick figure animation from clinical text
-  app.post("/api/generate-stick-figure-animation", ensureAuthenticated, async (req: Request, res: Response) => {
-    try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ error: 'User not authenticated' });
-      }
-
-      const { clinicalDescription, bodyPart, movementType = 'functional_movement' } = req.body;
-
-      if (!clinicalDescription) {
-        return res.status(400).json({ error: 'Clinical description is required' });
-      }
-
-      console.log(`Generating stick figure animation from text: ${clinicalDescription.substring(0, 100)}...`);
-
-      // Use existing AI movement generator for stick figure animation
-      const animationData = await aiMovementGenerator.generateMovementFromSOAP({
-        subjective: clinicalDescription,
-        objective: '',
-        assessment: '',
-        plan: '',
-        bodyPart: bodyPart || 'general'
-      });
-
-      res.json({
-        success: true,
-        animationData,
-        clinicalDescription,
-        bodyPart,
-        movementType,
-        source: 'stick-figure-animation',
-        generatedAt: new Date()
-      });
-
-    } catch (error) {
-      console.error('Error generating stick figure animation:', error);
-      res.status(500).json({ error: error.message || 'Failed to generate animation' });
-    }
-  });
 
   return httpServer;
 }

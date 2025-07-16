@@ -164,6 +164,9 @@ function Router() {
           <Route path="/admin">
             <ProtectedRoute component={AdminDashboard} />
           </Route>
+          <Route path="/admin/bulk-email">
+            <ProtectedRoute component={lazy(() => import('./pages/AdminBulkEmailPage'))} />
+          </Route>
           <Route path="/tournaments/:id/waiting-room">
             <ProtectedRoute component={TournamentWaitingRoom} />
           </Route>

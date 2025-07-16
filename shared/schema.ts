@@ -200,6 +200,13 @@ export const users = pgTable("users", {
   stripeCustomerId: text("stripe_customer_id"),
   // isAdmin will be added in the future via migration
   // isAdmin: boolean("is_admin").default(false),
+  
+  // Email notification preferences
+  emailNotifications: boolean("email_notifications").default(true).notNull(),
+  competitionNotifications: boolean("competition_notifications").default(true).notNull(),
+  weeklyDigest: boolean("weekly_digest").default(true).notNull(),
+  marketingEmails: boolean("marketing_emails").default(false).notNull(),
+  
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -2322,6 +2329,51 @@ export const diagnosisDuelTournamentRelations = relations(diagnosisDuelTournamen
   participants: many(tournamentParticipants),
   matches: many(tournamentMatches),
 }));
+
+// Email Campaigns Schema
+export const emailCampaigns = pgTable("email_campaigns", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  subject: text("subject").notNull(),
+  htmlContent: text("html_content").notNull(),
+  textContent: text("text_content").notNull(),
+  targetAudience: text("target_audience").notNull(), // "all", "competition_subscribers", "premium_users", etc.
+  competitionId: integer("competition_id").references(() => competitions.id),
+  sentBy: integer("sent_by").notNull().references(() => users.id),
+  sentAt: timestamp("sent_at"),
+  scheduledFor: timestamp("scheduled_for"),
+  status: text("status").default("draft").notNull(), // "draft", "scheduled", "sending", "sent", "failed"
+  recipientCount: integer("recipient_count").default(0),
+  openedCount: integer("opened_count").default(0),
+  clickedCount: integer("clicked_count").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Email Campaign Recipients Schema
+export const emailCampaignRecipients = pgTable("email_campaign_recipients", {
+  id: serial("id").primaryKey(),
+  campaignId: integer("campaign_id").notNull().references(() => emailCampaigns.id, { onDelete: "cascade" }),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  email: text("email").notNull(),
+  status: text("status").default("pending").notNull(), // "pending", "sent", "delivered", "opened", "clicked", "bounced", "failed"
+  sentAt: timestamp("sent_at"),
+  openedAt: timestamp("opened_at"),
+  clickedAt: timestamp("clicked_at"),
+  errorMessage: text("error_message"),
+});
+
+export const insertEmailCampaignSchema = createInsertSchema(emailCampaigns).omit({
+  id: true,
+  createdAt: true,
+  sentAt: true,
+  recipientCount: true,
+  openedCount: true,
+  clickedCount: true,
+});
+
+export type InsertEmailCampaign = z.infer<typeof insertEmailCampaignSchema>;
+export type EmailCampaign = typeof emailCampaigns.$inferSelect;
+export type EmailCampaignRecipient = typeof emailCampaignRecipients.$inferSelect;
 
 export const tournamentParticipantRelations = relations(tournamentParticipants, ({ one }) => ({
   tournament: one(diagnosisDuelTournaments, {

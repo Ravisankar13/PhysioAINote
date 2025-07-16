@@ -90,26 +90,32 @@ const FocusedHero = () => {
 
             {/* Main Hero Content */}
             <div className="lg:col-span-1 flex flex-col justify-center text-center order-first lg:order-none">
-              <h2 className="text-3xl md:text-4xl font-bold mb-4">
-                Clinical Excellence Meets Innovation
-              </h2>
-              <p className="text-lg text-white/90 mb-6 leading-relaxed">
-                Transform your practice with AI-powered tools, virtual patients, and competitive challenges that advance physiotherapy education.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                <Link href="/physio-gpt">
-                  <Button size="lg" variant="secondary" className="w-full sm:w-auto">
-                    <Brain className="h-5 w-5 mr-2" />
-                    Start PhysioGPT
-                  </Button>
-                </Link>
-                <Link href="/competitions">
-                  <Button size="lg" variant="outline" className="w-full sm:w-auto border-white/50 text-white hover:bg-white/20 hover:text-white bg-white/10">
-                    <Trophy className="h-5 w-5 mr-2" />
-                    Join Competitions
-                  </Button>
-                </Link>
-              </div>
+              <Card className="bg-white/10 border-white/20 text-white backdrop-blur-sm p-8">
+                <CardHeader className="pb-6">
+                  <CardTitle className="text-3xl md:text-4xl font-bold mb-4">
+                    Clinical Excellence Meets Innovation
+                  </CardTitle>
+                  <CardDescription className="text-lg text-white/90 leading-relaxed">
+                    Transform your practice with AI-powered tools, virtual patients, and competitive challenges that advance physiotherapy education.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                    <Link href="/physio-gpt">
+                      <Button size="lg" variant="secondary" className="w-full sm:w-auto">
+                        <Brain className="h-5 w-5 mr-2" />
+                        Start PhysioGPT
+                      </Button>
+                    </Link>
+                    <Link href="/competitions">
+                      <Button size="lg" variant="outline" className="w-full sm:w-auto border-white/50 text-white hover:bg-white/20 hover:text-white bg-white/10">
+                        <Trophy className="h-5 w-5 mr-2" />
+                        Join Competitions
+                      </Button>
+                    </Link>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
 
             {/* Pattern Recognition Leaderboard */}

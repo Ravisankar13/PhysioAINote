@@ -33,7 +33,7 @@ const Home = () => {
       <FocusedHero />
       
       {/* Pattern Recognition Leaderboard */}
-      <section className="bg-gray-50 py-16">
+      <section id="pattern-recognition-leaderboard" className="bg-gray-50 py-16">
         <div className="container mx-auto px-4">
           <div className="grid lg:grid-cols-2 gap-8">
             <PatternRecognitionLeaderboard />

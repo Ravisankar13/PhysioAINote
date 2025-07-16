@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import CompactPatternRecognitionLeaderboard from "./CompactPatternRecognitionLeaderboard";
 
 const FocusedHero = () => {
   return (
@@ -32,46 +33,29 @@ const FocusedHero = () => {
           </p>
         </div>
 
-        {/* Main Virtual Patient Feature */}
+        {/* Main Features Grid - 3 Column Layout */}
         <div className="mb-16">
-          <Card className="bg-white/10 border-white/20 text-white backdrop-blur-sm overflow-hidden">
-            <div className="grid md:grid-cols-2 gap-0">
-              <div className="p-8 md:p-12">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-12 h-12 rounded-lg bg-white/20 flex items-center justify-center">
-                    <Users className="h-6 w-6" />
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            {/* Virtual Patient Feature */}
+            <div className="lg:col-span-1">
+              <Card className="bg-white/10 border-white/20 text-white backdrop-blur-sm overflow-hidden h-full">
+                <div className="p-6">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center">
+                      <Users className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold">Virtual Patient Creator</h2>
+                      <p className="text-white/80 text-xs">Featured Tool</p>
+                    </div>
                   </div>
-                  <div>
-                    <h2 className="text-2xl md:text-3xl font-bold">Virtual Patient Creator</h2>
-                    <p className="text-white/80 text-sm">Featured Tool</p>
-                  </div>
-                </div>
-                <p className="text-lg text-white/90 mb-6 leading-relaxed">
-                  Create your own digital patients using AI-powered motion capture and clinical analysis. 
-                  Transform real movement data into comprehensive virtual case studies with automated 
-                  clinical correlations and diagnostic insights.
-                </p>
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <Link href="/virtual-patients">
-                    <Button size="lg" variant="secondary" className="w-full sm:w-auto">
-                      <Play className="h-5 w-5 mr-2" />
-                      Create Virtual Patient
-                    </Button>
-                  </Link>
-                  <Link href="/motion-capture">
-                    <Button size="lg" variant="outline" className="w-full sm:w-auto border-white/50 text-white hover:bg-white/20 hover:text-white bg-white/10">
-                      Start Motion Capture
-                      <ArrowRight className="h-4 w-4 ml-2" />
-                    </Button>
-                  </Link>
-                </div>
-              </div>
-              <div className="bg-white/5 p-8 md:p-12 flex items-center justify-center">
-                <div className="text-center">
-                  <div className="w-32 h-32 mx-auto mb-4 rounded-full bg-white/10 flex items-center justify-center">
-                    <Users className="h-16 w-16 text-white/80" />
-                  </div>
-                  <div className="space-y-2 text-sm text-white/80">
+                  <p className="text-sm text-white/90 mb-4 leading-relaxed">
+                    Create digital patients using AI-powered motion capture and clinical analysis.
+                  </p>
+                  
+                  {/* Feature checklist */}
+                  <div className="space-y-2 text-xs text-white/80 mb-4">
                     <div className="flex justify-between">
                       <span>Motion Analysis</span>
                       <span className="text-green-300">✓</span>
@@ -84,15 +68,56 @@ const FocusedHero = () => {
                       <span>3D Visualization</span>
                       <span className="text-green-300">✓</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span>AI-Generated Insights</span>
-                      <span className="text-green-300">✓</span>
-                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <Link href="/virtual-patients">
+                      <Button size="sm" variant="secondary" className="w-full">
+                        <Play className="h-4 w-4 mr-2" />
+                        Create Patient
+                      </Button>
+                    </Link>
+                    <Link href="/motion-capture">
+                      <Button size="sm" variant="outline" className="w-full border-white/50 text-white hover:bg-white/20 hover:text-white bg-white/10">
+                        Motion Capture
+                        <ArrowRight className="h-4 w-4 ml-2" />
+                      </Button>
+                    </Link>
                   </div>
                 </div>
+              </Card>
+            </div>
+
+            {/* Main Hero Content */}
+            <div className="lg:col-span-1 flex flex-col justify-center text-center order-first lg:order-none">
+              <h2 className="text-3xl md:text-4xl font-bold mb-4">
+                Clinical Excellence Meets Innovation
+              </h2>
+              <p className="text-lg text-white/90 mb-6 leading-relaxed">
+                Transform your practice with AI-powered tools, virtual patients, and competitive challenges that advance physiotherapy education.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <Link href="/physio-gpt">
+                  <Button size="lg" variant="secondary" className="w-full sm:w-auto">
+                    <Brain className="h-5 w-5 mr-2" />
+                    Start PhysioGPT
+                  </Button>
+                </Link>
+                <Link href="/competitions">
+                  <Button size="lg" variant="outline" className="w-full sm:w-auto border-white/50 text-white hover:bg-white/20 hover:text-white bg-white/10">
+                    <Trophy className="h-5 w-5 mr-2" />
+                    Join Competitions
+                  </Button>
+                </Link>
               </div>
             </div>
-          </Card>
+
+            {/* Pattern Recognition Leaderboard */}
+            <div className="lg:col-span-1">
+              <CompactPatternRecognitionLeaderboard />
+            </div>
+
+          </div>
         </div>
 
         {/* Core Features Grid */}

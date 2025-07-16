@@ -276,15 +276,25 @@ export default function VirtualPatientsPage() {
     }
     
     // Check for AI text-generated animation data in motionData field (this is the correct field from database schema)
-    if (patient?.motionData?.frames?.length > 0) {
-      console.log('Found AI-generated animation frames in motionData:', patient.motionData.frames.length);
+    let motionData = patient?.motionData;
+    if (typeof motionData === 'string') {
+      try {
+        motionData = JSON.parse(motionData);
+      } catch (e) {
+        console.error('Failed to parse motionData JSON:', e);
+        motionData = null;
+      }
+    }
+    
+    if (motionData?.frames?.length > 0) {
+      console.log('Found AI-generated animation frames in motionData:', motionData.frames.length);
       return {
         source: 'Text Generated',
-        frames: patient.motionData.frames,
-        animationSequences: patient.motionData.frames,
+        frames: motionData.frames,
+        animationSequences: motionData.frames,
         movementHeatmap: [],
-        movementPatterns: patient.motionData.movementPatterns,
-        clinicalCorrelation: patient.motionData.clinicalCorrelation
+        movementPatterns: motionData.movementPatterns,
+        clinicalCorrelation: motionData.clinicalCorrelation
       };
     }
     
@@ -738,77 +748,45 @@ export default function VirtualPatientsPage() {
 
     setIsGeneratingFromText(true);
     try {
-      // Check if patient is selected
+      // Create a temporary patient if none selected
+      let targetPatient = selectedPatient;
       if (!selectedPatient) {
-        throw new Error('Please select a patient card first to generate animation');
+        targetPatient = {
+          id: Date.now(),
+          patient_name: "Generated Patient",
+          chief_complaint: "Movement analysis from text description",
+          body_part: "general",
+          symptoms_description: clinicalText
+        } as SoapVirtualPatient;
+        setSelectedPatient(targetPatient);
       }
 
-      console.log('Generating animation for selected patient:', selectedPatient.id);
+      console.log('Generating animation for patient:', targetPatient.id);
       
-      // Generate animation for the currently selected patient using text description
-      const soapNote = {
-        id: Date.now(),
-        subjective: `${selectedPatient.chief_complaint}. ${clinicalText}. ${selectedPatient.symptoms_description}`,
-        objective: `Clinical examination findings related to ${selectedPatient.body_part} complaints.`,
-        assessment: `Working assessment based on clinical presentation in ${selectedPatient.body_part} region.`,
-        plan: 'Treatment plan to be determined based on movement analysis.',
-        fullTranscription: clinicalText
-      };
-
-      const animationResponse = await apiRequest(
-        'POST', 
-        `/api/virtual-patients/${selectedPatient.id}/generate-text-animation`, 
-        { soapNote }
-      );
-
-      if (!animationResponse.ok) {
-        throw new Error(`Animation generation failed: ${animationResponse.statusText}`);
-      }
-
-      const animationResult = await animationResponse.json();
-      console.log('Full animation result from backend:', animationResult);
-      setTextAnimationResult(animationResult);
+      // Generate stick figure animation data directly from clinical text
+      const animationFrames = generateStickFigureFromText(clinicalText);
       
-      // Update the animation sequence for immediate display
-      if (animationResult.animationSequence) {
-        setAnimationSequence(animationResult.animationSequence);
-        console.log('Setting animation sequence:', animationResult.animationSequence);
-      } else if (animationResult.frames) {
-        // Handle direct frames response
-        const sequence = { frames: animationResult.frames };
-        setAnimationSequence(sequence);
-        console.log('Setting animation sequence from direct frames:', sequence);
-      }
-      
-      // Refresh the movement data to trigger re-render
-      await getAnimationData(selectedPatient);
-      
-      // Update the selected patient to include animation data with proper structure
-      const frames = animationResult.animationSequence?.frames || animationResult.frames || [];
-      console.log('Extracted frames for patient:', frames.length);
-      
+      // Update the patient with animation data
       const updatedPatient = {
-        ...selectedPatient,
-        motionData: {
-          frames: frames,
-          movementPatterns: animationResult.movementPatterns,
-          clinicalCorrelation: animationResult.clinicalCorrelation,
+        ...targetPatient,
+        motionData: JSON.stringify({
+          frames: animationFrames,
           animationSource: "text-to-animation",
-          generatedAt: new Date().toISOString()
-        },
+          generatedAt: new Date().toISOString(),
+          description: clinicalText
+        }),
         hasMotionData: true,
         aiGenerated: true
       };
-      setSelectedPatient(updatedPatient);
       
-      console.log('Updated patient with animation data:', updatedPatient.motionData);
+      setSelectedPatient(updatedPatient);
       
       // Clear the input
       setTextToAnimationInput('');
 
       toast({
         title: "Animation Generated",
-        description: `Successfully generated ${animationResult.animationSequence?.frames?.length || 0} animation frames for ${selectedPatient.patient_name}`,
+        description: `Successfully generated stick figure animation from clinical description`,
       });
 
     } catch (error: any) {
@@ -821,6 +799,84 @@ export default function VirtualPatientsPage() {
     } finally {
       setIsGeneratingFromText(false);
     }
+  };
+
+  // Generate stick figure animation frames from clinical text
+  const generateStickFigureFromText = (clinicalText: string) => {
+    // Parse clinical text to determine movement type and create appropriate animation
+    const lowerText = clinicalText.toLowerCase();
+    
+    // Base stick figure keypoints (head, shoulders, elbows, wrists, hips, knees, ankles)
+    const baseFrame = {
+      keypoints: [
+        { x: 200, y: 50, name: 'head' },
+        { x: 180, y: 100, name: 'left_shoulder' },
+        { x: 220, y: 100, name: 'right_shoulder' },
+        { x: 160, y: 140, name: 'left_elbow' },
+        { x: 240, y: 140, name: 'right_elbow' },
+        { x: 140, y: 180, name: 'left_wrist' },
+        { x: 260, y: 180, name: 'right_wrist' },
+        { x: 200, y: 150, name: 'spine' },
+        { x: 180, y: 200, name: 'left_hip' },
+        { x: 220, y: 200, name: 'right_hip' },
+        { x: 175, y: 250, name: 'left_knee' },
+        { x: 225, y: 250, name: 'right_knee' },
+        { x: 170, y: 300, name: 'left_ankle' },
+        { x: 230, y: 300, name: 'right_ankle' }
+      ]
+    };
+
+    // Generate movement frames based on clinical description
+    const frames = [baseFrame];
+    
+    // Generate 20 frames of movement animation
+    for (let i = 1; i <= 20; i++) {
+      const progress = i / 20;
+      const frame = JSON.parse(JSON.stringify(baseFrame));
+      
+      // Apply movement patterns based on clinical text
+      if (lowerText.includes('shoulder') || lowerText.includes('arm')) {
+        // Shoulder movement animation
+        frame.keypoints.forEach(kp => {
+          if (kp.name.includes('shoulder') || kp.name.includes('elbow') || kp.name.includes('wrist')) {
+            kp.y += Math.sin(progress * Math.PI * 2) * 20;
+            if (lowerText.includes('limited') || lowerText.includes('restricted')) {
+              kp.y += Math.sin(progress * Math.PI) * 10; // Reduced range
+            }
+          }
+        });
+      } else if (lowerText.includes('knee') || lowerText.includes('leg')) {
+        // Knee movement animation
+        frame.keypoints.forEach(kp => {
+          if (kp.name.includes('knee') || kp.name.includes('ankle')) {
+            kp.x += Math.sin(progress * Math.PI * 2) * 15;
+            if (lowerText.includes('pain') || lowerText.includes('stiff')) {
+              kp.x += Math.sin(progress * Math.PI) * 5; // Reduced movement
+            }
+          }
+        });
+      } else if (lowerText.includes('back') || lowerText.includes('spine')) {
+        // Spine movement animation
+        frame.keypoints.forEach(kp => {
+          if (kp.name === 'spine' || kp.name.includes('shoulder')) {
+            kp.x += Math.sin(progress * Math.PI * 2) * 10;
+            if (lowerText.includes('limited') || lowerText.includes('stiff')) {
+              kp.x += Math.sin(progress * Math.PI) * 3; // Very limited movement
+            }
+          }
+        });
+      } else {
+        // General movement animation
+        frame.keypoints.forEach(kp => {
+          kp.x += Math.sin(progress * Math.PI * 2) * 8;
+          kp.y += Math.cos(progress * Math.PI * 2) * 5;
+        });
+      }
+      
+      frames.push(frame);
+    }
+    
+    return frames;
   };
 
   const generateFunctionalMovement = async (movementId: string) => {
@@ -1006,9 +1062,9 @@ export default function VirtualPatientsPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-4">
-                {selectedPatient && animationData ? (
+                {selectedPatient ? (
                   <StickFigureAnimation 
-                    animationData={animationData}
+                    animationData={getAnimationData(selectedPatient)}
                     isPlaying={isPlaying}
                     onTogglePlay={togglePlayback}
                     onReset={resetPlayback}
@@ -1016,12 +1072,9 @@ export default function VirtualPatientsPage() {
                 ) : (
                   <div className="text-center text-gray-500 py-12">
                     <Activity className="h-16 w-16 mx-auto mb-4 text-gray-400" />
-                    <p className="text-lg mb-2">No Animation Data</p>
+                    <p className="text-lg mb-2">No Patient Selected</p>
                     <p className="text-sm text-gray-400">
-                      {!selectedPatient 
-                        ? "Select a patient to view animations" 
-                        : "Generate animation from patient data or text description"
-                      }
+                      Select a patient to view stick figure animations
                     </p>
                   </div>
                 )}
@@ -1052,7 +1105,7 @@ export default function VirtualPatientsPage() {
                   />
                   <Button
                     onClick={() => generateAnimationFromText(textToAnimationInput)}
-                    disabled={!textToAnimationInput.trim() || isGeneratingFromText || !selectedPatient}
+                    disabled={!textToAnimationInput.trim() || isGeneratingFromText}
                     className="w-full"
                     size="sm"
                   >

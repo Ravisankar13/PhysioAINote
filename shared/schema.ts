@@ -201,12 +201,6 @@ export const users = pgTable("users", {
   // isAdmin will be added in the future via migration
   // isAdmin: boolean("is_admin").default(false),
   
-  // Email notification preferences
-  emailNotifications: boolean("email_notifications").default(true).notNull(),
-  competitionNotifications: boolean("competition_notifications").default(true).notNull(),
-  weeklyDigest: boolean("weekly_digest").default(true).notNull(),
-  marketingEmails: boolean("marketing_emails").default(false).notNull(),
-  
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

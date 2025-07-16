@@ -494,10 +494,62 @@ export function StickFigureAnimation({
     const leftFoot = getKeypointByName('left_foot');
     const rightFoot = getKeypointByName('right_foot');
 
-    // 1. Spine/Vertebrae
+    // 1. Spine/Vertebrae - Draw directly without rotation
     if (neck && spine) {
       const isAffected = neck.status === 'limited' || spine.status === 'limited';
-      drawAnatomicalBone(neck, spine, 'spine', getBoneColor(neck, spine), isAffected);
+      
+      // Draw spine vertebrae directly on canvas without rotation
+      const spineLength = Math.sqrt((spine.x - neck.x) ** 2 + (spine.y - neck.y) ** 2);
+      const vertebraeCount = Math.floor(spineLength / 15);
+      
+      // Set vertebrae color
+      const boneColor = getBoneColor(neck, spine);
+      const gradient = ctx.createLinearGradient(neck.x - 10, neck.y, neck.x + 10, neck.y);
+      gradient.addColorStop(0, isAffected ? '#ffcccc' : '#ffffff');
+      gradient.addColorStop(0.5, boneColor);
+      gradient.addColorStop(1, '#d4af8a');
+      ctx.fillStyle = gradient;
+      
+      // Draw individual vertebrae along the spine line
+      for (let i = 0; i < vertebraeCount; i++) {
+        const progress = i / (vertebraeCount - 1 || 1);
+        const x = neck.x + (spine.x - neck.x) * progress;
+        const y = neck.y + (spine.y - neck.y) * progress;
+        
+        // Vertebral body (centered on spine)
+        ctx.beginPath();
+        ctx.roundRect(x - 6, y - 5, 12, 10, 2);
+        ctx.fill();
+        
+        // Spinous process
+        ctx.beginPath();
+        ctx.roundRect(x - 2, y - 2, 4, 8, 1);
+        ctx.fill();
+        
+        // Outline
+        ctx.strokeStyle = isAffected ? '#dc2626' : '#8b5a2b';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.roundRect(x - 6, y - 5, 12, 10, 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.roundRect(x - 2, y - 2, 4, 8, 1);
+        ctx.stroke();
+      }
+      
+      if (isAffected) {
+        // Additional red highlighting for affected spine
+        ctx.strokeStyle = '#dc2626';
+        ctx.lineWidth = 3;
+        for (let i = 0; i < vertebraeCount; i++) {
+          const progress = i / (vertebraeCount - 1 || 1);
+          const x = neck.x + (spine.x - neck.x) * progress;
+          const y = neck.y + (spine.y - neck.y) * progress;
+          ctx.beginPath();
+          ctx.roundRect(x - 7, y - 6, 14, 12, 2);
+          ctx.stroke();
+        }
+      }
     }
 
     // 2. Pelvis

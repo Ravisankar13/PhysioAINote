@@ -61,7 +61,7 @@ export function StickFigureAnimation({
     drawStickFigure(frame, ctx);
   }, [currentFrame, animationData]);
 
-  // Draw stick figure from keypoints
+  // Draw anatomical skeleton with realistic bones
   const drawStickFigure = (frame: any, ctx: CanvasRenderingContext2D) => {
     ctx.clearRect(0, 0, 400, 400);
     
@@ -81,101 +81,218 @@ export function StickFigureAnimation({
       return;
     }
 
-    // Set drawing style
-    ctx.strokeStyle = '#2563eb';
-    ctx.lineWidth = 3;
-    ctx.lineCap = 'round';
-    ctx.fillStyle = '#2563eb';
-
     const keypoints = frame.keypoints;
-
-    // Find keypoints by name
+    
+    // Helper function to find keypoint by name
     const getKeypointByName = (name: string) => {
       return keypoints.find((kp: any) => kp.name === name);
     };
 
-    // Enhanced anatomical connections for realistic bone structure
-    const connections = [
-      // Head and neck
-      ['head', 'neck'],
-      ['neck', 'left_shoulder'],
-      ['neck', 'right_shoulder'],
-      // Upper body structure
-      ['left_shoulder', 'right_shoulder'],
-      ['left_shoulder', 'spine'],
-      ['right_shoulder', 'spine'],
-      // Arms - left side
-      ['left_shoulder', 'left_elbow'],
-      ['left_elbow', 'left_wrist'],
-      // Arms - right side  
-      ['right_shoulder', 'right_elbow'],
-      ['right_elbow', 'right_wrist'],
-      // Torso
-      ['spine', 'left_hip'],
-      ['spine', 'right_hip'],
-      ['left_hip', 'right_hip'],
-      // Legs - left side
-      ['left_hip', 'left_knee'],
-      ['left_knee', 'left_ankle'],
-      ['left_ankle', 'left_foot'],
-      // Legs - right side
-      ['right_hip', 'right_knee'],
-      ['right_knee', 'right_ankle'],
-      ['right_ankle', 'right_foot']
-    ];
-
-    // Draw connections with status-based coloring
-    connections.forEach(([startName, endName]) => {
-      const start = getKeypointByName(startName);
-      const end = getKeypointByName(endName);
+    // Helper function to draw a bone between two points
+    const drawBone = (start: any, end: any, width: number, boneColor: string) => {
+      if (!start || !end) return;
       
-      if (start && end) {
-        // Set color based on joint status
-        const affectedJoint = start.status === 'limited' || end.status === 'limited';
-        ctx.strokeStyle = affectedJoint ? '#ef4444' : '#2563eb'; // Red for limited, blue for normal
-        ctx.lineWidth = affectedJoint ? 4 : 3; // Thicker lines for affected joints
-        
-        ctx.beginPath();
-        ctx.moveTo(start.x, start.y);
-        ctx.lineTo(end.x, end.y);
-        ctx.stroke();
-      }
-    });
-
-    // Draw head as circle
-    const head = getKeypointByName('head');
-    if (head) {
+      const angle = Math.atan2(end.y - start.y, end.x - start.x);
+      const length = Math.sqrt((end.x - start.x) ** 2 + (end.y - start.y) ** 2);
+      
+      ctx.save();
+      ctx.translate(start.x, start.y);
+      ctx.rotate(angle);
+      
+      // Create gradient for 3D bone effect
+      const gradient = ctx.createLinearGradient(0, -width/2, 0, width/2);
+      gradient.addColorStop(0, '#f3f4f6');
+      gradient.addColorStop(0.5, boneColor);
+      gradient.addColorStop(1, '#9ca3af');
+      
+      ctx.fillStyle = gradient;
+      
+      // Draw rounded bone shape
       ctx.beginPath();
-      ctx.arc(head.x, head.y, 12, 0, 2 * Math.PI);
+      ctx.roundRect(0, -width/2, length, width, width/2);
+      ctx.fill();
+      
+      // Add bone outline
+      ctx.strokeStyle = '#6b7280';
+      ctx.lineWidth = 1;
       ctx.stroke();
+      
+      ctx.restore();
+    };
+
+    // Helper function to get bone color based on status
+    const getBoneColor = (joint1: any, joint2: any) => {
+      if (joint1?.status === 'limited' || joint2?.status === 'limited') {
+        return '#ffb3b3'; // Red tint for affected bones
+      }
+      if (joint1?.status === 'compensating' || joint2?.status === 'compensating') {
+        return '#fff3b3'; // Yellow tint for compensating bones
+      }
+      return '#f5deb3'; // Normal bone color (tan/beige)
+    };
+
+    // Draw major bones in anatomical order (back to front)
+    
+    // 1. Spine/Vertebrae (simplified as single bone)
+    const neck = getKeypointByName('neck');
+    const spine = getKeypointByName('spine');
+    if (neck && spine) {
+      drawBone(neck, spine, 8, getBoneColor(neck, spine));
     }
 
-    // Draw joints as color-coded circles based on clinical status
+    // 2. Pelvis (simplified as horizontal bone)
+    const leftHip = getKeypointByName('left_hip');
+    const rightHip = getKeypointByName('right_hip');
+    if (leftHip && rightHip) {
+      drawBone(leftHip, rightHip, 12, getBoneColor(leftHip, rightHip));
+    }
+
+    // 3. Femur bones (thigh bones)
+    const leftKnee = getKeypointByName('left_knee');
+    const rightKnee = getKeypointByName('right_knee');
+    if (leftHip && leftKnee) {
+      drawBone(leftHip, leftKnee, 14, getBoneColor(leftHip, leftKnee)); // Left femur
+    }
+    if (rightHip && rightKnee) {
+      drawBone(rightHip, rightKnee, 14, getBoneColor(rightHip, rightKnee)); // Right femur
+    }
+
+    // 4. Tibia bones (shin bones)
+    const leftAnkle = getKeypointByName('left_ankle');
+    const rightAnkle = getKeypointByName('right_ankle');
+    if (leftKnee && leftAnkle) {
+      drawBone(leftKnee, leftAnkle, 10, getBoneColor(leftKnee, leftAnkle)); // Left tibia
+    }
+    if (rightKnee && rightAnkle) {
+      drawBone(rightKnee, rightAnkle, 10, getBoneColor(rightKnee, rightAnkle)); // Right tibia
+    }
+
+    // 5. Fibula bones (smaller lower leg bones) - slightly offset
+    if (leftKnee && leftAnkle) {
+      const fibulaStart = { x: leftKnee.x - 3, y: leftKnee.y + 5 };
+      const fibulaEnd = { x: leftAnkle.x - 3, y: leftAnkle.y };
+      drawBone(fibulaStart, fibulaEnd, 4, getBoneColor(leftKnee, leftAnkle)); // Left fibula
+    }
+    if (rightKnee && rightAnkle) {
+      const fibulaStart = { x: rightKnee.x + 3, y: rightKnee.y + 5 };
+      const fibulaEnd = { x: rightAnkle.x + 3, y: rightAnkle.y };
+      drawBone(fibulaStart, fibulaEnd, 4, getBoneColor(rightKnee, rightAnkle)); // Right fibula
+    }
+
+    // 6. Humerus bones (upper arm)
+    const leftShoulder = getKeypointByName('left_shoulder');
+    const rightShoulder = getKeypointByName('right_shoulder');
+    const leftElbow = getKeypointByName('left_elbow');
+    const rightElbow = getKeypointByName('right_elbow');
+    if (leftShoulder && leftElbow) {
+      drawBone(leftShoulder, leftElbow, 10, getBoneColor(leftShoulder, leftElbow)); // Left humerus
+    }
+    if (rightShoulder && rightElbow) {
+      drawBone(rightShoulder, rightElbow, 10, getBoneColor(rightShoulder, rightElbow)); // Right humerus
+    }
+
+    // 7. Radius bones (forearm - thumb side)
+    const leftWrist = getKeypointByName('left_wrist');
+    const rightWrist = getKeypointByName('right_wrist');
+    if (leftElbow && leftWrist) {
+      drawBone(leftElbow, leftWrist, 6, getBoneColor(leftElbow, leftWrist)); // Left radius
+    }
+    if (rightElbow && rightWrist) {
+      drawBone(rightElbow, rightWrist, 6, getBoneColor(rightElbow, rightWrist)); // Right radius
+    }
+
+    // 8. Ulna bones (forearm - pinky side) - slightly offset
+    if (leftElbow && leftWrist) {
+      const ulnaStart = { x: leftElbow.x - 2, y: leftElbow.y };
+      const ulnaEnd = { x: leftWrist.x + 2, y: leftWrist.y };
+      drawBone(ulnaStart, ulnaEnd, 5, getBoneColor(leftElbow, leftWrist)); // Left ulna
+    }
+    if (rightElbow && rightWrist) {
+      const ulnaStart = { x: rightElbow.x + 2, y: rightElbow.y };
+      const ulnaEnd = { x: rightWrist.x - 2, y: rightWrist.y };
+      drawBone(ulnaStart, ulnaEnd, 5, getBoneColor(rightElbow, rightWrist)); // Right ulna
+    }
+
+    // 9. Foot bones (simplified)
+    const leftFoot = getKeypointByName('left_foot');
+    const rightFoot = getKeypointByName('right_foot');
+    if (leftAnkle && leftFoot) {
+      drawBone(leftAnkle, leftFoot, 6, getBoneColor(leftAnkle, leftFoot)); // Left foot
+    }
+    if (rightAnkle && rightFoot) {
+      drawBone(rightAnkle, rightFoot, 6, getBoneColor(rightAnkle, rightFoot)); // Right foot
+    }
+
+    // 10. Shoulder girdle (clavicles)
+    if (neck && leftShoulder) {
+      drawBone(neck, leftShoulder, 6, getBoneColor(neck, leftShoulder)); // Left clavicle
+    }
+    if (neck && rightShoulder) {
+      drawBone(neck, rightShoulder, 6, getBoneColor(neck, rightShoulder)); // Right clavicle
+    }
+
+    // Draw head as skull
+    const head = getKeypointByName('head');
+    if (head) {
+      // Skull shape
+      ctx.fillStyle = '#f5deb3';
+      ctx.beginPath();
+      ctx.arc(head.x, head.y, 14, 0, 2 * Math.PI);
+      ctx.fill();
+      
+      // Skull outline
+      ctx.strokeStyle = '#8b5a2b';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(head.x, head.y, 14, 0, 2 * Math.PI);
+      ctx.stroke();
+      
+      // Eye sockets
+      ctx.fillStyle = '#666';
+      ctx.beginPath();
+      ctx.arc(head.x - 4, head.y - 2, 2, 0, 2 * Math.PI);
+      ctx.arc(head.x + 4, head.y - 2, 2, 0, 2 * Math.PI);
+      ctx.fill();
+    }
+
+    // Draw joints as articulation points
     keypoints.forEach((kp: any) => {
-      if (kp.name !== 'head') {
+      if (kp.name !== 'head' && kp.name !== 'left_foot' && kp.name !== 'right_foot') {
         // Set joint color based on status
         switch (kp.status) {
           case 'limited':
-            ctx.fillStyle = '#ef4444'; // Red for limited/painful
+            ctx.fillStyle = '#dc2626'; // Dark red for limited/painful joints
+            ctx.strokeStyle = '#fca5a5'; // Light red outline
             break;
           case 'compensating':
-            ctx.fillStyle = '#f59e0b'; // Yellow for compensating
+            ctx.fillStyle = '#d97706'; // Orange for compensating joints
+            ctx.strokeStyle = '#fed7aa'; // Light orange outline
             break;
           default:
-            ctx.fillStyle = '#10b981'; // Green for normal
+            ctx.fillStyle = '#047857'; // Dark green for normal joints
+            ctx.strokeStyle = '#a7f3d0'; // Light green outline
         }
         
-        // Larger circles for affected joints
-        const radius = kp.status === 'limited' ? 6 : 4;
+        // Joint size based on status
+        const radius = kp.status === 'limited' ? 8 : 6;
         
+        // Draw joint capsule
         ctx.beginPath();
         ctx.arc(kp.x, kp.y, radius, 0, 2 * Math.PI);
         ctx.fill();
         
-        // Add subtle pulsing effect for painful joints
+        // Joint outline
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(kp.x, kp.y, radius, 0, 2 * Math.PI);
+        ctx.stroke();
+        
+        // Add pulsing effect for painful joints
         if (kp.status === 'limited') {
-          ctx.strokeStyle = '#fca5a5';
-          ctx.lineWidth = 2;
+          ctx.strokeStyle = '#ef4444';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.arc(kp.x, kp.y, radius + 3, 0, 2 * Math.PI);
           ctx.stroke();
         }
       }

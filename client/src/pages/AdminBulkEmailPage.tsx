@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAuth } from '@/hooks/use-auth';
-import { Navigate } from 'wouter';
+import { Redirect } from 'wouter';
 import BulkEmailDashboard from '@/components/admin/BulkEmailDashboard';
 
 export default function AdminBulkEmailPage() {
@@ -16,7 +16,7 @@ export default function AdminBulkEmailPage() {
 
   // Check if user is admin (Fateofjustice)
   if (!user || user.username !== 'Fateofjustice') {
-    return <Navigate to="/auth" replace />;
+    return <Redirect to="/auth" />;
   }
 
   return (

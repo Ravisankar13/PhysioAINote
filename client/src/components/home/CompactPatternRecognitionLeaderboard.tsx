@@ -79,11 +79,11 @@ const CompactPatternRecognitionLeaderboard = () => {
         {stats && (
           <div className="grid grid-cols-2 gap-3 mb-4">
             <div className="text-center p-2 bg-white/10 rounded-lg">
-              <div className="text-lg font-bold text-blue-300">{stats.highestScore}</div>
+              <div className="text-2xl font-black text-blue-300 shadow-lg">{stats.highestScore}</div>
               <div className="text-xs text-white/70">Best Score</div>
             </div>
             <div className="text-center p-2 bg-white/10 rounded-lg">
-              <div className="text-lg font-bold text-green-300">{stats.totalPlayers}</div>
+              <div className="text-2xl font-black text-green-300 shadow-lg">{stats.totalPlayers}</div>
               <div className="text-xs text-white/70">Players</div>
             </div>
           </div>

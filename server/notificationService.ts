@@ -1,4 +1,4 @@
-import { MailService } from '@sendgrid/mail';
+// SendGrid functionality removed for deployment compatibility
 import { db } from './db';
 import { users, competitions, competitionParticipants } from '@shared/schema';
 import { eq, and, gte, lte } from 'drizzle-orm';
@@ -17,43 +17,23 @@ export interface CompetitionNotification {
 }
 
 export class NotificationService {
-  private mailService: MailService | null = null;
   private inAppNotifications: Map<number, any[]> = new Map(); // userId -> notifications
 
   constructor() {
-    if (process.env.SENDGRID_API_KEY) {
-      this.mailService = new MailService();
-      this.mailService.setApiKey(process.env.SENDGRID_API_KEY);
-    }
+    // Email functionality disabled for deployment compatibility
   }
 
   /**
-   * Send email notification using SendGrid
+   * Send email notification (disabled for deployment compatibility)
    */
   async sendEmailNotification(
     to: string,
     template: NotificationTemplate,
     fromEmail: string = 'noreply@physiogpt.com'
   ): Promise<boolean> {
-    if (!this.mailService) {
-      console.log('📧 SendGrid not configured, email notification skipped');
-      return false;
-    }
-
-    try {
-      await this.mailService.send({
-        to,
-        from: fromEmail,
-        subject: template.subject,
-        text: template.text,
-        html: template.html,
-      });
-      console.log(`📧 Email sent to ${to}: ${template.subject}`);
-      return true;
-    } catch (error) {
-      console.error('📧 Email sending failed:', error);
-      return false;
-    }
+    console.log('📧 Email functionality disabled for deployment compatibility');
+    console.log(`📧 Would have sent email to ${to}: ${template.subject}`);
+    return false;
   }
 
   /**

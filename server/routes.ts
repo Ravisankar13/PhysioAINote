@@ -39,8 +39,7 @@ import { documentGenerationService } from "./documentGenerationService";
 import { googleVeoService } from "./googleVeoService";
 import { runwayService } from "./runwayService";
 import { leonardoService } from "./leonardoService";
-import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, exercises, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, competitionParticipants, soapNotes, insertSoapNoteSchema, bodyScans, insertBodyScanSchema, tournamentParticipants, diagnosisDuelTournaments, gameContent, virtualPatients, patternRecognitionScores, emailCampaigns, emailCampaignRecipients, insertEmailCampaignSchema } from "@shared/schema";
-import { bulkEmailService } from './bulkEmailService';
+import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, exercises, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, competitionParticipants, soapNotes, insertSoapNoteSchema, bodyScans, insertBodyScanSchema, tournamentParticipants, diagnosisDuelTournaments, gameContent, virtualPatients, patternRecognitionScores } from "@shared/schema";
 import { ZodError, z } from "zod";
 import { fromZodError } from "zod-validation-error";
 import multer from "multer";
@@ -11379,114 +11378,7 @@ Respond in JSON format:
     }
   });
 
-  // Bulk Email Campaign Routes
-  
-  // Send Pattern Recognition announcement to all competition subscribers
-  app.post("/api/admin/send-pattern-recognition-announcement", async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
-    
-    // Check if user is admin (Fateofjustice)
-    if (req.user!.username !== "Fateofjustice") {
-      return res.status(403).json({ error: "Admin access required" });
-    }
-    
-    try {
-      const { targetAudience = 'competition_subscribers' } = req.body;
-      
-      const result = await bulkEmailService.sendPatternRecognitionAnnouncement(
-        req.user!.id,
-        { targetAudience }
-      );
-      
-      res.json({
-        success: true,
-        message: `Pattern Recognition announcement sent to ${result.recipientCount} users`,
-        campaignId: result.campaignId,
-        recipientCount: result.recipientCount
-      });
-      
-    } catch (error: any) {
-      console.error("Error sending Pattern Recognition announcement:", error);
-      res.status(500).json({ error: error.message });
-    }
-  });
 
-  // Create and send custom email campaign
-  app.post("/api/admin/create-email-campaign", async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
-    
-    // Check if user is admin (Fateofjustice)
-    if (req.user!.username !== "Fateofjustice") {
-      return res.status(403).json({ error: "Admin access required" });
-    }
-    
-    try {
-      const { title, subject, htmlContent, textContent, targetAudience, competitionId, scheduledFor } = req.body;
-      
-      const result = await bulkEmailService.createAndSendCampaign({
-        title,
-        template: { subject, htmlContent, textContent },
-        sentByUserId: req.user!.id,
-        competitionId,
-        targetAudience,
-        scheduledFor: scheduledFor ? new Date(scheduledFor) : undefined
-      });
-      
-      res.json({
-        success: true,
-        message: `Email campaign created and ${scheduledFor ? 'scheduled' : 'sent'} to ${result.recipientCount} users`,
-        campaignId: result.campaignId,
-        recipientCount: result.recipientCount
-      });
-      
-    } catch (error: any) {
-      console.error("Error creating email campaign:", error);
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // Get campaign statistics
-  app.get("/api/admin/email-campaigns/:id/stats", async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
-    
-    // Check if user is admin (Fateofjustice)
-    if (req.user!.username !== "Fateofjustice") {
-      return res.status(403).json({ error: "Admin access required" });
-    }
-    
-    try {
-      const campaignId = parseInt(req.params.id);
-      const stats = await bulkEmailService.getCampaignStats(campaignId);
-      res.json(stats);
-      
-    } catch (error: any) {
-      console.error("Error getting campaign stats:", error);
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // Get all email campaigns (admin only)
-  app.get("/api/admin/email-campaigns", async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
-    
-    // Check if user is admin (Fateofjustice)  
-    if (req.user!.username !== "Fateofjustice") {
-      return res.status(403).json({ error: "Admin access required" });
-    }
-    
-    try {
-      const campaigns = await db.query.emailCampaigns.findMany({
-        orderBy: (emailCampaigns, { desc }) => [desc(emailCampaigns.createdAt)],
-        limit: 50
-      });
-      
-      res.json(campaigns);
-      
-    } catch (error: any) {
-      console.error("Error getting email campaigns:", error);
-      res.status(500).json({ error: error.message });
-    }
-  });
 
   return httpServer;
 }

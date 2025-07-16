@@ -94,32 +94,47 @@ export function StickFigureAnimation({
       return keypoints.find((kp: any) => kp.name === name);
     };
 
-    // Draw connections between joints
+    // Enhanced anatomical connections for realistic bone structure
     const connections = [
-      ['head', 'left_shoulder'],
-      ['head', 'right_shoulder'],
+      // Head and neck
+      ['head', 'neck'],
+      ['neck', 'left_shoulder'],
+      ['neck', 'right_shoulder'],
+      // Upper body structure
       ['left_shoulder', 'right_shoulder'],
-      ['left_shoulder', 'left_elbow'],
-      ['left_elbow', 'left_wrist'],
-      ['right_shoulder', 'right_elbow'],
-      ['right_elbow', 'right_wrist'],
       ['left_shoulder', 'spine'],
       ['right_shoulder', 'spine'],
+      // Arms - left side
+      ['left_shoulder', 'left_elbow'],
+      ['left_elbow', 'left_wrist'],
+      // Arms - right side  
+      ['right_shoulder', 'right_elbow'],
+      ['right_elbow', 'right_wrist'],
+      // Torso
       ['spine', 'left_hip'],
       ['spine', 'right_hip'],
       ['left_hip', 'right_hip'],
+      // Legs - left side
       ['left_hip', 'left_knee'],
       ['left_knee', 'left_ankle'],
+      ['left_ankle', 'left_foot'],
+      // Legs - right side
       ['right_hip', 'right_knee'],
-      ['right_knee', 'right_ankle']
+      ['right_knee', 'right_ankle'],
+      ['right_ankle', 'right_foot']
     ];
 
-    // Draw connections
+    // Draw connections with status-based coloring
     connections.forEach(([startName, endName]) => {
       const start = getKeypointByName(startName);
       const end = getKeypointByName(endName);
       
       if (start && end) {
+        // Set color based on joint status
+        const affectedJoint = start.status === 'limited' || end.status === 'limited';
+        ctx.strokeStyle = affectedJoint ? '#ef4444' : '#2563eb'; // Red for limited, blue for normal
+        ctx.lineWidth = affectedJoint ? 4 : 3; // Thicker lines for affected joints
+        
         ctx.beginPath();
         ctx.moveTo(start.x, start.y);
         ctx.lineTo(end.x, end.y);
@@ -135,12 +150,34 @@ export function StickFigureAnimation({
       ctx.stroke();
     }
 
-    // Draw joints as small circles
+    // Draw joints as color-coded circles based on clinical status
     keypoints.forEach((kp: any) => {
       if (kp.name !== 'head') {
+        // Set joint color based on status
+        switch (kp.status) {
+          case 'limited':
+            ctx.fillStyle = '#ef4444'; // Red for limited/painful
+            break;
+          case 'compensating':
+            ctx.fillStyle = '#f59e0b'; // Yellow for compensating
+            break;
+          default:
+            ctx.fillStyle = '#10b981'; // Green for normal
+        }
+        
+        // Larger circles for affected joints
+        const radius = kp.status === 'limited' ? 6 : 4;
+        
         ctx.beginPath();
-        ctx.arc(kp.x, kp.y, 4, 0, 2 * Math.PI);
+        ctx.arc(kp.x, kp.y, radius, 0, 2 * Math.PI);
         ctx.fill();
+        
+        // Add subtle pulsing effect for painful joints
+        if (kp.status === 'limited') {
+          ctx.strokeStyle = '#fca5a5';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
       }
     });
   };

@@ -806,106 +806,321 @@ export default function VirtualPatientsPage() {
     // Parse clinical text to determine movement type and create appropriate animation
     const lowerText = clinicalText.toLowerCase();
     
-    // Base stick figure keypoints (head, shoulders, elbows, wrists, hips, knees, ankles)
+    // Enhanced anatomical stick figure with proper bone segments
     const baseFrame = {
       keypoints: [
-        { x: 200, y: 50, name: 'head' },
-        { x: 180, y: 100, name: 'left_shoulder' },
-        { x: 220, y: 100, name: 'right_shoulder' },
-        { x: 160, y: 140, name: 'left_elbow' },
-        { x: 240, y: 140, name: 'right_elbow' },
-        { x: 140, y: 180, name: 'left_wrist' },
-        { x: 260, y: 180, name: 'right_wrist' },
-        { x: 200, y: 150, name: 'spine' },
-        { x: 180, y: 200, name: 'left_hip' },
-        { x: 220, y: 200, name: 'right_hip' },
-        { x: 175, y: 250, name: 'left_knee' },
-        { x: 225, y: 250, name: 'right_knee' },
-        { x: 170, y: 300, name: 'left_ankle' },
-        { x: 230, y: 300, name: 'right_ankle' }
+        { x: 200, y: 50, name: 'head', status: 'normal' },
+        { x: 200, y: 75, name: 'neck', status: 'normal' },
+        { x: 180, y: 100, name: 'left_shoulder', status: 'normal' },
+        { x: 220, y: 100, name: 'right_shoulder', status: 'normal' },
+        { x: 160, y: 140, name: 'left_elbow', status: 'normal' },
+        { x: 240, y: 140, name: 'right_elbow', status: 'normal' },
+        { x: 140, y: 180, name: 'left_wrist', status: 'normal' },
+        { x: 260, y: 180, name: 'right_wrist', status: 'normal' },
+        { x: 200, y: 150, name: 'spine', status: 'normal' },
+        { x: 180, y: 200, name: 'left_hip', status: 'normal' },
+        { x: 220, y: 200, name: 'right_hip', status: 'normal' },
+        { x: 175, y: 250, name: 'left_knee', status: 'normal' },
+        { x: 225, y: 250, name: 'right_knee', status: 'normal' },
+        { x: 170, y: 300, name: 'left_ankle', status: 'normal' },
+        { x: 230, y: 300, name: 'right_ankle', status: 'normal' },
+        { x: 165, y: 315, name: 'left_foot', status: 'normal' },
+        { x: 235, y: 315, name: 'right_foot', status: 'normal' }
       ]
     };
+
+    // Parse clinical findings from text
+    const clinicalFindings = parseClinicalText(lowerText);
+    
+    // Apply clinical status to affected joints
+    baseFrame.keypoints.forEach(kp => {
+      if (clinicalFindings.affectedJoints[kp.name]) {
+        kp.status = clinicalFindings.affectedJoints[kp.name];
+      }
+    });
 
     // Generate movement frames based on clinical description
     const frames = [baseFrame];
     
-    // Generate 20 frames of movement animation
-    for (let i = 1; i <= 20; i++) {
-      const progress = i / 20;
-      const frame = JSON.parse(JSON.stringify(baseFrame));
-      
-      // Apply movement patterns based on clinical text
-      if (lowerText.includes('shoulder') || lowerText.includes('arm') || lowerText.includes('flexion')) {
-        // Shoulder movement animation - create actual range of motion
-        const shoulderCycle = Math.sin(progress * Math.PI * 2); // -1 to 1
-        const maxRange = lowerText.includes('limited') || lowerText.includes('restricted') ? 30 : 60;
-        const range = shoulderCycle * maxRange;
-        
-        frame.keypoints.forEach(kp => {
-          if (kp.name.includes('shoulder')) {
-            kp.y += range * 0.3; // Shoulder elevation
-          }
-          if (kp.name.includes('elbow')) {
-            kp.y += range * 0.5; // Elbow follows shoulder
-            kp.x += range * 0.2; // Slight forward movement
-          }
-          if (kp.name.includes('wrist')) {
-            kp.y += range * 0.7; // Wrist follows elbow
-            kp.x += range * 0.3; // More forward movement
-          }
-        });
-      } else if (lowerText.includes('knee') || lowerText.includes('leg')) {
-        // Knee movement animation - walking or squatting motion
-        const kneeCycle = Math.sin(progress * Math.PI * 4); // Faster cycle for walking
-        const maxBend = lowerText.includes('pain') || lowerText.includes('stiff') ? 20 : 40;
-        const bend = kneeCycle * maxBend;
-        
-        frame.keypoints.forEach(kp => {
-          if (kp.name.includes('knee')) {
-            kp.y += Math.abs(bend); // Knees move up during flexion
-          }
-          if (kp.name.includes('ankle')) {
-            kp.y += Math.abs(bend) * 0.5; // Ankles follow knees
-          }
-          if (kp.name.includes('hip')) {
-            kp.y += bend * 0.3; // Hips drop slightly during squat
-          }
-        });
-      } else if (lowerText.includes('back') || lowerText.includes('spine')) {
-        // Spine movement animation - flexion/extension
-        const spineCycle = Math.sin(progress * Math.PI * 2);
-        const maxFlex = lowerText.includes('limited') || lowerText.includes('stiff') ? 15 : 30;
-        const flexion = spineCycle * maxFlex;
-        
-        frame.keypoints.forEach(kp => {
-          if (kp.name === 'spine') {
-            kp.x += flexion * 0.5; // Forward flexion
-            kp.y += Math.abs(flexion) * 0.3; // Slight drop
-          }
-          if (kp.name === 'head') {
-            kp.x += flexion * 0.8; // Head follows spine
-            kp.y += Math.abs(flexion) * 0.5;
-          }
-          if (kp.name.includes('shoulder')) {
-            kp.x += flexion * 0.6; // Shoulders follow spine
-            kp.y += Math.abs(flexion) * 0.2;
-          }
-        });
-      } else {
-        // General movement animation - subtle swaying
-        const swayCycle = Math.sin(progress * Math.PI * 2);
-        const swayAmount = 8;
-        
-        frame.keypoints.forEach(kp => {
-          kp.x += swayCycle * swayAmount * 0.5;
-          kp.y += Math.cos(progress * Math.PI * 3) * 3; // Slight breathing motion
-        });
-      }
-      
+    // Generate 30 frames of anatomically correct movement animation
+    for (let i = 1; i <= 30; i++) {
+      const progress = i / 30;
+      const frame = generateAnatomicalMovement(baseFrame, progress, clinicalFindings);
       frames.push(frame);
     }
     
     return frames;
+  };
+
+  // Parse clinical text to identify specific joint limitations and compensations
+  const parseClinicalText = (text: string) => {
+    const findings = {
+      affectedJoints: {} as Record<string, string>,
+      movementType: 'general',
+      limitations: [] as string[],
+      compensations: [] as string[],
+      severity: 'moderate'
+    };
+
+    // Identify affected body parts and sides
+    const leftSide = text.includes('left') || text.includes('l)') || text.includes('l ');
+    const rightSide = text.includes('right') || text.includes('r)') || text.includes('r ');
+    
+    // Identify specific joints and movements
+    if (text.includes('shoulder')) {
+      findings.movementType = 'shoulder';
+      if (leftSide) findings.affectedJoints['left_shoulder'] = 'limited';
+      if (rightSide) findings.affectedJoints['right_shoulder'] = 'limited';
+      if (!leftSide && !rightSide) {
+        findings.affectedJoints['left_shoulder'] = 'limited';
+        findings.affectedJoints['right_shoulder'] = 'limited';
+      }
+    }
+    
+    if (text.includes('knee')) {
+      findings.movementType = 'knee';
+      if (leftSide) findings.affectedJoints['left_knee'] = 'limited';
+      if (rightSide) findings.affectedJoints['right_knee'] = 'limited';
+      if (!leftSide && !rightSide) {
+        findings.affectedJoints['left_knee'] = 'limited';
+        findings.affectedJoints['right_knee'] = 'limited';
+      }
+    }
+    
+    if (text.includes('ankle')) {
+      findings.movementType = 'ankle';
+      if (leftSide) findings.affectedJoints['left_ankle'] = 'limited';
+      if (rightSide) findings.affectedJoints['right_ankle'] = 'limited';
+      if (!leftSide && !rightSide) {
+        findings.affectedJoints['left_ankle'] = 'limited';
+        findings.affectedJoints['right_ankle'] = 'limited';
+      }
+    }
+    
+    if (text.includes('back') || text.includes('spine')) {
+      findings.movementType = 'spine';
+      findings.affectedJoints['spine'] = 'limited';
+    }
+    
+    if (text.includes('hip')) {
+      findings.movementType = 'hip';
+      if (leftSide) findings.affectedJoints['left_hip'] = 'limited';
+      if (rightSide) findings.affectedJoints['right_hip'] = 'limited';
+      if (!leftSide && !rightSide) {
+        findings.affectedJoints['left_hip'] = 'limited';
+        findings.affectedJoints['right_hip'] = 'limited';
+      }
+    }
+
+    // Identify limitations
+    if (text.includes('decreased') || text.includes('limited') || text.includes('restricted')) {
+      findings.limitations.push('range_of_motion');
+    }
+    if (text.includes('pain') || text.includes('painful')) {
+      findings.limitations.push('pain');
+    }
+    if (text.includes('stiff') || text.includes('rigid')) {
+      findings.limitations.push('stiffness');
+    }
+
+    // Identify severity
+    if (text.includes('severe') || text.includes('significant')) {
+      findings.severity = 'severe';
+    } else if (text.includes('mild') || text.includes('slight')) {
+      findings.severity = 'mild';
+    }
+
+    // Identify compensations
+    if (text.includes('compensat') || text.includes('favor') || text.includes('avoid')) {
+      findings.compensations.push('altered_movement');
+    }
+
+    return findings;
+  };
+
+  // Generate anatomically correct movement with joint constraints
+  const generateAnatomicalMovement = (baseFrame: any, progress: number, findings: any) => {
+    const frame = JSON.parse(JSON.stringify(baseFrame));
+    
+    // Get movement amplitude based on limitations
+    const getMovementAmplitude = (jointName: string, normalRange: number) => {
+      const status = findings.affectedJoints[jointName];
+      if (!status) return normalRange;
+      
+      switch (findings.severity) {
+        case 'severe': return normalRange * 0.3;
+        case 'moderate': return normalRange * 0.6;
+        case 'mild': return normalRange * 0.8;
+        default: return normalRange;
+      }
+    };
+
+    // Apply specific movement patterns based on clinical findings
+    switch (findings.movementType) {
+      case 'shoulder':
+        generateShoulderMovement(frame, progress, findings, getMovementAmplitude);
+        break;
+      case 'knee':
+        generateKneeMovement(frame, progress, findings, getMovementAmplitude);
+        break;
+      case 'ankle':
+        generateAnkleMovement(frame, progress, findings, getMovementAmplitude);
+        break;
+      case 'spine':
+        generateSpineMovement(frame, progress, findings, getMovementAmplitude);
+        break;
+      case 'hip':
+        generateHipMovement(frame, progress, findings, getMovementAmplitude);
+        break;
+      default:
+        generateGeneralMovement(frame, progress, findings, getMovementAmplitude);
+    }
+
+    return frame;
+  };
+
+  // Shoulder movement with anatomical constraints
+  const generateShoulderMovement = (frame: any, progress: number, findings: any, getAmplitude: Function) => {
+    const cycle = Math.sin(progress * Math.PI * 2);
+    
+    // Normal shoulder abduction: 0-180 degrees
+    const leftRange = getAmplitude('left_shoulder', 60);
+    const rightRange = getAmplitude('right_shoulder', 60);
+    
+    frame.keypoints.forEach((kp: any) => {
+      if (kp.name === 'left_shoulder' && findings.affectedJoints['left_shoulder']) {
+        // Limited shoulder elevation
+        kp.y += cycle * leftRange * 0.3;
+      }
+      if (kp.name === 'left_elbow' && findings.affectedJoints['left_shoulder']) {
+        // Elbow follows shoulder with kinematic chain
+        kp.y += cycle * leftRange * 0.5;
+        kp.x += cycle * leftRange * 0.2;
+      }
+      if (kp.name === 'left_wrist' && findings.affectedJoints['left_shoulder']) {
+        // Wrist follows elbow
+        kp.y += cycle * leftRange * 0.7;
+        kp.x += cycle * leftRange * 0.3;
+      }
+      
+      // Add compensation if severe limitation
+      if (findings.severity === 'severe' && findings.affectedJoints['left_shoulder']) {
+        // Trunk lean compensation
+        if (kp.name === 'spine') {
+          kp.x += Math.abs(cycle) * 15;
+        }
+        // Shoulder hiking
+        if (kp.name === 'left_shoulder') {
+          kp.y -= Math.abs(cycle) * 10;
+        }
+      }
+    });
+  };
+
+  // Knee movement with flexion constraints
+  const generateKneeMovement = (frame: any, progress: number, findings: any, getAmplitude: Function) => {
+    const cycle = Math.sin(progress * Math.PI * 4); // Walking pattern
+    
+    // Normal knee flexion: 0-135 degrees
+    const leftRange = getAmplitude('left_knee', 40);
+    const rightRange = getAmplitude('right_knee', 40);
+    
+    frame.keypoints.forEach((kp: any) => {
+      if (kp.name === 'left_knee' && findings.affectedJoints['left_knee']) {
+        // Limited knee flexion
+        kp.y += Math.abs(cycle) * leftRange * 0.5;
+      }
+      if (kp.name === 'left_ankle' && findings.affectedJoints['left_knee']) {
+        // Ankle follows knee movement
+        kp.y += Math.abs(cycle) * leftRange * 0.3;
+      }
+      
+      // Hip hiking compensation for limited knee flexion
+      if (findings.severity !== 'mild' && findings.affectedJoints['left_knee']) {
+        if (kp.name === 'left_hip') {
+          kp.y -= Math.abs(cycle) * 15; // Hip hikes to clear ground
+        }
+      }
+    });
+  };
+
+  // Ankle movement with dorsiflexion/plantarflexion
+  const generateAnkleMovement = (frame: any, progress: number, findings: any, getAmplitude: Function) => {
+    const cycle = Math.sin(progress * Math.PI * 3);
+    
+    // Normal ankle dorsiflexion: 20 degrees, plantarflexion: 50 degrees
+    const leftRange = getAmplitude('left_ankle', 15);
+    const rightRange = getAmplitude('right_ankle', 15);
+    
+    frame.keypoints.forEach((kp: any) => {
+      if (kp.name === 'left_foot' && findings.affectedJoints['left_ankle']) {
+        // Limited foot dorsiflexion
+        kp.y += cycle * leftRange * 0.3;
+        kp.x += cycle * leftRange * 0.5; // Foot angle change
+      }
+      if (kp.name === 'left_ankle' && findings.affectedJoints['left_ankle']) {
+        kp.y += cycle * leftRange * 0.2;
+      }
+    });
+  };
+
+  // Spine movement with flexion/extension constraints
+  const generateSpineMovement = (frame: any, progress: number, findings: any, getAmplitude: Function) => {
+    const cycle = Math.sin(progress * Math.PI * 2);
+    
+    // Normal spinal flexion: 80 degrees
+    const spineRange = getAmplitude('spine', 25);
+    
+    frame.keypoints.forEach((kp: any) => {
+      if (kp.name === 'spine') {
+        kp.x += cycle * spineRange * 0.6; // Forward flexion
+        kp.y += Math.abs(cycle) * spineRange * 0.3;
+      }
+      if (kp.name === 'head' || kp.name === 'neck') {
+        kp.x += cycle * spineRange * 0.8; // Head follows spine
+        kp.y += Math.abs(cycle) * spineRange * 0.4;
+      }
+      if (kp.name.includes('shoulder')) {
+        kp.x += cycle * spineRange * 0.5; // Shoulders follow spine
+        kp.y += Math.abs(cycle) * spineRange * 0.2;
+      }
+    });
+  };
+
+  // Hip movement patterns
+  const generateHipMovement = (frame: any, progress: number, findings: any, getAmplitude: Function) => {
+    const cycle = Math.sin(progress * Math.PI * 2);
+    
+    // Normal hip flexion: 120 degrees
+    const leftRange = getAmplitude('left_hip', 30);
+    const rightRange = getAmplitude('right_hip', 30);
+    
+    frame.keypoints.forEach((kp: any) => {
+      if (kp.name === 'left_hip' && findings.affectedJoints['left_hip']) {
+        kp.y += cycle * leftRange * 0.3;
+      }
+      if (kp.name === 'left_knee' && findings.affectedJoints['left_hip']) {
+        // Knee follows hip movement
+        kp.y += cycle * leftRange * 0.5;
+        kp.x += cycle * leftRange * 0.4;
+      }
+    });
+  };
+
+  // General movement for non-specific descriptions
+  const generateGeneralMovement = (frame: any, progress: number, findings: any, getAmplitude: Function) => {
+    const sway = Math.sin(progress * Math.PI * 2);
+    const breathing = Math.sin(progress * Math.PI * 6);
+    
+    frame.keypoints.forEach((kp: any) => {
+      // Gentle swaying motion
+      kp.x += sway * 5;
+      
+      // Breathing motion
+      if (kp.name.includes('shoulder') || kp.name === 'spine') {
+        kp.y += breathing * 2;
+      }
+    });
   };
 
   const generateFunctionalMovement = async (movementId: string) => {

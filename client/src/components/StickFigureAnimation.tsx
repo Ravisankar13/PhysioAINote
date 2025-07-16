@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Play, Pause, RotateCcw } from 'lucide-react';
+import { Play, Pause, RotateCcw, Box, Grid3X3 } from 'lucide-react';
+import ThreeDAnatomicalVisualization from './ThreeDAnatomicalVisualization';
 
 interface StickFigureAnimationProps {
   animationData?: any;
@@ -9,6 +10,8 @@ interface StickFigureAnimationProps {
   onReset?: () => void;
   className?: string;
 }
+
+type VisualizationMode = '2D' | '3D';
 
 export function StickFigureAnimation({ 
   animationData,
@@ -19,6 +22,7 @@ export function StickFigureAnimation({
 }: StickFigureAnimationProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [currentFrame, setCurrentFrame] = useState(0);
+  const [visualizationMode, setVisualizationMode] = useState<VisualizationMode>('3D');
   const animationRef = useRef<number | null>(null);
 
   // Animation loop
@@ -716,15 +720,47 @@ export function StickFigureAnimation({
 
   return (
     <div className={`space-y-4 ${className}`}>
-      {/* Canvas */}
+      {/* Visualization Mode Toggle */}
       <div className="flex justify-center">
-        <canvas
-          ref={canvasRef}
-          width={400}
-          height={400}
-          className="border border-gray-300 rounded-lg bg-white"
-        />
+        <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1">
+          <Button
+            size="sm"
+            variant={visualizationMode === '2D' ? 'default' : 'ghost'}
+            onClick={() => setVisualizationMode('2D')}
+            className="flex items-center gap-1"
+          >
+            <Grid3X3 className="h-4 w-4" />
+            2D Bones
+          </Button>
+          <Button
+            size="sm"
+            variant={visualizationMode === '3D' ? 'default' : 'ghost'}
+            onClick={() => setVisualizationMode('3D')}
+            className="flex items-center gap-1"
+          >
+            <Box className="h-4 w-4" />
+            3D Models
+          </Button>
+        </div>
       </div>
+
+      {/* Visualization Display */}
+      {visualizationMode === '2D' ? (
+        <div className="flex justify-center">
+          <canvas
+            ref={canvasRef}
+            width={400}
+            height={400}
+            className="border border-gray-300 rounded-lg bg-white"
+          />
+        </div>
+      ) : (
+        <ThreeDAnatomicalVisualization
+          animationData={animationData}
+          currentFrame={currentFrame}
+          isPlaying={isPlaying}
+        />
+      )}
 
       {/* Animation Info */}
       <div className="text-center space-y-2">
@@ -734,6 +770,9 @@ export function StickFigureAnimation({
               {animationData.source}
             </span>
           )}
+          <span className="inline-block bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs mr-2">
+            {visualizationMode === '3D' ? 'Medical-Grade 3D Models' : 'Anatomical 2D Bones'}
+          </span>
           {animationData?.frames?.length > 0 ? (
             <span>Frame {currentFrame + 1} of {animationData.frames.length}</span>
           ) : (

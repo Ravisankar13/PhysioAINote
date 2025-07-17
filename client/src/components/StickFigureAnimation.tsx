@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Play, Pause, RotateCcw, Box, Grid3X3 } from 'lucide-react';
+import { Play, Pause, RotateCcw, Box, Grid3X3, Activity, ArrowDown, ArrowUp, RotateCw, Target, Zap, Shuffle } from 'lucide-react';
 import ThreeDAnatomicalVisualization from './ThreeDAnatomicalVisualization';
 
 interface StickFigureAnimationProps {
@@ -13,6 +13,129 @@ interface StickFigureAnimationProps {
 
 type VisualizationMode = '2D' | '3D';
 
+// Movement types for functional exercises
+type MovementType = 'squat' | 'walking' | 'shoulder_elevation' | 'spinal_flexion' | 'lunge' | 'reaching' | 'balance';
+
+// Joint angle data for each movement keyframe
+interface JointAngles {
+  hip: number;
+  knee: number;
+  ankle: number;
+  shoulder: number;
+  elbow: number;
+  spine: number;
+}
+
+// Movement keyframe with timing
+interface MovementKeyframe {
+  angles: JointAngles;
+  duration: number; // milliseconds
+  description: string;
+}
+
+// Complete movement pattern
+interface MovementPattern {
+  name: string;
+  keyframes: MovementKeyframe[];
+  loop: boolean;
+  clinicalNotes: string;
+}
+
+// Define movement patterns for physiotherapy exercises
+const MOVEMENT_PATTERNS: Record<MovementType, MovementPattern> = {
+  squat: {
+    name: "Squat",
+    keyframes: [
+      { angles: { hip: 0, knee: 0, ankle: 0, shoulder: 0, elbow: 0, spine: 0 }, duration: 500, description: "Standing position" },
+      { angles: { hip: 60, knee: 90, ankle: 15, shoulder: 30, elbow: 0, spine: 10 }, duration: 1000, description: "Descent phase" },
+      { angles: { hip: 90, knee: 120, ankle: 25, shoulder: 45, elbow: 0, spine: 15 }, duration: 500, description: "Bottom position" },
+      { angles: { hip: 60, knee: 90, ankle: 15, shoulder: 30, elbow: 0, spine: 10 }, duration: 800, description: "Ascent phase" },
+      { angles: { hip: 0, knee: 0, ankle: 0, shoulder: 0, elbow: 0, spine: 0 }, duration: 500, description: "Return to standing" }
+    ],
+    loop: true,
+    clinicalNotes: "Observe knee alignment, hip hinge pattern, and ankle mobility during movement"
+  },
+  walking: {
+    name: "Walking Gait",
+    keyframes: [
+      { angles: { hip: 0, knee: 0, ankle: 0, shoulder: 20, elbow: 0, spine: 0 }, duration: 300, description: "Heel strike" },
+      { angles: { hip: -10, knee: 15, ankle: 10, shoulder: 0, elbow: 0, spine: 0 }, duration: 300, description: "Loading response" },
+      { angles: { hip: -20, knee: 5, ankle: -5, shoulder: -20, elbow: 0, spine: 0 }, duration: 300, description: "Mid stance" },
+      { angles: { hip: -15, knee: -30, ankle: -15, shoulder: -10, elbow: 0, spine: 0 }, duration: 300, description: "Terminal stance" },
+      { angles: { hip: 10, knee: -60, ankle: 20, shoulder: 10, elbow: 0, spine: 0 }, duration: 300, description: "Pre-swing" },
+      { angles: { hip: 20, knee: -30, ankle: 10, shoulder: 20, elbow: 0, spine: 0 }, duration: 300, description: "Initial swing" }
+    ],
+    loop: true,
+    clinicalNotes: "Assess gait symmetry, stride length, and weight transfer patterns"
+  },
+  shoulder_elevation: {
+    name: "Shoulder Elevation",
+    keyframes: [
+      { angles: { hip: 0, knee: 0, ankle: 0, shoulder: 0, elbow: 0, spine: 0 }, duration: 500, description: "Arms at sides" },
+      { angles: { hip: 0, knee: 0, ankle: 0, shoulder: 45, elbow: 0, spine: 0 }, duration: 800, description: "45° elevation" },
+      { angles: { hip: 0, knee: 0, ankle: 0, shoulder: 90, elbow: 0, spine: 0 }, duration: 800, description: "90° elevation" },
+      { angles: { hip: 0, knee: 0, ankle: 0, shoulder: 135, elbow: 0, spine: 0 }, duration: 800, description: "135° elevation" },
+      { angles: { hip: 0, knee: 0, ankle: 0, shoulder: 180, elbow: 0, spine: 0 }, duration: 500, description: "Full elevation" },
+      { angles: { hip: 0, knee: 0, ankle: 0, shoulder: 90, elbow: 0, spine: 0 }, duration: 800, description: "Return descent" },
+      { angles: { hip: 0, knee: 0, ankle: 0, shoulder: 0, elbow: 0, spine: 0 }, duration: 500, description: "Return to start" }
+    ],
+    loop: true,
+    clinicalNotes: "Monitor for impingement signs, scapular rhythm, and range limitations"
+  },
+  spinal_flexion: {
+    name: "Spinal Flexion",
+    keyframes: [
+      { angles: { hip: 0, knee: 0, ankle: 0, shoulder: 0, elbow: 0, spine: 0 }, duration: 500, description: "Neutral spine" },
+      { angles: { hip: 15, knee: 0, ankle: 0, shoulder: 10, elbow: 0, spine: 15 }, duration: 1000, description: "Early flexion" },
+      { angles: { hip: 30, knee: 0, ankle: 0, shoulder: 20, elbow: 0, spine: 30 }, duration: 1000, description: "Mid flexion" },
+      { angles: { hip: 45, knee: 10, ankle: 0, shoulder: 30, elbow: 0, spine: 45 }, duration: 500, description: "Full flexion" },
+      { angles: { hip: 30, knee: 0, ankle: 0, shoulder: 20, elbow: 0, spine: 30 }, duration: 800, description: "Return phase" },
+      { angles: { hip: 0, knee: 0, ankle: 0, shoulder: 0, elbow: 0, spine: 0 }, duration: 800, description: "Return to neutral" }
+    ],
+    loop: true,
+    clinicalNotes: "Assess spinal segmentation, hip hinge pattern, and flexion limitations"
+  },
+  lunge: {
+    name: "Forward Lunge",
+    keyframes: [
+      { angles: { hip: 0, knee: 0, ankle: 0, shoulder: 0, elbow: 0, spine: 0 }, duration: 500, description: "Standing ready" },
+      { angles: { hip: 30, knee: 45, ankle: 10, shoulder: 0, elbow: 0, spine: 5 }, duration: 1000, description: "Step forward" },
+      { angles: { hip: 60, knee: 90, ankle: 20, shoulder: 0, elbow: 0, spine: 10 }, duration: 800, description: "Lunge descent" },
+      { angles: { hip: 90, knee: 120, ankle: 25, shoulder: 0, elbow: 0, spine: 15 }, duration: 500, description: "Bottom position" },
+      { angles: { hip: 30, knee: 45, ankle: 10, shoulder: 0, elbow: 0, spine: 5 }, duration: 800, description: "Push back up" },
+      { angles: { hip: 0, knee: 0, ankle: 0, shoulder: 0, elbow: 0, spine: 0 }, duration: 600, description: "Return to standing" }
+    ],
+    loop: true,
+    clinicalNotes: "Monitor knee tracking, balance control, and bilateral strength differences"
+  },
+  reaching: {
+    name: "Functional Reaching",
+    keyframes: [
+      { angles: { hip: 0, knee: 0, ankle: 0, shoulder: 0, elbow: 0, spine: 0 }, duration: 500, description: "Neutral position" },
+      { angles: { hip: 0, knee: 0, ankle: 0, shoulder: 45, elbow: 30, spine: 5 }, duration: 800, description: "Reach initiation" },
+      { angles: { hip: 10, knee: 0, ankle: 0, shoulder: 90, elbow: 45, spine: 10 }, duration: 800, description: "Forward reach" },
+      { angles: { hip: 15, knee: 0, ankle: 0, shoulder: 120, elbow: 60, spine: 15 }, duration: 500, description: "Maximum reach" },
+      { angles: { hip: 10, knee: 0, ankle: 0, shoulder: 90, elbow: 45, spine: 10 }, duration: 600, description: "Return phase" },
+      { angles: { hip: 0, knee: 0, ankle: 0, shoulder: 0, elbow: 0, spine: 0 }, duration: 600, description: "Return to neutral" }
+    ],
+    loop: true,
+    clinicalNotes: "Evaluate reach distance, compensatory movements, and trunk stability"
+  },
+  balance: {
+    name: "Single Leg Balance",
+    keyframes: [
+      { angles: { hip: 0, knee: 0, ankle: 0, shoulder: 0, elbow: 0, spine: 0 }, duration: 500, description: "Double leg stance" },
+      { angles: { hip: 30, knee: 90, ankle: 0, shoulder: 15, elbow: 0, spine: 5 }, duration: 1000, description: "Lift one leg" },
+      { angles: { hip: 35, knee: 95, ankle: 5, shoulder: 20, elbow: 0, spine: 8 }, duration: 2000, description: "Balance hold" },
+      { angles: { hip: 32, knee: 92, ankle: -3, shoulder: 10, elbow: 0, spine: 3 }, duration: 1000, description: "Stabilize" },
+      { angles: { hip: 30, knee: 90, ankle: 0, shoulder: 15, elbow: 0, spine: 5 }, duration: 800, description: "Maintain balance" },
+      { angles: { hip: 0, knee: 0, ankle: 0, shoulder: 0, elbow: 0, spine: 0 }, duration: 600, description: "Return to double stance" }
+    ],
+    loop: true,
+    clinicalNotes: "Assess postural sway, ankle strategies, and proprioceptive control"
+  }
+};
+
 export function StickFigureAnimation({ 
   animationData,
   isPlaying = false,
@@ -24,10 +147,82 @@ export function StickFigureAnimation({
   const [currentFrame, setCurrentFrame] = useState(0);
   const [visualizationMode, setVisualizationMode] = useState<VisualizationMode>('3D');
   const animationRef = useRef<number | null>(null);
+  
+  // Movement system state
+  const [currentMovement, setCurrentMovement] = useState<MovementType | null>(null);
+  const [movementFrame, setMovementFrame] = useState(0);
+  const [isMovementPlaying, setIsMovementPlaying] = useState(false);
+  const [movementSpeed, setMovementSpeed] = useState(1.0);
+  const movementAnimationRef = useRef<number | null>(null);
 
-  // Animation loop
+  // Movement animation system
+  const startMovement = (movementType: MovementType) => {
+    setCurrentMovement(movementType);
+    setMovementFrame(0);
+    setIsMovementPlaying(true);
+  };
+
+  const stopMovement = () => {
+    setIsMovementPlaying(false);
+    if (movementAnimationRef.current) {
+      cancelAnimationFrame(movementAnimationRef.current);
+      movementAnimationRef.current = null;
+    }
+  };
+
+  const resetMovement = () => {
+    setMovementFrame(0);
+    setIsMovementPlaying(false);
+    if (movementAnimationRef.current) {
+      cancelAnimationFrame(movementAnimationRef.current);
+      movementAnimationRef.current = null;
+    }
+  };
+
+  // Movement animation loop
   useEffect(() => {
-    if (!isPlaying || !animationData?.frames?.length) {
+    if (!isMovementPlaying || !currentMovement) {
+      if (movementAnimationRef.current) {
+        cancelAnimationFrame(movementAnimationRef.current);
+        movementAnimationRef.current = null;
+      }
+      return;
+    }
+
+    const pattern = MOVEMENT_PATTERNS[currentMovement];
+    if (!pattern?.keyframes?.length) return;
+
+    const animate = () => {
+      setMovementFrame(prev => {
+        const nextFrame = prev + 1;
+        if (nextFrame >= pattern.keyframes.length) {
+          return pattern.loop ? 0 : prev; // Loop or stay at end
+        }
+        return nextFrame;
+      });
+      
+      movementAnimationRef.current = requestAnimationFrame(animate);
+    };
+
+    const currentKeyframe = pattern.keyframes[movementFrame];
+    const frameDelay = currentKeyframe ? currentKeyframe.duration / movementSpeed : 500;
+
+    const timeoutId = setTimeout(() => {
+      movementAnimationRef.current = requestAnimationFrame(animate);
+    }, frameDelay);
+
+    return () => {
+      clearTimeout(timeoutId);
+      if (movementAnimationRef.current) {
+        cancelAnimationFrame(movementAnimationRef.current);
+        movementAnimationRef.current = null;
+      }
+    };
+  }, [isMovementPlaying, currentMovement, movementFrame, movementSpeed]);
+
+  // Original animation loop for motion capture data
+  useEffect(() => {
+    if (!isPlaying || !animationData?.frames?.length || currentMovement) {
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
         animationRef.current = null;
@@ -51,19 +246,134 @@ export function StickFigureAnimation({
         animationRef.current = null;
       }
     };
-  }, [isPlaying, animationData?.frames?.length]);
+  }, [isPlaying, animationData?.frames?.length, currentMovement]);
 
-  // Draw animation frame
+  // Function to generate keypoints from movement angles
+  const generateKeypointsFromAngles = (angles: JointAngles): any[] => {
+    // Base position (center of canvas)
+    const centerX = 200;
+    const centerY = 200;
+    
+    // Convert angles to radians
+    const toRad = (deg: number) => (deg * Math.PI) / 180;
+    
+    // Generate keypoints based on joint angles
+    const keypoints = [];
+    
+    // Head (fixed relative to spine)
+    const headX = centerX;
+    const headY = centerY - 80 - Math.sin(toRad(angles.spine)) * 20;
+    keypoints.push({ name: 'head', x: headX, y: headY, score: 1.0 });
+    
+    // Neck
+    const neckX = centerX;
+    const neckY = centerY - 60 - Math.sin(toRad(angles.spine)) * 15;
+    keypoints.push({ name: 'neck', x: neckX, y: neckY, score: 1.0 });
+    
+    // Spine/torso
+    const spineX = centerX + Math.sin(toRad(angles.spine)) * 30;
+    const spineY = centerY + Math.cos(toRad(angles.spine)) * 30;
+    keypoints.push({ name: 'spine', x: spineX, y: spineY, score: 1.0 });
+    
+    // Shoulders
+    const shoulderWidth = 40;
+    const leftShoulderX = neckX - shoulderWidth + Math.sin(toRad(angles.spine)) * 10;
+    const leftShoulderY = neckY + 10 + Math.cos(toRad(angles.spine)) * 10;
+    const rightShoulderX = neckX + shoulderWidth + Math.sin(toRad(angles.spine)) * 10;
+    const rightShoulderY = neckY + 10 + Math.cos(toRad(angles.spine)) * 10;
+    
+    keypoints.push({ name: 'left_shoulder', x: leftShoulderX, y: leftShoulderY, score: 1.0 });
+    keypoints.push({ name: 'right_shoulder', x: rightShoulderX, y: rightShoulderY, score: 1.0 });
+    
+    // Arms (shoulder elevation affects arm position)
+    const armLength = 50;
+    const leftElbowX = leftShoulderX + Math.cos(toRad(angles.shoulder - 90)) * armLength;
+    const leftElbowY = leftShoulderY + Math.sin(toRad(angles.shoulder - 90)) * armLength;
+    const rightElbowX = rightShoulderX + Math.cos(toRad(angles.shoulder + 90)) * armLength;
+    const rightElbowY = rightShoulderY + Math.sin(toRad(angles.shoulder + 90)) * armLength;
+    
+    keypoints.push({ name: 'left_elbow', x: leftElbowX, y: leftElbowY, score: 1.0 });
+    keypoints.push({ name: 'right_elbow', x: rightElbowX, y: rightElbowY, score: 1.0 });
+    
+    // Forearms
+    const forearmLength = 45;
+    const leftWristX = leftElbowX + Math.cos(toRad(angles.shoulder + angles.elbow - 90)) * forearmLength;
+    const leftWristY = leftElbowY + Math.sin(toRad(angles.shoulder + angles.elbow - 90)) * forearmLength;
+    const rightWristX = rightElbowX + Math.cos(toRad(angles.shoulder + angles.elbow + 90)) * forearmLength;
+    const rightWristY = rightElbowY + Math.sin(toRad(angles.shoulder + angles.elbow + 90)) * forearmLength;
+    
+    keypoints.push({ name: 'left_wrist', x: leftWristX, y: leftWristY, score: 1.0 });
+    keypoints.push({ name: 'right_wrist', x: rightWristX, y: rightWristY, score: 1.0 });
+    
+    // Hips
+    const hipWidth = 35;
+    const leftHipX = spineX - hipWidth;
+    const leftHipY = spineY + 30;
+    const rightHipX = spineX + hipWidth;
+    const rightHipY = spineY + 30;
+    
+    keypoints.push({ name: 'left_hip', x: leftHipX, y: leftHipY, score: 1.0 });
+    keypoints.push({ name: 'right_hip', x: rightHipX, y: rightHipY, score: 1.0 });
+    
+    // Thighs (hip angle affects thigh position)
+    const thighLength = 60;
+    const leftKneeX = leftHipX + Math.sin(toRad(angles.hip)) * thighLength;
+    const leftKneeY = leftHipY + Math.cos(toRad(angles.hip)) * thighLength;
+    const rightKneeX = rightHipX + Math.sin(toRad(angles.hip)) * thighLength;
+    const rightKneeY = rightHipY + Math.cos(toRad(angles.hip)) * thighLength;
+    
+    keypoints.push({ name: 'left_knee', x: leftKneeX, y: leftKneeY, score: 1.0 });
+    keypoints.push({ name: 'right_knee', x: rightKneeX, y: rightKneeY, score: 1.0 });
+    
+    // Shins (knee angle affects shin position)
+    const shinLength = 55;
+    const leftAnkleX = leftKneeX + Math.sin(toRad(angles.hip + angles.knee)) * shinLength;
+    const leftAnkleY = leftKneeY + Math.cos(toRad(angles.hip + angles.knee)) * shinLength;
+    const rightAnkleX = rightKneeX + Math.sin(toRad(angles.hip + angles.knee)) * shinLength;
+    const rightAnkleY = rightKneeY + Math.cos(toRad(angles.hip + angles.knee)) * shinLength;
+    
+    keypoints.push({ name: 'left_ankle', x: leftAnkleX, y: leftAnkleY, score: 1.0 });
+    keypoints.push({ name: 'right_ankle', x: rightAnkleX, y: rightAnkleY, score: 1.0 });
+    
+    // Feet (ankle angle affects foot position)
+    const footLength = 25;
+    const leftFootX = leftAnkleX + Math.cos(toRad(angles.ankle)) * footLength;
+    const leftFootY = leftAnkleY + Math.sin(toRad(angles.ankle)) * footLength;
+    const rightFootX = rightAnkleX + Math.cos(toRad(angles.ankle)) * footLength;
+    const rightFootY = rightAnkleY + Math.sin(toRad(angles.ankle)) * footLength;
+    
+    keypoints.push({ name: 'left_foot', x: leftFootX, y: leftFootY, score: 1.0 });
+    keypoints.push({ name: 'right_foot', x: rightFootX, y: rightFootY, score: 1.0 });
+    
+    return keypoints;
+  };
+
+  // Draw animation frame (handles both motion capture and movement patterns)
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !animationData?.frames?.length) return;
+    if (!canvas) return;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const frame = animationData.frames[currentFrame];
-    drawStickFigure(frame, ctx);
-  }, [currentFrame, animationData]);
+    let frame;
+    
+    // Use movement pattern if active, otherwise use motion capture data
+    if (currentMovement && visualizationMode === '2D') {
+      const pattern = MOVEMENT_PATTERNS[currentMovement];
+      if (pattern?.keyframes?.length > 0) {
+        const currentKeyframe = pattern.keyframes[movementFrame] || pattern.keyframes[0];
+        const keypoints = generateKeypointsFromAngles(currentKeyframe.angles);
+        frame = { keypoints };
+      }
+    } else if (animationData?.frames?.length) {
+      frame = animationData.frames[currentFrame];
+    }
+    
+    if (frame && visualizationMode === '2D') {
+      drawStickFigure(frame, ctx);
+    }
+  }, [currentFrame, animationData, currentMovement, movementFrame, visualizationMode]);
 
   // Draw anatomical skeleton with realistic bones
   const drawStickFigure = (frame: any, ctx: CanvasRenderingContext2D) => {
@@ -780,28 +1090,180 @@ export function StickFigureAnimation({
           )}
         </div>
 
-        {/* Controls */}
-        <div className="flex justify-center gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={onTogglePlay}
-            disabled={!animationData?.frames?.length}
-          >
-            {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              setCurrentFrame(0);
-              onReset?.();
-            }}
-            disabled={!animationData?.frames?.length}
-          >
-            <RotateCcw className="h-4 w-4" />
-          </Button>
-        </div>
+        {/* Movement Pattern Controls (2D Mode Only) */}
+        {visualizationMode === '2D' && (
+          <div className="space-y-4">
+            <div className="text-center">
+              <h3 className="font-semibold text-gray-700 mb-2">Functional Movements</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 max-w-2xl mx-auto">
+                <Button
+                  size="sm"
+                  variant={currentMovement === 'squat' ? "default" : "outline"}
+                  onClick={() => startMovement('squat')}
+                  className="flex flex-col items-center p-3 h-auto"
+                >
+                  <ArrowDown className="h-4 w-4 mb-1" />
+                  <span className="text-xs">Squat</span>
+                </Button>
+                <Button
+                  size="sm"
+                  variant={currentMovement === 'walking' ? "default" : "outline"}
+                  onClick={() => startMovement('walking')}
+                  className="flex flex-col items-center p-3 h-auto"
+                >
+                  <Shuffle className="h-4 w-4 mb-1" />
+                  <span className="text-xs">Walking</span>
+                </Button>
+                <Button
+                  size="sm"
+                  variant={currentMovement === 'shoulder_elevation' ? "default" : "outline"}
+                  onClick={() => startMovement('shoulder_elevation')}
+                  className="flex flex-col items-center p-3 h-auto"
+                >
+                  <ArrowUp className="h-4 w-4 mb-1" />
+                  <span className="text-xs">Shoulder</span>
+                </Button>
+                <Button
+                  size="sm"
+                  variant={currentMovement === 'spinal_flexion' ? "default" : "outline"}
+                  onClick={() => startMovement('spinal_flexion')}
+                  className="flex flex-col items-center p-3 h-auto"
+                >
+                  <RotateCw className="h-4 w-4 mb-1" />
+                  <span className="text-xs">Spine</span>
+                </Button>
+                <Button
+                  size="sm"
+                  variant={currentMovement === 'lunge' ? "default" : "outline"}
+                  onClick={() => startMovement('lunge')}
+                  className="flex flex-col items-center p-3 h-auto"
+                >
+                  <Target className="h-4 w-4 mb-1" />
+                  <span className="text-xs">Lunge</span>
+                </Button>
+                <Button
+                  size="sm"
+                  variant={currentMovement === 'reaching' ? "default" : "outline"}
+                  onClick={() => startMovement('reaching')}
+                  className="flex flex-col items-center p-3 h-auto"
+                >
+                  <Activity className="h-4 w-4 mb-1" />
+                  <span className="text-xs">Reaching</span>
+                </Button>
+                <Button
+                  size="sm"
+                  variant={currentMovement === 'balance' ? "default" : "outline"}
+                  onClick={() => startMovement('balance')}
+                  className="flex flex-col items-center p-3 h-auto"
+                >
+                  <Zap className="h-4 w-4 mb-1" />
+                  <span className="text-xs">Balance</span>
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setCurrentMovement(null);
+                    resetMovement();
+                  }}
+                  className="flex flex-col items-center p-3 h-auto"
+                >
+                  <RotateCcw className="h-4 w-4 mb-1" />
+                  <span className="text-xs">Clear</span>
+                </Button>
+              </div>
+            </div>
+
+            {/* Movement Controls */}
+            {currentMovement && (
+              <div className="space-y-3">
+                <div className="flex justify-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setIsMovementPlaying(!isMovementPlaying)}
+                  >
+                    {isMovementPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={resetMovement}
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                  </Button>
+                </div>
+                
+                {/* Movement Info */}
+                <div className="text-center">
+                  <div className="text-sm font-medium text-gray-700">
+                    {MOVEMENT_PATTERNS[currentMovement].name}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    {MOVEMENT_PATTERNS[currentMovement].keyframes[movementFrame]?.description || "Ready"}
+                  </div>
+                  <div className="text-xs text-blue-600 mt-2 max-w-md mx-auto">
+                    {MOVEMENT_PATTERNS[currentMovement].clinicalNotes}
+                  </div>
+                </div>
+
+                {/* Speed Control */}
+                <div className="flex items-center justify-center gap-2">
+                  <span className="text-xs text-gray-500">Speed:</span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setMovementSpeed(0.5)}
+                    className={movementSpeed === 0.5 ? "bg-blue-100" : ""}
+                  >
+                    0.5x
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setMovementSpeed(1.0)}
+                    className={movementSpeed === 1.0 ? "bg-blue-100" : ""}
+                  >
+                    1x
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setMovementSpeed(2.0)}
+                    className={movementSpeed === 2.0 ? "bg-blue-100" : ""}
+                  >
+                    2x
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Original Controls (for motion capture data) */}
+        {(!currentMovement || visualizationMode === '3D') && (
+          <div className="flex justify-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onTogglePlay}
+              disabled={!animationData?.frames?.length}
+            >
+              {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setCurrentFrame(0);
+                onReset?.();
+              }}
+              disabled={!animationData?.frames?.length}
+            >
+              <RotateCcw className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

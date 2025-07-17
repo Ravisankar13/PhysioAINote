@@ -441,50 +441,139 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
       return group;
     };
 
-    // Create rib cage
+    // Create anatomically accurate rib cage matching reference image
     const createRibCage = () => {
       const group = new THREE.Group();
       
-      // Create 12 pairs of ribs
+      // Sternum (breastbone) - elongated central bone
+      const sternumGeometry = new THREE.BoxGeometry(3, 45, 2);
+      const sternum = new THREE.Mesh(sternumGeometry, boneMaterial);
+      sternum.position.set(0, 35, 28);
+      group.add(sternum);
+      
+      // Create 12 pairs of anatomically accurate ribs
       for (let i = 0; i < 12; i++) {
-        const ribLevel = i * 8;
-        const ribCurvature = Math.PI * 0.8;
+        const ribLevel = 60 - i * 4.5; // Vertical spacing between ribs
         
-        // Left rib
-        const leftRibGeometry = new THREE.TorusGeometry(
-          12 + i * 1.2, // Radius increases down the chest
-          1.5, // Tube thickness
-          4, // Radial segments
-          16 // Tubular segments
-        );
-        const leftRib = new THREE.Mesh(leftRibGeometry, boneMaterial);
-        leftRib.position.set(-8, ribLevel, 0);
-        leftRib.rotation.y = -Math.PI/2;
-        leftRib.rotation.z = Math.PI/8;
-        leftRib.scale.set(0.8, 1, 0.6);
+        // Rib dimensions based on anatomical proportions
+        let ribLength, ribCurvature, ribAngle;
+        
+        if (i < 7) {
+          // Upper ribs (1-7) - true ribs, shorter and steeper
+          ribLength = 25 + i * 2;
+          ribCurvature = 0.8 + i * 0.1;
+          ribAngle = 0.3 + i * 0.1;
+        } else if (i < 10) {
+          // Middle ribs (8-10) - false ribs, longer
+          ribLength = 35 - (i - 7) * 1;
+          ribCurvature = 1.5;
+          ribAngle = 1.2;
+        } else {
+          // Lower ribs (11-12) - floating ribs, shorter
+          ribLength = 20;
+          ribCurvature = 1.2;
+          ribAngle = 1.4;
+        }
+        
+        // Create curved rib using multiple segments for smooth curvature
+        const createCurvedRib = (side: 'left' | 'right') => {
+          const ribGroup = new THREE.Group();
+          const segments = 8;
+          const isLeft = side === 'left';
+          
+          for (let j = 0; j < segments; j++) {
+            const t = j / (segments - 1);
+            
+            // Create rib curve using parametric equations
+            const x = isLeft ? 
+              -Math.sin(t * Math.PI * ribCurvature) * ribLength :
+              Math.sin(t * Math.PI * ribCurvature) * ribLength;
+            const y = 0;
+            const z = Math.cos(t * Math.PI * ribCurvature) * ribLength * 0.6;
+            
+            // Individual rib segment
+            const segmentGeometry = new THREE.CylinderGeometry(
+              0.8 - t * 0.3, // Taper from spine to front
+              0.8 - t * 0.3,
+              ribLength / segments * 1.2,
+              8
+            );
+            
+            const ribSegment = new THREE.Mesh(segmentGeometry, boneMaterial);
+            
+            // Position and orient segment
+            ribSegment.position.set(x, y, z);
+            
+            // Calculate rotation for proper rib orientation
+            if (j < segments - 1) {
+              const nextT = (j + 1) / (segments - 1);
+              const nextX = isLeft ?
+                -Math.sin(nextT * Math.PI * ribCurvature) * ribLength :
+                Math.sin(nextT * Math.PI * ribCurvature) * ribLength;
+              const nextZ = Math.cos(nextT * Math.PI * ribCurvature) * ribLength * 0.6;
+              
+              const direction = new THREE.Vector3(nextX - x, 0, nextZ - z);
+              direction.normalize();
+              
+              ribSegment.lookAt(
+                ribSegment.position.x + direction.x,
+                ribSegment.position.y + direction.y,
+                ribSegment.position.z + direction.z
+              );
+              
+              ribSegment.rotateX(Math.PI / 2);
+            }
+            
+            ribGroup.add(ribSegment);
+          }
+          
+          // Add rib attachment to vertebrae (posterior)
+          const posteriorAttachment = new THREE.SphereGeometry(1.2, 8, 6);
+          const posteriorJoint = new THREE.Mesh(posteriorAttachment, boneMaterial);
+          posteriorJoint.position.set(isLeft ? -3 : 3, 0, -8);
+          ribGroup.add(posteriorJoint);
+          
+          // Add costal cartilage connection for ribs 1-10
+          if (i < 10) {
+            const cartilageGeometry = new THREE.CylinderGeometry(0.5, 0.7, 8, 6);
+            const cartilage = new THREE.Mesh(cartilageGeometry, boneMaterial);
+            cartilage.position.set(isLeft ? -ribLength * 0.7 : ribLength * 0.7, 0, ribLength * 0.4);
+            cartilage.rotation.x = Math.PI / 2;
+            cartilage.rotation.z = isLeft ? -ribAngle : ribAngle;
+            ribGroup.add(cartilage);
+          }
+          
+          return ribGroup;
+        };
+        
+        // Create left and right ribs
+        const leftRib = createCurvedRib('left');
+        const rightRib = createCurvedRib('right');
+        
+        // Position ribs at correct vertebral level
+        leftRib.position.set(0, ribLevel, 0);
+        rightRib.position.set(0, ribLevel, 0);
+        
+        // Add slight downward angle for anatomical accuracy
+        leftRib.rotation.x = -ribAngle * 0.3;
+        rightRib.rotation.x = -ribAngle * 0.3;
+        
         group.add(leftRib);
-
-        // Right rib
-        const rightRibGeometry = new THREE.TorusGeometry(
-          12 + i * 1.2,
-          1.5,
-          4,
-          16
-        );
-        const rightRib = new THREE.Mesh(rightRibGeometry, boneMaterial);
-        rightRib.position.set(8, ribLevel, 0);
-        rightRib.rotation.y = Math.PI/2;
-        rightRib.rotation.z = -Math.PI/8;
-        rightRib.scale.set(0.8, 1, 0.6);
         group.add(rightRib);
       }
-
-      // Sternum (breastbone)
-      const sternumGeometry = new THREE.BoxGeometry(4, 20, 2);
-      const sternum = new THREE.Mesh(sternumGeometry, boneMaterial);
-      sternum.position.set(0, 40, 12);
-      group.add(sternum);
-
+      
+      // Add xiphoid process (bottom of sternum)
+      const xiphoidGeometry = new THREE.ConeGeometry(1.5, 4, 6);
+      const xiphoid = new THREE.Mesh(xiphoidGeometry, boneMaterial);
+      xiphoid.position.set(0, 12, 28);
+      group.add(xiphoid);
+      
+      // Add manubrium (top of sternum)
+      const manubriumGeometry = new THREE.BoxGeometry(4, 8, 2.5);
+      const manubrium = new THREE.Mesh(manubriumGeometry, boneMaterial);
+      manubrium.position.set(0, 58, 28);
+      group.add(manubrium);
+      
       return group;
     };
 

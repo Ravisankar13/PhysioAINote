@@ -134,137 +134,376 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
 
     const boneModels = new Map<string, BoneModel>();
 
-    // Bone material with realistic appearance
+    // Realistic bone material with medical-grade appearance
     const boneMaterial = new THREE.MeshPhongMaterial({
-      color: 0xf5deb3,
-      shininess: 30,
-      specular: 0x333333
+      color: 0xF5F5DC,          // Bone white/beige color
+      shininess: 5,              // Low shininess for matte bone finish
+      specular: 0x222222,        // Subtle specular highlights
+      transparent: false,
+      opacity: 1.0,
+      side: THREE.DoubleSide
     });
 
     const affectedBoneMaterial = new THREE.MeshPhongMaterial({
-      color: 0xff6b6b,
-      shininess: 30,
-      specular: 0x333333
+      color: 0xDC143C,          // Medical red for pathology
+      shininess: 8,
+      specular: 0x333333,
+      transparent: true,
+      opacity: 0.9,
+      emissive: 0x220000,       // Slight glow for affected areas
+      side: THREE.DoubleSide
     });
 
-    // Create femur (thigh bone) with anatomical detail
+    // Create anatomically accurate femur (thigh bone)
     const createFemur = (isLeft: boolean) => {
       const group = new THREE.Group();
       
-      // Femoral head (ball joint)
-      const headGeometry = new THREE.SphereGeometry(8, 16, 16);
+      // Femoral head (spherical ball joint) - anatomically accurate size
+      const headGeometry = new THREE.SphereGeometry(7, 20, 16);
       const head = new THREE.Mesh(headGeometry, boneMaterial);
-      head.position.set(0, 80, 0);
+      head.position.set(0, 75, 0);
       group.add(head);
 
-      // Femoral neck
-      const neckGeometry = new THREE.CylinderGeometry(4, 6, 20, 8);
+      // Femoral neck - angled connection to shaft
+      const neckGeometry = new THREE.CylinderGeometry(3.5, 5, 18, 12);
       const neck = new THREE.Mesh(neckGeometry, boneMaterial);
-      neck.position.set(isLeft ? -10 : 10, 70, 0);
-      neck.rotation.z = isLeft ? -Math.PI/6 : Math.PI/6;
+      neck.position.set(isLeft ? -8 : 8, 66, 0);
+      neck.rotation.z = isLeft ? -Math.PI/5 : Math.PI/5;
       group.add(neck);
 
-      // Femoral shaft
-      const shaftGeometry = new THREE.CylinderGeometry(6, 8, 60, 8);
+      // Femoral shaft with realistic curvature
+      const shaftGeometry = new THREE.CylinderGeometry(5, 7.5, 65, 16);
       const shaft = new THREE.Mesh(shaftGeometry, boneMaterial);
-      shaft.position.set(0, 30, 0);
+      shaft.position.set(0, 25, 0);
+      // Add slight anterior bow (natural femur curve)
+      shaft.rotation.x = Math.PI/60;
       group.add(shaft);
 
-      // Femoral condyles (knee joint)
-      const condyleGeometry = new THREE.SphereGeometry(10, 12, 12);
+      // Greater trochanter - prominent bone landmark
+      const trochanterGeometry = new THREE.BoxGeometry(8, 12, 6);
+      const trochanter = new THREE.Mesh(trochanterGeometry, boneMaterial);
+      trochanter.position.set(isLeft ? 6 : -6, 55, 0);
+      group.add(trochanter);
+
+      // Femoral condyles (knee joint) - anatomically shaped
+      const condyleGeometry = new THREE.SphereGeometry(9, 16, 12);
       const medialCondyle = new THREE.Mesh(condyleGeometry, boneMaterial);
-      medialCondyle.position.set(isLeft ? -6 : 6, -5, 0);
-      medialCondyle.scale.set(0.8, 0.6, 1.2);
+      medialCondyle.position.set(isLeft ? -5 : 5, -8, 2);
+      medialCondyle.scale.set(0.9, 0.7, 1.3);
       group.add(medialCondyle);
 
       const lateralCondyle = new THREE.Mesh(condyleGeometry, boneMaterial);
-      lateralCondyle.position.set(isLeft ? 6 : -6, -5, 0);
-      lateralCondyle.scale.set(0.8, 0.6, 1.2);
+      lateralCondyle.position.set(isLeft ? 5 : -5, -8, 2);
+      lateralCondyle.scale.set(0.9, 0.7, 1.3);
       group.add(lateralCondyle);
+
+      // Intercondylar notch
+      const notchGeometry = new THREE.BoxGeometry(4, 6, 8);
+      const notch = new THREE.Mesh(notchGeometry, boneMaterial);
+      notch.position.set(0, -8, 0);
+      group.add(notch);
 
       return group;
     };
 
-    // Create tibia (shin bone)
+    // Create anatomically accurate tibia (shin bone)
     const createTibia = () => {
       const group = new THREE.Group();
       
-      // Tibial plateau (knee joint surface)
-      const plateauGeometry = new THREE.CylinderGeometry(12, 10, 8, 8);
+      // Tibial plateau (flat knee joint surface)
+      const plateauGeometry = new THREE.CylinderGeometry(11, 9, 6, 16);
       const plateau = new THREE.Mesh(plateauGeometry, boneMaterial);
-      plateau.position.set(0, 35, 0);
+      plateau.position.set(0, 32, 0);
       group.add(plateau);
 
-      // Tibial shaft
-      const shaftGeometry = new THREE.CylinderGeometry(5, 7, 60, 8);
+      // Tibial tuberosity (attachment point for patellar ligament)
+      const tuberosityGeometry = new THREE.BoxGeometry(5, 4, 3);
+      const tuberosity = new THREE.Mesh(tuberosityGeometry, boneMaterial);
+      tuberosity.position.set(0, 26, 4);
+      group.add(tuberosity);
+
+      // Tibial shaft - triangular cross-section like real tibia
+      const shaftPoints = [];
+      for (let i = 0; i <= 16; i++) {
+        const angle = (i / 16) * Math.PI * 2;
+        // Create triangular shape with anterior crest
+        let radius;
+        if (angle < Math.PI/3 || angle > 5*Math.PI/3) {
+          radius = 4; // Anterior (front) - sharp crest
+        } else {
+          radius = 6; // Posterior (back) - rounded
+        }
+        shaftPoints.push(new THREE.Vector2(Math.cos(angle) * radius, Math.sin(angle) * radius));
+      }
+      const shaftShape = new THREE.Shape(shaftPoints);
+      const shaftGeometry = new THREE.ExtrudeGeometry(shaftShape, {
+        depth: 50,
+        bevelEnabled: false
+      });
       const shaft = new THREE.Mesh(shaftGeometry, boneMaterial);
-      shaft.position.set(0, 0, 0);
+      shaft.position.set(0, -5, -25);
+      shaft.rotation.x = Math.PI/2;
       group.add(shaft);
 
       // Medial malleolus (ankle prominence)
-      const malleolus = new THREE.Mesh(
-        new THREE.SphereGeometry(4, 8, 8),
+      const medialMalleolus = new THREE.Mesh(
+        new THREE.BoxGeometry(6, 8, 4),
         boneMaterial
       );
-      malleolus.position.set(3, -30, 0);
-      group.add(malleolus);
+      medialMalleolus.position.set(3, -28, 0);
+      group.add(medialMalleolus);
+
+      // Tibial plafond (ankle joint surface)
+      const plafondGeometry = new THREE.CylinderGeometry(8, 8, 4, 16);
+      const plafond = new THREE.Mesh(plafondGeometry, boneMaterial);
+      plafond.position.set(0, -30, 0);
+      group.add(plafond);
 
       return group;
     };
 
-    // Create humerus (upper arm bone)
+    // Create anatomically accurate humerus (upper arm bone)
     const createHumerus = () => {
       const group = new THREE.Group();
       
-      // Humeral head (shoulder joint)
-      const headGeometry = new THREE.SphereGeometry(10, 16, 16);
+      // Humeral head (ball-shaped shoulder joint)
+      const headGeometry = new THREE.SphereGeometry(8, 20, 16);
       const head = new THREE.Mesh(headGeometry, boneMaterial);
-      head.position.set(0, 30, 0);
+      head.position.set(0, 28, 0);
+      // Anatomical neck angle
+      head.rotation.z = Math.PI/12;
       group.add(head);
 
-      // Greater tubercle
-      const tubercleGeometry = new THREE.SphereGeometry(5, 8, 8);
-      const tubercle = new THREE.Mesh(tubercleGeometry, boneMaterial);
-      tubercle.position.set(8, 25, 0);
-      group.add(tubercle);
+      // Greater tubercle - attachment for rotator cuff
+      const greaterTubercleGeometry = new THREE.BoxGeometry(6, 8, 5);
+      const greaterTubercle = new THREE.Mesh(greaterTubercleGeometry, boneMaterial);
+      greaterTubercle.position.set(6, 24, 0);
+      group.add(greaterTubercle);
 
-      // Humeral shaft
-      const shaftGeometry = new THREE.CylinderGeometry(5, 7, 50, 8);
+      // Lesser tubercle
+      const lesserTubercleGeometry = new THREE.BoxGeometry(4, 6, 4);
+      const lesserTubercle = new THREE.Mesh(lesserTubercleGeometry, boneMaterial);
+      lesserTubercle.position.set(-4, 24, 2);
+      group.add(lesserTubercle);
+
+      // Humeral shaft with natural spiral groove
+      const shaftGeometry = new THREE.CylinderGeometry(4, 6, 45, 16);
       const shaft = new THREE.Mesh(shaftGeometry, boneMaterial);
       shaft.position.set(0, 0, 0);
       group.add(shaft);
 
-      // Humeral condyles (elbow joint)
-      const condyleGeometry = new THREE.SphereGeometry(6, 10, 10);
-      const condyle = new THREE.Mesh(condyleGeometry, boneMaterial);
-      condyle.position.set(0, -25, 0);
-      condyle.scale.set(1.5, 0.8, 1);
-      group.add(condyle);
+      // Deltoid tuberosity (deltoid muscle attachment)
+      const deltoidTuberosityGeometry = new THREE.BoxGeometry(8, 6, 4);
+      const deltoidTuberosity = new THREE.Mesh(deltoidTuberosityGeometry, boneMaterial);
+      deltoidTuberosity.position.set(3, 5, 0);
+      group.add(deltoidTuberosity);
+
+      // Medial epicondyle
+      const medialEpicondyleGeometry = new THREE.SphereGeometry(3, 12, 8);
+      const medialEpicondyle = new THREE.Mesh(medialEpicondyleGeometry, boneMaterial);
+      medialEpicondyle.position.set(-5, -22, 0);
+      group.add(medialEpicondyle);
+
+      // Lateral epicondyle  
+      const lateralEpicondyleGeometry = new THREE.SphereGeometry(3, 12, 8);
+      const lateralEpicondyle = new THREE.Mesh(lateralEpicondyleGeometry, boneMaterial);
+      lateralEpicondyle.position.set(5, -22, 0);
+      group.add(lateralEpicondyle);
+
+      // Capitulum (elbow joint surface)
+      const capitulumGeometry = new THREE.SphereGeometry(4, 12, 10);
+      const capitulum = new THREE.Mesh(capitulumGeometry, boneMaterial);
+      capitulum.position.set(2, -24, 0);
+      group.add(capitulum);
+
+      // Trochlea (elbow joint surface)
+      const trochleaGeometry = new THREE.CylinderGeometry(3, 3, 6, 12);
+      const trochlea = new THREE.Mesh(trochleaGeometry, boneMaterial);
+      trochlea.position.set(-2, -24, 0);
+      trochlea.rotation.z = Math.PI/2;
+      group.add(trochlea);
 
       return group;
     };
 
-    // Create spine vertebrae
+    // Create anatomically accurate spine with natural curvatures
     const createSpine = () => {
       const group = new THREE.Group();
       
-      for (let i = 0; i < 7; i++) {
+      // Create 12 vertebrae with anatomical features
+      for (let i = 0; i < 12; i++) {
         const vertebra = new THREE.Group();
         
-        // Vertebral body
-        const bodyGeometry = new THREE.BoxGeometry(12, 8, 10);
+        // Vertebral body - kidney-shaped like real vertebrae
+        const bodyGeometry = new THREE.CylinderGeometry(5, 6, 6, 16);
         const body = new THREE.Mesh(bodyGeometry, boneMaterial);
         vertebra.add(body);
 
-        // Spinous process
-        const processGeometry = new THREE.BoxGeometry(4, 6, 15);
+        // Spinous process - prominent posterior projection
+        const processGeometry = new THREE.BoxGeometry(2, 4, 12);
         const process = new THREE.Mesh(processGeometry, boneMaterial);
-        process.position.z = -8;
+        process.position.set(0, 0, -7);
         vertebra.add(process);
 
-        vertebra.position.y = i * 12;
+        // Transverse processes - left and right projections
+        const transverseLeftGeometry = new THREE.BoxGeometry(8, 3, 2);
+        const transverseLeft = new THREE.Mesh(transverseLeftGeometry, boneMaterial);
+        transverseLeft.position.set(-6, 0, -2);
+        vertebra.add(transverseLeft);
+
+        const transverseRightGeometry = new THREE.BoxGeometry(8, 3, 2);
+        const transverseRight = new THREE.Mesh(transverseRightGeometry, boneMaterial);
+        transverseRight.position.set(6, 0, -2);
+        vertebra.add(transverseRight);
+
+        // Vertebral arch (laminae)
+        const archLeftGeometry = new THREE.BoxGeometry(3, 4, 6);
+        const archLeft = new THREE.Mesh(archLeftGeometry, boneMaterial);
+        archLeft.position.set(-3, 0, -4);
+        archLeft.rotation.y = Math.PI/6;
+        vertebra.add(archLeft);
+
+        const archRightGeometry = new THREE.BoxGeometry(3, 4, 6);
+        const archRight = new THREE.Mesh(archRightGeometry, boneMaterial);
+        archRight.position.set(3, 0, -4);
+        archRight.rotation.y = -Math.PI/6;
+        vertebra.add(archRight);
+
+        // Superior and inferior articular processes
+        const superiorProcesses = new THREE.BoxGeometry(2, 3, 2);
+        const superiorLeft = new THREE.Mesh(superiorProcesses, boneMaterial);
+        superiorLeft.position.set(-4, 3, -3);
+        vertebra.add(superiorLeft);
+
+        const superiorRight = new THREE.Mesh(superiorProcesses, boneMaterial);
+        superiorRight.position.set(4, 3, -3);
+        vertebra.add(superiorRight);
+
+        // Position vertebra with natural spinal curvatures
+        vertebra.position.y = i * 8;
+        
+        // Add natural spinal curves
+        if (i < 3) {
+          // Cervical lordosis (C1-C3)
+          vertebra.rotation.x = Math.PI/25;
+          vertebra.position.z = i * 0.5;
+        } else if (i >= 3 && i < 7) {
+          // Thoracic kyphosis (T1-T4)
+          vertebra.rotation.x = -Math.PI/30;
+          vertebra.position.z = 1.5 - (i-3) * 0.5;
+        } else {
+          // Lumbar lordosis (L1-L5)
+          vertebra.rotation.x = Math.PI/20;
+          vertebra.position.z = -0.5 + (i-7) * 0.3;
+        }
+        
         group.add(vertebra);
       }
+
+      return group;
+    };
+
+    // Create pelvis (hip bone)
+    const createPelvis = () => {
+      const group = new THREE.Group();
+      
+      // Iliac bones (hip wings)
+      const iliacGeometry = new THREE.SphereGeometry(15, 16, 12);
+      const leftIliac = new THREE.Mesh(iliacGeometry, boneMaterial);
+      leftIliac.position.set(-12, 0, 0);
+      leftIliac.scale.set(1.2, 0.6, 0.8);
+      group.add(leftIliac);
+
+      const rightIliac = new THREE.Mesh(iliacGeometry, boneMaterial);
+      rightIliac.position.set(12, 0, 0);
+      rightIliac.scale.set(1.2, 0.6, 0.8);
+      group.add(rightIliac);
+
+      // Sacrum (triangular bone)
+      const sacrumGeometry = new THREE.ConeGeometry(8, 15, 8);
+      const sacrum = new THREE.Mesh(sacrumGeometry, boneMaterial);
+      sacrum.position.set(0, -5, -8);
+      sacrum.rotation.x = Math.PI;
+      group.add(sacrum);
+
+      // Acetabulum (hip socket)
+      const acetabulumGeometry = new THREE.SphereGeometry(6, 16, 12);
+      const leftAcetabulum = new THREE.Mesh(acetabulumGeometry, boneMaterial);
+      leftAcetabulum.position.set(-15, -8, 0);
+      leftAcetabulum.scale.set(0.8, 0.8, 0.5);
+      group.add(leftAcetabulum);
+
+      const rightAcetabulum = new THREE.Mesh(acetabulumGeometry, boneMaterial);
+      rightAcetabulum.position.set(15, -8, 0);
+      rightAcetabulum.scale.set(0.8, 0.8, 0.5);
+      group.add(rightAcetabulum);
+
+      return group;
+    };
+
+    // Create rib cage
+    const createRibCage = () => {
+      const group = new THREE.Group();
+      
+      // Create 12 pairs of ribs
+      for (let i = 0; i < 12; i++) {
+        const ribLevel = i * 8;
+        const ribCurvature = Math.PI * 0.8;
+        
+        // Left rib
+        const leftRibGeometry = new THREE.TorusGeometry(
+          12 + i * 1.2, // Radius increases down the chest
+          1.5, // Tube thickness
+          4, // Radial segments
+          16 // Tubular segments
+        );
+        const leftRib = new THREE.Mesh(leftRibGeometry, boneMaterial);
+        leftRib.position.set(-8, ribLevel, 0);
+        leftRib.rotation.y = -Math.PI/2;
+        leftRib.rotation.z = Math.PI/8;
+        leftRib.scale.set(0.8, 1, 0.6);
+        group.add(leftRib);
+
+        // Right rib
+        const rightRibGeometry = new THREE.TorusGeometry(
+          12 + i * 1.2,
+          1.5,
+          4,
+          16
+        );
+        const rightRib = new THREE.Mesh(rightRibGeometry, boneMaterial);
+        rightRib.position.set(8, ribLevel, 0);
+        rightRib.rotation.y = Math.PI/2;
+        rightRib.rotation.z = -Math.PI/8;
+        rightRib.scale.set(0.8, 1, 0.6);
+        group.add(rightRib);
+      }
+
+      // Sternum (breastbone)
+      const sternumGeometry = new THREE.BoxGeometry(4, 20, 2);
+      const sternum = new THREE.Mesh(sternumGeometry, boneMaterial);
+      sternum.position.set(0, 40, 12);
+      group.add(sternum);
+
+      return group;
+    };
+
+    // Create skull
+    const createSkull = () => {
+      const group = new THREE.Group();
+      
+      // Cranium
+      const craniumGeometry = new THREE.SphereGeometry(12, 20, 16);
+      const cranium = new THREE.Mesh(craniumGeometry, boneMaterial);
+      cranium.position.set(0, 0, 0);
+      cranium.scale.set(1, 1.1, 1.2);
+      group.add(cranium);
+
+      // Jaw (mandible)
+      const jawGeometry = new THREE.BoxGeometry(8, 3, 6);
+      const jaw = new THREE.Mesh(jawGeometry, boneMaterial);
+      jaw.position.set(0, -8, 2);
+      group.add(jaw);
 
       return group;
     };
@@ -277,8 +516,23 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
       'right_tibia': createTibia(),
       'left_humerus': createHumerus(),
       'right_humerus': createHumerus(),
-      'spine': createSpine()
+      'spine': createSpine(),
+      'pelvis': createPelvis(),
+      'rib_cage': createRibCage(),
+      'skull': createSkull()
     };
+
+    // Position bones anatomically
+    bones['left_femur'].position.set(-25, -50, 0);
+    bones['right_femur'].position.set(25, -50, 0);
+    bones['left_tibia'].position.set(-25, -120, 0);
+    bones['right_tibia'].position.set(25, -120, 0);
+    bones['left_humerus'].position.set(-50, 30, 0);
+    bones['right_humerus'].position.set(50, 30, 0);
+    bones['spine'].position.set(0, 10, 0);
+    bones['pelvis'].position.set(0, -30, 0);
+    bones['rib_cage'].position.set(0, 50, 0);
+    bones['skull'].position.set(0, 120, 0);
 
     // Add bones to scene and store references
     Object.entries(bones).forEach(([name, bone]) => {

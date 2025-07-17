@@ -134,11 +134,11 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
 
     const boneModels = new Map<string, BoneModel>();
 
-    // Realistic bone material with medical-grade appearance
+    // Medical-grade bone material matching reference image
     const boneMaterial = new THREE.MeshPhongMaterial({
-      color: 0xF5F5DC,          // Bone white/beige color
-      shininess: 5,              // Low shininess for matte bone finish
-      specular: 0x222222,        // Subtle specular highlights
+      color: 0xF5DEB3,          // Exact bone cream color from reference
+      shininess: 2,              // Very low shininess for authentic bone finish
+      specular: 0x111111,        // Minimal specular highlights
       transparent: false,
       opacity: 1.0,
       side: THREE.DoubleSide
@@ -146,11 +146,11 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
 
     const affectedBoneMaterial = new THREE.MeshPhongMaterial({
       color: 0xDC143C,          // Medical red for pathology
-      shininess: 8,
-      specular: 0x333333,
+      shininess: 5,
+      specular: 0x222222,
       transparent: true,
-      opacity: 0.9,
-      emissive: 0x220000,       // Slight glow for affected areas
+      opacity: 0.85,
+      emissive: 0x330000,       // Slight glow for affected areas
       side: THREE.DoubleSide
     });
 
@@ -488,51 +488,236 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
       return group;
     };
 
-    // Create skull
+    // Create complete anatomical skull matching reference
     const createSkull = () => {
       const group = new THREE.Group();
       
-      // Cranium
-      const craniumGeometry = new THREE.SphereGeometry(12, 20, 16);
+      // Cranium (rounded dome shape)
+      const craniumGeometry = new THREE.SphereGeometry(11, 24, 20);
       const cranium = new THREE.Mesh(craniumGeometry, boneMaterial);
-      cranium.position.set(0, 0, 0);
-      cranium.scale.set(1, 1.1, 1.2);
+      cranium.position.set(0, 2, 0);
+      cranium.scale.set(1, 1.1, 1.15);
       group.add(cranium);
 
-      // Jaw (mandible)
-      const jawGeometry = new THREE.BoxGeometry(8, 3, 6);
-      const jaw = new THREE.Mesh(jawGeometry, boneMaterial);
-      jaw.position.set(0, -8, 2);
-      group.add(jaw);
+      // Eye sockets (orbital cavities)
+      const eyeSocketGeometry = new THREE.SphereGeometry(2.5, 12, 10);
+      const leftEyeSocket = new THREE.Mesh(eyeSocketGeometry, boneMaterial);
+      leftEyeSocket.position.set(-3.5, 0, 8);
+      leftEyeSocket.scale.set(1.2, 1, 0.8);
+      group.add(leftEyeSocket);
+
+      const rightEyeSocket = new THREE.Mesh(eyeSocketGeometry, boneMaterial);
+      rightEyeSocket.position.set(3.5, 0, 8);
+      rightEyeSocket.scale.set(1.2, 1, 0.8);
+      group.add(rightEyeSocket);
+
+      // Nasal cavity
+      const nasalGeometry = new THREE.BoxGeometry(1.5, 4, 3);
+      const nasal = new THREE.Mesh(nasalGeometry, boneMaterial);
+      nasal.position.set(0, -2, 9);
+      group.add(nasal);
+
+      // Upper jaw (maxilla)
+      const upperJawGeometry = new THREE.BoxGeometry(8, 2, 4);
+      const upperJaw = new THREE.Mesh(upperJawGeometry, boneMaterial);
+      upperJaw.position.set(0, -4, 6);
+      group.add(upperJaw);
+
+      // Lower jaw (mandible) - U-shaped
+      const mandibleGeometry = new THREE.BoxGeometry(8, 3, 4);
+      const mandible = new THREE.Mesh(mandibleGeometry, boneMaterial);
+      mandible.position.set(0, -8, 5);
+      group.add(mandible);
+
+      // Temporal bones (side skull)
+      const temporalGeometry = new THREE.BoxGeometry(3, 4, 6);
+      const leftTemporal = new THREE.Mesh(temporalGeometry, boneMaterial);
+      leftTemporal.position.set(-8, -1, 2);
+      group.add(leftTemporal);
+
+      const rightTemporal = new THREE.Mesh(temporalGeometry, boneMaterial);
+      rightTemporal.position.set(8, -1, 2);
+      group.add(rightTemporal);
 
       return group;
     };
 
-    // Create and position bone models
-    const bones = {
-      'left_femur': createFemur(true),
-      'right_femur': createFemur(false),
-      'left_tibia': createTibia(),
-      'right_tibia': createTibia(),
-      'left_humerus': createHumerus(),
-      'right_humerus': createHumerus(),
-      'spine': createSpine(),
-      'pelvis': createPelvis(),
-      'rib_cage': createRibCage(),
-      'skull': createSkull()
+    // Create complete arm bones (humerus, radius, ulna)
+    const createCompleteArm = (side: 'left' | 'right') => {
+      const group = new THREE.Group();
+      const isLeft = side === 'left';
+      
+      // Humerus (upper arm) - enhanced from previous version
+      const humerus = createHumerus();
+      humerus.position.set(0, 0, 0);
+      group.add(humerus);
+
+      // Radius (forearm thumb side)
+      const radiusGeometry = new THREE.CylinderGeometry(2.5, 3, 35, 12);
+      const radius = new THREE.Mesh(radiusGeometry, boneMaterial);
+      radius.position.set(isLeft ? 3 : -3, -40, 0);
+      group.add(radius);
+
+      // Ulna (forearm pinky side)
+      const ulnaGeometry = new THREE.CylinderGeometry(2, 2.5, 38, 12);
+      const ulna = new THREE.Mesh(ulnaGeometry, boneMaterial);
+      ulna.position.set(isLeft ? -2 : 2, -41, 0);
+      
+      // Olecranon process (elbow point)
+      const olecranonGeometry = new THREE.BoxGeometry(3, 4, 2);
+      const olecranon = new THREE.Mesh(olecranonGeometry, boneMaterial);
+      olecranon.position.set(isLeft ? -2 : 2, -22, -2);
+      group.add(ulna, olecranon);
+
+      return group;
     };
 
-    // Position bones anatomically
-    bones['left_femur'].position.set(-25, -50, 0);
-    bones['right_femur'].position.set(25, -50, 0);
-    bones['left_tibia'].position.set(-25, -120, 0);
-    bones['right_tibia'].position.set(25, -120, 0);
-    bones['left_humerus'].position.set(-50, 30, 0);
-    bones['right_humerus'].position.set(50, 30, 0);
-    bones['spine'].position.set(0, 10, 0);
-    bones['pelvis'].position.set(0, -30, 0);
-    bones['rib_cage'].position.set(0, 50, 0);
-    bones['skull'].position.set(0, 120, 0);
+    // Create hand with fingers
+    const createHand = () => {
+      const group = new THREE.Group();
+      
+      // Palm (metacarpals)
+      const palmGeometry = new THREE.BoxGeometry(6, 2, 10);
+      const palm = new THREE.Mesh(palmGeometry, boneMaterial);
+      palm.position.set(0, 0, 0);
+      group.add(palm);
+
+      // Create 5 fingers
+      for (let i = 0; i < 5; i++) {
+        const fingerGroup = new THREE.Group();
+        const fingerOffset = (i - 2) * 1.3; // Spread fingers
+        
+        // Proximal phalanx
+        const proximalGeometry = new THREE.CylinderGeometry(0.4, 0.5, 3, 8);
+        const proximal = new THREE.Mesh(proximalGeometry, boneMaterial);
+        proximal.position.set(fingerOffset, 0, 6);
+        fingerGroup.add(proximal);
+
+        // Middle phalanx (skip for thumb)
+        if (i !== 0) {
+          const middleGeometry = new THREE.CylinderGeometry(0.3, 0.4, 2.5, 8);
+          const middle = new THREE.Mesh(middleGeometry, boneMaterial);
+          middle.position.set(fingerOffset, 0, 9);
+          fingerGroup.add(middle);
+        }
+
+        // Distal phalanx
+        const distalGeometry = new THREE.CylinderGeometry(0.2, 0.3, 2, 8);
+        const distal = new THREE.Mesh(distalGeometry, boneMaterial);
+        distal.position.set(fingerOffset, 0, i === 0 ? 9 : 11.5);
+        fingerGroup.add(distal);
+
+        group.add(fingerGroup);
+      }
+
+      return group;
+    };
+
+    // Create complete leg bones (femur, tibia, fibula)
+    const createCompleteLeg = (side: 'left' | 'right') => {
+      const group = new THREE.Group();
+      const isLeft = side === 'left';
+      
+      // Femur (enhanced from previous version)
+      const femur = createFemur(isLeft);
+      group.add(femur);
+
+      // Tibia (enhanced from previous version)  
+      const tibia = createTibia();
+      tibia.position.set(0, -75, 0);
+      group.add(tibia);
+
+      // Fibula (thin lateral bone)
+      const fibulaGeometry = new THREE.CylinderGeometry(1.5, 2, 35, 10);
+      const fibula = new THREE.Mesh(fibulaGeometry, boneMaterial);
+      fibula.position.set(isLeft ? 4 : -4, -75, 0);
+      group.add(fibula);
+
+      // Patella (kneecap)
+      const patellaGeometry = new THREE.SphereGeometry(3, 12, 10);
+      const patella = new THREE.Mesh(patellaGeometry, boneMaterial);
+      patella.position.set(0, -40, 5);
+      patella.scale.set(1, 0.7, 0.5);
+      group.add(patella);
+
+      return group;
+    };
+
+    // Create foot with toes
+    const createFoot = () => {
+      const group = new THREE.Group();
+      
+      // Calcaneus (heel bone)
+      const calcaneusGeometry = new THREE.BoxGeometry(6, 4, 8);
+      const calcaneus = new THREE.Mesh(calcaneusGeometry, boneMaterial);
+      calcaneus.position.set(0, 0, -4);
+      group.add(calcaneus);
+
+      // Metatarsals (foot bones)
+      const metatarsalGeometry = new THREE.BoxGeometry(8, 2, 12);
+      const metatarsals = new THREE.Mesh(metatarsalGeometry, boneMaterial);
+      metatarsals.position.set(0, 0, 6);
+      group.add(metatarsals);
+
+      // Create 5 toes
+      for (let i = 0; i < 5; i++) {
+        const toeGroup = new THREE.Group();
+        const toeOffset = (i - 2) * 1.5;
+        
+        // Toe bones (phalanges)
+        const proximalToeGeometry = new THREE.CylinderGeometry(0.4, 0.5, 2, 8);
+        const proximalToe = new THREE.Mesh(proximalToeGeometry, boneMaterial);
+        proximalToe.position.set(toeOffset, 0, 12);
+        toeGroup.add(proximalToe);
+
+        const distalToeGeometry = new THREE.CylinderGeometry(0.3, 0.4, 1.5, 8);
+        const distalToe = new THREE.Mesh(distalToeGeometry, boneMaterial);
+        distalToe.position.set(toeOffset, 0, 14);
+        toeGroup.add(distalToe);
+
+        group.add(toeGroup);
+      }
+
+      return group;
+    };
+
+    // Create complete anatomical skeleton
+    const bones = {
+      'skull': createSkull(),
+      'spine': createSpine(),
+      'rib_cage': createRibCage(),
+      'pelvis': createPelvis(),
+      'left_arm': createCompleteArm('left'),
+      'right_arm': createCompleteArm('right'),
+      'left_hand': createHand(),
+      'right_hand': createHand(),
+      'left_leg': createCompleteLeg('left'),
+      'right_leg': createCompleteLeg('right'),
+      'left_foot': createFoot(),
+      'right_foot': createFoot()
+    };
+
+    // Position complete skeleton anatomically matching reference image
+    bones['skull'].position.set(0, 150, 0);
+    bones['spine'].position.set(0, 20, 0);
+    bones['rib_cage'].position.set(0, 60, 0);
+    bones['pelvis'].position.set(0, -20, 0);
+    
+    // Arms positioned naturally at sides
+    bones['left_arm'].position.set(-40, 50, 0);
+    bones['right_arm'].position.set(40, 50, 0);
+    bones['left_hand'].position.set(-43, -20, 0);
+    bones['right_hand'].position.set(43, -20, 0);
+    
+    // Legs positioned for natural standing pose
+    bones['left_leg'].position.set(-15, -50, 0);
+    bones['right_leg'].position.set(15, -50, 0);
+    bones['left_foot'].position.set(-15, -160, 0);
+    bones['right_foot'].position.set(15, -160, 0);
+    
+    // Rotate feet to proper orientation
+    bones['left_foot'].rotation.x = -Math.PI/2;
+    bones['right_foot'].rotation.x = -Math.PI/2;
 
     // Add bones to scene and store references
     Object.entries(bones).forEach(([name, bone]) => {

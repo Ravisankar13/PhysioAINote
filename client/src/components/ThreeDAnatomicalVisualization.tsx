@@ -1119,14 +1119,14 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
       const femur = createFemur(isLeft);
       group.add(femur);
 
-      // Enhanced tibia with realistic anatomy
+      // Enhanced tibia with realistic anatomy - positioned to articulate with femoral condyles
       const tibia = createTibia();
-      tibia.position.set(0, -75, 0);
+      tibia.position.set(0, -40, 0); // Moved up to connect with femoral condyles
       group.add(tibia);
 
-      // Fibula (lateral leg bone) - use the new anatomically accurate version
+      // Fibula (lateral leg bone) - positioned alongside tibia
       const fibula = createFibula();
-      fibula.position.set(isLeft ? -8 : 8, -75, 0); // Position lateral to tibia
+      fibula.position.set(isLeft ? -8 : 8, -40, 0); // Moved up to align with tibia
       group.add(fibula);
 
       // Enhanced patella (kneecap) - properly positioned in patellar groove
@@ -1170,12 +1170,12 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
       
       // Position patella in the patellar groove between femoral condyles
       const patella = createPatella();
-      patella.position.set(0, -48, 12); // Adjusted to fit in improved knee joint
+      patella.position.set(0, -32, 12); // Adjusted to align with new knee joint position
       group.add(patella);
 
       // Complete foot structure with all bones
       const foot = createFoot(isLeft);
-      foot.position.set(0, -150, 0); // Position below tibia/fibula
+      foot.position.set(0, -115, 0); // Adjusted to align with new tibia position
       group.add(foot);
 
       return group;
@@ -1209,9 +1209,9 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
     bones['left_hand'].position.set(-43, -20, 0);
     bones['right_hand'].position.set(43, -20, 0);
     
-    // Complete legs with integrated fibula and foot structures
-    bones['left_leg'].position.set(-15, -50, 0);
-    bones['right_leg'].position.set(15, -50, 0);
+    // Complete legs with integrated fibula and foot structures - positioned to connect with acetabulum
+    bones['left_leg'].position.set(-15, -35, 0); // Moved up to connect femur head with acetabulum
+    bones['right_leg'].position.set(15, -35, 0); // Moved up to connect femur head with acetabulum
 
     // Add bones to scene and store references
     Object.entries(bones).forEach(([name, bone]) => {

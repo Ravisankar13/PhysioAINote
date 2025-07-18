@@ -1404,7 +1404,7 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
     };
 
     // Position complete skeleton anatomically with enhanced lower limbs
-    bones['skull'].position.set(0, 170, 0); // Positioned at top of cervical spine (C1)
+    bones['skull'].position.set(0, 62, 0); // Positioned at top of cervical spine (C1 atlas at Y=20+42=62)
     bones['spine'].position.set(0, 20, 0);
     bones['rib_cage'].position.set(0, 85, 0); // Positioned to connect with thoracic vertebrae T1-T12
     bones['pelvis'].position.set(0, -20, 0);

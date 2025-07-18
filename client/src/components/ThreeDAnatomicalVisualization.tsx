@@ -1176,67 +1176,81 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
         return clavicleGroup;
       };
       
-      // SCAPULA - shoulder blade
+      // SCAPULA - shoulder blade (triangular wing-shaped bone)
       const createScapula = () => {
         const scapulaGroup = new THREE.Group();
         
-        // Scapular body (triangular flat bone)
-        const bodyGeometry = new THREE.BoxGeometry(3, 20, 15);
-        const body = new THREE.Mesh(bodyGeometry, boneMaterial);
-        body.position.set(0, 0, 0);
-        body.rotation.y = isLeft ? 0.3 : -0.3; // Angled against rib cage
-        scapulaGroup.add(body);
+        // Create triangular scapular body using custom geometry
+        const createTriangularBody = () => {
+          const geometry = new THREE.BufferGeometry();
+          
+          // Define triangle vertices for wing shape (left scapula, mirror for right)
+          const vertices = new Float32Array([
+            // Front face of triangle
+            0, 10, 0,     // Superior angle (top)
+            isLeft ? -8 : 8, -8, -6,  // Inferior angle (bottom medial)
+            isLeft ? 8 : -8, 2, 6,    // Lateral angle (glenoid area)
+            
+            // Back face of triangle (slightly offset for thickness)
+            0, 10, -2,    // Superior angle (back)
+            isLeft ? -8 : 8, -8, -8,  // Inferior angle (back)
+            isLeft ? 8 : -8, 2, 4,    // Lateral angle (back)
+          ]);
+          
+          // Define triangle faces
+          const indices = new Uint16Array([
+            // Front triangle
+            0, 1, 2,
+            // Back triangle  
+            3, 5, 4,
+            // Connecting edges (creating thickness)
+            0, 3, 1, 1, 3, 4,  // Top edge
+            1, 4, 2, 2, 4, 5,  // Bottom edge
+            2, 5, 0, 0, 5, 3,  // Side edge
+          ]);
+          
+          geometry.setIndex(indices);
+          geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+          geometry.computeVertexNormals();
+          
+          return geometry;
+        };
         
-        // Scapular spine (prominent ridge)
-        const spineGeometry = new THREE.BoxGeometry(4, 18, 2);
+        const triangularBodyGeometry = createTriangularBody();
+        const triangularBody = new THREE.Mesh(triangularBodyGeometry, boneMaterial);
+        triangularBody.rotation.y = isLeft ? 0.3 : -0.3; // Angled against rib cage
+        scapulaGroup.add(triangularBody);
+        
+        // Scapular spine (prominent ridge running diagonally across the wing)
+        const spineGeometry = new THREE.BoxGeometry(2, 16, 1.5);
         const spine = new THREE.Mesh(spineGeometry, boneMaterial);
-        spine.position.set(isLeft ? -2 : 2, 0, -2);
+        spine.position.set(isLeft ? -3 : 3, 1, -1);
         spine.rotation.y = isLeft ? 0.3 : -0.3;
+        spine.rotation.z = isLeft ? -0.2 : 0.2; // Diagonal across wing
         scapulaGroup.add(spine);
         
-        // Acromion process (connects to clavicle)
-        const acromionGeometry = new THREE.BoxGeometry(2, 6, 4);
+        // Acromion process (extends from spine, connects to clavicle)
+        const acromionGeometry = new THREE.BoxGeometry(1.5, 4, 3);
         const acromion = new THREE.Mesh(acromionGeometry, boneMaterial);
-        acromion.position.set(isLeft ? -2 : 2, 8, -4);
+        acromion.position.set(isLeft ? -4 : 4, 8, -2);
         acromion.rotation.y = isLeft ? 0.3 : -0.3;
         scapulaGroup.add(acromion);
         
-        // Coracoid process (anterior projection)
-        const coracoidGeometry = new THREE.ConeGeometry(2, 6, 8);
+        // Coracoid process (beak-like projection)
+        const coracoidGeometry = new THREE.ConeGeometry(1.5, 5, 8);
         const coracoid = new THREE.Mesh(coracoidGeometry, boneMaterial);
-        coracoid.position.set(isLeft ? 2 : -2, 6, 4);
+        coracoid.position.set(isLeft ? 3 : -3, 6, 3);
         coracoid.rotation.x = Math.PI/4;
         coracoid.rotation.y = isLeft ? -0.3 : 0.3;
         scapulaGroup.add(coracoid);
         
-        // Glenoid fossa (shoulder socket for humerus)
-        const glenoidGeometry = new THREE.SphereGeometry(5, 16, 12);
+        // Glenoid fossa (shoulder socket - positioned at lateral angle)
+        const glenoidGeometry = new THREE.SphereGeometry(4, 16, 12);
         const glenoid = new THREE.Mesh(glenoidGeometry, boneMaterial);
-        glenoid.position.set(isLeft ? 1 : -1, 5, 2);
-        glenoid.scale.set(0.8, 0.8, 0.6);
+        glenoid.position.set(isLeft ? 6 : -6, 2, 4);
+        glenoid.scale.set(0.7, 0.7, 0.5);
         glenoid.rotation.y = isLeft ? 0.3 : -0.3;
         scapulaGroup.add(glenoid);
-        
-        // Superior border
-        const superiorBorderGeometry = new THREE.BoxGeometry(2, 2, 12);
-        const superiorBorder = new THREE.Mesh(superiorBorderGeometry, boneMaterial);
-        superiorBorder.position.set(0, 10, 0);
-        superiorBorder.rotation.y = isLeft ? 0.3 : -0.3;
-        scapulaGroup.add(superiorBorder);
-        
-        // Medial border (closest to spine)
-        const medialBorderGeometry = new THREE.BoxGeometry(2, 18, 2);
-        const medialBorder = new THREE.Mesh(medialBorderGeometry, boneMaterial);
-        medialBorder.position.set(isLeft ? 1 : -1, 0, -6);
-        medialBorder.rotation.y = isLeft ? 0.3 : -0.3;
-        scapulaGroup.add(medialBorder);
-        
-        // Lateral border (closest to arm)
-        const lateralBorderGeometry = new THREE.BoxGeometry(2, 16, 2);
-        const lateralBorder = new THREE.Mesh(lateralBorderGeometry, boneMaterial);
-        lateralBorder.position.set(isLeft ? -1 : 1, -2, 6);
-        lateralBorder.rotation.y = isLeft ? 0.3 : -0.3;
-        scapulaGroup.add(lateralBorder);
         
         return scapulaGroup;
       };

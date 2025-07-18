@@ -185,23 +185,43 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
       trochanter.position.set(isLeft ? 6 : -6, 55, 0);
       group.add(trochanter);
 
-      // Femoral condyles (knee joint) - anatomically shaped
-      const condyleGeometry = new THREE.SphereGeometry(9, 16, 12);
-      const medialCondyle = new THREE.Mesh(condyleGeometry, boneMaterial);
-      medialCondyle.position.set(isLeft ? -5 : 5, -8, 2);
-      medialCondyle.scale.set(0.9, 0.7, 1.3);
-      group.add(medialCondyle);
+      // Enhanced femoral condyles (knee joint) - anatomically accurate
+      const createFemoralCondyles = () => {
+        const condylesGroup = new THREE.Group();
+        
+        // Medial femoral condyle (larger, more prominent)
+        const medialCondyleGeometry = new THREE.SphereGeometry(10, 20, 16);
+        const medialCondyle = new THREE.Mesh(medialCondyleGeometry, boneMaterial);
+        medialCondyle.position.set(isLeft ? -6 : 6, -32, 3);
+        medialCondyle.scale.set(0.8, 0.6, 1.4);
+        condylesGroup.add(medialCondyle);
 
-      const lateralCondyle = new THREE.Mesh(condyleGeometry, boneMaterial);
-      lateralCondyle.position.set(isLeft ? 5 : -5, -8, 2);
-      lateralCondyle.scale.set(0.9, 0.7, 1.3);
-      group.add(lateralCondyle);
+        // Lateral femoral condyle (smaller, rounder)
+        const lateralCondyleGeometry = new THREE.SphereGeometry(9, 20, 16);
+        const lateralCondyle = new THREE.Mesh(lateralCondyleGeometry, boneMaterial);
+        lateralCondyle.position.set(isLeft ? 6 : -6, -32, 3);
+        lateralCondyle.scale.set(0.8, 0.6, 1.3);
+        condylesGroup.add(lateralCondyle);
 
-      // Intercondylar notch
-      const notchGeometry = new THREE.BoxGeometry(4, 6, 8);
-      const notch = new THREE.Mesh(notchGeometry, boneMaterial);
-      notch.position.set(0, -8, 0);
-      group.add(notch);
+        // Intercondylar notch (deep groove between condyles)
+        const notchGeometry = new THREE.BoxGeometry(6, 8, 12);
+        const notch = new THREE.Mesh(notchGeometry, boneMaterial);
+        notch.position.set(0, -32, 0);
+        condylesGroup.add(notch);
+
+        // Patellar groove (anterior surface for kneecap)
+        const grooveGeometry = new THREE.CylinderGeometry(8, 8, 10, 16);
+        const groove = new THREE.Mesh(grooveGeometry, boneMaterial);
+        groove.position.set(0, -28, 8);
+        groove.rotation.x = Math.PI/2;
+        groove.scale.set(1, 0.8, 0.6);
+        condylesGroup.add(groove);
+
+        return condylesGroup;
+      };
+
+      const femoralCondyles = createFemoralCondyles();
+      group.add(femoralCondyles);
 
       return group;
     };
@@ -210,23 +230,51 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
     const createTibia = () => {
       const group = new THREE.Group();
       
-      // Tibial plateau (expanded proximal end with joint surfaces)
-      const plateauGeometry = new THREE.CylinderGeometry(12, 8, 8, 16);
-      const plateau = new THREE.Mesh(plateauGeometry, boneMaterial);
-      plateau.position.set(0, 35, 0);
-      group.add(plateau);
+      // Enhanced tibial plateau - articulates with femoral condyles
+      const createTibialPlateau = () => {
+        const plateauGroup = new THREE.Group();
+        
+        // Main tibial plateau (broad, flat surface)
+        const plateauGeometry = new THREE.CylinderGeometry(14, 10, 10, 20);
+        const plateau = new THREE.Mesh(plateauGeometry, boneMaterial);
+        plateau.position.set(0, 35, 0);
+        plateauGroup.add(plateau);
 
-      // Tibial condyles (medial and lateral joint surfaces)
-      const condyleGeometry = new THREE.SphereGeometry(6, 12, 10);
-      const medialCondyle = new THREE.Mesh(condyleGeometry, boneMaterial);
-      medialCondyle.position.set(4, 35, 2);
-      medialCondyle.scale.set(1, 0.6, 1.2);
-      group.add(medialCondyle);
+        // Medial tibial condyle (larger, oval-shaped)
+        const medialCondyleGeometry = new THREE.SphereGeometry(7, 16, 12);
+        const medialCondyle = new THREE.Mesh(medialCondyleGeometry, boneMaterial);
+        medialCondyle.position.set(5, 38, 3);
+        medialCondyle.scale.set(1.2, 0.4, 1.5);
+        plateauGroup.add(medialCondyle);
 
-      const lateralCondyle = new THREE.Mesh(condyleGeometry, boneMaterial);
-      lateralCondyle.position.set(-4, 35, 2);
-      lateralCondyle.scale.set(1, 0.6, 1.2);
-      group.add(lateralCondyle);
+        // Lateral tibial condyle (smaller, more circular)
+        const lateralCondyleGeometry = new THREE.SphereGeometry(6, 16, 12);
+        const lateralCondyle = new THREE.Mesh(lateralCondyleGeometry, boneMaterial);
+        lateralCondyle.position.set(-5, 38, 3);
+        lateralCondyle.scale.set(1.1, 0.4, 1.3);
+        plateauGroup.add(lateralCondyle);
+
+        // Intercondylar eminence (central spine between condyles)
+        const eminenceGeometry = new THREE.BoxGeometry(4, 6, 8);
+        const eminence = new THREE.Mesh(eminenceGeometry, boneMaterial);
+        eminence.position.set(0, 38, 0);
+        plateauGroup.add(eminence);
+
+        // Tibial spines (medial and lateral intercondylar tubercles)
+        const spineGeometry = new THREE.ConeGeometry(1.5, 4, 8);
+        const medialSpine = new THREE.Mesh(spineGeometry, boneMaterial);
+        medialSpine.position.set(2, 40, 0);
+        plateauGroup.add(medialSpine);
+
+        const lateralSpine = new THREE.Mesh(spineGeometry, boneMaterial);
+        lateralSpine.position.set(-2, 40, 0);
+        plateauGroup.add(lateralSpine);
+
+        return plateauGroup;
+      };
+
+      const tibialPlateau = createTibialPlateau();
+      group.add(tibialPlateau);
 
       // Tibial tuberosity (prominent anterior projection)
       const tuberosityGeometry = new THREE.BoxGeometry(6, 5, 4);
@@ -917,31 +965,48 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
       fibula.position.set(isLeft ? -8 : 8, -75, 0); // Position lateral to tibia
       group.add(fibula);
 
-      // Patella (kneecap) - anatomically positioned
+      // Enhanced patella (kneecap) - properly positioned in patellar groove
       const createPatella = () => {
         const patellaGroup = new THREE.Group();
         
-        // Main patella body (triangular sesamoid bone)
-        const patellaGeometry = new THREE.SphereGeometry(4, 16, 12);
+        // Main patella body (triangular sesamoid bone with proper shape)
+        const patellaGeometry = new THREE.SphereGeometry(5, 20, 16);
         const patella = new THREE.Mesh(patellaGeometry, boneMaterial);
-        patella.scale.set(1.2, 0.8, 0.6);
+        patella.scale.set(1.3, 0.7, 0.8);
         patellaGroup.add(patella);
         
-        // Patellar facets for femoral articulation
-        const facetGeometry = new THREE.BoxGeometry(3, 2, 2);
-        const medialFacet = new THREE.Mesh(facetGeometry, boneMaterial);
-        medialFacet.position.set(1.5, 0, 2);
+        // Patellar apex (inferior point)
+        const apexGeometry = new THREE.ConeGeometry(2, 4, 8);
+        const apex = new THREE.Mesh(apexGeometry, boneMaterial);
+        apex.position.set(0, -4, 0);
+        patellaGroup.add(apex);
+        
+        // Articular facets (posterior surface that articulates with femur)
+        const medialFacetGeometry = new THREE.SphereGeometry(3, 12, 10);
+        const medialFacet = new THREE.Mesh(medialFacetGeometry, boneMaterial);
+        medialFacet.position.set(isLeft ? 2 : -2, 0, -2);
+        medialFacet.scale.set(0.8, 0.6, 0.4);
         patellaGroup.add(medialFacet);
         
-        const lateralFacet = new THREE.Mesh(facetGeometry, boneMaterial);
-        lateralFacet.position.set(-1.5, 0, 2);
+        const lateralFacetGeometry = new THREE.SphereGeometry(3.5, 12, 10);
+        const lateralFacet = new THREE.Mesh(lateralFacetGeometry, boneMaterial);
+        lateralFacet.position.set(isLeft ? -2 : 2, 0, -2);
+        lateralFacet.scale.set(0.8, 0.6, 0.4);
         patellaGroup.add(lateralFacet);
+        
+        // Odd facet (small medial facet for extreme flexion)
+        const oddFacetGeometry = new THREE.SphereGeometry(1.5, 8, 6);
+        const oddFacet = new THREE.Mesh(oddFacetGeometry, boneMaterial);
+        oddFacet.position.set(isLeft ? 3.5 : -3.5, 0, -1);
+        oddFacet.scale.set(0.6, 0.4, 0.3);
+        patellaGroup.add(oddFacet);
         
         return patellaGroup;
       };
       
+      // Position patella in the patellar groove between femoral condyles
       const patella = createPatella();
-      patella.position.set(0, -40, 8);
+      patella.position.set(0, -48, 12); // Adjusted to fit in improved knee joint
       group.add(patella);
 
       // Complete foot structure with all bones

@@ -1150,27 +1150,27 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
       const group = new THREE.Group();
       const isLeft = side === 'left';
       
-      // CLAVICLE - collar bone connecting sternum to scapula
+      // CLAVICLE - collar bone connecting sternum to scapula (enhanced for reference matching)
       const createClavicle = () => {
         const clavicleGroup = new THREE.Group();
         
-        // Main clavicular shaft (S-shaped curve)
-        const shaftGeometry = new THREE.CylinderGeometry(2, 2.5, 25, 12);
+        // Main clavicular shaft (S-shaped curve) - longer and more horizontal
+        const shaftGeometry = new THREE.CylinderGeometry(2.2, 2.5, 30, 12);
         const shaft = new THREE.Mesh(shaftGeometry, boneMaterial);
         shaft.rotation.z = Math.PI/2;
-        shaft.rotation.y = isLeft ? 0.2 : -0.2; // Natural S-curve
+        shaft.rotation.y = isLeft ? 0.15 : -0.15; // Reduced S-curve for more horizontal appearance
         clavicleGroup.add(shaft);
         
-        // Sternal end (medial, connects to sternum)
-        const sternalEndGeometry = new THREE.SphereGeometry(3, 12, 10);
+        // Sternal end (medial, connects to sternum) - positioned for reference match
+        const sternalEndGeometry = new THREE.SphereGeometry(3.2, 12, 10);
         const sternalEnd = new THREE.Mesh(sternalEndGeometry, boneMaterial);
-        sternalEnd.position.set(isLeft ? -12 : 12, 0, 2);
+        sternalEnd.position.set(isLeft ? -15 : 15, 0, 1.5);
         clavicleGroup.add(sternalEnd);
         
-        // Acromial end (lateral, connects to scapula)
-        const acromialEndGeometry = new THREE.SphereGeometry(2.5, 12, 10);
+        // Acromial end (lateral, connects to scapula) - positioned for reference match
+        const acromialEndGeometry = new THREE.SphereGeometry(2.8, 12, 10);
         const acromialEnd = new THREE.Mesh(acromialEndGeometry, boneMaterial);
-        acromialEnd.position.set(isLeft ? 12 : -12, 0, -2);
+        acromialEnd.position.set(isLeft ? 15 : -15, 0, -1.5);
         clavicleGroup.add(acromialEnd);
         
         return clavicleGroup;
@@ -1241,35 +1241,37 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
         return scapulaGroup;
       };
       
-      // Position shoulder complex
+      // Position shoulder complex to match reference image
       const clavicle = createClavicle();
-      clavicle.position.set(0, 15, 0); // High on chest
+      clavicle.position.set(0, 25, 0); // Positioned high on chest, more horizontal
+      clavicle.rotation.z = 0; // Keep horizontal orientation
       group.add(clavicle);
       
       const scapula = createScapula();
-      scapula.position.set(isLeft ? -8 : 8, 5, -8); // Against posterior rib cage
+      scapula.position.set(isLeft ? -12 : 12, 15, -12); // Positioned against posterior rib cage
       group.add(scapula);
       
-      // HUMERUS (upper arm) - positioned to articulate with glenoid fossa
+      // HUMERUS (upper arm) - positioned laterally from shoulder socket
       const humerus = createHumerus();
-      humerus.position.set(isLeft ? -2 : 2, -10, 2); // Raised to connect with shoulder socket
+      humerus.position.set(isLeft ? -18 : 18, -5, 8); // More lateral positioning like reference
+      humerus.rotation.z = isLeft ? 0.3 : -0.3; // Slight outward angle
       group.add(humerus);
 
-      // Radius (forearm thumb side)
+      // Radius (forearm thumb side) - positioned to match reference
       const radiusGeometry = new THREE.CylinderGeometry(2.5, 3, 35, 12);
       const radius = new THREE.Mesh(radiusGeometry, boneMaterial);
-      radius.position.set(isLeft ? 1 : -1, -50, 2);
+      radius.position.set(isLeft ? -15 : 15, -40, 8);
       group.add(radius);
 
-      // Ulna (forearm pinky side)
+      // Ulna (forearm pinky side) - positioned to match reference
       const ulnaGeometry = new THREE.CylinderGeometry(2, 2.5, 38, 12);
       const ulna = new THREE.Mesh(ulnaGeometry, boneMaterial);
-      ulna.position.set(isLeft ? -4 : 4, -51, 2);
+      ulna.position.set(isLeft ? -18 : 18, -41, 8);
       
       // Olecranon process (elbow point)
       const olecranonGeometry = new THREE.BoxGeometry(3, 4, 2);
       const olecranon = new THREE.Mesh(olecranonGeometry, boneMaterial);
-      olecranon.position.set(isLeft ? -4 : 4, -32, 0);
+      olecranon.position.set(isLeft ? -18 : 18, -22, 6);
       group.add(ulna, olecranon);
 
       return group;
@@ -1416,14 +1418,14 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
 
     // Position complete skeleton anatomically with enhanced lower limbs
     bones['spine'].position.set(0, 20, 0);
-    bones['rib_cage'].position.set(0, 85, 0); // Positioned to connect with thoracic vertebrae T1-T12
+    bones['rib_cage'].position.set(0, 75, 0); // Positioned to connect with thoracic vertebrae T1-T12
     bones['pelvis'].position.set(0, -20, 0);
     
-    // Arms positioned naturally with proper shoulder complex
-    bones['left_arm'].position.set(-20, 85, 0); // Raised to connect with enhanced shoulder
-    bones['right_arm'].position.set(20, 85, 0); // Raised to connect with enhanced shoulder
-    bones['left_hand'].position.set(-23, 5, 0); // Adjusted for new arm position
-    bones['right_hand'].position.set(23, 5, 0); // Adjusted for new arm position
+    // Arms positioned laterally to match reference image
+    bones['left_arm'].position.set(-30, 85, 0); // More lateral positioning like reference
+    bones['right_arm'].position.set(30, 85, 0); // More lateral positioning like reference
+    bones['left_hand'].position.set(-35, -5, 0); // Hands positioned at arm ends
+    bones['right_hand'].position.set(35, -5, 0); // Hands positioned at arm ends
     
     // Complete legs with integrated fibula and foot structures - positioned to connect with acetabulum
     bones['left_leg'].position.set(-15, -35, 0); // Moved up to connect femur head with acetabulum

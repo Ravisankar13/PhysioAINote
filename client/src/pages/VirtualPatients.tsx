@@ -745,28 +745,20 @@ export default function VirtualPatientsPage() {
   // Handle patient selection
   const handlePatientSelect = (patient: SoapVirtualPatient) => {
     const patientName = patient.patient_name || `Patient ${patient.id}`;
-    console.log('Patient selected:', patientName);
+    console.log('DEBUG: Patient selection started for:', patientName);
+    console.log('DEBUG: Current URL:', window.location.href);
     
-    // Immediately set selected patient and show loading
+    // Immediately set selected patient
     setSelectedPatient(patient);
-    setIsLoadingAnalysis(true);
+    console.log('DEBUG: Selected patient state updated');
     
     // Show success notification
     toast({
       title: "Patient Selected",
-      description: `Loading ${patientName} data and movement visualization...`,
+      description: `Selected ${patientName} - debugging mode active`,
     });
     
-    // Load data in next tick to prevent blocking UI
-    setTimeout(() => {
-      loadEnhancedPatientData(patient).finally(() => {
-        setIsLoadingAnalysis(false);
-        toast({
-          title: "Patient Data Loaded",
-          description: `${patientName} visualization is ready to view.`,
-        });
-      });
-    }, 100);
+    console.log('DEBUG: Patient selection completed successfully');
   };
 
   // Helper functions for editing patient names
@@ -1378,12 +1370,15 @@ export default function VirtualPatientsPage() {
                     </p>
                   </div>
                 ) : selectedPatient ? (
-                  <StickFigureAnimation 
-                    animationData={getAnimationData(selectedPatient)}
-                    isPlaying={isPlaying}
-                    onTogglePlay={togglePlayback}
-                    onReset={resetPlayback}
-                  />
+                  <div className="text-center py-8">
+                    <Activity className="h-12 w-12 mx-auto mb-4 text-blue-600" />
+                    <h3 className="text-lg font-semibold mb-2">Patient Selected: {selectedPatient.patient_name || `Patient ${selectedPatient.id}`}</h3>
+                    <p className="text-sm text-gray-600 mb-4">Animation system temporarily disabled for debugging</p>
+                    <div className="space-y-2">
+                      <p><strong>Body Part:</strong> {selectedPatient.body_part || 'Not specified'}</p>
+                      <p><strong>Chief Complaint:</strong> {selectedPatient.chief_complaint || 'None recorded'}</p>
+                    </div>
+                  </div>
                 ) : (
                   <div className="text-center text-gray-500 py-12">
                     <Activity className="h-16 w-16 mx-auto mb-4 text-gray-400" />

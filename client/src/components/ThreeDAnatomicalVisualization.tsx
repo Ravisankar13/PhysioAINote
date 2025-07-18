@@ -1389,10 +1389,21 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
 
 
 
+    // Create spine with integrated skull at C1
+    const createSpineWithSkull = () => {
+      const spineGroup = createSpine();
+      
+      // Create skull positioned directly at C1 atlas level
+      const skull = createSkull();
+      skull.position.set(0, 42, 2); // Positioned at C1 level (spine starts at 0, C1 is at top + offset)
+      spineGroup.add(skull);
+      
+      return spineGroup;
+    };
+
     // Create complete anatomical skeleton with enhanced lower limbs
     const bones = {
-      'skull': createSkull(),
-      'spine': createSpine(),
+      'spine': createSpineWithSkull(), // Spine now includes skull at C1
       'rib_cage': createRibCage(),
       'pelvis': createPelvis(),
       'left_arm': createCompleteArm('left'),
@@ -1404,7 +1415,6 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
     };
 
     // Position complete skeleton anatomically with enhanced lower limbs
-    bones['skull'].position.set(0, 105, 0); // Positioned at top of cervical spine above C1 atlas
     bones['spine'].position.set(0, 20, 0);
     bones['rib_cage'].position.set(0, 85, 0); // Positioned to connect with thoracic vertebrae T1-T12
     bones['pelvis'].position.set(0, -20, 0);

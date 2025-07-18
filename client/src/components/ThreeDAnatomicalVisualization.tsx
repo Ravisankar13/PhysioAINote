@@ -539,78 +539,184 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
       return group;
     };
 
-    // Create anatomically accurate spine with natural curvatures
+    // Create anatomically accurate spine with correct vertebrae count and curvatures
     const createSpine = () => {
       const group = new THREE.Group();
       
-      // Create 12 vertebrae with anatomical features
-      for (let i = 0; i < 12; i++) {
+      // Create specific vertebra types based on region
+      const createVertebra = (type: 'cervical' | 'thoracic' | 'lumbar', index: number) => {
         const vertebra = new THREE.Group();
         
-        // Vertebral body - kidney-shaped like real vertebrae
-        const bodyGeometry = new THREE.CylinderGeometry(5, 6, 6, 16);
+        // Vertebral body size varies by region
+        let bodySize, processLength, transverseLength;
+        
+        switch (type) {
+          case 'cervical':
+            bodySize = { radius: 3, height: 4 };
+            processLength = 6;
+            transverseLength = 6;
+            break;
+          case 'thoracic':
+            bodySize = { radius: 5, height: 6 };
+            processLength = 10;
+            transverseLength = 8;
+            break;
+          case 'lumbar':
+            bodySize = { radius: 7, height: 8 };
+            processLength = 8;
+            transverseLength = 10;
+            break;
+        }
+        
+        // Vertebral body - kidney-shaped, size varies by region
+        const bodyGeometry = new THREE.CylinderGeometry(bodySize.radius, bodySize.radius + 1, bodySize.height, 16);
         const body = new THREE.Mesh(bodyGeometry, boneMaterial);
         vertebra.add(body);
 
-        // Spinous process - prominent posterior projection
-        const processGeometry = new THREE.BoxGeometry(2, 4, 12);
+        // Spinous process - varies by region
+        const processGeometry = new THREE.BoxGeometry(2, 4, processLength);
         const process = new THREE.Mesh(processGeometry, boneMaterial);
-        process.position.set(0, 0, -7);
+        process.position.set(0, 0, -processLength/2 - 2);
+        
+        // Cervical vertebrae have bifid spinous processes (except C7)
+        if (type === 'cervical' && index < 6) {
+          process.scale.set(0.7, 1, 0.6);
+          
+          // Bifid process (split end)
+          const bifidLeft = new THREE.BoxGeometry(1, 3, 2);
+          const bifidLeftMesh = new THREE.Mesh(bifidLeft, boneMaterial);
+          bifidLeftMesh.position.set(-1, 0, -processLength/2 - 3);
+          vertebra.add(bifidLeftMesh);
+          
+          const bifidRightMesh = new THREE.Mesh(bifidLeft, boneMaterial);
+          bifidRightMesh.position.set(1, 0, -processLength/2 - 3);
+          vertebra.add(bifidRightMesh);
+        }
+        
         vertebra.add(process);
 
-        // Transverse processes - left and right projections
-        const transverseLeftGeometry = new THREE.BoxGeometry(8, 3, 2);
+        // Transverse processes - size varies by region
+        const transverseLeftGeometry = new THREE.BoxGeometry(transverseLength, 3, 2);
         const transverseLeft = new THREE.Mesh(transverseLeftGeometry, boneMaterial);
-        transverseLeft.position.set(-6, 0, -2);
+        transverseLeft.position.set(-transverseLength/2 - 2, 0, -2);
         vertebra.add(transverseLeft);
 
-        const transverseRightGeometry = new THREE.BoxGeometry(8, 3, 2);
+        const transverseRightGeometry = new THREE.BoxGeometry(transverseLength, 3, 2);
         const transverseRight = new THREE.Mesh(transverseRightGeometry, boneMaterial);
-        transverseRight.position.set(6, 0, -2);
+        transverseRight.position.set(transverseLength/2 + 2, 0, -2);
         vertebra.add(transverseRight);
 
-        // Vertebral arch (laminae)
-        const archLeftGeometry = new THREE.BoxGeometry(3, 4, 6);
+        // Cervical vertebrae have transverse foramina
+        if (type === 'cervical' && index > 0) { // Skip atlas (C1)
+          const foramenGeometry = new THREE.SphereGeometry(1, 8, 6);
+          const leftForamen = new THREE.Mesh(foramenGeometry, boneMaterial);
+          leftForamen.position.set(-3, 0, -1);
+          vertebra.add(leftForamen);
+          
+          const rightForamen = new THREE.Mesh(foramenGeometry, boneMaterial);
+          rightForamen.position.set(3, 0, -1);
+          vertebra.add(rightForamen);
+        }
+
+        // Thoracic vertebrae have costal facets for rib articulation
+        if (type === 'thoracic') {
+          const costalFacetGeometry = new THREE.SphereGeometry(1.5, 8, 6);
+          const leftCostalFacet = new THREE.Mesh(costalFacetGeometry, boneMaterial);
+          leftCostalFacet.position.set(-bodySize.radius - 1, 1, 1);
+          vertebra.add(leftCostalFacet);
+          
+          const rightCostalFacet = new THREE.Mesh(costalFacetGeometry, boneMaterial);
+          rightCostalFacet.position.set(bodySize.radius + 1, 1, 1);
+          vertebra.add(rightCostalFacet);
+        }
+
+        // Vertebral arch (laminae) - size varies by region
+        const archSize = type === 'cervical' ? 2 : type === 'thoracic' ? 3 : 4;
+        const archLeftGeometry = new THREE.BoxGeometry(archSize, 4, 6);
         const archLeft = new THREE.Mesh(archLeftGeometry, boneMaterial);
-        archLeft.position.set(-3, 0, -4);
+        archLeft.position.set(-2.5, 0, -4);
         archLeft.rotation.y = Math.PI/6;
         vertebra.add(archLeft);
 
-        const archRightGeometry = new THREE.BoxGeometry(3, 4, 6);
+        const archRightGeometry = new THREE.BoxGeometry(archSize, 4, 6);
         const archRight = new THREE.Mesh(archRightGeometry, boneMaterial);
-        archRight.position.set(3, 0, -4);
+        archRight.position.set(2.5, 0, -4);
         archRight.rotation.y = -Math.PI/6;
         vertebra.add(archRight);
 
         // Superior and inferior articular processes
-        const superiorProcesses = new THREE.BoxGeometry(2, 3, 2);
+        const articulationSize = type === 'lumbar' ? 3 : 2;
+        const superiorProcesses = new THREE.BoxGeometry(articulationSize, 3, 2);
         const superiorLeft = new THREE.Mesh(superiorProcesses, boneMaterial);
-        superiorLeft.position.set(-4, 3, -3);
+        superiorLeft.position.set(-3, bodySize.height/2 + 1, -3);
         vertebra.add(superiorLeft);
 
         const superiorRight = new THREE.Mesh(superiorProcesses, boneMaterial);
-        superiorRight.position.set(4, 3, -3);
+        superiorRight.position.set(3, bodySize.height/2 + 1, -3);
         vertebra.add(superiorRight);
-
-        // Position vertebra with natural spinal curvatures
-        vertebra.position.y = i * 8;
         
-        // Add natural spinal curves
-        if (i < 3) {
-          // Cervical lordosis (C1-C3)
-          vertebra.rotation.x = Math.PI/25;
-          vertebra.position.z = i * 0.5;
-        } else if (i >= 3 && i < 7) {
-          // Thoracic kyphosis (T1-T4)
-          vertebra.rotation.x = -Math.PI/30;
-          vertebra.position.z = 1.5 - (i-3) * 0.5;
-        } else {
-          // Lumbar lordosis (L1-L5)
-          vertebra.rotation.x = Math.PI/20;
-          vertebra.position.z = -0.5 + (i-7) * 0.3;
+        const inferiorLeft = new THREE.Mesh(superiorProcesses, boneMaterial);
+        inferiorLeft.position.set(-3, -bodySize.height/2 - 1, -3);
+        vertebra.add(inferiorLeft);
+
+        const inferiorRight = new THREE.Mesh(superiorProcesses, boneMaterial);
+        inferiorRight.position.set(3, -bodySize.height/2 - 1, -3);
+        vertebra.add(inferiorRight);
+
+        return vertebra;
+      };
+      
+      let currentHeight = 0;
+      
+      // Create 7 cervical vertebrae (C1-C7)
+      for (let i = 0; i < 7; i++) {
+        const vertebra = createVertebra('cervical', i);
+        vertebra.position.y = currentHeight;
+        
+        // Cervical lordosis (forward curve)
+        vertebra.rotation.x = Math.PI/30;
+        vertebra.position.z = i * 0.3;
+        
+        // Special features for atlas (C1) and axis (C2)
+        if (i === 0) {
+          // Atlas - no vertebral body
+          vertebra.scale.set(0.8, 0.6, 0.8);
+        } else if (i === 1) {
+          // Axis - has odontoid process (dens)
+          const densGeometry = new THREE.CylinderGeometry(1, 1.5, 6, 8);
+          const dens = new THREE.Mesh(densGeometry, boneMaterial);
+          dens.position.set(0, 3, 2);
+          vertebra.add(dens);
         }
         
         group.add(vertebra);
+        currentHeight += 6;
+      }
+      
+      // Create 12 thoracic vertebrae (T1-T12)
+      for (let i = 0; i < 12; i++) {
+        const vertebra = createVertebra('thoracic', i);
+        vertebra.position.y = currentHeight;
+        
+        // Thoracic kyphosis (backward curve)
+        vertebra.rotation.x = -Math.PI/40;
+        vertebra.position.z = 2 - i * 0.2;
+        
+        group.add(vertebra);
+        currentHeight += 8;
+      }
+      
+      // Create 5 lumbar vertebrae (L1-L5)
+      for (let i = 0; i < 5; i++) {
+        const vertebra = createVertebra('lumbar', i);
+        vertebra.position.y = currentHeight;
+        
+        // Lumbar lordosis (forward curve)
+        vertebra.rotation.x = Math.PI/25;
+        vertebra.position.z = -0.5 + i * 0.4;
+        
+        group.add(vertebra);
+        currentHeight += 10;
       }
 
       return group;

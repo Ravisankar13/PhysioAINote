@@ -334,8 +334,14 @@ export default function VirtualPatientsPage() {
       };
     }
     
-    console.log('No animation data found for patient');
-    return null;
+    console.log('No animation data found for patient, providing default empty animation');
+    // Always return a valid animation object to prevent blank page
+    return {
+      source: 'No Data - Default',
+      frames: [],
+      animationSequences: [],
+      movementHeatmap: []
+    };
   }
 
   // Helper function to fetch animation data for a patient
@@ -412,6 +418,12 @@ export default function VirtualPatientsPage() {
         setMovementData(analysis);
       } catch (error) {
         console.error('Error parsing motion data:', error);
+        // Set empty movement data on error to prevent crashes
+        setMovementData({
+          capturedMovements: [],
+          compensationPatterns: [],
+          comparisonData: { normal: [], patient: [], deviations: [] }
+        });
       }
     }
 
@@ -706,8 +718,25 @@ export default function VirtualPatientsPage() {
 
   // Handle patient selection
   const handlePatientSelect = (patient: SoapVirtualPatient) => {
+    const patientName = patient.patient_name || `Patient ${patient.id}`;
+    console.log('Patient selected:', patientName);
+    
     setSelectedPatient(patient);
-    loadEnhancedPatientData(patient);
+    setIsLoadingAnalysis(true); // Show loading state
+    
+    // Show success notification
+    toast({
+      title: "Patient Selected",
+      description: `Loading ${patientName} data and movement visualization...`,
+    });
+    
+    loadEnhancedPatientData(patient).finally(() => {
+      setIsLoadingAnalysis(false); // Hide loading state when done
+      toast({
+        title: "Patient Data Loaded",
+        description: `${patientName} visualization is ready to view.`,
+      });
+    });
   };
 
   // Helper functions for editing patient names
@@ -1306,7 +1335,15 @@ export default function VirtualPatientsPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-4">
-                {selectedPatient ? (
+                {isLoadingAnalysis ? (
+                  <div className="text-center text-gray-500 py-12">
+                    <Loader2 className="h-16 w-16 mx-auto mb-4 text-blue-400 animate-spin" />
+                    <p className="text-lg mb-2">Loading Patient Data</p>
+                    <p className="text-sm text-gray-400">
+                      Generating movement visualization...
+                    </p>
+                  </div>
+                ) : selectedPatient ? (
                   <StickFigureAnimation 
                     animationData={getAnimationData(selectedPatient)}
                     isPlaying={isPlaying}

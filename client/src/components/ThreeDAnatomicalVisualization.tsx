@@ -965,9 +965,9 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
       sternum.position.set(0, 35, 28);
       group.add(sternum);
       
-      // Create 12 pairs of anatomically accurate ribs
+      // Create 12 pairs of anatomically accurate ribs (T1-T12 thoracic vertebrae connection)
       for (let i = 0; i < 12; i++) {
-        const ribLevel = 60 - i * 4.5; // Vertical spacing between ribs
+        const ribLevel = 60 - i * 8; // Aligned with thoracic vertebrae spacing (T1-T12)
         
         // Rib dimensions based on anatomical proportions
         let ribLength, ribCurvature, ribAngle;
@@ -1041,10 +1041,10 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
             ribGroup.add(ribSegment);
           }
           
-          // Add rib attachment to vertebrae (posterior)
-          const posteriorAttachment = new THREE.SphereGeometry(1.2, 8, 6);
+          // Add rib attachment to thoracic vertebrae (posterior) - connects to costal facets
+          const posteriorAttachment = new THREE.SphereGeometry(2, 8, 6);
           const posteriorJoint = new THREE.Mesh(posteriorAttachment, boneMaterial);
-          posteriorJoint.position.set(isLeft ? -3 : 3, 0, -8);
+          posteriorJoint.position.set(isLeft ? -8 : 8, 0, -10);
           ribGroup.add(posteriorJoint);
           
           // Add costal cartilage connection for ribs 1-10
@@ -1404,9 +1404,9 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
     };
 
     // Position complete skeleton anatomically with enhanced lower limbs
-    bones['skull'].position.set(0, 150, 0);
+    bones['skull'].position.set(0, 170, 0); // Positioned at top of cervical spine (C1)
     bones['spine'].position.set(0, 20, 0);
-    bones['rib_cage'].position.set(0, 60, 0);
+    bones['rib_cage'].position.set(0, 85, 0); // Positioned to connect with thoracic vertebrae T1-T12
     bones['pelvis'].position.set(0, -20, 0);
     
     // Arms positioned naturally with proper shoulder complex

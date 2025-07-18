@@ -616,70 +616,234 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
       return group;
     };
 
-    // Create anatomically accurate pelvis matching reference image
+    // Create anatomically accurate pelvis with proper innominate bones
     const createPelvis = () => {
       const group = new THREE.Group();
       
-      // Iliac wings (butterfly-shaped hip bones)
-      const createIliacWing = (side: 'left' | 'right') => {
+      // Enhanced innominate bone (hip bone) - fusion of ilium, ischium, and pubis
+      const createInnominateBone = (side: 'left' | 'right') => {
         const isLeft = side === 'left';
-        const wingGroup = new THREE.Group();
+        const innominateGroup = new THREE.Group();
         
-        // Main iliac blade (wide, curved wing)
-        const iliacBladeGeometry = new THREE.BoxGeometry(12, 16, 3);
-        const iliacBlade = new THREE.Mesh(iliacBladeGeometry, boneMaterial);
-        iliacBlade.position.set(isLeft ? -20 : 20, 8, 0);
-        iliacBlade.rotation.z = isLeft ? 0.4 : -0.4;
-        iliacBlade.rotation.y = isLeft ? -0.3 : 0.3;
-        wingGroup.add(iliacBlade);
+        // ILIUM - largest part of hip bone
+        const createIlium = () => {
+          const iliumGroup = new THREE.Group();
+          
+          // Iliac wing (ala) - broad, fan-shaped upper portion
+          const wingGeometry = new THREE.BoxGeometry(18, 20, 4);
+          const wing = new THREE.Mesh(wingGeometry, boneMaterial);
+          wing.position.set(0, 12, 0);
+          wing.rotation.z = isLeft ? 0.3 : -0.3;
+          wing.rotation.y = isLeft ? -0.4 : 0.4;
+          wing.scale.set(1, 0.8, 1.2);
+          iliumGroup.add(wing);
+          
+          // Iliac crest - S-shaped superior border
+          const crestGeometry = new THREE.CylinderGeometry(1.5, 2, 22, 12);
+          const crest = new THREE.Mesh(crestGeometry, boneMaterial);
+          crest.position.set(0, 22, 0);
+          crest.rotation.z = Math.PI/2;
+          crest.rotation.y = isLeft ? -0.4 : 0.4;
+          iliumGroup.add(crest);
+          
+          // Anterior superior iliac spine (ASIS)
+          const asisGeometry = new THREE.ConeGeometry(2, 5, 8);
+          const asis = new THREE.Mesh(asisGeometry, boneMaterial);
+          asis.position.set(0, 20, 8);
+          asis.rotation.x = Math.PI/6;
+          iliumGroup.add(asis);
+          
+          // Posterior superior iliac spine (PSIS)
+          const psisGeometry = new THREE.ConeGeometry(1.5, 4, 8);
+          const psis = new THREE.Mesh(psisGeometry, boneMaterial);
+          psis.position.set(0, 18, -8);
+          psis.rotation.x = -Math.PI/6;
+          iliumGroup.add(psis);
+          
+          // Iliac fossa (smooth internal surface)
+          const fossaGeometry = new THREE.SphereGeometry(12, 16, 12);
+          const fossa = new THREE.Mesh(fossaGeometry, boneMaterial);
+          fossa.position.set(0, 8, -2);
+          fossa.scale.set(0.8, 0.6, 0.3);
+          iliumGroup.add(fossa);
+          
+          return iliumGroup;
+        };
         
-        // Iliac crest (top rim of hip bone)
-        const iliacCrestGeometry = new THREE.CylinderGeometry(1, 1.5, 18, 8);
-        const iliacCrest = new THREE.Mesh(iliacCrestGeometry, boneMaterial);
-        iliacCrest.position.set(isLeft ? -20 : 20, 16, 0);
-        iliacCrest.rotation.z = Math.PI/2;
-        iliacCrest.rotation.y = isLeft ? -0.3 : 0.3;
-        wingGroup.add(iliacCrest);
+        // ISCHIUM - posteroinferior part of hip bone
+        const createIschium = () => {
+          const ischiumGroup = new THREE.Group();
+          
+          // Ischial body
+          const bodyGeometry = new THREE.BoxGeometry(8, 12, 8);
+          const body = new THREE.Mesh(bodyGeometry, boneMaterial);
+          body.position.set(0, -8, 2);
+          ischiumGroup.add(body);
+          
+          // Ischial tuberosity (sitting bone prominence)
+          const tuberosityGeometry = new THREE.SphereGeometry(4, 12, 10);
+          const tuberosity = new THREE.Mesh(tuberosityGeometry, boneMaterial);
+          tuberosity.position.set(0, -18, 4);
+          tuberosity.scale.set(1.2, 0.8, 1);
+          ischiumGroup.add(tuberosity);
+          
+          // Ischial spine
+          const spineGeometry = new THREE.ConeGeometry(1.5, 4, 8);
+          const spine = new THREE.Mesh(spineGeometry, boneMaterial);
+          spine.position.set(0, -4, -6);
+          spine.rotation.x = Math.PI;
+          ischiumGroup.add(spine);
+          
+          // Ischial ramus
+          const ramusGeometry = new THREE.CylinderGeometry(2.5, 3, 12, 8);
+          const ramus = new THREE.Mesh(ramusGeometry, boneMaterial);
+          ramus.position.set(0, -12, 8);
+          ramus.rotation.x = Math.PI/3;
+          ischiumGroup.add(ramus);
+          
+          return ischiumGroup;
+        };
         
-        // Acetabulum (deep hip socket)
-        const acetabulumGeometry = new THREE.SphereGeometry(6, 16, 12);
-        const acetabulum = new THREE.Mesh(acetabulumGeometry, boneMaterial);
-        acetabulum.position.set(isLeft ? -15 : 15, -5, 0);
-        acetabulum.scale.set(0.9, 0.9, 0.6);
-        wingGroup.add(acetabulum);
+        // PUBIS - anteroinferior part of hip bone
+        const createPubis = () => {
+          const pubisGroup = new THREE.Group();
+          
+          // Pubic body
+          const bodyGeometry = new THREE.BoxGeometry(6, 8, 6);
+          const body = new THREE.Mesh(bodyGeometry, boneMaterial);
+          body.position.set(0, -12, 12);
+          pubisGroup.add(body);
+          
+          // Superior pubic ramus
+          const superiorRamusGeometry = new THREE.CylinderGeometry(2, 3, 10, 8);
+          const superiorRamus = new THREE.Mesh(superiorRamusGeometry, boneMaterial);
+          superiorRamus.position.set(0, -4, 8);
+          superiorRamus.rotation.x = -Math.PI/4;
+          pubisGroup.add(superiorRamus);
+          
+          // Inferior pubic ramus
+          const inferiorRamusGeometry = new THREE.CylinderGeometry(2, 2.5, 8, 8);
+          const inferiorRamus = new THREE.Mesh(inferiorRamusGeometry, boneMaterial);
+          inferiorRamus.position.set(0, -16, 10);
+          inferiorRamus.rotation.x = Math.PI/6;
+          pubisGroup.add(inferiorRamus);
+          
+          // Pubic tubercle
+          const tubercleGeometry = new THREE.SphereGeometry(1.5, 8, 6);
+          const tubercle = new THREE.Mesh(tubercleGeometry, boneMaterial);
+          tubercle.position.set(0, -8, 14);
+          pubisGroup.add(tubercle);
+          
+          return pubisGroup;
+        };
         
-        // Ischium (sitting bone)
-        const ischiumGeometry = new THREE.BoxGeometry(6, 8, 6);
-        const ischium = new THREE.Mesh(ischiumGeometry, boneMaterial);
-        ischium.position.set(isLeft ? -12 : 12, -15, 2);
-        wingGroup.add(ischium);
+        // ACETABULUM - deep socket for femoral head articulation
+        const createAcetabulum = () => {
+          const acetabulumGroup = new THREE.Group();
+          
+          // Acetabular rim (horseshoe-shaped articular surface)
+          const rimGeometry = new THREE.TorusGeometry(8, 2, 8, 16);
+          const rim = new THREE.Mesh(rimGeometry, boneMaterial);
+          rim.position.set(0, -2, 6);
+          rim.rotation.x = Math.PI/2;
+          rim.rotation.z = Math.PI/8;
+          acetabulumGroup.add(rim);
+          
+          // Acetabular fossa (central non-articular depression)
+          const fossaGeometry = new THREE.SphereGeometry(5, 16, 12);
+          const fossa = new THREE.Mesh(fossaGeometry, boneMaterial);
+          fossa.position.set(0, -2, 6);
+          fossa.scale.set(0.8, 0.8, 0.6);
+          acetabulumGroup.add(fossa);
+          
+          // Acetabular notch (inferior gap in rim)
+          const notchGeometry = new THREE.BoxGeometry(4, 3, 6);
+          const notch = new THREE.Mesh(notchGeometry, boneMaterial);
+          notch.position.set(0, -8, 8);
+          acetabulumGroup.add(notch);
+          
+          // Lunate surface (crescent-shaped articular cartilage area)
+          const lunateGeometry = new THREE.SphereGeometry(7, 16, 12);
+          const lunate = new THREE.Mesh(lunateGeometry, boneMaterial);
+          lunate.position.set(0, -2, 6);
+          lunate.scale.set(0.9, 0.6, 0.8);
+          acetabulumGroup.add(lunate);
+          
+          return acetabulumGroup;
+        };
         
-        return wingGroup;
+        // Assemble the complete innominate bone
+        const ilium = createIlium();
+        ilium.position.set(isLeft ? -18 : 18, 8, 0);
+        innominateGroup.add(ilium);
+        
+        const ischium = createIschium();
+        ischium.position.set(isLeft ? -15 : 15, -5, 0);
+        innominateGroup.add(ischium);
+        
+        const pubis = createPubis();
+        pubis.position.set(isLeft ? -8 : 8, -8, 0);
+        innominateGroup.add(pubis);
+        
+        const acetabulum = createAcetabulum();
+        acetabulum.position.set(isLeft ? -15 : 15, -2, 6);
+        innominateGroup.add(acetabulum);
+        
+        return innominateGroup;
       };
       
-      // Create left and right iliac wings
-      const leftWing = createIliacWing('left');
-      const rightWing = createIliacWing('right');
-      group.add(leftWing, rightWing);
+      // Create left and right innominate bones
+      const leftInnominate = createInnominateBone('left');
+      const rightInnominate = createInnominateBone('right');
+      group.add(leftInnominate, rightInnominate);
       
-      // Sacrum (triangular bone at spine base)
-      const sacrumGeometry = new THREE.ConeGeometry(8, 18, 6);
-      const sacrum = new THREE.Mesh(sacrumGeometry, boneMaterial);
-      sacrum.position.set(0, 0, -12);
-      sacrum.rotation.x = Math.PI;
+      // Enhanced sacrum with proper anatomy
+      const createSacrum = () => {
+        const sacrumGroup = new THREE.Group();
+        
+        // Main sacral body (triangular, wedge-shaped)
+        const sacrumGeometry = new THREE.ConeGeometry(10, 20, 6);
+        const sacrum = new THREE.Mesh(sacrumGeometry, boneMaterial);
+        sacrum.position.set(0, 0, -12);
+        sacrum.rotation.x = Math.PI;
+        sacrumGroup.add(sacrum);
+        
+        // Sacral promontory (anterior projection)
+        const promontoryGeometry = new THREE.SphereGeometry(3, 12, 8);
+        const promontory = new THREE.Mesh(promontoryGeometry, boneMaterial);
+        promontory.position.set(0, 10, -8);
+        promontory.scale.set(1, 0.6, 0.8);
+        sacrumGroup.add(promontory);
+        
+        // Sacral foramina (holes for nerve passages)
+        for (let i = 0; i < 4; i++) {
+          const foramenGeometry = new THREE.SphereGeometry(1.5, 8, 6);
+          const leftForamen = new THREE.Mesh(foramenGeometry, boneMaterial);
+          leftForamen.position.set(-4, 5 - i * 3, -10 + i);
+          sacrumGroup.add(leftForamen);
+          
+          const rightForamen = new THREE.Mesh(foramenGeometry, boneMaterial);
+          rightForamen.position.set(4, 5 - i * 3, -10 + i);
+          sacrumGroup.add(rightForamen);
+        }
+        
+        return sacrumGroup;
+      };
+      
+      const sacrum = createSacrum();
       group.add(sacrum);
       
-      // Pubic symphysis (front pelvic connection)
-      const pubicSymphysisGeometry = new THREE.BoxGeometry(3, 8, 4);
+      // Pubic symphysis (fibrocartilaginous joint)
+      const pubicSymphysisGeometry = new THREE.BoxGeometry(2, 10, 6);
       const pubicSymphysis = new THREE.Mesh(pubicSymphysisGeometry, boneMaterial);
-      pubicSymphysis.position.set(0, -12, 8);
+      pubicSymphysis.position.set(0, -15, 14);
       group.add(pubicSymphysis);
       
-      // Coccyx (tailbone)
-      const coccyxGeometry = new THREE.ConeGeometry(2, 6, 6);
+      // Enhanced coccyx (tailbone)
+      const coccyxGeometry = new THREE.ConeGeometry(2.5, 8, 6);
       const coccyx = new THREE.Mesh(coccyxGeometry, boneMaterial);
-      coccyx.position.set(0, -8, -18);
-      coccyx.rotation.x = Math.PI/6;
+      coccyx.position.set(0, -10, -20);
+      coccyx.rotation.x = Math.PI/4;
       group.add(coccyx);
 
       return group;

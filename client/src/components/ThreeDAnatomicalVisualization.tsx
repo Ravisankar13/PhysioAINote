@@ -279,6 +279,154 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
       return group;
     };
 
+    // Create anatomically accurate fibula (smaller lateral bone of lower leg)
+    const createFibula = () => {
+      const group = new THREE.Group();
+      
+      // Fibular head (proximal end - smaller, articulates with tibia)
+      const headGeometry = new THREE.SphereGeometry(4, 12, 10);
+      const head = new THREE.Mesh(headGeometry, boneMaterial);
+      head.position.set(0, 35, 0);
+      head.scale.set(0.8, 1, 0.8);
+      group.add(head);
+
+      // Fibular neck (narrow region below head)
+      const neckGeometry = new THREE.CylinderGeometry(2.5, 3, 8, 12);
+      const neck = new THREE.Mesh(neckGeometry, boneMaterial);
+      neck.position.set(0, 30, 0);
+      group.add(neck);
+
+      // Fibular shaft (thin, lateral to tibia)
+      const shaftGeometry = new THREE.CylinderGeometry(2, 2.5, 50, 12);
+      const shaft = new THREE.Mesh(shaftGeometry, boneMaterial);
+      shaft.position.set(0, 0, 0);
+      group.add(shaft);
+
+      // Lateral malleolus (prominent ankle bone - larger than medial)
+      const lateralMalleolus = new THREE.Mesh(
+        new THREE.BoxGeometry(6, 12, 8),
+        boneMaterial
+      );
+      lateralMalleolus.position.set(0, -30, 0);
+      group.add(lateralMalleolus);
+
+      // Styloid process (tip of lateral malleolus)
+      const styloidGeometry = new THREE.ConeGeometry(2, 4, 8);
+      const styloid = new THREE.Mesh(styloidGeometry, boneMaterial);
+      styloid.position.set(0, -35, 0);
+      group.add(styloid);
+
+      return group;
+    };
+
+    // Create comprehensive foot structure with all major bones
+    const createFoot = (isLeft = true) => {
+      const group = new THREE.Group();
+      
+      // Calcaneus (heel bone - largest foot bone)
+      const calcaneusGeometry = new THREE.BoxGeometry(20, 12, 35);
+      const calcaneus = new THREE.Mesh(calcaneusGeometry, boneMaterial);
+      calcaneus.position.set(0, 0, -15);
+      // Add calcaneal tuberosity (heel prominence)
+      const tuberosityGeometry = new THREE.SphereGeometry(8, 12, 10);
+      const tuberosity = new THREE.Mesh(tuberosityGeometry, boneMaterial);
+      tuberosity.position.set(0, -4, -25);
+      tuberosity.scale.set(1, 0.8, 1.2);
+      calcaneus.add(tuberosity);
+      group.add(calcaneus);
+
+      // Talus (ankle bone - articulates with tibia/fibula)
+      const talusGeometry = new THREE.BoxGeometry(16, 10, 18);
+      const talus = new THREE.Mesh(talusGeometry, boneMaterial);
+      talus.position.set(0, 8, -5);
+      // Talar dome (superior articular surface)
+      const domeGeometry = new THREE.CylinderGeometry(8, 8, 6, 16);
+      const dome = new THREE.Mesh(domeGeometry, boneMaterial);
+      dome.position.set(0, 8, 0);
+      dome.rotation.x = Math.PI/2;
+      talus.add(dome);
+      group.add(talus);
+
+      // Navicular (boat-shaped midfoot bone)
+      const navicularGeometry = new THREE.BoxGeometry(12, 6, 8);
+      const navicular = new THREE.Mesh(navicularGeometry, boneMaterial);
+      navicular.position.set(0, 4, 8);
+      group.add(navicular);
+
+      // Cuboid (lateral midfoot bone)
+      const cuboidGeometry = new THREE.BoxGeometry(10, 6, 12);
+      const cuboid = new THREE.Mesh(cuboidGeometry, boneMaterial);
+      cuboid.position.set(isLeft ? -8 : 8, 2, 5);
+      group.add(cuboid);
+
+      // Cuneiform bones (medial, intermediate, lateral)
+      const medialCuneiformGeometry = new THREE.BoxGeometry(8, 6, 10);
+      const medialCuneiform = new THREE.Mesh(medialCuneiformGeometry, boneMaterial);
+      medialCuneiform.position.set(isLeft ? 6 : -6, 3, 12);
+      group.add(medialCuneiform);
+
+      const intermediateCuneiformGeometry = new THREE.BoxGeometry(6, 5, 8);
+      const intermediateCuneiform = new THREE.Mesh(intermediateCuneiformGeometry, boneMaterial);
+      intermediateCuneiform.position.set(isLeft ? 2 : -2, 2.5, 14);
+      group.add(intermediateCuneiform);
+
+      const lateralCuneiformGeometry = new THREE.BoxGeometry(7, 5, 9);
+      const lateralCuneiform = new THREE.Mesh(lateralCuneiformGeometry, boneMaterial);
+      lateralCuneiform.position.set(isLeft ? -3 : 3, 2.5, 13);
+      group.add(lateralCuneiform);
+
+      // Metatarsals (5 long bones of the foot)
+      const metatarsalPositions = [
+        { x: isLeft ? 8 : -8, z: 20 },   // 1st metatarsal (big toe)
+        { x: isLeft ? 4 : -4, z: 22 },   // 2nd metatarsal
+        { x: isLeft ? 0 : 0, z: 23 },    // 3rd metatarsal
+        { x: isLeft ? -4 : 4, z: 22 },   // 4th metatarsal
+        { x: isLeft ? -8 : 8, z: 20 }    // 5th metatarsal
+      ];
+
+      metatarsalPositions.forEach((pos, index) => {
+        const length = index === 0 ? 16 : 18; // 1st metatarsal is shorter and thicker
+        const radius = index === 0 ? 3 : 2.5;
+        
+        const metatarsalGeometry = new THREE.CylinderGeometry(radius, radius * 0.8, length, 12);
+        const metatarsal = new THREE.Mesh(metatarsalGeometry, boneMaterial);
+        metatarsal.position.set(pos.x, 1, pos.z);
+        metatarsal.rotation.x = Math.PI/2;
+        
+        // Metatarsal heads (joint surfaces)
+        const headGeometry = new THREE.SphereGeometry(radius * 1.2, 12, 10);
+        const head = new THREE.Mesh(headGeometry, boneMaterial);
+        head.position.set(0, 0, length/2);
+        metatarsal.add(head);
+        
+        group.add(metatarsal);
+      });
+
+      // Phalanges (toe bones)
+      const phalangealPositions = [
+        { x: isLeft ? 8 : -8, z: 32, toes: 2 },   // Big toe (2 phalanges)
+        { x: isLeft ? 4 : -4, z: 35, toes: 3 },   // 2nd toe (3 phalanges)
+        { x: isLeft ? 0 : 0, z: 36, toes: 3 },    // 3rd toe (3 phalanges)
+        { x: isLeft ? -4 : 4, z: 35, toes: 3 },   // 4th toe (3 phalanges)
+        { x: isLeft ? -8 : 8, z: 32, toes: 3 }    // 5th toe (3 phalanges)
+      ];
+
+      phalangealPositions.forEach((toe, toeIndex) => {
+        for (let i = 0; i < toe.toes; i++) {
+          const length = toeIndex === 0 ? (i === 0 ? 8 : 6) : (i === 0 ? 6 : i === 1 ? 4 : 3);
+          const radius = toeIndex === 0 ? 2 : 1.5;
+          
+          const phalanxGeometry = new THREE.CylinderGeometry(radius, radius * 0.8, length, 8);
+          const phalanx = new THREE.Mesh(phalanxGeometry, boneMaterial);
+          phalanx.position.set(toe.x, 0.5, toe.z + (i * (length + 1)));
+          phalanx.rotation.x = Math.PI/2;
+          group.add(phalanx);
+        }
+      });
+
+      return group;
+    };
+
     // Create anatomically accurate humerus (upper arm bone)
     const createHumerus = () => {
       const group = new THREE.Group();
@@ -764,62 +912,9 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
       tibia.position.set(0, -75, 0);
       group.add(tibia);
 
-      // Fibula (lateral leg bone) - anatomically accurate matching reference
-      const createFibula = () => {
-        const fibulaGroup = new THREE.Group();
-        
-        // Fibular head (enlarged proximal end with realistic shape)
-        const headGeometry = new THREE.SphereGeometry(3.5, 16, 12);
-        const head = new THREE.Mesh(headGeometry, boneMaterial);
-        head.position.set(0, 30, 0);
-        head.scale.set(1, 0.8, 1.2);
-        fibulaGroup.add(head);
-        
-        // Fibular neck (narrow connection to head)
-        const neckGeometry = new THREE.CylinderGeometry(2, 3, 6, 12);
-        const neck = new THREE.Mesh(neckGeometry, boneMaterial);
-        neck.position.set(0, 25, 0);
-        fibulaGroup.add(neck);
-        
-        // Fibular shaft (slender, realistic taper)
-        const createFibularShaft = () => {
-          const shaftGroup = new THREE.Group();
-          
-          // Upper shaft
-          const upperGeometry = new THREE.CylinderGeometry(2, 2.5, 15, 12);
-          const upper = new THREE.Mesh(upperGeometry, boneMaterial);
-          upper.position.set(0, 15, 0);
-          shaftGroup.add(upper);
-          
-          // Middle shaft (thinnest part)
-          const middleGeometry = new THREE.CylinderGeometry(1.8, 2, 20, 12);
-          const middle = new THREE.Mesh(middleGeometry, boneMaterial);
-          middle.position.set(0, 0, 0);
-          shaftGroup.add(middle);
-          
-          // Lower shaft (expanding toward ankle)
-          const lowerGeometry = new THREE.CylinderGeometry(3, 1.8, 15, 12);
-          const lower = new THREE.Mesh(lowerGeometry, boneMaterial);
-          lower.position.set(0, -15, 0);
-          shaftGroup.add(lower);
-          
-          return shaftGroup;
-        };
-        
-        const shaft = createFibularShaft();
-        fibulaGroup.add(shaft);
-        
-        // Lateral malleolus (prominent ankle prominence - larger and more defined)
-        const malleolus = new THREE.BoxGeometry(6, 8, 4);
-        const lateralMalleolus = new THREE.Mesh(malleolus, boneMaterial);
-        lateralMalleolus.position.set(0, -28, 0);
-        fibulaGroup.add(lateralMalleolus);
-        
-        return fibulaGroup;
-      };
-      
+      // Fibula (lateral leg bone) - use the new anatomically accurate version
       const fibula = createFibula();
-      fibula.position.set(isLeft ? 10 : -10, -75, 0);
+      fibula.position.set(isLeft ? -8 : 8, -75, 0); // Position lateral to tibia
       group.add(fibula);
 
       // Patella (kneecap) - anatomically positioned
@@ -849,107 +944,17 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
       patella.position.set(0, -40, 8);
       group.add(patella);
 
-      return group;
-    };
-
-    // Create anatomically accurate foot exactly matching reference image
-    const createFoot = () => {
-      const group = new THREE.Group();
-      
-      // Calcaneus (heel bone) - large, robust with realistic shape
-      const calcaneusGeometry = new THREE.BoxGeometry(10, 8, 16);
-      const calcaneus = new THREE.Mesh(calcaneusGeometry, boneMaterial);
-      calcaneus.position.set(0, -2, -8);
-      // Add realistic heel contour
-      calcaneus.scale.set(1, 0.8, 1.2);
-      group.add(calcaneus);
-      
-      // Calcaneal tuberosity (prominent heel projection)
-      const tuberosityGeometry = new THREE.BoxGeometry(8, 6, 6);
-      const tuberosity = new THREE.Mesh(tuberosityGeometry, boneMaterial);
-      tuberosity.position.set(0, -4, -14);
-      group.add(tuberosity);
-
-      // Talus (ankle bone) - dome-shaped for tibia articulation
-      const talusGeometry = new THREE.SphereGeometry(4, 16, 12);
-      const talus = new THREE.Mesh(talusGeometry, boneMaterial);
-      talus.position.set(0, 3, -3);
-      talus.scale.set(1.4, 0.8, 1.2);
-      group.add(talus);
-
-      // Navicular bone (boat-shaped midfoot bone)
-      const navicularGeometry = new THREE.BoxGeometry(8, 4, 5);
-      const navicular = new THREE.Mesh(navicularGeometry, boneMaterial);
-      navicular.position.set(0, 0, 4);
-      group.add(navicular);
-
-      // Cuboid bone (lateral midfoot) - cube-like shape
-      const cuboidGeometry = new THREE.BoxGeometry(5, 4, 6);
-      const cuboid = new THREE.Mesh(cuboidGeometry, boneMaterial);
-      cuboid.position.set(-4, -1, 1);
-      group.add(cuboid);
-
-      // Cuneiform bones (3 wedge-shaped bones) - clearly separated
-      const cuneiformData = [
-        { size: [3, 3, 4], pos: [2, 0, 6] },   // Medial cuneiform (largest)
-        { size: [2.5, 2.5, 3], pos: [0, 0, 7] }, // Intermediate cuneiform
-        { size: [2, 2, 3], pos: [-2, 0, 6] }     // Lateral cuneiform
-      ];
-      
-      cuneiformData.forEach((bone, i) => {
-        const geometry = new THREE.BoxGeometry(...bone.size);
-        const cuneiform = new THREE.Mesh(geometry, boneMaterial);
-        cuneiform.position.set(...bone.pos);
-        group.add(cuneiform);
-      });
-
-      // Metatarsals (5 distinct long bones) - clearly visible as separate bones
-      const metatarsalData = [
-        { length: 10, width: 1.2, pos: [-3.6, 0, 12] },  // 1st metatarsal (shortest, thickest)
-        { length: 12, width: 1.0, pos: [-1.8, 0, 13] },  // 2nd metatarsal (longest)
-        { length: 11, width: 1.0, pos: [0, 0, 12.5] },   // 3rd metatarsal
-        { length: 10, width: 0.9, pos: [1.8, 0, 12] },   // 4th metatarsal
-        { length: 9, width: 0.8, pos: [3.6, 0, 11] }     // 5th metatarsal (shortest, thinnest)
-      ];
-      
-      metatarsalData.forEach((bone, i) => {
-        const geometry = new THREE.CylinderGeometry(bone.width, bone.width * 0.8, bone.length, 12);
-        const metatarsal = new THREE.Mesh(geometry, boneMaterial);
-        metatarsal.position.set(...bone.pos);
-        metatarsal.rotation.x = Math.PI/2;
-        group.add(metatarsal);
-      });
-
-      // Toe phalanges (clearly articulated toe bones)
-      const toeData = [
-        { offset: -3.6, lengths: [4, 3] },      // Big toe (2 phalanges)
-        { offset: -1.8, lengths: [3, 2.5, 2] }, // 2nd toe (3 phalanges)
-        { offset: 0, lengths: [3, 2.5, 2] },    // 3rd toe (3 phalanges)
-        { offset: 1.8, lengths: [2.5, 2, 1.5] }, // 4th toe (3 phalanges)
-        { offset: 3.6, lengths: [2, 1.5, 1] }   // 5th toe (3 phalanges)
-      ];
-      
-      toeData.forEach((toe, toeIndex) => {
-        const toeGroup = new THREE.Group();
-        let currentZ = 18;
-        
-        toe.lengths.forEach((length, phalangIndex) => {
-          const width = 0.6 - (phalangIndex * 0.1) - (toeIndex === 0 ? 0 : 0.1);
-          const geometry = new THREE.CylinderGeometry(width, width * 0.8, length, 8);
-          const phalanx = new THREE.Mesh(geometry, boneMaterial);
-          phalanx.position.set(toe.offset, 0, currentZ + length/2);
-          phalanx.rotation.x = Math.PI/2;
-          toeGroup.add(phalanx);
-          currentZ += length + 0.5; // Small gap between phalanges
-        });
-        
-        group.add(toeGroup);
-      });
+      // Complete foot structure with all bones
+      const foot = createFoot(isLeft);
+      foot.position.set(0, -150, 0); // Position below tibia/fibula
+      group.add(foot);
 
       return group;
     };
 
-    // Create complete anatomical skeleton
+
+
+    // Create complete anatomical skeleton with enhanced lower limbs
     const bones = {
       'skull': createSkull(),
       'spine': createSpine(),
@@ -959,13 +964,11 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
       'right_arm': createCompleteArm('right'),
       'left_hand': createHand(),
       'right_hand': createHand(),
-      'left_leg': createCompleteLeg('left'),
-      'right_leg': createCompleteLeg('right'),
-      'left_foot': createFoot(),
-      'right_foot': createFoot()
+      'left_leg': createCompleteLeg('left'),  // Now includes fibula and complete foot
+      'right_leg': createCompleteLeg('right')  // Now includes fibula and complete foot
     };
 
-    // Position complete skeleton anatomically matching reference image
+    // Position complete skeleton anatomically with enhanced lower limbs
     bones['skull'].position.set(0, 150, 0);
     bones['spine'].position.set(0, 20, 0);
     bones['rib_cage'].position.set(0, 60, 0);
@@ -977,15 +980,9 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
     bones['left_hand'].position.set(-43, -20, 0);
     bones['right_hand'].position.set(43, -20, 0);
     
-    // Legs positioned for natural standing pose
+    // Complete legs with integrated fibula and foot structures
     bones['left_leg'].position.set(-15, -50, 0);
     bones['right_leg'].position.set(15, -50, 0);
-    bones['left_foot'].position.set(-15, -160, 0);
-    bones['right_foot'].position.set(15, -160, 0);
-    
-    // Rotate feet to proper orientation
-    bones['left_foot'].rotation.x = -Math.PI/2;
-    bones['right_foot'].rotation.x = -Math.PI/2;
 
     // Add bones to scene and store references
     Object.entries(bones).forEach(([name, bone]) => {

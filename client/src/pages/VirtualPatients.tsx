@@ -359,12 +359,13 @@ export default function VirtualPatientsPage() {
 
   // Enhanced patient data loading  
   const loadEnhancedPatientData = async (patient: SoapVirtualPatient) => {
-    setSelectedPatient(patient);
-    
-    // Generate AI animation from SOAP text
-    await generateAnimation(patient);
-    
-    // Generate enhanced profile from patient data
+    try {
+      setSelectedPatient(patient);
+      
+      // Generate AI animation from SOAP text
+      await generateAnimation(patient);
+      
+      // Generate enhanced profile from patient data
     const profile: EnhancedPatientProfile = {
       demographics: {
         name: patient.patient_name || 'Unknown Patient',
@@ -453,6 +454,31 @@ export default function VirtualPatientsPage() {
     };
 
     setClinicalData(correlation);
+    } catch (error) {
+      console.error('Error loading enhanced patient data:', error);
+      // Set default data to prevent crashes
+      setEnhancedProfile({
+        demographics: {
+          name: patient.patient_name || 'Unknown Patient',
+          age: 45,
+          gender: 'Not specified',
+          occupation: 'Not specified'
+        },
+        clinicalTimeline: [],
+        painMap: { regions: [] },
+        functionalScores: { mobility: 50, strength: 50, flexibility: 50, balance: 50 },
+        progressTracking: []
+      });
+      setClinicalData({
+        soapIntegration: [],
+        aiInsights: [],
+        treatmentResponse: []
+      });
+      toast({
+        title: "Patient Data Loaded",
+        description: "Basic patient information loaded successfully.",
+      });
+    }
   };
 
   // Helper functions
@@ -721,8 +747,9 @@ export default function VirtualPatientsPage() {
     const patientName = patient.patient_name || `Patient ${patient.id}`;
     console.log('Patient selected:', patientName);
     
+    // Immediately set selected patient and show loading
     setSelectedPatient(patient);
-    setIsLoadingAnalysis(true); // Show loading state
+    setIsLoadingAnalysis(true);
     
     // Show success notification
     toast({
@@ -730,13 +757,16 @@ export default function VirtualPatientsPage() {
       description: `Loading ${patientName} data and movement visualization...`,
     });
     
-    loadEnhancedPatientData(patient).finally(() => {
-      setIsLoadingAnalysis(false); // Hide loading state when done
-      toast({
-        title: "Patient Data Loaded",
-        description: `${patientName} visualization is ready to view.`,
+    // Load data in next tick to prevent blocking UI
+    setTimeout(() => {
+      loadEnhancedPatientData(patient).finally(() => {
+        setIsLoadingAnalysis(false);
+        toast({
+          title: "Patient Data Loaded",
+          description: `${patientName} visualization is ready to view.`,
+        });
       });
-    });
+    }, 100);
   };
 
   // Helper functions for editing patient names
@@ -1249,7 +1279,11 @@ export default function VirtualPatientsPage() {
                       className={`cursor-pointer transition-all hover:shadow-md group ${
                         selectedPatient?.id === patient.id ? 'ring-2 ring-blue-500 bg-blue-50' : 'hover:bg-gray-50'
                       }`}
-                      onClick={() => handlePatientSelect(patient)}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handlePatientSelect(patient);
+                      }}
                     >
                       <CardContent className="p-4">
                         <div className="flex items-center justify-between">

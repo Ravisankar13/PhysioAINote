@@ -55,6 +55,9 @@ export default function SoapNotesPage() {
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const [permissionStatus, setPermissionStatus] = useState<'unknown' | 'granted' | 'denied' | 'prompt'>('unknown');
+  const [isCheckingPermissions, setIsCheckingPermissions] = useState(false);
+  const [recordingError, setRecordingError] = useState<string | null>(null);
   
   // Session and notes state
   const [activeSession, setActiveSession] = useState<SoapNote | null>(null);
@@ -236,39 +239,200 @@ export default function SoapNotesPage() {
     }
   }, [currentSession]);
 
-  // Start recording
-  const startRecording = async () => {
+  // Check permissions on component mount
+  useEffect(() => {
+    checkMicrophonePermissions();
+  }, []);
+
+  // Check microphone permissions
+  const checkMicrophonePermissions = async () => {
+    setIsCheckingPermissions(true);
+    setRecordingError(null);
+    
     try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Check if we're on HTTPS (required for most mobile browsers)
+      if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+        setRecordingError('HTTPS connection required for microphone access on mobile devices');
+        setPermissionStatus('denied');
+        setIsCheckingPermissions(false);
+        return false;
+      }
+
+      // Check if MediaDevices API is supported
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setRecordingError('Audio recording not supported in this browser');
+        setPermissionStatus('denied');
+        setIsCheckingPermissions(false);
+        return false;
+      }
+
+      // Check permissions API if available
+      if (navigator.permissions) {
+        try {
+          const permissionResult = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+          setPermissionStatus(permissionResult.state);
+          
+          if (permissionResult.state === 'denied') {
+            setRecordingError('Microphone permission denied. Please check browser settings.');
+            setIsCheckingPermissions(false);
+            return false;
+          }
+        } catch (permError) {
+          console.log('Permission API not available, continuing with getUserMedia test');
+        }
+      }
+
+      // Test actual microphone access
+      try {
+        const testStream = await navigator.mediaDevices.getUserMedia({ 
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            sampleRate: 44100
+          } 
+        });
+        
+        // Immediately stop the test stream
+        testStream.getTracks().forEach(track => track.stop());
+        
+        setPermissionStatus('granted');
+        setIsCheckingPermissions(false);
+        return true;
+        
+      } catch (getUserMediaError: any) {
+        let errorMessage = 'Unknown microphone error';
+        
+        if (getUserMediaError.name === 'NotAllowedError') {
+          errorMessage = 'Microphone permission denied. Please allow microphone access and try again.';
+        } else if (getUserMediaError.name === 'NotFoundError') {
+          errorMessage = 'No microphone found on this device.';
+        } else if (getUserMediaError.name === 'NotReadableError') {
+          errorMessage = 'Microphone is being used by another application.';
+        } else if (getUserMediaError.name === 'SecurityError') {
+          errorMessage = 'Security error: Please use HTTPS or check browser settings.';
+        } else if (getUserMediaError.name === 'TypeError') {
+          errorMessage = 'Browser does not support audio recording.';
+        } else {
+          errorMessage = `Microphone error: ${getUserMediaError.message || 'Unknown error'}`;
+        }
+        
+        setRecordingError(errorMessage);
+        setPermissionStatus('denied');
+        setIsCheckingPermissions(false);
+        return false;
+      }
+      
+    } catch (error: any) {
+      setRecordingError(`System error: ${error.message || 'Unknown error'}`);
+      setPermissionStatus('denied');
+      setIsCheckingPermissions(false);
+      return false;
+    }
+  };
+
+  // Enhanced start recording with mobile compatibility
+  const startRecording = async () => {
+    setRecordingError(null);
+    
+    // First check permissions
+    const hasPermission = await checkMicrophonePermissions();
+    if (!hasPermission) {
+      toast({
+        title: "Cannot Start Recording",
+        description: recordingError || "Microphone access denied",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Get optimal audio constraints for mobile
+      const constraints = {
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 44100,
+          channelCount: 1, // Mono for better mobile compatibility
+        }
+      };
+
+      const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
       setStream(mediaStream);
       
-      const recorder = new MediaRecorder(mediaStream);
+      // Check MediaRecorder support and get best format
+      let mimeType = 'audio/webm;codecs=opus'; // Default
+      
+      if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+        mimeType = 'audio/webm;codecs=opus';
+      } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+        mimeType = 'audio/mp4';
+      } else if (MediaRecorder.isTypeSupported('audio/wav')) {
+        mimeType = 'audio/wav';
+      } else {
+        mimeType = ''; // Let browser choose
+      }
+
+      const recorder = new MediaRecorder(mediaStream, { 
+        mimeType: mimeType || undefined,
+        bitsPerSecond: 128000 // Optimize for mobile
+      });
       setMediaRecorder(recorder);
       
       const chunks: BlobPart[] = [];
       
       recorder.ondataavailable = (e) => {
-        chunks.push(e.data);
+        if (e.data.size > 0) {
+          chunks.push(e.data);
+        }
       };
       
       recorder.onstop = () => {
-        const blob = new Blob(chunks, { type: "audio/wav" });
+        const finalMimeType = mimeType || 'audio/wav';
+        const blob = new Blob(chunks, { type: finalMimeType });
         setAudioBlob(blob);
-        mediaStream.getTracks().forEach(track => track.stop());
+        
+        // Clean up stream
+        mediaStream.getTracks().forEach(track => {
+          track.stop();
+        });
+      };
+
+      recorder.onerror = (event: any) => {
+        console.error('MediaRecorder error:', event);
+        setRecordingError(`Recording error: ${event.error?.message || 'Unknown error'}`);
+        stopRecording();
       };
       
-      recorder.start();
+      recorder.start(1000); // Collect data every second for mobile compatibility
       setIsRecording(true);
       setRecordingTime(0);
       
       intervalRef.current = setInterval(() => {
         setRecordingTime(prev => prev + 1);
       }, 1000);
+
+      toast({
+        title: "Recording Started",
+        description: "Audio recording in progress...",
+      });
       
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Recording start error:', error);
+      
+      let errorMessage = 'Could not start recording';
+      if (error.name === 'NotAllowedError') {
+        errorMessage = 'Microphone permission denied. Please check browser settings and try again.';
+      } else if (error.name === 'NotFoundError') {
+        errorMessage = 'No microphone found. Please check your device settings.';
+      } else if (error.name === 'NotReadableError') {
+        errorMessage = 'Microphone is busy. Please close other apps using the microphone.';
+      }
+      
+      setRecordingError(errorMessage);
       toast({
         title: "Recording Error",
-        description: "Could not access microphone",
+        description: errorMessage,
         variant: "destructive",
       });
     }
@@ -362,16 +526,101 @@ export default function SoapNotesPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
+              {/* Permission Status Display */}
+              <div className="space-y-4">
+                {isCheckingPermissions && (
+                  <div className="bg-blue-50 p-4 rounded-lg">
+                    <div className="flex items-center space-x-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                      <span className="text-blue-800 font-medium">Checking microphone permissions...</span>
+                    </div>
+                  </div>
+                )}
+                
+                {!isCheckingPermissions && (
+                  <div className={`p-4 rounded-lg ${
+                    permissionStatus === 'granted' 
+                      ? 'bg-green-50 border border-green-200' 
+                      : permissionStatus === 'denied' 
+                      ? 'bg-red-50 border border-red-200'
+                      : 'bg-yellow-50 border border-yellow-200'
+                  }`}>
+                    <div className="flex items-start space-x-3">
+                      {permissionStatus === 'granted' ? (
+                        <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5" />
+                      ) : permissionStatus === 'denied' ? (
+                        <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
+                      ) : (
+                        <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5" />
+                      )}
+                      
+                      <div className="flex-1 space-y-1">
+                        <p className={`font-medium ${
+                          permissionStatus === 'granted' 
+                            ? 'text-green-800' 
+                            : permissionStatus === 'denied' 
+                            ? 'text-red-800'
+                            : 'text-yellow-800'
+                        }`}>
+                          {permissionStatus === 'granted' && 'Microphone Ready'}
+                          {permissionStatus === 'denied' && 'Microphone Access Denied'}
+                          {permissionStatus === 'prompt' && 'Microphone Permission Required'}
+                          {permissionStatus === 'unknown' && 'Checking Microphone Status'}
+                        </p>
+                        
+                        {recordingError && (
+                          <p className="text-sm text-red-700 bg-red-100 p-2 rounded">
+                            <strong>Error:</strong> {recordingError}
+                          </p>
+                        )}
+                        
+                        {permissionStatus === 'denied' && (
+                          <div className="text-sm space-y-2">
+                            <p className="text-red-700">
+                              To fix this issue:
+                            </p>
+                            <ul className="list-disc list-inside text-red-600 space-y-1 ml-2">
+                              <li><strong>iPhone/iPad:</strong> Go to Settings → Privacy & Security → Microphone → [Your Browser] → Enable</li>
+                              <li><strong>Android:</strong> Go to Settings → Apps → [Your Browser] → Permissions → Microphone → Allow</li>
+                              <li><strong>Browser:</strong> Click the microphone icon in address bar and select "Always Allow"</li>
+                              <li><strong>Alternative:</strong> Clear site data and refresh page to get new permission prompt</li>
+                            </ul>
+                            <div className="pt-2">
+                              <Button 
+                                onClick={checkMicrophonePermissions}
+                                variant="outline" 
+                                size="sm"
+                                className="text-red-600 border-red-300"
+                              >
+                                <AlertCircle className="h-4 w-4 mr-1" />
+                                Retry Permission Check
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {permissionStatus === 'granted' && (
+                          <p className="text-sm text-green-700">
+                            Ready to record high-quality audio for SOAP note transcription.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Recording Controls */}
               <div className="flex items-center justify-center space-x-4">
                 {!isRecording ? (
                   <Button
                     onClick={startRecording}
+                    disabled={permissionStatus !== 'granted' || isCheckingPermissions}
                     size="lg"
-                    className="bg-red-600 hover:bg-red-700 text-white px-8 py-3"
+                    className="bg-red-600 hover:bg-red-700 text-white px-8 py-3 disabled:bg-gray-400 disabled:cursor-not-allowed"
                   >
                     <Mic className="h-5 w-5 mr-2" />
-                    Start Recording
+                    {permissionStatus === 'granted' ? 'Start Recording' : 'Recording Unavailable'}
                   </Button>
                 ) : (
                   <Button

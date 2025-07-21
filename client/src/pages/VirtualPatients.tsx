@@ -861,6 +861,109 @@ export default function VirtualPatientsPage() {
     }
   };
 
+  // Generate sample motion data for virtual patients without motion data
+  const generateSampleMotionData = async (patient: SoapVirtualPatient | null) => {
+    if (!patient) return;
+    
+    setIsGeneratingMovement(true);
+    try {
+      // Generate realistic motion data based on patient's condition
+      const bodyPart = patient.bodyPart || 'general';
+      const complaint = (patient.clinicalPresentation as any)?.chiefComplaint || '';
+      
+      // Create sample motion frames with clinical restrictions
+      const motionFrames = generateClinicalMotionFrames(bodyPart, complaint);
+      
+      // Update patient with generated motion data
+      const response = await apiRequest('PUT', `/api/virtual-patients/${patient.id}`, {
+        motionData: JSON.stringify({
+          frames: motionFrames,
+          source: 'AI Generated Sample',
+          bodyPart: bodyPart,
+          complaint: complaint,
+          generatedAt: new Date().toISOString()
+        }),
+        hasMotionData: true
+      });
+      
+      if (response.ok) {
+        // Update local state
+        const updatedPatient = {
+          ...patient,
+          motionData: JSON.stringify({
+            frames: motionFrames,
+            source: 'AI Generated Sample',
+            bodyPart: bodyPart,
+            complaint: complaint,
+            generatedAt: new Date().toISOString()
+          }),
+          hasMotionData: true
+        };
+        
+        setSelectedPatient(updatedPatient);
+        
+        toast({
+          title: "Motion Data Generated",
+          description: `Created ${motionFrames.length} frames of realistic movement patterns for ${bodyPart} condition`,
+        });
+        
+        // Refresh the patients list
+        refetch();
+      }
+    } catch (error: any) {
+      console.error('Sample motion generation error:', error);
+      toast({
+        title: "Generation Error",
+        description: error.message || "Failed to generate sample motion data",
+        variant: "destructive"
+      });
+    } finally {
+      setIsGeneratingMovement(false);
+    }
+  };
+
+  // Generate clinical motion frames based on condition
+  const generateClinicalMotionFrames = (bodyPart: string, complaint: string) => {
+    const frames = [];
+    const frameCount = 60; // 2 seconds at 30fps
+    
+    for (let i = 0; i < frameCount; i++) {
+      const progress = i / frameCount;
+      
+      // Base skeleton landmarks (33 MediaPipe pose landmarks)
+      const landmarks = [];
+      
+      // Generate realistic movement based on body part and complaint
+      for (let j = 0; j < 33; j++) {
+        let x = 0.5 + Math.sin(progress * Math.PI * 2) * 0.1; // Base movement
+        let y = 0.5 + Math.cos(progress * Math.PI * 2) * 0.05;
+        let z = 0;
+        
+        // Apply clinical restrictions based on body part
+        if (bodyPart === 'shoulder' && j >= 11 && j <= 16) {
+          // Restrict shoulder movement for shoulder conditions
+          y += Math.sin(progress * Math.PI) * 0.02; // Limited elevation
+        } else if (bodyPart === 'knee' && (j === 25 || j === 26)) {
+          // Knee compensation patterns
+          x += Math.sin(progress * Math.PI * 3) * 0.01;
+        } else if (bodyPart === 'back' && j >= 11 && j <= 24) {
+          // Spinal stiffness pattern
+          y *= 0.7; // Reduced movement
+        }
+        
+        landmarks.push({ x, y, z, visibility: 0.9 });
+      }
+      
+      frames.push({
+        timestamp: (i / 30) * 1000, // Convert to milliseconds
+        landmarks: landmarks,
+        worldLandmarks: landmarks // Use same for world coordinates
+      });
+    }
+    
+    return frames;
+  };
+
   // Generate stick figure animation frames from clinical text
   const generateStickFigureFromText = (clinicalText: string) => {
     // Parse clinical text to determine movement type and create appropriate animation
@@ -1379,13 +1482,110 @@ export default function VirtualPatientsPage() {
                     </p>
                   </div>
                 ) : selectedPatient ? (
-                  <div className="text-center py-8">
-                    <Activity className="h-12 w-12 mx-auto mb-4 text-blue-600" />
-                    <h3 className="text-lg font-semibold mb-2">Patient Selected: {selectedPatient.title || `Patient ${selectedPatient.id}`}</h3>
-                    <p className="text-sm text-gray-600 mb-4">Animation system temporarily disabled for debugging</p>
-                    <div className="space-y-2">
-                      <p><strong>Body Part:</strong> {selectedPatient.bodyPart || 'Not specified'}</p>
-                      <p><strong>Chief Complaint:</strong> {(selectedPatient.clinicalPresentation as any)?.chiefComplaint || 'None recorded'}</p>
+                  <div className="space-y-4">
+                    {/* Patient Info Header */}
+                    <div className="text-center border-b pb-3">
+                      <h3 className="text-lg font-semibold">{selectedPatient.title || `Patient ${selectedPatient.id}`}</h3>
+                      <div className="text-sm text-gray-600 space-x-4">
+                        <span><strong>Body Part:</strong> {selectedPatient.bodyPart || 'Not specified'}</span>
+                        <Badge variant="outline">{selectedPatient.hasMotionData ? 'Has Motion Data' : 'No Motion Data'}</Badge>
+                      </div>
+                    </div>
+
+                    {/* Visualization Mode Selector */}
+                    <div className="flex justify-center gap-2 mb-2">
+                      <Button
+                        size="sm"
+                        variant={currentView === 'anterior' ? 'default' : 'outline'}
+                        onClick={() => setCurrentView('anterior')}
+                      >
+                        3D View
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={currentView === 'custom' ? 'default' : 'outline'}
+                        onClick={() => setCurrentView('custom')}
+                      >
+                        2D Skeleton
+                      </Button>
+                    </div>
+
+                    {/* Animation Display */}
+                    <div className="h-64 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center relative overflow-hidden">
+                      {selectedPatient.motionData ? (
+                        <div className="w-full h-full">
+                          {currentView === 'anterior' ? (
+                            <ThreeDSkeletonPlayer 
+                              motionData={selectedPatient.motionData}
+                              isPlaying={isPlaying}
+                              currentFrame={playbackTime}
+                              className="w-full h-full"
+                            />
+                          ) : (
+                            <TwoDVirtualPatient 
+                              patientData={selectedPatient}
+                              isPlaying={isPlaying}
+                              currentFrame={playbackTime}
+                              className="w-full h-full"
+                            />
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-center space-y-3">
+                          <Activity className="h-16 w-16 mx-auto mb-3 text-gray-400" />
+                          <p className="text-gray-600 font-medium">No Motion Data Available</p>
+                          <p className="text-sm text-gray-500">Generate or capture movement data</p>
+                          <div className="flex gap-2 justify-center">
+                            <Button
+                              size="sm"
+                              onClick={() => setShowMotionCapture(true)}
+                            >
+                              <Camera className="h-4 w-4 mr-2" />
+                              Motion Capture
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => generateSampleMotionData(selectedPatient)}
+                              disabled={isGeneratingMovement}
+                            >
+                              <Zap className="h-4 w-4 mr-2" />
+                              Generate Sample
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Animation Controls */}
+                    <div className="flex justify-center items-center gap-3">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setIsPlaying(!isPlaying)}
+                        disabled={!selectedPatient.motionData}
+                      >
+                        {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setPlaybackTime(0)}
+                        disabled={!selectedPatient.motionData}
+                      >
+                        <SkipBack className="h-4 w-4" />
+                      </Button>
+                      <span className="text-sm text-gray-600">
+                        Frame: {playbackTime}
+                      </span>
+                    </div>
+
+                    {/* Clinical Information */}
+                    <div className="bg-blue-50 p-3 rounded-lg">
+                      <p className="text-sm"><strong>Chief Complaint:</strong> {(selectedPatient.clinicalPresentation as any)?.chiefComplaint || 'None recorded'}</p>
+                      {(selectedPatient.clinicalPresentation as any)?.symptomsTimeline && (
+                        <p className="text-sm mt-1"><strong>Symptoms:</strong> {(selectedPatient.clinicalPresentation as any).symptomsTimeline}</p>
+                      )}
                     </div>
                   </div>
                 ) : (

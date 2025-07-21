@@ -753,14 +753,16 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
           leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
           rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
           shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
-          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0.2] },
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, -0.2] }
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] },
+          leftClavicle: { position: [-0.13, 1.7, 0], rotation: [0, 0, -0.52] },
+          rightClavicle: { position: [0.13, 1.7, 0], rotation: [0, 0, 0.52] }
         }
       },
       {
         time: 1500,
         joints: {
-          // Arms raised laterally to 90 degrees
+          // Arms raised forward to 90 degrees (shoulder flexion)
           head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
           torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
           pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
@@ -773,14 +775,16 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
           leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
           rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
           shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
-          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 1.57] }, // 90 degrees
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, -1.57] }
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [-1.57, 0, 0] }, // 90 degrees forward
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [-1.57, 0, 0] },
+          leftClavicle: { position: [-0.13, 1.7, 0], rotation: [0, 0, -0.52] },
+          rightClavicle: { position: [0.13, 1.7, 0], rotation: [0, 0, 0.52] }
         }
       },
       {
         time: 3000,
         joints: {
-          // Arms raised overhead to 180 degrees
+          // Arms raised overhead to 180 degrees (full shoulder flexion)
           head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
           torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
           pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
@@ -793,8 +797,10 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
           leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
           rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
           shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
-          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 3.14] }, // 180 degrees
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, -3.14] }
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [-3.14, 0, 0] }, // 180 degrees forward
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [-3.14, 0, 0] },
+          leftClavicle: { position: [-0.13, 1.7, 0], rotation: [-0.2, 0, -0.52] }, // Slight elevation
+          rightClavicle: { position: [0.13, 1.7, 0], rotation: [-0.2, 0, 0.52] }
         }
       },
       {
@@ -813,8 +819,10 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
           leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
           rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
           shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
-          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0.2] },
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, -0.2] }
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] },
+          leftClavicle: { position: [-0.13, 1.7, 0], rotation: [0, 0, -0.52] },
+          rightClavicle: { position: [0.13, 1.7, 0], rotation: [0, 0, 0.52] }
         }
       }
     ];

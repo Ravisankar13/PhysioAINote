@@ -488,12 +488,12 @@ export default function VirtualPatientsPage() {
   };
 
   const generatePainMap = (patient: SoapVirtualPatient) => {
-    const bodyPart = patient.body_part || 'general';
+    const bodyPart = patient.bodyPart || 'general';
     return [
       {
         bodyPart: bodyPart,
-        intensity: extractPainLevel(patient.symptoms_description || ''),
-        description: patient.chief_complaint || 'Primary pain area'
+        intensity: extractPainLevel((patient.clinicalPresentation as any)?.chiefComplaint || ''),
+        description: (patient.clinicalPresentation as any)?.chiefComplaint || 'Primary pain area'
       }
     ];
   };
@@ -744,7 +744,7 @@ export default function VirtualPatientsPage() {
 
   // Handle patient selection
   const handlePatientSelect = (patient: SoapVirtualPatient) => {
-    const patientName = patient.patient_name || `Patient ${patient.id}`;
+    const patientName = patient.title || `Patient ${patient.id}`;
     console.log('DEBUG: Patient selection started for:', patientName);
     console.log('DEBUG: Current URL:', window.location.href);
     
@@ -779,7 +779,7 @@ export default function VirtualPatientsPage() {
   // Helper functions for editing patient names
   const startEditing = (patient: SoapVirtualPatient) => {
     setEditingPatientId(patient.id!);
-    setEditingName(patient.patient_name || `Patient ${patient.id}`);
+    setEditingName(patient.title || `Patient ${patient.id}`);
   };
 
   const cancelEditing = () => {
@@ -836,7 +836,7 @@ export default function VirtualPatientsPage() {
         setSelectedPatient(targetPatient);
       }
 
-      console.log('Generating animation for patient:', targetPatient.id);
+      console.log('Generating animation for patient:', targetPatient?.id);
       
       // Generate stick figure animation data directly from clinical text
       const animationFrames = generateStickFigureFromText(clinicalText);
@@ -854,7 +854,7 @@ export default function VirtualPatientsPage() {
         aiGenerated: true
       };
       
-      setSelectedPatient(updatedPatient);
+      setSelectedPatient(updatedPatient as SoapVirtualPatient);
       
       // Clear the input
       setTextToAnimationInput('');
@@ -915,7 +915,7 @@ export default function VirtualPatientsPage() {
           hasMotionData: true
         };
         
-        setSelectedPatient(updatedPatient);
+        setSelectedPatient(updatedPatient as SoapVirtualPatient);
         
         toast({
           title: "Motion Data Generated",
@@ -1584,8 +1584,8 @@ export default function VirtualPatientsPage() {
               <CardContent className="p-0">
                 <ScrollArea className="h-96 px-4">
                   <div className="space-y-3 py-4">
-                    {virtualPatients && virtualPatients.length > 0 ? (
-                      virtualPatients.map((patient) => (
+                    {virtualPatients && Array.isArray(virtualPatients) && virtualPatients.length > 0 ? (
+                      virtualPatients.map((patient: SoapVirtualPatient) => (
                     <Card 
                       key={patient.id} 
                       className={`cursor-pointer transition-all hover:shadow-md group ${
@@ -1634,7 +1634,7 @@ export default function VirtualPatientsPage() {
                           ) : (
                             <div className="flex items-center gap-2 flex-1">
                               <CardTitle className="text-lg">
-                                {patient.patient_name || `Patient ${patient.id}`}
+                                {patient.title || `Patient ${patient.id}`}
                               </CardTitle>
                               <Button
                                 size="sm"
@@ -1724,7 +1724,6 @@ export default function VirtualPatientsPage() {
                         <div className="w-full h-full">
                           {currentView === 'anterior' ? (
                             <ThreeDAnatomicalVisualization 
-                              patientData={selectedPatient}
                               animationData={selectedPatient.motionData ? (() => {
                                 try {
                                   return typeof selectedPatient.motionData === 'string' 
@@ -1741,7 +1740,6 @@ export default function VirtualPatientsPage() {
                             />
                           ) : (
                             <TwoDVirtualPatient 
-                              patientData={selectedPatient}
                               isPlaying={isPlaying}
                               currentFrame={playbackTime}
                               className="w-full h-full"
@@ -1752,7 +1750,6 @@ export default function VirtualPatientsPage() {
                         <div className="text-center space-y-3">
                           {currentView === 'anterior' ? (
                             <ThreeDAnatomicalVisualization 
-                              patientData={null}
                               animationData={null}
                               isPlaying={false}
                               currentFrame={0}

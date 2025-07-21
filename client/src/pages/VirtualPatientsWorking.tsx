@@ -470,6 +470,105 @@ export default function VirtualPatientsWorking() {
                 </Card>
               </Collapsible>
 
+              {/* Exercise Movements */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg font-semibold">Exercise Movements</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        setCustomText('performing squats');
+                        generateAnimationFromText('performing squats');
+                      }}
+                      className="text-xs"
+                    >
+                      Squats
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        setCustomText('performing lunges');
+                        generateAnimationFromText('performing lunges');
+                      }}
+                      className="text-xs"
+                    >
+                      Lunges
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        setCustomText('performing arm raises');
+                        generateAnimationFromText('performing arm raises');
+                      }}
+                      className="text-xs"
+                    >
+                      Arm Raises
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        setCustomText('performing hip abduction');
+                        generateAnimationFromText('performing hip abduction');
+                      }}
+                      className="text-xs"
+                    >
+                      Hip Abduction
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        setCustomText('performing knee flexion');
+                        generateAnimationFromText('performing knee flexion');
+                      }}
+                      className="text-xs"
+                    >
+                      Knee Flexion
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        setCustomText('performing shoulder rotation');
+                        generateAnimationFromText('performing shoulder rotation');
+                      }}
+                      className="text-xs"
+                    >
+                      Shoulder Rotation
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        setCustomText('performing standing march');
+                        generateAnimationFromText('performing standing march');
+                      }}
+                      className="text-xs"
+                    >
+                      Standing March
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        setCustomText('performing heel raises');
+                        generateAnimationFromText('performing heel raises');
+                      }}
+                      className="text-xs"
+                    >
+                      Heel Raises
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
               {/* Quick Actions */}
               <Card>
                 <CardHeader>

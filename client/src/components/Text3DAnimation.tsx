@@ -301,7 +301,23 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
     };
 
     // Generate animation based on analysis
-    if (bodyParts.shoulder && limitations.limited) {
+    if (lowerText.includes('squat')) {
+      animationFrames = generateSquatAnimation();
+    } else if (lowerText.includes('lunge')) {
+      animationFrames = generateLungeAnimation();
+    } else if (lowerText.includes('arm raise')) {
+      animationFrames = generateArmRaiseAnimation();
+    } else if (lowerText.includes('hip abduction')) {
+      animationFrames = generateHipAbductionAnimation();
+    } else if (lowerText.includes('knee flexion')) {
+      animationFrames = generateKneeFlexionAnimation();
+    } else if (lowerText.includes('shoulder rotation')) {
+      animationFrames = generateShoulderRotationAnimation();
+    } else if (lowerText.includes('standing march') || lowerText.includes('march')) {
+      animationFrames = generateStandingMarchAnimation();
+    } else if (lowerText.includes('heel raise')) {
+      animationFrames = generateHeelRaiseAnimation();
+    } else if (bodyParts.shoulder && limitations.limited) {
       animationFrames = generateShoulderLimitationAnimation();
     } else if (bodyParts.back && limitations.stiff) {
       animationFrames = generateBackStiffnessAnimation();
@@ -544,6 +560,296 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
           torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0.2] },
           rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, -0.2] }
+        }
+      }
+    ];
+  };
+
+  const generateSquatAnimation = (): AnimationKeyframe[] => {
+    return [
+      {
+        time: 0,
+        joints: {
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [-0.5, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [-0.5, 0, 0] }
+        }
+      },
+      {
+        time: 1500,
+        joints: {
+          torso: { position: [0, 0.8, 0], rotation: [0.2, 0, 0] },
+          leftHip: { position: [-0.15, 0.4, 0], rotation: [-0.8, 0, 0] },
+          rightHip: { position: [0.15, 0.4, 0], rotation: [-0.8, 0, 0] },
+          leftKnee: { position: [-0.15, 0.2, 0.3], rotation: [1.2, 0, 0] },
+          rightKnee: { position: [0.15, 0.2, 0.3], rotation: [1.2, 0, 0] },
+          leftArmGroup: { position: [-0.25, 1.25, 0], rotation: [-0.8, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.25, 0], rotation: [-0.8, 0, 0] }
+        }
+      },
+      {
+        time: 3000,
+        joints: {
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [-0.5, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [-0.5, 0, 0] }
+        }
+      }
+    ];
+  };
+
+  const generateLungeAnimation = (): AnimationKeyframe[] => {
+    return [
+      {
+        time: 0,
+        joints: {
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] }
+        }
+      },
+      {
+        time: 1500,
+        joints: {
+          torso: { position: [0, 1.0, 0], rotation: [0.1, 0, 0] },
+          leftHip: { position: [-0.15, 0.6, 0.5], rotation: [0.8, 0, 0] },
+          rightHip: { position: [0.15, 0.6, -0.5], rotation: [-0.8, 0, 0] },
+          leftKnee: { position: [-0.15, 0.2, 0.8], rotation: [1.4, 0, 0] },
+          rightKnee: { position: [0.15, 0.2, -0.2], rotation: [-0.2, 0, 0] }
+        }
+      },
+      {
+        time: 3000,
+        joints: {
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] }
+        }
+      }
+    ];
+  };
+
+  const generateArmRaiseAnimation = (): AnimationKeyframe[] => {
+    return [
+      {
+        time: 0,
+        joints: {
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0.2] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, -0.2] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] }
+        }
+      },
+      {
+        time: 1500,
+        joints: {
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 1.57] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, -1.57] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] }
+        }
+      },
+      {
+        time: 3000,
+        joints: {
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0.2] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, -0.2] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] }
+        }
+      }
+    ];
+  };
+
+  const generateHipAbductionAnimation = (): AnimationKeyframe[] => {
+    return [
+      {
+        time: 0,
+        joints: {
+          leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] }
+        }
+      },
+      {
+        time: 1500,
+        joints: {
+          leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, -0.6] },
+          rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.35, 0.4, 0], rotation: [0, 0, -0.6] },
+          rightKnee: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] }
+        }
+      },
+      {
+        time: 3000,
+        joints: {
+          leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] }
+        }
+      }
+    ];
+  };
+
+  const generateKneeFlexionAnimation = (): AnimationKeyframe[] => {
+    return [
+      {
+        time: 0,
+        joints: {
+          leftKnee: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
+          leftAnkle: { position: [-0.15, 0.1, 0], rotation: [0, 0, 0] },
+          rightAnkle: { position: [0.15, 0.1, 0], rotation: [0, 0, 0] }
+        }
+      },
+      {
+        time: 1000,
+        joints: {
+          leftKnee: { position: [-0.15, 0.4, 0], rotation: [-1.2, 0, 0] },
+          rightKnee: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
+          leftAnkle: { position: [-0.15, 0.3, -0.3], rotation: [-1.2, 0, 0] },
+          rightAnkle: { position: [0.15, 0.1, 0], rotation: [0, 0, 0] }
+        }
+      },
+      {
+        time: 2000,
+        joints: {
+          leftKnee: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0.4, 0], rotation: [-1.2, 0, 0] },
+          leftAnkle: { position: [-0.15, 0.1, 0], rotation: [0, 0, 0] },
+          rightAnkle: { position: [0.15, 0.3, -0.3], rotation: [-1.2, 0, 0] }
+        }
+      },
+      {
+        time: 3000,
+        joints: {
+          leftKnee: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
+          leftAnkle: { position: [-0.15, 0.1, 0], rotation: [0, 0, 0] },
+          rightAnkle: { position: [0.15, 0.1, 0], rotation: [0, 0, 0] }
+        }
+      }
+    ];
+  };
+
+  const generateShoulderRotationAnimation = (): AnimationKeyframe[] => {
+    return [
+      {
+        time: 0,
+        joints: {
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0.5] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, -0.5] }
+        }
+      },
+      {
+        time: 1000,
+        joints: {
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 1.57, 0.5] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, -1.57, -0.5] }
+        }
+      },
+      {
+        time: 2000,
+        joints: {
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, -1.57, 0.5] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 1.57, -0.5] }
+        }
+      },
+      {
+        time: 3000,
+        joints: {
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0.5] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, -0.5] }
+        }
+      }
+    ];
+  };
+
+  const generateStandingMarchAnimation = (): AnimationKeyframe[] => {
+    return [
+      {
+        time: 0,
+        joints: {
+          leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] }
+        }
+      },
+      {
+        time: 750,
+        joints: {
+          leftHip: { position: [-0.15, 0.8, 0], rotation: [-0.8, 0, 0] },
+          rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0.5, 0.3], rotation: [-0.8, 0, 0] },
+          rightKnee: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] }
+        }
+      },
+      {
+        time: 1500,
+        joints: {
+          leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.8, 0], rotation: [-0.8, 0, 0] },
+          leftKnee: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0.5, 0.3], rotation: [-0.8, 0, 0] }
+        }
+      },
+      {
+        time: 2250,
+        joints: {
+          leftHip: { position: [-0.15, 0.8, 0], rotation: [-0.8, 0, 0] },
+          rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0.5, 0.3], rotation: [-0.8, 0, 0] },
+          rightKnee: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] }
+        }
+      },
+      {
+        time: 3000,
+        joints: {
+          leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] }
+        }
+      }
+    ];
+  };
+
+  const generateHeelRaiseAnimation = (): AnimationKeyframe[] => {
+    return [
+      {
+        time: 0,
+        joints: {
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          leftAnkle: { position: [-0.15, 0.1, 0], rotation: [0, 0, 0] },
+          rightAnkle: { position: [0.15, 0.1, 0], rotation: [0, 0, 0] }
+        }
+      },
+      {
+        time: 1500,
+        joints: {
+          torso: { position: [0, 1.35, 0], rotation: [0, 0, 0] },
+          leftAnkle: { position: [-0.15, 0.15, 0.05], rotation: [0.5, 0, 0] },
+          rightAnkle: { position: [0.15, 0.15, 0.05], rotation: [0.5, 0, 0] }
+        }
+      },
+      {
+        time: 3000,
+        joints: {
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          leftAnkle: { position: [-0.15, 0.1, 0], rotation: [0, 0, 0] },
+          rightAnkle: { position: [0.15, 0.1, 0], rotation: [0, 0, 0] }
         }
       }
     ];

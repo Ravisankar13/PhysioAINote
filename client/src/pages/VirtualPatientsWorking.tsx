@@ -10,6 +10,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { useToast } from "@/hooks/use-toast";
 import type { SoapVirtualPatient } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
+import Text3DAnimation from "@/components/Text3DAnimation";
 
 export default function VirtualPatientsWorking() {
   const [selectedPatient, setSelectedPatient] = useState<SoapVirtualPatient | null>(null);
@@ -314,25 +315,22 @@ export default function VirtualPatientsWorking() {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {/* Animation Display Area */}
-                    <div className="bg-gray-50 rounded-lg p-6 text-center min-h-[300px] flex items-center justify-center">
-                      {selectedPatient ? (
-                        <div className="space-y-4">
-                          <div className="text-6xl">🚶‍♂️</div>
-                          <p className="text-gray-600">
-                            3D Animation for {selectedPatient.title || `Patient ${selectedPatient.id}`}
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            {selectedPatient.bodyPart ? `Focus: ${selectedPatient.bodyPart}` : 'General movement analysis'}
-                          </p>
-                        </div>
-                      ) : (
+                    {/* 3D Animation Display Area */}
+                    {customText.trim() || selectedPatient ? (
+                      <Text3DAnimation
+                        clinicalText={customText.trim() || selectedPatient?.title || ''}
+                        isPlaying={isPlaying}
+                        onTimeUpdate={(time) => setPlaybackTime(time)}
+                      />
+                    ) : (
+                      <div className="bg-gray-50 rounded-lg p-6 text-center min-h-[300px] flex items-center justify-center">
                         <div className="text-gray-400 space-y-2">
-                          <div className="text-4xl">👥</div>
-                          <p>Select a patient to view animation</p>
+                          <div className="text-4xl">🎬</div>
+                          <p>Enter clinical description or select patient</p>
+                          <p className="text-sm">to generate 3D movement visualization</p>
                         </div>
-                      )}
-                    </div>
+                      </div>
+                    )}
 
                     {/* Playback Controls */}
                     {selectedPatient && (
@@ -430,22 +428,38 @@ export default function VirtualPatientsWorking() {
                         placeholder="Describe movement limitations (e.g., 'limited shoulder movement', 'back stiffness', 'knee limping')..."
                         value={customText}
                         onChange={(e) => setCustomText(e.target.value)}
-                        rows={3}
+                        rows={4}
                       />
-                      <Button
-                        onClick={() => generateAnimationFromText(customText)}
-                        disabled={isLoadingAnimation || !customText.trim()}
-                        className="w-full"
-                      >
-                        {isLoadingAnimation ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Generating...
-                          </>
-                        ) : (
-                          'Generate Animation'
-                        )}
-                      </Button>
+                      <div className="text-xs text-gray-500 space-y-1">
+                        <p><strong>Try these examples:</strong></p>
+                        <p>• "Limited shoulder elevation with pain"</p>
+                        <p>• "Back stiffness with restricted flexion"</p>
+                        <p>• "Knee pain with compensated gait"</p>
+                        <p>• "Hip restriction with limited range"</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={() => generateAnimationFromText(customText)}
+                          disabled={isLoadingAnimation || !customText.trim()}
+                          className="flex-1"
+                        >
+                          {isLoadingAnimation ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Generating...
+                            </>
+                          ) : (
+                            'Generate 3D Animation'
+                          )}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => setCustomText('')}
+                          disabled={!customText.trim()}
+                        >
+                          Clear
+                        </Button>
+                      </div>
                     </CardContent>
                   </CollapsibleContent>
                 </Card>

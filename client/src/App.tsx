@@ -32,6 +32,7 @@ import TestCaseStudiesPage from "@/pages/TestCaseStudiesPage";
 import SessionsPage from "@/pages/SessionsPage";
 import VirtualPatientPage from "@/pages/VirtualPatientPage";
 import VirtualPatients from "@/pages/VirtualPatients";
+import VirtualPatientsSimple from "@/pages/VirtualPatientsSimple";
 import SharedCasesPage from "@/pages/SharedCasesPage";
 import SharedCaseDetailPage from "@/pages/SharedCaseDetailPage";
 import SharedCaseFormPage from "@/pages/SharedCaseFormPage";
@@ -94,6 +95,9 @@ function Router() {
           <Route path="/integrated-assessment" component={IntegratedClinicalAssessment} />
           <Route path="/intelligent-assessment" component={IntelligentAssessment} />
           <Route path="/virtual-patients">
+            <ProtectedRoute component={VirtualPatientsSimple} />
+          </Route>
+          <Route path="/virtual-patients-full">
             <ProtectedRoute component={VirtualPatients} />
           </Route>
           <Route path="/virtual-patient">

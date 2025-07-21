@@ -222,6 +222,11 @@ export default function VirtualPatientsPage() {
     queryKey: ["/api/virtual-patients"],
   });
 
+  // Debug: Log the virtualPatients data structure
+  console.log('Virtual Patients Data:', virtualPatients);
+  console.log('Virtual Patients Type:', typeof virtualPatients);
+  console.log('Is Array:', Array.isArray(virtualPatients));
+
   // Mutation for updating patient name
   const updatePatientMutation = useMutation({
     mutationFn: async ({ id, name }: { id: number; name: string }) => {
@@ -1532,7 +1537,15 @@ export default function VirtualPatientsPage() {
     }
   };
 
+  // Debug: Add explicit logging
+  console.log('=== VIRTUAL PATIENTS DEBUG ===');
+  console.log('patientsLoading:', patientsLoading);
+  console.log('virtualPatients:', virtualPatients);
+  console.log('virtualPatients type:', typeof virtualPatients);
+  console.log('virtualPatients isArray:', Array.isArray(virtualPatients));
+
   if (patientsLoading) {
+    console.log('Rendering loading state');
     return (
       <div className="container mx-auto py-8 px-4">
         <div className="max-w-7xl mx-auto">
@@ -1544,6 +1557,11 @@ export default function VirtualPatientsPage() {
       </div>
     );
   }
+
+  // Ensure virtualPatients is always an array
+  const patientsArray = Array.isArray(virtualPatients) ? virtualPatients : [];
+  console.log('Patients Array:', patientsArray);
+  console.log('Will render main component now');
 
   return (
     <div className="container mx-auto py-8 px-4">
@@ -1584,8 +1602,8 @@ export default function VirtualPatientsPage() {
               <CardContent className="p-0">
                 <ScrollArea className="h-96 px-4">
                   <div className="space-y-3 py-4">
-                    {virtualPatients && Array.isArray(virtualPatients) && virtualPatients.length > 0 ? (
-                      virtualPatients.map((patient: SoapVirtualPatient) => (
+                    {patientsArray.length > 0 ? (
+                      patientsArray.map((patient: SoapVirtualPatient) => (
                     <Card 
                       key={patient.id} 
                       className={`cursor-pointer transition-all hover:shadow-md group ${

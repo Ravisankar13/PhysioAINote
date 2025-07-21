@@ -187,11 +187,20 @@ export default function VirtualPatientsPage() {
 
   const { toast } = useToast();
 
-  // Animation frame progression
+  // Animation frame progression - simplified and safe
   useEffect(() => {
-    if (!isPlaying) return;
+    if (!isPlaying || !selectedPatient?.motionData) return;
     
-    const animationData = getAnimationData(selectedPatient);
+    let animationData;
+    try {
+      animationData = typeof selectedPatient.motionData === 'string' 
+        ? JSON.parse(selectedPatient.motionData) 
+        : selectedPatient.motionData;
+    } catch (e) {
+      console.error('Error parsing motion data:', e);
+      return;
+    }
+    
     if (!animationData?.frames?.length) return;
     
     const interval = setInterval(() => {
@@ -199,7 +208,7 @@ export default function VirtualPatientsPage() {
     }, 100); // 10 FPS animation
     
     return () => clearInterval(interval);
-  }, [isPlaying, selectedPatient]);
+  }, [isPlaying, selectedPatient?.id]); // Only depend on isPlaying and patient ID to avoid loops
   const queryClient = useQueryClient();
 
   // Helper functions for clinical scoring display
@@ -222,10 +231,7 @@ export default function VirtualPatientsPage() {
     queryKey: ["/api/virtual-patients"],
   });
 
-  // Debug: Log the virtualPatients data structure
-  console.log('Virtual Patients Data:', virtualPatients);
-  console.log('Virtual Patients Type:', typeof virtualPatients);
-  console.log('Is Array:', Array.isArray(virtualPatients));
+
 
   // Mutation for updating patient name
   const updatePatientMutation = useMutation({
@@ -1537,15 +1543,10 @@ export default function VirtualPatientsPage() {
     }
   };
 
-  // Debug: Add explicit logging
-  console.log('=== VIRTUAL PATIENTS DEBUG ===');
-  console.log('patientsLoading:', patientsLoading);
-  console.log('virtualPatients:', virtualPatients);
-  console.log('virtualPatients type:', typeof virtualPatients);
-  console.log('virtualPatients isArray:', Array.isArray(virtualPatients));
+  // Ensure virtualPatients is always an array
+  const patientsArray = Array.isArray(virtualPatients) ? virtualPatients : [];
 
   if (patientsLoading) {
-    console.log('Rendering loading state');
     return (
       <div className="container mx-auto py-8 px-4">
         <div className="max-w-7xl mx-auto">
@@ -1557,11 +1558,6 @@ export default function VirtualPatientsPage() {
       </div>
     );
   }
-
-  // Ensure virtualPatients is always an array
-  const patientsArray = Array.isArray(virtualPatients) ? virtualPatients : [];
-  console.log('Patients Array:', patientsArray);
-  console.log('Will render main component now');
 
   return (
     <div className="container mx-auto py-8 px-4">

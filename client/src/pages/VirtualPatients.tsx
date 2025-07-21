@@ -748,17 +748,32 @@ export default function VirtualPatientsPage() {
     console.log('DEBUG: Patient selection started for:', patientName);
     console.log('DEBUG: Current URL:', window.location.href);
     
-    // Immediately set selected patient
-    setSelectedPatient(patient);
-    console.log('DEBUG: Selected patient state updated');
-    
-    // Show success notification
-    toast({
-      title: "Patient Selected",
-      description: `Selected ${patientName} - Animation system ready`,
-    });
-    
-    console.log('DEBUG: Patient selection completed successfully');
+    try {
+      // Safe patient selection with proper motion data handling
+      const safePatient = {
+        ...patient,
+        motionData: patient.motionData || null
+      };
+      
+      // Immediately set selected patient
+      setSelectedPatient(safePatient);
+      console.log('DEBUG: Selected patient state updated');
+      
+      // Show success notification
+      toast({
+        title: "Patient Selected",
+        description: `Selected ${patientName} - Animation system ready`,
+      });
+      
+      console.log('DEBUG: Patient selection completed successfully');
+    } catch (error) {
+      console.error('DEBUG: Error in patient selection:', error);
+      toast({
+        title: "Selection Error",
+        description: "Unable to select patient. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
   // Helper functions for editing patient names
@@ -1710,7 +1725,16 @@ export default function VirtualPatientsPage() {
                           {currentView === 'anterior' ? (
                             <ThreeDAnatomicalVisualization 
                               patientData={selectedPatient}
-                              animationData={selectedPatient.motionData ? JSON.parse(selectedPatient.motionData) : null}
+                              animationData={selectedPatient.motionData ? (() => {
+                                try {
+                                  return typeof selectedPatient.motionData === 'string' 
+                                    ? JSON.parse(selectedPatient.motionData) 
+                                    : selectedPatient.motionData;
+                                } catch (e) {
+                                  console.error('Error parsing motion data:', e);
+                                  return null;
+                                }
+                              })() : null}
                               isPlaying={isPlaying}
                               currentFrame={playbackTime}
                               className="w-full h-full"

@@ -1536,6 +1536,100 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
         }
       });
 
+      // After updating joint positions, adjust leg bones to maintain connections
+      const leftThigh = skeletonRef.current!.getObjectByName('leftThigh') as THREE.Mesh;
+      const leftShin = skeletonRef.current!.getObjectByName('leftShin') as THREE.Mesh;
+      const leftHip = skeletonRef.current!.getObjectByName('leftHip') as THREE.Mesh;
+      const leftKnee = skeletonRef.current!.getObjectByName('leftKnee') as THREE.Mesh;
+      const leftAnkle = skeletonRef.current!.getObjectByName('leftAnkle') as THREE.Mesh;
+      const leftFoot = skeletonRef.current!.getObjectByName('leftFoot') as THREE.Mesh;
+
+      const rightThigh = skeletonRef.current!.getObjectByName('rightThigh') as THREE.Mesh;
+      const rightShin = skeletonRef.current!.getObjectByName('rightShin') as THREE.Mesh;
+      const rightHip = skeletonRef.current!.getObjectByName('rightHip') as THREE.Mesh;
+      const rightKnee = skeletonRef.current!.getObjectByName('rightKnee') as THREE.Mesh;
+      const rightAnkle = skeletonRef.current!.getObjectByName('rightAnkle') as THREE.Mesh;
+      const rightFoot = skeletonRef.current!.getObjectByName('rightFoot') as THREE.Mesh;
+
+      // Adjust left leg bones to connect properly
+      if (leftThigh && leftHip && leftKnee) {
+        // Position thigh between hip and knee
+        leftThigh.position.x = (leftHip.position.x + leftKnee.position.x) / 2;
+        leftThigh.position.y = (leftHip.position.y + leftKnee.position.y) / 2;
+        leftThigh.position.z = (leftHip.position.z + leftKnee.position.z) / 2;
+        
+        // Calculate thigh length and scale
+        const thighLength = leftHip.position.distanceTo(leftKnee.position);
+        leftThigh.scale.y = thighLength / 0.8; // 0.8 is the original bone length
+        
+        // Rotate thigh to point from hip to knee
+        const direction = new THREE.Vector3().subVectors(leftKnee.position, leftHip.position).normalize();
+        const quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, -1, 0), direction);
+        leftThigh.setRotationFromQuaternion(quaternion);
+      }
+
+      if (leftShin && leftKnee && leftAnkle) {
+        // Position shin between knee and ankle
+        leftShin.position.x = (leftKnee.position.x + leftAnkle.position.x) / 2;
+        leftShin.position.y = (leftKnee.position.y + leftAnkle.position.y) / 2;
+        leftShin.position.z = (leftKnee.position.z + leftAnkle.position.z) / 2;
+        
+        // Calculate shin length and scale
+        const shinLength = leftKnee.position.distanceTo(leftAnkle.position);
+        leftShin.scale.y = shinLength / 0.8;
+        
+        // Rotate shin to point from knee to ankle
+        const direction = new THREE.Vector3().subVectors(leftAnkle.position, leftKnee.position).normalize();
+        const quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, -1, 0), direction);
+        leftShin.setRotationFromQuaternion(quaternion);
+      }
+
+      // Adjust right leg bones
+      if (rightThigh && rightHip && rightKnee) {
+        // Position thigh between hip and knee
+        rightThigh.position.x = (rightHip.position.x + rightKnee.position.x) / 2;
+        rightThigh.position.y = (rightHip.position.y + rightKnee.position.y) / 2;
+        rightThigh.position.z = (rightHip.position.z + rightKnee.position.z) / 2;
+        
+        // Calculate thigh length and scale
+        const thighLength = rightHip.position.distanceTo(rightKnee.position);
+        rightThigh.scale.y = thighLength / 0.8;
+        
+        // Rotate thigh to point from hip to knee
+        const direction = new THREE.Vector3().subVectors(rightKnee.position, rightHip.position).normalize();
+        const quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, -1, 0), direction);
+        rightThigh.setRotationFromQuaternion(quaternion);
+      }
+
+      if (rightShin && rightKnee && rightAnkle) {
+        // Position shin between knee and ankle
+        rightShin.position.x = (rightKnee.position.x + rightAnkle.position.x) / 2;
+        rightShin.position.y = (rightKnee.position.y + rightAnkle.position.y) / 2;
+        rightShin.position.z = (rightKnee.position.z + rightAnkle.position.z) / 2;
+        
+        // Calculate shin length and scale
+        const shinLength = rightKnee.position.distanceTo(rightAnkle.position);
+        rightShin.scale.y = shinLength / 0.8;
+        
+        // Rotate shin to point from knee to ankle
+        const direction = new THREE.Vector3().subVectors(rightAnkle.position, rightKnee.position).normalize();
+        const quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, -1, 0), direction);
+        rightShin.setRotationFromQuaternion(quaternion);
+      }
+
+      // Ensure feet follow ankles
+      if (leftFoot && leftAnkle) {
+        leftFoot.position.x = leftAnkle.position.x;
+        leftFoot.position.y = leftAnkle.position.y - 0.05;
+        leftFoot.position.z = leftAnkle.position.z + 0.05;
+      }
+
+      if (rightFoot && rightAnkle) {
+        rightFoot.position.x = rightAnkle.position.x;
+        rightFoot.position.y = rightAnkle.position.y - 0.05;
+        rightFoot.position.z = rightAnkle.position.z + 0.05;
+      }
+
       animationFrameId = requestAnimationFrame(updateAnimation);
     };
 

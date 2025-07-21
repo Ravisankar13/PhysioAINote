@@ -63,12 +63,6 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
     // Render loop
     const animate = () => {
       animationRef.current = requestAnimationFrame(animate);
-      
-      // Always update animation if data is available and playing
-      if (animationData.length > 0) {
-        updateAnimation();
-      }
-      
       renderer.render(scene, camera);
     };
     animate();
@@ -84,14 +78,10 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
     };
   }, []);
 
-  // Generate animation from clinical text and auto-play
+  // Generate animation from clinical text
   useEffect(() => {
     if (clinicalText) {
       generateAnimationFromText(clinicalText);
-      // Auto-start animation when text changes
-      setTimeout(() => {
-        setCurrentTime(0);
-      }, 100);
     }
   }, [clinicalText]);
 
@@ -855,52 +845,68 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
     ];
   };
 
-  const updateAnimation = () => {
-    if (!skeletonRef.current || animationData.length === 0) return;
+  // Animation update effect that runs when animationData or isPlaying changes
+  useEffect(() => {
+    if (!skeletonRef.current || animationData.length === 0 || !isPlaying) return;
 
-    // Increment time automatically for continuous animation
-    const newTime = (currentTime + 16) % 4000; // 4 second loop
-    setCurrentTime(newTime);
-    onTimeUpdate?.(newTime / 1000);
+    let startTime = Date.now();
+    let animationFrameId: number;
 
-    // Find current animation frame
-    let currentFrame = animationData[0];
-    let nextFrame = animationData[1] || animationData[0];
+    const updateAnimation = () => {
+      const elapsed = Date.now() - startTime;
+      const loopTime = elapsed % 4000; // 4 second loop
+      
+      onTimeUpdate?.(loopTime / 1000);
 
-    for (let i = 0; i < animationData.length - 1; i++) {
-      if (newTime >= animationData[i].time && newTime <= animationData[i + 1].time) {
-        currentFrame = animationData[i];
-        nextFrame = animationData[i + 1];
-        break;
+      // Find current animation frame
+      let currentFrame = animationData[0];
+      let nextFrame = animationData[1] || animationData[0];
+
+      for (let i = 0; i < animationData.length - 1; i++) {
+        if (loopTime >= animationData[i].time && loopTime <= animationData[i + 1].time) {
+          currentFrame = animationData[i];
+          nextFrame = animationData[i + 1];
+          break;
+        }
       }
-    }
 
-    // Calculate smooth interpolation factor
-    const timeDiff = nextFrame.time - currentFrame.time;
-    let t = timeDiff > 0 ? (newTime - currentFrame.time) / timeDiff : 0;
-    
-    // Apply easing for more natural movement
-    t = t * t * (3.0 - 2.0 * t); // Smoothstep interpolation
+      // Calculate smooth interpolation factor
+      const timeDiff = nextFrame.time - currentFrame.time;
+      let t = timeDiff > 0 ? (loopTime - currentFrame.time) / timeDiff : 0;
+      
+      // Apply easing for more natural movement
+      t = t * t * (3.0 - 2.0 * t); // Smoothstep interpolation
 
-    // Apply interpolated transformations to all joints
-    Object.keys(currentFrame.joints).forEach(jointName => {
-      const bone = skeletonRef.current!.getObjectByName(jointName);
-      if (bone) {
-        const currentJoint = currentFrame.joints[jointName];
-        const nextJoint = nextFrame.joints[jointName] || currentJoint;
+      // Apply interpolated transformations to all joints
+      Object.keys(currentFrame.joints).forEach(jointName => {
+        const bone = skeletonRef.current!.getObjectByName(jointName);
+        if (bone) {
+          const currentJoint = currentFrame.joints[jointName];
+          const nextJoint = nextFrame.joints[jointName] || currentJoint;
 
-        // Smooth position interpolation
-        bone.position.x = THREE.MathUtils.lerp(currentJoint.position[0], nextJoint.position[0], t);
-        bone.position.y = THREE.MathUtils.lerp(currentJoint.position[1], nextJoint.position[1], t);
-        bone.position.z = THREE.MathUtils.lerp(currentJoint.position[2], nextJoint.position[2], t);
+          // Smooth position interpolation
+          bone.position.x = THREE.MathUtils.lerp(currentJoint.position[0], nextJoint.position[0], t);
+          bone.position.y = THREE.MathUtils.lerp(currentJoint.position[1], nextJoint.position[1], t);
+          bone.position.z = THREE.MathUtils.lerp(currentJoint.position[2], nextJoint.position[2], t);
 
-        // Smooth rotation interpolation  
-        bone.rotation.x = THREE.MathUtils.lerp(currentJoint.rotation[0], nextJoint.rotation[0], t);
-        bone.rotation.y = THREE.MathUtils.lerp(currentJoint.rotation[1], nextJoint.rotation[1], t);
-        bone.rotation.z = THREE.MathUtils.lerp(currentJoint.rotation[2], nextJoint.rotation[2], t);
+          // Smooth rotation interpolation  
+          bone.rotation.x = THREE.MathUtils.lerp(currentJoint.rotation[0], nextJoint.rotation[0], t);
+          bone.rotation.y = THREE.MathUtils.lerp(currentJoint.rotation[1], nextJoint.rotation[1], t);
+          bone.rotation.z = THREE.MathUtils.lerp(currentJoint.rotation[2], nextJoint.rotation[2], t);
+        }
+      });
+
+      animationFrameId = requestAnimationFrame(updateAnimation);
+    };
+
+    updateAnimation();
+
+    return () => {
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
       }
-    });
-  };
+    };
+  }, [animationData, isPlaying]);
 
   return (
     <div className="relative">
@@ -908,9 +914,9 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
       <div className="absolute bottom-2 left-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-xs">
         3D Clinical Animation
       </div>
-      {animationData.length > 0 && (
-        <div className="absolute bottom-2 right-2 bg-blue-600 text-white px-2 py-1 rounded text-xs">
-          {Math.round((currentTime / 1000) * 10) / 10}s
+      {animationData.length > 0 && isPlaying && (
+        <div className="absolute bottom-2 right-2 bg-blue-600 text-white px-2 py-1 rounded text-xs animate-pulse">
+          Playing...
         </div>
       )}
     </div>

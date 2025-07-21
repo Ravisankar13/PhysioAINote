@@ -444,7 +444,10 @@ export default function VirtualPatientsWorking() {
                       </div>
                       <div className="flex gap-2">
                         <Button
-                          onClick={() => generateAnimationFromText(customText)}
+                          onClick={() => {
+                            generateAnimationFromText(customText);
+                            setIsPlaying(true);
+                          }}
                           disabled={isLoadingAnimation || !customText.trim()}
                           className="flex-1"
                         >
@@ -482,7 +485,7 @@ export default function VirtualPatientsWorking() {
                       size="sm"
                       onClick={() => {
                         setCustomText('performing squats');
-                        generateAnimationFromText('performing squats');
+                        setIsPlaying(true);
                       }}
                       className="text-xs"
                     >
@@ -493,7 +496,7 @@ export default function VirtualPatientsWorking() {
                       size="sm"
                       onClick={() => {
                         setCustomText('performing lunges');
-                        generateAnimationFromText('performing lunges');
+                        setIsPlaying(true);
                       }}
                       className="text-xs"
                     >
@@ -504,7 +507,7 @@ export default function VirtualPatientsWorking() {
                       size="sm"
                       onClick={() => {
                         setCustomText('performing arm raises');
-                        generateAnimationFromText('performing arm raises');
+                        setIsPlaying(true);
                       }}
                       className="text-xs"
                     >
@@ -515,7 +518,7 @@ export default function VirtualPatientsWorking() {
                       size="sm"
                       onClick={() => {
                         setCustomText('performing hip abduction');
-                        generateAnimationFromText('performing hip abduction');
+                        setIsPlaying(true);
                       }}
                       className="text-xs"
                     >
@@ -526,7 +529,7 @@ export default function VirtualPatientsWorking() {
                       size="sm"
                       onClick={() => {
                         setCustomText('performing knee flexion');
-                        generateAnimationFromText('performing knee flexion');
+                        setIsPlaying(true);
                       }}
                       className="text-xs"
                     >
@@ -537,7 +540,7 @@ export default function VirtualPatientsWorking() {
                       size="sm"
                       onClick={() => {
                         setCustomText('performing shoulder rotation');
-                        generateAnimationFromText('performing shoulder rotation');
+                        setIsPlaying(true);
                       }}
                       className="text-xs"
                     >
@@ -548,7 +551,7 @@ export default function VirtualPatientsWorking() {
                       size="sm"
                       onClick={() => {
                         setCustomText('performing standing march');
-                        generateAnimationFromText('performing standing march');
+                        setIsPlaying(true);
                       }}
                       className="text-xs"
                     >
@@ -559,7 +562,7 @@ export default function VirtualPatientsWorking() {
                       size="sm"
                       onClick={() => {
                         setCustomText('performing heel raises');
-                        generateAnimationFromText('performing heel raises');
+                        setIsPlaying(true);
                       }}
                       className="text-xs"
                     >

@@ -931,7 +931,11 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
           rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
           shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] },
+          leftAnkle: { position: [-0.15, -0.8, 0], rotation: [0, 0, 0] },
+          rightAnkle: { position: [0.15, -0.8, 0], rotation: [0, 0, 0] },
+          leftFoot: { position: [-0.15, -0.85, 0.05], rotation: [0, 0, 0] },
+          rightFoot: { position: [0.15, -0.85, 0.05], rotation: [0, 0, 0] }
         }
       },
       {
@@ -951,7 +955,11 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
           rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
           shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, -0.05] },
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, -0.8] }, // Arms for balance
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0.2] }
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0.2] },
+          leftAnkle: { position: [-0.65, -0.7, 0], rotation: [0, 0, -0.5] }, // Follow abducted leg
+          rightAnkle: { position: [0.15, -0.8, 0], rotation: [0, 0, 0] },
+          leftFoot: { position: [-0.7, -0.75, 0.05], rotation: [0, 0, -0.5] }, // Follow abducted leg
+          rightFoot: { position: [0.15, -0.85, 0.05], rotation: [0, 0, 0] }
         }
       },
       {
@@ -971,7 +979,11 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
           rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
           shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] },
+          leftAnkle: { position: [-0.15, -0.8, 0], rotation: [0, 0, 0] },
+          rightAnkle: { position: [0.15, -0.8, 0], rotation: [0, 0, 0] },
+          leftFoot: { position: [-0.15, -0.85, 0.05], rotation: [0, 0, 0] },
+          rightFoot: { position: [0.15, -0.85, 0.05], rotation: [0, 0, 0] }
         }
       }
     ];
@@ -996,7 +1008,11 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
           rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
           shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] },
+          leftAnkle: { position: [-0.15, -0.8, 0], rotation: [0, 0, 0] },
+          rightAnkle: { position: [0.15, -0.8, 0], rotation: [0, 0, 0] },
+          leftFoot: { position: [-0.15, -0.85, 0.05], rotation: [0, 0, 0] },
+          rightFoot: { position: [0.15, -0.85, 0.05], rotation: [0, 0, 0] }
         }
       },
       {
@@ -1016,7 +1032,11 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
           rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
           shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] },
+          leftAnkle: { position: [-0.15, 0.3, -0.4], rotation: [2.0, 0, 0] }, // Follow bent knee
+          rightAnkle: { position: [0.15, -0.8, 0], rotation: [0, 0, 0] },
+          leftFoot: { position: [-0.15, 0.35, -0.45], rotation: [2.0, 0, 0] }, // Follow bent knee
+          rightFoot: { position: [0.15, -0.85, 0.05], rotation: [0, 0, 0] }
         }
       },
       {
@@ -1036,7 +1056,11 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
           rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
           shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] },
+          leftAnkle: { position: [-0.15, -0.8, 0], rotation: [0, 0, 0] },
+          rightAnkle: { position: [0.15, 0.3, -0.4], rotation: [2.0, 0, 0] }, // Follow bent knee
+          leftFoot: { position: [-0.15, -0.85, 0.05], rotation: [0, 0, 0] },
+          rightFoot: { position: [0.15, 0.35, -0.45], rotation: [2.0, 0, 0] } // Follow bent knee
         }
       },
       {
@@ -1056,7 +1080,11 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
           rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
           shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] },
+          leftAnkle: { position: [-0.15, -0.8, 0], rotation: [0, 0, 0] },
+          rightAnkle: { position: [0.15, -0.8, 0], rotation: [0, 0, 0] },
+          leftFoot: { position: [-0.15, -0.85, 0.05], rotation: [0, 0, 0] },
+          rightFoot: { position: [0.15, -0.85, 0.05], rotation: [0, 0, 0] }
         }
       }
     ];
@@ -1081,7 +1109,11 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
           rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
           shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [-1.57, 0, 0] }, // Arms forward
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [-1.57, 0, 0] }
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [-1.57, 0, 0] },
+          leftAnkle: { position: [-0.15, -0.8, 0], rotation: [0, 0, 0] },
+          rightAnkle: { position: [0.15, -0.8, 0], rotation: [0, 0, 0] },
+          leftFoot: { position: [-0.15, -0.85, 0.05], rotation: [0, 0, 0] },
+          rightFoot: { position: [0.15, -0.85, 0.05], rotation: [0, 0, 0] }
         }
       },
       {
@@ -1101,7 +1133,11 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
           rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
           shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [-1.57, 1.57, 0] }, // External rotation
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [-1.57, -1.57, 0] }
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [-1.57, -1.57, 0] },
+          leftAnkle: { position: [-0.15, -0.8, 0], rotation: [0, 0, 0] },
+          rightAnkle: { position: [0.15, -0.8, 0], rotation: [0, 0, 0] },
+          leftFoot: { position: [-0.15, -0.85, 0.05], rotation: [0, 0, 0] },
+          rightFoot: { position: [0.15, -0.85, 0.05], rotation: [0, 0, 0] }
         }
       },
       {
@@ -1121,7 +1157,11 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
           rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
           shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [-1.57, -1.57, 0] }, // Internal rotation
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [-1.57, 1.57, 0] }
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [-1.57, 1.57, 0] },
+          leftAnkle: { position: [-0.15, -0.8, 0], rotation: [0, 0, 0] },
+          rightAnkle: { position: [0.15, -0.8, 0], rotation: [0, 0, 0] },
+          leftFoot: { position: [-0.15, -0.85, 0.05], rotation: [0, 0, 0] },
+          rightFoot: { position: [0.15, -0.85, 0.05], rotation: [0, 0, 0] }
         }
       },
       {
@@ -1141,7 +1181,11 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
           rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
           shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [-1.57, 0, 0] },
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [-1.57, 0, 0] }
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [-1.57, 0, 0] },
+          leftAnkle: { position: [-0.15, -0.8, 0], rotation: [0, 0, 0] },
+          rightAnkle: { position: [0.15, -0.8, 0], rotation: [0, 0, 0] },
+          leftFoot: { position: [-0.15, -0.85, 0.05], rotation: [0, 0, 0] },
+          rightFoot: { position: [0.15, -0.85, 0.05], rotation: [0, 0, 0] }
         }
       },
       {
@@ -1161,7 +1205,11 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
           rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
           shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] },
+          leftAnkle: { position: [-0.15, -0.8, 0], rotation: [0, 0, 0] },
+          rightAnkle: { position: [0.15, -0.8, 0], rotation: [0, 0, 0] },
+          leftFoot: { position: [-0.15, -0.85, 0.05], rotation: [0, 0, 0] },
+          rightFoot: { position: [0.15, -0.85, 0.05], rotation: [0, 0, 0] }
         }
       }
     ];
@@ -1188,7 +1236,11 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
           rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
           shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0.3, 0, 0] }, // Opposite arm swing
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [-0.3, 0, 0] }
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [-0.3, 0, 0] },
+          leftAnkle: { position: [-0.15, -0.8, 0], rotation: [0, 0, 0] },
+          rightAnkle: { position: [0.15, -0.8, 0], rotation: [0, 0, 0] },
+          leftFoot: { position: [-0.15, -0.85, 0.05], rotation: [0, 0, 0] },
+          rightFoot: { position: [0.15, -0.85, 0.05], rotation: [0, 0, 0] }
         }
       },
       {
@@ -1208,7 +1260,11 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
           rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
           shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [-0.3, 0, 0] }, // Arm swings back
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0.3, 0, 0] } // Arm swings forward
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0.3, 0, 0] }, // Arm swings forward
+          leftAnkle: { position: [-0.15, -0.3, 0.45], rotation: [0, 0, 0] }, // Follow raised knee
+          rightAnkle: { position: [0.15, -0.8, 0], rotation: [0, 0, 0] },
+          leftFoot: { position: [-0.15, -0.35, 0.5], rotation: [0, 0, 0] }, // Follow raised knee
+          rightFoot: { position: [0.15, -0.85, 0.05], rotation: [0, 0, 0] }
         }
       },
       {
@@ -1228,7 +1284,11 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
           rightKnee: { position: [0.15, 0.3, 0.35], rotation: [0, 0, 0] },
           shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0.3, 0, 0] }, // Arm swings forward
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [-0.3, 0, 0] } // Arm swings back
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [-0.3, 0, 0] }, // Arm swings back
+          leftAnkle: { position: [-0.15, -0.8, 0], rotation: [0, 0, 0] },
+          rightAnkle: { position: [0.15, -0.3, 0.45], rotation: [0, 0, 0] }, // Follow raised knee
+          leftFoot: { position: [-0.15, -0.85, 0.05], rotation: [0, 0, 0] },
+          rightFoot: { position: [0.15, -0.35, 0.5], rotation: [0, 0, 0] } // Follow raised knee
         }
       },
       {
@@ -1248,7 +1308,11 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
           rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
           shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [-0.3, 0, 0] },
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0.3, 0, 0] }
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0.3, 0, 0] },
+          leftAnkle: { position: [-0.15, -0.3, 0.45], rotation: [0, 0, 0] }, // Follow raised knee
+          rightAnkle: { position: [0.15, -0.8, 0], rotation: [0, 0, 0] },
+          leftFoot: { position: [-0.15, -0.35, 0.5], rotation: [0, 0, 0] }, // Follow raised knee
+          rightFoot: { position: [0.15, -0.85, 0.05], rotation: [0, 0, 0] }
         }
       },
       {
@@ -1268,7 +1332,11 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
           rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
           shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0.3, 0, 0] },
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [-0.3, 0, 0] }
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [-0.3, 0, 0] },
+          leftAnkle: { position: [-0.15, -0.8, 0], rotation: [0, 0, 0] },
+          rightAnkle: { position: [0.15, -0.8, 0], rotation: [0, 0, 0] },
+          leftFoot: { position: [-0.15, -0.85, 0.05], rotation: [0, 0, 0] },
+          rightFoot: { position: [0.15, -0.85, 0.05], rotation: [0, 0, 0] }
         }
       }
     ];

@@ -32,6 +32,7 @@ import TestCaseStudiesPage from "@/pages/TestCaseStudiesPage";
 import SessionsPage from "@/pages/SessionsPage";
 import VirtualPatientPage from "@/pages/VirtualPatientPage";
 import VirtualPatients from "@/pages/VirtualPatients";
+import VirtualPatientsWorking from "@/pages/VirtualPatientsWorking";
 import VirtualPatientsSimple from "@/pages/VirtualPatientsSimple";
 import VirtualPatientsMinimal from "@/pages/VirtualPatientsMinimal";
 import VirtualPatientsFixed from "@/pages/VirtualPatientsFixed";
@@ -97,7 +98,7 @@ function Router() {
           <Route path="/integrated-assessment" component={IntegratedClinicalAssessment} />
           <Route path="/intelligent-assessment" component={IntelligentAssessment} />
           <Route path="/virtual-patients">
-            <ProtectedRoute component={VirtualPatients} />
+            <ProtectedRoute component={VirtualPatientsWorking} />
           </Route>
           <Route path="/virtual-patients-debug">
             <ProtectedRoute component={VirtualPatientsSimple} />

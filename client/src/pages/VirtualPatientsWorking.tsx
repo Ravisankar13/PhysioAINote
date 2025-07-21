@@ -440,6 +440,7 @@ export default function VirtualPatientsWorking() {
                         <p>• "Back stiffness with restricted flexion"</p>
                         <p>• "Knee pain with compensated gait"</p>
                         <p>• "Hip restriction with limited range"</p>
+                        <p>• "Shoulder pain" or just "knee pain"</p>
                       </div>
                       <div className="flex gap-2">
                         <Button

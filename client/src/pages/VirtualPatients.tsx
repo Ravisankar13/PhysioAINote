@@ -51,7 +51,7 @@ import { StickFigureAnimation } from '../components/StickFigureAnimation';
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { SoapVirtualPatient } from "@shared/schema";
 import MotionCapture from "@/components/MotionCapture";
-import ThreeDSkeletonPlayer from "@/components/ThreeDSkeletonPlayer";
+import ThreeDAnatomicalVisualization from "@/components/ThreeDAnatomicalVisualization";
 import InteractiveSkeleton from "@/components/virtualPatient/InteractiveSkeleton";
 import SkeletonAnimationPlayer from "@/components/SkeletonAnimationPlayer";
 
@@ -1080,6 +1080,83 @@ export default function VirtualPatientsPage() {
     return heatmap;
   };
 
+  // Generate clinical motion from text description
+  const generateClinicalMotionFromText = (text: string) => {
+    const frames = [];
+    const frameCount = 60; // 2 seconds at 30fps
+    const bodyPart = extractBodyPartFromText(text);
+    const movementType = extractMovementTypeFromText(text);
+    
+    for (let i = 0; i < frameCount; i++) {
+      const progress = i / frameCount;
+      const landmarks = [];
+      
+      // Generate realistic movement based on text description
+      for (let j = 0; j < 33; j++) {
+        let x = 0.5 + Math.sin(progress * Math.PI * 2) * 0.15; // More pronounced movement
+        let y = 0.5 + Math.cos(progress * Math.PI * 2) * 0.1;
+        let z = 0;
+        
+        // Apply movement patterns based on text analysis
+        if (bodyPart === 'shoulder' && (j === 11 || j === 12)) {
+          // Shoulder-specific movements
+          if (text.toLowerCase().includes('limited') || text.toLowerCase().includes('restricted')) {
+            y += Math.sin(progress * Math.PI) * 0.03; // Limited elevation
+          } else if (text.toLowerCase().includes('reaching') || text.toLowerCase().includes('overhead')) {
+            y += Math.sin(progress * Math.PI) * 0.2; // Full elevation
+          }
+        } else if (bodyPart === 'back' && j >= 11 && j <= 24) {
+          // Spinal movement patterns
+          if (text.toLowerCase().includes('stiff') || text.toLowerCase().includes('rigid')) {
+            x *= 0.5; y *= 0.5; // Reduced movement
+          } else if (text.toLowerCase().includes('flexible') || text.toLowerCase().includes('bending')) {
+            x += Math.sin(progress * Math.PI * 2) * 0.1; // Side bending
+          }
+        } else if (bodyPart === 'knee' && (j === 25 || j === 26)) {
+          // Knee movement patterns
+          if (text.toLowerCase().includes('limp') || text.toLowerCase().includes('favoring')) {
+            y += Math.sin(progress * Math.PI * 3) * 0.02; // Limping gait
+          }
+        }
+        
+        landmarks.push({ x, y, z, visibility: 0.9 });
+      }
+      
+      frames.push({
+        timestamp: (i / 30) * 1000,
+        landmarks: landmarks,
+        worldLandmarks: landmarks
+      });
+    }
+    
+    return frames;
+  };
+
+  // Extract body part from text
+  const extractBodyPartFromText = (text: string) => {
+    const lowerText = text.toLowerCase();
+    if (lowerText.includes('shoulder')) return 'shoulder';
+    if (lowerText.includes('back') || lowerText.includes('spine')) return 'back';
+    if (lowerText.includes('knee')) return 'knee';
+    if (lowerText.includes('hip')) return 'hip';
+    if (lowerText.includes('ankle')) return 'ankle';
+    if (lowerText.includes('elbow')) return 'elbow';
+    if (lowerText.includes('wrist')) return 'wrist';
+    if (lowerText.includes('neck')) return 'neck';
+    return 'general';
+  };
+
+  // Extract movement type from text
+  const extractMovementTypeFromText = (text: string) => {
+    const lowerText = text.toLowerCase();
+    if (lowerText.includes('reaching') || lowerText.includes('overhead')) return 'elevation';
+    if (lowerText.includes('bending') || lowerText.includes('flexion')) return 'flexion';
+    if (lowerText.includes('turning') || lowerText.includes('rotation')) return 'rotation';
+    if (lowerText.includes('walking') || lowerText.includes('gait')) return 'gait';
+    if (lowerText.includes('stiff') || lowerText.includes('limited')) return 'restricted';
+    return 'general';
+  };
+
   // Generate stick figure animation frames from clinical text
   const generateStickFigureFromText = (clinicalText: string) => {
     // Parse clinical text to determine movement type and create appropriate animation
@@ -1631,11 +1708,11 @@ export default function VirtualPatientsPage() {
                       {selectedPatient.motionData ? (
                         <div className="w-full h-full">
                           {currentView === 'anterior' ? (
-                            <ThreeDSkeletonPlayer 
-                              animationSequences={parseMotionDataForThreeD(selectedPatient.motionData)}
-                              movementHeatmap={generateMovementHeatmap(selectedPatient)}
+                            <ThreeDAnatomicalVisualization 
+                              patientData={selectedPatient}
+                              animationData={selectedPatient.motionData ? JSON.parse(selectedPatient.motionData) : null}
                               isPlaying={isPlaying}
-                              playbackTime={playbackTime}
+                              currentFrame={playbackTime}
                               className="w-full h-full"
                             />
                           ) : (
@@ -1649,9 +1726,21 @@ export default function VirtualPatientsPage() {
                         </div>
                       ) : (
                         <div className="text-center space-y-3">
-                          <Activity className="h-16 w-16 mx-auto mb-3 text-gray-400" />
-                          <p className="text-gray-600 font-medium">No Motion Data Available</p>
-                          <p className="text-sm text-gray-500">Generate or capture movement data</p>
+                          {currentView === 'anterior' ? (
+                            <ThreeDAnatomicalVisualization 
+                              patientData={null}
+                              animationData={null}
+                              isPlaying={false}
+                              currentFrame={0}
+                              className="w-full h-full"
+                            />
+                          ) : (
+                            <>
+                              <Activity className="h-16 w-16 mx-auto mb-3 text-gray-400" />
+                              <p className="text-gray-600 font-medium">No Motion Data Available</p>
+                              <p className="text-sm text-gray-500">Generate or capture movement data</p>
+                            </>
+                          )}
                           <div className="flex gap-2 justify-center">
                             <Button
                               size="sm"

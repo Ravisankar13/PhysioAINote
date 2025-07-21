@@ -414,7 +414,7 @@ export default function VirtualPatientsPage() {
     // Load movement data if available
     if (patient.motionData) {
       try {
-        const motionData = JSON.parse(patient.motionData || '{}');
+        const motionData = JSON.parse(String(patient.motionData) || '{}');
         const analysis: MovementAnalysis = {
           capturedMovements: motionData.frames || [],
           compensationPatterns: [
@@ -1664,11 +1664,11 @@ export default function VirtualPatientsPage() {
                             </div>
                           )}
                         </div>
-                        {patient.motionData && (
+                        {patient.motionData ? (
                           <Badge variant="secondary" className="bg-green-100 text-green-800 mt-2">
                             Digital Twin
                           </Badge>
-                        )}
+                        ) : null}
                         </CardContent>
                       </Card>
                     ))

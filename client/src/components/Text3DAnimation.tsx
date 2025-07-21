@@ -377,6 +377,14 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
       animationFrames = generateStandingMarchAnimation();
     } else if (lowerText.includes('heel raise')) {
       animationFrames = generateHeelRaiseAnimation();
+    } else if (lowerText.includes('deadlift')) {
+      animationFrames = generateDeadliftAnimation();
+    } else if (lowerText.includes('bridge')) {
+      animationFrames = generateBridgeAnimation();
+    } else if (lowerText.includes('step up') || lowerText.includes('step-up')) {
+      animationFrames = generateStepUpAnimation();
+    } else if (lowerText.includes('bird dog')) {
+      animationFrames = generateBirdDogAnimation();
     } else if (bodyParts.shoulder && limitations.limited) {
       animationFrames = generateShoulderLimitationAnimation();
     } else if (bodyParts.back && limitations.stiff) {
@@ -1480,6 +1488,314 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
           shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
           rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
+        }
+      }
+    ];
+  };
+
+  // Deadlift animation
+  const generateDeadliftAnimation = (): AnimationKeyframe[] => {
+    return [
+      {
+        time: 0,
+        joints: {
+          // Starting position - standing
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
+          leftShin: { position: [-0.15, -0.4, 0], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
+          leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] },
+          leftAnkle: { position: [-0.15, -0.8, 0], rotation: [0, 0, 0] },
+          rightAnkle: { position: [0.15, -0.8, 0], rotation: [0, 0, 0] }
+        }
+      },
+      {
+        time: 2000,
+        joints: {
+          // Bent position - hinge at hips
+          head: { position: [0, 1.1, 0.3], rotation: [0.5, 0, 0] },
+          torso: { position: [0, 0.8, 0.2], rotation: [1.2, 0, 0] }, // Major hip hinge
+          pelvis: { position: [0, 0.6, -0.2], rotation: [1.2, 0, 0] },
+          leftThigh: { position: [-0.15, 0.3, -0.1], rotation: [-0.3, 0, 0] },
+          rightThigh: { position: [0.15, 0.3, -0.1], rotation: [-0.3, 0, 0] },
+          leftShin: { position: [-0.15, -0.4, 0], rotation: [0.2, 0, 0] },
+          rightShin: { position: [0.15, -0.4, 0], rotation: [0.2, 0, 0] },
+          leftHip: { position: [-0.15, 0.6, -0.2], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.6, -0.2], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, -0.05, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, -0.05, 0], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.25, 0.8, 0.5], rotation: [0.3, 0, 0] }, // Arms reach down
+          rightArmGroup: { position: [0.25, 0.8, 0.5], rotation: [0.3, 0, 0] },
+          leftAnkle: { position: [-0.15, -0.8, 0], rotation: [0, 0, 0] },
+          rightAnkle: { position: [0.15, -0.8, 0], rotation: [0, 0, 0] }
+        }
+      },
+      {
+        time: 4000,
+        joints: {
+          // Return to standing
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
+          leftShin: { position: [-0.15, -0.4, 0], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
+          leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] },
+          leftAnkle: { position: [-0.15, -0.8, 0], rotation: [0, 0, 0] },
+          rightAnkle: { position: [0.15, -0.8, 0], rotation: [0, 0, 0] }
+        }
+      }
+    ];
+  };
+
+  // Bridge exercise animation
+  const generateBridgeAnimation = (): AnimationKeyframe[] => {
+    return [
+      {
+        time: 0,
+        joints: {
+          // Lying on back position
+          head: { position: [0, 0.1, -0.8], rotation: [0, 0, 0] },
+          torso: { position: [0, 0.1, -0.4], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.1, 0], rotation: [0, 0, 0] },
+          leftThigh: { position: [-0.15, 0.1, 0.3], rotation: [-1.57, 0, 0] }, // Knees bent
+          rightThigh: { position: [0.15, 0.1, 0.3], rotation: [-1.57, 0, 0] },
+          leftShin: { position: [-0.15, 0.3, 0.6], rotation: [-1.57, 0, 0] },
+          rightShin: { position: [0.15, 0.3, 0.6], rotation: [-1.57, 0, 0] },
+          leftHip: { position: [-0.15, 0.1, 0], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.1, 0], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0.1, 0.6], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0.1, 0.6], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.35, 0.1, -0.3], rotation: [0, 0, 0.5] },
+          rightArmGroup: { position: [0.35, 0.1, -0.3], rotation: [0, 0, -0.5] },
+          leftAnkle: { position: [-0.15, 0.1, 0.8], rotation: [0, 0, 0] },
+          rightAnkle: { position: [0.15, 0.1, 0.8], rotation: [0, 0, 0] }
+        }
+      },
+      {
+        time: 2000,
+        joints: {
+          // Bridge position - hips raised
+          head: { position: [0, 0.1, -0.8], rotation: [0, 0, 0] },
+          torso: { position: [0, 0.4, -0.4], rotation: [-0.3, 0, 0] },
+          pelvis: { position: [0, 0.6, 0], rotation: [-0.4, 0, 0] }, // Pelvis lifted
+          leftThigh: { position: [-0.15, 0.4, 0.3], rotation: [-1.2, 0, 0] },
+          rightThigh: { position: [0.15, 0.4, 0.3], rotation: [-1.2, 0, 0] },
+          leftShin: { position: [-0.15, 0.25, 0.6], rotation: [-1.57, 0, 0] },
+          rightShin: { position: [0.15, 0.25, 0.6], rotation: [-1.57, 0, 0] },
+          leftHip: { position: [-0.15, 0.6, 0], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.6, 0], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0.35, 0.5], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0.35, 0.5], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.35, 0.1, -0.3], rotation: [0, 0, 0.5] },
+          rightArmGroup: { position: [0.35, 0.1, -0.3], rotation: [0, 0, -0.5] },
+          leftAnkle: { position: [-0.15, 0.1, 0.8], rotation: [0, 0, 0] },
+          rightAnkle: { position: [0.15, 0.1, 0.8], rotation: [0, 0, 0] }
+        }
+      },
+      {
+        time: 4000,
+        joints: {
+          // Return to lying position
+          head: { position: [0, 0.1, -0.8], rotation: [0, 0, 0] },
+          torso: { position: [0, 0.1, -0.4], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.1, 0], rotation: [0, 0, 0] },
+          leftThigh: { position: [-0.15, 0.1, 0.3], rotation: [-1.57, 0, 0] },
+          rightThigh: { position: [0.15, 0.1, 0.3], rotation: [-1.57, 0, 0] },
+          leftShin: { position: [-0.15, 0.3, 0.6], rotation: [-1.57, 0, 0] },
+          rightShin: { position: [0.15, 0.3, 0.6], rotation: [-1.57, 0, 0] },
+          leftHip: { position: [-0.15, 0.1, 0], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.1, 0], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0.1, 0.6], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0.1, 0.6], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.35, 0.1, -0.3], rotation: [0, 0, 0.5] },
+          rightArmGroup: { position: [0.35, 0.1, -0.3], rotation: [0, 0, -0.5] },
+          leftAnkle: { position: [-0.15, 0.1, 0.8], rotation: [0, 0, 0] },
+          rightAnkle: { position: [0.15, 0.1, 0.8], rotation: [0, 0, 0] }
+        }
+      }
+    ];
+  };
+
+  // Step-up animation
+  const generateStepUpAnimation = (): AnimationKeyframe[] => {
+    return [
+      {
+        time: 0,
+        joints: {
+          // Starting position - standing in front of step
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
+          leftShin: { position: [-0.15, -0.4, 0], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
+          leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
+          leftAnkle: { position: [-0.15, -0.8, 0], rotation: [0, 0, 0] },
+          rightAnkle: { position: [0.15, -0.8, 0], rotation: [0, 0, 0] }
+        }
+      },
+      {
+        time: 1000,
+        joints: {
+          // Right leg stepping up
+          head: { position: [0, 2.1, 0.1], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.4, 0.1], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 1.1, 0.1], rotation: [0, 0, 0] },
+          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightThigh: { position: [0.15, 0.7, 0.2], rotation: [-0.7, 0, 0] }, // Right thigh lifted
+          leftShin: { position: [-0.15, -0.4, 0], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, 0.1, 0.3], rotation: [0, 0, 0] }, // Right shin vertical
+          leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 1.1, 0.1], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0.3, 0.3], rotation: [0, 0, 0] },
+          leftAnkle: { position: [-0.15, -0.8, 0], rotation: [0, 0, 0] },
+          rightAnkle: { position: [0.15, -0.1, 0.3], rotation: [0, 0, 0] } // Right foot on step
+        }
+      },
+      {
+        time: 2000,
+        joints: {
+          // Both feet on step
+          head: { position: [0, 2.3, 0.3], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.6, 0.3], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 1.3, 0.3], rotation: [0, 0, 0] },
+          leftThigh: { position: [-0.15, 0.8, 0.3], rotation: [0, 0, 0] },
+          rightThigh: { position: [0.15, 0.8, 0.3], rotation: [0, 0, 0] },
+          leftShin: { position: [-0.15, 0, 0.3], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, 0, 0.3], rotation: [0, 0, 0] },
+          leftHip: { position: [-0.15, 1.2, 0.3], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 1.2, 0.3], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0.4, 0.3], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0.4, 0.3], rotation: [0, 0, 0] },
+          leftAnkle: { position: [-0.15, -0.4, 0.3], rotation: [0, 0, 0] },
+          rightAnkle: { position: [0.15, -0.4, 0.3], rotation: [0, 0, 0] }
+        }
+      },
+      {
+        time: 3000,
+        joints: {
+          // Stepping back down
+          head: { position: [0, 2.1, 0.1], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.4, 0.1], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 1.1, 0.1], rotation: [0, 0, 0] },
+          leftThigh: { position: [-0.15, 0.6, 0.1], rotation: [-0.3, 0, 0] },
+          rightThigh: { position: [0.15, 0.6, 0.3], rotation: [0, 0, 0] },
+          leftShin: { position: [-0.15, -0.2, 0], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, -0.2, 0.3], rotation: [0, 0, 0] },
+          leftHip: { position: [-0.15, 1.0, 0.1], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 1.0, 0.3], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0.2, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0.2, 0.3], rotation: [0, 0, 0] },
+          leftAnkle: { position: [-0.15, -0.6, 0], rotation: [0, 0, 0] },
+          rightAnkle: { position: [0.15, -0.6, 0.3], rotation: [0, 0, 0] }
+        }
+      },
+      {
+        time: 4000,
+        joints: {
+          // Return to starting position
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
+          leftShin: { position: [-0.15, -0.4, 0], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
+          leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
+          leftAnkle: { position: [-0.15, -0.8, 0], rotation: [0, 0, 0] },
+          rightAnkle: { position: [0.15, -0.8, 0], rotation: [0, 0, 0] }
+        }
+      }
+    ];
+  };
+
+  // Bird dog animation
+  const generateBirdDogAnimation = (): AnimationKeyframe[] => {
+    return [
+      {
+        time: 0,
+        joints: {
+          // Quadruped position
+          head: { position: [0, 0.8, -0.4], rotation: [-0.5, 0, 0] },
+          torso: { position: [0, 0.6, 0], rotation: [1.57, 0, 0] }, // Horizontal
+          pelvis: { position: [0, 0.6, 0.4], rotation: [1.57, 0, 0] },
+          leftThigh: { position: [-0.15, 0.4, 0.6], rotation: [0.7, 0, 0] },
+          rightThigh: { position: [0.15, 0.4, 0.6], rotation: [0.7, 0, 0] },
+          leftShin: { position: [-0.15, 0.1, 0.6], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, 0.1, 0.6], rotation: [0, 0, 0] },
+          leftHip: { position: [-0.15, 0.6, 0.4], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.6, 0.4], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0.3, 0.6], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0.3, 0.6], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.25, 0.6, -0.3], rotation: [1.57, 0, 0] },
+          rightArmGroup: { position: [0.25, 0.6, -0.3], rotation: [1.57, 0, 0] },
+          leftAnkle: { position: [-0.15, 0.1, 0.6], rotation: [0, 0, 0] },
+          rightAnkle: { position: [0.15, 0.1, 0.6], rotation: [0, 0, 0] }
+        }
+      },
+      {
+        time: 2000,
+        joints: {
+          // Left arm and right leg extended
+          head: { position: [0, 0.8, -0.4], rotation: [-0.3, 0, 0] },
+          torso: { position: [0, 0.6, 0], rotation: [1.57, 0, 0] },
+          pelvis: { position: [0, 0.6, 0.4], rotation: [1.57, 0, 0] },
+          leftThigh: { position: [-0.15, 0.4, 0.6], rotation: [0.7, 0, 0] },
+          rightThigh: { position: [0.15, 0.6, 0.8], rotation: [3.14, 0, 0] }, // Extended back
+          leftShin: { position: [-0.15, 0.1, 0.6], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, 0.6, 1.2], rotation: [3.14, 0, 0] },
+          leftHip: { position: [-0.15, 0.6, 0.4], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.6, 0.4], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0.3, 0.6], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0.6, 1.0], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.25, 0.6, -0.8], rotation: [0, 0, 0] }, // Extended forward
+          rightArmGroup: { position: [0.25, 0.6, -0.3], rotation: [1.57, 0, 0] },
+          leftAnkle: { position: [-0.15, 0.1, 0.6], rotation: [0, 0, 0] },
+          rightAnkle: { position: [0.15, 0.6, 1.4], rotation: [0, 0, 0] }
+        }
+      },
+      {
+        time: 4000,
+        joints: {
+          // Return to quadruped
+          head: { position: [0, 0.8, -0.4], rotation: [-0.5, 0, 0] },
+          torso: { position: [0, 0.6, 0], rotation: [1.57, 0, 0] },
+          pelvis: { position: [0, 0.6, 0.4], rotation: [1.57, 0, 0] },
+          leftThigh: { position: [-0.15, 0.4, 0.6], rotation: [0.7, 0, 0] },
+          rightThigh: { position: [0.15, 0.4, 0.6], rotation: [0.7, 0, 0] },
+          leftShin: { position: [-0.15, 0.1, 0.6], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, 0.1, 0.6], rotation: [0, 0, 0] },
+          leftHip: { position: [-0.15, 0.6, 0.4], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.6, 0.4], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0.3, 0.6], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0.3, 0.6], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.25, 0.6, -0.3], rotation: [1.57, 0, 0] },
+          rightArmGroup: { position: [0.25, 0.6, -0.3], rotation: [1.57, 0, 0] },
+          leftAnkle: { position: [-0.15, 0.1, 0.6], rotation: [0, 0, 0] },
+          rightAnkle: { position: [0.15, 0.1, 0.6], rotation: [0, 0, 0] }
         }
       }
     ];

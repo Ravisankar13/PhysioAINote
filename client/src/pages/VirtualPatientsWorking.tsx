@@ -568,6 +568,50 @@ export default function VirtualPatientsWorking() {
                     >
                       Heel Raises
                     </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        setCustomText('performing deadlift');
+                        setIsPlaying(true);
+                      }}
+                      className="text-xs"
+                    >
+                      Deadlift
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        setCustomText('performing bridge');
+                        setIsPlaying(true);
+                      }}
+                      className="text-xs"
+                    >
+                      Bridge
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        setCustomText('performing step up');
+                        setIsPlaying(true);
+                      }}
+                      className="text-xs"
+                    >
+                      Step-Up
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        setCustomText('performing bird dog');
+                        setIsPlaying(true);
+                      }}
+                      className="text-xs"
+                    >
+                      Bird Dog
+                    </Button>
                   </div>
                 </CardContent>
               </Card>

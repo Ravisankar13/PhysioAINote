@@ -23,8 +23,12 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
   const rendererRef = useRef<THREE.WebGLRenderer>();
   const animationRef = useRef<number>();
   const skeletonRef = useRef<THREE.Group>();
+  const cameraRef = useRef<THREE.PerspectiveCamera>();
   const [animationData, setAnimationData] = useState<AnimationKeyframe[]>([]);
   const [currentTime, setCurrentTime] = useState(0);
+  const [rotation, setRotation] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
   // Initialize Three.js scene
   useEffect(() => {
@@ -39,6 +43,7 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
     const camera = new THREE.PerspectiveCamera(75, 400 / 300, 0.1, 1000);
     camera.position.set(0, 1, 3);
     camera.lookAt(0, 1, 0);
+    cameraRef.current = camera;
 
     // Renderer setup
     const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -63,6 +68,13 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
     // Render loop
     const animate = () => {
       animationRef.current = requestAnimationFrame(animate);
+      
+      // Apply rotation to skeleton
+      if (skeletonRef.current) {
+        skeletonRef.current.rotation.y = rotation.y;
+        skeletonRef.current.rotation.x = rotation.x;
+      }
+      
       renderer.render(scene, camera);
     };
     animate();
@@ -76,7 +88,7 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
       }
       renderer.dispose();
     };
-  }, []);
+  }, [rotation]);
 
   // Generate animation from clinical text
   useEffect(() => {
@@ -1390,11 +1402,57 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
     };
   }, [animationData, isPlaying]);
 
+  // Mouse event handlers for rotation
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsDragging(true);
+    setDragStart({ x: e.clientX, y: e.clientY });
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging) return;
+    
+    const deltaX = e.clientX - dragStart.x;
+    const deltaY = e.clientY - dragStart.y;
+    
+    setRotation({
+      x: rotation.x + deltaY * 0.01,
+      y: rotation.y + deltaX * 0.01
+    });
+    
+    setDragStart({ x: e.clientX, y: e.clientY });
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const handleMouseLeave = () => {
+    setIsDragging(false);
+  };
+
   return (
     <div className="relative">
-      <div ref={mountRef} className="w-full h-[300px] bg-gray-50 rounded-lg overflow-hidden" />
+      <div 
+        ref={mountRef} 
+        className="w-full h-[300px] bg-gray-50 rounded-lg overflow-hidden cursor-move"
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseLeave}
+      />
       <div className="absolute bottom-2 left-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-xs">
         3D Clinical Animation
+      </div>
+      <div className="absolute top-2 right-2 flex gap-2">
+        <div className="bg-black bg-opacity-50 text-white px-2 py-1 rounded text-xs">
+          Click and drag to rotate
+        </div>
+        <button
+          onClick={() => setRotation({ x: 0, y: 0 })}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs transition-colors"
+        >
+          Reset View
+        </button>
       </div>
       {animationData.length > 0 && isPlaying && (
         <div className="absolute bottom-2 right-2 bg-blue-600 text-white px-2 py-1 rounded text-xs animate-pulse">

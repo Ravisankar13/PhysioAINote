@@ -109,11 +109,15 @@ export default function VirtualPatientsWorking() {
     setIsLoadingAnimation(true);
     try {
       // Simulate animation generation
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Auto-start the animation
+      setIsPlaying(true);
+      setPlaybackTime(0);
       
       toast({
-        title: "Animation Generated",
-        description: "Created movement visualization from clinical description",
+        title: "3D Animation Ready",
+        description: `Generated movement visualization for: ${clinicalText.substring(0, 50)}${clinicalText.length > 50 ? '...' : ''}`,
       });
     } catch (error: any) {
       toast({
@@ -333,7 +337,7 @@ export default function VirtualPatientsWorking() {
                     )}
 
                     {/* Playback Controls */}
-                    {selectedPatient && (
+                    {(customText.trim() || selectedPatient) && (
                       <div className="flex items-center justify-center gap-4">
                         <Button 
                           size="sm" 
@@ -350,7 +354,7 @@ export default function VirtualPatientsWorking() {
                           <RotateCcw className="h-4 w-4" />
                         </Button>
                         <div className="text-sm text-gray-500">
-                          {playbackTime.toFixed(1)}s
+                          {playbackTime.toFixed(1)}s / 4.0s
                         </div>
                       </div>
                     )}

@@ -64,7 +64,8 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
     const animate = () => {
       animationRef.current = requestAnimationFrame(animate);
       
-      if (isPlaying && animationData.length > 0) {
+      // Always update animation if data is available and playing
+      if (animationData.length > 0) {
         updateAnimation();
       }
       
@@ -83,10 +84,14 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
     };
   }, []);
 
-  // Generate animation from clinical text
+  // Generate animation from clinical text and auto-play
   useEffect(() => {
     if (clinicalText) {
       generateAnimationFromText(clinicalText);
+      // Auto-start animation when text changes
+      setTimeout(() => {
+        setCurrentTime(0);
+      }, 100);
     }
   }, [clinicalText]);
 
@@ -262,25 +267,63 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
           leftShoulder: { position: [-0.25, 1.7, 0], rotation: [0, 0, 0] },
           rightShoulder: { position: [0.25, 1.7, 0], rotation: [0, 0, 0] },
           leftUpperArm: { position: [-0.4, 1.5, 0], rotation: [0, 0, Math.PI / 6] },
-          rightUpperArm: { position: [0.4, 1.5, 0], rotation: [0, 0, -Math.PI / 6] }
+          rightUpperArm: { position: [0.4, 1.5, 0], rotation: [0, 0, -Math.PI / 6] },
+          leftForearm: { position: [-0.7, 1.0, 0], rotation: [0, 0, Math.PI / 4] },
+          rightForearm: { position: [0.7, 1.0, 0], rotation: [0, 0, -Math.PI / 4] },
+          head: { position: [0, 2.1, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] }
         }
       },
       {
         time: 1000,
         joints: {
-          leftShoulder: { position: [-0.25, 1.7, 0], rotation: [0, 0, 0.3] },
-          rightShoulder: { position: [0.25, 1.7, 0], rotation: [0, 0, -0.3] },
-          leftUpperArm: { position: [-0.4, 1.5, 0], rotation: [0, 0, Math.PI / 4] },
-          rightUpperArm: { position: [0.4, 1.5, 0], rotation: [0, 0, -Math.PI / 4] }
+          leftShoulder: { position: [-0.25, 1.7, 0], rotation: [0, 0, 0.2] },
+          rightShoulder: { position: [0.25, 1.7, 0], rotation: [0, 0, -0.2] },
+          leftUpperArm: { position: [-0.4, 1.5, 0], rotation: [0, 0, Math.PI / 3] },
+          rightUpperArm: { position: [0.4, 1.5, 0], rotation: [0, 0, -Math.PI / 5] },
+          leftForearm: { position: [-0.7, 1.0, 0], rotation: [0, 0, Math.PI / 2] },
+          rightForearm: { position: [0.7, 1.0, 0], rotation: [0, 0, -Math.PI / 6] },
+          head: { position: [0, 2.1, 0], rotation: [0, 0, -0.1] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0.05] }
         }
       },
       {
         time: 2000,
         joints: {
+          leftShoulder: { position: [-0.25, 1.7, 0], rotation: [0, 0, 0.4] },
+          rightShoulder: { position: [0.25, 1.7, 0], rotation: [0, 0, -0.1] },
+          leftUpperArm: { position: [-0.4, 1.5, 0], rotation: [0, 0, Math.PI / 2] },
+          rightUpperArm: { position: [0.4, 1.5, 0], rotation: [0, 0, -Math.PI / 8] },
+          leftForearm: { position: [-0.7, 1.0, 0], rotation: [0, 0, Math.PI / 3] },
+          rightForearm: { position: [0.7, 1.0, 0], rotation: [0, 0, -Math.PI / 8] },
+          head: { position: [0, 2.1, 0], rotation: [0, 0, -0.2] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0.1] }
+        }
+      },
+      {
+        time: 3000,
+        joints: {
+          leftShoulder: { position: [-0.25, 1.7, 0], rotation: [0, 0, 0.2] },
+          rightShoulder: { position: [0.25, 1.7, 0], rotation: [0, 0, -0.2] },
+          leftUpperArm: { position: [-0.4, 1.5, 0], rotation: [0, 0, Math.PI / 3] },
+          rightUpperArm: { position: [0.4, 1.5, 0], rotation: [0, 0, -Math.PI / 5] },
+          leftForearm: { position: [-0.7, 1.0, 0], rotation: [0, 0, Math.PI / 2] },
+          rightForearm: { position: [0.7, 1.0, 0], rotation: [0, 0, -Math.PI / 6] },
+          head: { position: [0, 2.1, 0], rotation: [0, 0, -0.1] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0.05] }
+        }
+      },
+      {
+        time: 4000,
+        joints: {
           leftShoulder: { position: [-0.25, 1.7, 0], rotation: [0, 0, 0] },
           rightShoulder: { position: [0.25, 1.7, 0], rotation: [0, 0, 0] },
           leftUpperArm: { position: [-0.4, 1.5, 0], rotation: [0, 0, Math.PI / 6] },
-          rightUpperArm: { position: [0.4, 1.5, 0], rotation: [0, 0, -Math.PI / 6] }
+          rightUpperArm: { position: [0.4, 1.5, 0], rotation: [0, 0, -Math.PI / 6] },
+          leftForearm: { position: [-0.7, 1.0, 0], rotation: [0, 0, Math.PI / 4] },
+          rightForearm: { position: [0.7, 1.0, 0], rotation: [0, 0, -Math.PI / 4] },
+          head: { position: [0, 2.1, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] }
         }
       }
     ];
@@ -292,21 +335,55 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
         time: 0,
         joints: {
           torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
-          head: { position: [0, 2.1, 0], rotation: [0, 0, 0] }
+          head: { position: [0, 2.1, 0], rotation: [0, 0, 0] },
+          leftShoulder: { position: [-0.25, 1.7, 0], rotation: [0, 0, 0] },
+          rightShoulder: { position: [0.25, 1.7, 0], rotation: [0, 0, 0] },
+          leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] }
         }
       },
       {
         time: 1000,
         joints: {
-          torso: { position: [0, 1.2, 0], rotation: [0.2, 0, 0] },
-          head: { position: [0, 2.1, 0], rotation: [0.1, 0, 0] }
+          torso: { position: [0, 1.2, 0], rotation: [0.3, 0, 0] },
+          head: { position: [0, 2.1, 0], rotation: [0.2, 0, 0] },
+          leftShoulder: { position: [-0.25, 1.7, 0], rotation: [0.1, 0, 0] },
+          rightShoulder: { position: [0.25, 1.7, 0], rotation: [0.1, 0, 0] },
+          leftHip: { position: [-0.15, 0.8, 0], rotation: [-0.1, 0, 0] },
+          rightHip: { position: [0.15, 0.8, 0], rotation: [-0.1, 0, 0] }
         }
       },
       {
         time: 2000,
         joints: {
+          torso: { position: [0, 1.2, 0], rotation: [0.1, 0, 0] },
+          head: { position: [0, 2.1, 0], rotation: [0.05, 0, 0] },
+          leftShoulder: { position: [-0.25, 1.7, 0], rotation: [0.05, 0, 0] },
+          rightShoulder: { position: [0.25, 1.7, 0], rotation: [0.05, 0, 0] },
+          leftHip: { position: [-0.15, 0.8, 0], rotation: [-0.05, 0, 0] },
+          rightHip: { position: [0.15, 0.8, 0], rotation: [-0.05, 0, 0] }
+        }
+      },
+      {
+        time: 3000,
+        joints: {
+          torso: { position: [0, 1.2, 0], rotation: [0.2, 0, 0] },
+          head: { position: [0, 2.1, 0], rotation: [0.15, 0, 0] },
+          leftShoulder: { position: [-0.25, 1.7, 0], rotation: [0.1, 0, 0] },
+          rightShoulder: { position: [0.25, 1.7, 0], rotation: [0.1, 0, 0] },
+          leftHip: { position: [-0.15, 0.8, 0], rotation: [-0.1, 0, 0] },
+          rightHip: { position: [0.15, 0.8, 0], rotation: [-0.1, 0, 0] }
+        }
+      },
+      {
+        time: 4000,
+        joints: {
           torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
-          head: { position: [0, 2.1, 0], rotation: [0, 0, 0] }
+          head: { position: [0, 2.1, 0], rotation: [0, 0, 0] },
+          leftShoulder: { position: [-0.25, 1.7, 0], rotation: [0, 0, 0] },
+          rightShoulder: { position: [0.25, 1.7, 0], rotation: [0, 0, 0] },
+          leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] }
         }
       }
     ];
@@ -320,25 +397,58 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
           leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
           rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
           leftThigh: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
-          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] }
+          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
+          leftShin: { position: [-0.15, -0.4, 0], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] }
         }
       },
       {
         time: 1000,
         joints: {
-          leftKnee: { position: [-0.15, 0, 0], rotation: [-0.5, 0, 0] },
+          leftKnee: { position: [-0.15, 0, 0], rotation: [-0.6, 0, 0] },
           rightKnee: { position: [0.15, 0, 0], rotation: [-0.3, 0, 0] },
-          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0.2, 0, 0] },
-          rightThigh: { position: [0.15, 0.4, 0], rotation: [0.1, 0, 0] }
+          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0.3, 0, 0.1] },
+          rightThigh: { position: [0.15, 0.4, 0], rotation: [0.1, 0, -0.05] },
+          leftShin: { position: [-0.15, -0.4, 0], rotation: [0.3, 0, 0] },
+          rightShin: { position: [0.15, -0.4, 0], rotation: [0.1, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0.05] }
         }
       },
       {
         time: 2000,
         joints: {
+          leftKnee: { position: [-0.15, 0, 0], rotation: [-0.4, 0, 0] },
+          rightKnee: { position: [0.15, 0, 0], rotation: [-0.6, 0, 0] },
+          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0.2, 0, 0.05] },
+          rightThigh: { position: [0.15, 0.4, 0], rotation: [0.3, 0, -0.1] },
+          leftShin: { position: [-0.15, -0.4, 0], rotation: [0.2, 0, 0] },
+          rightShin: { position: [0.15, -0.4, 0], rotation: [0.3, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, -0.05] }
+        }
+      },
+      {
+        time: 3000,
+        joints: {
+          leftKnee: { position: [-0.15, 0, 0], rotation: [-0.2, 0, 0] },
+          rightKnee: { position: [0.15, 0, 0], rotation: [-0.2, 0, 0] },
+          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0.1, 0, 0] },
+          rightThigh: { position: [0.15, 0.4, 0], rotation: [0.1, 0, 0] },
+          leftShin: { position: [-0.15, -0.4, 0], rotation: [0.1, 0, 0] },
+          rightShin: { position: [0.15, -0.4, 0], rotation: [0.1, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] }
+        }
+      },
+      {
+        time: 4000,
+        joints: {
           leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
           rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
           leftThigh: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
-          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] }
+          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
+          leftShin: { position: [-0.15, -0.4, 0], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] }
         }
       }
     ];
@@ -405,7 +515,8 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
   const updateAnimation = () => {
     if (!skeletonRef.current || animationData.length === 0) return;
 
-    const newTime = (currentTime + 16) % 3000; // 3 second loop
+    // Increment time automatically for continuous animation
+    const newTime = (currentTime + 16) % 4000; // 4 second loop
     setCurrentTime(newTime);
     onTimeUpdate?.(newTime / 1000);
 
@@ -421,22 +532,26 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
       }
     }
 
-    // Interpolate between frames
-    const t = (newTime - currentFrame.time) / (nextFrame.time - currentFrame.time) || 0;
+    // Calculate smooth interpolation factor
+    const timeDiff = nextFrame.time - currentFrame.time;
+    let t = timeDiff > 0 ? (newTime - currentFrame.time) / timeDiff : 0;
+    
+    // Apply easing for more natural movement
+    t = t * t * (3.0 - 2.0 * t); // Smoothstep interpolation
 
-    // Apply interpolated transformations
+    // Apply interpolated transformations to all joints
     Object.keys(currentFrame.joints).forEach(jointName => {
       const bone = skeletonRef.current!.getObjectByName(jointName);
       if (bone) {
         const currentJoint = currentFrame.joints[jointName];
-        const nextJoint = nextFrame.joints[jointName];
+        const nextJoint = nextFrame.joints[jointName] || currentJoint;
 
-        // Interpolate position
+        // Smooth position interpolation
         bone.position.x = THREE.MathUtils.lerp(currentJoint.position[0], nextJoint.position[0], t);
         bone.position.y = THREE.MathUtils.lerp(currentJoint.position[1], nextJoint.position[1], t);
         bone.position.z = THREE.MathUtils.lerp(currentJoint.position[2], nextJoint.position[2], t);
 
-        // Interpolate rotation
+        // Smooth rotation interpolation  
         bone.rotation.x = THREE.MathUtils.lerp(currentJoint.rotation[0], nextJoint.rotation[0], t);
         bone.rotation.y = THREE.MathUtils.lerp(currentJoint.rotation[1], nextJoint.rotation[1], t);
         bone.rotation.z = THREE.MathUtils.lerp(currentJoint.rotation[2], nextJoint.rotation[2], t);

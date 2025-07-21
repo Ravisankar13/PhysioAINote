@@ -964,6 +964,106 @@ export default function VirtualPatientsPage() {
     return frames;
   };
 
+  // Parse motion data for ThreeDSkeletonPlayer component
+  const parseMotionDataForThreeD = (motionDataString: string | null) => {
+    if (!motionDataString) return [];
+    
+    try {
+      const motionData = JSON.parse(motionDataString);
+      const frames = motionData.frames || [];
+      
+      return frames.map((frame: any, index: number) => ({
+        timestamp: frame.timestamp || index * 33.33, // 30 FPS
+        keyframes: convertLandmarksToKeyframes(frame.landmarks || [])
+      }));
+    } catch (error) {
+      console.error('Error parsing motion data for 3D:', error);
+      return [];
+    }
+  };
+
+  // Convert MediaPipe landmarks to 3D keyframes
+  const convertLandmarksToKeyframes = (landmarks: any[]) => {
+    const keyframes = [];
+    
+    // MediaPipe pose landmark mapping to bone names
+    const landmarkToBone = {
+      0: 'head',
+      11: 'leftShoulder', 12: 'rightShoulder',
+      13: 'leftElbow', 14: 'rightElbow', 
+      15: 'leftWrist', 16: 'rightWrist',
+      23: 'leftHip', 24: 'rightHip',
+      25: 'leftKnee', 26: 'rightKnee',
+      27: 'leftAnkle', 28: 'rightAnkle'
+    };
+    
+    landmarks.forEach((landmark, index) => {
+      const boneName = landmarkToBone[index as keyof typeof landmarkToBone];
+      if (boneName && landmark) {
+        keyframes.push({
+          boneName,
+          position: [landmark.x || 0, landmark.y || 0, landmark.z || 0],
+          rotation: [0, 0, 0] // Default rotation
+        });
+      }
+    });
+    
+    // Add derived bones
+    if (landmarks[11] && landmarks[12]) {
+      // Neck position between shoulders
+      keyframes.push({
+        boneName: 'neck',
+        position: [
+          (landmarks[11].x + landmarks[12].x) / 2,
+          (landmarks[11].y + landmarks[12].y) / 2,
+          (landmarks[11].z + landmarks[12].z) / 2
+        ],
+        rotation: [0, 0, 0]
+      });
+    }
+    
+    if (landmarks[23] && landmarks[24]) {
+      // Spine position between hips
+      keyframes.push({
+        boneName: 'spine',
+        position: [
+          (landmarks[23].x + landmarks[24].x) / 2,
+          (landmarks[23].y + landmarks[24].y) / 2,
+          (landmarks[23].z + landmarks[24].z) / 2
+        ],
+        rotation: [0, 0, 0]
+      });
+    }
+    
+    return keyframes;
+  };
+
+  // Generate movement heatmap for patient
+  const generateMovementHeatmap = (patient: SoapVirtualPatient) => {
+    const bodyPart = patient.bodyPart || 'general';
+    const complaint = (patient.clinicalPresentation as any)?.chiefComplaint || '';
+    
+    const heatmap = [
+      { jointName: 'head', intensity: 0.2, problemAreas: false },
+      { jointName: 'neck', intensity: 0.3, problemAreas: bodyPart === 'neck' },
+      { jointName: 'leftShoulder', intensity: 0.4, problemAreas: bodyPart === 'shoulder' },
+      { jointName: 'rightShoulder', intensity: 0.4, problemAreas: bodyPart === 'shoulder' },
+      { jointName: 'leftElbow', intensity: 0.3, problemAreas: bodyPart === 'elbow' },
+      { jointName: 'rightElbow', intensity: 0.3, problemAreas: bodyPart === 'elbow' },
+      { jointName: 'leftWrist', intensity: 0.3, problemAreas: bodyPart === 'wrist' },
+      { jointName: 'rightWrist', intensity: 0.3, problemAreas: bodyPart === 'wrist' },
+      { jointName: 'spine', intensity: 0.5, problemAreas: bodyPart === 'back' },
+      { jointName: 'leftHip', intensity: 0.4, problemAreas: bodyPart === 'hip' },
+      { jointName: 'rightHip', intensity: 0.4, problemAreas: bodyPart === 'hip' },
+      { jointName: 'leftKnee', intensity: 0.5, problemAreas: bodyPart === 'knee' },
+      { jointName: 'rightKnee', intensity: 0.5, problemAreas: bodyPart === 'knee' },
+      { jointName: 'leftAnkle', intensity: 0.3, problemAreas: bodyPart === 'ankle' },
+      { jointName: 'rightAnkle', intensity: 0.3, problemAreas: bodyPart === 'ankle' }
+    ];
+    
+    return heatmap;
+  };
+
   // Generate stick figure animation frames from clinical text
   const generateStickFigureFromText = (clinicalText: string) => {
     // Parse clinical text to determine movement type and create appropriate animation
@@ -1516,9 +1616,10 @@ export default function VirtualPatientsPage() {
                         <div className="w-full h-full">
                           {currentView === 'anterior' ? (
                             <ThreeDSkeletonPlayer 
-                              motionData={selectedPatient.motionData}
+                              animationSequences={parseMotionDataForThreeD(selectedPatient.motionData)}
+                              movementHeatmap={generateMovementHeatmap(selectedPatient)}
                               isPlaying={isPlaying}
-                              currentFrame={playbackTime}
+                              playbackTime={playbackTime}
                               className="w-full h-full"
                             />
                           ) : (

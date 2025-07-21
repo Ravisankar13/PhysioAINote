@@ -755,7 +755,7 @@ export default function VirtualPatientsPage() {
     // Show success notification
     toast({
       title: "Patient Selected",
-      description: `Selected ${patientName} - debugging mode active`,
+      description: `Selected ${patientName} - Animation system ready`,
     });
     
     console.log('DEBUG: Patient selection completed successfully');
@@ -966,18 +966,34 @@ export default function VirtualPatientsPage() {
 
   // Parse motion data for ThreeDSkeletonPlayer component
   const parseMotionDataForThreeD = (motionDataString: string | null) => {
-    if (!motionDataString) return [];
+    if (!motionDataString) {
+      console.log('No motion data string provided');
+      return [];
+    }
     
     try {
+      console.log('Raw motion data string:', motionDataString.substring(0, 200) + '...');
       const motionData = JSON.parse(motionDataString);
-      const frames = motionData.frames || [];
+      console.log('Parsed motion data structure:', Object.keys(motionData));
       
-      return frames.map((frame: any, index: number) => ({
+      const frames = motionData.frames || [];
+      console.log('Found frames:', frames.length);
+      
+      if (frames.length === 0) {
+        console.log('No frames found in motion data');
+        return [];
+      }
+      
+      const processedFrames = frames.map((frame: any, index: number) => ({
         timestamp: frame.timestamp || index * 33.33, // 30 FPS
         keyframes: convertLandmarksToKeyframes(frame.landmarks || [])
       }));
+      
+      console.log('Processed frames for 3D:', processedFrames.length);
+      return processedFrames;
     } catch (error) {
       console.error('Error parsing motion data for 3D:', error);
+      console.log('Motion data that caused error:', motionDataString);
       return [];
     }
   };

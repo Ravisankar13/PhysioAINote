@@ -568,6 +568,11 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
           rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
           leftShin: { position: [-0.15, -0.4, 0], rotation: [0, 0, 0] },
           rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
+          leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
+          shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [-1.2, 0, 0] }, // Arms forward
           rightArmGroup: { position: [0.25, 1.65, 0], rotation: [-1.2, 0, 0] }
         }
@@ -583,6 +588,11 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
           rightThigh: { position: [0.15, 0.2, -0.1], rotation: [-1.0, 0, 0] },
           leftShin: { position: [-0.15, -0.2, 0.2], rotation: [1.3, 0, 0] }, // Shin angle
           rightShin: { position: [0.15, -0.2, 0.2], rotation: [1.3, 0, 0] },
+          leftHip: { position: [-0.15, 0.5, -0.2], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.5, -0.2], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0, 0.05], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0, 0.05], rotation: [0, 0, 0] },
+          shoulderConnector: { position: [0, 1.35, 0.1], rotation: [0.2, 0, 0] },
           leftArmGroup: { position: [-0.25, 1.35, 0.1], rotation: [-1.4, 0, 0] },
           rightArmGroup: { position: [0.25, 1.35, 0.1], rotation: [-1.4, 0, 0] }
         }
@@ -598,6 +608,11 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
           rightThigh: { position: [0.15, 0.0, -0.2], rotation: [-1.4, 0, 0] },
           leftShin: { position: [-0.15, -0.3, 0.3], rotation: [1.5, 0, 0] }, // Full knee bend
           rightShin: { position: [0.15, -0.3, 0.3], rotation: [1.5, 0, 0] },
+          leftHip: { position: [-0.15, 0.2, -0.3], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.2, -0.3], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, -0.15, 0.05], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, -0.15, 0.05], rotation: [0, 0, 0] },
+          shoulderConnector: { position: [0, 1.05, 0.2], rotation: [0.3, 0, 0] },
           leftArmGroup: { position: [-0.25, 1.05, 0.2], rotation: [-1.5, 0, 0] },
           rightArmGroup: { position: [0.25, 1.05, 0.2], rotation: [-1.5, 0, 0] }
         }
@@ -613,6 +628,11 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
           rightThigh: { position: [0.15, 0.2, -0.1], rotation: [-1.0, 0, 0] },
           leftShin: { position: [-0.15, -0.2, 0.2], rotation: [1.3, 0, 0] },
           rightShin: { position: [0.15, -0.2, 0.2], rotation: [1.3, 0, 0] },
+          leftHip: { position: [-0.15, 0.5, -0.2], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.5, -0.2], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0, 0.05], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0, 0.05], rotation: [0, 0, 0] },
+          shoulderConnector: { position: [0, 1.35, 0.1], rotation: [0.2, 0, 0] },
           leftArmGroup: { position: [-0.25, 1.35, 0.1], rotation: [-1.4, 0, 0] },
           rightArmGroup: { position: [0.25, 1.35, 0.1], rotation: [-1.4, 0, 0] }
         }
@@ -628,6 +648,11 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
           rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
           leftShin: { position: [-0.15, -0.4, 0], rotation: [0, 0, 0] },
           rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
+          leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
+          shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [-1.2, 0, 0] },
           rightArmGroup: { position: [0.25, 1.65, 0], rotation: [-1.2, 0, 0] }
         }
@@ -640,31 +665,61 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
       {
         time: 0,
         joints: {
+          // Starting position - standing
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
           torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
+          leftShin: { position: [-0.15, -0.4, 0], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
           leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
           rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
-          leftKnee: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
-          rightKnee: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] }
+          leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
+          shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
         }
       },
       {
-        time: 1500,
+        time: 2000,
         joints: {
-          torso: { position: [0, 1.0, 0], rotation: [0.1, 0, 0] },
-          leftHip: { position: [-0.15, 0.6, 0.5], rotation: [0.8, 0, 0] },
-          rightHip: { position: [0.15, 0.6, -0.5], rotation: [-0.8, 0, 0] },
-          leftKnee: { position: [-0.15, 0.2, 0.8], rotation: [1.4, 0, 0] },
-          rightKnee: { position: [0.15, 0.2, -0.2], rotation: [-0.2, 0, 0] }
+          // Lunge position - left leg forward
+          head: { position: [0, 1.7, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.0, 0], rotation: [0.05, 0, 0] },
+          pelvis: { position: [0, 0.7, 0], rotation: [0, 0, 0] },
+          leftThigh: { position: [-0.15, 0.3, 0.4], rotation: [-1.2, 0, 0] }, // Front leg bent
+          rightThigh: { position: [0.15, 0.3, -0.4], rotation: [0.4, 0, 0] }, // Back leg extended
+          leftShin: { position: [-0.15, -0.3, 0.6], rotation: [1.4, 0, 0] },
+          rightShin: { position: [0.15, -0.4, -0.3], rotation: [0.3, 0, 0] },
+          leftHip: { position: [-0.15, 0.7, 0.4], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.7, -0.4], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0, 0.5], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, -0.1, -0.35], rotation: [0, 0, 0] },
+          shoulderConnector: { position: [0, 1.45, 0], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.25, 1.45, 0], rotation: [-0.3, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.45, 0], rotation: [0.3, 0, 0] } // Opposite arm movement
         }
       },
       {
-        time: 3000,
+        time: 4000,
         joints: {
+          // Return to starting position
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
           torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
+          leftShin: { position: [-0.15, -0.4, 0], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
           leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
           rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
-          leftKnee: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
-          rightKnee: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] }
+          leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
+          shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
         }
       }
     ];
@@ -675,25 +730,81 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
       {
         time: 0,
         joints: {
+          // Starting position - arms at sides
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
+          leftShin: { position: [-0.15, -0.4, 0], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
+          leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
+          shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0.2] },
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, -0.2] },
-          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] }
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, -0.2] }
         }
       },
       {
         time: 1500,
         joints: {
-          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 1.57] },
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, -1.57] },
-          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] }
+          // Arms raised laterally to 90 degrees
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
+          leftShin: { position: [-0.15, -0.4, 0], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
+          leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
+          shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 1.57] }, // 90 degrees
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, -1.57] }
         }
       },
       {
         time: 3000,
         joints: {
+          // Arms raised overhead to 180 degrees
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
+          leftShin: { position: [-0.15, -0.4, 0], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
+          leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
+          shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 3.14] }, // 180 degrees
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, -3.14] }
+        }
+      },
+      {
+        time: 4000,
+        joints: {
+          // Return to starting position
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
+          leftShin: { position: [-0.15, -0.4, 0], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
+          leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
+          shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0.2] },
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, -0.2] },
-          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] }
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, -0.2] }
         }
       }
     ];
@@ -704,28 +815,61 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
       {
         time: 0,
         joints: {
+          // Starting position - standing
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
+          leftShin: { position: [-0.15, -0.4, 0], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
           leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
           rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
-          leftKnee: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
-          rightKnee: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] }
+          leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
+          shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
         }
       },
       {
-        time: 1500,
+        time: 2000,
         joints: {
-          leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, -0.6] },
+          // Left leg abducted
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, -0.05] }, // Slight lean right
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, -0.05] },
+          leftThigh: { position: [-0.4, 0.4, 0], rotation: [0, 0, -0.5] }, // Leg out to side
+          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
+          leftShin: { position: [-0.6, -0.3, 0], rotation: [0, 0, -0.5] },
+          rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
+          leftHip: { position: [-0.4, 0.8, 0], rotation: [0, 0, -0.5] },
           rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
-          leftKnee: { position: [-0.35, 0.4, 0], rotation: [0, 0, -0.6] },
-          rightKnee: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] }
+          leftKnee: { position: [-0.5, 0.05, 0], rotation: [0, 0, -0.5] },
+          rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
+          shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, -0.05] },
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, -0.8] }, // Arms for balance
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0.2] }
         }
       },
       {
-        time: 3000,
+        time: 4000,
         joints: {
+          // Return to starting position
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
+          leftShin: { position: [-0.15, -0.4, 0], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
           leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
           rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
-          leftKnee: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
-          rightKnee: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] }
+          leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
+          shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
         }
       }
     ];
@@ -736,37 +880,81 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
       {
         time: 0,
         joints: {
-          leftKnee: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
-          rightKnee: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
-          leftAnkle: { position: [-0.15, 0.1, 0], rotation: [0, 0, 0] },
-          rightAnkle: { position: [0.15, 0.1, 0], rotation: [0, 0, 0] }
+          // Starting position - standing
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
+          leftShin: { position: [-0.15, -0.4, 0], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
+          leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
+          shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
         }
       },
       {
-        time: 1000,
+        time: 1500,
         joints: {
-          leftKnee: { position: [-0.15, 0.4, 0], rotation: [-1.2, 0, 0] },
-          rightKnee: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
-          leftAnkle: { position: [-0.15, 0.3, -0.3], rotation: [-1.2, 0, 0] },
-          rightAnkle: { position: [0.15, 0.1, 0], rotation: [0, 0, 0] }
-        }
-      },
-      {
-        time: 2000,
-        joints: {
-          leftKnee: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
-          rightKnee: { position: [0.15, 0.4, 0], rotation: [-1.2, 0, 0] },
-          leftAnkle: { position: [-0.15, 0.1, 0], rotation: [0, 0, 0] },
-          rightAnkle: { position: [0.15, 0.3, -0.3], rotation: [-1.2, 0, 0] }
+          // Left knee flexed (heel to butt)
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
+          leftShin: { position: [-0.15, -0.1, -0.3], rotation: [2.0, 0, 0] }, // Knee bent
+          rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
+          leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
+          shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
         }
       },
       {
         time: 3000,
         joints: {
-          leftKnee: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
-          rightKnee: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
-          leftAnkle: { position: [-0.15, 0.1, 0], rotation: [0, 0, 0] },
-          rightAnkle: { position: [0.15, 0.1, 0], rotation: [0, 0, 0] }
+          // Right knee flexed
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
+          leftShin: { position: [-0.15, -0.4, 0], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, -0.1, -0.3], rotation: [2.0, 0, 0] }, // Knee bent
+          leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
+          shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
+        }
+      },
+      {
+        time: 4000,
+        joints: {
+          // Return to starting position
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
+          leftShin: { position: [-0.15, -0.4, 0], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
+          leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
+          shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
         }
       }
     ];
@@ -777,79 +965,208 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
       {
         time: 0,
         joints: {
-          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0.5] },
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, -0.5] }
+          // Starting position - arms at 90 degrees
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
+          leftShin: { position: [-0.15, -0.4, 0], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
+          leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
+          shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [-1.57, 0, 0] }, // Arms forward
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [-1.57, 0, 0] }
         }
       },
       {
         time: 1000,
         joints: {
-          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 1.57, 0.5] },
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, -1.57, -0.5] }
+          // External rotation
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
+          leftShin: { position: [-0.15, -0.4, 0], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
+          leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
+          shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [-1.57, 1.57, 0] }, // External rotation
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [-1.57, -1.57, 0] }
         }
       },
       {
         time: 2000,
         joints: {
-          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, -1.57, 0.5] },
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 1.57, -0.5] }
+          // Internal rotation
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
+          leftShin: { position: [-0.15, -0.4, 0], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
+          leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
+          shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [-1.57, -1.57, 0] }, // Internal rotation
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [-1.57, 1.57, 0] }
         }
       },
       {
         time: 3000,
         joints: {
-          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0.5] },
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, -0.5] }
+          // Return to starting
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
+          leftShin: { position: [-0.15, -0.4, 0], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
+          leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
+          shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [-1.57, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [-1.57, 0, 0] }
+        }
+      },
+      {
+        time: 4000,
+        joints: {
+          // Return to neutral
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
+          leftShin: { position: [-0.15, -0.4, 0], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
+          leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
+          shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
         }
       }
     ];
   };
+
+
 
   const generateStandingMarchAnimation = (): AnimationKeyframe[] => {
     return [
       {
         time: 0,
         joints: {
+          // Starting position - standing
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
+          leftShin: { position: [-0.15, -0.4, 0], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
           leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
           rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
-          leftKnee: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
-          rightKnee: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] }
+          leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
+          shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0.3, 0, 0] }, // Opposite arm swing
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [-0.3, 0, 0] }
         }
       },
       {
-        time: 750,
+        time: 1000,
         joints: {
-          leftHip: { position: [-0.15, 0.8, 0], rotation: [-0.8, 0, 0] },
+          // Left knee raised
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftThigh: { position: [-0.15, 0.5, 0.3], rotation: [-1.2, 0, 0] }, // Knee raised to 90 degrees
+          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
+          leftShin: { position: [-0.15, 0.1, 0.4], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
+          leftHip: { position: [-0.15, 0.9, 0.3], rotation: [0, 0, 0] },
           rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
-          leftKnee: { position: [-0.15, 0.5, 0.3], rotation: [-0.8, 0, 0] },
-          rightKnee: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] }
+          leftKnee: { position: [-0.15, 0.3, 0.35], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
+          shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [-0.3, 0, 0] }, // Arm swings back
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0.3, 0, 0] } // Arm swings forward
         }
       },
       {
-        time: 1500,
+        time: 2000,
         joints: {
+          // Right knee raised
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightThigh: { position: [0.15, 0.5, 0.3], rotation: [-1.2, 0, 0] }, // Knee raised to 90 degrees
+          leftShin: { position: [-0.15, -0.4, 0], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, 0.1, 0.4], rotation: [0, 0, 0] },
           leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
-          rightHip: { position: [0.15, 0.8, 0], rotation: [-0.8, 0, 0] },
-          leftKnee: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
-          rightKnee: { position: [0.15, 0.5, 0.3], rotation: [-0.8, 0, 0] }
-        }
-      },
-      {
-        time: 2250,
-        joints: {
-          leftHip: { position: [-0.15, 0.8, 0], rotation: [-0.8, 0, 0] },
-          rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
-          leftKnee: { position: [-0.15, 0.5, 0.3], rotation: [-0.8, 0, 0] },
-          rightKnee: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] }
+          rightHip: { position: [0.15, 0.9, 0.3], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0.3, 0.35], rotation: [0, 0, 0] },
+          shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0.3, 0, 0] }, // Arm swings forward
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [-0.3, 0, 0] } // Arm swings back
         }
       },
       {
         time: 3000,
         joints: {
+          // Left knee raised again
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftThigh: { position: [-0.15, 0.5, 0.3], rotation: [-1.2, 0, 0] },
+          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
+          leftShin: { position: [-0.15, 0.1, 0.4], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
+          leftHip: { position: [-0.15, 0.9, 0.3], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0.3, 0.35], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
+          shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [-0.3, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0.3, 0, 0] }
+        }
+      },
+      {
+        time: 4000,
+        joints: {
+          // Return to starting position
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
+          leftShin: { position: [-0.15, -0.4, 0], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
           leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
           rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
-          leftKnee: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
-          rightKnee: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] }
+          leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
+          shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0.3, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [-0.3, 0, 0] }
         }
       }
     ];
@@ -860,25 +1177,61 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
       {
         time: 0,
         joints: {
+          // Starting position - standing
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
           torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
-          leftAnkle: { position: [-0.15, 0.1, 0], rotation: [0, 0, 0] },
-          rightAnkle: { position: [0.15, 0.1, 0], rotation: [0, 0, 0] }
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
+          leftShin: { position: [-0.15, -0.4, 0], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
+          leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
+          shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
         }
       },
       {
-        time: 1500,
+        time: 2000,
         joints: {
+          // Raised on toes - entire body moves up
+          head: { position: [0, 2.05, 0], rotation: [0, 0, 0] },
           torso: { position: [0, 1.35, 0], rotation: [0, 0, 0] },
-          leftAnkle: { position: [-0.15, 0.15, 0.05], rotation: [0.5, 0, 0] },
-          rightAnkle: { position: [0.15, 0.15, 0.05], rotation: [0.5, 0, 0] }
+          pelvis: { position: [0, 1.05, 0], rotation: [0, 0, 0] },
+          leftThigh: { position: [-0.15, 0.55, 0], rotation: [0, 0, 0] },
+          rightThigh: { position: [0.15, 0.55, 0], rotation: [0, 0, 0] },
+          leftShin: { position: [-0.15, -0.25, 0], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, -0.25, 0], rotation: [0, 0, 0] },
+          leftHip: { position: [-0.15, 0.95, 0], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.95, 0], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0.15, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0.15, 0], rotation: [0, 0, 0] },
+          shoulderConnector: { position: [0, 1.8, 0], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.25, 1.8, 0], rotation: [0, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.8, 0], rotation: [0, 0, 0] }
         }
       },
       {
-        time: 3000,
+        time: 4000,
         joints: {
+          // Return to starting position
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
           torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
-          leftAnkle: { position: [-0.15, 0.1, 0], rotation: [0, 0, 0] },
-          rightAnkle: { position: [0.15, 0.1, 0], rotation: [0, 0, 0] }
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
+          leftShin: { position: [-0.15, -0.4, 0], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
+          leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
+          shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
         }
       }
     ];

@@ -141,18 +141,18 @@ export default function VirtualPatientsPage() {
   
   // Animation frame updating when playing
   useEffect(() => {
-    if (!isPlaying || !selectedPatient?.threeDVisualization?.animationSequences?.length) return;
+    if (!isPlaying || !selectedPatient?.motionData) return;
     
     const interval = setInterval(() => {
       setPlaybackTime(prev => {
         const next = prev + 1;
-        const maxFrames = selectedPatient.threeDVisualization.animationSequences.length;
+        const maxFrames = 100; // Default frame count
         return next >= maxFrames ? 0 : next; // Loop back to start
       });
     }, 33); // ~30 FPS
     
     return () => clearInterval(interval);
-  }, [isPlaying, selectedPatient?.threeDVisualization?.animationSequences?.length]);
+  }, [isPlaying, selectedPatient?.motionData]);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [selectedMovement, setSelectedMovement] = useState<string>('all');
   const [showComparisonMode, setShowComparisonMode] = useState(false);
@@ -368,17 +368,17 @@ export default function VirtualPatientsPage() {
       // Generate enhanced profile from patient data
     const profile: EnhancedPatientProfile = {
       demographics: {
-        name: patient.patient_name || 'Unknown Patient',
-        age: patient.age || 45,
-        gender: patient.gender || 'Not specified',
-        occupation: patient.occupation || 'Not specified'
+        name: patient.title || 'Unknown Patient',
+        age: 45,
+        gender: 'Not specified',
+        occupation: 'Not specified'
       },
       clinicalTimeline: [
         {
-          date: new Date(patient.created_at || Date.now()).toLocaleDateString(),
+          date: new Date(patient.createdAt || Date.now()).toLocaleDateString(),
           session: 'Initial Assessment',
-          findings: patient.chief_complaint || 'No chief complaint recorded',
-          painLevel: extractPainLevel(patient.symptoms_description || '')
+          findings: (patient.clinicalPresentation as any)?.chiefComplaint || 'No chief complaint recorded',
+          painLevel: 5
         }
       ],
       painMap: {
@@ -403,7 +403,7 @@ export default function VirtualPatientsPage() {
     // Load movement data if available
     if (patient.motionData) {
       try {
-        const motionData = JSON.parse(patient.motionData);
+        const motionData = JSON.parse(patient.motionData || '{}');
         const analysis: MovementAnalysis = {
           capturedMovements: motionData.frames || [],
           compensationPatterns: [
@@ -432,7 +432,7 @@ export default function VirtualPatientsPage() {
     const correlation: ClinicalCorrelation = {
       soapIntegration: [
         {
-          complaint: patient.chief_complaint || 'Primary complaint',
+          complaint: (patient.clinicalPresentation as any)?.chiefComplaint || 'Primary complaint',
           movementCorrelation: 'Compensated movement pattern observed',
           severity: 'Moderate'
         }
@@ -459,7 +459,7 @@ export default function VirtualPatientsPage() {
       // Set default data to prevent crashes
       setEnhancedProfile({
         demographics: {
-          name: patient.patient_name || 'Unknown Patient',
+          name: patient.title || 'Unknown Patient',
           age: 45,
           gender: 'Not specified',
           occupation: 'Not specified'
@@ -562,7 +562,7 @@ export default function VirtualPatientsPage() {
     if (!patient) return;
     
     // Set animation description from patient data
-    const description = `${patient.chief_complaint || ''} ${patient.symptoms_description || ''} ${patient.assessment_plan?.primaryDiagnosis || ''}`.trim();
+    const description = `${(patient.clinicalPresentation as any)?.chiefComplaint || ''} ${(patient.clinicalPresentation as any)?.symptomsTimeline || ''} ${(patient.assessmentPlan as any)?.primaryDiagnosis || ''}`.trim();
     setAnimationDescription(description);
     
     toast({
@@ -804,10 +804,19 @@ export default function VirtualPatientsPage() {
       if (!selectedPatient) {
         targetPatient = {
           id: Date.now(),
-          patient_name: "Generated Patient",
-          chief_complaint: "Movement analysis from text description",
-          body_part: "general",
-          symptoms_description: clinicalText
+          title: "Generated Patient", 
+          userId: 1,
+          soapNoteId: null,
+          bodyPart: "general",
+          patientProfile: {},
+          clinicalPresentation: { chiefComplaint: "Movement analysis from text description" },
+          physicalFindings: {},
+          assessmentPlan: {},
+          motionData: null,
+          hasMotionData: false,
+          aiGenerated: false,
+          createdAt: new Date(),
+          updatedAt: new Date()
         } as SoapVirtualPatient;
         setSelectedPatient(targetPatient);
       }
@@ -1372,11 +1381,11 @@ export default function VirtualPatientsPage() {
                 ) : selectedPatient ? (
                   <div className="text-center py-8">
                     <Activity className="h-12 w-12 mx-auto mb-4 text-blue-600" />
-                    <h3 className="text-lg font-semibold mb-2">Patient Selected: {selectedPatient.patient_name || `Patient ${selectedPatient.id}`}</h3>
+                    <h3 className="text-lg font-semibold mb-2">Patient Selected: {selectedPatient.title || `Patient ${selectedPatient.id}`}</h3>
                     <p className="text-sm text-gray-600 mb-4">Animation system temporarily disabled for debugging</p>
                     <div className="space-y-2">
-                      <p><strong>Body Part:</strong> {selectedPatient.body_part || 'Not specified'}</p>
-                      <p><strong>Chief Complaint:</strong> {selectedPatient.chief_complaint || 'None recorded'}</p>
+                      <p><strong>Body Part:</strong> {selectedPatient.bodyPart || 'Not specified'}</p>
+                      <p><strong>Chief Complaint:</strong> {(selectedPatient.clinicalPresentation as any)?.chiefComplaint || 'None recorded'}</p>
                     </div>
                   </div>
                 ) : (
@@ -1524,7 +1533,7 @@ export default function VirtualPatientsPage() {
               <DialogTitle>Motion Capture & Analysis</DialogTitle>
             </DialogHeader>
             <MotionCapture 
-              onCaptureComplete={(captureData) => {
+              onComplete={(captureData) => {
                 console.log("Motion capture completed:", captureData);
                 setShowMotionCapture(false);
                 // Refresh patients list to show new patient

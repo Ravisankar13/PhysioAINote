@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { Helmet } from "react-helmet";
 import { useToast } from "@/hooks/use-toast";
@@ -6,8 +6,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ExternalLink, BookOpen, Info, Award, Calendar, Users } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ExternalLink, BookOpen, Info, Award, Calendar, Users, Video, Play, Clock, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
+import { apiRequest } from "@/lib/queryClient";
 import { 
   Pagination, 
   PaginationContent, 
@@ -35,6 +40,44 @@ interface ResearchArticle {
   updatedAt: string;
 }
 
+interface YouTubeVideoInfo {
+  title: string;
+  channel: string;
+  duration: number;
+  publishDate: string;
+}
+
+interface VideoAnalysisResult {
+  id: string;
+  videoInfo: YouTubeVideoInfo;
+  transcript: string;
+  clinicalAnalysis: {
+    conditionIdentified: string;
+    bodyPartsInvolved: string[];
+    treatmentTechniques: string[];
+    assessmentMethods: string[];
+    clinicalReasoning: string;
+    safetyConsiderations: string[];
+  };
+  relatedResearch: Array<{
+    title: string;
+    relevanceScore: number;
+    keyPoints: string[];
+    bodyPart: string;
+  }>;
+  treatmentRecommendations: {
+    evidenceBasedAlternatives: string[];
+    bestPractices: string[];
+    contraindications: string[];
+  };
+  educationalValue: {
+    learningPoints: string[];
+    skillsDemonstrated: string[];
+    clinicalReasoningInsights: string[];
+  };
+  timestamp: string;
+}
+
 // Map of body part categories to display names and colors
 const bodyPartInfo = {
   shoulder: { name: "Shoulder", color: "bg-blue-100 text-blue-800 hover:bg-blue-200" },
@@ -56,6 +99,462 @@ type BodyPartKey = keyof typeof bodyPartInfo;
 function formatDate(dateString: string): string {
   const date = new Date(dateString);
   return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+function formatDuration(seconds: number): string {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainingSeconds = seconds % 60;
+  
+  if (hours > 0) {
+    return `${hours}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+  }
+  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+}
+
+function VideoAnalysisComponent() {
+  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [analysisResult, setAnalysisResult] = useState<VideoAnalysisResult | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [validationResult, setValidationResult] = useState<{valid: boolean, videoInfo?: YouTubeVideoInfo, error?: string} | null>(null);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  // Validate YouTube URL
+  const validateUrl = async () => {
+    if (!youtubeUrl.trim()) {
+      toast({
+        title: "URL Required",
+        description: "Please enter a YouTube URL to validate",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const response = await apiRequest("/api/youtube/validate", {
+        method: "POST",
+        body: { url: youtubeUrl }
+      });
+
+      if (response.valid) {
+        setValidationResult({
+          valid: true,
+          videoInfo: response.videoInfo
+        });
+        toast({
+          title: "Valid YouTube URL",
+          description: "Video is accessible and ready for analysis",
+        });
+      }
+    } catch (error: any) {
+      setValidationResult({
+        valid: false,
+        error: error.message || "Invalid YouTube URL"
+      });
+      toast({
+        title: "Invalid URL",
+        description: error.message || "This YouTube video cannot be analyzed",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Analyze YouTube video
+  const analyzeVideo = async () => {
+    if (!youtubeUrl.trim()) {
+      toast({
+        title: "URL Required",
+        description: "Please enter a YouTube URL to analyze",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsAnalyzing(true);
+    try {
+      const response = await apiRequest("/api/youtube/analyze", {
+        method: "POST",
+        body: { url: youtubeUrl }
+      });
+
+      if (response.success) {
+        setAnalysisResult(response.analysis);
+        toast({
+          title: "Analysis Complete",
+          description: "YouTube video has been successfully analyzed",
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Analysis Failed",
+        description: error.message || "Failed to analyze YouTube video",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const clearAnalysis = () => {
+    setAnalysisResult(null);
+    setValidationResult(null);
+    setYoutubeUrl("");
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* URL Input Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Video className="h-5 w-5" />
+            YouTube Video Analysis
+          </CardTitle>
+          <CardDescription>
+            Analyze clinical videos from YouTube to extract educational insights and correlate with research evidence
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="youtube-url">YouTube Video URL</Label>
+            <div className="flex gap-2">
+              <Input
+                id="youtube-url"
+                placeholder="https://www.youtube.com/watch?v=..."
+                value={youtubeUrl}
+                onChange={(e) => setYoutubeUrl(e.target.value)}
+                className="flex-1"
+              />
+              <Button 
+                variant="outline" 
+                onClick={validateUrl}
+                disabled={!youtubeUrl.trim()}
+              >
+                Validate
+              </Button>
+            </div>
+          </div>
+
+          {/* Validation Result */}
+          {validationResult && (
+            <Alert className={validationResult.valid ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}>
+              <div className="flex items-center gap-2">
+                {validationResult.valid ? (
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                ) : (
+                  <AlertCircle className="h-4 w-4 text-red-600" />
+                )}
+                <AlertDescription>
+                  {validationResult.valid ? (
+                    <div>
+                      <p className="font-medium text-green-800">Video is valid and accessible</p>
+                      {validationResult.videoInfo && (
+                        <div className="mt-2 text-sm text-green-700">
+                          <p><strong>Title:</strong> {validationResult.videoInfo.title}</p>
+                          <p><strong>Channel:</strong> {validationResult.videoInfo.channel}</p>
+                          <p><strong>Duration:</strong> {formatDuration(validationResult.videoInfo.duration)}</p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-red-800">{validationResult.error}</p>
+                  )}
+                </AlertDescription>
+              </div>
+            </Alert>
+          )}
+
+          {/* Analysis Button */}
+          <div className="flex gap-2">
+            <Button 
+              onClick={analyzeVideo}
+              disabled={!youtubeUrl.trim() || isAnalyzing}
+              className="flex items-center gap-2"
+            >
+              {isAnalyzing ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Analyzing...
+                </>
+              ) : (
+                <>
+                  <Play className="h-4 w-4" />
+                  Analyze Video
+                </>
+              )}
+            </Button>
+            {analysisResult && (
+              <Button variant="outline" onClick={clearAnalysis}>
+                Clear Results
+              </Button>
+            )}
+          </div>
+
+          {/* Progress indicator */}
+          {isAnalyzing && (
+            <Alert className="border-blue-200 bg-blue-50">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <AlertDescription>
+                <div className="space-y-1">
+                  <p className="font-medium text-blue-800">Analyzing video content...</p>
+                  <p className="text-sm text-blue-700">This may take 2-3 minutes to complete audio transcription and AI analysis</p>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Analysis Results */}
+      {analysisResult && (
+        <div className="space-y-6">
+          {/* Video Information */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Info className="h-5 w-5" />
+                Video Information
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <h4 className="font-medium text-sm text-muted-foreground mb-1">Title</h4>
+                  <p className="text-sm">{analysisResult.videoInfo.title}</p>
+                </div>
+                <div>
+                  <h4 className="font-medium text-sm text-muted-foreground mb-1">Channel</h4>
+                  <p className="text-sm">{analysisResult.videoInfo.channelName}</p>
+                </div>
+                <div>
+                  <h4 className="font-medium text-sm text-muted-foreground mb-1">Duration</h4>
+                  <p className="text-sm">{formatDuration(analysisResult.videoInfo.duration)}</p>
+                </div>
+                <div>
+                  <h4 className="font-medium text-sm text-muted-foreground mb-1">Published</h4>
+                  <p className="text-sm">{analysisResult.videoInfo.publishDate}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Clinical Analysis */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Award className="h-5 w-5" />
+                Clinical Analysis
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <h4 className="font-medium text-sm text-muted-foreground mb-1">Condition Identified</h4>
+                <p className="text-sm">{analysisResult.clinicalAnalysis.conditionIdentified}</p>
+              </div>
+              
+              <div>
+                <h4 className="font-medium text-sm text-muted-foreground mb-1">Body Parts Involved</h4>
+                <div className="flex flex-wrap gap-1">
+                  {analysisResult.clinicalAnalysis.bodyPartsInvolved.map((part, index) => (
+                    <Badge key={index} variant="secondary">{part}</Badge>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <h4 className="font-medium text-sm text-muted-foreground mb-1">Treatment Techniques</h4>
+                <ul className="text-sm space-y-1">
+                  {analysisResult.clinicalAnalysis.treatmentTechniques.map((technique, index) => (
+                    <li key={index} className="flex items-start gap-1">
+                      <span className="text-blue-600">•</span>
+                      {technique}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div>
+                <h4 className="font-medium text-sm text-muted-foreground mb-1">Assessment Methods</h4>
+                <ul className="text-sm space-y-1">
+                  {analysisResult.clinicalAnalysis.assessmentMethods.map((method, index) => (
+                    <li key={index} className="flex items-start gap-1">
+                      <span className="text-green-600">•</span>
+                      {method}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div>
+                <h4 className="font-medium text-sm text-muted-foreground mb-1">Clinical Reasoning</h4>
+                <p className="text-sm">{analysisResult.clinicalAnalysis.clinicalReasoning}</p>
+              </div>
+
+              {analysisResult.clinicalAnalysis.safetyConsiderations.length > 0 && (
+                <div>
+                  <h4 className="font-medium text-sm text-muted-foreground mb-1">Safety Considerations</h4>
+                  <ul className="text-sm space-y-1">
+                    {analysisResult.clinicalAnalysis.safetyConsiderations.map((safety, index) => (
+                      <li key={index} className="flex items-start gap-1">
+                        <span className="text-red-600">•</span>
+                        {safety}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Educational Value */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <BookOpen className="h-5 w-5" />
+                Educational Value
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <h4 className="font-medium text-sm text-muted-foreground mb-1">Learning Points</h4>
+                <ul className="text-sm space-y-1">
+                  {analysisResult.educationalValue.learningPoints.map((point, index) => (
+                    <li key={index} className="flex items-start gap-1">
+                      <span className="text-blue-600">•</span>
+                      {point}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div>
+                <h4 className="font-medium text-sm text-muted-foreground mb-1">Skills Demonstrated</h4>
+                <ul className="text-sm space-y-1">
+                  {analysisResult.educationalValue.skillsDemonstrated.map((skill, index) => (
+                    <li key={index} className="flex items-start gap-1">
+                      <span className="text-green-600">•</span>
+                      {skill}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div>
+                <h4 className="font-medium text-sm text-muted-foreground mb-1">Clinical Reasoning Insights</h4>
+                <ul className="text-sm space-y-1">
+                  {analysisResult.educationalValue.clinicalReasoningInsights.map((insight, index) => (
+                    <li key={index} className="flex items-start gap-1">
+                      <span className="text-purple-600">•</span>
+                      {insight}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Related Research */}
+          {analysisResult.relatedResearch.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ExternalLink className="h-5 w-5" />
+                  Related Research
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {analysisResult.relatedResearch.map((research, index) => (
+                    <div key={index} className="border rounded-lg p-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <h4 className="font-medium text-sm">{research.title}</h4>
+                          <Badge variant="outline" className="mt-1">
+                            {research.bodyPart} • {research.relevanceScore}% relevant
+                          </Badge>
+                        </div>
+                      </div>
+                      <ul className="mt-2 text-sm space-y-1">
+                        {research.keyPoints.map((point, pointIndex) => (
+                          <li key={pointIndex} className="flex items-start gap-1">
+                            <span className="text-blue-600">•</span>
+                            {point}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Treatment Recommendations */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Award className="h-5 w-5" />
+                Treatment Recommendations
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <h4 className="font-medium text-sm text-muted-foreground mb-1">Evidence-Based Alternatives</h4>
+                <ul className="text-sm space-y-1">
+                  {analysisResult.treatmentRecommendations.evidenceBasedAlternatives.map((alt, index) => (
+                    <li key={index} className="flex items-start gap-1">
+                      <span className="text-green-600">•</span>
+                      {alt}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div>
+                <h4 className="font-medium text-sm text-muted-foreground mb-1">Best Practices</h4>
+                <ul className="text-sm space-y-1">
+                  {analysisResult.treatmentRecommendations.bestPractices.map((practice, index) => (
+                    <li key={index} className="flex items-start gap-1">
+                      <span className="text-blue-600">•</span>
+                      {practice}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div>
+                <h4 className="font-medium text-sm text-muted-foreground mb-1">Contraindications</h4>
+                <ul className="text-sm space-y-1">
+                  {analysisResult.treatmentRecommendations.contraindications.map((contra, index) => (
+                    <li key={index} className="flex items-start gap-1">
+                      <span className="text-red-600">•</span>
+                      {contra}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Video Transcript */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="h-5 w-5" />
+                Video Transcript
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="max-h-60 overflow-y-auto border rounded-lg p-4 bg-gray-50">
+                <p className="text-sm whitespace-pre-wrap">{analysisResult.transcript}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function ArticleCard({ article }: { article: ResearchArticle }) {
@@ -275,11 +774,18 @@ export default function Research() {
           <div className="text-center">
             <h1 className="text-3xl font-bold tracking-tight">Physiotherapy Research</h1>
             <p className="text-muted-foreground mt-1">
-              Browse peer-reviewed physiotherapy research articles organized by body part
+              Browse peer-reviewed research articles and analyze clinical videos
             </p>
           </div>
         
-        <Card>
+        <Tabs defaultValue="articles" className="w-full">
+          <TabsList className="grid w-full grid-cols-2 max-w-md mx-auto">
+            <TabsTrigger value="articles">Research Articles</TabsTrigger>
+            <TabsTrigger value="video-analysis">Video Analysis</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="articles">
+            <Card>
           <CardHeader className="pb-2">
             <CardTitle>Research Articles by Body Part</CardTitle>
             <CardDescription>
@@ -466,6 +972,12 @@ export default function Research() {
             </Tabs>
           </CardContent>
         </Card>
+          </TabsContent>
+          
+          <TabsContent value="video-analysis">
+            <VideoAnalysisComponent />
+          </TabsContent>
+        </Tabs>
       </div>
       </MembershipRequired>
     </div>

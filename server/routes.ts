@@ -37,6 +37,7 @@ import { virtualPatientService } from "./virtualPatientService";
 import { soapVirtualPatientService } from "./soapVirtualPatientService";
 import { documentGenerationService } from "./documentGenerationService";
 import { aiMovementGenerator } from "./aiMovementGenerator";
+import { youtubeAnalysisService } from "./youtubeAnalysisService";
 
 import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, exercises, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, competitionParticipants, soapNotes, insertSoapNoteSchema, bodyScans, insertBodyScanSchema, tournamentParticipants, diagnosisDuelTournaments, gameContent, virtualPatients, patternRecognitionScores } from "@shared/schema";
 import { ZodError, z } from "zod";
@@ -11202,6 +11203,103 @@ Respond in JSON format:
     } catch (error) {
       console.error('Error generating stick figure animation:', error);
       res.status(500).json({ error: error.message || 'Failed to generate animation' });
+    }
+  });
+
+  // ======================= YOUTUBE VIDEO ANALYSIS SYSTEM =======================
+
+  // Validate YouTube URL
+  app.post("/api/youtube/validate", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { url } = req.body;
+      
+      if (!url) {
+        return res.status(400).json({ error: 'YouTube URL is required' });
+      }
+
+      const isValid = youtubeAnalysisService.isValidYouTubeUrl(url);
+      
+      if (!isValid) {
+        return res.status(400).json({ error: 'Invalid YouTube URL format' });
+      }
+
+      // Get video information to confirm accessibility
+      const videoInfo = await youtubeAnalysisService.getVideoInfo(url);
+      
+      res.json({
+        valid: true,
+        videoInfo: {
+          title: videoInfo.title,
+          channel: videoInfo.channelName,
+          duration: videoInfo.duration,
+          publishDate: videoInfo.publishDate
+        }
+      });
+    } catch (error: any) {
+      console.error('YouTube URL validation error:', error);
+      res.status(400).json({ 
+        valid: false, 
+        error: error.message || 'Unable to access YouTube video'
+      });
+    }
+  });
+
+  // Analyze YouTube video
+  app.post("/api/youtube/analyze", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { url } = req.body;
+      
+      if (!url) {
+        return res.status(400).json({ error: 'YouTube URL is required' });
+      }
+
+      console.log(`Starting YouTube video analysis for user ${userId}: ${url}`);
+
+      // Perform comprehensive video analysis
+      const analysisResult = await youtubeAnalysisService.analyzeYouTubeVideo(url);
+      
+      res.json({
+        success: true,
+        analysis: analysisResult,
+        message: 'Video analysis completed successfully'
+      });
+
+    } catch (error: any) {
+      console.error('YouTube video analysis error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: error.message || 'Failed to analyze YouTube video'
+      });
+    }
+  });
+
+  // Get video information only (without full analysis)
+  app.post("/api/youtube/info", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { url } = req.body;
+      
+      if (!url) {
+        return res.status(400).json({ error: 'YouTube URL is required' });
+      }
+
+      const videoInfo = await youtubeAnalysisService.getVideoInfo(url);
+      
+      res.json({
+        success: true,
+        videoInfo
+      });
+
+    } catch (error: any) {
+      console.error('YouTube video info error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: error.message || 'Failed to get video information'
+      });
     }
   });
 

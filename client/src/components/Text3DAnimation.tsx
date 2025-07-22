@@ -145,13 +145,86 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
     headMesh.name = 'head';
     skeleton.add(headMesh);
     
-    // Pelvis - position based on scaled torso
-    const pelvisGeometry = new THREE.BoxGeometry(0.3, 0.2, 0.2);
+    // Create anatomically accurate pelvis with hip sockets
+    const pelvisGroup = new THREE.Group();
+    pelvisGroup.position.set(0, 0.9, 0);
+    pelvisGroup.name = 'pelvisGroup';
+    
+    // Main pelvis body (butterfly/bowl shape)
+    const pelvisShape = new THREE.Shape();
+    pelvisShape.moveTo(-0.15, 0);
+    pelvisShape.bezierCurveTo(-0.25, 0.05, -0.3, 0.1, -0.35, 0.15); // Left iliac wing
+    pelvisShape.lineTo(-0.35, 0.2);
+    pelvisShape.bezierCurveTo(-0.3, 0.22, -0.2, 0.2, -0.15, 0.15);
+    pelvisShape.lineTo(-0.1, 0.05);
+    pelvisShape.lineTo(0.1, 0.05);
+    pelvisShape.lineTo(0.15, 0.15);
+    pelvisShape.bezierCurveTo(0.2, 0.2, 0.3, 0.22, 0.35, 0.2); // Right iliac wing
+    pelvisShape.lineTo(0.35, 0.15);
+    pelvisShape.bezierCurveTo(0.3, 0.1, 0.25, 0.05, 0.15, 0);
+    pelvisShape.closePath();
+    
+    const pelvisExtrudeSettings = {
+      depth: 0.15,
+      bevelEnabled: true,
+      bevelThickness: 0.02,
+      bevelSize: 0.02,
+      bevelSegments: 3
+    };
+    
+    const pelvisGeometry = new THREE.ExtrudeGeometry(pelvisShape, pelvisExtrudeSettings);
     const pelvisMesh = new THREE.Mesh(pelvisGeometry, boneMaterial);
-    pelvisMesh.position.y = 0.9; // Base position for pelvis
-    pelvisMesh.name = 'pelvis';
-    skeleton.add(pelvisMesh);
-    bonesRef.current['pelvis'] = pelvisMesh;
+    pelvisMesh.rotation.x = -Math.PI / 2;
+    pelvisMesh.position.y = -0.1;
+    pelvisGroup.add(pelvisMesh);
+    
+    // Add hip sockets (acetabulum)
+    const socketGeometry = new THREE.SphereGeometry(0.06, 16, 16, 0, Math.PI);
+    
+    // Left hip socket
+    const leftSocket = new THREE.Mesh(socketGeometry, boneMaterial);
+    leftSocket.rotation.z = -Math.PI / 2;
+    leftSocket.position.set(-0.15, -0.05, 0);
+    leftSocket.name = 'leftHipSocket';
+    pelvisGroup.add(leftSocket);
+    
+    // Right hip socket
+    const rightSocket = new THREE.Mesh(socketGeometry, boneMaterial);
+    rightSocket.rotation.z = Math.PI / 2;
+    rightSocket.position.set(0.15, -0.05, 0);
+    rightSocket.name = 'rightHipSocket';
+    pelvisGroup.add(rightSocket);
+    
+    // Add pubic symphysis (front connection)
+    const pubicGeometry = new THREE.CylinderGeometry(0.03, 0.03, 0.25, 8);
+    const pubicBone = new THREE.Mesh(pubicGeometry, boneMaterial);
+    pubicBone.rotation.z = Math.PI / 2;
+    pubicBone.position.set(0, -0.1, 0.07);
+    pelvisGroup.add(pubicBone);
+    
+    // Add sacrum (tailbone area)
+    const sacrumShape = new THREE.Shape();
+    sacrumShape.moveTo(-0.05, 0);
+    sacrumShape.lineTo(0.05, 0);
+    sacrumShape.lineTo(0.03, -0.15);
+    sacrumShape.lineTo(-0.03, -0.15);
+    sacrumShape.closePath();
+    
+    const sacrumGeometry = new THREE.ExtrudeGeometry(sacrumShape, {
+      depth: 0.08,
+      bevelEnabled: true,
+      bevelThickness: 0.01,
+      bevelSize: 0.01,
+      bevelSegments: 2
+    });
+    
+    const sacrum = new THREE.Mesh(sacrumGeometry, boneMaterial);
+    sacrum.rotation.x = -Math.PI / 2;
+    sacrum.position.set(0, 0, -0.08);
+    pelvisGroup.add(sacrum);
+    
+    skeleton.add(pelvisGroup);
+    bonesRef.current['pelvis'] = pelvisMesh; // Reference the mesh, not the group
 
     // Create clavicles (collar bones) to connect shoulders to torso
     const clavicleGeometry = new THREE.CylinderGeometry(0.04, 0.04, 0.35, 8);
@@ -330,14 +403,16 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
     rightElbow.name = 'rightElbow';
     rightArmGroup.add(rightElbow);
 
-    // Hip joints
-    const leftHip = new THREE.Mesh(jointGeometry, jointMaterial);
-    leftHip.position.set(-0.15, 0.8, 0);
+    // Hip joints - Femoral heads (ball joints)
+    const femoralHeadGeometry = new THREE.SphereGeometry(0.05, 16, 16);
+    
+    const leftHip = new THREE.Mesh(femoralHeadGeometry, jointMaterial);
+    leftHip.position.set(-0.15, 0.9, 0); // At pelvis level
     leftHip.name = 'leftHip';
     skeleton.add(leftHip);
 
-    const rightHip = new THREE.Mesh(jointGeometry, jointMaterial);
-    rightHip.position.set(0.15, 0.8, 0);
+    const rightHip = new THREE.Mesh(femoralHeadGeometry, jointMaterial);
+    rightHip.position.set(0.15, 0.9, 0); // At pelvis level
     rightHip.name = 'rightHip';
     skeleton.add(rightHip);
 

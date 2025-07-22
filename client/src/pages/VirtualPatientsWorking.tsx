@@ -25,7 +25,9 @@ export default function VirtualPatientsWorking() {
     animation: true,
     textInput: false,
     limbControls: true,  // Changed to true to show Body Proportions by default
-    hipPathology: false
+    hipPathology: false,
+    kneePathology: false,
+    shoulderPathology: false
   });
   const [limbScales, setLimbScales] = useState({
     upperArm: 1.0,
@@ -39,6 +41,16 @@ export default function VirtualPatientsWorking() {
     neckAngle: 130,      // Normal: 125-135°
     anteversion: 12,     // Normal: 10-15°
     acetabularCoverage: 75  // Normal: 70-80%
+  });
+  const [kneePathology, setKneePathology] = useState({
+    varusValgus: 3,      // Normal: 0-5° valgus
+    patellaHeight: 1.0,  // Normal: 0.8-1.2 (Insall-Salvati ratio)
+    tibialTorsion: 10    // Normal: 0-20° external
+  });
+  const [shoulderPathology, setShoulderPathology] = useState({
+    scapularWinging: 3,    // Normal: 0-5°
+    acSeparation: 0,       // Grade 0-6
+    ghSubluxation: 0       // Normal: 0%
   });
 
   const { toast } = useToast();
@@ -342,6 +354,8 @@ export default function VirtualPatientsWorking() {
                         onTimeUpdate={(time) => setPlaybackTime(time)}
                         limbScales={limbScales}
                         hipPathology={hipPathology}
+                        kneePathology={kneePathology}
+                        shoulderPathology={shoulderPathology}
                       />
                     ) : (
                       <div className="bg-gray-50 rounded-lg p-6 text-center min-h-[300px] flex items-center justify-center">
@@ -874,6 +888,235 @@ export default function VirtualPatientsWorking() {
                             onClick={() => setHipPathology({ neckAngle: 130, anteversion: 12, acetabularCoverage: 60 })}
                           >
                             Hip Dysplasia
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </CollapsibleContent>
+                </Card>
+              </Collapsible>
+
+              {/* Knee Pathology Controls */}
+              <Collapsible 
+                open={expandedSections.kneePathology} 
+                onOpenChange={() => toggleSection('kneePathology')}
+              >
+                <Card>
+                  <CollapsibleTrigger asChild>
+                    <CardHeader className="cursor-pointer hover:bg-gray-50 transition-colors">
+                      <CardTitle className="text-lg font-semibold flex items-center justify-between">
+                        Knee Pathology
+                        {expandedSections.kneePathology ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                      </CardTitle>
+                    </CardHeader>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-3">
+                        {/* Varus/Valgus Angle */}
+                        <div>
+                          <label className="text-sm font-medium text-gray-700 flex justify-between">
+                            <span>Varus/Valgus Angle</span>
+                            <span>{kneePathology.varusValgus}°</span>
+                          </label>
+                          <div className="text-xs text-gray-500 mb-1">
+                            Varus &lt;0° | Normal: 0-5° | Valgus &gt;5°
+                          </div>
+                          <input
+                            type="range"
+                            min="-20"
+                            max="20"
+                            value={kneePathology.varusValgus}
+                            onChange={(e) => setKneePathology(prev => ({ ...prev, varusValgus: Number(e.target.value) }))}
+                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                          />
+                        </div>
+                        
+                        {/* Patella Height */}
+                        <div>
+                          <label className="text-sm font-medium text-gray-700 flex justify-between">
+                            <span>Patella Height (Insall-Salvati)</span>
+                            <span>{kneePathology.patellaHeight.toFixed(2)}</span>
+                          </label>
+                          <div className="text-xs text-gray-500 mb-1">
+                            Baja &lt;0.8 | Normal: 0.8-1.2 | Alta &gt;1.2
+                          </div>
+                          <input
+                            type="range"
+                            min="0.5"
+                            max="1.5"
+                            step="0.05"
+                            value={kneePathology.patellaHeight}
+                            onChange={(e) => setKneePathology(prev => ({ ...prev, patellaHeight: Number(e.target.value) }))}
+                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                          />
+                        </div>
+                        
+                        {/* Tibial Torsion */}
+                        <div>
+                          <label className="text-sm font-medium text-gray-700 flex justify-between">
+                            <span>Tibial Torsion</span>
+                            <span>{kneePathology.tibialTorsion}°</span>
+                          </label>
+                          <div className="text-xs text-gray-500 mb-1">
+                            Internal &lt;0° | Normal: 0-20° | External &gt;20°
+                          </div>
+                          <input
+                            type="range"
+                            min="-30"
+                            max="40"
+                            value={kneePathology.tibialTorsion}
+                            onChange={(e) => setKneePathology(prev => ({ ...prev, tibialTorsion: Number(e.target.value) }))}
+                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                          />
+                        </div>
+                      </div>
+                      
+                      {/* Preset Conditions */}
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-gray-700">Preset Conditions</label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setKneePathology({ varusValgus: 3, patellaHeight: 1.0, tibialTorsion: 10 })}
+                          >
+                            Normal Knee
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setKneePathology({ varusValgus: -10, patellaHeight: 1.0, tibialTorsion: 10 })}
+                          >
+                            Genu Varum
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setKneePathology({ varusValgus: 15, patellaHeight: 1.0, tibialTorsion: 10 })}
+                          >
+                            Genu Valgum
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setKneePathology({ varusValgus: 3, patellaHeight: 1.3, tibialTorsion: 10 })}
+                          >
+                            Patella Alta
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </CollapsibleContent>
+                </Card>
+              </Collapsible>
+
+              {/* Shoulder Pathology Controls */}
+              <Collapsible 
+                open={expandedSections.shoulderPathology} 
+                onOpenChange={() => toggleSection('shoulderPathology')}
+              >
+                <Card>
+                  <CollapsibleTrigger asChild>
+                    <CardHeader className="cursor-pointer hover:bg-gray-50 transition-colors">
+                      <CardTitle className="text-lg font-semibold flex items-center justify-between">
+                        Shoulder Pathology
+                        {expandedSections.shoulderPathology ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                      </CardTitle>
+                    </CardHeader>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-3">
+                        {/* Scapular Winging */}
+                        <div>
+                          <label className="text-sm font-medium text-gray-700 flex justify-between">
+                            <span>Scapular Winging</span>
+                            <span>{shoulderPathology.scapularWinging}°</span>
+                          </label>
+                          <div className="text-xs text-gray-500 mb-1">
+                            Normal: 0-5° | Mild: 5-15° | Severe: &gt;15°
+                          </div>
+                          <input
+                            type="range"
+                            min="0"
+                            max="30"
+                            value={shoulderPathology.scapularWinging}
+                            onChange={(e) => setShoulderPathology(prev => ({ ...prev, scapularWinging: Number(e.target.value) }))}
+                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                          />
+                        </div>
+                        
+                        {/* AC Joint Separation */}
+                        <div>
+                          <label className="text-sm font-medium text-gray-700 flex justify-between">
+                            <span>AC Joint Separation</span>
+                            <span>Grade {shoulderPathology.acSeparation}</span>
+                          </label>
+                          <div className="text-xs text-gray-500 mb-1">
+                            Normal: 0 | Grade I-III: Ligament injury | Grade IV-VI: Complete separation
+                          </div>
+                          <input
+                            type="range"
+                            min="0"
+                            max="6"
+                            value={shoulderPathology.acSeparation}
+                            onChange={(e) => setShoulderPathology(prev => ({ ...prev, acSeparation: Number(e.target.value) }))}
+                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                          />
+                        </div>
+                        
+                        {/* GH Subluxation */}
+                        <div>
+                          <label className="text-sm font-medium text-gray-700 flex justify-between">
+                            <span>GH Subluxation</span>
+                            <span>{shoulderPathology.ghSubluxation}%</span>
+                          </label>
+                          <div className="text-xs text-gray-500 mb-1">
+                            Normal: 0% | Mild: 25% | Moderate: 50% | Severe: &gt;50%
+                          </div>
+                          <input
+                            type="range"
+                            min="0"
+                            max="75"
+                            value={shoulderPathology.ghSubluxation}
+                            onChange={(e) => setShoulderPathology(prev => ({ ...prev, ghSubluxation: Number(e.target.value) }))}
+                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                          />
+                        </div>
+                      </div>
+                      
+                      {/* Preset Conditions */}
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-gray-700">Preset Conditions</label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShoulderPathology({ scapularWinging: 3, acSeparation: 0, ghSubluxation: 0 })}
+                          >
+                            Normal Shoulder
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShoulderPathology({ scapularWinging: 20, acSeparation: 0, ghSubluxation: 0 })}
+                          >
+                            Scapular Dyskinesis
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShoulderPathology({ scapularWinging: 3, acSeparation: 3, ghSubluxation: 0 })}
+                          >
+                            AC Joint Injury
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShoulderPathology({ scapularWinging: 3, acSeparation: 0, ghSubluxation: 50 })}
+                          >
+                            GH Instability
                           </Button>
                         </div>
                       </div>

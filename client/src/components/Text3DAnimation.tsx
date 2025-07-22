@@ -18,6 +18,16 @@ interface Text3DAnimationProps {
     anteversion: number;
     acetabularCoverage: number;
   };
+  kneePathology?: {
+    varusValgus: number;
+    patellaHeight: number;
+    tibialTorsion: number;
+  };
+  shoulderPathology?: {
+    scapularWinging: number;
+    acSeparation: number;
+    ghSubluxation: number;
+  };
 }
 
 interface AnimationKeyframe {
@@ -41,6 +51,14 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
   neckAngle: 130,
   anteversion: 12,
   acetabularCoverage: 75
+}, kneePathology = {
+  varusValgus: 3,
+  patellaHeight: 1.0,
+  tibialTorsion: 10
+}, shoulderPathology = {
+  scapularWinging: 3,
+  acSeparation: 0,
+  ghSubluxation: 0
 } }: Text3DAnimationProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene>();
@@ -258,9 +276,21 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
     const upperArmGeometry = new THREE.CylinderGeometry(0.05, 0.045, upperArmLength, 8);
     const forearmGeometry = new THREE.CylinderGeometry(0.045, 0.04, forearmLength, 8);
     
-    // Left arm group for hierarchical transformation
+    // Left arm group for hierarchical transformation with pathology
     const leftArmGroup = new THREE.Group();
-    leftArmGroup.position.set(-0.25, torsoHeight + 0.9 - 0.15, 0); // Position at shoulder level
+    const baseShoulderHeight = torsoHeight + 0.9 - 0.15;
+    
+    // Apply AC separation (vertical displacement)
+    const acSeparationOffset = shoulderPathology.acSeparation * 0.02; // Each grade adds 2cm
+    
+    // Apply GH subluxation (inferior displacement and forward translation)
+    const ghSubluxationOffset = (shoulderPathology.ghSubluxation / 100) * 0.1; // Percentage to offset
+    
+    leftArmGroup.position.set(
+      -0.25, 
+      baseShoulderHeight - acSeparationOffset - ghSubluxationOffset, 
+      ghSubluxationOffset * 0.5  // Forward displacement with subluxation
+    );
     leftArmGroup.name = 'leftArmGroup';
     
     // Left upper arm
@@ -279,9 +309,13 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
 
     skeleton.add(leftArmGroup);
 
-    // Right arm group for hierarchical transformation
+    // Right arm group for hierarchical transformation with pathology
     const rightArmGroup = new THREE.Group();
-    rightArmGroup.position.set(0.25, torsoHeight + 0.9 - 0.15, 0); // Position at shoulder level
+    rightArmGroup.position.set(
+      0.25, 
+      baseShoulderHeight - acSeparationOffset - ghSubluxationOffset, 
+      ghSubluxationOffset * 0.5  // Forward displacement with subluxation
+    );
     rightArmGroup.name = 'rightArmGroup';
     
     // Right upper arm
@@ -339,17 +373,26 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
     
     const scapula3D = new THREE.ExtrudeGeometry(scapulaGeometry, scapulaExtrudeSettings);
     
-    // Left scapula
+    // Left scapula with winging pathology
     const leftScapula = new THREE.Mesh(scapula3D, boneMaterial);
     leftScapula.position.set(-0.22, torsoHeight + 0.9 - 0.25, -0.12); // Behind and to the side of the torso
-    leftScapula.rotation.set(0, -0.3, 0); // Angle it appropriately
+    
+    // Apply scapular winging
+    const wingingRad = (shoulderPathology.scapularWinging * Math.PI) / 180;
+    leftScapula.rotation.set(0, -0.3 - wingingRad, 0); // Add winging rotation
+    leftScapula.position.z = -0.12 - (wingingRad * 0.1); // Move backward with winging
+    
     leftScapula.name = 'leftScapula';
     skeleton.add(leftScapula);
     
-    // Right scapula
+    // Right scapula with winging pathology
     const rightScapula = new THREE.Mesh(scapula3D, boneMaterial);
     rightScapula.position.set(0.22, torsoHeight + 0.9 - 0.25, -0.12); // Behind and to the side of the torso
-    rightScapula.rotation.set(0, 0.3, 0); // Angle it appropriately
+    
+    // Apply scapular winging
+    rightScapula.rotation.set(0, 0.3 + wingingRad, 0); // Add winging rotation
+    rightScapula.position.z = -0.12 - (wingingRad * 0.1); // Move backward with winging
+    
     rightScapula.scale.x = -1; // Mirror for right side
     rightScapula.name = 'rightScapula';
     skeleton.add(rightScapula);
@@ -376,9 +419,18 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
     skeleton.add(leftThigh);
     bonesRef.current['leftThigh'] = leftThigh;
 
-    // Left shin
+    // Left shin with knee pathology
     const leftShin = new THREE.Mesh(shinGeometry, boneMaterial);
     leftShin.position.set(-0.15, 0.85 - thighLength - shinLength / 2, 0); // Adjusted for raised thigh
+    
+    // Apply varus/valgus angle
+    const varusValgusRad = (kneePathology.varusValgus * Math.PI) / 180;
+    leftShin.rotation.z = -varusValgusRad; // Negative for left side
+    
+    // Apply tibial torsion
+    const tibialTorsionRad = (kneePathology.tibialTorsion * Math.PI) / 180;
+    leftShin.rotation.y = tibialTorsionRad * 0.5;
+    
     leftShin.name = 'leftShin';
     skeleton.add(leftShin);
     bonesRef.current['leftShin'] = leftShin;
@@ -397,9 +449,16 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
     skeleton.add(rightThigh);
     bonesRef.current['rightThigh'] = rightThigh;
 
-    // Right shin
+    // Right shin with knee pathology
     const rightShin = new THREE.Mesh(shinGeometry, boneMaterial);
     rightShin.position.set(0.15, 0.85 - thighLength - shinLength / 2, 0); // Adjusted for raised thigh
+    
+    // Apply varus/valgus angle (opposite for right side)
+    rightShin.rotation.z = varusValgusRad;
+    
+    // Apply tibial torsion (opposite for right side)
+    rightShin.rotation.y = -tibialTorsionRad * 0.5;
+    
     rightShin.name = 'rightShin';
     skeleton.add(rightShin);
     bonesRef.current['rightShin'] = rightShin;
@@ -442,16 +501,34 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
     rightHip.name = 'rightHip';
     skeleton.add(rightHip);
 
-    // Knee joints - positioned between thigh and shin
+    // Knee joints - positioned between thigh and shin with varus/valgus adjustment
     const leftKnee = new THREE.Mesh(jointGeometry, jointMaterial);
-    leftKnee.position.set(-0.15, 0.85 - thighLength, 0); // Adjusted for raised hip
+    const leftKneeOffset = Math.sin(-varusValgusRad) * shinLength * 0.5;
+    leftKnee.position.set(-0.15 + leftKneeOffset, 0.85 - thighLength, 0); 
     leftKnee.name = 'leftKnee';
     skeleton.add(leftKnee);
 
     const rightKnee = new THREE.Mesh(jointGeometry, jointMaterial);
-    rightKnee.position.set(0.15, 0.85 - thighLength, 0); // Adjusted for raised hip
+    const rightKneeOffset = Math.sin(varusValgusRad) * shinLength * 0.5;
+    rightKnee.position.set(0.15 + rightKneeOffset, 0.85 - thighLength, 0);
     rightKnee.name = 'rightKnee';
     skeleton.add(rightKnee);
+    
+    // Patella (kneecap) with adjustable height
+    const patellaGeometry = new THREE.SphereGeometry(0.03, 8, 8);
+    const patellaOffset = (kneePathology.patellaHeight - 1.0) * 0.1; // Convert ratio to offset
+    
+    const leftPatella = new THREE.Mesh(patellaGeometry, boneMaterial);
+    leftPatella.position.set(-0.15, 0.85 - thighLength + patellaOffset, 0.05); // Slightly forward
+    leftPatella.scale.set(1.2, 1, 0.8); // Flattened shape
+    leftPatella.name = 'leftPatella';
+    skeleton.add(leftPatella);
+    
+    const rightPatella = new THREE.Mesh(patellaGeometry, boneMaterial);
+    rightPatella.position.set(0.15, 0.85 - thighLength + patellaOffset, 0.05); // Slightly forward
+    rightPatella.scale.set(1.2, 1, 0.8); // Flattened shape
+    rightPatella.name = 'rightPatella';
+    skeleton.add(rightPatella);
 
     // Ankle joints - positioned at the end of shin
     const leftAnkle = new THREE.Mesh(jointGeometry, jointMaterial);

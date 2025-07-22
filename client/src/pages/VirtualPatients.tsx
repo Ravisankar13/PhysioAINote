@@ -1733,7 +1733,7 @@ export default function VirtualPatientsPage() {
                     </div>
 
                     {/* Animation Display */}
-                    <div className="h-64 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center relative overflow-hidden">
+                    <div className="h-96 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center relative overflow-hidden">
                       {selectedPatient.motionData ? (
                         <div className="w-full h-full">
                           {currentView === 'anterior' ? (

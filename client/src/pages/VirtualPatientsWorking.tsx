@@ -52,6 +52,7 @@ export default function VirtualPatientsWorking() {
     acSeparation: 0,       // Grade 0-6
     ghSubluxation: 0       // Normal: 0%
   });
+  const [activeTab, setActiveTab] = useState<'body-proportions' | 'hip-pathology' | 'knee-pathology' | 'shoulder-pathology'>('body-proportions');
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -685,483 +686,478 @@ export default function VirtualPatientsWorking() {
                 </CardContent>
               </Card>
 
-              {/* Limb Length Controls */}
-              <Collapsible 
-                open={expandedSections.limbControls} 
-                onOpenChange={() => toggleSection('limbControls')}
-              >
-                <Card>
-                  <CollapsibleTrigger asChild>
-                    <CardHeader className="cursor-pointer hover:bg-gray-50 transition-colors">
-                      <CardTitle className="text-lg font-semibold flex items-center justify-between">
-                        Body Proportions
-                        {expandedSections.limbControls ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                      </CardTitle>
-                    </CardHeader>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <CardContent className="space-y-4">
-                      <div className="space-y-3">
-                        {/* Overall Scale */}
-                        <div>
-                          <label className="text-sm font-medium text-gray-700 flex justify-between">
-                            <span>Overall Size</span>
-                            <span>{(limbScales.overall * 100).toFixed(0)}%</span>
-                          </label>
-                          <input
-                            type="range"
-                            min="50"
-                            max="150"
-                            value={limbScales.overall * 100}
-                            onChange={(e) => setLimbScales(prev => ({ ...prev, overall: Number(e.target.value) / 100 }))}
-                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                          />
-                        </div>
-                        
-                        {/* Torso */}
-                        <div>
-                          <label className="text-sm font-medium text-gray-700 flex justify-between">
-                            <span>Torso Height</span>
-                            <span>{(limbScales.torso * 100).toFixed(0)}%</span>
-                          </label>
-                          <input
-                            type="range"
-                            min="50"
-                            max="150"
-                            value={limbScales.torso * 100}
-                            onChange={(e) => setLimbScales(prev => ({ ...prev, torso: Number(e.target.value) / 100 }))}
-                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                          />
-                        </div>
-                        
-                        {/* Upper Arm */}
-                        <div>
-                          <label className="text-sm font-medium text-gray-700 flex justify-between">
-                            <span>Upper Arm</span>
-                            <span>{(limbScales.upperArm * 100).toFixed(0)}%</span>
-                          </label>
-                          <input
-                            type="range"
-                            min="50"
-                            max="150"
-                            value={limbScales.upperArm * 100}
-                            onChange={(e) => setLimbScales(prev => ({ ...prev, upperArm: Number(e.target.value) / 100 }))}
-                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                          />
-                        </div>
-                        
-                        {/* Forearm */}
-                        <div>
-                          <label className="text-sm font-medium text-gray-700 flex justify-between">
-                            <span>Forearm</span>
-                            <span>{(limbScales.forearm * 100).toFixed(0)}%</span>
-                          </label>
-                          <input
-                            type="range"
-                            min="50"
-                            max="150"
-                            value={limbScales.forearm * 100}
-                            onChange={(e) => setLimbScales(prev => ({ ...prev, forearm: Number(e.target.value) / 100 }))}
-                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                          />
-                        </div>
-                        
-                        {/* Thigh */}
-                        <div>
-                          <label className="text-sm font-medium text-gray-700 flex justify-between">
-                            <span>Thigh</span>
-                            <span>{(limbScales.thigh * 100).toFixed(0)}%</span>
-                          </label>
-                          <input
-                            type="range"
-                            min="50"
-                            max="150"
-                            value={limbScales.thigh * 100}
-                            onChange={(e) => setLimbScales(prev => ({ ...prev, thigh: Number(e.target.value) / 100 }))}
-                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                          />
-                        </div>
-                        
-                        {/* Shin */}
-                        <div>
-                          <label className="text-sm font-medium text-gray-700 flex justify-between">
-                            <span>Shin</span>
-                            <span>{(limbScales.shin * 100).toFixed(0)}%</span>
-                          </label>
-                          <input
-                            type="range"
-                            min="50"
-                            max="150"
-                            value={limbScales.shin * 100}
-                            onChange={(e) => setLimbScales(prev => ({ ...prev, shin: Number(e.target.value) / 100 }))}
-                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                          />
-                        </div>
-                      </div>
-                      
-                      {/* Reset Button */}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setLimbScales({
-                          upperArm: 1.0,
-                          forearm: 1.0,
-                          thigh: 1.0,
-                          shin: 1.0,
-                          torso: 1.0,
-                          overall: 1.0
-                        })}
-                        className="w-full"
-                      >
-                        Reset to Default
-                      </Button>
-                    </CardContent>
-                  </CollapsibleContent>
-                </Card>
-              </Collapsible>
+              {/* Tabbed Interface for Body Parameters */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg font-semibold">Body Parameters</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {/* Tab Headers */}
+                  <div className="flex border-b">
+                    <button
+                      onClick={() => setActiveTab('body-proportions')}
+                      className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+                        activeTab === 'body-proportions'
+                          ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50'
+                          : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+                      }`}
+                    >
+                      Body Proportions
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('hip-pathology')}
+                      className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+                        activeTab === 'hip-pathology'
+                          ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50'
+                          : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+                      }`}
+                    >
+                      Hip Pathology
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('knee-pathology')}
+                      className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+                        activeTab === 'knee-pathology'
+                          ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50'
+                          : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+                      }`}
+                    >
+                      Knee Pathology
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('shoulder-pathology')}
+                      className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+                        activeTab === 'shoulder-pathology'
+                          ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50'
+                          : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+                      }`}
+                    >
+                      Shoulder Pathology
+                    </button>
+                  </div>
 
-              {/* Hip Pathology Controls */}
-              <Collapsible 
-                open={expandedSections.hipPathology} 
-                onOpenChange={() => toggleSection('hipPathology')}
-              >
-                <Card>
-                  <CollapsibleTrigger asChild>
-                    <CardHeader className="cursor-pointer hover:bg-gray-50 transition-colors">
-                      <CardTitle className="text-lg font-semibold flex items-center justify-between">
-                        Hip Pathology
-                        {expandedSections.hipPathology ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                      </CardTitle>
-                    </CardHeader>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <CardContent className="space-y-4">
-                      <div className="space-y-3">
-                        {/* Femoral Neck Angle */}
-                        <div>
-                          <label className="text-sm font-medium text-gray-700 flex justify-between">
-                            <span>Femoral Neck Angle</span>
-                            <span>{hipPathology.neckAngle}°</span>
-                          </label>
-                          <div className="text-xs text-gray-500 mb-1">
-                            Normal: 125-135° | Coxa Vara: &lt;120° | Coxa Valga: &gt;140°
+                  {/* Tab Content */}
+                  <div className="p-4">
+                    {/* Body Proportions Tab */}
+                    {activeTab === 'body-proportions' && (
+                      <div className="space-y-4">
+                        <div className="space-y-3">
+                          {/* Overall Scale */}
+                          <div>
+                            <label className="text-sm font-medium text-gray-700 flex justify-between">
+                              <span>Overall Size</span>
+                              <span>{(limbScales.overall * 100).toFixed(0)}%</span>
+                            </label>
+                            <input
+                              type="range"
+                              min="50"
+                              max="150"
+                              value={limbScales.overall * 100}
+                              onChange={(e) => setLimbScales(prev => ({ ...prev, overall: Number(e.target.value) / 100 }))}
+                              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                            />
                           </div>
-                          <input
-                            type="range"
-                            min="100"
-                            max="160"
-                            value={hipPathology.neckAngle}
-                            onChange={(e) => setHipPathology(prev => ({ ...prev, neckAngle: Number(e.target.value) }))}
-                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                          />
+                          
+                          {/* Torso */}
+                          <div>
+                            <label className="text-sm font-medium text-gray-700 flex justify-between">
+                              <span>Torso Height</span>
+                              <span>{(limbScales.torso * 100).toFixed(0)}%</span>
+                            </label>
+                            <input
+                              type="range"
+                              min="50"
+                              max="150"
+                              value={limbScales.torso * 100}
+                              onChange={(e) => setLimbScales(prev => ({ ...prev, torso: Number(e.target.value) / 100 }))}
+                              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                            />
+                          </div>
+                          
+                          {/* Upper Arm */}
+                          <div>
+                            <label className="text-sm font-medium text-gray-700 flex justify-between">
+                              <span>Upper Arm</span>
+                              <span>{(limbScales.upperArm * 100).toFixed(0)}%</span>
+                            </label>
+                            <input
+                              type="range"
+                              min="50"
+                              max="150"
+                              value={limbScales.upperArm * 100}
+                              onChange={(e) => setLimbScales(prev => ({ ...prev, upperArm: Number(e.target.value) / 100 }))}
+                              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                            />
+                          </div>
+                          
+                          {/* Forearm */}
+                          <div>
+                            <label className="text-sm font-medium text-gray-700 flex justify-between">
+                              <span>Forearm</span>
+                              <span>{(limbScales.forearm * 100).toFixed(0)}%</span>
+                            </label>
+                            <input
+                              type="range"
+                              min="50"
+                              max="150"
+                              value={limbScales.forearm * 100}
+                              onChange={(e) => setLimbScales(prev => ({ ...prev, forearm: Number(e.target.value) / 100 }))}
+                              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                            />
+                          </div>
+                          
+                          {/* Thigh */}
+                          <div>
+                            <label className="text-sm font-medium text-gray-700 flex justify-between">
+                              <span>Thigh</span>
+                              <span>{(limbScales.thigh * 100).toFixed(0)}%</span>
+                            </label>
+                            <input
+                              type="range"
+                              min="50"
+                              max="150"
+                              value={limbScales.thigh * 100}
+                              onChange={(e) => setLimbScales(prev => ({ ...prev, thigh: Number(e.target.value) / 100 }))}
+                              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                            />
+                          </div>
+                          
+                          {/* Shin */}
+                          <div>
+                            <label className="text-sm font-medium text-gray-700 flex justify-between">
+                              <span>Shin</span>
+                              <span>{(limbScales.shin * 100).toFixed(0)}%</span>
+                            </label>
+                            <input
+                              type="range"
+                              min="50"
+                              max="150"
+                              value={limbScales.shin * 100}
+                              onChange={(e) => setLimbScales(prev => ({ ...prev, shin: Number(e.target.value) / 100 }))}
+                              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                            />
+                          </div>
                         </div>
                         
-                        {/* Femoral Anteversion */}
-                        <div>
-                          <label className="text-sm font-medium text-gray-700 flex justify-between">
-                            <span>Femoral Anteversion</span>
-                            <span>{hipPathology.anteversion}°</span>
-                          </label>
-                          <div className="text-xs text-gray-500 mb-1">
-                            Normal: 10-15° | Retroversion: &lt;0° | Excessive: &gt;25°
-                          </div>
-                          <input
-                            type="range"
-                            min="-20"
-                            max="40"
-                            value={hipPathology.anteversion}
-                            onChange={(e) => setHipPathology(prev => ({ ...prev, anteversion: Number(e.target.value) }))}
-                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                          />
-                        </div>
-                        
-                        {/* Acetabular Coverage */}
-                        <div>
-                          <label className="text-sm font-medium text-gray-700 flex justify-between">
-                            <span>Acetabular Coverage</span>
-                            <span>{hipPathology.acetabularCoverage}%</span>
-                          </label>
-                          <div className="text-xs text-gray-500 mb-1">
-                            Normal: 70-80% | Dysplasia: &lt;70% | Overcoverage: &gt;85%
-                          </div>
-                          <input
-                            type="range"
-                            min="50"
-                            max="100"
-                            value={hipPathology.acetabularCoverage}
-                            onChange={(e) => setHipPathology(prev => ({ ...prev, acetabularCoverage: Number(e.target.value) }))}
-                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                          />
-                        </div>
+                        {/* Reset Button */}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setLimbScales({
+                            upperArm: 1.0,
+                            forearm: 1.0,
+                            thigh: 1.0,
+                            shin: 1.0,
+                            torso: 1.0,
+                            overall: 1.0
+                          })}
+                          className="w-full"
+                        >
+                          Reset to Default
+                        </Button>
                       </div>
-                      
-                      {/* Preset Conditions */}
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700">Preset Conditions</label>
-                        <div className="grid grid-cols-2 gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setHipPathology({ neckAngle: 130, anteversion: 12, acetabularCoverage: 75 })}
-                          >
-                            Normal Hip
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setHipPathology({ neckAngle: 110, anteversion: 12, acetabularCoverage: 75 })}
-                          >
-                            Coxa Vara
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setHipPathology({ neckAngle: 150, anteversion: 12, acetabularCoverage: 75 })}
-                          >
-                            Coxa Valga
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setHipPathology({ neckAngle: 130, anteversion: 12, acetabularCoverage: 60 })}
-                          >
-                            Hip Dysplasia
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </CollapsibleContent>
-                </Card>
-              </Collapsible>
+                    )}
 
-              {/* Knee Pathology Controls */}
-              <Collapsible 
-                open={expandedSections.kneePathology} 
-                onOpenChange={() => toggleSection('kneePathology')}
-              >
-                <Card>
-                  <CollapsibleTrigger asChild>
-                    <CardHeader className="cursor-pointer hover:bg-gray-50 transition-colors">
-                      <CardTitle className="text-lg font-semibold flex items-center justify-between">
-                        Knee Pathology
-                        {expandedSections.kneePathology ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                      </CardTitle>
-                    </CardHeader>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <CardContent className="space-y-4">
-                      <div className="space-y-3">
-                        {/* Varus/Valgus Angle */}
-                        <div>
-                          <label className="text-sm font-medium text-gray-700 flex justify-between">
-                            <span>Varus/Valgus Angle</span>
-                            <span>{kneePathology.varusValgus}°</span>
-                          </label>
-                          <div className="text-xs text-gray-500 mb-1">
-                            Varus &lt;0° | Normal: 0-5° | Valgus &gt;5°
+                    {/* Hip Pathology Tab */}
+                    {activeTab === 'hip-pathology' && (
+                      <div className="space-y-4">
+                        <div className="space-y-3">
+                          {/* Femoral Neck Angle */}
+                          <div>
+                            <label className="text-sm font-medium text-gray-700 flex justify-between">
+                              <span>Femoral Neck Angle</span>
+                              <span>{hipPathology.neckAngle}°</span>
+                            </label>
+                            <div className="text-xs text-gray-500 mb-1">
+                              Normal: 125-135° | Coxa Vara: &lt;120° | Coxa Valga: &gt;140°
+                            </div>
+                            <input
+                              type="range"
+                              min="100"
+                              max="160"
+                              value={hipPathology.neckAngle}
+                              onChange={(e) => setHipPathology(prev => ({ ...prev, neckAngle: Number(e.target.value) }))}
+                              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                            />
                           </div>
-                          <input
-                            type="range"
-                            min="-20"
-                            max="20"
-                            value={kneePathology.varusValgus}
-                            onChange={(e) => setKneePathology(prev => ({ ...prev, varusValgus: Number(e.target.value) }))}
-                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                          />
+                          
+                          {/* Femoral Anteversion */}
+                          <div>
+                            <label className="text-sm font-medium text-gray-700 flex justify-between">
+                              <span>Femoral Anteversion</span>
+                              <span>{hipPathology.anteversion}°</span>
+                            </label>
+                            <div className="text-xs text-gray-500 mb-1">
+                              Normal: 10-15° | Retroversion: &lt;0° | Excessive: &gt;25°
+                            </div>
+                            <input
+                              type="range"
+                              min="-20"
+                              max="40"
+                              value={hipPathology.anteversion}
+                              onChange={(e) => setHipPathology(prev => ({ ...prev, anteversion: Number(e.target.value) }))}
+                              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                            />
+                          </div>
+                          
+                          {/* Acetabular Coverage */}
+                          <div>
+                            <label className="text-sm font-medium text-gray-700 flex justify-between">
+                              <span>Acetabular Coverage</span>
+                              <span>{hipPathology.acetabularCoverage}%</span>
+                            </label>
+                            <div className="text-xs text-gray-500 mb-1">
+                              Normal: 70-80% | Dysplasia: &lt;70% | Overcoverage: &gt;85%
+                            </div>
+                            <input
+                              type="range"
+                              min="50"
+                              max="100"
+                              value={hipPathology.acetabularCoverage}
+                              onChange={(e) => setHipPathology(prev => ({ ...prev, acetabularCoverage: Number(e.target.value) }))}
+                              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                            />
+                          </div>
                         </div>
                         
-                        {/* Patella Height */}
-                        <div>
-                          <label className="text-sm font-medium text-gray-700 flex justify-between">
-                            <span>Patella Height (Insall-Salvati)</span>
-                            <span>{kneePathology.patellaHeight.toFixed(2)}</span>
-                          </label>
-                          <div className="text-xs text-gray-500 mb-1">
-                            Baja &lt;0.8 | Normal: 0.8-1.2 | Alta &gt;1.2
+                        {/* Preset Conditions */}
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-gray-700">Preset Conditions</label>
+                          <div className="grid grid-cols-2 gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setHipPathology({ neckAngle: 130, anteversion: 12, acetabularCoverage: 75 })}
+                            >
+                              Normal Hip
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setHipPathology({ neckAngle: 110, anteversion: 12, acetabularCoverage: 75 })}
+                            >
+                              Coxa Vara
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setHipPathology({ neckAngle: 150, anteversion: 12, acetabularCoverage: 75 })}
+                            >
+                              Coxa Valga
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setHipPathology({ neckAngle: 130, anteversion: 12, acetabularCoverage: 60 })}
+                            >
+                              Hip Dysplasia
+                            </Button>
                           </div>
-                          <input
-                            type="range"
-                            min="0.5"
-                            max="1.5"
-                            step="0.05"
-                            value={kneePathology.patellaHeight}
-                            onChange={(e) => setKneePathology(prev => ({ ...prev, patellaHeight: Number(e.target.value) }))}
-                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                          />
-                        </div>
-                        
-                        {/* Tibial Torsion */}
-                        <div>
-                          <label className="text-sm font-medium text-gray-700 flex justify-between">
-                            <span>Tibial Torsion</span>
-                            <span>{kneePathology.tibialTorsion}°</span>
-                          </label>
-                          <div className="text-xs text-gray-500 mb-1">
-                            Internal &lt;0° | Normal: 0-20° | External &gt;20°
-                          </div>
-                          <input
-                            type="range"
-                            min="-30"
-                            max="40"
-                            value={kneePathology.tibialTorsion}
-                            onChange={(e) => setKneePathology(prev => ({ ...prev, tibialTorsion: Number(e.target.value) }))}
-                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                          />
                         </div>
                       </div>
-                      
-                      {/* Preset Conditions */}
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700">Preset Conditions</label>
-                        <div className="grid grid-cols-2 gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setKneePathology({ varusValgus: 3, patellaHeight: 1.0, tibialTorsion: 10 })}
-                          >
-                            Normal Knee
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setKneePathology({ varusValgus: -10, patellaHeight: 1.0, tibialTorsion: 10 })}
-                          >
-                            Genu Varum
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setKneePathology({ varusValgus: 15, patellaHeight: 1.0, tibialTorsion: 10 })}
-                          >
-                            Genu Valgum
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setKneePathology({ varusValgus: 3, patellaHeight: 1.3, tibialTorsion: 10 })}
-                          >
-                            Patella Alta
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </CollapsibleContent>
-                </Card>
-              </Collapsible>
+                    )}
 
-              {/* Shoulder Pathology Controls */}
-              <Collapsible 
-                open={expandedSections.shoulderPathology} 
-                onOpenChange={() => toggleSection('shoulderPathology')}
-              >
-                <Card>
-                  <CollapsibleTrigger asChild>
-                    <CardHeader className="cursor-pointer hover:bg-gray-50 transition-colors">
-                      <CardTitle className="text-lg font-semibold flex items-center justify-between">
-                        Shoulder Pathology
-                        {expandedSections.shoulderPathology ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                      </CardTitle>
-                    </CardHeader>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <CardContent className="space-y-4">
-                      <div className="space-y-3">
-                        {/* Scapular Winging */}
-                        <div>
-                          <label className="text-sm font-medium text-gray-700 flex justify-between">
-                            <span>Scapular Winging</span>
-                            <span>{shoulderPathology.scapularWinging}°</span>
-                          </label>
-                          <div className="text-xs text-gray-500 mb-1">
-                            Normal: 0-5° | Mild: 5-15° | Severe: &gt;15°
+                    {/* Knee Pathology Tab */}
+                    {activeTab === 'knee-pathology' && (
+                      <div className="space-y-4">
+                        <div className="space-y-3">
+                          {/* Varus/Valgus Angle */}
+                          <div>
+                            <label className="text-sm font-medium text-gray-700 flex justify-between">
+                              <span>Varus/Valgus Angle</span>
+                              <span>{kneePathology.varusValgus}°</span>
+                            </label>
+                            <div className="text-xs text-gray-500 mb-1">
+                              Varus &lt;0° | Normal: 0-5° | Valgus &gt;5°
+                            </div>
+                            <input
+                              type="range"
+                              min="-20"
+                              max="20"
+                              value={kneePathology.varusValgus}
+                              onChange={(e) => setKneePathology(prev => ({ ...prev, varusValgus: Number(e.target.value) }))}
+                              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                            />
                           </div>
-                          <input
-                            type="range"
-                            min="0"
-                            max="30"
-                            value={shoulderPathology.scapularWinging}
-                            onChange={(e) => setShoulderPathology(prev => ({ ...prev, scapularWinging: Number(e.target.value) }))}
-                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                          />
+                          
+                          {/* Patella Height */}
+                          <div>
+                            <label className="text-sm font-medium text-gray-700 flex justify-between">
+                              <span>Patella Height (Insall-Salvati)</span>
+                              <span>{kneePathology.patellaHeight.toFixed(2)}</span>
+                            </label>
+                            <div className="text-xs text-gray-500 mb-1">
+                              Baja &lt;0.8 | Normal: 0.8-1.2 | Alta &gt;1.2
+                            </div>
+                            <input
+                              type="range"
+                              min="0.5"
+                              max="1.5"
+                              step="0.05"
+                              value={kneePathology.patellaHeight}
+                              onChange={(e) => setKneePathology(prev => ({ ...prev, patellaHeight: Number(e.target.value) }))}
+                              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                            />
+                          </div>
+                          
+                          {/* Tibial Torsion */}
+                          <div>
+                            <label className="text-sm font-medium text-gray-700 flex justify-between">
+                              <span>Tibial Torsion</span>
+                              <span>{kneePathology.tibialTorsion}°</span>
+                            </label>
+                            <div className="text-xs text-gray-500 mb-1">
+                              Internal &lt;0° | Normal: 0-20° | External &gt;20°
+                            </div>
+                            <input
+                              type="range"
+                              min="-30"
+                              max="40"
+                              value={kneePathology.tibialTorsion}
+                              onChange={(e) => setKneePathology(prev => ({ ...prev, tibialTorsion: Number(e.target.value) }))}
+                              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                            />
+                          </div>
                         </div>
                         
-                        {/* AC Joint Separation */}
-                        <div>
-                          <label className="text-sm font-medium text-gray-700 flex justify-between">
-                            <span>AC Joint Separation</span>
-                            <span>Grade {shoulderPathology.acSeparation}</span>
-                          </label>
-                          <div className="text-xs text-gray-500 mb-1">
-                            Normal: 0 | Grade I-III: Ligament injury | Grade IV-VI: Complete separation
+                        {/* Preset Conditions */}
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-gray-700">Preset Conditions</label>
+                          <div className="grid grid-cols-2 gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setKneePathology({ varusValgus: 3, patellaHeight: 1.0, tibialTorsion: 10 })}
+                            >
+                              Normal Knee
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setKneePathology({ varusValgus: -10, patellaHeight: 1.0, tibialTorsion: 10 })}
+                            >
+                              Genu Varum
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setKneePathology({ varusValgus: 15, patellaHeight: 1.0, tibialTorsion: 10 })}
+                            >
+                              Genu Valgum
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setKneePathology({ varusValgus: 3, patellaHeight: 1.3, tibialTorsion: 10 })}
+                            >
+                              Patella Alta
+                            </Button>
                           </div>
-                          <input
-                            type="range"
-                            min="0"
-                            max="6"
-                            value={shoulderPathology.acSeparation}
-                            onChange={(e) => setShoulderPathology(prev => ({ ...prev, acSeparation: Number(e.target.value) }))}
-                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Shoulder Pathology Tab */}
+                    {activeTab === 'shoulder-pathology' && (
+                      <div className="space-y-4">
+                        <div className="space-y-3">
+                          {/* Scapular Winging */}
+                          <div>
+                            <label className="text-sm font-medium text-gray-700 flex justify-between">
+                              <span>Scapular Winging</span>
+                              <span>{shoulderPathology.scapularWinging}°</span>
+                            </label>
+                            <div className="text-xs text-gray-500 mb-1">
+                              Normal: 0-5° | Mild: 5-10° | Severe: &gt;10°
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="20"
+                              value={shoulderPathology.scapularWinging}
+                              onChange={(e) => setShoulderPathology(prev => ({ ...prev, scapularWinging: Number(e.target.value) }))}
+                              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                            />
+                          </div>
+                          
+                          {/* AC Joint Separation */}
+                          <div>
+                            <label className="text-sm font-medium text-gray-700 flex justify-between">
+                              <span>AC Joint Separation</span>
+                              <span>Grade {shoulderPathology.acSeparation}</span>
+                            </label>
+                            <div className="text-xs text-gray-500 mb-1">
+                              Normal: 0 | Mild: 1-2 | Moderate: 3-4 | Severe: 5-6
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="6"
+                              value={shoulderPathology.acSeparation}
+                              onChange={(e) => setShoulderPathology(prev => ({ ...prev, acSeparation: Number(e.target.value) }))}
+                              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                            />
+                          </div>
+                          
+                          {/* GH Subluxation */}
+                          <div>
+                            <label className="text-sm font-medium text-gray-700 flex justify-between">
+                              <span>GH Subluxation</span>
+                              <span>{shoulderPathology.ghSubluxation}%</span>
+                            </label>
+                            <div className="text-xs text-gray-500 mb-1">
+                              Normal: 0% | Mild: &lt;25% | Moderate: 25-50%
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="50"
+                              value={shoulderPathology.ghSubluxation}
+                              onChange={(e) => setShoulderPathology(prev => ({ ...prev, ghSubluxation: Number(e.target.value) }))}
+                              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                            />
+                          </div>
                         </div>
                         
-                        {/* GH Subluxation */}
-                        <div>
-                          <label className="text-sm font-medium text-gray-700 flex justify-between">
-                            <span>GH Subluxation</span>
-                            <span>{shoulderPathology.ghSubluxation}%</span>
-                          </label>
-                          <div className="text-xs text-gray-500 mb-1">
-                            Normal: 0% | Mild: 25% | Moderate: 50% | Severe: &gt;50%
+                        {/* Preset Conditions */}
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-gray-700">Preset Conditions</label>
+                          <div className="grid grid-cols-2 gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setShoulderPathology({ scapularWinging: 3, acSeparation: 0, ghSubluxation: 0 })}
+                            >
+                              Normal Shoulder
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setShoulderPathology({ scapularWinging: 12, acSeparation: 0, ghSubluxation: 0 })}
+                            >
+                              Scapular Dyskinesis
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setShoulderPathology({ scapularWinging: 3, acSeparation: 3, ghSubluxation: 0 })}
+                            >
+                              AC Separation
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setShoulderPathology({ scapularWinging: 3, acSeparation: 0, ghSubluxation: 30 })}
+                            >
+                              Shoulder Instability
+                            </Button>
                           </div>
-                          <input
-                            type="range"
-                            min="0"
-                            max="75"
-                            value={shoulderPathology.ghSubluxation}
-                            onChange={(e) => setShoulderPathology(prev => ({ ...prev, ghSubluxation: Number(e.target.value) }))}
-                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                          />
                         </div>
                       </div>
-                      
-                      {/* Preset Conditions */}
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700">Preset Conditions</label>
-                        <div className="grid grid-cols-2 gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setShoulderPathology({ scapularWinging: 3, acSeparation: 0, ghSubluxation: 0 })}
-                          >
-                            Normal Shoulder
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setShoulderPathology({ scapularWinging: 20, acSeparation: 0, ghSubluxation: 0 })}
-                          >
-                            Scapular Dyskinesis
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setShoulderPathology({ scapularWinging: 3, acSeparation: 3, ghSubluxation: 0 })}
-                          >
-                            AC Joint Injury
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setShoulderPathology({ scapularWinging: 3, acSeparation: 0, ghSubluxation: 50 })}
-                          >
-                            GH Instability
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </CollapsibleContent>
-                </Card>
-              </Collapsible>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
 
               {/* Quick Actions */}
               <Card>

@@ -473,6 +473,30 @@ export default function VirtualPatientsWorking() {
                         <p>• "Hip restriction with limited range"</p>
                         <p>• "Shoulder pain" or just "knee pain"</p>
                       </div>
+                      <div className="flex gap-2 mb-2">
+                        <Button
+                          onClick={() => {
+                            setCustomText("shoulder elevation");
+                            generateAnimationFromText("shoulder elevation");
+                            setIsPlaying(true);
+                          }}
+                          size="sm"
+                          variant="secondary"
+                        >
+                          Test Shoulder Elevation
+                        </Button>
+                        <Button
+                          onClick={() => {
+                            setCustomText("arm raise");
+                            generateAnimationFromText("arm raise");
+                            setIsPlaying(true);
+                          }}
+                          size="sm"
+                          variant="secondary"
+                        >
+                          Test Arm Raise
+                        </Button>
+                      </div>
                       <div className="flex gap-2">
                         <Button
                           onClick={() => {

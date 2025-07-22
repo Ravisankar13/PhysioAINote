@@ -604,6 +604,8 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
       animationFrames = generateStepUpAnimation();
     } else if (lowerText.includes('bird dog')) {
       animationFrames = generateBirdDogAnimation();
+    } else if (lowerText.includes('shoulder elevation') || lowerText.includes('arm raise')) {
+      animationFrames = generateShoulderElevationAnimation();
     } else if (bodyParts.shoulder && limitations.limited) {
       animationFrames = generateShoulderLimitationAnimation();
     } else if (bodyParts.back && limitations.stiff) {
@@ -626,6 +628,8 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
         joints: {
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0.2] },
           rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, -0.2] },
+          leftScapula: { position: [-0.22, 1.55, -0.12], rotation: [0, -0.3, 0] },
+          rightScapula: { position: [0.22, 1.55, -0.12], rotation: [0, 0.3, 0] },
           head: { position: [0, 2.1, 0], rotation: [0, 0, 0] },
           torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] }
         }
@@ -635,6 +639,8 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
         joints: {
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0.8] },
           rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, -0.1] },
+          leftScapula: { position: [-0.22, 1.58, -0.10], rotation: [0.1, -0.4, -0.2] }, // Upward rotation and protraction
+          rightScapula: { position: [0.22, 1.55, -0.12], rotation: [0, 0.3, 0] },
           head: { position: [0, 2.1, 0], rotation: [0, 0, -0.1] },
           torso: { position: [0, 1.2, 0], rotation: [0, 0, 0.05] }
         }
@@ -644,6 +650,8 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
         joints: {
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 1.2] },
           rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, -0.05] },
+          leftScapula: { position: [-0.22, 1.60, -0.08], rotation: [0.2, -0.5, -0.3] }, // More upward rotation
+          rightScapula: { position: [0.22, 1.55, -0.12], rotation: [0, 0.3, 0] },
           head: { position: [0, 2.1, 0], rotation: [0, 0, -0.2] },
           torso: { position: [0, 1.2, 0], rotation: [0, 0, 0.1] }
         }
@@ -653,6 +661,8 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
         joints: {
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0.8] },
           rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, -0.1] },
+          leftScapula: { position: [-0.22, 1.58, -0.10], rotation: [0.1, -0.4, -0.2] },
+          rightScapula: { position: [0.22, 1.55, -0.12], rotation: [0, 0.3, 0] },
           head: { position: [0, 2.1, 0], rotation: [0, 0, -0.1] },
           torso: { position: [0, 1.2, 0], rotation: [0, 0, 0.05] }
         }
@@ -662,7 +672,64 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
         joints: {
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0.2] },
           rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, -0.2] },
+          leftScapula: { position: [-0.22, 1.55, -0.12], rotation: [0, -0.3, 0] },
+          rightScapula: { position: [0.22, 1.55, -0.12], rotation: [0, 0.3, 0] },
           head: { position: [0, 2.1, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] }
+        }
+      }
+    ];
+  };
+
+  const generateShoulderElevationAnimation = (): AnimationKeyframe[] => {
+    return [
+      {
+        time: 0,
+        joints: {
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] },
+          leftScapula: { position: [-0.22, 1.55, -0.12], rotation: [0, -0.3, 0] },
+          rightScapula: { position: [0.22, 1.55, -0.12], rotation: [0, 0.3, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] }
+        }
+      },
+      {
+        time: 1000,
+        joints: {
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 1.57] }, // 90 degrees
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, -1.57] },
+          leftScapula: { position: [-0.20, 1.62, -0.08], rotation: [0.3, -0.5, -0.4] }, // Upward rotation and elevation
+          rightScapula: { position: [0.20, 1.62, -0.08], rotation: [0.3, 0.5, 0.4] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] }
+        }
+      },
+      {
+        time: 2000,
+        joints: {
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 3.14] }, // 180 degrees overhead
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, -3.14] },
+          leftScapula: { position: [-0.18, 1.68, -0.05], rotation: [0.5, -0.6, -0.6] }, // Maximum upward rotation
+          rightScapula: { position: [0.18, 1.68, -0.05], rotation: [0.5, 0.6, 0.6] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] }
+        }
+      },
+      {
+        time: 3000,
+        joints: {
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 1.57] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, -1.57] },
+          leftScapula: { position: [-0.20, 1.62, -0.08], rotation: [0.3, -0.5, -0.4] },
+          rightScapula: { position: [0.20, 1.62, -0.08], rotation: [0.3, 0.5, 0.4] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] }
+        }
+      },
+      {
+        time: 4000,
+        joints: {
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] },
+          leftScapula: { position: [-0.22, 1.55, -0.12], rotation: [0, -0.3, 0] },
+          rightScapula: { position: [0.22, 1.55, -0.12], rotation: [0, 0.3, 0] },
           torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] }
         }
       }

@@ -24,7 +24,7 @@ export default function VirtualPatientsWorking() {
     profile: true,
     animation: true,
     textInput: false,
-    limbControls: false
+    limbControls: true  // Changed to true to show Body Proportions by default
   });
   const [limbScales, setLimbScales] = useState({
     upperArm: 1.0,

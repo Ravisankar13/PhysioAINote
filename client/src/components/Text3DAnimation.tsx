@@ -13,6 +13,11 @@ interface Text3DAnimationProps {
     torso: number;
     overall: number;
   };
+  hipPathology?: {
+    neckAngle: number;
+    anteversion: number;
+    acetabularCoverage: number;
+  };
 }
 
 interface AnimationKeyframe {
@@ -32,6 +37,10 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
   shin: 1.0,
   torso: 1.0,
   overall: 1.0
+}, hipPathology = {
+  neckAngle: 130,
+  anteversion: 12,
+  acetabularCoverage: 75
 } }: Text3DAnimationProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene>();
@@ -178,8 +187,9 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
     pelvisMesh.position.y = -0.1;
     pelvisGroup.add(pelvisMesh);
     
-    // Add hip sockets (acetabulum)
-    const socketGeometry = new THREE.SphereGeometry(0.06, 16, 16, 0, Math.PI);
+    // Add hip sockets (acetabulum) with pathology-based coverage
+    const coverageAngle = (hipPathology.acetabularCoverage / 100) * Math.PI; // Convert percentage to radians
+    const socketGeometry = new THREE.SphereGeometry(0.06, 16, 16, 0, coverageAngle);
     
     // Left hip socket
     const leftSocket = new THREE.Mesh(socketGeometry, boneMaterial);
@@ -350,30 +360,46 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
     const thighGeometry = new THREE.CylinderGeometry(0.08, 0.08, thighLength, 8);
     const shinGeometry = new THREE.CylinderGeometry(0.08, 0.08, shinLength, 8);
     
-    // Left thigh
+    // Left thigh - positioned to start from hip socket with pathology angles
     const leftThigh = new THREE.Mesh(thighGeometry, boneMaterial);
-    leftThigh.position.set(-0.15, 0.9 - thighLength / 2, 0); // Position based on scaled length
+    leftThigh.position.set(-0.15, 0.85 - thighLength / 2, 0); // Raised to connect with hip socket
+    
+    // Apply femoral neck angle (coxa vara/valga)
+    const neckAngleRad = ((hipPathology.neckAngle - 130) * Math.PI) / 180; // Convert deviation from normal to radians
+    leftThigh.rotation.z = -neckAngleRad * 0.5; // Apply half the angle for natural look
+    
+    // Apply femoral anteversion
+    const anteversionRad = (hipPathology.anteversion * Math.PI) / 180;
+    leftThigh.rotation.y = anteversionRad * 0.3; // Apply 30% of angle for subtlety
+    
     leftThigh.name = 'leftThigh';
     skeleton.add(leftThigh);
     bonesRef.current['leftThigh'] = leftThigh;
 
     // Left shin
     const leftShin = new THREE.Mesh(shinGeometry, boneMaterial);
-    leftShin.position.set(-0.15, 0.9 - thighLength - shinLength / 2, 0); // Position below thigh
+    leftShin.position.set(-0.15, 0.85 - thighLength - shinLength / 2, 0); // Adjusted for raised thigh
     leftShin.name = 'leftShin';
     skeleton.add(leftShin);
     bonesRef.current['leftShin'] = leftShin;
 
-    // Right thigh
+    // Right thigh - positioned to start from hip socket with pathology angles
     const rightThigh = new THREE.Mesh(thighGeometry, boneMaterial);
-    rightThigh.position.set(0.15, 0.9 - thighLength / 2, 0);
+    rightThigh.position.set(0.15, 0.85 - thighLength / 2, 0); // Raised to connect with hip socket
+    
+    // Apply femoral neck angle (coxa vara/valga) - mirror for right side
+    rightThigh.rotation.z = neckAngleRad * 0.5; // Opposite angle for right side
+    
+    // Apply femoral anteversion
+    rightThigh.rotation.y = -anteversionRad * 0.3; // Opposite for right side
+    
     rightThigh.name = 'rightThigh';
     skeleton.add(rightThigh);
     bonesRef.current['rightThigh'] = rightThigh;
 
     // Right shin
     const rightShin = new THREE.Mesh(shinGeometry, boneMaterial);
-    rightShin.position.set(0.15, 0.9 - thighLength - shinLength / 2, 0);
+    rightShin.position.set(0.15, 0.85 - thighLength - shinLength / 2, 0); // Adjusted for raised thigh
     rightShin.name = 'rightShin';
     skeleton.add(rightShin);
     bonesRef.current['rightShin'] = rightShin;
@@ -407,40 +433,40 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
     const femoralHeadGeometry = new THREE.SphereGeometry(0.05, 16, 16);
     
     const leftHip = new THREE.Mesh(femoralHeadGeometry, jointMaterial);
-    leftHip.position.set(-0.15, 0.9, 0); // At pelvis level
+    leftHip.position.set(-0.15, 0.85, 0); // Positioned to insert into hip socket
     leftHip.name = 'leftHip';
     skeleton.add(leftHip);
 
     const rightHip = new THREE.Mesh(femoralHeadGeometry, jointMaterial);
-    rightHip.position.set(0.15, 0.9, 0); // At pelvis level
+    rightHip.position.set(0.15, 0.85, 0); // Positioned to insert into hip socket
     rightHip.name = 'rightHip';
     skeleton.add(rightHip);
 
     // Knee joints - positioned between thigh and shin
     const leftKnee = new THREE.Mesh(jointGeometry, jointMaterial);
-    leftKnee.position.set(-0.15, 0.9 - thighLength, 0);
+    leftKnee.position.set(-0.15, 0.85 - thighLength, 0); // Adjusted for raised hip
     leftKnee.name = 'leftKnee';
     skeleton.add(leftKnee);
 
     const rightKnee = new THREE.Mesh(jointGeometry, jointMaterial);
-    rightKnee.position.set(0.15, 0.9 - thighLength, 0);
+    rightKnee.position.set(0.15, 0.85 - thighLength, 0); // Adjusted for raised hip
     rightKnee.name = 'rightKnee';
     skeleton.add(rightKnee);
 
     // Ankle joints - positioned at the end of shin
     const leftAnkle = new THREE.Mesh(jointGeometry, jointMaterial);
-    leftAnkle.position.set(-0.15, 0.9 - thighLength - shinLength, 0);
+    leftAnkle.position.set(-0.15, 0.85 - thighLength - shinLength, 0); // Adjusted for raised hip
     leftAnkle.name = 'leftAnkle';
     skeleton.add(leftAnkle);
 
     const rightAnkle = new THREE.Mesh(jointGeometry, jointMaterial);
-    rightAnkle.position.set(0.15, 0.9 - thighLength - shinLength, 0);
+    rightAnkle.position.set(0.15, 0.85 - thighLength - shinLength, 0); // Adjusted for raised hip
     rightAnkle.name = 'rightAnkle';
     skeleton.add(rightAnkle);
 
     // Feet
     const footGeometry = new THREE.BoxGeometry(0.12, 0.06, 0.25);
-    const footY = 0.9 - thighLength - shinLength - 0.05; // Position below ankle
+    const footY = 0.85 - thighLength - shinLength - 0.05; // Adjusted for raised hip
     
     const leftFoot = new THREE.Mesh(footGeometry, boneMaterial);
     leftFoot.position.set(-0.15, footY, 0.05);

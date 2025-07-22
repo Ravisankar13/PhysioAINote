@@ -24,7 +24,8 @@ export default function VirtualPatientsWorking() {
     profile: true,
     animation: true,
     textInput: false,
-    limbControls: true  // Changed to true to show Body Proportions by default
+    limbControls: true,  // Changed to true to show Body Proportions by default
+    hipPathology: false
   });
   const [limbScales, setLimbScales] = useState({
     upperArm: 1.0,
@@ -33,6 +34,11 @@ export default function VirtualPatientsWorking() {
     shin: 1.0,
     torso: 1.0,
     overall: 1.0
+  });
+  const [hipPathology, setHipPathology] = useState({
+    neckAngle: 130,      // Normal: 125-135°
+    anteversion: 12,     // Normal: 10-15°
+    acetabularCoverage: 75  // Normal: 70-80%
   });
 
   const { toast } = useToast();
@@ -335,6 +341,7 @@ export default function VirtualPatientsWorking() {
                         isPlaying={isPlaying}
                         onTimeUpdate={(time) => setPlaybackTime(time)}
                         limbScales={limbScales}
+                        hipPathology={hipPathology}
                       />
                     ) : (
                       <div className="bg-gray-50 rounded-lg p-6 text-center min-h-[300px] flex items-center justify-center">
@@ -756,6 +763,120 @@ export default function VirtualPatientsWorking() {
                       >
                         Reset to Default
                       </Button>
+                    </CardContent>
+                  </CollapsibleContent>
+                </Card>
+              </Collapsible>
+
+              {/* Hip Pathology Controls */}
+              <Collapsible 
+                open={expandedSections.hipPathology} 
+                onOpenChange={() => toggleSection('hipPathology')}
+              >
+                <Card>
+                  <CollapsibleTrigger asChild>
+                    <CardHeader className="cursor-pointer hover:bg-gray-50 transition-colors">
+                      <CardTitle className="text-lg font-semibold flex items-center justify-between">
+                        Hip Pathology
+                        {expandedSections.hipPathology ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                      </CardTitle>
+                    </CardHeader>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-3">
+                        {/* Femoral Neck Angle */}
+                        <div>
+                          <label className="text-sm font-medium text-gray-700 flex justify-between">
+                            <span>Femoral Neck Angle</span>
+                            <span>{hipPathology.neckAngle}°</span>
+                          </label>
+                          <div className="text-xs text-gray-500 mb-1">
+                            Normal: 125-135° | Coxa Vara: &lt;120° | Coxa Valga: &gt;140°
+                          </div>
+                          <input
+                            type="range"
+                            min="100"
+                            max="160"
+                            value={hipPathology.neckAngle}
+                            onChange={(e) => setHipPathology(prev => ({ ...prev, neckAngle: Number(e.target.value) }))}
+                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                          />
+                        </div>
+                        
+                        {/* Femoral Anteversion */}
+                        <div>
+                          <label className="text-sm font-medium text-gray-700 flex justify-between">
+                            <span>Femoral Anteversion</span>
+                            <span>{hipPathology.anteversion}°</span>
+                          </label>
+                          <div className="text-xs text-gray-500 mb-1">
+                            Normal: 10-15° | Retroversion: &lt;0° | Excessive: &gt;25°
+                          </div>
+                          <input
+                            type="range"
+                            min="-20"
+                            max="40"
+                            value={hipPathology.anteversion}
+                            onChange={(e) => setHipPathology(prev => ({ ...prev, anteversion: Number(e.target.value) }))}
+                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                          />
+                        </div>
+                        
+                        {/* Acetabular Coverage */}
+                        <div>
+                          <label className="text-sm font-medium text-gray-700 flex justify-between">
+                            <span>Acetabular Coverage</span>
+                            <span>{hipPathology.acetabularCoverage}%</span>
+                          </label>
+                          <div className="text-xs text-gray-500 mb-1">
+                            Normal: 70-80% | Dysplasia: &lt;70% | Overcoverage: &gt;85%
+                          </div>
+                          <input
+                            type="range"
+                            min="50"
+                            max="100"
+                            value={hipPathology.acetabularCoverage}
+                            onChange={(e) => setHipPathology(prev => ({ ...prev, acetabularCoverage: Number(e.target.value) }))}
+                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                          />
+                        </div>
+                      </div>
+                      
+                      {/* Preset Conditions */}
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-gray-700">Preset Conditions</label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setHipPathology({ neckAngle: 130, anteversion: 12, acetabularCoverage: 75 })}
+                          >
+                            Normal Hip
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setHipPathology({ neckAngle: 110, anteversion: 12, acetabularCoverage: 75 })}
+                          >
+                            Coxa Vara
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setHipPathology({ neckAngle: 150, anteversion: 12, acetabularCoverage: 75 })}
+                          >
+                            Coxa Valga
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setHipPathology({ neckAngle: 130, anteversion: 12, acetabularCoverage: 60 })}
+                          >
+                            Hip Dysplasia
+                          </Button>
+                        </div>
+                      </div>
                     </CardContent>
                   </CollapsibleContent>
                 </Card>

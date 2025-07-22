@@ -23,7 +23,16 @@ export default function VirtualPatientsWorking() {
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     profile: true,
     animation: true,
-    textInput: false
+    textInput: false,
+    limbControls: false
+  });
+  const [limbScales, setLimbScales] = useState({
+    upperArm: 1.0,
+    forearm: 1.0,
+    thigh: 1.0,
+    shin: 1.0,
+    torso: 1.0,
+    overall: 1.0
   });
 
   const { toast } = useToast();
@@ -325,6 +334,7 @@ export default function VirtualPatientsWorking() {
                         clinicalText={customText.trim() || selectedPatient?.title || ''}
                         isPlaying={isPlaying}
                         onTimeUpdate={(time) => setPlaybackTime(time)}
+                        limbScales={limbScales}
                       />
                     ) : (
                       <div className="bg-gray-50 rounded-lg p-6 text-center min-h-[300px] flex items-center justify-center">
@@ -615,6 +625,141 @@ export default function VirtualPatientsWorking() {
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Limb Length Controls */}
+              <Collapsible 
+                open={expandedSections.limbControls} 
+                onOpenChange={() => toggleSection('limbControls')}
+              >
+                <Card>
+                  <CollapsibleTrigger asChild>
+                    <CardHeader className="cursor-pointer hover:bg-gray-50 transition-colors">
+                      <CardTitle className="text-lg font-semibold flex items-center justify-between">
+                        Body Proportions
+                        {expandedSections.limbControls ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                      </CardTitle>
+                    </CardHeader>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-3">
+                        {/* Overall Scale */}
+                        <div>
+                          <label className="text-sm font-medium text-gray-700 flex justify-between">
+                            <span>Overall Size</span>
+                            <span>{(limbScales.overall * 100).toFixed(0)}%</span>
+                          </label>
+                          <input
+                            type="range"
+                            min="50"
+                            max="150"
+                            value={limbScales.overall * 100}
+                            onChange={(e) => setLimbScales(prev => ({ ...prev, overall: Number(e.target.value) / 100 }))}
+                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                          />
+                        </div>
+                        
+                        {/* Torso */}
+                        <div>
+                          <label className="text-sm font-medium text-gray-700 flex justify-between">
+                            <span>Torso Height</span>
+                            <span>{(limbScales.torso * 100).toFixed(0)}%</span>
+                          </label>
+                          <input
+                            type="range"
+                            min="50"
+                            max="150"
+                            value={limbScales.torso * 100}
+                            onChange={(e) => setLimbScales(prev => ({ ...prev, torso: Number(e.target.value) / 100 }))}
+                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                          />
+                        </div>
+                        
+                        {/* Upper Arm */}
+                        <div>
+                          <label className="text-sm font-medium text-gray-700 flex justify-between">
+                            <span>Upper Arm</span>
+                            <span>{(limbScales.upperArm * 100).toFixed(0)}%</span>
+                          </label>
+                          <input
+                            type="range"
+                            min="50"
+                            max="150"
+                            value={limbScales.upperArm * 100}
+                            onChange={(e) => setLimbScales(prev => ({ ...prev, upperArm: Number(e.target.value) / 100 }))}
+                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                          />
+                        </div>
+                        
+                        {/* Forearm */}
+                        <div>
+                          <label className="text-sm font-medium text-gray-700 flex justify-between">
+                            <span>Forearm</span>
+                            <span>{(limbScales.forearm * 100).toFixed(0)}%</span>
+                          </label>
+                          <input
+                            type="range"
+                            min="50"
+                            max="150"
+                            value={limbScales.forearm * 100}
+                            onChange={(e) => setLimbScales(prev => ({ ...prev, forearm: Number(e.target.value) / 100 }))}
+                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                          />
+                        </div>
+                        
+                        {/* Thigh */}
+                        <div>
+                          <label className="text-sm font-medium text-gray-700 flex justify-between">
+                            <span>Thigh</span>
+                            <span>{(limbScales.thigh * 100).toFixed(0)}%</span>
+                          </label>
+                          <input
+                            type="range"
+                            min="50"
+                            max="150"
+                            value={limbScales.thigh * 100}
+                            onChange={(e) => setLimbScales(prev => ({ ...prev, thigh: Number(e.target.value) / 100 }))}
+                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                          />
+                        </div>
+                        
+                        {/* Shin */}
+                        <div>
+                          <label className="text-sm font-medium text-gray-700 flex justify-between">
+                            <span>Shin</span>
+                            <span>{(limbScales.shin * 100).toFixed(0)}%</span>
+                          </label>
+                          <input
+                            type="range"
+                            min="50"
+                            max="150"
+                            value={limbScales.shin * 100}
+                            onChange={(e) => setLimbScales(prev => ({ ...prev, shin: Number(e.target.value) / 100 }))}
+                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                          />
+                        </div>
+                      </div>
+                      
+                      {/* Reset Button */}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setLimbScales({
+                          upperArm: 1.0,
+                          forearm: 1.0,
+                          thigh: 1.0,
+                          shin: 1.0,
+                          torso: 1.0,
+                          overall: 1.0
+                        })}
+                        className="w-full"
+                      >
+                        Reset to Default
+                      </Button>
+                    </CardContent>
+                  </CollapsibleContent>
+                </Card>
+              </Collapsible>
 
               {/* Quick Actions */}
               <Card>

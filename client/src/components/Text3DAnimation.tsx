@@ -5,6 +5,14 @@ interface Text3DAnimationProps {
   clinicalText: string;
   isPlaying: boolean;
   onTimeUpdate?: (time: number) => void;
+  limbScales?: {
+    upperArm: number;
+    forearm: number;
+    thigh: number;
+    shin: number;
+    torso: number;
+    overall: number;
+  };
 }
 
 interface AnimationKeyframe {
@@ -17,7 +25,14 @@ interface AnimationKeyframe {
   };
 }
 
-export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate }: Text3DAnimationProps) {
+export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate, limbScales = {
+  upperArm: 1.0,
+  forearm: 1.0,
+  thigh: 1.0,
+  shin: 1.0,
+  torso: 1.0,
+  overall: 1.0
+} }: Text3DAnimationProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene>();
   const rendererRef = useRef<THREE.WebGLRenderer>();
@@ -29,6 +44,7 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
   const [rotation, setRotation] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const bonesRef = useRef<{ [key: string]: THREE.Mesh }>({});
 
   // Initialize Three.js scene
   useEffect(() => {
@@ -88,7 +104,7 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
       }
       renderer.dispose();
     };
-  }, [rotation]);
+  }, [rotation, limbScales]);
 
   // Generate animation from clinical text
   useEffect(() => {
@@ -113,74 +129,91 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
       shininess: 50
     });
 
-    // Create main body structure
-    const torso = new THREE.CylinderGeometry(0.15, 0.2, 1.2, 8);
+    // Create main body structure with scaling
+    const torsoHeight = 1.2 * limbScales.torso * limbScales.overall;
+    const torso = new THREE.CylinderGeometry(0.15, 0.2, torsoHeight, 8);
     const torsoMesh = new THREE.Mesh(torso, boneMaterial);
-    torsoMesh.position.y = 1.2;
+    torsoMesh.position.y = torsoHeight / 2 + 0.9; // Position based on scaled height
     torsoMesh.name = 'torso';
     skeleton.add(torsoMesh);
+    bonesRef.current['torso'] = torsoMesh;
 
-    // Head
+    // Head - position based on scaled torso
     const head = new THREE.SphereGeometry(0.2, 16, 16);
     const headMesh = new THREE.Mesh(head, boneMaterial);
-    headMesh.position.y = 2.1;
+    headMesh.position.y = torsoHeight + 0.9 + 0.3;
     headMesh.name = 'head';
     skeleton.add(headMesh);
+    
+    // Pelvis - position based on scaled torso
+    const pelvisGeometry = new THREE.BoxGeometry(0.3, 0.2, 0.2);
+    const pelvisMesh = new THREE.Mesh(pelvisGeometry, boneMaterial);
+    pelvisMesh.position.y = 0.9; // Base position for pelvis
+    pelvisMesh.name = 'pelvis';
+    skeleton.add(pelvisMesh);
+    bonesRef.current['pelvis'] = pelvisMesh;
 
     // Create clavicles (collar bones) to connect shoulders to torso
     const clavicleGeometry = new THREE.CylinderGeometry(0.04, 0.04, 0.35, 8);
+    const clavicleY = torsoHeight + 0.9 - 0.1; // Just below top of torso
     
     const leftClavicle = new THREE.Mesh(clavicleGeometry, boneMaterial);
-    leftClavicle.position.set(-0.13, 1.7, 0);
+    leftClavicle.position.set(-0.13, clavicleY, 0);
     leftClavicle.rotation.z = -Math.PI / 6;
     leftClavicle.name = 'leftClavicle';
     skeleton.add(leftClavicle);
 
     const rightClavicle = new THREE.Mesh(clavicleGeometry, boneMaterial);
-    rightClavicle.position.set(0.13, 1.7, 0);
+    rightClavicle.position.set(0.13, clavicleY, 0);
     rightClavicle.rotation.z = Math.PI / 6;
     rightClavicle.name = 'rightClavicle';
     skeleton.add(rightClavicle);
 
-    // Arms - Create proper anatomical arm structure with better proportions
-    const upperArmGeometry = new THREE.CylinderGeometry(0.05, 0.045, 0.5, 8);
-    const forearmGeometry = new THREE.CylinderGeometry(0.045, 0.04, 0.45, 8);
+    // Arms - Create proper anatomical arm structure with scaling
+    const upperArmLength = 0.5 * limbScales.upperArm * limbScales.overall;
+    const forearmLength = 0.45 * limbScales.forearm * limbScales.overall;
+    const upperArmGeometry = new THREE.CylinderGeometry(0.05, 0.045, upperArmLength, 8);
+    const forearmGeometry = new THREE.CylinderGeometry(0.045, 0.04, forearmLength, 8);
     
     // Left arm group for hierarchical transformation
     const leftArmGroup = new THREE.Group();
-    leftArmGroup.position.set(-0.25, 1.65, 0);
+    leftArmGroup.position.set(-0.25, torsoHeight + 0.9 - 0.15, 0); // Position at shoulder level
     leftArmGroup.name = 'leftArmGroup';
     
     // Left upper arm
     const leftUpperArm = new THREE.Mesh(upperArmGeometry, boneMaterial);
-    leftUpperArm.position.set(0, -0.25, 0);
+    leftUpperArm.position.set(0, -upperArmLength / 2, 0);
     leftUpperArm.name = 'leftUpperArm';
     leftArmGroup.add(leftUpperArm);
+    bonesRef.current['leftUpperArm'] = leftUpperArm;
 
     // Left forearm
     const leftForearm = new THREE.Mesh(forearmGeometry, boneMaterial);
-    leftForearm.position.set(0, -0.7, 0);
+    leftForearm.position.set(0, -upperArmLength - forearmLength / 2, 0);
     leftForearm.name = 'leftForearm';
     leftArmGroup.add(leftForearm);
+    bonesRef.current['leftForearm'] = leftForearm;
 
     skeleton.add(leftArmGroup);
 
     // Right arm group for hierarchical transformation
     const rightArmGroup = new THREE.Group();
-    rightArmGroup.position.set(0.25, 1.65, 0);
+    rightArmGroup.position.set(0.25, torsoHeight + 0.9 - 0.15, 0); // Position at shoulder level
     rightArmGroup.name = 'rightArmGroup';
     
     // Right upper arm
     const rightUpperArm = new THREE.Mesh(upperArmGeometry, boneMaterial);
-    rightUpperArm.position.set(0, -0.25, 0);
+    rightUpperArm.position.set(0, -upperArmLength / 2, 0);
     rightUpperArm.name = 'rightUpperArm';
     rightArmGroup.add(rightUpperArm);
+    bonesRef.current['rightUpperArm'] = rightUpperArm;
 
     // Right forearm
     const rightForearm = new THREE.Mesh(forearmGeometry, boneMaterial);
-    rightForearm.position.set(0, -0.7, 0);
+    rightForearm.position.set(0, -upperArmLength - forearmLength / 2, 0);
     rightForearm.name = 'rightForearm';
     rightArmGroup.add(rightForearm);
+    bonesRef.current['rightForearm'] = rightForearm;
 
     skeleton.add(rightArmGroup);
 
@@ -188,19 +221,19 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
     const handGeometry = new THREE.SphereGeometry(0.06, 12, 12);
     
     const leftHand = new THREE.Mesh(handGeometry, boneMaterial);
-    leftHand.position.set(0, -0.95, 0);
+    leftHand.position.set(0, -upperArmLength - forearmLength - 0.05, 0);
     leftHand.name = 'leftHand';
     leftArmGroup.add(leftHand);
 
     const rightHand = new THREE.Mesh(handGeometry, boneMaterial);
-    rightHand.position.set(0, -0.95, 0);
+    rightHand.position.set(0, -upperArmLength - forearmLength - 0.05, 0);
     rightHand.name = 'rightHand';
     rightArmGroup.add(rightHand);
 
     // Add upper body connection bones for better visual connectivity
     const shoulderConnectorGeometry = new THREE.BoxGeometry(0.5, 0.08, 0.08);
     const shoulderConnector = new THREE.Mesh(shoulderConnectorGeometry, boneMaterial);
-    shoulderConnector.position.set(0, 1.65, 0);
+    shoulderConnector.position.set(0, torsoHeight + 0.9 - 0.15, 0); // At shoulder level
     shoulderConnector.name = 'shoulderConnector';
     skeleton.add(shoulderConnector);
 
@@ -225,45 +258,52 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
     
     // Left scapula
     const leftScapula = new THREE.Mesh(scapula3D, boneMaterial);
-    leftScapula.position.set(-0.22, 1.55, -0.12); // Behind and to the side of the torso
+    leftScapula.position.set(-0.22, torsoHeight + 0.9 - 0.25, -0.12); // Behind and to the side of the torso
     leftScapula.rotation.set(0, -0.3, 0); // Angle it appropriately
     leftScapula.name = 'leftScapula';
     skeleton.add(leftScapula);
     
     // Right scapula
     const rightScapula = new THREE.Mesh(scapula3D, boneMaterial);
-    rightScapula.position.set(0.22, 1.55, -0.12); // Behind and to the side of the torso
+    rightScapula.position.set(0.22, torsoHeight + 0.9 - 0.25, -0.12); // Behind and to the side of the torso
     rightScapula.rotation.set(0, 0.3, 0); // Angle it appropriately
     rightScapula.scale.x = -1; // Mirror for right side
     rightScapula.name = 'rightScapula';
     skeleton.add(rightScapula);
 
-    // Legs
-    const legGeometry = new THREE.CylinderGeometry(0.08, 0.08, 0.8, 8);
+    // Legs with scaling
+    const thighLength = 0.8 * limbScales.thigh * limbScales.overall;
+    const shinLength = 0.8 * limbScales.shin * limbScales.overall;
+    const thighGeometry = new THREE.CylinderGeometry(0.08, 0.08, thighLength, 8);
+    const shinGeometry = new THREE.CylinderGeometry(0.08, 0.08, shinLength, 8);
     
     // Left thigh
-    const leftThigh = new THREE.Mesh(legGeometry, boneMaterial);
-    leftThigh.position.set(-0.15, 0.4, 0);
+    const leftThigh = new THREE.Mesh(thighGeometry, boneMaterial);
+    leftThigh.position.set(-0.15, 0.9 - thighLength / 2, 0); // Position based on scaled length
     leftThigh.name = 'leftThigh';
     skeleton.add(leftThigh);
+    bonesRef.current['leftThigh'] = leftThigh;
 
     // Left shin
-    const leftShin = new THREE.Mesh(legGeometry, boneMaterial);
-    leftShin.position.set(-0.15, -0.4, 0);
+    const leftShin = new THREE.Mesh(shinGeometry, boneMaterial);
+    leftShin.position.set(-0.15, 0.9 - thighLength - shinLength / 2, 0); // Position below thigh
     leftShin.name = 'leftShin';
     skeleton.add(leftShin);
+    bonesRef.current['leftShin'] = leftShin;
 
     // Right thigh
-    const rightThigh = new THREE.Mesh(legGeometry, boneMaterial);
-    rightThigh.position.set(0.15, 0.4, 0);
+    const rightThigh = new THREE.Mesh(thighGeometry, boneMaterial);
+    rightThigh.position.set(0.15, 0.9 - thighLength / 2, 0);
     rightThigh.name = 'rightThigh';
     skeleton.add(rightThigh);
+    bonesRef.current['rightThigh'] = rightThigh;
 
     // Right shin
-    const rightShin = new THREE.Mesh(legGeometry, boneMaterial);
-    rightShin.position.set(0.15, -0.4, 0);
+    const rightShin = new THREE.Mesh(shinGeometry, boneMaterial);
+    rightShin.position.set(0.15, 0.9 - thighLength - shinLength / 2, 0);
     rightShin.name = 'rightShin';
     skeleton.add(rightShin);
+    bonesRef.current['rightShin'] = rightShin;
 
     // Joints
     const jointGeometry = new THREE.SphereGeometry(0.08, 12, 12);
@@ -281,12 +321,12 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
 
     // Elbow joints - positioned between upper arm and forearm
     const leftElbow = new THREE.Mesh(jointGeometry, jointMaterial);
-    leftElbow.position.set(0, -0.5, 0);
+    leftElbow.position.set(0, -upperArmLength, 0);
     leftElbow.name = 'leftElbow';
     leftArmGroup.add(leftElbow);
 
     const rightElbow = new THREE.Mesh(jointGeometry, jointMaterial);
-    rightElbow.position.set(0, -0.5, 0);
+    rightElbow.position.set(0, -upperArmLength, 0);
     rightElbow.name = 'rightElbow';
     rightArmGroup.add(rightElbow);
 
@@ -301,38 +341,39 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate 
     rightHip.name = 'rightHip';
     skeleton.add(rightHip);
 
-    // Knee joints
+    // Knee joints - positioned between thigh and shin
     const leftKnee = new THREE.Mesh(jointGeometry, jointMaterial);
-    leftKnee.position.set(-0.15, 0, 0);
+    leftKnee.position.set(-0.15, 0.9 - thighLength, 0);
     leftKnee.name = 'leftKnee';
     skeleton.add(leftKnee);
 
     const rightKnee = new THREE.Mesh(jointGeometry, jointMaterial);
-    rightKnee.position.set(0.15, 0, 0);
+    rightKnee.position.set(0.15, 0.9 - thighLength, 0);
     rightKnee.name = 'rightKnee';
     skeleton.add(rightKnee);
 
-    // Ankle joints
+    // Ankle joints - positioned at the end of shin
     const leftAnkle = new THREE.Mesh(jointGeometry, jointMaterial);
-    leftAnkle.position.set(-0.15, -0.8, 0);
+    leftAnkle.position.set(-0.15, 0.9 - thighLength - shinLength, 0);
     leftAnkle.name = 'leftAnkle';
     skeleton.add(leftAnkle);
 
     const rightAnkle = new THREE.Mesh(jointGeometry, jointMaterial);
-    rightAnkle.position.set(0.15, -0.8, 0);
+    rightAnkle.position.set(0.15, 0.9 - thighLength - shinLength, 0);
     rightAnkle.name = 'rightAnkle';
     skeleton.add(rightAnkle);
 
     // Feet
     const footGeometry = new THREE.BoxGeometry(0.12, 0.06, 0.25);
+    const footY = 0.9 - thighLength - shinLength - 0.05; // Position below ankle
     
     const leftFoot = new THREE.Mesh(footGeometry, boneMaterial);
-    leftFoot.position.set(-0.15, -0.85, 0.05);
+    leftFoot.position.set(-0.15, footY, 0.05);
     leftFoot.name = 'leftFoot';
     skeleton.add(leftFoot);
 
     const rightFoot = new THREE.Mesh(footGeometry, boneMaterial);
-    rightFoot.position.set(0.15, -0.85, 0.05);
+    rightFoot.position.set(0.15, footY, 0.05);
     rightFoot.name = 'rightFoot';
     skeleton.add(rightFoot);
 

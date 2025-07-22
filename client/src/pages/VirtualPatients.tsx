@@ -1733,23 +1733,21 @@ export default function VirtualPatientsPage() {
                     </div>
 
                     {/* Animation Display */}
-                    <div className="h-96 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center relative overflow-hidden">
+                    <div className="h-64 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center relative overflow-hidden">
                       {selectedPatient.motionData ? (
                         <div className="w-full h-full">
                           {currentView === 'anterior' ? (
                             <ThreeDAnatomicalVisualization 
-                              animationData={(() => {
-                                if (!selectedPatient.motionData) return undefined;
+                              animationData={selectedPatient.motionData ? (() => {
                                 try {
-                                  const data = typeof selectedPatient.motionData === 'string' 
+                                  return typeof selectedPatient.motionData === 'string' 
                                     ? JSON.parse(selectedPatient.motionData) 
                                     : selectedPatient.motionData;
-                                  return data && data.frames ? data : undefined;
                                 } catch (e) {
                                   console.error('Error parsing motion data:', e);
-                                  return undefined;
+                                  return null;
                                 }
-                              })()}
+                              })() : null}
                               isPlaying={isPlaying}
                               currentFrame={playbackTime}
                               className="w-full h-full"

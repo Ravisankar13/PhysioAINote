@@ -56,11 +56,10 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
   useEffect(() => {
     if (!mountRef.current) return;
 
-    try {
-      // Scene setup
-      const scene = new THREE.Scene();
-      scene.background = new THREE.Color(0xf8f9fa);
-      sceneRef.current = scene;
+    // Scene setup
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf8f9fa);
+    sceneRef.current = scene;
 
     // Camera setup (orthographic for medical accuracy)
     const aspect = 400 / 400;
@@ -141,10 +140,6 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
       }
       renderer.dispose();
     };
-    } catch (error) {
-      console.error('Error initializing 3D scene:', error);
-      setIsLoaded(false);
-    }
   }, []);
 
   // Load 3D bone models
@@ -446,8 +441,7 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
     const scene = sceneRef.current;
     if (!scene) return;
 
-    try {
-      const boneModels = new Map<string, BoneModel>();
+    const boneModels = new Map<string, BoneModel>();
 
     // Medical-grade bone material matching reference image
     const boneMaterial = new THREE.MeshPhongMaterial({
@@ -1524,7 +1518,7 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
             2, 5, 0, 0, 5, 3,  // Side edge
           ]);
           
-          geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+          geometry.setIndex(indices);
           geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
           geometry.computeVertexNormals();
           
@@ -1764,7 +1758,7 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
     Object.entries(bones).forEach(([name, bone]) => {
       scene.add(bone);
       boneModels.set(name, {
-        mesh: bone as unknown as THREE.Mesh,
+        mesh: bone as THREE.Mesh,
         originalPosition: bone.position.clone(),
         originalRotation: bone.rotation.clone()
       });
@@ -1849,7 +1843,7 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
       
       Object.entries(jointPositions).forEach(([jointName, position]) => {
         const stressIndicator = createJointStressIndicator(jointName);
-        stressIndicator.position.set(position[0], position[1], position[2]);
+        stressIndicator.position.set(...position);
         stressIndicator.name = `${jointName}_stress`;
         scene.add(stressIndicator);
         
@@ -1919,10 +1913,6 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
     createAlignmentGuides();
 
     boneModelsRef.current = boneModels;
-    } catch (error) {
-      console.error('Error in createProceduralBoneModels:', error);
-      setLoadingProgress(0);
-    }
   };
 
   // Update bone positions based on animation data

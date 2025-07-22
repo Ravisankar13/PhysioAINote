@@ -15,6 +15,18 @@ interface BoneModel {
   originalRotation: THREE.Euler;
 }
 
+interface JointStressData {
+  stress: number; // 0-1 value
+  color: THREE.Color;
+  pulseSpeed: number;
+}
+
+interface MuscleActivation {
+  intensity: number; // 0-1 value
+  type: 'primary' | 'synergist' | 'stabilizer';
+  color: THREE.Color;
+}
+
 const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps> = ({
   animationData,
   currentFrame = 0,
@@ -27,8 +39,18 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
   const cameraRef = useRef<THREE.OrthographicCamera>();
   const controlsRef = useRef<OrbitControls>();
   const boneModelsRef = useRef<Map<string, BoneModel>>(new Map());
+  const jointStressRef = useRef<Map<string, JointStressData>>(new Map());
+  const muscleGroupsRef = useRef<Map<string, THREE.Group>>(new Map());
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [showMuscles, setShowMuscles] = useState(true);
+  const [showStressIndicators, setShowStressIndicators] = useState(true);
+  const [showRangeOfMotion, setShowRangeOfMotion] = useState(false);
+  const [showAlignmentGuides, setShowAlignmentGuides] = useState(false);
+  const [showMovementTrails, setShowMovementTrails] = useState(false);
+  const [viewAngle, setViewAngle] = useState<'front' | 'back' | 'left' | 'right' | 'top'>('front');
+  const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
+  const clockRef = useRef(new THREE.Clock());
 
   // Initialize 3D scene
   useEffect(() => {
@@ -97,6 +119,17 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
     const animate = () => {
       requestAnimationFrame(animate);
       controls.update();
+      
+      // Update joint stress indicators
+      if (showStressIndicators) {
+        updateJointStressIndicators();
+      }
+      
+      // Update muscle activation
+      if (showMuscles) {
+        updateMuscleActivation();
+      }
+      
       renderer.render(scene, camera);
     };
     animate();
@@ -125,6 +158,282 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
       await createProceduralBoneModels();
       setIsLoaded(true);
     }
+  };
+
+  // Calculate joint stress based on angle and load
+  const calculateJointStress = (jointName: string, angle: number, velocity: number = 0): number => {
+    // Base stress calculation from joint angle
+    let stress = 0;
+    
+    // Different joints have different normal ranges
+    const jointLimits: Record<string, { min: number; max: number; optimal: number }> = {
+      knee: { min: 0, max: 140, optimal: 10 },
+      hip: { min: -20, max: 125, optimal: 0 },
+      shoulder: { min: -40, max: 180, optimal: 0 },
+      elbow: { min: 0, max: 145, optimal: 10 },
+      ankle: { min: -20, max: 45, optimal: 0 }
+    };
+    
+    const limits = jointLimits[jointName] || { min: 0, max: 90, optimal: 0 };
+    const deviation = Math.abs(angle - limits.optimal);
+    const range = Math.max(limits.max - limits.optimal, limits.optimal - limits.min);
+    
+    // Calculate stress based on deviation from optimal angle
+    stress = deviation / range;
+    
+    // Add velocity component (faster movements = more stress)
+    stress += velocity * 0.2;
+    
+    // Clamp between 0 and 1
+    return Math.max(0, Math.min(1, stress));
+  };
+
+  // Get stress color based on stress level
+  const getStressColor = (stress: number): THREE.Color => {
+    if (stress < 0.3) return new THREE.Color(0x00ff00); // Green
+    if (stress < 0.6) return new THREE.Color(0xffff00); // Yellow
+    if (stress < 0.8) return new THREE.Color(0xff8800); // Orange
+    return new THREE.Color(0xff0000); // Red
+  };
+
+  // Create joint stress indicator
+  const createJointStressIndicator = (jointName: string): THREE.Group => {
+    const group = new THREE.Group();
+    
+    // Create glowing sphere for joint stress
+    const sphereGeometry = new THREE.SphereGeometry(5, 16, 16);
+    const sphereMaterial = new THREE.MeshPhongMaterial({
+      color: 0x00ff00,
+      transparent: true,
+      opacity: 0.7,
+      emissive: 0x00ff00,
+      emissiveIntensity: 0.5
+    });
+    
+    const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+    sphere.name = 'stressIndicator';
+    group.add(sphere);
+    
+    // Add pulse effect
+    const pulseGeometry = new THREE.SphereGeometry(7, 16, 16);
+    const pulseMaterial = new THREE.MeshPhongMaterial({
+      color: 0x00ff00,
+      transparent: true,
+      opacity: 0.3,
+      emissive: 0x00ff00,
+      emissiveIntensity: 0.3
+    });
+    
+    const pulseSphere = new THREE.Mesh(pulseGeometry, pulseMaterial);
+    pulseSphere.name = 'pulseIndicator';
+    group.add(pulseSphere);
+    
+    return group;
+  };
+
+  // Update joint stress indicators
+  const updateJointStressIndicators = () => {
+    const time = clockRef.current.getElapsedTime();
+    
+    jointStressRef.current.forEach((stressData, jointName) => {
+      const jointModel = boneModelsRef.current.get(jointName);
+      if (!jointModel) return;
+      
+      // Find stress indicator in scene
+      const stressGroup = jointModel.mesh.parent?.getObjectByName(`${jointName}_stress`);
+      if (!stressGroup) return;
+      
+      const stressIndicator = stressGroup.getObjectByName('stressIndicator') as THREE.Mesh;
+      const pulseIndicator = stressGroup.getObjectByName('pulseIndicator') as THREE.Mesh;
+      
+      if (stressIndicator && stressIndicator.material instanceof THREE.MeshPhongMaterial) {
+        stressIndicator.material.color = stressData.color;
+        stressIndicator.material.emissive = stressData.color;
+        stressIndicator.material.emissiveIntensity = 0.3 + stressData.stress * 0.5;
+      }
+      
+      // Pulse effect
+      if (pulseIndicator) {
+        const pulseScale = 1 + Math.sin(time * stressData.pulseSpeed) * 0.2 * stressData.stress;
+        pulseIndicator.scale.setScalar(pulseScale);
+        
+        if (pulseIndicator.material instanceof THREE.MeshPhongMaterial) {
+          pulseIndicator.material.opacity = 0.3 * stressData.stress;
+        }
+      }
+    });
+  };
+
+  // Create muscle group
+  const createMuscleGroup = (muscleName: string, geometry: THREE.BufferGeometry): THREE.Group => {
+    const group = new THREE.Group();
+    
+    const muscleMaterial = new THREE.MeshPhongMaterial({
+      color: 0xff0000,
+      transparent: true,
+      opacity: 0,
+      emissive: 0xff0000,
+      emissiveIntensity: 0,
+      side: THREE.DoubleSide
+    });
+    
+    const muscle = new THREE.Mesh(geometry, muscleMaterial);
+    muscle.name = muscleName;
+    group.add(muscle);
+    
+    // Add fiber direction lines
+    const fiberMaterial = new THREE.LineBasicMaterial({
+      color: 0xcc0000,
+      transparent: true,
+      opacity: 0
+    });
+    
+    const fiberGeometry = new THREE.BufferGeometry();
+    const fiberPoints = [];
+    
+    // Create fiber lines based on muscle orientation
+    for (let i = 0; i < 10; i++) {
+      fiberPoints.push(new THREE.Vector3(-10 + i * 2, -20, 0));
+      fiberPoints.push(new THREE.Vector3(-10 + i * 2, 20, 0));
+    }
+    
+    fiberGeometry.setFromPoints(fiberPoints);
+    const fibers = new THREE.LineSegments(fiberGeometry, fiberMaterial);
+    fibers.name = `${muscleName}_fibers`;
+    group.add(fibers);
+    
+    return group;
+  };
+
+  // Update muscle activation
+  const updateMuscleActivation = () => {
+    const time = clockRef.current.getElapsedTime();
+    
+    // Example muscle activation based on current animation
+    const muscleActivations = calculateMuscleActivation();
+    
+    muscleGroupsRef.current.forEach((muscleGroup, muscleName) => {
+      const activation = muscleActivations.get(muscleName);
+      if (!activation) return;
+      
+      const muscle = muscleGroup.getObjectByName(muscleName) as THREE.Mesh;
+      const fibers = muscleGroup.getObjectByName(`${muscleName}_fibers`) as THREE.LineSegments;
+      
+      if (muscle && muscle.material instanceof THREE.MeshPhongMaterial) {
+        // Update muscle opacity and color based on activation
+        muscle.material.opacity = activation.intensity * 0.7;
+        muscle.material.color = activation.color;
+        muscle.material.emissive = activation.color;
+        muscle.material.emissiveIntensity = activation.intensity * 0.5;
+        
+        // Slight size change to show contraction
+        const contractionScale = 1 + activation.intensity * 0.1;
+        muscle.scale.y = contractionScale;
+      }
+      
+      if (fibers && fibers.material instanceof THREE.LineBasicMaterial) {
+        fibers.material.opacity = activation.intensity * 0.4;
+      }
+    });
+  };
+
+  // Calculate muscle activation based on current movement
+  const calculateMuscleActivation = (): Map<string, MuscleActivation> => {
+    const activations = new Map<string, MuscleActivation>();
+    
+    // Get current joint positions from animation data
+    if (!animationData?.frames?.length || !isLoaded) return activations;
+    
+    const frame = animationData.frames[currentFrame];
+    if (!frame?.keypoints) return activations;
+    
+    // Helper to find keypoint
+    const getKeypoint = (name: string) => {
+      return frame.keypoints.find((kp: any) => kp.name === name);
+    };
+    
+    const leftHip = getKeypoint('left_hip');
+    const leftKnee = getKeypoint('left_knee');
+    const rightHip = getKeypoint('right_hip');
+    const rightKnee = getKeypoint('right_knee');
+    const leftShoulder = getKeypoint('left_shoulder');
+    const rightShoulder = getKeypoint('right_shoulder');
+    
+    // Calculate knee flexion angle
+    let kneeFlexion = 0;
+    if (leftHip && leftKnee) {
+      kneeFlexion = Math.abs(Math.atan2(leftKnee.y - leftHip.y, leftKnee.x - leftHip.x) * 180 / Math.PI - 90);
+    }
+    
+    // Quadriceps activation (higher during knee extension/standing)
+    const quadIntensity = Math.max(0.2, Math.min(1, kneeFlexion / 90));
+    activations.set('left_quadriceps', {
+      intensity: quadIntensity,
+      type: 'primary',
+      color: new THREE.Color(0xff0000)
+    });
+    activations.set('right_quadriceps', {
+      intensity: quadIntensity,
+      type: 'primary',
+      color: new THREE.Color(0xff0000)
+    });
+    
+    // Hamstrings activation (higher during knee flexion)
+    const hamstringIntensity = Math.max(0.1, Math.min(0.8, (90 - kneeFlexion) / 90));
+    activations.set('left_hamstrings', {
+      intensity: hamstringIntensity,
+      type: 'synergist',
+      color: new THREE.Color(0xff8800)
+    });
+    activations.set('right_hamstrings', {
+      intensity: hamstringIntensity,
+      type: 'synergist',
+      color: new THREE.Color(0xff8800)
+    });
+    
+    // Glutes activation (higher during hip extension/squats)
+    let hipAngle = 0;
+    if (leftHip && leftKnee) {
+      hipAngle = Math.abs(leftHip.y - 200); // Distance from neutral position
+    }
+    const gluteIntensity = Math.max(0.2, Math.min(1, hipAngle / 100));
+    activations.set('left_glutes', {
+      intensity: gluteIntensity,
+      type: 'primary',
+      color: new THREE.Color(0xff0000)
+    });
+    activations.set('right_glutes', {
+      intensity: gluteIntensity,
+      type: 'primary',
+      color: new THREE.Color(0xff0000)
+    });
+    
+    // Deltoid activation (based on arm elevation)
+    let shoulderElevation = 0;
+    if (leftShoulder) {
+      shoulderElevation = Math.abs(leftShoulder.y - 100) / 100; // Normalized elevation
+    }
+    const deltoidIntensity = Math.max(0.1, Math.min(1, shoulderElevation));
+    activations.set('left_deltoid', {
+      intensity: deltoidIntensity,
+      type: shoulderElevation > 0.5 ? 'primary' : 'stabilizer',
+      color: shoulderElevation > 0.5 ? new THREE.Color(0xff0000) : new THREE.Color(0x0088ff)
+    });
+    activations.set('right_deltoid', {
+      intensity: deltoidIntensity,
+      type: shoulderElevation > 0.5 ? 'primary' : 'stabilizer',
+      color: shoulderElevation > 0.5 ? new THREE.Color(0xff0000) : new THREE.Color(0x0088ff)
+    });
+    
+    // Core activation (always some level during movement)
+    const coreIntensity = Math.max(0.3, (quadIntensity + gluteIntensity) / 2);
+    activations.set('core', {
+      intensity: coreIntensity,
+      type: 'stabilizer',
+      color: new THREE.Color(0x0088ff)
+    });
+    
+    return activations;
   };
 
   // Create procedural 3D bone models
@@ -1455,6 +1764,154 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
       });
     });
 
+    // Create muscle groups
+    const createMuscles = () => {
+      // Quadriceps (front of thigh)
+      const quadGeometry = new THREE.BoxGeometry(12, 40, 8);
+      const leftQuad = createMuscleGroup('left_quadriceps', quadGeometry);
+      leftQuad.position.set(-15, -20, 5);
+      scene.add(leftQuad);
+      muscleGroupsRef.current.set('left_quadriceps', leftQuad);
+      
+      const rightQuad = createMuscleGroup('right_quadriceps', quadGeometry);
+      rightQuad.position.set(15, -20, 5);
+      scene.add(rightQuad);
+      muscleGroupsRef.current.set('right_quadriceps', rightQuad);
+      
+      // Hamstrings (back of thigh)
+      const hamstringGeometry = new THREE.BoxGeometry(10, 35, 6);
+      const leftHamstring = createMuscleGroup('left_hamstrings', hamstringGeometry);
+      leftHamstring.position.set(-15, -20, -5);
+      scene.add(leftHamstring);
+      muscleGroupsRef.current.set('left_hamstrings', leftHamstring);
+      
+      const rightHamstring = createMuscleGroup('right_hamstrings', hamstringGeometry);
+      rightHamstring.position.set(15, -20, -5);
+      scene.add(rightHamstring);
+      muscleGroupsRef.current.set('right_hamstrings', rightHamstring);
+      
+      // Glutes
+      const gluteGeometry = new THREE.SphereGeometry(12, 16, 12);
+      const leftGlute = createMuscleGroup('left_glutes', gluteGeometry);
+      leftGlute.position.set(-18, 0, -8);
+      leftGlute.scale.set(1, 0.8, 0.6);
+      scene.add(leftGlute);
+      muscleGroupsRef.current.set('left_glutes', leftGlute);
+      
+      const rightGlute = createMuscleGroup('right_glutes', gluteGeometry);
+      rightGlute.position.set(18, 0, -8);
+      rightGlute.scale.set(1, 0.8, 0.6);
+      scene.add(rightGlute);
+      muscleGroupsRef.current.set('right_glutes', rightGlute);
+      
+      // Deltoids (shoulders)
+      const deltoidGeometry = new THREE.SphereGeometry(8, 16, 12);
+      const leftDeltoid = createMuscleGroup('left_deltoid', deltoidGeometry);
+      leftDeltoid.position.set(-35, 85, 0);
+      leftDeltoid.scale.set(1.2, 1, 0.8);
+      scene.add(leftDeltoid);
+      muscleGroupsRef.current.set('left_deltoid', leftDeltoid);
+      
+      const rightDeltoid = createMuscleGroup('right_deltoid', deltoidGeometry);
+      rightDeltoid.position.set(35, 85, 0);
+      rightDeltoid.scale.set(1.2, 1, 0.8);
+      scene.add(rightDeltoid);
+      muscleGroupsRef.current.set('right_deltoid', rightDeltoid);
+      
+      // Core/Abs
+      const coreGeometry = new THREE.BoxGeometry(20, 30, 5);
+      const core = createMuscleGroup('core', coreGeometry);
+      core.position.set(0, 50, 10);
+      scene.add(core);
+      muscleGroupsRef.current.set('core', core);
+    };
+    
+    // Create joint stress indicators
+    const createStressIndicators = () => {
+      const jointPositions = {
+        left_knee: [-15, -40, 0],
+        right_knee: [15, -40, 0],
+        left_hip: [-15, 0, 0],
+        right_hip: [15, 0, 0],
+        left_shoulder: [-30, 85, 0],
+        right_shoulder: [30, 85, 0],
+        left_ankle: [-15, -80, 0],
+        right_ankle: [15, -80, 0],
+        left_elbow: [-35, 45, 0],
+        right_elbow: [35, 45, 0]
+      };
+      
+      Object.entries(jointPositions).forEach(([jointName, position]) => {
+        const stressIndicator = createJointStressIndicator(jointName);
+        stressIndicator.position.set(...position);
+        stressIndicator.name = `${jointName}_stress`;
+        scene.add(stressIndicator);
+        
+        // Initialize joint stress data
+        jointStressRef.current.set(jointName, {
+          stress: 0,
+          color: new THREE.Color(0x00ff00),
+          pulseSpeed: 2
+        });
+      });
+    };
+    
+    // Create alignment guides
+    const createAlignmentGuides = () => {
+      const guideMaterial = new THREE.LineBasicMaterial({ 
+        color: 0x0088ff, 
+        transparent: true, 
+        opacity: 0.3 
+      });
+      
+      // Sagittal plane (front/back)
+      const sagittalGeometry = new THREE.PlaneGeometry(1, 200);
+      const sagittalMaterial = new THREE.MeshBasicMaterial({ 
+        color: 0x0088ff, 
+        transparent: true, 
+        opacity: 0.1,
+        side: THREE.DoubleSide
+      });
+      const sagittalPlane = new THREE.Mesh(sagittalGeometry, sagittalMaterial);
+      sagittalPlane.position.set(0, 0, 0);
+      sagittalPlane.visible = showAlignmentGuides;
+      sagittalPlane.name = 'sagittal_plane';
+      scene.add(sagittalPlane);
+      
+      // Frontal plane (left/right)
+      const frontalGeometry = new THREE.PlaneGeometry(100, 200);
+      const frontalMaterial = new THREE.MeshBasicMaterial({ 
+        color: 0xff8800, 
+        transparent: true, 
+        opacity: 0.1,
+        side: THREE.DoubleSide
+      });
+      const frontalPlane = new THREE.Mesh(frontalGeometry, frontalMaterial);
+      frontalPlane.rotation.y = Math.PI / 2;
+      frontalPlane.visible = showAlignmentGuides;
+      frontalPlane.name = 'frontal_plane';
+      scene.add(frontalPlane);
+      
+      // Transverse plane (top/bottom)
+      const transverseGeometry = new THREE.PlaneGeometry(100, 100);
+      const transverseMaterial = new THREE.MeshBasicMaterial({ 
+        color: 0x00ff00, 
+        transparent: true, 
+        opacity: 0.1,
+        side: THREE.DoubleSide
+      });
+      const transversePlane = new THREE.Mesh(transverseGeometry, transverseMaterial);
+      transversePlane.rotation.x = Math.PI / 2;
+      transversePlane.position.y = 50;
+      transversePlane.visible = showAlignmentGuides;
+      transversePlane.name = 'transverse_plane';
+      scene.add(transversePlane);
+    };
+    
+    createMuscles();
+    createStressIndicators();
+    createAlignmentGuides();
+
     boneModelsRef.current = boneModels;
   };
 
@@ -1611,7 +2068,53 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
       updateBoneColor(spineModel, neck.status === 'limited' || spine.status === 'limited');
     }
 
-  }, [animationData, currentFrame, isLoaded]);
+    // Update joint stress based on movement
+    if (showStressIndicators) {
+      // Calculate joint angles and stress
+      if (leftHip && leftKnee) {
+        const hipAngle = Math.atan2(leftKnee.y - leftHip.y, leftKnee.x - leftHip.x) * 180 / Math.PI;
+        const kneeStress = calculateJointStress('left_knee', Math.abs(hipAngle), 0);
+        jointStressRef.current.set('left_knee', {
+          stress: kneeStress,
+          color: getStressColor(kneeStress),
+          pulseSpeed: 2 + kneeStress * 3
+        });
+      }
+      
+      if (rightHip && rightKnee) {
+        const hipAngle = Math.atan2(rightKnee.y - rightHip.y, rightKnee.x - rightHip.x) * 180 / Math.PI;
+        const kneeStress = calculateJointStress('right_knee', Math.abs(hipAngle), 0);
+        jointStressRef.current.set('right_knee', {
+          stress: kneeStress,
+          color: getStressColor(kneeStress),
+          pulseSpeed: 2 + kneeStress * 3
+        });
+      }
+      
+      // Hip stress based on range of motion
+      if (leftHip && spine) {
+        const hipAngle = Math.atan2(leftHip.y - spine.y, leftHip.x - spine.x) * 180 / Math.PI;
+        const hipStress = calculateJointStress('left_hip', Math.abs(hipAngle - 90), 0);
+        jointStressRef.current.set('left_hip', {
+          stress: hipStress,
+          color: getStressColor(hipStress),
+          pulseSpeed: 2 + hipStress * 3
+        });
+      }
+      
+      // Shoulder stress
+      if (leftShoulder && leftElbow) {
+        const shoulderAngle = Math.atan2(leftElbow.y - leftShoulder.y, leftElbow.x - leftShoulder.x) * 180 / Math.PI;
+        const shoulderStress = calculateJointStress('left_shoulder', Math.abs(shoulderAngle), 0);
+        jointStressRef.current.set('left_shoulder', {
+          stress: shoulderStress,
+          color: getStressColor(shoulderStress),
+          pulseSpeed: 2 + shoulderStress * 3
+        });
+      }
+    }
+
+  }, [animationData, currentFrame, isLoaded, showStressIndicators]);
 
   return (
     <div className={`space-y-4 ${className}`}>
@@ -1638,16 +2141,183 @@ const ThreeDAnatomicalVisualization: React.FC<ThreeDAnatomicalVisualizationProps
       )}
 
       {isLoaded && (
-        <div className="text-center space-y-2">
-          <div className="text-sm text-gray-600">
-            <span className="inline-block bg-green-100 text-green-800 px-2 py-1 rounded text-xs mr-2">
-              3D Medical Models
-            </span>
-            Professional anatomical visualization
+        <div className="space-y-4">
+          <div className="text-center space-y-2">
+            <div className="text-sm text-gray-600">
+              <span className="inline-block bg-green-100 text-green-800 px-2 py-1 rounded text-xs mr-2">
+                3D Medical Models
+              </span>
+              Professional anatomical visualization
+            </div>
+            <div className="text-xs text-gray-500">
+              Use mouse to rotate, zoom, and examine bones in 3D
+            </div>
           </div>
-          <div className="text-xs text-gray-500">
-            Use mouse to rotate, zoom, and examine bones in 3D
+          
+          {/* Visualization Controls */}
+          <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+            <h4 className="text-sm font-semibold text-gray-700">Visualization Options</h4>
+            
+            <div className="grid grid-cols-2 gap-3">
+              {/* Toggle Muscle Highlighting */}
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showMuscles}
+                  onChange={(e) => setShowMuscles(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700">Muscle Activation</span>
+              </label>
+              
+              {/* Toggle Joint Stress */}
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showStressIndicators}
+                  onChange={(e) => setShowStressIndicators(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700">Joint Stress</span>
+              </label>
+              
+              {/* Toggle Alignment Guides */}
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showAlignmentGuides}
+                  onChange={(e) => {
+                    setShowAlignmentGuides(e.target.checked);
+                    // Update plane visibility
+                    const scene = sceneRef.current;
+                    if (scene) {
+                      ['sagittal_plane', 'frontal_plane', 'transverse_plane'].forEach(planeName => {
+                        const plane = scene.getObjectByName(planeName);
+                        if (plane) plane.visible = e.target.checked;
+                      });
+                    }
+                  }}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700">Alignment Guides</span>
+              </label>
+              
+              {/* Toggle Movement Trails */}
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showMovementTrails}
+                  onChange={(e) => setShowMovementTrails(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700">Movement Trails</span>
+              </label>
+            </div>
+            
+            {/* View Angle Presets */}
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => {
+                  const camera = cameraRef.current;
+                  if (camera) {
+                    camera.position.set(0, 0, 500);
+                    camera.lookAt(0, 0, 0);
+                  }
+                }}
+                className="px-3 py-1 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50"
+              >
+                Front
+              </button>
+              <button
+                onClick={() => {
+                  const camera = cameraRef.current;
+                  if (camera) {
+                    camera.position.set(0, 0, -500);
+                    camera.lookAt(0, 0, 0);
+                  }
+                }}
+                className="px-3 py-1 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50"
+              >
+                Back
+              </button>
+              <button
+                onClick={() => {
+                  const camera = cameraRef.current;
+                  if (camera) {
+                    camera.position.set(-500, 0, 0);
+                    camera.lookAt(0, 0, 0);
+                  }
+                }}
+                className="px-3 py-1 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50"
+              >
+                Left
+              </button>
+              <button
+                onClick={() => {
+                  const camera = cameraRef.current;
+                  if (camera) {
+                    camera.position.set(500, 0, 0);
+                    camera.lookAt(0, 0, 0);
+                  }
+                }}
+                className="px-3 py-1 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50"
+              >
+                Right
+              </button>
+              <button
+                onClick={() => {
+                  const camera = cameraRef.current;
+                  if (camera) {
+                    camera.position.set(0, 500, 0);
+                    camera.lookAt(0, 0, 0);
+                  }
+                }}
+                className="px-3 py-1 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50"
+              >
+                Top
+              </button>
+            </div>
+            
+            {/* Playback Speed Control */}
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-gray-700">Speed:</span>
+              <input
+                type="range"
+                min="0.1"
+                max="2"
+                step="0.1"
+                value={playbackSpeed}
+                onChange={(e) => setPlaybackSpeed(parseFloat(e.target.value))}
+                className="flex-1"
+              />
+              <span className="text-sm text-gray-600 w-10">{playbackSpeed}x</span>
+            </div>
           </div>
+          
+          {/* Legend */}
+          {showStressIndicators && (
+            <div className="bg-gray-50 rounded-lg p-3">
+              <h4 className="text-sm font-semibold text-gray-700 mb-2">Joint Stress Legend</h4>
+              <div className="flex items-center space-x-4 text-xs">
+                <div className="flex items-center space-x-1">
+                  <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                  <span>Normal (0-30%)</span>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                  <span>Moderate (30-60%)</span>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
+                  <span>High (60-80%)</span>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                  <span>Excessive (80-100%)</span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

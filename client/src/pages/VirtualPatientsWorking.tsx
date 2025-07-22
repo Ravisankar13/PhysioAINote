@@ -498,6 +498,17 @@ export default function VirtualPatientsWorking() {
                           >
                             Test Arm Raise
                           </Button>
+                          <Button
+                            onClick={() => {
+                              setCustomText("squat");
+                              generateAnimationFromText("squat");
+                              setIsPlaying(true);
+                            }}
+                            variant="default"
+                            className="bg-blue-600 hover:bg-blue-700"
+                          >
+                            Test Squat
+                          </Button>
                         </div>
                       </div>
                       <div className="flex gap-2">

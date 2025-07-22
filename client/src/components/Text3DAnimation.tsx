@@ -960,8 +960,8 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
           rightThigh: { position: [0.15, 0.2, -0.1], rotation: [-1.0, 0, 0] },
           leftShin: { position: [-0.15, -0.2, 0.2], rotation: [1.3, 0, 0] }, // Shin angle
           rightShin: { position: [0.15, -0.2, 0.2], rotation: [1.3, 0, 0] },
-          leftHip: { position: [-0.15, 0.5, -0.2], rotation: [0, 0, 0] },
-          rightHip: { position: [0.15, 0.5, -0.2], rotation: [0, 0, 0] },
+          leftHip: { position: [-0.15, 0.5, -0.2], rotation: [0, 0, 0] }, // Follow pelvis position
+          rightHip: { position: [0.15, 0.5, -0.2], rotation: [0, 0, 0] }, // Follow pelvis position
           leftKnee: { position: [-0.15, 0.05, 0.1], rotation: [0, 0, 0] }, // Connect thigh to shin
           rightKnee: { position: [0.15, 0.05, 0.1], rotation: [0, 0, 0] },
           shoulderConnector: { position: [0, 1.35, 0.1], rotation: [0.2, 0, 0] },
@@ -988,8 +988,8 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
           rightThigh: { position: [0.15, 0.0, -0.2], rotation: [-1.4, 0, 0] },
           leftShin: { position: [-0.15, -0.3, 0.3], rotation: [1.5, 0, 0] }, // Full knee bend
           rightShin: { position: [0.15, -0.3, 0.3], rotation: [1.5, 0, 0] },
-          leftHip: { position: [-0.15, 0.2, -0.3], rotation: [0, 0, 0] },
-          rightHip: { position: [0.15, 0.2, -0.3], rotation: [0, 0, 0] },
+          leftHip: { position: [-0.15, 0.2, -0.3], rotation: [0, 0, 0] }, // Follow pelvis position
+          rightHip: { position: [0.15, 0.2, -0.3], rotation: [0, 0, 0] }, // Follow pelvis position
           leftKnee: { position: [-0.15, -0.1, 0.15], rotation: [0, 0, 0] }, // Connect thigh to shin
           rightKnee: { position: [0.15, -0.1, 0.15], rotation: [0, 0, 0] },
           shoulderConnector: { position: [0, 1.05, 0.2], rotation: [0.3, 0, 0] },
@@ -1016,8 +1016,8 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
           rightThigh: { position: [0.15, 0.2, -0.1], rotation: [-1.0, 0, 0] },
           leftShin: { position: [-0.15, -0.2, 0.2], rotation: [1.3, 0, 0] },
           rightShin: { position: [0.15, -0.2, 0.2], rotation: [1.3, 0, 0] },
-          leftHip: { position: [-0.15, 0.5, -0.2], rotation: [0, 0, 0] },
-          rightHip: { position: [0.15, 0.5, -0.2], rotation: [0, 0, 0] },
+          leftHip: { position: [-0.15, 0.5, -0.2], rotation: [0, 0, 0] }, // Follow pelvis position
+          rightHip: { position: [0.15, 0.5, -0.2], rotation: [0, 0, 0] }, // Follow pelvis position
           leftKnee: { position: [-0.15, 0.05, 0.1], rotation: [0, 0, 0] }, // Connect thigh to shin
           rightKnee: { position: [0.15, 0.05, 0.1], rotation: [0, 0, 0] },
           shoulderConnector: { position: [0, 1.35, 0.1], rotation: [0.2, 0, 0] },

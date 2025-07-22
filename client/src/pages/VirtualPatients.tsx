@@ -1738,16 +1738,18 @@ export default function VirtualPatientsPage() {
                         <div className="w-full h-full">
                           {currentView === 'anterior' ? (
                             <ThreeDAnatomicalVisualization 
-                              animationData={selectedPatient.motionData ? (() => {
+                              animationData={(() => {
+                                if (!selectedPatient.motionData) return undefined;
                                 try {
-                                  return typeof selectedPatient.motionData === 'string' 
+                                  const data = typeof selectedPatient.motionData === 'string' 
                                     ? JSON.parse(selectedPatient.motionData) 
                                     : selectedPatient.motionData;
+                                  return data && data.frames ? data : undefined;
                                 } catch (e) {
                                   console.error('Error parsing motion data:', e);
-                                  return null;
+                                  return undefined;
                                 }
-                              })() : null}
+                              })()}
                               isPlaying={isPlaying}
                               currentFrame={playbackTime}
                               className="w-full h-full"

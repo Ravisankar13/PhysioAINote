@@ -1,15 +1,20 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, Users, Camera, Activity, Stethoscope } from "lucide-react";
+import { Loader2, Users, Camera, Activity, Stethoscope, Dumbbell } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Slider } from "@/components/ui/slider";
+import { Label } from "@/components/ui/label";
 import Text3DAnimation from "@/components/Text3DAnimation";
 import type { SoapVirtualPatient } from "@shared/schema";
 
 export default function VirtualPatientsFixed() {
   const [selectedPatient, setSelectedPatient] = useState<SoapVirtualPatient | null>(null);
   const [selectedTest, setSelectedTest] = useState<string>("");
+  const [selectedExercise, setSelectedExercise] = useState<string>("");
+  const [animationSpeed, setAnimationSpeed] = useState<number[]>([1]);
+  const [repetitions, setRepetitions] = useState<number[]>([10]);
 
   // Get all virtual patients for user
   const { data: virtualPatients = [], isLoading: patientsLoading, error } = useQuery({
@@ -30,6 +35,22 @@ export default function VirtualPatientsFixed() {
     { id: 8, name: "Lumbar Flexion Test", text: "Lumbar spine flexion test", bodyPart: "back" },
     { id: 9, name: "Ankle Dorsiflexion Test", text: "Ankle dorsiflexion test", bodyPart: "ankle" },
     { id: 10, name: "Standing March Test", text: "Standing march test - alternating knee lifts", bodyPart: "general" }
+  ];
+
+  // Exercise movements data
+  const exerciseMovements = [
+    { id: 1, name: "Squat", text: "Squat exercise", bodyPart: "lower body" },
+    { id: 2, name: "Deadlift", text: "Deadlift exercise", bodyPart: "full body" },
+    { id: 3, name: "Bridge", text: "Bridge exercise", bodyPart: "glutes" },
+    { id: 4, name: "Step-Up", text: "Step-up exercise", bodyPart: "lower body" },
+    { id: 5, name: "Bird Dog", text: "Bird dog exercise", bodyPart: "core" },
+    { id: 6, name: "Shoulder Press", text: "Shoulder press exercise", bodyPart: "shoulder" },
+    { id: 7, name: "Chest Press", text: "Chest press exercise", bodyPart: "chest" },
+    { id: 8, name: "Row", text: "Row exercise", bodyPart: "back" },
+    { id: 9, name: "Plank", text: "Plank exercise", bodyPart: "core" },
+    { id: 10, name: "Side Plank", text: "Side plank exercise", bodyPart: "core" },
+    { id: 11, name: "Lunge", text: "Lunge exercise", bodyPart: "lower body" },
+    { id: 12, name: "Calf Raise", text: "Calf raise exercise", bodyPart: "calf" }
   ];
 
   if (patientsLoading) {
@@ -190,27 +211,57 @@ export default function VirtualPatientsFixed() {
           {/* Assessment Tests Tab */}
           <TabsContent value="tests">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Left Panel - Test Selection */}
+              {/* Left Panel - Test and Exercise Selection */}
               <Card className="lg:col-span-1">
                 <CardHeader>
                   <CardTitle className="text-lg font-semibold">
                     <Stethoscope className="h-5 w-5 inline-block mr-2" />
-                    Assessment Tests
+                    Tests & Exercises
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-2">
-                    {assessmentTests.map((test) => (
-                      <Button
-                        key={test.id}
-                        variant={selectedTest === test.text ? "default" : "outline"}
-                        className="w-full justify-start text-left"
-                        onClick={() => setSelectedTest(test.text)}
-                      >
-                        <Activity className="h-4 w-4 mr-2" />
-                        {test.name}
-                      </Button>
-                    ))}
+                  <div className="space-y-4">
+                    {/* Assessment Tests */}
+                    <div>
+                      <h4 className="font-medium mb-2 text-gray-700">Assessment Tests</h4>
+                      <div className="space-y-2">
+                        {assessmentTests.map((test) => (
+                          <Button
+                            key={test.id}
+                            variant={selectedTest === test.text ? "default" : "outline"}
+                            className="w-full justify-start text-left"
+                            onClick={() => {
+                              setSelectedTest(test.text);
+                              setSelectedExercise("");
+                            }}
+                          >
+                            <Activity className="h-4 w-4 mr-2" />
+                            {test.name}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    {/* Exercise Movements */}
+                    <div>
+                      <h4 className="font-medium mb-2 text-gray-700">Exercise Movements</h4>
+                      <div className="space-y-2">
+                        {exerciseMovements.map((exercise) => (
+                          <Button
+                            key={exercise.id}
+                            variant={selectedExercise === exercise.text ? "default" : "outline"}
+                            className="w-full justify-start text-left"
+                            onClick={() => {
+                              setSelectedExercise(exercise.text);
+                              setSelectedTest("");
+                            }}
+                          >
+                            <Dumbbell className="h-4 w-4 mr-2" />
+                            {exercise.name}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </CardContent>
               </Card>

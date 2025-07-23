@@ -300,11 +300,25 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
     leftArmGroup.add(leftUpperArm);
     bonesRef.current['leftUpperArm'] = leftUpperArm;
 
-    // Left forearm
+    // Left elbow group - for proper forearm hierarchy
+    const leftElbowGroup = new THREE.Group();
+    leftElbowGroup.position.set(0, -upperArmLength, 0); // Position at elbow joint
+    leftElbowGroup.name = 'leftElbowGroup';
+    leftArmGroup.add(leftElbowGroup);
+
+    // Add visible elbow joint
+    const elbowJointGeometry = new THREE.SphereGeometry(0.05, 16, 16);
+    const elbowJointMaterial = new THREE.MeshPhongMaterial({ color: 0xff0000 }); // Red color
+    const leftElbowJoint = new THREE.Mesh(elbowJointGeometry, elbowJointMaterial);
+    leftElbowJoint.position.set(0, 0, 0); // At elbow group origin
+    leftElbowJoint.name = 'leftElbowJoint';
+    leftElbowGroup.add(leftElbowJoint);
+
+    // Left forearm attached to elbow group
     const leftForearm = new THREE.Mesh(forearmGeometry, boneMaterial);
-    leftForearm.position.set(0, -upperArmLength - forearmLength / 2, 0);
+    leftForearm.position.set(0, -forearmLength / 2, 0);
     leftForearm.name = 'leftForearm';
-    leftArmGroup.add(leftForearm);
+    leftElbowGroup.add(leftForearm);
     bonesRef.current['leftForearm'] = leftForearm;
 
     skeleton.add(leftArmGroup);
@@ -325,11 +339,23 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
     rightArmGroup.add(rightUpperArm);
     bonesRef.current['rightUpperArm'] = rightUpperArm;
 
-    // Right forearm
+    // Right elbow group - for proper forearm hierarchy
+    const rightElbowGroup = new THREE.Group();
+    rightElbowGroup.position.set(0, -upperArmLength, 0); // Position at elbow joint
+    rightElbowGroup.name = 'rightElbowGroup';
+    rightArmGroup.add(rightElbowGroup);
+
+    // Add visible elbow joint
+    const rightElbowJoint = new THREE.Mesh(elbowJointGeometry, elbowJointMaterial);
+    rightElbowJoint.position.set(0, 0, 0); // At elbow group origin
+    rightElbowJoint.name = 'rightElbowJoint';
+    rightElbowGroup.add(rightElbowJoint);
+
+    // Right forearm attached to elbow group
     const rightForearm = new THREE.Mesh(forearmGeometry, boneMaterial);
-    rightForearm.position.set(0, -upperArmLength - forearmLength / 2, 0);
+    rightForearm.position.set(0, -forearmLength / 2, 0);
     rightForearm.name = 'rightForearm';
-    rightArmGroup.add(rightForearm);
+    rightElbowGroup.add(rightForearm);
     bonesRef.current['rightForearm'] = rightForearm;
 
     skeleton.add(rightArmGroup);
@@ -338,14 +364,14 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
     const handGeometry = new THREE.SphereGeometry(0.06, 12, 12);
     
     const leftHand = new THREE.Mesh(handGeometry, boneMaterial);
-    leftHand.position.set(0, -upperArmLength - forearmLength - 0.05, 0);
+    leftHand.position.set(0, -forearmLength - 0.05, 0);
     leftHand.name = 'leftHand';
-    leftArmGroup.add(leftHand);
+    leftElbowGroup.add(leftHand); // Attach to elbow group
 
     const rightHand = new THREE.Mesh(handGeometry, boneMaterial);
-    rightHand.position.set(0, -upperArmLength - forearmLength - 0.05, 0);
+    rightHand.position.set(0, -forearmLength - 0.05, 0);
     rightHand.name = 'rightHand';
-    rightArmGroup.add(rightHand);
+    rightElbowGroup.add(rightHand); // Attach to elbow group
 
     // Add upper body connection bones for better visual connectivity
     const shoulderConnectorGeometry = new THREE.BoxGeometry(0.5, 0.08, 0.08);
@@ -752,8 +778,8 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
           rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
           rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] },
-          leftForearm: { position: [0, -0.7, 0], rotation: [-1.57, 0, 0] }, // Elbow bent 90 degrees
-          rightForearm: { position: [0, -0.7, 0], rotation: [-1.57, 0, 0] },
+          leftElbowGroup: { position: [0, -0.5, 0], rotation: [-1.57, 0, 0] }, // Elbow bent 90 degrees
+          rightElbowGroup: { position: [0, -0.5, 0], rotation: [-1.57, 0, 0] },
           leftScapula: { position: [-0.22, 1.55, -0.12], rotation: [0, -0.3, 0] },
           rightScapula: { position: [0.22, 1.55, -0.12], rotation: [0, 0.3, 0] }
         }
@@ -761,7 +787,7 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
       {
         time: 1500,
         joints: {
-          // External rotation - forearms rotate outward
+          // External rotation - upper arms rotate outward
           head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
           torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
           pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
@@ -771,8 +797,8 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
           rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, -1.0, 0] }, // External rotation
           rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 1.0, 0] },
-          leftForearm: { position: [0, -0.7, 0], rotation: [-1.57, 0, 0] },
-          rightForearm: { position: [0, -0.7, 0], rotation: [-1.57, 0, 0] },
+          leftElbowGroup: { position: [0, -0.5, 0], rotation: [-1.57, 0, 0] }, // Maintain elbow bend
+          rightElbowGroup: { position: [0, -0.5, 0], rotation: [-1.57, 0, 0] },
           leftScapula: { position: [-0.22, 1.55, -0.14], rotation: [0, -0.4, -0.1] }, // Slight retraction
           rightScapula: { position: [0.22, 1.55, -0.14], rotation: [0, 0.4, 0.1] }
         }
@@ -790,8 +816,8 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
           rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
           rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] },
-          leftForearm: { position: [0, -0.7, 0], rotation: [-1.57, 0, 0] },
-          rightForearm: { position: [0, -0.7, 0], rotation: [-1.57, 0, 0] },
+          leftElbowGroup: { position: [0, -0.5, 0], rotation: [-1.57, 0, 0] },
+          rightElbowGroup: { position: [0, -0.5, 0], rotation: [-1.57, 0, 0] },
           leftScapula: { position: [-0.22, 1.55, -0.12], rotation: [0, -0.3, 0] },
           rightScapula: { position: [0.22, 1.55, -0.12], rotation: [0, 0.3, 0] }
         }
@@ -814,8 +840,8 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
           rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
           rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] },
-          leftForearm: { position: [0, -0.7, 0], rotation: [-1.57, 0, 0] }, // Elbow bent 90 degrees
-          rightForearm: { position: [0, -0.7, 0], rotation: [-1.57, 0, 0] },
+          leftElbowGroup: { position: [0, -0.5, 0], rotation: [-1.57, 0, 0] }, // Elbow bent 90 degrees
+          rightElbowGroup: { position: [0, -0.5, 0], rotation: [-1.57, 0, 0] },
           leftScapula: { position: [-0.22, 1.55, -0.12], rotation: [0, -0.3, 0] },
           rightScapula: { position: [0.22, 1.55, -0.12], rotation: [0, 0.3, 0] }
         }
@@ -823,7 +849,7 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
       {
         time: 1500,
         joints: {
-          // Internal rotation - forearms rotate inward
+          // Internal rotation - upper arms rotate inward
           head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
           torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
           pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
@@ -833,8 +859,8 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
           rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 1.0, 0] }, // Internal rotation
           rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, -1.0, 0] },
-          leftForearm: { position: [0, -0.7, 0], rotation: [-1.57, 0, 0] },
-          rightForearm: { position: [0, -0.7, 0], rotation: [-1.57, 0, 0] },
+          leftElbowGroup: { position: [0, -0.5, 0], rotation: [-1.57, 0, 0] }, // Maintain elbow bend
+          rightElbowGroup: { position: [0, -0.5, 0], rotation: [-1.57, 0, 0] },
           leftScapula: { position: [-0.22, 1.55, -0.10], rotation: [0, -0.2, 0.1] }, // Slight protraction
           rightScapula: { position: [0.22, 1.55, -0.10], rotation: [0, 0.2, -0.1] }
         }
@@ -852,8 +878,8 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
           rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
           rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] },
-          leftForearm: { position: [0, -0.7, 0], rotation: [-1.57, 0, 0] },
-          rightForearm: { position: [0, -0.7, 0], rotation: [-1.57, 0, 0] },
+          leftElbowGroup: { position: [0, -0.5, 0], rotation: [-1.57, 0, 0] },
+          rightElbowGroup: { position: [0, -0.5, 0], rotation: [-1.57, 0, 0] },
           leftScapula: { position: [-0.22, 1.55, -0.12], rotation: [0, -0.3, 0] },
           rightScapula: { position: [0.22, 1.55, -0.12], rotation: [0, 0.3, 0] }
         }

@@ -579,8 +579,64 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
       weak: lowerText.includes('weak') || lowerText.includes('instability')
     };
 
-    // Generate animation based on analysis
-    if (lowerText.includes('squat')) {
+    // Check for physical examination tests first
+    const isPhysicalTest = lowerText.includes('test') || lowerText.includes('examination') || lowerText.includes('assessment');
+    
+    if (isPhysicalTest || lowerText.includes('shoulder abduction test')) {
+      animationFrames = generateShoulderAbductionTest();
+    } else if (isPhysicalTest && lowerText.includes('shoulder flexion')) {
+      animationFrames = generateShoulderFlexionTest();
+    } else if (isPhysicalTest && lowerText.includes('shoulder external rotation')) {
+      animationFrames = generateShoulderExternalRotationTest();
+    } else if (isPhysicalTest && lowerText.includes('shoulder internal rotation')) {
+      animationFrames = generateShoulderInternalRotationTest();
+    } else if (isPhysicalTest && lowerText.includes('scapula protraction')) {
+      animationFrames = generateScapulaProtractionTest();
+    } else if (isPhysicalTest && lowerText.includes('scapula retraction')) {
+      animationFrames = generateScapulaRetractionTest();
+    } else if (isPhysicalTest && lowerText.includes('knee extension')) {
+      animationFrames = generateKneeExtensionTest();
+    } else if (isPhysicalTest && lowerText.includes('knee flexion')) {
+      animationFrames = generateKneeFlexionTest();
+    } else if (isPhysicalTest && lowerText.includes('hip flexion')) {
+      animationFrames = generateHipFlexionTest();
+    } else if (isPhysicalTest && lowerText.includes('hip extension')) {
+      animationFrames = generateHipExtensionTest();
+    } else if (isPhysicalTest && lowerText.includes('hip abduction')) {
+      animationFrames = generateHipAbductionTest();
+    } else if (isPhysicalTest && lowerText.includes('hip adduction')) {
+      animationFrames = generateHipAdductionTest();
+    } else if (isPhysicalTest && lowerText.includes('hip internal rotation')) {
+      animationFrames = generateHipInternalRotationTest();
+    } else if (isPhysicalTest && lowerText.includes('hip external rotation')) {
+      animationFrames = generateHipExternalRotationTest();
+    } else if (isPhysicalTest && lowerText.includes('ankle dorsiflexion')) {
+      animationFrames = generateAnkleDorsiflexionTest();
+    } else if (isPhysicalTest && lowerText.includes('ankle plantarflexion')) {
+      animationFrames = generateAnklePlantarflexionTest();
+    } else if (isPhysicalTest && lowerText.includes('cervical flexion')) {
+      animationFrames = generateCervicalFlexionTest();
+    } else if (isPhysicalTest && lowerText.includes('cervical extension')) {
+      animationFrames = generateCervicalExtensionTest();
+    } else if (isPhysicalTest && lowerText.includes('cervical rotation')) {
+      animationFrames = generateCervicalRotationTest();
+    } else if (isPhysicalTest && lowerText.includes('thoracic rotation')) {
+      animationFrames = generateThoracicRotationTest();
+    } else if (isPhysicalTest && lowerText.includes('lumbar flexion')) {
+      animationFrames = generateLumbarFlexionTest();
+    } else if (isPhysicalTest && lowerText.includes('lumbar extension')) {
+      animationFrames = generateLumbarExtensionTest();
+    } else if (isPhysicalTest && lowerText.includes('elbow flexion')) {
+      animationFrames = generateElbowFlexionTest();
+    } else if (isPhysicalTest && lowerText.includes('elbow extension')) {
+      animationFrames = generateElbowExtensionTest();
+    } else if (isPhysicalTest && lowerText.includes('wrist flexion')) {
+      animationFrames = generateWristFlexionTest();
+    } else if (isPhysicalTest && lowerText.includes('wrist extension')) {
+      animationFrames = generateWristExtensionTest();
+    }
+    // Exercise movements
+    else if (lowerText.includes('squat')) {
       animationFrames = generateSquatAnimation();
     } else if (lowerText.includes('lunge')) {
       animationFrames = generateLungeAnimation();
@@ -2072,39 +2128,7 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
           pelvis: { position: [0, 0.6, 0.4], rotation: [1.57, 0, 0] },
           leftThigh: { position: [-0.15, 0.4, 0.6], rotation: [0.7, 0, 0] },
           rightThigh: { position: [0.15, 0.4, 0.6], rotation: [0.7, 0, 0] },
-          leftShin: { position: [-0.15, 0.1, 0.6], rotation: [0, 0, 0] },
-          rightShin: { position: [0.15, 0.1, 0.6], rotation: [0, 0, 0] },
-          leftHip: { position: [-0.15, 0.6, 0.4], rotation: [0, 0, 0] },
-          rightHip: { position: [0.15, 0.6, 0.4], rotation: [0, 0, 0] },
-          leftKnee: { position: [-0.15, 0.3, 0.6], rotation: [0, 0, 0] },
-          rightKnee: { position: [0.15, 0.3, 0.6], rotation: [0, 0, 0] },
-          leftArmGroup: { position: [-0.25, 0.6, -0.3], rotation: [1.57, 0, 0] },
-          rightArmGroup: { position: [0.25, 0.6, -0.3], rotation: [1.57, 0, 0] },
-          leftAnkle: { position: [-0.15, 0.1, 0.6], rotation: [0, 0, 0] },
-          rightAnkle: { position: [0.15, 0.1, 0.6], rotation: [0, 0, 0] }
-        }
-      }
-    ];
-  };
 
-  // Animation update effect that runs when animationData or isPlaying changes
-  useEffect(() => {
-    if (!skeletonRef.current || animationData.length === 0 || !isPlaying) return;
-
-    let startTime = Date.now();
-    let animationFrameId: number;
-
-    const updateAnimation = () => {
-      const elapsed = Date.now() - startTime;
-      const loopTime = elapsed % 4000; // 4 second loop
-      
-      onTimeUpdate?.(loopTime / 1000);
-
-      // Find current animation frame
-      let currentFrame = animationData[0];
-      let nextFrame = animationData[1] || animationData[0];
-
-      for (let i = 0; i < animationData.length - 1; i++) {
         if (loopTime >= animationData[i].time && loopTime <= animationData[i + 1].time) {
           currentFrame = animationData[i];
           nextFrame = animationData[i + 1];

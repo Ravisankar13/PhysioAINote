@@ -15,6 +15,29 @@ export default function VirtualPatientsFixed() {
   const [selectedExercise, setSelectedExercise] = useState<string>("");
   const [animationSpeed, setAnimationSpeed] = useState<number[]>([1]);
   const [repetitions, setRepetitions] = useState<number[]>([10]);
+  
+  // Limb scale states
+  const [upperArmScale, setUpperArmScale] = useState<number[]>([1.0]);
+  const [forearmScale, setForearmScale] = useState<number[]>([1.0]);
+  const [thighScale, setThighScale] = useState<number[]>([1.0]);
+  const [shinScale, setShinScale] = useState<number[]>([1.0]);
+  const [torsoScale, setTorsoScale] = useState<number[]>([1.0]);
+  const [overallScale, setOverallScale] = useState<number[]>([1.0]);
+  
+  // Hip pathology states
+  const [hipNeckAngle, setHipNeckAngle] = useState<number[]>([130]);
+  const [hipAnteversion, setHipAnteversion] = useState<number[]>([12]);
+  const [acetabularCoverage, setAcetabularCoverage] = useState<number[]>([75]);
+  
+  // Knee pathology states
+  const [kneeVarusValgus, setKneeVarusValgus] = useState<number[]>([3]);
+  const [patellaHeight, setPatellaHeight] = useState<number[]>([1.0]);
+  const [tibialTorsion, setTibialTorsion] = useState<number[]>([10]);
+  
+  // Shoulder pathology states
+  const [scapularWinging, setScapularWinging] = useState<number[]>([3]);
+  const [acSeparation, setAcSeparation] = useState<number[]>([0]);
+  const [ghSubluxation, setGhSubluxation] = useState<number[]>([0]);
 
   // Get all virtual patients for user
   const { data: virtualPatients = [], isLoading: patientsLoading, error } = useQuery({
@@ -281,49 +304,353 @@ export default function VirtualPatientsFixed() {
                           clinicalText={selectedTest || selectedExercise}
                           isPlaying={true}
                           limbScales={{
-                            upperArm: 1.0,
-                            forearm: 1.0,
-                            thigh: 1.0,
-                            shin: 1.0,
-                            torso: 1.0,
-                            overall: 1.0
+                            upperArm: upperArmScale[0],
+                            forearm: forearmScale[0],
+                            thigh: thighScale[0],
+                            shin: shinScale[0],
+                            torso: torsoScale[0],
+                            overall: overallScale[0]
+                          }}
+                          hipPathology={{
+                            neckAngle: hipNeckAngle[0],
+                            anteversion: hipAnteversion[0],
+                            acetabularCoverage: acetabularCoverage[0]
+                          }}
+                          kneePathology={{
+                            varusValgus: kneeVarusValgus[0],
+                            patellaHeight: patellaHeight[0],
+                            tibialTorsion: tibialTorsion[0]
+                          }}
+                          shoulderPathology={{
+                            scapularWinging: scapularWinging[0],
+                            acSeparation: acSeparation[0],
+                            ghSubluxation: ghSubluxation[0]
                           }}
                         />
                       </div>
                       
                       {/* Control Sliders */}
-                      <div className="space-y-4 p-4 bg-gray-50 rounded-lg">
-                        <div>
-                          <Label className="text-sm font-medium">Animation Speed</Label>
-                          <div className="flex items-center gap-4 mt-2">
-                            <span className="text-sm text-gray-600">0.5x</span>
-                            <Slider
-                              value={animationSpeed}
-                              onValueChange={setAnimationSpeed}
-                              min={0.5}
-                              max={2}
-                              step={0.1}
-                              className="flex-1"
-                            />
-                            <span className="text-sm text-gray-600">2x</span>
-                            <span className="text-sm font-medium ml-2">{animationSpeed[0]}x</span>
+                      <div className="space-y-4 p-4 bg-gray-50 rounded-lg max-h-[600px] overflow-y-auto">
+                        {/* Animation Controls */}
+                        <div className="pb-4 border-b">
+                          <h4 className="font-medium mb-3">Animation Controls</h4>
+                          <div className="space-y-3">
+                            <div>
+                              <Label className="text-sm font-medium">Animation Speed</Label>
+                              <div className="flex items-center gap-4 mt-2">
+                                <span className="text-sm text-gray-600">0.5x</span>
+                                <Slider
+                                  value={animationSpeed}
+                                  onValueChange={setAnimationSpeed}
+                                  min={0.5}
+                                  max={2}
+                                  step={0.1}
+                                  className="flex-1"
+                                />
+                                <span className="text-sm text-gray-600">2x</span>
+                                <span className="text-sm font-medium ml-2">{animationSpeed[0]}x</span>
+                              </div>
+                            </div>
+                            
+                            <div>
+                              <Label className="text-sm font-medium">Repetitions</Label>
+                              <div className="flex items-center gap-4 mt-2">
+                                <span className="text-sm text-gray-600">1</span>
+                                <Slider
+                                  value={repetitions}
+                                  onValueChange={setRepetitions}
+                                  min={1}
+                                  max={20}
+                                  step={1}
+                                  className="flex-1"
+                                />
+                                <span className="text-sm text-gray-600">20</span>
+                                <span className="text-sm font-medium ml-2">{repetitions[0]} reps</span>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                        
+
+                        {/* Limb Length Controls */}
+                        <div className="pb-4 border-b">
+                          <h4 className="font-medium mb-3">Limb Lengths</h4>
+                          <div className="space-y-3">
+                            <div>
+                              <Label className="text-sm font-medium">Upper Arm Length</Label>
+                              <div className="flex items-center gap-4 mt-2">
+                                <span className="text-sm text-gray-600">0.5</span>
+                                <Slider
+                                  value={upperArmScale}
+                                  onValueChange={setUpperArmScale}
+                                  min={0.5}
+                                  max={1.5}
+                                  step={0.05}
+                                  className="flex-1"
+                                />
+                                <span className="text-sm text-gray-600">1.5</span>
+                                <span className="text-sm font-medium ml-2">{upperArmScale[0].toFixed(2)}</span>
+                              </div>
+                            </div>
+                            
+                            <div>
+                              <Label className="text-sm font-medium">Forearm Length</Label>
+                              <div className="flex items-center gap-4 mt-2">
+                                <span className="text-sm text-gray-600">0.5</span>
+                                <Slider
+                                  value={forearmScale}
+                                  onValueChange={setForearmScale}
+                                  min={0.5}
+                                  max={1.5}
+                                  step={0.05}
+                                  className="flex-1"
+                                />
+                                <span className="text-sm text-gray-600">1.5</span>
+                                <span className="text-sm font-medium ml-2">{forearmScale[0].toFixed(2)}</span>
+                              </div>
+                            </div>
+                            
+                            <div>
+                              <Label className="text-sm font-medium">Thigh Length</Label>
+                              <div className="flex items-center gap-4 mt-2">
+                                <span className="text-sm text-gray-600">0.5</span>
+                                <Slider
+                                  value={thighScale}
+                                  onValueChange={setThighScale}
+                                  min={0.5}
+                                  max={1.5}
+                                  step={0.05}
+                                  className="flex-1"
+                                />
+                                <span className="text-sm text-gray-600">1.5</span>
+                                <span className="text-sm font-medium ml-2">{thighScale[0].toFixed(2)}</span>
+                              </div>
+                            </div>
+                            
+                            <div>
+                              <Label className="text-sm font-medium">Shin Length</Label>
+                              <div className="flex items-center gap-4 mt-2">
+                                <span className="text-sm text-gray-600">0.5</span>
+                                <Slider
+                                  value={shinScale}
+                                  onValueChange={setShinScale}
+                                  min={0.5}
+                                  max={1.5}
+                                  step={0.05}
+                                  className="flex-1"
+                                />
+                                <span className="text-sm text-gray-600">1.5</span>
+                                <span className="text-sm font-medium ml-2">{shinScale[0].toFixed(2)}</span>
+                              </div>
+                            </div>
+                            
+                            <div>
+                              <Label className="text-sm font-medium">Torso Length</Label>
+                              <div className="flex items-center gap-4 mt-2">
+                                <span className="text-sm text-gray-600">0.5</span>
+                                <Slider
+                                  value={torsoScale}
+                                  onValueChange={setTorsoScale}
+                                  min={0.5}
+                                  max={1.5}
+                                  step={0.05}
+                                  className="flex-1"
+                                />
+                                <span className="text-sm text-gray-600">1.5</span>
+                                <span className="text-sm font-medium ml-2">{torsoScale[0].toFixed(2)}</span>
+                              </div>
+                            </div>
+                            
+                            <div>
+                              <Label className="text-sm font-medium">Overall Scale</Label>
+                              <div className="flex items-center gap-4 mt-2">
+                                <span className="text-sm text-gray-600">0.5</span>
+                                <Slider
+                                  value={overallScale}
+                                  onValueChange={setOverallScale}
+                                  min={0.5}
+                                  max={1.5}
+                                  step={0.05}
+                                  className="flex-1"
+                                />
+                                <span className="text-sm text-gray-600">1.5</span>
+                                <span className="text-sm font-medium ml-2">{overallScale[0].toFixed(2)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Hip Pathology Controls */}
+                        <div className="pb-4 border-b">
+                          <h4 className="font-medium mb-3">Hip Pathology</h4>
+                          <div className="space-y-3">
+                            <div>
+                              <Label className="text-sm font-medium">Neck-Shaft Angle (Coxa Vara/Valga)</Label>
+                              <div className="flex items-center gap-4 mt-2">
+                                <span className="text-sm text-gray-600">110°</span>
+                                <Slider
+                                  value={hipNeckAngle}
+                                  onValueChange={setHipNeckAngle}
+                                  min={110}
+                                  max={150}
+                                  step={1}
+                                  className="flex-1"
+                                />
+                                <span className="text-sm text-gray-600">150°</span>
+                                <span className="text-sm font-medium ml-2">{hipNeckAngle[0]}°</span>
+                              </div>
+                              <p className="text-xs text-gray-500 mt-1">Normal: 125-135°, &lt;120° = Coxa vara, &gt;140° = Coxa valga</p>
+                            </div>
+                            
+                            <div>
+                              <Label className="text-sm font-medium">Femoral Anteversion/Retroversion</Label>
+                              <div className="flex items-center gap-4 mt-2">
+                                <span className="text-sm text-gray-600">-10°</span>
+                                <Slider
+                                  value={hipAnteversion}
+                                  onValueChange={setHipAnteversion}
+                                  min={-10}
+                                  max={40}
+                                  step={1}
+                                  className="flex-1"
+                                />
+                                <span className="text-sm text-gray-600">40°</span>
+                                <span className="text-sm font-medium ml-2">{hipAnteversion[0]}°</span>
+                              </div>
+                              <p className="text-xs text-gray-500 mt-1">Normal: 10-15°, Negative = Retroversion, &gt;15° = Anteversion</p>
+                            </div>
+                            
+                            <div>
+                              <Label className="text-sm font-medium">Acetabular Coverage</Label>
+                              <div className="flex items-center gap-4 mt-2">
+                                <span className="text-sm text-gray-600">50%</span>
+                                <Slider
+                                  value={acetabularCoverage}
+                                  onValueChange={setAcetabularCoverage}
+                                  min={50}
+                                  max={100}
+                                  step={1}
+                                  className="flex-1"
+                                />
+                                <span className="text-sm text-gray-600">100%</span>
+                                <span className="text-sm font-medium ml-2">{acetabularCoverage[0]}%</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Knee Pathology Controls */}
+                        <div className="pb-4 border-b">
+                          <h4 className="font-medium mb-3">Knee Pathology</h4>
+                          <div className="space-y-3">
+                            <div>
+                              <Label className="text-sm font-medium">Varus/Valgus Angle</Label>
+                              <div className="flex items-center gap-4 mt-2">
+                                <span className="text-sm text-gray-600">-15°</span>
+                                <Slider
+                                  value={kneeVarusValgus}
+                                  onValueChange={setKneeVarusValgus}
+                                  min={-15}
+                                  max={15}
+                                  step={1}
+                                  className="flex-1"
+                                />
+                                <span className="text-sm text-gray-600">15°</span>
+                                <span className="text-sm font-medium ml-2">{kneeVarusValgus[0]}°</span>
+                              </div>
+                              <p className="text-xs text-gray-500 mt-1">Negative = Varus (bow-legged), Positive = Valgus (knock-kneed)</p>
+                            </div>
+                            
+                            <div>
+                              <Label className="text-sm font-medium">Patella Height (Insall-Salvati)</Label>
+                              <div className="flex items-center gap-4 mt-2">
+                                <span className="text-sm text-gray-600">0.5</span>
+                                <Slider
+                                  value={patellaHeight}
+                                  onValueChange={setPatellaHeight}
+                                  min={0.5}
+                                  max={1.5}
+                                  step={0.05}
+                                  className="flex-1"
+                                />
+                                <span className="text-sm text-gray-600">1.5</span>
+                                <span className="text-sm font-medium ml-2">{patellaHeight[0].toFixed(2)}</span>
+                              </div>
+                              <p className="text-xs text-gray-500 mt-1">Normal: 0.8-1.2, &lt;0.8 = Patella baja, &gt;1.2 = Patella alta</p>
+                            </div>
+                            
+                            <div>
+                              <Label className="text-sm font-medium">Tibial Torsion</Label>
+                              <div className="flex items-center gap-4 mt-2">
+                                <span className="text-sm text-gray-600">-20°</span>
+                                <Slider
+                                  value={tibialTorsion}
+                                  onValueChange={setTibialTorsion}
+                                  min={-20}
+                                  max={40}
+                                  step={1}
+                                  className="flex-1"
+                                />
+                                <span className="text-sm text-gray-600">40°</span>
+                                <span className="text-sm font-medium ml-2">{tibialTorsion[0]}°</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Shoulder Pathology Controls */}
                         <div>
-                          <Label className="text-sm font-medium">Repetitions</Label>
-                          <div className="flex items-center gap-4 mt-2">
-                            <span className="text-sm text-gray-600">1</span>
-                            <Slider
-                              value={repetitions}
-                              onValueChange={setRepetitions}
-                              min={1}
-                              max={20}
-                              step={1}
-                              className="flex-1"
-                            />
-                            <span className="text-sm text-gray-600">20</span>
-                            <span className="text-sm font-medium ml-2">{repetitions[0]} reps</span>
+                          <h4 className="font-medium mb-3">Shoulder Pathology</h4>
+                          <div className="space-y-3">
+                            <div>
+                              <Label className="text-sm font-medium">Scapular Winging</Label>
+                              <div className="flex items-center gap-4 mt-2">
+                                <span className="text-sm text-gray-600">0°</span>
+                                <Slider
+                                  value={scapularWinging}
+                                  onValueChange={setScapularWinging}
+                                  min={0}
+                                  max={20}
+                                  step={1}
+                                  className="flex-1"
+                                />
+                                <span className="text-sm text-gray-600">20°</span>
+                                <span className="text-sm font-medium ml-2">{scapularWinging[0]}°</span>
+                              </div>
+                            </div>
+                            
+                            <div>
+                              <Label className="text-sm font-medium">AC Joint Separation</Label>
+                              <div className="flex items-center gap-4 mt-2">
+                                <span className="text-sm text-gray-600">0mm</span>
+                                <Slider
+                                  value={acSeparation}
+                                  onValueChange={setAcSeparation}
+                                  min={0}
+                                  max={20}
+                                  step={1}
+                                  className="flex-1"
+                                />
+                                <span className="text-sm text-gray-600">20mm</span>
+                                <span className="text-sm font-medium ml-2">{acSeparation[0]}mm</span>
+                              </div>
+                            </div>
+                            
+                            <div>
+                              <Label className="text-sm font-medium">GH Joint Subluxation</Label>
+                              <div className="flex items-center gap-4 mt-2">
+                                <span className="text-sm text-gray-600">0mm</span>
+                                <Slider
+                                  value={ghSubluxation}
+                                  onValueChange={setGhSubluxation}
+                                  min={0}
+                                  max={15}
+                                  step={1}
+                                  className="flex-1"
+                                />
+                                <span className="text-sm text-gray-600">15mm</span>
+                                <span className="text-sm font-medium ml-2">{ghSubluxation[0]}mm</span>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>

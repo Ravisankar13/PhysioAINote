@@ -266,7 +266,7 @@ export default function VirtualPatientsFixed() {
                 </CardContent>
               </Card>
               
-              {/* Right Panel - 3D Animation */}
+              {/* Right Panel - 3D Animation and Controls */}
               <Card className="lg:col-span-2">
                 <CardHeader>
                   <CardTitle className="text-lg font-semibold">
@@ -274,38 +274,101 @@ export default function VirtualPatientsFixed() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {selectedTest ? (
+                  {selectedTest || selectedExercise ? (
                     <div className="space-y-4">
                       <div className="bg-gray-100 rounded-lg p-4">
-                        <Text3DAnimation text={selectedTest} />
+                        <Text3DAnimation 
+                          clinicalText={selectedTest || selectedExercise}
+                          isPlaying={true}
+                          limbScales={{
+                            upperArm: 1.0,
+                            forearm: 1.0,
+                            thigh: 1.0,
+                            shin: 1.0,
+                            torso: 1.0,
+                            overall: 1.0
+                          }}
+                        />
                       </div>
+                      
+                      {/* Control Sliders */}
+                      <div className="space-y-4 p-4 bg-gray-50 rounded-lg">
+                        <div>
+                          <Label className="text-sm font-medium">Animation Speed</Label>
+                          <div className="flex items-center gap-4 mt-2">
+                            <span className="text-sm text-gray-600">0.5x</span>
+                            <Slider
+                              value={animationSpeed}
+                              onValueChange={setAnimationSpeed}
+                              min={0.5}
+                              max={2}
+                              step={0.1}
+                              className="flex-1"
+                            />
+                            <span className="text-sm text-gray-600">2x</span>
+                            <span className="text-sm font-medium ml-2">{animationSpeed[0]}x</span>
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <Label className="text-sm font-medium">Repetitions</Label>
+                          <div className="flex items-center gap-4 mt-2">
+                            <span className="text-sm text-gray-600">1</span>
+                            <Slider
+                              value={repetitions}
+                              onValueChange={setRepetitions}
+                              min={1}
+                              max={20}
+                              step={1}
+                              className="flex-1"
+                            />
+                            <span className="text-sm text-gray-600">20</span>
+                            <span className="text-sm font-medium ml-2">{repetitions[0]} reps</span>
+                          </div>
+                        </div>
+                      </div>
+                      
                       <div className="p-4 bg-blue-50 rounded-lg">
-                        <h4 className="font-medium mb-2">Test Instructions:</h4>
+                        <h4 className="font-medium mb-2">
+                          {selectedTest ? "Test Instructions:" : "Exercise Instructions:"}
+                        </h4>
                         <p className="text-sm text-gray-700">
-                          {selectedTest.includes("Shoulder Abduction") && 
+                          {selectedTest?.includes("Shoulder Abduction") && 
                             "Patient starts with arms at sides, then abducts both arms to 180 degrees overhead. Assess for range of motion, symmetry, and compensation patterns."}
-                          {selectedTest.includes("Shoulder Flexion") && 
+                          {selectedTest?.includes("Shoulder Flexion") && 
                             "Patient raises arms forward and up to full overhead position. Look for scapular rhythm and any trunk compensation."}
-                          {selectedTest.includes("Knee Flexion") && 
+                          {selectedTest?.includes("Knee Flexion") && 
                             "Patient flexes knee to maximum range. Normal range is 130-140 degrees. Check for crepitus or pain."}
-                          {selectedTest.includes("Hip Abduction") && 
+                          {selectedTest?.includes("Hip Abduction") && 
                             "Patient moves leg laterally away from midline. Normal range is 40-45 degrees. Watch for trunk lean."}
-                          {selectedTest.includes("Standing March") && 
+                          {selectedTest?.includes("Standing March") && 
                             "Patient alternates lifting knees to 90 degrees. Assess balance, coordination, and hip flexor strength."}
-                          {!selectedTest.includes("Shoulder Abduction") && 
-                           !selectedTest.includes("Shoulder Flexion") && 
-                           !selectedTest.includes("Knee Flexion") && 
-                           !selectedTest.includes("Hip Abduction") && 
-                           !selectedTest.includes("Standing March") && 
-                            "Select a test to see specific instructions and normal ranges."}
+                          {selectedExercise?.includes("Squat") && 
+                            "Keep feet shoulder-width apart, lower hips back and down, maintain neutral spine. Go as low as comfortable while keeping knees aligned over toes."}
+                          {selectedExercise?.includes("Deadlift") && 
+                            "Hinge at hips, maintain neutral spine, keep weight close to body. Drive through heels to return to standing."}
+                          {selectedExercise?.includes("Bridge") && 
+                            "Lie on back, feet flat on floor. Lift hips up squeezing glutes, hold briefly, lower with control."}
+                          {selectedExercise?.includes("Step-Up") && 
+                            "Step up onto platform with full foot, drive through heel, control descent. Keep torso upright throughout."}
+                          {selectedExercise?.includes("Bird Dog") && 
+                            "Start on hands and knees. Extend opposite arm and leg, maintain neutral spine, hold briefly."}
+                          {selectedExercise?.includes("Shoulder Press") && 
+                            "Press weights overhead maintaining neutral spine. Lower with control to shoulder level."}
+                          {selectedExercise?.includes("Plank") && 
+                            "Maintain straight line from head to heels. Engage core, avoid sagging hips or raised buttocks."}
+                          {selectedExercise?.includes("Lunge") && 
+                            "Step forward, lower back knee toward floor. Keep front knee over ankle, push through front heel to return."}
+                          {!selectedTest && !selectedExercise && 
+                            "Select a test or exercise to see specific instructions."}
                         </p>
                       </div>
                     </div>
                   ) : (
                     <div className="text-center text-gray-500 py-16">
                       <Activity className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-                      <p className="text-lg">Select an assessment test</p>
-                      <p className="text-sm mt-2">Choose a test from the left panel to see the 3D demonstration</p>
+                      <p className="text-lg">Select an assessment test or exercise</p>
+                      <p className="text-sm mt-2">Choose from the left panel to see the 3D demonstration</p>
                     </div>
                   )}
                 </CardContent>

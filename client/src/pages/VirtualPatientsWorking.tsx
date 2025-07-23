@@ -50,7 +50,9 @@ export default function VirtualPatientsWorking() {
   const [shoulderPathology, setShoulderPathology] = useState({
     scapularWinging: 3,    // Normal: 0-5°
     acSeparation: 0,       // Grade 0-6
-    ghSubluxation: 0       // Normal: 0%
+    ghSubluxation: 0,      // Normal: 0%
+    scapularProtraction: 0, // Normal: 0-5cm
+    ghInternalRotation: 40  // Normal: 40-60°
   });
   const [activeTab, setActiveTab] = useState<'body-proportions' | 'hip-pathology' | 'knee-pathology' | 'shoulder-pathology'>('body-proportions');
 
@@ -666,28 +668,28 @@ export default function VirtualPatientsWorking() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => setShoulderPathology({ scapularProtraction: 3, scapularWinging: 2, ghInternalRotation: 45 })}
+                            onClick={() => setShoulderPathology({ scapularProtraction: 3, scapularWinging: 2, ghInternalRotation: 45, acSeparation: 0, ghSubluxation: 0 })}
                           >
                             Normal Shoulder
                           </Button>
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => setShoulderPathology({ scapularProtraction: 12, scapularWinging: 5, ghInternalRotation: 35 })}
+                            onClick={() => setShoulderPathology({ scapularProtraction: 12, scapularWinging: 5, ghInternalRotation: 35, acSeparation: 0, ghSubluxation: 0 })}
                           >
                             SICK Scapula
                           </Button>
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => setShoulderPathology({ scapularProtraction: 5, scapularWinging: 20, ghInternalRotation: 45 })}
+                            onClick={() => setShoulderPathology({ scapularProtraction: 5, scapularWinging: 20, ghInternalRotation: 45, acSeparation: 0, ghSubluxation: 0 })}
                           >
                             Scapular Winging
                           </Button>
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => setShoulderPathology({ scapularProtraction: 3, scapularWinging: 2, ghInternalRotation: 20 })}
+                            onClick={() => setShoulderPathology({ scapularProtraction: 3, scapularWinging: 2, ghInternalRotation: 20, acSeparation: 0, ghSubluxation: 0 })}
                           >
                             GIRD
                           </Button>

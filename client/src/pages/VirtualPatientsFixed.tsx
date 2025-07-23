@@ -9,6 +9,7 @@ import type { SoapVirtualPatient } from "@shared/schema";
 
 export default function VirtualPatientsFixed() {
   const [selectedPatient, setSelectedPatient] = useState<SoapVirtualPatient | null>(null);
+  const [selectedTest, setSelectedTest] = useState<string>("");
 
   // Get all virtual patients for user
   const { data: virtualPatients = [], isLoading: patientsLoading, error } = useQuery({
@@ -16,6 +17,20 @@ export default function VirtualPatientsFixed() {
   });
 
   const patientsArray = Array.isArray(virtualPatients) ? virtualPatients : [];
+
+  // Assessment tests data
+  const assessmentTests = [
+    { id: 1, name: "Shoulder Abduction Test", text: "Shoulder abduction test - arms to sides then out", bodyPart: "shoulder" },
+    { id: 2, name: "Shoulder Flexion Test", text: "Shoulder flexion test - arms forward then up", bodyPart: "shoulder" },
+    { id: 3, name: "Shoulder External Rotation", text: "Shoulder external rotation test", bodyPart: "shoulder" },
+    { id: 4, name: "Shoulder Internal Rotation", text: "Shoulder internal rotation test", bodyPart: "shoulder" },
+    { id: 5, name: "Knee Flexion Test", text: "Knee flexion test assessment", bodyPart: "knee" },
+    { id: 6, name: "Hip Abduction Test", text: "Hip abduction test - leg to side", bodyPart: "hip" },
+    { id: 7, name: "Cervical Rotation Test", text: "Cervical spine rotation test", bodyPart: "neck" },
+    { id: 8, name: "Lumbar Flexion Test", text: "Lumbar spine flexion test", bodyPart: "back" },
+    { id: 9, name: "Ankle Dorsiflexion Test", text: "Ankle dorsiflexion test", bodyPart: "ankle" },
+    { id: 10, name: "Standing March Test", text: "Standing march test - alternating knee lifts", bodyPart: "general" }
+  ];
 
   if (patientsLoading) {
     return (
@@ -41,22 +56,6 @@ export default function VirtualPatientsFixed() {
       </div>
     );
   }
-
-  // Assessment tests data
-  const assessmentTests = [
-    { id: 1, name: "Shoulder Abduction Test", text: "Shoulder abduction test - arms to sides then out", bodyPart: "shoulder" },
-    { id: 2, name: "Shoulder Flexion Test", text: "Shoulder flexion test - arms forward then up", bodyPart: "shoulder" },
-    { id: 3, name: "Shoulder External Rotation", text: "Shoulder external rotation test", bodyPart: "shoulder" },
-    { id: 4, name: "Shoulder Internal Rotation", text: "Shoulder internal rotation test", bodyPart: "shoulder" },
-    { id: 5, name: "Knee Flexion Test", text: "Knee flexion test assessment", bodyPart: "knee" },
-    { id: 6, name: "Hip Abduction Test", text: "Hip abduction test - leg to side", bodyPart: "hip" },
-    { id: 7, name: "Cervical Rotation Test", text: "Cervical spine rotation test", bodyPart: "neck" },
-    { id: 8, name: "Lumbar Flexion Test", text: "Lumbar spine flexion test", bodyPart: "back" },
-    { id: 9, name: "Ankle Dorsiflexion Test", text: "Ankle dorsiflexion test", bodyPart: "ankle" },
-    { id: 10, name: "Standing March Test", text: "Standing march test - alternating knee lifts", bodyPart: "general" }
-  ];
-
-  const [selectedTest, setSelectedTest] = useState<string>("");
 
   return (
     <div className="container mx-auto py-8 px-4">

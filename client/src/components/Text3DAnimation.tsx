@@ -583,57 +583,57 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
     const isPhysicalTest = lowerText.includes('test') || lowerText.includes('examination') || lowerText.includes('assessment');
     
     if (isPhysicalTest || lowerText.includes('shoulder abduction test')) {
-      animationFrames = generateShoulderAbductionTest();
+      animationFrames = generateGeneralMovementAnimation();
     } else if (isPhysicalTest && lowerText.includes('shoulder flexion')) {
-      animationFrames = generateShoulderFlexionTest();
+      animationFrames = generateGeneralMovementAnimation();
     } else if (isPhysicalTest && lowerText.includes('shoulder external rotation')) {
-      animationFrames = generateShoulderExternalRotationTest();
+      animationFrames = generateGeneralMovementAnimation();
     } else if (isPhysicalTest && lowerText.includes('shoulder internal rotation')) {
-      animationFrames = generateShoulderInternalRotationTest();
+      animationFrames = generateGeneralMovementAnimation();
     } else if (isPhysicalTest && lowerText.includes('scapula protraction')) {
-      animationFrames = generateScapulaProtractionTest();
+      animationFrames = generateGeneralMovementAnimation();
     } else if (isPhysicalTest && lowerText.includes('scapula retraction')) {
-      animationFrames = generateScapulaRetractionTest();
+      animationFrames = generateGeneralMovementAnimation();
     } else if (isPhysicalTest && lowerText.includes('knee extension')) {
-      animationFrames = generateKneeExtensionTest();
+      animationFrames = generateGeneralMovementAnimation();
     } else if (isPhysicalTest && lowerText.includes('knee flexion')) {
-      animationFrames = generateKneeFlexionTest();
+      animationFrames = generateGeneralMovementAnimation();
     } else if (isPhysicalTest && lowerText.includes('hip flexion')) {
-      animationFrames = generateHipFlexionTest();
+      animationFrames = generateGeneralMovementAnimation();
     } else if (isPhysicalTest && lowerText.includes('hip extension')) {
-      animationFrames = generateHipExtensionTest();
+      animationFrames = generateGeneralMovementAnimation();
     } else if (isPhysicalTest && lowerText.includes('hip abduction')) {
-      animationFrames = generateHipAbductionTest();
+      animationFrames = generateGeneralMovementAnimation();
     } else if (isPhysicalTest && lowerText.includes('hip adduction')) {
-      animationFrames = generateHipAdductionTest();
+      animationFrames = generateGeneralMovementAnimation();
     } else if (isPhysicalTest && lowerText.includes('hip internal rotation')) {
-      animationFrames = generateHipInternalRotationTest();
+      animationFrames = generateGeneralMovementAnimation();
     } else if (isPhysicalTest && lowerText.includes('hip external rotation')) {
-      animationFrames = generateHipExternalRotationTest();
+      animationFrames = generateGeneralMovementAnimation();
     } else if (isPhysicalTest && lowerText.includes('ankle dorsiflexion')) {
-      animationFrames = generateAnkleDorsiflexionTest();
+      animationFrames = generateGeneralMovementAnimation();
     } else if (isPhysicalTest && lowerText.includes('ankle plantarflexion')) {
-      animationFrames = generateAnklePlantarflexionTest();
+      animationFrames = generateGeneralMovementAnimation();
     } else if (isPhysicalTest && lowerText.includes('cervical flexion')) {
-      animationFrames = generateCervicalFlexionTest();
+      animationFrames = generateGeneralMovementAnimation();
     } else if (isPhysicalTest && lowerText.includes('cervical extension')) {
-      animationFrames = generateCervicalExtensionTest();
+      animationFrames = generateGeneralMovementAnimation();
     } else if (isPhysicalTest && lowerText.includes('cervical rotation')) {
-      animationFrames = generateCervicalRotationTest();
+      animationFrames = generateGeneralMovementAnimation();
     } else if (isPhysicalTest && lowerText.includes('thoracic rotation')) {
-      animationFrames = generateThoracicRotationTest();
+      animationFrames = generateGeneralMovementAnimation();
     } else if (isPhysicalTest && lowerText.includes('lumbar flexion')) {
-      animationFrames = generateLumbarFlexionTest();
+      animationFrames = generateGeneralMovementAnimation();
     } else if (isPhysicalTest && lowerText.includes('lumbar extension')) {
-      animationFrames = generateLumbarExtensionTest();
+      animationFrames = generateGeneralMovementAnimation();
     } else if (isPhysicalTest && lowerText.includes('elbow flexion')) {
-      animationFrames = generateElbowFlexionTest();
+      animationFrames = generateGeneralMovementAnimation();
     } else if (isPhysicalTest && lowerText.includes('elbow extension')) {
-      animationFrames = generateElbowExtensionTest();
+      animationFrames = generateGeneralMovementAnimation();
     } else if (isPhysicalTest && lowerText.includes('wrist flexion')) {
-      animationFrames = generateWristFlexionTest();
+      animationFrames = generateGeneralMovementAnimation();
     } else if (isPhysicalTest && lowerText.includes('wrist extension')) {
-      animationFrames = generateWristExtensionTest();
+      animationFrames = generateGeneralMovementAnimation();
     }
     // Exercise movements
     else if (lowerText.includes('squat')) {
@@ -665,11 +665,11 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
     } else if (bodyParts.shoulder && limitations.limited) {
       animationFrames = generateShoulderLimitationAnimation();
     } else if (bodyParts.back && limitations.stiff) {
-      animationFrames = generateBackStiffnessAnimation();
+      animationFrames = generateGeneralMovementAnimation();
     } else if (bodyParts.knee && limitations.pain) {
-      animationFrames = generateKneePainAnimation();
+      animationFrames = generateGeneralMovementAnimation();
     } else if (bodyParts.hip) {
-      animationFrames = generateHipMovementAnimation();
+      animationFrames = generateHipAbductionAnimation();
     } else {
       animationFrames = generateGeneralMovementAnimation();
     }
@@ -2128,7 +2128,43 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
           pelvis: { position: [0, 0.6, 0.4], rotation: [1.57, 0, 0] },
           leftThigh: { position: [-0.15, 0.4, 0.6], rotation: [0.7, 0, 0] },
           rightThigh: { position: [0.15, 0.4, 0.6], rotation: [0.7, 0, 0] },
+          leftShin: { position: [-0.15, 0.1, 0.6], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, 0.1, 0.6], rotation: [0, 0, 0] },
+          leftHip: { position: [-0.15, 0.6, 0.4], rotation: [0, 0, 0] },
+          rightHip: { position: [0.15, 0.6, 0.4], rotation: [0, 0, 0] },
+          leftKnee: { position: [-0.15, 0.3, 0.6], rotation: [0, 0, 0] },
+          rightKnee: { position: [0.15, 0.3, 0.6], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.25, 0.6, -0.3], rotation: [1.57, 0, 0] },
+          rightArmGroup: { position: [0.25, 0.6, -0.3], rotation: [1.57, 0, 0] },
+          leftAnkle: { position: [-0.15, 0.1, 0.6], rotation: [0, 0, 0] },
+          rightAnkle: { position: [0.15, 0.1, 0.6], rotation: [0, 0, 0] }
+        }
+      }
+    ];
+  };
 
+  // Animation playback effect
+  useEffect(() => {
+    if (!isPlaying || animationData.length === 0) return;
+
+    let animationFrameId: number;
+    let startTime = Date.now();
+
+    const updateAnimation = () => {
+      const elapsedTime = Date.now() - startTime;
+      const totalDuration = Math.max(...animationData.map(frame => frame.time));
+      const loopTime = elapsedTime % totalDuration;
+
+      setCurrentTime(loopTime);
+      if (onTimeUpdate) {
+        onTimeUpdate(loopTime);
+      }
+
+      // Find current and next frames
+      let currentFrame = animationData[0];
+      let nextFrame = animationData[1] || animationData[0];
+
+      for (let i = 0; i < animationData.length - 1; i++) {
         if (loopTime >= animationData[i].time && loopTime <= animationData[i + 1].time) {
           currentFrame = animationData[i];
           nextFrame = animationData[i + 1];
@@ -2162,100 +2198,6 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
         }
       });
 
-      // After updating joint positions, adjust leg bones to maintain connections
-      const leftThigh = skeletonRef.current!.getObjectByName('leftThigh') as THREE.Mesh;
-      const leftShin = skeletonRef.current!.getObjectByName('leftShin') as THREE.Mesh;
-      const leftHip = skeletonRef.current!.getObjectByName('leftHip') as THREE.Mesh;
-      const leftKnee = skeletonRef.current!.getObjectByName('leftKnee') as THREE.Mesh;
-      const leftAnkle = skeletonRef.current!.getObjectByName('leftAnkle') as THREE.Mesh;
-      const leftFoot = skeletonRef.current!.getObjectByName('leftFoot') as THREE.Mesh;
-
-      const rightThigh = skeletonRef.current!.getObjectByName('rightThigh') as THREE.Mesh;
-      const rightShin = skeletonRef.current!.getObjectByName('rightShin') as THREE.Mesh;
-      const rightHip = skeletonRef.current!.getObjectByName('rightHip') as THREE.Mesh;
-      const rightKnee = skeletonRef.current!.getObjectByName('rightKnee') as THREE.Mesh;
-      const rightAnkle = skeletonRef.current!.getObjectByName('rightAnkle') as THREE.Mesh;
-      const rightFoot = skeletonRef.current!.getObjectByName('rightFoot') as THREE.Mesh;
-
-      // Adjust left leg bones to connect properly
-      if (leftThigh && leftHip && leftKnee) {
-        // Position thigh between hip and knee
-        leftThigh.position.x = (leftHip.position.x + leftKnee.position.x) / 2;
-        leftThigh.position.y = (leftHip.position.y + leftKnee.position.y) / 2;
-        leftThigh.position.z = (leftHip.position.z + leftKnee.position.z) / 2;
-        
-        // Calculate thigh length and scale
-        const thighLength = leftHip.position.distanceTo(leftKnee.position);
-        leftThigh.scale.y = thighLength / 0.8; // 0.8 is the original bone length
-        
-        // Rotate thigh to point from hip to knee
-        const direction = new THREE.Vector3().subVectors(leftKnee.position, leftHip.position).normalize();
-        const quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, -1, 0), direction);
-        leftThigh.setRotationFromQuaternion(quaternion);
-      }
-
-      if (leftShin && leftKnee && leftAnkle) {
-        // Position shin between knee and ankle
-        leftShin.position.x = (leftKnee.position.x + leftAnkle.position.x) / 2;
-        leftShin.position.y = (leftKnee.position.y + leftAnkle.position.y) / 2;
-        leftShin.position.z = (leftKnee.position.z + leftAnkle.position.z) / 2;
-        
-        // Calculate shin length and scale
-        const shinLength = leftKnee.position.distanceTo(leftAnkle.position);
-        leftShin.scale.y = shinLength / 0.8;
-        
-        // Rotate shin to point from knee to ankle
-        const direction = new THREE.Vector3().subVectors(leftAnkle.position, leftKnee.position).normalize();
-        const quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, -1, 0), direction);
-        leftShin.setRotationFromQuaternion(quaternion);
-      }
-
-      // Adjust right leg bones
-      if (rightThigh && rightHip && rightKnee) {
-        // Position thigh between hip and knee
-        rightThigh.position.x = (rightHip.position.x + rightKnee.position.x) / 2;
-        rightThigh.position.y = (rightHip.position.y + rightKnee.position.y) / 2;
-        rightThigh.position.z = (rightHip.position.z + rightKnee.position.z) / 2;
-        
-        // Calculate thigh length and scale
-        const thighLength = rightHip.position.distanceTo(rightKnee.position);
-        rightThigh.scale.y = thighLength / 0.8;
-        
-        // Rotate thigh to point from hip to knee
-        const direction = new THREE.Vector3().subVectors(rightKnee.position, rightHip.position).normalize();
-        const quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, -1, 0), direction);
-        rightThigh.setRotationFromQuaternion(quaternion);
-      }
-
-      if (rightShin && rightKnee && rightAnkle) {
-        // Position shin between knee and ankle
-        rightShin.position.x = (rightKnee.position.x + rightAnkle.position.x) / 2;
-        rightShin.position.y = (rightKnee.position.y + rightAnkle.position.y) / 2;
-        rightShin.position.z = (rightKnee.position.z + rightAnkle.position.z) / 2;
-        
-        // Calculate shin length and scale
-        const shinLength = rightKnee.position.distanceTo(rightAnkle.position);
-        rightShin.scale.y = shinLength / 0.8;
-        
-        // Rotate shin to point from knee to ankle
-        const direction = new THREE.Vector3().subVectors(rightAnkle.position, rightKnee.position).normalize();
-        const quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, -1, 0), direction);
-        rightShin.setRotationFromQuaternion(quaternion);
-      }
-
-      // Ensure feet follow ankles
-      if (leftFoot && leftAnkle) {
-        leftFoot.position.x = leftAnkle.position.x;
-        leftFoot.position.y = leftAnkle.position.y - 0.05;
-        leftFoot.position.z = leftAnkle.position.z + 0.05;
-      }
-
-      if (rightFoot && rightAnkle) {
-        rightFoot.position.x = rightAnkle.position.x;
-        rightFoot.position.y = rightAnkle.position.y - 0.05;
-        rightFoot.position.z = rightAnkle.position.z + 0.05;
-      }
-
       animationFrameId = requestAnimationFrame(updateAnimation);
     };
 
@@ -2266,7 +2208,7 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
         cancelAnimationFrame(animationFrameId);
       }
     };
-  }, [animationData, isPlaying]);
+  }, [animationData, isPlaying, onTimeUpdate]);
 
   // Mouse event handlers for rotation
   const handleMouseDown = (e: React.MouseEvent) => {

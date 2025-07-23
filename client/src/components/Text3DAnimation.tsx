@@ -429,9 +429,14 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
     const thighGeometry = new THREE.CylinderGeometry(0.08, 0.08, thighLength, 8);
     const shinGeometry = new THREE.CylinderGeometry(0.08, 0.08, shinLength, 8);
     
-    // Left thigh - positioned to start from hip socket with pathology angles
+    // Left leg group for hierarchical transformation
+    const leftLegGroup = new THREE.Group();
+    leftLegGroup.position.set(-0.15, 0.85, 0); // Position at hip joint
+    leftLegGroup.name = 'leftLegGroup';
+    
+    // Left thigh attached to leg group
     const leftThigh = new THREE.Mesh(thighGeometry, boneMaterial);
-    leftThigh.position.set(-0.15, 0.85 - thighLength / 2, 0); // Raised to connect with hip socket
+    leftThigh.position.set(0, -thighLength / 2, 0); // Relative to leg group
     
     // Apply femoral neck angle (coxa vara/valga)
     const neckAngleRad = ((hipPathology.neckAngle - 130) * Math.PI) / 180; // Convert deviation from normal to radians
@@ -442,12 +447,28 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
     leftThigh.rotation.y = anteversionRad * 0.3; // Apply 30% of angle for subtlety
     
     leftThigh.name = 'leftThigh';
-    skeleton.add(leftThigh);
+    leftLegGroup.add(leftThigh);
     bonesRef.current['leftThigh'] = leftThigh;
+    bonesRef.current['leftLegGroup'] = leftLegGroup;
 
-    // Left shin with knee pathology
+    // Left knee group - for proper shin hierarchy
+    const leftKneeGroup = new THREE.Group();
+    leftKneeGroup.position.set(0, -thighLength, 0); // Position at knee joint
+    leftKneeGroup.name = 'leftKneeGroup';
+    leftLegGroup.add(leftKneeGroup);
+
+    // Add visible knee joint
+    const kneeJointGeometry = new THREE.SphereGeometry(0.08, 16, 16);
+    const kneeJointMaterial = new THREE.MeshPhongMaterial({ color: 0x00ff00 }); // Green color
+    const leftKneeJoint = new THREE.Mesh(kneeJointGeometry, kneeJointMaterial);
+    leftKneeJoint.position.set(0, 0, 0); // At knee group origin
+    leftKneeJoint.name = 'leftKneeJoint';
+    leftKneeGroup.add(leftKneeJoint);
+    bonesRef.current['leftKneeGroup'] = leftKneeGroup;
+
+    // Left shin attached to knee group
     const leftShin = new THREE.Mesh(shinGeometry, boneMaterial);
-    leftShin.position.set(-0.15, 0.85 - thighLength - shinLength / 2, 0); // Adjusted for raised thigh
+    leftShin.position.set(0, -shinLength / 2, 0); // Relative to knee group
     
     // Apply varus/valgus angle
     const varusValgusRad = (kneePathology.varusValgus * Math.PI) / 180;
@@ -458,12 +479,41 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
     leftShin.rotation.y = tibialTorsionRad * 0.5;
     
     leftShin.name = 'leftShin';
-    skeleton.add(leftShin);
+    leftKneeGroup.add(leftShin);
     bonesRef.current['leftShin'] = leftShin;
+    
+    // Left ankle group - for proper foot hierarchy
+    const leftAnkleGroup = new THREE.Group();
+    leftAnkleGroup.position.set(0, -shinLength, 0); // Position at ankle joint
+    leftAnkleGroup.name = 'leftAnkleGroup';
+    leftKneeGroup.add(leftAnkleGroup);
+    
+    // Add visible ankle joint
+    const ankleJointGeometry = new THREE.SphereGeometry(0.06, 16, 16);
+    const ankleJointMaterial = new THREE.MeshPhongMaterial({ color: 0x0000ff }); // Blue color
+    const leftAnkleJoint = new THREE.Mesh(ankleJointGeometry, ankleJointMaterial);
+    leftAnkleJoint.position.set(0, 0, 0); // At ankle group origin
+    leftAnkleJoint.name = 'leftAnkleJoint';
+    leftAnkleGroup.add(leftAnkleJoint);
+    
+    // Left foot attached to ankle group
+    const footGeometry = new THREE.BoxGeometry(0.12, 0.06, 0.25);
+    const leftFoot = new THREE.Mesh(footGeometry, boneMaterial);
+    leftFoot.position.set(0, -0.05, 0.05); // Relative to ankle group
+    leftFoot.name = 'leftFoot';
+    leftAnkleGroup.add(leftFoot);
+    bonesRef.current['leftFoot'] = leftFoot;
+    
+    skeleton.add(leftLegGroup);
 
-    // Right thigh - positioned to start from hip socket with pathology angles
+    // Right leg group for hierarchical transformation
+    const rightLegGroup = new THREE.Group();
+    rightLegGroup.position.set(0.15, 0.85, 0); // Position at hip joint
+    rightLegGroup.name = 'rightLegGroup';
+    
+    // Right thigh attached to leg group
     const rightThigh = new THREE.Mesh(thighGeometry, boneMaterial);
-    rightThigh.position.set(0.15, 0.85 - thighLength / 2, 0); // Raised to connect with hip socket
+    rightThigh.position.set(0, -thighLength / 2, 0); // Relative to leg group
     
     // Apply femoral neck angle (coxa vara/valga) - mirror for right side
     rightThigh.rotation.z = neckAngleRad * 0.5; // Opposite angle for right side
@@ -472,12 +522,26 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
     rightThigh.rotation.y = -anteversionRad * 0.3; // Opposite for right side
     
     rightThigh.name = 'rightThigh';
-    skeleton.add(rightThigh);
+    rightLegGroup.add(rightThigh);
     bonesRef.current['rightThigh'] = rightThigh;
+    bonesRef.current['rightLegGroup'] = rightLegGroup;
 
-    // Right shin with knee pathology
+    // Right knee group - for proper shin hierarchy
+    const rightKneeGroup = new THREE.Group();
+    rightKneeGroup.position.set(0, -thighLength, 0); // Position at knee joint
+    rightKneeGroup.name = 'rightKneeGroup';
+    rightLegGroup.add(rightKneeGroup);
+
+    // Add visible knee joint
+    const rightKneeJoint = new THREE.Mesh(kneeJointGeometry, kneeJointMaterial);
+    rightKneeJoint.position.set(0, 0, 0); // At knee group origin
+    rightKneeJoint.name = 'rightKneeJoint';
+    rightKneeGroup.add(rightKneeJoint);
+    bonesRef.current['rightKneeGroup'] = rightKneeGroup;
+
+    // Right shin attached to knee group
     const rightShin = new THREE.Mesh(shinGeometry, boneMaterial);
-    rightShin.position.set(0.15, 0.85 - thighLength - shinLength / 2, 0); // Adjusted for raised thigh
+    rightShin.position.set(0, -shinLength / 2, 0); // Relative to knee group
     
     // Apply varus/valgus angle (opposite for right side)
     rightShin.rotation.z = varusValgusRad;
@@ -486,8 +550,29 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
     rightShin.rotation.y = -tibialTorsionRad * 0.5;
     
     rightShin.name = 'rightShin';
-    skeleton.add(rightShin);
+    rightKneeGroup.add(rightShin);
     bonesRef.current['rightShin'] = rightShin;
+    
+    // Right ankle group - for proper foot hierarchy
+    const rightAnkleGroup = new THREE.Group();
+    rightAnkleGroup.position.set(0, -shinLength, 0); // Position at ankle joint
+    rightAnkleGroup.name = 'rightAnkleGroup';
+    rightKneeGroup.add(rightAnkleGroup);
+    
+    // Add visible ankle joint
+    const rightAnkleJoint = new THREE.Mesh(ankleJointGeometry, ankleJointMaterial);
+    rightAnkleJoint.position.set(0, 0, 0); // At ankle group origin
+    rightAnkleJoint.name = 'rightAnkleJoint';
+    rightAnkleGroup.add(rightAnkleJoint);
+    
+    // Right foot attached to ankle group
+    const rightFoot = new THREE.Mesh(footGeometry, boneMaterial);
+    rightFoot.position.set(0, -0.05, 0.05); // Relative to ankle group
+    rightFoot.name = 'rightFoot';
+    rightAnkleGroup.add(rightFoot);
+    bonesRef.current['rightFoot'] = rightFoot;
+    
+    skeleton.add(rightLegGroup);
 
     // Joints
     const jointGeometry = new THREE.SphereGeometry(0.08, 12, 12);
@@ -567,19 +652,7 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
     rightAnkle.name = 'rightAnkle';
     skeleton.add(rightAnkle);
 
-    // Feet
-    const footGeometry = new THREE.BoxGeometry(0.12, 0.06, 0.25);
-    const footY = 0.85 - thighLength - shinLength - 0.05; // Adjusted for raised hip
-    
-    const leftFoot = new THREE.Mesh(footGeometry, boneMaterial);
-    leftFoot.position.set(-0.15, footY, 0.05);
-    leftFoot.name = 'leftFoot';
-    skeleton.add(leftFoot);
-
-    const rightFoot = new THREE.Mesh(footGeometry, boneMaterial);
-    rightFoot.position.set(0.15, footY, 0.05);
-    rightFoot.name = 'rightFoot';
-    skeleton.add(rightFoot);
+    // Note: Feet are now created as part of the ankle groups above
 
     scene.add(skeleton);
   };
@@ -1751,21 +1824,15 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
           head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
           torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
           pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
-          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
-          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, -0.52] }, // 30 degrees abduction
-          leftShin: { position: [-0.15, -0.4, 0], rotation: [0, 0, 0] },
-          rightShin: { position: [0.45, -0.25, 0], rotation: [0, 0, -0.52] },
+          leftLegGroup: { position: [-0.15, 0.85, 0], rotation: [0, 0, 0] },
+          rightLegGroup: { position: [0.15, 0.85, 0], rotation: [0, 0, -0.52] }, // 30 degrees abduction
+          leftKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          rightKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
           leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
           rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
-          leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
-          rightKnee: { position: [0.3, 0.1, 0], rotation: [0, 0, -0.52] },
           shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] },
-          leftAnkle: { position: [-0.15, -0.8, 0], rotation: [0, 0, 0] },
-          rightAnkle: { position: [0.6, -0.6, 0], rotation: [0, 0, -0.52] },
-          leftFoot: { position: [-0.15, -0.85, 0.05], rotation: [0, 0, 0] },
-          rightFoot: { position: [0.65, -0.65, 0.05], rotation: [0, 0, -0.52] }
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
         }
       },
       {
@@ -1775,21 +1842,15 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
           head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
           torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
           pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
-          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
-          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, -0.78] }, // 45 degrees
-          leftShin: { position: [-0.15, -0.4, 0], rotation: [0, 0, 0] },
-          rightShin: { position: [0.55, -0.15, 0], rotation: [0, 0, -0.78] },
+          leftLegGroup: { position: [-0.15, 0.85, 0], rotation: [0, 0, 0] },
+          rightLegGroup: { position: [0.15, 0.85, 0], rotation: [0, 0, -0.78] }, // 45 degrees
+          leftKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          rightKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
           leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
           rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
-          leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
-          rightKnee: { position: [0.35, 0.2, 0], rotation: [0, 0, -0.78] },
           shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] },
-          leftAnkle: { position: [-0.15, -0.8, 0], rotation: [0, 0, 0] },
-          rightAnkle: { position: [0.75, -0.45, 0], rotation: [0, 0, -0.78] },
-          leftFoot: { position: [-0.15, -0.85, 0.05], rotation: [0, 0, 0] },
-          rightFoot: { position: [0.8, -0.5, 0.05], rotation: [0, 0, -0.78] }
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
         }
       },
       {
@@ -2012,21 +2073,15 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
           head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
           torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
           pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
-          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
-          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
-          leftShin: { position: [-0.15, -0.4, 0], rotation: [0, 0, 0] },
-          rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
+          leftLegGroup: { position: [-0.15, 0.85, 0], rotation: [0, 0, 0] },
+          rightLegGroup: { position: [0.15, 0.85, 0], rotation: [0, 0, 0] },
+          leftKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          rightKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
           leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
           rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
-          leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
-          rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
           shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
           rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] },
-          leftAnkle: { position: [-0.15, -0.8, 0], rotation: [0, 0, 0] },
-          rightAnkle: { position: [0.15, -0.8, 0], rotation: [0, 0, 0] },
-          leftFoot: { position: [-0.15, -0.85, 0.05], rotation: [0, 0, 0] },
-          rightFoot: { position: [0.15, -0.85, 0.05], rotation: [0, 0, 0] },
           leftScapula: { position: [-0.22, 1.55, -0.12], rotation: [0, -0.3, 0] },
           rightScapula: { position: [0.22, 1.55, -0.12], rotation: [0, 0.3, 0] }
         }
@@ -2038,21 +2093,15 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
           head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
           torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
           pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
-          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
-          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
-          leftShin: { position: [-0.15, -0.1, -0.3], rotation: [2.0, 0, 0] }, // Knee bent
-          rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
+          leftLegGroup: { position: [-0.15, 0.85, 0], rotation: [0, 0, 0] },
+          rightLegGroup: { position: [0.15, 0.85, 0], rotation: [0, 0, 0] },
+          leftKneeGroup: { position: [0, -0.8, 0], rotation: [-2.0, 0, 0] }, // Knee bent
+          rightKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
           leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
           rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
-          leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
-          rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
           shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
           rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] },
-          leftAnkle: { position: [-0.15, 0.3, -0.4], rotation: [2.0, 0, 0] }, // Follow bent knee
-          rightAnkle: { position: [0.15, -0.8, 0], rotation: [0, 0, 0] },
-          leftFoot: { position: [-0.15, 0.35, -0.45], rotation: [2.0, 0, 0] }, // Follow bent knee
-          rightFoot: { position: [0.15, -0.85, 0.05], rotation: [0, 0, 0] },
           leftScapula: { position: [-0.22, 1.55, -0.12], rotation: [0, -0.3, 0] },
           rightScapula: { position: [0.22, 1.55, -0.12], rotation: [0, 0.3, 0] }
         }
@@ -2064,21 +2113,15 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
           head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
           torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
           pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
-          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
-          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
-          leftShin: { position: [-0.15, -0.4, 0], rotation: [0, 0, 0] },
-          rightShin: { position: [0.15, -0.1, -0.3], rotation: [2.0, 0, 0] }, // Knee bent
+          leftLegGroup: { position: [-0.15, 0.85, 0], rotation: [0, 0, 0] },
+          rightLegGroup: { position: [0.15, 0.85, 0], rotation: [0, 0, 0] },
+          leftKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          rightKneeGroup: { position: [0, -0.8, 0], rotation: [-2.0, 0, 0] }, // Knee bent
           leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
           rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
-          leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
-          rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
           shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
           rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] },
-          leftAnkle: { position: [-0.15, -0.8, 0], rotation: [0, 0, 0] },
-          rightAnkle: { position: [0.15, 0.3, -0.4], rotation: [2.0, 0, 0] }, // Follow bent knee
-          leftFoot: { position: [-0.15, -0.85, 0.05], rotation: [0, 0, 0] },
-          rightFoot: { position: [0.15, 0.35, -0.45], rotation: [2.0, 0, 0] }, // Follow bent knee
           leftScapula: { position: [-0.22, 1.55, -0.12], rotation: [0, -0.3, 0] },
           rightScapula: { position: [0.22, 1.55, -0.12], rotation: [0, 0.3, 0] }
         }

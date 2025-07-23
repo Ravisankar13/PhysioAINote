@@ -896,24 +896,24 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
         time: 0,
         joints: {
           torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
-          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0.2] },
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, -0.2] }
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
         }
       },
       {
         time: 1000,
         joints: {
           torso: { position: [0, 1.2, 0], rotation: [0, 0.2, 0] },
-          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0.5] },
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, -0.5] }
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
         }
       },
       {
         time: 2000,
         joints: {
           torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
-          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0.2] },
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, -0.2] }
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
         }
       }
     ];

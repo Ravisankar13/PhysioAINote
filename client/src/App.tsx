@@ -98,7 +98,7 @@ function Router() {
           <Route path="/integrated-assessment" component={IntegratedClinicalAssessment} />
           <Route path="/intelligent-assessment" component={IntelligentAssessment} />
           <Route path="/virtual-patients">
-            <ProtectedRoute component={VirtualPatientsWorking} />
+            <ProtectedRoute component={VirtualPatientsFixed} />
           </Route>
           <Route path="/virtual-patients-debug">
             <ProtectedRoute component={VirtualPatientsSimple} />

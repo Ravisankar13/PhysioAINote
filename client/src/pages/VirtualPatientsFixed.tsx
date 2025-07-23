@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, Users, Camera } from "lucide-react";
+import { Loader2, Users, Camera, Activity, Stethoscope } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import Text3DAnimation from "@/components/Text3DAnimation";
 import type { SoapVirtualPatient } from "@shared/schema";
 
 export default function VirtualPatientsFixed() {
@@ -40,6 +42,22 @@ export default function VirtualPatientsFixed() {
     );
   }
 
+  // Assessment tests data
+  const assessmentTests = [
+    { id: 1, name: "Shoulder Abduction Test", text: "Shoulder abduction test - arms to sides then out", bodyPart: "shoulder" },
+    { id: 2, name: "Shoulder Flexion Test", text: "Shoulder flexion test - arms forward then up", bodyPart: "shoulder" },
+    { id: 3, name: "Shoulder External Rotation", text: "Shoulder external rotation test", bodyPart: "shoulder" },
+    { id: 4, name: "Shoulder Internal Rotation", text: "Shoulder internal rotation test", bodyPart: "shoulder" },
+    { id: 5, name: "Knee Flexion Test", text: "Knee flexion test assessment", bodyPart: "knee" },
+    { id: 6, name: "Hip Abduction Test", text: "Hip abduction test - leg to side", bodyPart: "hip" },
+    { id: 7, name: "Cervical Rotation Test", text: "Cervical spine rotation test", bodyPart: "neck" },
+    { id: 8, name: "Lumbar Flexion Test", text: "Lumbar spine flexion test", bodyPart: "back" },
+    { id: 9, name: "Ankle Dorsiflexion Test", text: "Ankle dorsiflexion test", bodyPart: "ankle" },
+    { id: 10, name: "Standing March Test", text: "Standing march test - alternating knee lifts", bodyPart: "general" }
+  ];
+
+  const [selectedTest, setSelectedTest] = useState<string>("");
+
   return (
     <div className="container mx-auto py-8 px-4">
       <div className="max-w-7xl mx-auto">
@@ -49,10 +67,10 @@ export default function VirtualPatientsFixed() {
             <div>
               <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
                 <Users className="h-8 w-8 text-blue-600" />
-                Virtual Patients (Fixed)
+                Virtual Patients & Assessment Tests
               </h1>
               <p className="text-gray-600 mt-2">
-                Create and analyze digital patient twins with AI-powered movement visualization
+                Clinical assessment tests with 3D animated demonstrations
               </p>
             </div>
             <Button className="bg-blue-600 hover:bg-blue-700 text-white">
@@ -62,8 +80,16 @@ export default function VirtualPatientsFixed() {
           </div>
         </div>
 
-        {/* Main Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Main Content with Tabs */}
+        <Tabs defaultValue="patients" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="patients">Virtual Patients</TabsTrigger>
+            <TabsTrigger value="tests">Assessment Tests</TabsTrigger>
+          </TabsList>
+          
+          {/* Virtual Patients Tab */}
+          <TabsContent value="patients">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Left Panel - Patient Selection */}
           <Card>
             <CardHeader>
@@ -160,27 +186,83 @@ export default function VirtualPatientsFixed() {
             </CardContent>
           </Card>
         </div>
-
-        {/* Debug Information */}
-        <Card className="mt-6">
-          <CardHeader>
-            <CardTitle className="text-lg font-semibold">Debug Information</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <p><strong>Loading:</strong> {patientsLoading ? 'Yes' : 'No'}</p>
-                <p><strong>Error:</strong> {error ? 'Yes' : 'No'}</p>
-                <p><strong>Data Type:</strong> {typeof virtualPatients}</p>
-              </div>
-              <div>
-                <p><strong>Is Array:</strong> {Array.isArray(virtualPatients) ? 'Yes' : 'No'}</p>
-                <p><strong>Patient Count:</strong> {patientsArray.length}</p>
-                <p><strong>Selected Patient:</strong> {selectedPatient ? selectedPatient.id : 'None'}</p>
-              </div>
+          </TabsContent>
+          
+          {/* Assessment Tests Tab */}
+          <TabsContent value="tests">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Left Panel - Test Selection */}
+              <Card className="lg:col-span-1">
+                <CardHeader>
+                  <CardTitle className="text-lg font-semibold">
+                    <Stethoscope className="h-5 w-5 inline-block mr-2" />
+                    Assessment Tests
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {assessmentTests.map((test) => (
+                      <Button
+                        key={test.id}
+                        variant={selectedTest === test.text ? "default" : "outline"}
+                        className="w-full justify-start text-left"
+                        onClick={() => setSelectedTest(test.text)}
+                      >
+                        <Activity className="h-4 w-4 mr-2" />
+                        {test.name}
+                      </Button>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+              
+              {/* Right Panel - 3D Animation */}
+              <Card className="lg:col-span-2">
+                <CardHeader>
+                  <CardTitle className="text-lg font-semibold">
+                    3D Movement Demonstration
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {selectedTest ? (
+                    <div className="space-y-4">
+                      <div className="bg-gray-100 rounded-lg p-4">
+                        <Text3DAnimation text={selectedTest} />
+                      </div>
+                      <div className="p-4 bg-blue-50 rounded-lg">
+                        <h4 className="font-medium mb-2">Test Instructions:</h4>
+                        <p className="text-sm text-gray-700">
+                          {selectedTest.includes("Shoulder Abduction") && 
+                            "Patient starts with arms at sides, then abducts both arms to 180 degrees overhead. Assess for range of motion, symmetry, and compensation patterns."}
+                          {selectedTest.includes("Shoulder Flexion") && 
+                            "Patient raises arms forward and up to full overhead position. Look for scapular rhythm and any trunk compensation."}
+                          {selectedTest.includes("Knee Flexion") && 
+                            "Patient flexes knee to maximum range. Normal range is 130-140 degrees. Check for crepitus or pain."}
+                          {selectedTest.includes("Hip Abduction") && 
+                            "Patient moves leg laterally away from midline. Normal range is 40-45 degrees. Watch for trunk lean."}
+                          {selectedTest.includes("Standing March") && 
+                            "Patient alternates lifting knees to 90 degrees. Assess balance, coordination, and hip flexor strength."}
+                          {!selectedTest.includes("Shoulder Abduction") && 
+                           !selectedTest.includes("Shoulder Flexion") && 
+                           !selectedTest.includes("Knee Flexion") && 
+                           !selectedTest.includes("Hip Abduction") && 
+                           !selectedTest.includes("Standing March") && 
+                            "Select a test to see specific instructions and normal ranges."}
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center text-gray-500 py-16">
+                      <Activity className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                      <p className="text-lg">Select an assessment test</p>
+                      <p className="text-sm mt-2">Choose a test from the left panel to see the 3D demonstration</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </div>
-          </CardContent>
-        </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

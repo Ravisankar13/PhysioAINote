@@ -587,9 +587,9 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
     } else if (isPhysicalTest && lowerText.includes('shoulder flexion')) {
       animationFrames = generateShoulderFlexionTest();
     } else if (isPhysicalTest && lowerText.includes('shoulder external rotation')) {
-      animationFrames = generateGeneralMovementAnimation();
+      animationFrames = generateShoulderExternalRotationTest();
     } else if (isPhysicalTest && lowerText.includes('shoulder internal rotation')) {
-      animationFrames = generateGeneralMovementAnimation();
+      animationFrames = generateShoulderInternalRotationTest();
     } else if (isPhysicalTest && lowerText.includes('scapula protraction')) {
       animationFrames = generateGeneralMovementAnimation();
     } else if (isPhysicalTest && lowerText.includes('scapula retraction')) {
@@ -732,6 +732,130 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
           rightScapula: { position: [0.22, 1.55, -0.12], rotation: [0, 0.3, 0] },
           head: { position: [0, 2.1, 0], rotation: [0, 0, 0] },
           torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] }
+        }
+      }
+    ];
+  };
+
+  const generateShoulderExternalRotationTest = (): AnimationKeyframe[] => {
+    return [
+      {
+        time: 0,
+        joints: {
+          // Starting position - arms at sides with elbows at 90 degrees
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
+          leftShin: { position: [-0.15, -0.4, 0], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] },
+          leftForearm: { position: [0, -0.7, 0], rotation: [-1.57, 0, 0] }, // Elbow bent 90 degrees
+          rightForearm: { position: [0, -0.7, 0], rotation: [-1.57, 0, 0] },
+          leftScapula: { position: [-0.22, 1.55, -0.12], rotation: [0, -0.3, 0] },
+          rightScapula: { position: [0.22, 1.55, -0.12], rotation: [0, 0.3, 0] }
+        }
+      },
+      {
+        time: 1500,
+        joints: {
+          // External rotation - forearms rotate outward
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
+          leftShin: { position: [-0.15, -0.4, 0], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, -1.0, 0] }, // External rotation
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 1.0, 0] },
+          leftForearm: { position: [0, -0.7, 0], rotation: [-1.57, 0, 0] },
+          rightForearm: { position: [0, -0.7, 0], rotation: [-1.57, 0, 0] },
+          leftScapula: { position: [-0.22, 1.55, -0.14], rotation: [0, -0.4, -0.1] }, // Slight retraction
+          rightScapula: { position: [0.22, 1.55, -0.14], rotation: [0, 0.4, 0.1] }
+        }
+      },
+      {
+        time: 3000,
+        joints: {
+          // Return to neutral
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
+          leftShin: { position: [-0.15, -0.4, 0], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] },
+          leftForearm: { position: [0, -0.7, 0], rotation: [-1.57, 0, 0] },
+          rightForearm: { position: [0, -0.7, 0], rotation: [-1.57, 0, 0] },
+          leftScapula: { position: [-0.22, 1.55, -0.12], rotation: [0, -0.3, 0] },
+          rightScapula: { position: [0.22, 1.55, -0.12], rotation: [0, 0.3, 0] }
+        }
+      }
+    ];
+  };
+
+  const generateShoulderInternalRotationTest = (): AnimationKeyframe[] => {
+    return [
+      {
+        time: 0,
+        joints: {
+          // Starting position - arms at sides with elbows at 90 degrees
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
+          leftShin: { position: [-0.15, -0.4, 0], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] },
+          leftForearm: { position: [0, -0.7, 0], rotation: [-1.57, 0, 0] }, // Elbow bent 90 degrees
+          rightForearm: { position: [0, -0.7, 0], rotation: [-1.57, 0, 0] },
+          leftScapula: { position: [-0.22, 1.55, -0.12], rotation: [0, -0.3, 0] },
+          rightScapula: { position: [0.22, 1.55, -0.12], rotation: [0, 0.3, 0] }
+        }
+      },
+      {
+        time: 1500,
+        joints: {
+          // Internal rotation - forearms rotate inward
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
+          leftShin: { position: [-0.15, -0.4, 0], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 1.0, 0] }, // Internal rotation
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, -1.0, 0] },
+          leftForearm: { position: [0, -0.7, 0], rotation: [-1.57, 0, 0] },
+          rightForearm: { position: [0, -0.7, 0], rotation: [-1.57, 0, 0] },
+          leftScapula: { position: [-0.22, 1.55, -0.10], rotation: [0, -0.2, 0.1] }, // Slight protraction
+          rightScapula: { position: [0.22, 1.55, -0.10], rotation: [0, 0.2, -0.1] }
+        }
+      },
+      {
+        time: 3000,
+        joints: {
+          // Return to neutral
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftThigh: { position: [-0.15, 0.4, 0], rotation: [0, 0, 0] },
+          rightThigh: { position: [0.15, 0.4, 0], rotation: [0, 0, 0] },
+          leftShin: { position: [-0.15, -0.4, 0], rotation: [0, 0, 0] },
+          rightShin: { position: [0.15, -0.4, 0], rotation: [0, 0, 0] },
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] },
+          leftForearm: { position: [0, -0.7, 0], rotation: [-1.57, 0, 0] },
+          rightForearm: { position: [0, -0.7, 0], rotation: [-1.57, 0, 0] },
+          leftScapula: { position: [-0.22, 1.55, -0.12], rotation: [0, -0.3, 0] },
+          rightScapula: { position: [0.22, 1.55, -0.12], rotation: [0, 0.3, 0] }
         }
       }
     ];

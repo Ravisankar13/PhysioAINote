@@ -375,6 +375,88 @@ export const soapVirtualPatients = pgTable("soap_virtual_patients", {
   hasMotionData: boolean("hasMotionData").default(false).notNull(),
   aiGenerated: boolean("aiGenerated").default(false).notNull(),
   
+  // 1. Anthropometric Measurements
+  anthropometrics: json("anthropometrics").$type<{
+    height?: number; // in cm
+    weight?: number; // in kg
+    bmi?: number;
+    bodyType?: 'ectomorph' | 'mesomorph' | 'endomorph';
+    segmentProportions?: {
+      trunkLength?: number; // relative to height (0.3-0.4)
+      neckLength?: number; // relative to height (0.08-0.12)
+      footSize?: number; // relative to height (0.14-0.17)
+    };
+  }>(),
+  
+  // 2. Postural Deviations
+  posturalDeviations: json("posturalDeviations").$type<{
+    spinalCurves?: {
+      cervicalLordosis?: number; // degrees (-30 to -60 normal)
+      thoracicKyphosis?: number; // degrees (20 to 45 normal)
+      lumbarLordosis?: number; // degrees (-40 to -60 normal)
+      scoliosis?: { angle: number; direction: 'left' | 'right'; level: string; };
+    };
+    headPosition?: {
+      forwardHeadPosture?: number; // cm forward from plumb line
+      lateralTilt?: number; // degrees
+      rotation?: number; // degrees
+    };
+    shoulderAlignment?: {
+      leftHeight?: number; // cm relative to right
+      protraction?: number; // cm forward from ideal
+      elevation?: number; // degrees
+    };
+    pelvicAlignment?: {
+      anteriorTilt?: number; // degrees (5-12 normal)
+      posteriorTilt?: number; // degrees
+      lateralTilt?: number; // degrees
+      rotation?: number; // degrees
+    };
+    footPosture?: {
+      leftPronation?: number; // degrees
+      rightPronation?: number; // degrees
+      leftArchHeight?: 'high' | 'normal' | 'low' | 'flat';
+      rightArchHeight?: 'high' | 'normal' | 'low' | 'flat';
+    };
+  }>(),
+  
+  // 3. Movement Quality Parameters
+  movementQuality: json("movementQuality").$type<{
+    rangeOfMotion?: {
+      [joint: string]: {
+        flexion?: number;
+        extension?: number;
+        abduction?: number;
+        adduction?: number;
+        internalRotation?: number;
+        externalRotation?: number;
+        lateralFlexion?: number;
+      };
+    };
+    movementSpeed?: {
+      overall?: 'very_slow' | 'slow' | 'normal' | 'fast';
+      guardedMovements?: string[]; // list of guarded movements
+    };
+    compensatoryPatterns?: {
+      hipHike?: { side: 'left' | 'right'; severity: 'mild' | 'moderate' | 'severe'; };
+      trunkLean?: { direction: 'forward' | 'backward' | 'left' | 'right'; angle: number; };
+      circumduction?: { limb: string; severity: 'mild' | 'moderate' | 'severe'; };
+      trendenlenburg?: { side: 'left' | 'right'; severity: 'mild' | 'moderate' | 'severe'; };
+    };
+    stability?: {
+      staticBalance?: 'poor' | 'fair' | 'good' | 'excellent';
+      dynamicBalance?: 'poor' | 'fair' | 'good' | 'excellent';
+      swayPatterns?: string[]; // descriptions of sway patterns
+      protectiveStrategies?: string[]; // ankle, hip, stepping strategies
+    };
+    coordination?: {
+      quality?: 'smooth' | 'mildly_jerky' | 'moderately_jerky' | 'severely_jerky';
+      timing?: 'normal' | 'delayed' | 'premature';
+      interlimbCoordination?: 'normal' | 'impaired';
+      eyeHandCoordination?: 'normal' | 'impaired';
+    };
+  }>(),
+  
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });

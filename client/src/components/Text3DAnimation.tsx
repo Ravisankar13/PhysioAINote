@@ -215,6 +215,7 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
     }
     
     skeleton.add(spineGroup);
+    bonesRef.current['spineGroup'] = spineGroup; // Add spine group to bonesRef
     
     // Create a reference torso mesh for animations (invisible)
     const torsoReference = new THREE.Mesh(
@@ -1590,7 +1591,8 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
           leftFoot: { position: [-0.1, -0.85, 0.05], rotation: [0, 0, 0] },
           rightFoot: { position: [0.1, -0.85, 0.05], rotation: [0, 0, 0] },
           leftScapula: { position: [-0.22, 1.55, -0.12], rotation: [0, -0.3, 0] },
-          rightScapula: { position: [0.22, 1.55, -0.12], rotation: [0, 0.3, 0] }
+          rightScapula: { position: [0.22, 1.55, -0.12], rotation: [0, 0.3, 0] },
+          spineGroup: { position: [0, 0, 0], rotation: [0, 0, 0] } // Starting spine position
         }
       },
       {
@@ -1618,7 +1620,8 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
           leftFoot: { position: [-0.1, -0.85, 0.05], rotation: [0, 0, 0] },
           rightFoot: { position: [0.1, -0.85, 0.05], rotation: [0, 0, 0] },
           leftScapula: { position: [-0.22, 1.35, -0.07], rotation: [0.1, -0.3, 0] },
-          rightScapula: { position: [0.22, 1.35, -0.07], rotation: [0.1, 0.3, 0] }
+          rightScapula: { position: [0.22, 1.35, -0.07], rotation: [0.1, 0.3, 0] },
+          spineGroup: { position: [0, -0.15, 0], rotation: [0.1, 0, 0] } // Spine flexes forward in mid-squat
         }
       },
       {
@@ -1646,7 +1649,8 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
           leftFoot: { position: [-0.1, -0.85, 0.05], rotation: [0, 0, 0] },
           rightFoot: { position: [0.1, -0.85, 0.05], rotation: [0, 0, 0] },
           leftScapula: { position: [-0.22, 1.05, -0.02], rotation: [0.2, -0.3, 0] },
-          rightScapula: { position: [0.22, 1.05, -0.02], rotation: [0.2, 0.3, 0] }
+          rightScapula: { position: [0.22, 1.05, -0.02], rotation: [0.2, 0.3, 0] },
+          spineGroup: { position: [0, -0.3, 0], rotation: [0.2, 0, 0] } // Maximum spine flexion at bottom
         }
       },
       {
@@ -1674,7 +1678,8 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
           leftFoot: { position: [-0.1, -0.85, 0.05], rotation: [0, 0, 0] },
           rightFoot: { position: [0.1, -0.85, 0.05], rotation: [0, 0, 0] },
           leftScapula: { position: [-0.22, 1.35, -0.07], rotation: [0.1, -0.3, 0] },
-          rightScapula: { position: [0.22, 1.35, -0.07], rotation: [0.1, 0.3, 0] }
+          rightScapula: { position: [0.22, 1.35, -0.07], rotation: [0.1, 0.3, 0] },
+          spineGroup: { position: [0, -0.15, 0], rotation: [0.1, 0, 0] } // Spine returning to neutral
         }
       },
       {
@@ -1700,7 +1705,8 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
           leftFoot: { position: [-0.1, -0.85, 0.05], rotation: [0, 0, 0] },
           rightFoot: { position: [0.1, -0.85, 0.05], rotation: [0, 0, 0] },
           leftScapula: { position: [-0.22, 1.55, -0.12], rotation: [0, -0.3, 0] },
-          rightScapula: { position: [0.22, 1.55, -0.12], rotation: [0, 0.3, 0] }
+          rightScapula: { position: [0.22, 1.55, -0.12], rotation: [0, 0.3, 0] },
+          spineGroup: { position: [0, 0, 0], rotation: [0, 0, 0] } // Back to neutral standing
         }
       }
     ];

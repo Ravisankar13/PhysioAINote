@@ -28,6 +28,30 @@ interface Text3DAnimationProps {
     acSeparation: number;
     ghSubluxation: number;
   };
+  anthropometric?: {
+    height: number;
+    weight: number;
+    bodyType: 'ectomorph' | 'mesomorph' | 'endomorph';
+  };
+  posturalDeviations?: {
+    forwardHead: number;
+    thoracicKyphosis: number;
+    lumbarLordosis: number;
+    pelvicTilt: number;
+    shoulderHeight: number;
+    scoliosis: number;
+  };
+  movementQuality?: {
+    speed: 'very_slow' | 'slow' | 'normal' | 'fast';
+    balance: 'poor' | 'fair' | 'good' | 'excellent';
+    coordination: 'smooth' | 'mildly_jerky' | 'moderately_jerky' | 'severely_jerky';
+    compensations: {
+      hipHike: boolean;
+      trunkLean: boolean;
+      circumduction: boolean;
+      trendelenburg: boolean;
+    };
+  };
 }
 
 interface AnimationKeyframe {
@@ -40,26 +64,58 @@ interface AnimationKeyframe {
   };
 }
 
-export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate, limbScales = {
-  upperArm: 1.0,
-  forearm: 1.0,
-  thigh: 1.0,
-  shin: 1.0,
-  torso: 1.0,
-  overall: 1.0
-}, hipPathology = {
-  neckAngle: 130,
-  anteversion: 12,
-  acetabularCoverage: 75
-}, kneePathology = {
-  varusValgus: 3,
-  patellaHeight: 1.0,
-  tibialTorsion: 10
-}, shoulderPathology = {
-  scapularWinging: 3,
-  acSeparation: 0,
-  ghSubluxation: 0
-} }: Text3DAnimationProps) {
+export default function Text3DAnimation({ 
+  clinicalText, 
+  isPlaying, 
+  onTimeUpdate, 
+  limbScales = {
+    upperArm: 1.0,
+    forearm: 1.0,
+    thigh: 1.0,
+    shin: 1.0,
+    torso: 1.0,
+    overall: 1.0
+  }, 
+  hipPathology = {
+    neckAngle: 130,
+    anteversion: 12,
+    acetabularCoverage: 75
+  }, 
+  kneePathology = {
+    varusValgus: 3,
+    patellaHeight: 1.0,
+    tibialTorsion: 10
+  }, 
+  shoulderPathology = {
+    scapularWinging: 3,
+    acSeparation: 0,
+    ghSubluxation: 0
+  },
+  anthropometric = {
+    height: 170,
+    weight: 70,
+    bodyType: 'mesomorph' as const
+  },
+  posturalDeviations = {
+    forwardHead: 0,
+    thoracicKyphosis: 35,
+    lumbarLordosis: -50,
+    pelvicTilt: 8,
+    shoulderHeight: 0,
+    scoliosis: 0
+  },
+  movementQuality = {
+    speed: 'normal' as const,
+    balance: 'good' as const,
+    coordination: 'smooth' as const,
+    compensations: {
+      hipHike: false,
+      trunkLean: false,
+      circumduction: false,
+      trendelenburg: false
+    }
+  }
+}: Text3DAnimationProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene>();
   const rendererRef = useRef<THREE.WebGLRenderer>();

@@ -38,6 +38,28 @@ export default function VirtualPatientsFixed() {
   const [scapularWinging, setScapularWinging] = useState<number[]>([3]);
   const [acSeparation, setAcSeparation] = useState<number[]>([0]);
   const [ghSubluxation, setGhSubluxation] = useState<number[]>([0]);
+  
+  // Anthropometric states
+  const [height, setHeight] = useState<number[]>([170]);
+  const [weight, setWeight] = useState<number[]>([70]);
+  const [bodyType, setBodyType] = useState<'ectomorph' | 'mesomorph' | 'endomorph'>('mesomorph');
+  
+  // Postural deviation states
+  const [forwardHead, setForwardHead] = useState<number[]>([0]);
+  const [thoracicKyphosis, setThoracicKyphosis] = useState<number[]>([35]);
+  const [lumbarLordosis, setLumbarLordosis] = useState<number[]>([-50]);
+  const [pelvicTilt, setPelvicTilt] = useState<number[]>([8]);
+  const [shoulderHeight, setShoulderHeight] = useState<number[]>([0]);
+  const [scoliosis, setScoliosis] = useState<number[]>([0]);
+  
+  // Movement quality states
+  const [movementSpeed, setMovementSpeed] = useState<'very_slow' | 'slow' | 'normal' | 'fast'>('normal');
+  const [balanceQuality, setBalanceQuality] = useState<'poor' | 'fair' | 'good' | 'excellent'>('good');
+  const [coordination, setCoordination] = useState<'smooth' | 'mildly_jerky' | 'moderately_jerky' | 'severely_jerky'>('smooth');
+  const [hipHike, setHipHike] = useState<boolean>(false);
+  const [trunkLean, setTrunkLean] = useState<boolean>(false);
+  const [circumduction, setCircumduction] = useState<boolean>(false);
+  const [trendelenburg, setTrendelenburg] = useState<boolean>(false);
 
   // Get all virtual patients for user
   const { data: virtualPatients = [], isLoading: patientsLoading, error } = useQuery({
@@ -325,6 +347,30 @@ export default function VirtualPatientsFixed() {
                             scapularWinging: scapularWinging[0],
                             acSeparation: acSeparation[0],
                             ghSubluxation: ghSubluxation[0]
+                          }}
+                          anthropometric={{
+                            height: height[0],
+                            weight: weight[0],
+                            bodyType: bodyType
+                          }}
+                          posturalDeviations={{
+                            forwardHead: forwardHead[0],
+                            thoracicKyphosis: thoracicKyphosis[0],
+                            lumbarLordosis: lumbarLordosis[0],
+                            pelvicTilt: pelvicTilt[0],
+                            shoulderHeight: shoulderHeight[0],
+                            scoliosis: scoliosis[0]
+                          }}
+                          movementQuality={{
+                            speed: movementSpeed,
+                            balance: balanceQuality,
+                            coordination: coordination,
+                            compensations: {
+                              hipHike: hipHike,
+                              trunkLean: trunkLean,
+                              circumduction: circumduction,
+                              trendelenburg: trendelenburg
+                            }
                           }}
                         />
                       </div>
@@ -649,6 +695,337 @@ export default function VirtualPatientsFixed() {
                                 />
                                 <span className="text-sm text-gray-600">15mm</span>
                                 <span className="text-sm font-medium ml-2">{ghSubluxation[0]}mm</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Anthropometric Measurements */}
+                        <div className="pb-4 border-b">
+                          <h4 className="font-medium mb-3">Anthropometric Measurements</h4>
+                          <div className="space-y-3">
+                            <div>
+                              <Label className="text-sm font-medium">Height (cm)</Label>
+                              <div className="flex items-center gap-4 mt-2">
+                                <span className="text-sm text-gray-600">140</span>
+                                <Slider
+                                  value={height}
+                                  onValueChange={setHeight}
+                                  min={140}
+                                  max={220}
+                                  step={1}
+                                  className="flex-1"
+                                />
+                                <span className="text-sm text-gray-600">220</span>
+                                <span className="text-sm font-medium ml-2">{height[0]} cm</span>
+                              </div>
+                            </div>
+                            
+                            <div>
+                              <Label className="text-sm font-medium">Weight (kg)</Label>
+                              <div className="flex items-center gap-4 mt-2">
+                                <span className="text-sm text-gray-600">40</span>
+                                <Slider
+                                  value={weight}
+                                  onValueChange={setWeight}
+                                  min={40}
+                                  max={150}
+                                  step={1}
+                                  className="flex-1"
+                                />
+                                <span className="text-sm text-gray-600">150</span>
+                                <span className="text-sm font-medium ml-2">{weight[0]} kg</span>
+                              </div>
+                              <p className="text-xs text-gray-500 mt-1">BMI: {(weight[0] / ((height[0] / 100) ** 2)).toFixed(1)}</p>
+                            </div>
+                            
+                            <div>
+                              <Label className="text-sm font-medium">Body Type</Label>
+                              <div className="flex gap-2 mt-2">
+                                <Button 
+                                  variant={bodyType === 'ectomorph' ? "default" : "outline"} 
+                                  size="sm"
+                                  onClick={() => setBodyType('ectomorph')}
+                                >
+                                  Ectomorph
+                                </Button>
+                                <Button 
+                                  variant={bodyType === 'mesomorph' ? "default" : "outline"} 
+                                  size="sm"
+                                  onClick={() => setBodyType('mesomorph')}
+                                >
+                                  Mesomorph
+                                </Button>
+                                <Button 
+                                  variant={bodyType === 'endomorph' ? "default" : "outline"} 
+                                  size="sm"
+                                  onClick={() => setBodyType('endomorph')}
+                                >
+                                  Endomorph
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Postural Deviations */}
+                        <div className="pb-4 border-b">
+                          <h4 className="font-medium mb-3">Postural Deviations</h4>
+                          <div className="space-y-3">
+                            <div>
+                              <Label className="text-sm font-medium">Forward Head Posture (cm)</Label>
+                              <div className="flex items-center gap-4 mt-2">
+                                <span className="text-sm text-gray-600">0</span>
+                                <Slider
+                                  value={forwardHead}
+                                  onValueChange={setForwardHead}
+                                  min={0}
+                                  max={10}
+                                  step={0.5}
+                                  className="flex-1"
+                                />
+                                <span className="text-sm text-gray-600">10</span>
+                                <span className="text-sm font-medium ml-2">{forwardHead[0]} cm</span>
+                              </div>
+                            </div>
+                            
+                            <div>
+                              <Label className="text-sm font-medium">Thoracic Kyphosis</Label>
+                              <div className="flex items-center gap-4 mt-2">
+                                <span className="text-sm text-gray-600">10°</span>
+                                <Slider
+                                  value={thoracicKyphosis}
+                                  onValueChange={setThoracicKyphosis}
+                                  min={10}
+                                  max={70}
+                                  step={1}
+                                  className="flex-1"
+                                />
+                                <span className="text-sm text-gray-600">70°</span>
+                                <span className="text-sm font-medium ml-2">{thoracicKyphosis[0]}°</span>
+                              </div>
+                              <p className="text-xs text-gray-500 mt-1">Normal: 20-45°</p>
+                            </div>
+                            
+                            <div>
+                              <Label className="text-sm font-medium">Lumbar Lordosis</Label>
+                              <div className="flex items-center gap-4 mt-2">
+                                <span className="text-sm text-gray-600">-20°</span>
+                                <Slider
+                                  value={lumbarLordosis}
+                                  onValueChange={setLumbarLordosis}
+                                  min={-80}
+                                  max={-20}
+                                  step={1}
+                                  className="flex-1"
+                                />
+                                <span className="text-sm text-gray-600">-80°</span>
+                                <span className="text-sm font-medium ml-2">{lumbarLordosis[0]}°</span>
+                              </div>
+                              <p className="text-xs text-gray-500 mt-1">Normal: -40° to -60°</p>
+                            </div>
+                            
+                            <div>
+                              <Label className="text-sm font-medium">Pelvic Tilt</Label>
+                              <div className="flex items-center gap-4 mt-2">
+                                <span className="text-sm text-gray-600">-10°</span>
+                                <Slider
+                                  value={pelvicTilt}
+                                  onValueChange={setPelvicTilt}
+                                  min={-10}
+                                  max={25}
+                                  step={1}
+                                  className="flex-1"
+                                />
+                                <span className="text-sm text-gray-600">25°</span>
+                                <span className="text-sm font-medium ml-2">{pelvicTilt[0]}°</span>
+                              </div>
+                              <p className="text-xs text-gray-500 mt-1">Negative = Posterior, Positive = Anterior. Normal: 5-12°</p>
+                            </div>
+                            
+                            <div>
+                              <Label className="text-sm font-medium">Shoulder Height Difference</Label>
+                              <div className="flex items-center gap-4 mt-2">
+                                <span className="text-sm text-gray-600">-5cm</span>
+                                <Slider
+                                  value={shoulderHeight}
+                                  onValueChange={setShoulderHeight}
+                                  min={-5}
+                                  max={5}
+                                  step={0.5}
+                                  className="flex-1"
+                                />
+                                <span className="text-sm text-gray-600">5cm</span>
+                                <span className="text-sm font-medium ml-2">{shoulderHeight[0]}cm</span>
+                              </div>
+                              <p className="text-xs text-gray-500 mt-1">Negative = Left lower, Positive = Right lower</p>
+                            </div>
+                            
+                            <div>
+                              <Label className="text-sm font-medium">Scoliosis Angle</Label>
+                              <div className="flex items-center gap-4 mt-2">
+                                <span className="text-sm text-gray-600">0°</span>
+                                <Slider
+                                  value={scoliosis}
+                                  onValueChange={setScoliosis}
+                                  min={0}
+                                  max={40}
+                                  step={1}
+                                  className="flex-1"
+                                />
+                                <span className="text-sm text-gray-600">40°</span>
+                                <span className="text-sm font-medium ml-2">{scoliosis[0]}°</span>
+                              </div>
+                              <p className="text-xs text-gray-500 mt-1">&lt;10° = Normal, 10-25° = Mild, 25-40° = Moderate</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Movement Quality */}
+                        <div>
+                          <h4 className="font-medium mb-3">Movement Quality</h4>
+                          <div className="space-y-3">
+                            <div>
+                              <Label className="text-sm font-medium">Movement Speed</Label>
+                              <div className="flex gap-2 mt-2">
+                                <Button 
+                                  variant={movementSpeed === 'very_slow' ? "default" : "outline"} 
+                                  size="sm"
+                                  onClick={() => setMovementSpeed('very_slow')}
+                                >
+                                  Very Slow
+                                </Button>
+                                <Button 
+                                  variant={movementSpeed === 'slow' ? "default" : "outline"} 
+                                  size="sm"
+                                  onClick={() => setMovementSpeed('slow')}
+                                >
+                                  Slow
+                                </Button>
+                                <Button 
+                                  variant={movementSpeed === 'normal' ? "default" : "outline"} 
+                                  size="sm"
+                                  onClick={() => setMovementSpeed('normal')}
+                                >
+                                  Normal
+                                </Button>
+                                <Button 
+                                  variant={movementSpeed === 'fast' ? "default" : "outline"} 
+                                  size="sm"
+                                  onClick={() => setMovementSpeed('fast')}
+                                >
+                                  Fast
+                                </Button>
+                              </div>
+                            </div>
+                            
+                            <div>
+                              <Label className="text-sm font-medium">Balance Quality</Label>
+                              <div className="flex gap-2 mt-2">
+                                <Button 
+                                  variant={balanceQuality === 'poor' ? "default" : "outline"} 
+                                  size="sm"
+                                  onClick={() => setBalanceQuality('poor')}
+                                >
+                                  Poor
+                                </Button>
+                                <Button 
+                                  variant={balanceQuality === 'fair' ? "default" : "outline"} 
+                                  size="sm"
+                                  onClick={() => setBalanceQuality('fair')}
+                                >
+                                  Fair
+                                </Button>
+                                <Button 
+                                  variant={balanceQuality === 'good' ? "default" : "outline"} 
+                                  size="sm"
+                                  onClick={() => setBalanceQuality('good')}
+                                >
+                                  Good
+                                </Button>
+                                <Button 
+                                  variant={balanceQuality === 'excellent' ? "default" : "outline"} 
+                                  size="sm"
+                                  onClick={() => setBalanceQuality('excellent')}
+                                >
+                                  Excellent
+                                </Button>
+                              </div>
+                            </div>
+                            
+                            <div>
+                              <Label className="text-sm font-medium">Coordination</Label>
+                              <div className="flex gap-2 mt-2">
+                                <Button 
+                                  variant={coordination === 'smooth' ? "default" : "outline"} 
+                                  size="sm"
+                                  onClick={() => setCoordination('smooth')}
+                                >
+                                  Smooth
+                                </Button>
+                                <Button 
+                                  variant={coordination === 'mildly_jerky' ? "default" : "outline"} 
+                                  size="sm"
+                                  onClick={() => setCoordination('mildly_jerky')}
+                                >
+                                  Mildly Jerky
+                                </Button>
+                                <Button 
+                                  variant={coordination === 'moderately_jerky' ? "default" : "outline"} 
+                                  size="sm"
+                                  onClick={() => setCoordination('moderately_jerky')}
+                                >
+                                  Moderately Jerky
+                                </Button>
+                                <Button 
+                                  variant={coordination === 'severely_jerky' ? "default" : "outline"} 
+                                  size="sm"
+                                  onClick={() => setCoordination('severely_jerky')}
+                                >
+                                  Severely Jerky
+                                </Button>
+                              </div>
+                            </div>
+                            
+                            <div>
+                              <Label className="text-sm font-medium">Compensatory Patterns</Label>
+                              <div className="grid grid-cols-2 gap-2 mt-2">
+                                <label className="flex items-center">
+                                  <input 
+                                    type="checkbox" 
+                                    className="mr-2" 
+                                    checked={hipHike}
+                                    onChange={(e) => setHipHike(e.target.checked)}
+                                  />
+                                  <span className="text-sm">Hip Hike</span>
+                                </label>
+                                <label className="flex items-center">
+                                  <input 
+                                    type="checkbox" 
+                                    className="mr-2" 
+                                    checked={trunkLean}
+                                    onChange={(e) => setTrunkLean(e.target.checked)}
+                                  />
+                                  <span className="text-sm">Trunk Lean</span>
+                                </label>
+                                <label className="flex items-center">
+                                  <input 
+                                    type="checkbox" 
+                                    className="mr-2" 
+                                    checked={circumduction}
+                                    onChange={(e) => setCircumduction(e.target.checked)}
+                                  />
+                                  <span className="text-sm">Circumduction</span>
+                                </label>
+                                <label className="flex items-center">
+                                  <input 
+                                    type="checkbox" 
+                                    className="mr-2" 
+                                    checked={trendelenburg}
+                                    onChange={(e) => setTrendelenburg(e.target.checked)}
+                                  />
+                                  <span className="text-sm">Trendelenburg</span>
+                                </label>
                               </div>
                             </div>
                           </div>

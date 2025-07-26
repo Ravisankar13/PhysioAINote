@@ -2550,7 +2550,8 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
           rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] },
           leftAnkle: { position: [-0.15, -0.8, 0], rotation: [0, 0, 0] },
-          rightAnkle: { position: [0.15, -0.8, 0], rotation: [0, 0, 0] }
+          rightAnkle: { position: [0.15, -0.8, 0], rotation: [0, 0, 0] },
+          spineGroup: { position: [0, 0, 0], rotation: [0, 0, 0] } // Neutral spine
         }
       },
       {
@@ -2571,7 +2572,8 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
           leftArmGroup: { position: [-0.25, 0.8, 0.5], rotation: [0.3, 0, 0] }, // Arms reach down
           rightArmGroup: { position: [0.25, 0.8, 0.5], rotation: [0.3, 0, 0] },
           leftAnkle: { position: [-0.15, -0.8, 0], rotation: [0, 0, 0] },
-          rightAnkle: { position: [0.15, -0.8, 0], rotation: [0, 0, 0] }
+          rightAnkle: { position: [0.15, -0.8, 0], rotation: [0, 0, 0] },
+          spineGroup: { position: [0, -0.4, 0.2], rotation: [1.2, 0, 0] } // Major spine flexion matching torso
         }
       },
       {
@@ -2590,7 +2592,8 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
           rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] },
           leftAnkle: { position: [-0.15, -0.8, 0], rotation: [0, 0, 0] },
-          rightAnkle: { position: [0.15, -0.8, 0], rotation: [0, 0, 0] }
+          rightAnkle: { position: [0.15, -0.8, 0], rotation: [0, 0, 0] },
+          spineGroup: { position: [0, 0, 0], rotation: [0, 0, 0] } // Back to neutral
         }
       }
     ];
@@ -2617,7 +2620,8 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
           leftArmGroup: { position: [-0.35, 0.1, -0.3], rotation: [0, 0, 0.5] },
           rightArmGroup: { position: [0.35, 0.1, -0.3], rotation: [0, 0, -0.5] },
           leftAnkle: { position: [-0.15, 0.1, 0.8], rotation: [0, 0, 0] },
-          rightAnkle: { position: [0.15, 0.1, 0.8], rotation: [0, 0, 0] }
+          rightAnkle: { position: [0.15, 0.1, 0.8], rotation: [0, 0, 0] },
+          spineGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] } // Spine flat on ground
         }
       },
       {
@@ -2638,7 +2642,8 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
           leftArmGroup: { position: [-0.35, 0.1, -0.3], rotation: [0, 0, 0.5] },
           rightArmGroup: { position: [0.35, 0.1, -0.3], rotation: [0, 0, -0.5] },
           leftAnkle: { position: [-0.15, 0.1, 0.8], rotation: [0, 0, 0] },
-          rightAnkle: { position: [0.15, 0.1, 0.8], rotation: [0, 0, 0] }
+          rightAnkle: { position: [0.15, 0.1, 0.8], rotation: [0, 0, 0] },
+          spineGroup: { position: [0, -0.5, 0], rotation: [-0.3, 0, 0] } // Spine arched in bridge
         }
       },
       {
@@ -2659,7 +2664,8 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
           leftArmGroup: { position: [-0.35, 0.1, -0.3], rotation: [0, 0, 0.5] },
           rightArmGroup: { position: [0.35, 0.1, -0.3], rotation: [0, 0, -0.5] },
           leftAnkle: { position: [-0.15, 0.1, 0.8], rotation: [0, 0, 0] },
-          rightAnkle: { position: [0.15, 0.1, 0.8], rotation: [0, 0, 0] }
+          rightAnkle: { position: [0.15, 0.1, 0.8], rotation: [0, 0, 0] },
+          spineGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] } // Back to flat on ground
         }
       }
     ];
@@ -2682,7 +2688,8 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
           leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
           rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
           leftAnkle: { position: [-0.15, -0.8, 0], rotation: [0, 0, 0] },
-          rightAnkle: { position: [0.15, -0.8, 0], rotation: [0, 0, 0] }
+          rightAnkle: { position: [0.15, -0.8, 0], rotation: [0, 0, 0] },
+          spineGroup: { position: [0, 0, 0], rotation: [0, 0, 0] } // Neutral spine
         }
       },
       {
@@ -2701,7 +2708,8 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
           leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
           rightKnee: { position: [0.15, 0.3, 0.3], rotation: [0, 0, 0] },
           leftAnkle: { position: [-0.15, -0.8, 0], rotation: [0, 0, 0] },
-          rightAnkle: { position: [0.15, -0.1, 0.3], rotation: [0, 0, 0] } // Right foot on step
+          rightAnkle: { position: [0.15, -0.1, 0.3], rotation: [0, 0, 0] }, // Right foot on step
+          spineGroup: { position: [0, 0.1, 0], rotation: [0.1, 0, 0] } // Slight forward lean
         }
       },
       {
@@ -2720,7 +2728,8 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
           leftKnee: { position: [-0.15, 0.4, 0.3], rotation: [0, 0, 0] },
           rightKnee: { position: [0.15, 0.4, 0.3], rotation: [0, 0, 0] },
           leftAnkle: { position: [-0.15, -0.4, 0.3], rotation: [0, 0, 0] },
-          rightAnkle: { position: [0.15, -0.4, 0.3], rotation: [0, 0, 0] }
+          rightAnkle: { position: [0.15, -0.4, 0.3], rotation: [0, 0, 0] },
+          spineGroup: { position: [0, 0.3, 0], rotation: [0, 0, 0] } // Elevated with step
         }
       },
       {
@@ -2739,7 +2748,8 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
           leftKnee: { position: [-0.15, 0.2, 0], rotation: [0, 0, 0] },
           rightKnee: { position: [0.15, 0.2, 0.3], rotation: [0, 0, 0] },
           leftAnkle: { position: [-0.15, -0.6, 0], rotation: [0, 0, 0] },
-          rightAnkle: { position: [0.15, -0.6, 0.3], rotation: [0, 0, 0] }
+          rightAnkle: { position: [0.15, -0.6, 0.3], rotation: [0, 0, 0] },
+          spineGroup: { position: [0, 0.1, 0], rotation: [0.1, 0, 0] } // Slight forward lean
         }
       },
       {
@@ -2756,7 +2766,8 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
           leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
           rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
           leftAnkle: { position: [-0.15, -0.8, 0], rotation: [0, 0, 0] },
-          rightAnkle: { position: [0.15, -0.8, 0], rotation: [0, 0, 0] }
+          rightAnkle: { position: [0.15, -0.8, 0], rotation: [0, 0, 0] },
+          spineGroup: { position: [0, 0, 0], rotation: [0, 0, 0] } // Back to neutral
         }
       }
     ];
@@ -2783,7 +2794,8 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
           leftArmGroup: { position: [-0.25, 0.6, -0.3], rotation: [1.57, 0, 0] },
           rightArmGroup: { position: [0.25, 0.6, -0.3], rotation: [1.57, 0, 0] },
           leftAnkle: { position: [-0.15, 0.1, 0.6], rotation: [0, 0, 0] },
-          rightAnkle: { position: [0.15, 0.1, 0.6], rotation: [0, 0, 0] }
+          rightAnkle: { position: [0.15, 0.1, 0.6], rotation: [0, 0, 0] },
+          spineGroup: { position: [0, -0.3, 0], rotation: [1.57, 0, 0] } // Horizontal spine
         }
       },
       {
@@ -2804,7 +2816,8 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
           leftArmGroup: { position: [-0.25, 0.6, -0.8], rotation: [0, 0, 0] }, // Extended forward
           rightArmGroup: { position: [0.25, 0.6, -0.3], rotation: [1.57, 0, 0] },
           leftAnkle: { position: [-0.15, 0.1, 0.6], rotation: [0, 0, 0] },
-          rightAnkle: { position: [0.15, 0.6, 1.4], rotation: [0, 0, 0] }
+          rightAnkle: { position: [0.15, 0.6, 1.4], rotation: [0, 0, 0] },
+          spineGroup: { position: [0, -0.3, 0], rotation: [1.57, 0, 0] } // Maintain neutral horizontal spine
         }
       },
       {
@@ -2825,7 +2838,8 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
           leftArmGroup: { position: [-0.25, 0.6, -0.3], rotation: [1.57, 0, 0] },
           rightArmGroup: { position: [0.25, 0.6, -0.3], rotation: [1.57, 0, 0] },
           leftAnkle: { position: [-0.15, 0.1, 0.6], rotation: [0, 0, 0] },
-          rightAnkle: { position: [0.15, 0.1, 0.6], rotation: [0, 0, 0] }
+          rightAnkle: { position: [0.15, 0.1, 0.6], rotation: [0, 0, 0] },
+          spineGroup: { position: [0, -0.3, 0], rotation: [1.57, 0, 0] } // Back to horizontal spine
         }
       }
     ];
@@ -2869,7 +2883,14 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
 
       // Apply interpolated transformations to all joints
       Object.keys(currentFrame.joints).forEach(jointName => {
-        const bone = skeletonRef.current!.getObjectByName(jointName);
+        // First try to get bone from bonesRef (for groups like spineGroup)
+        let bone = bonesRef.current[jointName];
+        
+        // If not in bonesRef, try to find by name in the skeleton
+        if (!bone) {
+          bone = skeletonRef.current!.getObjectByName(jointName);
+        }
+        
         if (bone) {
           const currentJoint = currentFrame.joints[jointName];
           const nextJoint = nextFrame.joints[jointName] || currentJoint;

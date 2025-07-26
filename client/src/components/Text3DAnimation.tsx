@@ -247,70 +247,70 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
       const innominateShape = new THREE.Shape();
       
       // Start at the acetabulum region (hip socket location)
-      innominateShape.moveTo(0.15 * sideMultiplier, 0);
+      innominateShape.moveTo(0.1 * sideMultiplier, 0);
       
       // Trace up to create the large iliac wing (upper butterfly wing)
       innominateShape.bezierCurveTo(
-        0.2 * sideMultiplier, 0.05,
-        0.3 * sideMultiplier, 0.15,
-        0.45 * sideMultiplier, 0.3  // Very wide iliac wing
+        0.13 * sideMultiplier, 0.03,
+        0.2 * sideMultiplier, 0.1,
+        0.3 * sideMultiplier, 0.2  // Smaller iliac wing
       );
       
       // Iliac crest (top of the wing) - curved like butterfly wing edge
       innominateShape.bezierCurveTo(
-        0.45 * sideMultiplier, 0.35,
-        0.35 * sideMultiplier, 0.4,
-        0.2 * sideMultiplier, 0.4
+        0.3 * sideMultiplier, 0.23,
+        0.23 * sideMultiplier, 0.26,
+        0.13 * sideMultiplier, 0.26
       );
       
       // Inner edge of iliac wing toward sacrum
       innominateShape.bezierCurveTo(
-        0.1 * sideMultiplier, 0.35,
-        0.05 * sideMultiplier, 0.25,
-        0.05 * sideMultiplier, 0.15
+        0.07 * sideMultiplier, 0.23,
+        0.03 * sideMultiplier, 0.17,
+        0.03 * sideMultiplier, 0.1
       );
       
       // Curve down to sacroiliac joint area
-      innominateShape.lineTo(0.05 * sideMultiplier, 0);
+      innominateShape.lineTo(0.03 * sideMultiplier, 0);
       
       // Move down posterior side (ischium region)
       innominateShape.bezierCurveTo(
-        0.08 * sideMultiplier, -0.05,
-        0.12 * sideMultiplier, -0.1,
-        0.15 * sideMultiplier, -0.15  // Ischial tuberosity
+        0.05 * sideMultiplier, -0.03,
+        0.08 * sideMultiplier, -0.07,
+        0.1 * sideMultiplier, -0.1  // Ischial tuberosity
       );
       
       // Curve forward under obturator foramen
       innominateShape.bezierCurveTo(
-        0.12 * sideMultiplier, -0.17,
-        0.08 * sideMultiplier, -0.15,
-        0.05 * sideMultiplier, -0.13
+        0.08 * sideMultiplier, -0.11,
+        0.05 * sideMultiplier, -0.1,
+        0.03 * sideMultiplier, -0.09
       );
       
       // Move forward to pubis
       innominateShape.bezierCurveTo(
-        0.02 * sideMultiplier, -0.1,
-        0, -0.07,
-        0, -0.03  // Meet at pubic symphysis
+        0.01 * sideMultiplier, -0.07,
+        0, -0.05,
+        0, -0.02  // Meet at pubic symphysis
       );
       
       // Superior pubic ramus back to acetabulum
       innominateShape.bezierCurveTo(
-        0.02 * sideMultiplier, 0,
-        0.08 * sideMultiplier, 0.02,
-        0.15 * sideMultiplier, 0  // Back to start
+        0.01 * sideMultiplier, 0,
+        0.05 * sideMultiplier, 0.01,
+        0.1 * sideMultiplier, 0  // Back to start
       );
       
       // Create obturator foramen as a hole in the shape
       const foramenPath = new THREE.Path();
       // Create oval hole for obturator foramen
-      const fx = 0.08 * sideMultiplier;
-      const fy = -0.07;
-      foramenPath.moveTo(fx + 0.03 * sideMultiplier, fy);
+      const fx = 0.05 * sideMultiplier;
+      const fy = -0.05;
+      foramenPath.moveTo(fx + 0.02 * sideMultiplier, fy);
       foramenPath.ellipse(
         0, 0,  // Center offset
-        0.03,  // X radius
-        0.05,  // Y radius (taller)
+        0.02,  // X radius (smaller)
+        0.03,  // Y radius (smaller)
         0,     // Start angle
         Math.PI * 2,  // End angle
         false  // Clockwise
@@ -333,10 +333,10 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
       
       // Add acetabulum (hip socket) as a separate spherical element
       const coverageAngle = (hipPathology.acetabularCoverage / 100) * Math.PI;
-      const socketGeometry = new THREE.SphereGeometry(0.08, 20, 20, 0, coverageAngle);
+      const socketGeometry = new THREE.SphereGeometry(0.05, 20, 20, 0, coverageAngle);  // Smaller socket
       const socket = new THREE.Mesh(socketGeometry, boneMaterial);
       socket.rotation.z = (Math.PI / 2) * sideMultiplier;
-      socket.position.set(0.15 * sideMultiplier, -0.05, 0);
+      socket.position.set(0.1 * sideMultiplier, -0.03, 0);  // Adjusted position
       socket.name = `${side}HipSocket`;
       innominateGroup.add(socket);
       
@@ -576,7 +576,7 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
     
     // Left leg group for hierarchical transformation
     const leftLegGroup = new THREE.Group();
-    leftLegGroup.position.set(-0.15, 0.6, 0); // Position at hip joint (below pelvis at 0.7)
+    leftLegGroup.position.set(-0.1, 0.6, 0); // Position at hip joint (below pelvis at 0.7) - closer together
     leftLegGroup.name = 'leftLegGroup';
     
     // Left thigh attached to leg group
@@ -653,7 +653,7 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
 
     // Right leg group for hierarchical transformation
     const rightLegGroup = new THREE.Group();
-    rightLegGroup.position.set(0.15, 0.6, 0); // Position at hip joint (below pelvis at 0.7)
+    rightLegGroup.position.set(0.1, 0.6, 0); // Position at hip joint (below pelvis at 0.7) - closer together
     rightLegGroup.name = 'rightLegGroup';
     
     // Right thigh attached to leg group

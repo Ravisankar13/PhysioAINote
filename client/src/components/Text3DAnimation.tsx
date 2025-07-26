@@ -233,65 +233,116 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
     headMesh.name = 'head';
     skeleton.add(headMesh);
     
-    // Create anatomically accurate pelvis with hip sockets
+    // Create anatomically accurate pelvis with two innominate bones
     const pelvisGroup = new THREE.Group();
     pelvisGroup.position.set(0, 0.9, 0);
     pelvisGroup.name = 'pelvisGroup';
     
-    // Main pelvis body (butterfly/bowl shape)
-    const pelvisShape = new THREE.Shape();
-    pelvisShape.moveTo(-0.15, 0);
-    pelvisShape.bezierCurveTo(-0.25, 0.05, -0.3, 0.1, -0.35, 0.15); // Left iliac wing
-    pelvisShape.lineTo(-0.35, 0.2);
-    pelvisShape.bezierCurveTo(-0.3, 0.22, -0.2, 0.2, -0.15, 0.15);
-    pelvisShape.lineTo(-0.1, 0.05);
-    pelvisShape.lineTo(0.1, 0.05);
-    pelvisShape.lineTo(0.15, 0.15);
-    pelvisShape.bezierCurveTo(0.2, 0.2, 0.3, 0.22, 0.35, 0.2); // Right iliac wing
-    pelvisShape.lineTo(0.35, 0.15);
-    pelvisShape.bezierCurveTo(0.3, 0.1, 0.25, 0.05, 0.15, 0);
-    pelvisShape.closePath();
-    
-    const pelvisExtrudeSettings = {
-      depth: 0.15,
-      bevelEnabled: true,
-      bevelThickness: 0.02,
-      bevelSize: 0.02,
-      bevelSegments: 3
+    // Function to create one innominate bone
+    const createInnominateBone = (side: 'left' | 'right') => {
+      const innominateGroup = new THREE.Group();
+      const sideMultiplier = side === 'left' ? -1 : 1;
+      
+      // Ilium (wing portion)
+      const iliumShape = new THREE.Shape();
+      iliumShape.moveTo(0, 0);
+      iliumShape.bezierCurveTo(0.05 * sideMultiplier, 0.05, 0.15 * sideMultiplier, 0.1, 0.2 * sideMultiplier, 0.2); // Iliac wing
+      iliumShape.lineTo(0.15 * sideMultiplier, 0.25); // Iliac crest
+      iliumShape.bezierCurveTo(0.1 * sideMultiplier, 0.25, 0.05 * sideMultiplier, 0.2, 0, 0.15);
+      iliumShape.lineTo(0, 0);
+      
+      const iliumGeometry = new THREE.ExtrudeGeometry(iliumShape, {
+        depth: 0.08,
+        bevelEnabled: true,
+        bevelThickness: 0.01,
+        bevelSize: 0.01,
+        bevelSegments: 2
+      });
+      
+      const ilium = new THREE.Mesh(iliumGeometry, boneMaterial);
+      ilium.rotation.x = -Math.PI / 2;
+      ilium.position.set(0.05 * sideMultiplier, 0, -0.05);
+      innominateGroup.add(ilium);
+      
+      // Ischium (lower posterior portion)
+      const ischiumShape = new THREE.Shape();
+      ischiumShape.moveTo(0, 0);
+      ischiumShape.lineTo(0.05 * sideMultiplier, -0.05);
+      ischiumShape.lineTo(0.08 * sideMultiplier, -0.15); // Ischial tuberosity
+      ischiumShape.lineTo(0.05 * sideMultiplier, -0.18);
+      ischiumShape.lineTo(0, -0.15);
+      ischiumShape.lineTo(0, 0);
+      
+      const ischiumGeometry = new THREE.ExtrudeGeometry(ischiumShape, {
+        depth: 0.06,
+        bevelEnabled: true,
+        bevelThickness: 0.01,
+        bevelSize: 0.01,
+        bevelSegments: 2
+      });
+      
+      const ischium = new THREE.Mesh(ischiumGeometry, boneMaterial);
+      ischium.rotation.x = -Math.PI / 2;
+      ischium.position.set(0.1 * sideMultiplier, -0.05, -0.03);
+      innominateGroup.add(ischium);
+      
+      // Pubis (anterior portion)
+      const pubisShape = new THREE.Shape();
+      pubisShape.moveTo(0, 0);
+      pubisShape.lineTo(0.05 * sideMultiplier, -0.02);
+      pubisShape.lineTo(0.08 * sideMultiplier, -0.08);
+      pubisShape.lineTo(0.05 * sideMultiplier, -0.12);
+      pubisShape.lineTo(0, -0.1);
+      pubisShape.lineTo(0, 0);
+      
+      const pubisGeometry = new THREE.ExtrudeGeometry(pubisShape, {
+        depth: 0.04,
+        bevelEnabled: true,
+        bevelThickness: 0.01,
+        bevelSize: 0.01,
+        bevelSegments: 2
+      });
+      
+      const pubis = new THREE.Mesh(pubisGeometry, boneMaterial);
+      pubis.rotation.x = -Math.PI / 2;
+      pubis.position.set(0.05 * sideMultiplier, -0.08, 0.08);
+      innominateGroup.add(pubis);
+      
+      // Acetabulum (hip socket) where all three bones meet
+      const coverageAngle = (hipPathology.acetabularCoverage / 100) * Math.PI;
+      const socketGeometry = new THREE.SphereGeometry(0.06, 16, 16, 0, coverageAngle);
+      const socket = new THREE.Mesh(socketGeometry, boneMaterial);
+      socket.rotation.z = (Math.PI / 2) * sideMultiplier;
+      socket.position.set(0.15 * sideMultiplier, -0.05, 0);
+      socket.name = `${side}HipSocket`;
+      innominateGroup.add(socket);
+      
+      // Obturator foramen (hole in hip bone)
+      const foramenGeometry = new THREE.TorusGeometry(0.05, 0.015, 8, 16);
+      const foramen = new THREE.Mesh(foramenGeometry, boneMaterial);
+      foramen.position.set(0.1 * sideMultiplier, -0.12, 0.02);
+      foramen.rotation.y = Math.PI / 2;
+      innominateGroup.add(foramen);
+      
+      innominateGroup.name = `${side}Innominate`;
+      return innominateGroup;
     };
     
-    const pelvisGeometry = new THREE.ExtrudeGeometry(pelvisShape, pelvisExtrudeSettings);
-    const pelvisMesh = new THREE.Mesh(pelvisGeometry, boneMaterial);
-    pelvisMesh.rotation.x = -Math.PI / 2;
-    pelvisMesh.position.y = -0.1;
-    pelvisGroup.add(pelvisMesh);
+    // Create left and right innominate bones
+    const leftInnominate = createInnominateBone('left');
+    pelvisGroup.add(leftInnominate);
     
-    // Add hip sockets (acetabulum) with pathology-based coverage
-    const coverageAngle = (hipPathology.acetabularCoverage / 100) * Math.PI; // Convert percentage to radians
-    const socketGeometry = new THREE.SphereGeometry(0.06, 16, 16, 0, coverageAngle);
+    const rightInnominate = createInnominateBone('right');
+    pelvisGroup.add(rightInnominate);
     
-    // Left hip socket
-    const leftSocket = new THREE.Mesh(socketGeometry, boneMaterial);
-    leftSocket.rotation.z = -Math.PI / 2;
-    leftSocket.position.set(-0.15, -0.05, 0);
-    leftSocket.name = 'leftHipSocket';
-    pelvisGroup.add(leftSocket);
-    
-    // Right hip socket
-    const rightSocket = new THREE.Mesh(socketGeometry, boneMaterial);
-    rightSocket.rotation.z = Math.PI / 2;
-    rightSocket.position.set(0.15, -0.05, 0);
-    rightSocket.name = 'rightHipSocket';
-    pelvisGroup.add(rightSocket);
-    
-    // Add pubic symphysis (front connection)
-    const pubicGeometry = new THREE.CylinderGeometry(0.03, 0.03, 0.25, 8);
+    // Add pubic symphysis (front connection between innominates)
+    const pubicGeometry = new THREE.CylinderGeometry(0.02, 0.02, 0.08, 8);
     const pubicBone = new THREE.Mesh(pubicGeometry, boneMaterial);
     pubicBone.rotation.z = Math.PI / 2;
-    pubicBone.position.set(0, -0.1, 0.07);
+    pubicBone.position.set(0, -0.15, 0.08);
     pelvisGroup.add(pubicBone);
     
-    // Add sacrum (tailbone area)
+    // Add sacrum (connects to innominates at back)
     const sacrumShape = new THREE.Shape();
     sacrumShape.moveTo(-0.05, 0);
     sacrumShape.lineTo(0.05, 0);
@@ -313,7 +364,16 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
     pelvisGroup.add(sacrum);
     
     skeleton.add(pelvisGroup);
-    bonesRef.current['pelvis'] = pelvisMesh; // Reference the mesh, not the group
+    
+    // Create invisible reference for animations
+    const pelvisReference = new THREE.Mesh(
+      new THREE.BoxGeometry(0.01, 0.01, 0.01),
+      new THREE.MeshBasicMaterial({ visible: false })
+    );
+    pelvisReference.position.set(0, 0.9, 0);
+    pelvisReference.name = 'pelvis';
+    skeleton.add(pelvisReference);
+    bonesRef.current['pelvis'] = pelvisReference;
 
     // Create clavicles (collar bones) to connect shoulders to torso
     const clavicleGeometry = new THREE.CylinderGeometry(0.04, 0.04, 0.35, 8);

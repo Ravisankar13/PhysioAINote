@@ -256,16 +256,16 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
 
     // Create clavicles (collar bones) to connect shoulders to torso
     const clavicleGeometry = new THREE.CylinderGeometry(0.04, 0.04, 0.35, 8);
-    const clavicleY = torsoHeight + 0.9 - 0.1; // Just below top of torso
+    const clavicleY = 1.55; // Position at upper chest level, just below shoulders (1.65)
     
     const leftClavicle = new THREE.Mesh(clavicleGeometry, boneMaterial);
-    leftClavicle.position.set(-0.13, clavicleY, 0);
+    leftClavicle.position.set(-0.13, clavicleY, 0.05); // Slightly forward
     leftClavicle.rotation.z = -Math.PI / 6;
     leftClavicle.name = 'leftClavicle';
     skeleton.add(leftClavicle);
 
     const rightClavicle = new THREE.Mesh(clavicleGeometry, boneMaterial);
-    rightClavicle.position.set(0.13, clavicleY, 0);
+    rightClavicle.position.set(0.13, clavicleY, 0.05); // Slightly forward
     rightClavicle.rotation.z = Math.PI / 6;
     rightClavicle.name = 'rightClavicle';
     skeleton.add(rightClavicle);

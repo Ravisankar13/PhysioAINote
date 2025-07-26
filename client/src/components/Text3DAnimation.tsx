@@ -156,14 +156,75 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
       shininess: 50
     });
 
-    // Create main body structure with scaling
+    // Create spine and ribcage instead of solid torso
     const torsoHeight = 1.2 * limbScales.torso * limbScales.overall;
-    const torso = new THREE.CylinderGeometry(0.15, 0.2, torsoHeight, 8);
-    const torsoMesh = new THREE.Mesh(torso, boneMaterial);
-    torsoMesh.position.y = torsoHeight / 2 + 0.9; // Position based on scaled height
-    torsoMesh.name = 'torso';
-    skeleton.add(torsoMesh);
-    bonesRef.current['torso'] = torsoMesh;
+    
+    // Create spine group for all vertebrae
+    const spineGroup = new THREE.Group();
+    spineGroup.name = 'spineGroup';
+    
+    // Create individual vertebrae
+    const vertebraHeight = 0.04;
+    const vertebraCount = 24; // 7 cervical + 12 thoracic + 5 lumbar
+    const spineStartY = 0.9;
+    
+    for (let i = 0; i < vertebraCount; i++) {
+      const vertebraGeometry = new THREE.CylinderGeometry(0.04, 0.04, vertebraHeight, 8);
+      const vertebra = new THREE.Mesh(vertebraGeometry, boneMaterial);
+      vertebra.position.y = spineStartY + (i * vertebraHeight * 1.2);
+      vertebra.name = `vertebra_${i}`;
+      spineGroup.add(vertebra);
+    }
+    
+    // Create sternum (breastbone)
+    const sternumGeometry = new THREE.BoxGeometry(0.06, 0.4, 0.03);
+    const sternum = new THREE.Mesh(sternumGeometry, boneMaterial);
+    sternum.position.set(0, 1.4, 0.15);
+    sternum.name = 'sternum';
+    spineGroup.add(sternum);
+    
+    // Create ribcage
+    const ribCount = 12;
+    const ribStartY = 1.1; // Start from thoracic region
+    
+    for (let i = 0; i < ribCount; i++) {
+      const ribY = ribStartY + (i * 0.05);
+      const ribRadius = 0.15 - (i * 0.005); // Taper slightly
+      
+      // Create curved rib path
+      const ribCurve = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(0, ribY, -0.05), // Back (spine)
+        new THREE.Vector3(ribRadius * 0.7, ribY, -ribRadius * 0.5),
+        new THREE.Vector3(ribRadius, ribY, 0),
+        new THREE.Vector3(ribRadius * 0.7, ribY, ribRadius * 0.5),
+        new THREE.Vector3(0, ribY, 0.15) // Front (sternum)
+      ]);
+      
+      const ribGeometry = new THREE.TubeGeometry(ribCurve, 20, 0.02, 8, false);
+      
+      // Left rib
+      const leftRib = new THREE.Mesh(ribGeometry, boneMaterial);
+      leftRib.name = `leftRib_${i}`;
+      spineGroup.add(leftRib);
+      
+      // Right rib (mirrored)
+      const rightRib = new THREE.Mesh(ribGeometry, boneMaterial);
+      rightRib.scale.x = -1;
+      rightRib.name = `rightRib_${i}`;
+      spineGroup.add(rightRib);
+    }
+    
+    skeleton.add(spineGroup);
+    
+    // Create a reference torso mesh for animations (invisible)
+    const torsoReference = new THREE.Mesh(
+      new THREE.BoxGeometry(0.01, torsoHeight, 0.01),
+      new THREE.MeshBasicMaterial({ visible: false })
+    );
+    torsoReference.position.y = torsoHeight / 2 + 0.9;
+    torsoReference.name = 'torso';
+    skeleton.add(torsoReference);
+    bonesRef.current['torso'] = torsoReference;
 
     // Head - position based on scaled torso
     const head = new THREE.SphereGeometry(0.2, 16, 16);

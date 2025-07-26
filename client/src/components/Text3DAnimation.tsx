@@ -243,15 +243,81 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
       const innominateGroup = new THREE.Group();
       const sideMultiplier = side === 'left' ? -1 : 1;
       
-      // Ilium (wing portion)
+      // Create materials for different parts
+      const iliumMaterial = new THREE.MeshPhongMaterial({ 
+        color: 0xF5DEB3, // Bone color (can be tinted red for visualization)
+        shininess: 30
+      });
+      
+      const ischiumMaterial = new THREE.MeshPhongMaterial({ 
+        color: 0xF5DEB3, // Bone color (can be tinted green for visualization)
+        shininess: 30
+      });
+      
+      const pubisMaterial = new THREE.MeshPhongMaterial({ 
+        color: 0xF5DEB3, // Bone color (can be tinted yellow for visualization)
+        shininess: 30
+      });
+      
+      // Ilium (large wing portion) - much larger and more flared
       const iliumShape = new THREE.Shape();
-      iliumShape.moveTo(0, 0);
-      iliumShape.bezierCurveTo(0.05 * sideMultiplier, 0.05, 0.15 * sideMultiplier, 0.1, 0.2 * sideMultiplier, 0.2); // Iliac wing
-      iliumShape.lineTo(0.15 * sideMultiplier, 0.25); // Iliac crest
-      iliumShape.bezierCurveTo(0.1 * sideMultiplier, 0.25, 0.05 * sideMultiplier, 0.2, 0, 0.15);
-      iliumShape.lineTo(0, 0);
+      iliumShape.moveTo(0.05 * sideMultiplier, -0.05); // Start near acetabulum
+      // Create large flared wing
+      iliumShape.bezierCurveTo(
+        0.1 * sideMultiplier, 0,
+        0.2 * sideMultiplier, 0.1,
+        0.35 * sideMultiplier, 0.2  // Much wider wing
+      );
+      // Iliac crest (top edge)
+      iliumShape.bezierCurveTo(
+        0.35 * sideMultiplier, 0.25,
+        0.3 * sideMultiplier, 0.3,
+        0.2 * sideMultiplier, 0.3
+      );
+      // Inner curve back to center
+      iliumShape.bezierCurveTo(
+        0.1 * sideMultiplier, 0.25,
+        0.05 * sideMultiplier, 0.15,
+        0.05 * sideMultiplier, 0.05
+      );
+      iliumShape.closePath();
       
       const iliumGeometry = new THREE.ExtrudeGeometry(iliumShape, {
+        depth: 0.12, // Thicker for more substantial appearance
+        bevelEnabled: true,
+        bevelThickness: 0.02,
+        bevelSize: 0.02,
+        bevelSegments: 3
+      });
+      
+      const ilium = new THREE.Mesh(iliumGeometry, iliumMaterial);
+      ilium.rotation.x = -Math.PI / 2;
+      ilium.position.set(0, -0.05, -0.05);
+      innominateGroup.add(ilium);
+      
+      // Ischium (lower posterior portion with ischial spine and tuberosity)
+      const ischiumShape = new THREE.Shape();
+      ischiumShape.moveTo(0.1 * sideMultiplier, -0.05); // Start at acetabulum
+      // Ischial spine projection
+      ischiumShape.lineTo(0.12 * sideMultiplier, -0.08);
+      ischiumShape.lineTo(0.15 * sideMultiplier, -0.1); // Ischial spine point
+      // Curve down to ischial tuberosity
+      ischiumShape.bezierCurveTo(
+        0.15 * sideMultiplier, -0.15,
+        0.12 * sideMultiplier, -0.2,
+        0.1 * sideMultiplier, -0.25  // Ischial tuberosity (sitting bone)
+      );
+      // Curve forward to meet obturator foramen
+      ischiumShape.bezierCurveTo(
+        0.05 * sideMultiplier, -0.23,
+        0.02 * sideMultiplier, -0.18,
+        0.03 * sideMultiplier, -0.12
+      );
+      // Back to start
+      ischiumShape.lineTo(0.05 * sideMultiplier, -0.08);
+      ischiumShape.closePath();
+      
+      const ischiumGeometry = new THREE.ExtrudeGeometry(ischiumShape, {
         depth: 0.08,
         bevelEnabled: true,
         bevelThickness: 0.01,
@@ -259,21 +325,32 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
         bevelSegments: 2
       });
       
-      const ilium = new THREE.Mesh(iliumGeometry, boneMaterial);
-      ilium.rotation.x = -Math.PI / 2;
-      ilium.position.set(0.05 * sideMultiplier, 0, -0.05);
-      innominateGroup.add(ilium);
+      const ischium = new THREE.Mesh(ischiumGeometry, ischiumMaterial);
+      ischium.rotation.x = -Math.PI / 2;
+      ischium.position.set(0, 0, -0.02);
+      innominateGroup.add(ischium);
       
-      // Ischium (lower posterior portion)
-      const ischiumShape = new THREE.Shape();
-      ischiumShape.moveTo(0, 0);
-      ischiumShape.lineTo(0.05 * sideMultiplier, -0.05);
-      ischiumShape.lineTo(0.08 * sideMultiplier, -0.15); // Ischial tuberosity
-      ischiumShape.lineTo(0.05 * sideMultiplier, -0.18);
-      ischiumShape.lineTo(0, -0.15);
-      ischiumShape.lineTo(0, 0);
+      // Pubis (anterior portion with superior and inferior rami)
+      const pubisShape = new THREE.Shape();
+      pubisShape.moveTo(0.05 * sideMultiplier, -0.05); // Start at acetabulum
+      // Superior pubic ramus
+      pubisShape.bezierCurveTo(
+        0.03 * sideMultiplier, -0.03,
+        0.01 * sideMultiplier, -0.02,
+        0, -0.08  // Meet at symphysis
+      );
+      // Pubic body
+      pubisShape.lineTo(0, -0.15);
+      // Inferior pubic ramus
+      pubisShape.bezierCurveTo(
+        0.02 * sideMultiplier, -0.16,
+        0.04 * sideMultiplier, -0.14,
+        0.05 * sideMultiplier, -0.12  // Connect to obturator foramen
+      );
+      // Back to acetabulum
+      pubisShape.lineTo(0.05 * sideMultiplier, -0.05);
       
-      const ischiumGeometry = new THREE.ExtrudeGeometry(ischiumShape, {
+      const pubisGeometry = new THREE.ExtrudeGeometry(pubisShape, {
         depth: 0.06,
         bevelEnabled: true,
         bevelThickness: 0.01,
@@ -281,47 +358,56 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
         bevelSegments: 2
       });
       
-      const ischium = new THREE.Mesh(ischiumGeometry, boneMaterial);
-      ischium.rotation.x = -Math.PI / 2;
-      ischium.position.set(0.1 * sideMultiplier, -0.05, -0.03);
-      innominateGroup.add(ischium);
-      
-      // Pubis (anterior portion)
-      const pubisShape = new THREE.Shape();
-      pubisShape.moveTo(0, 0);
-      pubisShape.lineTo(0.05 * sideMultiplier, -0.02);
-      pubisShape.lineTo(0.08 * sideMultiplier, -0.08);
-      pubisShape.lineTo(0.05 * sideMultiplier, -0.12);
-      pubisShape.lineTo(0, -0.1);
-      pubisShape.lineTo(0, 0);
-      
-      const pubisGeometry = new THREE.ExtrudeGeometry(pubisShape, {
-        depth: 0.04,
-        bevelEnabled: true,
-        bevelThickness: 0.01,
-        bevelSize: 0.01,
-        bevelSegments: 2
-      });
-      
-      const pubis = new THREE.Mesh(pubisGeometry, boneMaterial);
+      const pubis = new THREE.Mesh(pubisGeometry, pubisMaterial);
       pubis.rotation.x = -Math.PI / 2;
-      pubis.position.set(0.05 * sideMultiplier, -0.08, 0.08);
+      pubis.position.set(0, -0.02, 0.08);
       innominateGroup.add(pubis);
       
-      // Acetabulum (hip socket) where all three bones meet
+      // Acetabulum (hip socket) - larger and more prominent
       const coverageAngle = (hipPathology.acetabularCoverage / 100) * Math.PI;
-      const socketGeometry = new THREE.SphereGeometry(0.06, 16, 16, 0, coverageAngle);
+      const socketGeometry = new THREE.SphereGeometry(0.08, 20, 20, 0, coverageAngle);
       const socket = new THREE.Mesh(socketGeometry, boneMaterial);
       socket.rotation.z = (Math.PI / 2) * sideMultiplier;
       socket.position.set(0.15 * sideMultiplier, -0.05, 0);
       socket.name = `${side}HipSocket`;
       innominateGroup.add(socket);
       
-      // Obturator foramen (hole in hip bone)
-      const foramenGeometry = new THREE.TorusGeometry(0.05, 0.015, 8, 16);
+      // Create proper obturator foramen (large oval opening)
+      // Using a custom shape instead of torus for more accurate representation
+      const foramenShape = new THREE.Shape();
+      const centerX = 0.08 * sideMultiplier;
+      const centerY = -0.13;
+      const radiusX = 0.04;
+      const radiusY = 0.06;
+      
+      // Create oval shape for the foramen
+      foramenShape.moveTo(centerX + radiusX * sideMultiplier, centerY);
+      for (let i = 0; i <= 32; i++) {
+        const angle = (i / 32) * Math.PI * 2;
+        const x = centerX + Math.cos(angle) * radiusX * sideMultiplier;
+        const y = centerY + Math.sin(angle) * radiusY;
+        foramenShape.lineTo(x, y);
+      }
+      
+      // Create the foramen as a hole by extruding with a hole
+      const foramenOuterShape = new THREE.Shape();
+      foramenOuterShape.moveTo(centerX + (radiusX + 0.02) * sideMultiplier, centerY);
+      for (let i = 0; i <= 32; i++) {
+        const angle = (i / 32) * Math.PI * 2;
+        const x = centerX + Math.cos(angle) * (radiusX + 0.02) * sideMultiplier;
+        const y = centerY + Math.sin(angle) * (radiusY + 0.02);
+        foramenOuterShape.lineTo(x, y);
+      }
+      foramenOuterShape.holes.push(foramenShape);
+      
+      const foramenGeometry = new THREE.ExtrudeGeometry(foramenOuterShape, {
+        depth: 0.04,
+        bevelEnabled: false
+      });
+      
       const foramen = new THREE.Mesh(foramenGeometry, boneMaterial);
-      foramen.position.set(0.1 * sideMultiplier, -0.12, 0.02);
-      foramen.rotation.y = Math.PI / 2;
+      foramen.rotation.x = -Math.PI / 2;
+      foramen.position.set(0, 0, 0.02);
       innominateGroup.add(foramen);
       
       innominateGroup.name = `${side}Innominate`;

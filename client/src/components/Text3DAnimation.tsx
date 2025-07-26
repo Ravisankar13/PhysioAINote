@@ -499,7 +499,7 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
     // Left foot attached to ankle group
     const footGeometry = new THREE.BoxGeometry(0.12, 0.06, 0.25);
     const leftFoot = new THREE.Mesh(footGeometry, boneMaterial);
-    leftFoot.position.set(0, -0.05, 0.05); // Relative to ankle group
+    leftFoot.position.set(0, -0.03, 0.05); // Positioned directly at ankle with minimal gap
     leftFoot.name = 'leftFoot';
     leftAnkleGroup.add(leftFoot);
     bonesRef.current['leftFoot'] = leftFoot;
@@ -567,7 +567,7 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
     
     // Right foot attached to ankle group
     const rightFoot = new THREE.Mesh(footGeometry, boneMaterial);
-    rightFoot.position.set(0, -0.05, 0.05); // Relative to ankle group
+    rightFoot.position.set(0, -0.03, 0.05); // Positioned directly at ankle with minimal gap
     rightFoot.name = 'rightFoot';
     rightAnkleGroup.add(rightFoot);
     bonesRef.current['rightFoot'] = rightFoot;

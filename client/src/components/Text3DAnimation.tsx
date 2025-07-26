@@ -235,7 +235,7 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
     
     // Create anatomically accurate pelvis with two innominate bones
     const pelvisGroup = new THREE.Group();
-    pelvisGroup.position.set(0, 0.9, 0);
+    pelvisGroup.position.set(0, 0.7, 0);  // Lowered from 0.9 to 0.7
     pelvisGroup.name = 'pelvisGroup';
     
     // Function to create one innominate bone as a unified butterfly-shaped structure
@@ -394,7 +394,7 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
       new THREE.BoxGeometry(0.01, 0.01, 0.01),
       new THREE.MeshBasicMaterial({ visible: false })
     );
-    pelvisReference.position.set(0, 0.9, 0);
+    pelvisReference.position.set(0, 0.7, 0);  // Match pelvisGroup position
     pelvisReference.name = 'pelvis';
     skeleton.add(pelvisReference);
     bonesRef.current['pelvis'] = pelvisReference;
@@ -576,7 +576,7 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
     
     // Left leg group for hierarchical transformation
     const leftLegGroup = new THREE.Group();
-    leftLegGroup.position.set(-0.15, 0.8, 0); // Position at hip joint (below pelvis at 0.9)
+    leftLegGroup.position.set(-0.15, 0.6, 0); // Position at hip joint (below pelvis at 0.7)
     leftLegGroup.name = 'leftLegGroup';
     
     // Left thigh attached to leg group
@@ -653,7 +653,7 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
 
     // Right leg group for hierarchical transformation
     const rightLegGroup = new THREE.Group();
-    rightLegGroup.position.set(0.15, 0.8, 0); // Position at hip joint (below pelvis at 0.9)
+    rightLegGroup.position.set(0.15, 0.6, 0); // Position at hip joint (below pelvis at 0.7)
     rightLegGroup.name = 'rightLegGroup';
     
     // Right thigh attached to leg group

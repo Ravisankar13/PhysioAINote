@@ -390,6 +390,10 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
     
     skeleton.add(pelvisGroup);
     
+    // Add innominate bones to bonesRef for animation
+    bonesRef.current['leftInnominate'] = leftInnominate;
+    bonesRef.current['rightInnominate'] = rightInnominate;
+    
     // Create invisible reference for animations
     const pelvisReference = new THREE.Mesh(
       new THREE.BoxGeometry(0.01, 0.01, 0.01),
@@ -1594,7 +1598,9 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
           rightFoot: { position: [0.1, -0.85, 0.05], rotation: [0, 0, 0] },
           leftScapula: { position: [-0.22, 1.55, -0.12], rotation: [0, -0.3, 0] },
           rightScapula: { position: [0.22, 1.55, -0.12], rotation: [0, 0.3, 0] },
-          spineGroup: { position: [0, 0, 0], rotation: [0, 0, 0] } // Starting spine position
+          spineGroup: { position: [0, 0, 0], rotation: [0, 0, 0] }, // Starting spine position
+          leftInnominate: { position: [0, 0, 0], rotation: [0, 0, 0] }, // Neutral position
+          rightInnominate: { position: [0, 0, 0], rotation: [0, 0, 0] } // Neutral position
         }
       },
       {
@@ -1625,7 +1631,9 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
           rightFoot: { position: [0.1, -0.85, 0.05], rotation: [0, 0, 0] },
           leftScapula: { position: [-0.22, 1.35, -0.07], rotation: [0.1, -0.3, 0] },
           rightScapula: { position: [0.22, 1.35, -0.07], rotation: [0.1, 0.3, 0] },
-          spineGroup: { position: [0, -0.15, 0], rotation: [0.1, 0, 0] } // Spine flexes forward in mid-squat
+          spineGroup: { position: [0, -0.15, 0], rotation: [0.1, 0, 0] }, // Spine flexes forward in mid-squat
+          leftInnominate: { position: [0, 0, 0], rotation: [0.15, 0, 0.05] }, // Forward tilt + slight outward rotation
+          rightInnominate: { position: [0, 0, 0], rotation: [0.15, 0, -0.05] } // Forward tilt + slight outward rotation
         }
       },
       {
@@ -1656,7 +1664,9 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
           rightFoot: { position: [0.1, -0.85, 0.05], rotation: [0, 0, 0] },
           leftScapula: { position: [-0.22, 1.05, -0.02], rotation: [0.2, -0.3, 0] },
           rightScapula: { position: [0.22, 1.05, -0.02], rotation: [0.2, 0.3, 0] },
-          spineGroup: { position: [0, -0.3, 0], rotation: [0.2, 0, 0] } // Maximum spine flexion at bottom
+          spineGroup: { position: [0, -0.3, 0], rotation: [0.2, 0, 0] }, // Maximum spine flexion at bottom
+          leftInnominate: { position: [0, 0, 0], rotation: [0.3, 0, 0.1] }, // Maximum forward tilt + outward rotation
+          rightInnominate: { position: [0, 0, 0], rotation: [0.3, 0, -0.1] } // Maximum forward tilt + outward rotation
         }
       },
       {
@@ -1687,7 +1697,9 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
           rightFoot: { position: [0.1, -0.85, 0.05], rotation: [0, 0, 0] },
           leftScapula: { position: [-0.22, 1.35, -0.07], rotation: [0.1, -0.3, 0] },
           rightScapula: { position: [0.22, 1.35, -0.07], rotation: [0.1, 0.3, 0] },
-          spineGroup: { position: [0, -0.15, 0], rotation: [0.1, 0, 0] } // Spine returning to neutral
+          spineGroup: { position: [0, -0.15, 0], rotation: [0.1, 0, 0] }, // Spine returning to neutral
+          leftInnominate: { position: [0, 0, 0], rotation: [0.15, 0, 0.05] }, // Returning to neutral
+          rightInnominate: { position: [0, 0, 0], rotation: [0.15, 0, -0.05] } // Returning to neutral
         }
       },
       {
@@ -1716,7 +1728,9 @@ export default function Text3DAnimation({ clinicalText, isPlaying, onTimeUpdate,
           rightFoot: { position: [0.1, -0.85, 0.05], rotation: [0, 0, 0] },
           leftScapula: { position: [-0.22, 1.55, -0.12], rotation: [0, -0.3, 0] },
           rightScapula: { position: [0.22, 1.55, -0.12], rotation: [0, 0.3, 0] },
-          spineGroup: { position: [0, 0, 0], rotation: [0, 0, 0] } // Back to neutral standing
+          spineGroup: { position: [0, 0, 0], rotation: [0, 0, 0] }, // Back to neutral standing
+          leftInnominate: { position: [0, 0, 0], rotation: [0, 0, 0] }, // Back to neutral
+          rightInnominate: { position: [0, 0, 0], rotation: [0, 0, 0] } // Back to neutral
         }
       }
     ];

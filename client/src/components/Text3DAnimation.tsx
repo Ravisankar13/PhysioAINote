@@ -368,17 +368,29 @@ export default function Text3DAnimation({
     const sternumGeometry = new THREE.BoxGeometry(0.06, 0.4, 0.03);
     const sternum = new THREE.Mesh(sternumGeometry, boneMaterial);
     
-    // Calculate sternum position based on average thoracic curve position
-    const thoracicStartY = spineStartY + (cervicalCount * vertebraHeight * 1.2); // Define thoracic start position
-    const midThoracicIndex = Math.floor(thoracicCount / 2);
-    const midThoracicT = midThoracicIndex / (thoracicCount - 1);
-    const midThoracicAngle = thoracicKyphosis * (midThoracicT - 0.5);
-    const thoracicSegmentHeight = thoracicCount * vertebraHeight * 1.2;
-    const thoracicCurveRadius = Math.abs(thoracicSegmentHeight / (2 * Math.sin(Math.abs(thoracicKyphosis) / 2)));
-    const sternumZ = thoracicCurveRadius * (Math.sin(midThoracicAngle)) * Math.sign(thoracicKyphosis) * 0.8 + 0.15;
-    
-    sternum.position.set(0, thoracicStartY + (thoracicSegmentHeight * 0.5), sternumZ);
-    sternum.rotation.x = midThoracicAngle * 0.5; // Tilt sternum to match thoracic angle
+    // Calculate sternum position based on actual thoracic vertebrae positions
+    if (thoracicVertebrae.length > 0) {
+      // Get average position of middle thoracic vertebrae
+      const midStart = Math.floor(thoracicVertebrae.length * 0.3);
+      const midEnd = Math.ceil(thoracicVertebrae.length * 0.7);
+      let avgY = 0, avgZ = 0, avgRotX = 0;
+      let count = 0;
+      
+      for (let i = midStart; i < midEnd && i < thoracicVertebrae.length; i++) {
+        avgY += thoracicVertebrae[i].position.y;
+        avgZ += thoracicVertebrae[i].position.z;
+        avgRotX += thoracicVertebrae[i].rotation.x;
+        count++;
+      }
+      
+      avgY /= count;
+      avgZ /= count;
+      avgRotX /= count;
+      
+      // Position sternum in front of the average thoracic position
+      sternum.position.set(0, avgY, avgZ + 0.18);
+      sternum.rotation.x = avgRotX * 0.8; // Slightly less tilted than vertebrae
+    }
     sternum.name = 'sternum';
     spineGroup.add(sternum);
     
@@ -404,30 +416,45 @@ export default function Text3DAnimation({
       // Adjust front extension for upper ribs
       const frontExtension = i < 3 ? 0.12 + (i * 0.02) : 0.2;
       
+      // Calculate rib curve that follows the thoracic kyphosis
+      // The ribs should curve forward following the spine's curvature
+      const ribAngle = vertebraRot.x; // Get the vertebra's tilt angle
+      
+      // Calculate sternum position for this specific rib level
+      const sternumYOffset = 0; // Keep ribs horizontal
+      const sternumZ = vertebraPos.z + frontExtension * Math.cos(ribAngle) + 0.05;
+      
       const ribCurve = new THREE.CatmullRomCurve3([
         new THREE.Vector3(0, vertebraPos.y, vertebraPos.z), // Back (spine attachment point)
-        new THREE.Vector3(ribRadius * 0.7, vertebraPos.y - (i * 0.003), vertebraPos.z - ribRadius * 0.3),
-        new THREE.Vector3(ribRadius, vertebraPos.y - (i * 0.005), vertebraPos.z + 0.05),
-        new THREE.Vector3(ribRadius * 0.7, vertebraPos.y - (i * 0.003), vertebraPos.z + ribRadius * 0.3),
-        new THREE.Vector3(0, vertebraPos.y, vertebraPos.z + frontExtension) // Front (sternum)
+        new THREE.Vector3(ribRadius * 0.7, vertebraPos.y + sternumYOffset, vertebraPos.z + (sternumZ - vertebraPos.z) * 0.2),
+        new THREE.Vector3(ribRadius, vertebraPos.y + sternumYOffset, vertebraPos.z + (sternumZ - vertebraPos.z) * 0.5),
+        new THREE.Vector3(ribRadius * 0.7, vertebraPos.y + sternumYOffset, vertebraPos.z + (sternumZ - vertebraPos.z) * 0.8),
+        new THREE.Vector3(0, vertebraPos.y + sternumYOffset, sternumZ) // Front (sternum position)
       ]);
       
       // Make upper ribs thinner
       const ribThickness = i < 3 ? 0.012 + (i * 0.002) : 0.02;
       const ribGeometry = new THREE.TubeGeometry(ribCurve, 20, ribThickness, 8, false);
       
+      // Create a group for this rib pair to handle rotation properly
+      const ribPairGroup = new THREE.Group();
+      ribPairGroup.position.copy(vertebraPos);
+      ribPairGroup.rotation.x = vertebraRot.x; // Rotate entire rib pair with vertebra
+      
       // Left rib
       const leftRib = new THREE.Mesh(ribGeometry, boneMaterial);
-      leftRib.rotation.x = vertebraRot.x; // Match vertebra tilt exactly
+      leftRib.position.sub(vertebraPos); // Offset to local coordinates
       leftRib.name = `leftRib_${i}`;
-      spineGroup.add(leftRib);
+      ribPairGroup.add(leftRib);
       
       // Right rib (mirrored)
       const rightRib = new THREE.Mesh(ribGeometry, boneMaterial);
+      rightRib.position.sub(vertebraPos); // Offset to local coordinates
       rightRib.scale.x = -1;
-      rightRib.rotation.x = vertebraRot.x; // Match vertebra tilt exactly
       rightRib.name = `rightRib_${i}`;
-      spineGroup.add(rightRib);
+      ribPairGroup.add(rightRib);
+      
+      spineGroup.add(ribPairGroup);
     }
     
     skeleton.add(spineGroup);

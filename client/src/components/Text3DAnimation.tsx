@@ -290,28 +290,38 @@ export default function Text3DAnimation({
         vertebra.name = `${regionName}_vertebra_${i}`;
         spineGroup.add(vertebra);
         
-        // Add intervertebral disc between vertebrae
-        if (i > 0 && allVertebrae.length > 0) {
-          const prevVertebra = allVertebrae[allVertebrae.length - 1];
-          const discGeometry = new THREE.CylinderGeometry(0.035, 0.035, vertebraHeight * 0.3, 8);
-          const discMaterial = new THREE.MeshPhongMaterial({ 
-            color: 0x4444ff, 
-            opacity: 0.6,
-            transparent: true
-          });
-          const disc = new THREE.Mesh(discGeometry, discMaterial);
-          
-          // Position disc between vertebrae
-          disc.position.set(
-            (vertebra.position.x + prevVertebra.position.x) / 2,
-            (vertebra.position.y + prevVertebra.position.y) / 2,
-            (vertebra.position.z + prevVertebra.position.z) / 2
-          );
-          
-          // Orient disc to match spine curve
-          disc.rotation.x = (vertebra.rotation.x + prevVertebra.rotation.x) / 2;
-          disc.name = `${regionName}_disc_${i}`;
-          spineGroup.add(disc);
+        // Add intervertebral disc between vertebrae (including between regions)
+        if (i > 0 || allVertebrae.length > 0) {
+          const prevVertebra = i > 0 ? allVertebrae[allVertebrae.length - 1] : allVertebrae[allVertebrae.length - 1];
+          if (i > 0 || allVertebrae.length > 0) { // Check if we have a previous vertebra
+            const discGeometry = new THREE.CylinderGeometry(0.035, 0.035, vertebraHeight * 0.3, 8);
+            const discMaterial = new THREE.MeshPhongMaterial({ 
+              color: 0x4444ff, 
+              opacity: 0.6,
+              transparent: true
+            });
+            const disc = new THREE.Mesh(discGeometry, discMaterial);
+            
+            // Calculate distance between vertebrae
+            const distance = vertebra.position.distanceTo(prevVertebra.position);
+            
+            // Position disc between vertebrae
+            disc.position.set(
+              (vertebra.position.x + prevVertebra.position.x) / 2,
+              (vertebra.position.y + prevVertebra.position.y) / 2,
+              (vertebra.position.z + prevVertebra.position.z) / 2
+            );
+            
+            // Scale disc height based on distance if there's a gap
+            if (distance > vertebraHeight * 1.5) {
+              disc.scale.y = distance / (vertebraHeight * 0.3);
+            }
+            
+            // Orient disc to match spine curve
+            disc.rotation.x = (vertebra.rotation.x + prevVertebra.rotation.x) / 2;
+            disc.name = `${regionName}_disc_${i}`;
+            spineGroup.add(disc);
+          }
         }
         
         // Store vertebrae for later reference
@@ -378,22 +388,33 @@ export default function Text3DAnimation({
     // Create ribs attached to thoracic vertebrae
     for (let i = 0; i < ribCount && i < thoracicVertebrae.length; i++) {
       const vertebra = thoracicVertebrae[i];
-      const ribRadius = 0.15 - (i * 0.005); // Taper slightly
+      // More aggressive taper for upper ribs (T1-T3 are smaller)
+      let ribRadius;
+      if (i < 3) {
+        ribRadius = 0.08 + (i * 0.02); // Start small for upper ribs
+      } else {
+        ribRadius = 0.14 - ((i - 3) * 0.003); // Normal taper for rest
+      }
       
       // Get vertebra position and rotation
       const vertebraPos = vertebra.position;
       const vertebraRot = vertebra.rotation;
       
       // Create curved rib path starting from actual vertebra position
+      // Adjust front extension for upper ribs
+      const frontExtension = i < 3 ? 0.12 + (i * 0.02) : 0.2;
+      
       const ribCurve = new THREE.CatmullRomCurve3([
         new THREE.Vector3(0, vertebraPos.y, vertebraPos.z), // Back (spine attachment point)
         new THREE.Vector3(ribRadius * 0.7, vertebraPos.y - (i * 0.003), vertebraPos.z - ribRadius * 0.3),
         new THREE.Vector3(ribRadius, vertebraPos.y - (i * 0.005), vertebraPos.z + 0.05),
         new THREE.Vector3(ribRadius * 0.7, vertebraPos.y - (i * 0.003), vertebraPos.z + ribRadius * 0.3),
-        new THREE.Vector3(0, vertebraPos.y, vertebraPos.z + 0.2) // Front (sternum)
+        new THREE.Vector3(0, vertebraPos.y, vertebraPos.z + frontExtension) // Front (sternum)
       ]);
       
-      const ribGeometry = new THREE.TubeGeometry(ribCurve, 20, 0.02, 8, false);
+      // Make upper ribs thinner
+      const ribThickness = i < 3 ? 0.012 + (i * 0.002) : 0.02;
+      const ribGeometry = new THREE.TubeGeometry(ribCurve, 20, ribThickness, 8, false);
       
       // Left rib
       const leftRib = new THREE.Mesh(ribGeometry, boneMaterial);

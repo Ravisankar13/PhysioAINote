@@ -187,7 +187,7 @@ export default function Text3DAnimation({
       }
       renderer.dispose();
     };
-  }, [rotation, limbScales, hipPathology, kneePathology, shoulderPathology]);
+  }, [rotation, limbScales, hipPathology, kneePathology, shoulderPathology, posturalDeviations]);
 
   // Generate animation from clinical text
   useEffect(() => {
@@ -261,7 +261,14 @@ export default function Text3DAnimation({
     // Helper function to create curved spine segment
     const createSpineSegment = (count: number, curvature: number, regionName: string, startY: number) => {
       const segmentHeight = count * vertebraHeight * 1.2;
-      const curveRadius = Math.abs(segmentHeight / (2 * Math.sin(Math.abs(curvature) / 2)));
+      
+      // Improved curve calculation for more visible curves
+      let curveRadius: number;
+      if (Math.abs(curvature) > 0.01) {
+        curveRadius = segmentHeight / (2 * Math.abs(curvature));
+      } else {
+        curveRadius = 10000; // Very large radius for nearly straight spine
+      }
       
       for (let i = 0; i < count; i++) {
         const vertebraGeometry = new THREE.CylinderGeometry(0.04, 0.04, vertebraHeight, 8);
@@ -271,11 +278,11 @@ export default function Text3DAnimation({
         const t = i / (count - 1); // Normalized position (0 to 1)
         const angle = curvature * (t - 0.5); // Center the curve
         
-        // Position along the curve
+        // Position along the curve with more pronounced displacement
         const localY = t * segmentHeight;
-        const localZ = curveRadius * (1 - Math.cos(angle)) * Math.sign(curvature);
+        const localZ = curveRadius * (Math.sin(angle)) * Math.sign(curvature);
         
-        vertebra.position.set(0, startY + localY, localZ * 0.3); // Scale Z for subtlety
+        vertebra.position.set(0, startY + localY, localZ * 0.8); // Increased Z scale for more visible curve
         
         // Tilt vertebra to follow curve tangent
         vertebra.rotation.x = angle * 0.5;
@@ -328,6 +335,25 @@ export default function Text3DAnimation({
     // Create lumbar spine (L1-L5) with lordosis
     createSpineSegment(lumbarCount, lumbarLordosis, 'lumbar', currentY);
     
+    // Create visual spine line to show the overall curve
+    if (allVertebrae.length > 1) {
+      const spinePoints: THREE.Vector3[] = [];
+      allVertebrae.forEach(vertebra => {
+        spinePoints.push(vertebra.position.clone());
+      });
+      
+      const spineCurve = new THREE.CatmullRomCurve3(spinePoints);
+      const spineGeometry = new THREE.TubeGeometry(spineCurve, 50, 0.015, 8, false);
+      const spineMaterial = new THREE.MeshPhongMaterial({ 
+        color: 0xff0000, 
+        opacity: 0.7,
+        transparent: true
+      });
+      const spineLineVisual = new THREE.Mesh(spineGeometry, spineMaterial);
+      spineLineVisual.name = 'spineLineVisual';
+      spineGroup.add(spineLineVisual);
+    }
+    
     // Create sternum (breastbone) - positioned to follow thoracic curve
     const sternumGeometry = new THREE.BoxGeometry(0.06, 0.4, 0.03);
     const sternum = new THREE.Mesh(sternumGeometry, boneMaterial);
@@ -339,7 +365,7 @@ export default function Text3DAnimation({
     const midThoracicAngle = thoracicKyphosis * (midThoracicT - 0.5);
     const thoracicSegmentHeight = thoracicCount * vertebraHeight * 1.2;
     const thoracicCurveRadius = Math.abs(thoracicSegmentHeight / (2 * Math.sin(Math.abs(thoracicKyphosis) / 2)));
-    const sternumZ = thoracicCurveRadius * (1 - Math.cos(midThoracicAngle)) * Math.sign(thoracicKyphosis) * 0.3 + 0.15;
+    const sternumZ = thoracicCurveRadius * (Math.sin(midThoracicAngle)) * Math.sign(thoracicKyphosis) * 0.8 + 0.15;
     
     sternum.position.set(0, thoracicStartY + (thoracicSegmentHeight * 0.5), sternumZ);
     sternum.rotation.x = midThoracicAngle * 0.5; // Tilt sternum to match thoracic angle

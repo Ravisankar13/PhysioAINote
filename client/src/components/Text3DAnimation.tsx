@@ -985,9 +985,9 @@ export default function Text3DAnimation({
     } else if (isPhysicalTest && lowerText.includes('hip external rotation')) {
       animationFrames = generateGeneralMovementAnimation();
     } else if (isPhysicalTest && lowerText.includes('ankle dorsiflexion')) {
-      animationFrames = generateGeneralMovementAnimation();
+      animationFrames = generateAnkleDorsiflexionAnimation();
     } else if (isPhysicalTest && lowerText.includes('ankle plantarflexion')) {
-      animationFrames = generateGeneralMovementAnimation();
+      animationFrames = generateAnklePlantarFlexionAnimation();
     } else if (isPhysicalTest && lowerText.includes('ankle inversion')) {
       animationFrames = generateAnkleInversionAnimation();
     } else if (isPhysicalTest && lowerText.includes('ankle eversion')) {
@@ -3187,8 +3187,8 @@ export default function Text3DAnimation({
     ];
   };
 
-  // Ankle eversion animation - demonstrates subtalar joint movement
-  const generateAnkleEversionAnimation = (): AnimationKeyframe[] => {
+  // Ankle dorsiflexion animation - demonstrates talocrural joint movement
+  const generateAnkleDorsiflexionAnimation = (): AnimationKeyframe[] => {
     return [
       {
         time: 0,
@@ -3201,10 +3201,8 @@ export default function Text3DAnimation({
           rightLegGroup: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
           leftKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
           rightKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
-          leftAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
-          rightAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
-          leftSubtalarGroup: { position: [0, -0.05, 0], rotation: [0, 0, 0] }, // Neutral
-          rightSubtalarGroup: { position: [0, -0.05, 0], rotation: [0, 0, 0] }, // Neutral
+          leftAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] }, // Neutral ankle
+          rightAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] }, // Neutral ankle
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
           rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
         }
@@ -3212,7 +3210,7 @@ export default function Text3DAnimation({
       {
         time: 1500,
         joints: {
-          // Left ankle eversion (subtalar joint rotation)
+          // Left ankle dorsiflexion (talocrural joint movement)
           head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
           torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
           pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
@@ -3220,10 +3218,8 @@ export default function Text3DAnimation({
           rightLegGroup: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
           leftKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
           rightKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
-          leftAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
-          rightAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
-          leftSubtalarGroup: { position: [0, -0.05, 0], rotation: [0, 0, -0.26] }, // 15° eversion
-          rightSubtalarGroup: { position: [0, -0.05, 0], rotation: [0, 0, 0] }, // Neutral
+          leftAnkleGroup: { position: [0, -0.8, 0], rotation: [-0.35, 0, 0] }, // 20° dorsiflexion
+          rightAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] }, // Neutral
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
           rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
         }
@@ -3239,10 +3235,8 @@ export default function Text3DAnimation({
           rightLegGroup: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
           leftKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
           rightKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
-          leftAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
-          rightAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
-          leftSubtalarGroup: { position: [0, -0.05, 0], rotation: [0, 0, 0] }, // Neutral
-          rightSubtalarGroup: { position: [0, -0.05, 0], rotation: [0, 0, 0] }, // Neutral
+          leftAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] }, // Neutral
+          rightAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] }, // Neutral
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
           rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
         }
@@ -3250,7 +3244,7 @@ export default function Text3DAnimation({
       {
         time: 4500,
         joints: {
-          // Right ankle eversion
+          // Right ankle dorsiflexion
           head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
           torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
           pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
@@ -3258,10 +3252,8 @@ export default function Text3DAnimation({
           rightLegGroup: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
           leftKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
           rightKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
-          leftAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
-          rightAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
-          leftSubtalarGroup: { position: [0, -0.05, 0], rotation: [0, 0, 0] }, // Neutral
-          rightSubtalarGroup: { position: [0, -0.05, 0], rotation: [0, 0, 0.26] }, // 15° eversion
+          leftAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] }, // Neutral
+          rightAnkleGroup: { position: [0, -0.8, 0], rotation: [-0.35, 0, 0] }, // 20° dorsiflexion
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
           rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
         }
@@ -3277,10 +3269,99 @@ export default function Text3DAnimation({
           rightLegGroup: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
           leftKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
           rightKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
-          leftAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
-          rightAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
-          leftSubtalarGroup: { position: [0, -0.05, 0], rotation: [0, 0, 0] }, // Neutral
-          rightSubtalarGroup: { position: [0, -0.05, 0], rotation: [0, 0, 0] }, // Neutral
+          leftAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] }, // Neutral
+          rightAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] }, // Neutral
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
+        }
+      }
+    ];
+  };
+
+  // Ankle plantar flexion animation - demonstrates talocrural joint movement
+  const generateAnklePlantarFlexionAnimation = (): AnimationKeyframe[] => {
+    return [
+      {
+        time: 0,
+        joints: {
+          // Starting position - neutral stance
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftLegGroup: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightLegGroup: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          rightKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          leftAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] }, // Neutral ankle
+          rightAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] }, // Neutral ankle
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
+        }
+      },
+      {
+        time: 1500,
+        joints: {
+          // Left ankle plantar flexion (pointing toes down)
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftLegGroup: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightLegGroup: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          rightKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          leftAnkleGroup: { position: [0, -0.8, 0], rotation: [0.87, 0, 0] }, // 50° plantar flexion
+          rightAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] }, // Neutral
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
+        }
+      },
+      {
+        time: 3000,
+        joints: {
+          // Return to neutral
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftLegGroup: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightLegGroup: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          rightKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          leftAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] }, // Neutral
+          rightAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] }, // Neutral
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
+        }
+      },
+      {
+        time: 4500,
+        joints: {
+          // Right ankle plantar flexion
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftLegGroup: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightLegGroup: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          rightKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          leftAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] }, // Neutral
+          rightAnkleGroup: { position: [0, -0.8, 0], rotation: [0.87, 0, 0] }, // 50° plantar flexion
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
+        }
+      },
+      {
+        time: 6000,
+        joints: {
+          // Return to neutral
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftLegGroup: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightLegGroup: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          rightKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          leftAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] }, // Neutral
+          rightAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] }, // Neutral
           leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
           rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
         }

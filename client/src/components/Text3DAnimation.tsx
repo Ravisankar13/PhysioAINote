@@ -339,9 +339,36 @@ export default function Text3DAnimation({
     // Track total vertebrae count across regions
     let totalVertebraeCreated = 0;
     
+    // Helper function to create vertebra with processes
+    const createVertebraWithProcesses = (radius: number, height: number, hasProcesses: boolean = true): THREE.Group => {
+      const vertebraGroup = new THREE.Group();
+      
+      // Main vertebral body
+      const bodyGeometry = new THREE.CylinderGeometry(radius, radius, height, 12);
+      const body = new THREE.Mesh(bodyGeometry, boneMaterial);
+      vertebraGroup.add(body);
+      
+      if (hasProcesses) {
+        // Spinous process (backward pointing)
+        const spinousGeometry = new THREE.BoxGeometry(radius * 0.3, height * 0.8, radius * 1.2);
+        const spinous = new THREE.Mesh(spinousGeometry, boneMaterial);
+        spinous.position.set(0, 0, -radius * 0.7);
+        vertebraGroup.add(spinous);
+        
+        // Transverse processes (side pointing)
+        const transverseGeometry = new THREE.BoxGeometry(radius * 1.8, height * 0.6, radius * 0.3);
+        const transverse = new THREE.Mesh(transverseGeometry, boneMaterial);
+        transverse.position.set(0, 0, -radius * 0.3);
+        vertebraGroup.add(transverse);
+      }
+      
+      return vertebraGroup;
+    };
+    
     // Helper function to create curved spine segment
     const createSpineSegment = (count: number, curvature: number, regionName: string, startY: number) => {
-      const segmentHeight = count * vertebraHeight * 1.2;
+      const baseSpacing = vertebraHeight * 0.8; // Reduced spacing for better connection
+      const segmentHeight = count * baseSpacing;
       
       // Improved curve calculation for more visible curves
       let curveRadius: number;
@@ -351,58 +378,70 @@ export default function Text3DAnimation({
         curveRadius = 10000; // Very large radius for nearly straight spine
       }
       
+      // Determine vertebra sizes based on region with gradual transitions
+      let startRadius: number, endRadius: number;
+      if (regionName === 'cervical') {
+        startRadius = 0.03;
+        endRadius = 0.035;
+      } else if (regionName === 'thoracic') {
+        startRadius = 0.036;
+        endRadius = 0.042;
+      } else { // lumbar
+        startRadius = 0.043;
+        endRadius = 0.05;
+      }
+      
       for (let i = 0; i < count; i++) {
-        const vertebraGeometry = new THREE.CylinderGeometry(0.04, 0.04, vertebraHeight, 8);
-        const vertebra = new THREE.Mesh(vertebraGeometry, boneMaterial);
+        const t = i / (count - 1);
+        
+        // Gradual size increase within region
+        const currentRadius = startRadius + (endRadius - startRadius) * t;
+        const currentHeight = vertebraHeight * (1 + t * 0.1);
+        
+        // Create vertebra with processes (no processes for C1-C2)
+        const hasProcesses = regionName !== 'cervical' || i > 1;
+        const vertebra = createVertebraWithProcesses(currentRadius, currentHeight, hasProcesses);
         
         // Calculate position along curve
-        const t = i / (count - 1); // Normalized position (0 to 1)
         const angle = curvature * (t - 0.5); // Center the curve
         
-        // Position along the curve with more pronounced displacement
-        const localY = t * segmentHeight;
-        const localZ = curveRadius * (Math.sin(angle)) * Math.sign(curvature);
+        // Position along the curve with reduced displacement for natural look
+        const localY = i * baseSpacing;
+        const localZ = Math.sin(angle) * segmentHeight * 0.15;
         
-        vertebra.position.set(0, startY + localY, localZ * 0.8); // Increased Z scale for more visible curve
-        
-        // Tilt vertebra to follow curve tangent
-        vertebra.rotation.x = angle * 0.5;
+        vertebra.position.set(0, startY - localY, localZ);
+        vertebra.rotation.x = angle * 0.3;
         
         vertebra.name = `${regionName}_vertebra_${i}`;
         spineGroup.add(vertebra);
         
-        // Add intervertebral disc between vertebrae (including between regions)
-        if (i > 0 || allVertebrae.length > 0) {
-          const prevVertebra = i > 0 ? allVertebrae[allVertebrae.length - 1] : allVertebrae[allVertebrae.length - 1];
-          if (i > 0 || allVertebrae.length > 0) { // Check if we have a previous vertebra
-            const discGeometry = new THREE.CylinderGeometry(0.035, 0.035, vertebraHeight * 0.3, 8);
-            const discMaterial = new THREE.MeshPhongMaterial({ 
-              color: 0x4444ff, 
-              opacity: 0.6,
-              transparent: true
-            });
-            const disc = new THREE.Mesh(discGeometry, discMaterial);
-            
-            // Calculate distance between vertebrae
-            const distance = vertebra.position.distanceTo(prevVertebra.position);
-            
-            // Position disc between vertebrae
-            disc.position.set(
-              (vertebra.position.x + prevVertebra.position.x) / 2,
-              (vertebra.position.y + prevVertebra.position.y) / 2,
-              (vertebra.position.z + prevVertebra.position.z) / 2
-            );
-            
-            // Scale disc height based on distance if there's a gap
-            if (distance > vertebraHeight * 1.5) {
-              disc.scale.y = distance / (vertebraHeight * 0.3);
-            }
-            
-            // Orient disc to match spine curve
-            disc.rotation.x = (vertebra.rotation.x + prevVertebra.rotation.x) / 2;
-            disc.name = `${regionName}_disc_${i}`;
-            spineGroup.add(disc);
-          }
+        // Add intervertebral disc AFTER the vertebra (not after the last one)
+        if (i < count - 1 || (totalVertebraeCreated < totalVertebrae - 1)) {
+          const discHeight = baseSpacing * 0.25;
+          const discRadius = currentRadius * 0.9;
+          const discGeometry = new THREE.CylinderGeometry(discRadius, discRadius, discHeight, 12);
+          const discMaterial = new THREE.MeshPhongMaterial({ 
+            color: 0xdddddd,
+            opacity: 0.85,
+            transparent: true
+          });
+          const disc = new THREE.Mesh(discGeometry, discMaterial);
+          
+          // Calculate next vertebra position
+          const nextT = Math.min((i + 1) / (count - 1), 1);
+          const nextAngle = curvature * (nextT - 0.5);
+          const nextY = startY - ((i + 1) * baseSpacing);
+          const nextZ = Math.sin(nextAngle) * segmentHeight * 0.15;
+          
+          // Position disc between current and next vertebra
+          disc.position.set(
+            0,
+            (vertebra.position.y + nextY) / 2,
+            (vertebra.position.z + nextZ) / 2
+          );
+          disc.rotation.x = (angle + nextAngle) * 0.15;
+          disc.name = `${regionName}_disc_${i + 1}`;
+          spineGroup.add(disc);
         }
         
         // Store vertebrae for later reference
@@ -417,11 +456,19 @@ export default function Text3DAnimation({
         vertebraIndex++;
       }
       
-      return startY + segmentHeight;
+      return startY - segmentHeight;
     };
     
     // Create cervical spine (C1-C7) with lordosis
     currentY = createSpineSegment(cervicalCount, cervicalLordosis, 'cervical', currentY);
+    
+    // Add transitional vertebra between cervical and thoracic
+    const c7t1Transition = createVertebraWithProcesses(0.0355, vertebraHeight * 1.05, true);
+    c7t1Transition.position.set(0, currentY - vertebraHeight * 0.4, 0);
+    c7t1Transition.name = 'c7_t1_transition';
+    spineGroup.add(c7t1Transition);
+    allVertebrae.push(c7t1Transition);
+    currentY -= vertebraHeight * 0.8;
     
     // Clear thoracicVertebrae array before creating thoracic spine
     thoracicVertebrae.length = 0;
@@ -429,73 +476,31 @@ export default function Text3DAnimation({
     // Create thoracic spine (T1-T12) with kyphosis
     currentY = createSpineSegment(thoracicCount, thoracicKyphosis, 'thoracic', currentY);
     
+    // Add transitional vertebra between thoracic and lumbar
+    const t12l1Transition = createVertebraWithProcesses(0.0425, vertebraHeight * 1.08, true);
+    t12l1Transition.position.set(0, currentY - vertebraHeight * 0.4, 0);
+    t12l1Transition.name = 't12_l1_transition';
+    spineGroup.add(t12l1Transition);
+    allVertebrae.push(t12l1Transition);
+    currentY -= vertebraHeight * 0.8;
+    
     // Create lumbar spine (L1-L5) with lordosis
     createSpineSegment(lumbarCount, lumbarLordosis, 'lumbar', currentY);
     
-    // Add connecting discs between spine regions
-    const addConnectingDisc = (vertebra1: THREE.Mesh, vertebra2: THREE.Mesh, name: string) => {
-      const discGeometry = new THREE.CylinderGeometry(
-        vertebraHeight * 0.35,
-        vertebraHeight * 0.35,
-        vertebraHeight * 0.3,
-        16
-      );
-      const discMaterial = new THREE.MeshPhongMaterial({ 
-        color: 0x4444ff,
-        opacity: 0.6,
-        transparent: true
-      });
-      const disc = new THREE.Mesh(discGeometry, discMaterial);
-      
-      // Position disc between vertebrae
-      disc.position.set(
-        (vertebra1.position.x + vertebra2.position.x) / 2,
-        (vertebra1.position.y + vertebra2.position.y) / 2,
-        (vertebra1.position.z + vertebra2.position.z) / 2
-      );
-      
-      // Calculate distance and scale if needed
-      const distance = vertebra1.position.distanceTo(vertebra2.position);
-      if (distance > vertebraHeight * 1.5) {
-        disc.scale.y = distance / (vertebraHeight * 0.3);
-      }
-      
-      // Orient disc to match curve
-      disc.rotation.x = (vertebra1.rotation.x + vertebra2.rotation.x) / 2;
-      disc.name = name;
-      spineGroup.add(disc);
-    };
+
     
-    // Add disc between cervical and thoracic
-    if (allVertebrae[cervicalCount - 1] && allVertebrae[cervicalCount]) {
-      addConnectingDisc(
-        allVertebrae[cervicalCount - 1], 
-        allVertebrae[cervicalCount], 
-        'cervical_thoracic_disc'
-      );
-    }
-    
-    // Add disc between thoracic and lumbar
-    if (allVertebrae[cervicalCount + thoracicCount - 1] && allVertebrae[cervicalCount + thoracicCount]) {
-      addConnectingDisc(
-        allVertebrae[cervicalCount + thoracicCount - 1], 
-        allVertebrae[cervicalCount + thoracicCount], 
-        'thoracic_lumbar_disc'
-      );
-    }
-    
-    // Create visual spine line to show the overall curve
+    // Create visual spine connecting tube for continuous appearance
     if (allVertebrae.length > 1) {
       const spinePoints: THREE.Vector3[] = [];
       allVertebrae.forEach(vertebra => {
         spinePoints.push(vertebra.position.clone());
       });
       
-      const spineCurve = new THREE.CatmullRomCurve3(spinePoints);
-      const spineGeometry = new THREE.TubeGeometry(spineCurve, 50, 0.015, 8, false);
+      const spineCurve = new THREE.CatmullRomCurve3(spinePoints, false, 'centripetal');
+      const spineGeometry = new THREE.TubeGeometry(spineCurve, 100, 0.02, 12, false);
       const spineMaterial = new THREE.MeshPhongMaterial({ 
-        color: 0xff0000, 
-        opacity: 0.7,
+        color: 0xF5DEB3, 
+        opacity: 0.3,
         transparent: true
       });
       const spineLineVisual = new THREE.Mesh(spineGeometry, spineMaterial);

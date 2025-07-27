@@ -254,6 +254,10 @@ export default function Text3DAnimation({
     let currentY = spineStartY;
     let vertebraIndex = 0;
     
+    // Store all vertebrae for rib attachment
+    const allVertebrae: THREE.Mesh[] = [];
+    const thoracicVertebrae: THREE.Mesh[] = [];
+    
     // Helper function to create curved spine segment
     const createSpineSegment = (count: number, curvature: number, regionName: string, startY: number) => {
       const segmentHeight = count * vertebraHeight * 1.2;
@@ -278,6 +282,36 @@ export default function Text3DAnimation({
         
         vertebra.name = `${regionName}_vertebra_${i}`;
         spineGroup.add(vertebra);
+        
+        // Add intervertebral disc between vertebrae
+        if (i > 0 && allVertebrae.length > 0) {
+          const prevVertebra = allVertebrae[allVertebrae.length - 1];
+          const discGeometry = new THREE.CylinderGeometry(0.035, 0.035, vertebraHeight * 0.3, 8);
+          const discMaterial = new THREE.MeshPhongMaterial({ 
+            color: 0x4444ff, 
+            opacity: 0.6,
+            transparent: true
+          });
+          const disc = new THREE.Mesh(discGeometry, discMaterial);
+          
+          // Position disc between vertebrae
+          disc.position.set(
+            (vertebra.position.x + prevVertebra.position.x) / 2,
+            (vertebra.position.y + prevVertebra.position.y) / 2,
+            (vertebra.position.z + prevVertebra.position.z) / 2
+          );
+          
+          // Orient disc to match spine curve
+          disc.rotation.x = (vertebra.rotation.x + prevVertebra.rotation.x) / 2;
+          disc.name = `${regionName}_disc_${i}`;
+          spineGroup.add(disc);
+        }
+        
+        // Store vertebrae for later reference
+        allVertebrae.push(vertebra);
+        if (regionName === 'thoracic') {
+          thoracicVertebrae.push(vertebra);
+        }
         
         vertebraIndex++;
       }
@@ -312,55 +346,39 @@ export default function Text3DAnimation({
     sternum.name = 'sternum';
     spineGroup.add(sternum);
     
-    // Create ribcage that follows the thoracic curve
+    // Create ribcage attached to actual thoracic vertebrae
     const ribCount = 12;
     
-    // Store thoracic vertebrae positions for rib attachment
-    const thoracicVertebraePositions: THREE.Vector3[] = [];
-    
-    // Calculate thoracic vertebrae positions along the curve
-    for (let i = 0; i < thoracicCount; i++) {
-      const t = i / (thoracicCount - 1);
-      const angle = thoracicKyphosis * (t - 0.5);
-      const segmentHeight = thoracicCount * vertebraHeight * 1.2;
-      const curveRadius = Math.abs(segmentHeight / (2 * Math.sin(Math.abs(thoracicKyphosis) / 2)));
-      
-      const localY = t * segmentHeight;
-      const localZ = curveRadius * (1 - Math.cos(angle)) * Math.sign(thoracicKyphosis);
-      
-      thoracicVertebraePositions.push(new THREE.Vector3(0, thoracicStartY + localY, localZ * 0.3));
-    }
-    
     // Create ribs attached to thoracic vertebrae
-    for (let i = 0; i < ribCount; i++) {
-      const vertebraPos = thoracicVertebraePositions[i];
+    for (let i = 0; i < ribCount && i < thoracicVertebrae.length; i++) {
+      const vertebra = thoracicVertebrae[i];
       const ribRadius = 0.15 - (i * 0.005); // Taper slightly
       
-      // Calculate rib angle to match vertebra orientation
-      const t = i / (thoracicCount - 1);
-      const vertebraAngle = (thoracicKyphosis * (t - 0.5)) * 0.5;
+      // Get vertebra position and rotation
+      const vertebraPos = vertebra.position;
+      const vertebraRot = vertebra.rotation;
       
-      // Create curved rib path starting from vertebra position
+      // Create curved rib path starting from actual vertebra position
       const ribCurve = new THREE.CatmullRomCurve3([
-        new THREE.Vector3(0, vertebraPos.y, vertebraPos.z - 0.05), // Back (spine)
-        new THREE.Vector3(ribRadius * 0.7, vertebraPos.y - (i * 0.003), vertebraPos.z - ribRadius * 0.5),
-        new THREE.Vector3(ribRadius, vertebraPos.y - (i * 0.005), vertebraPos.z),
-        new THREE.Vector3(ribRadius * 0.7, vertebraPos.y - (i * 0.003), vertebraPos.z + ribRadius * 0.5),
-        new THREE.Vector3(0, vertebraPos.y, vertebraPos.z + 0.15) // Front (sternum)
+        new THREE.Vector3(0, vertebraPos.y, vertebraPos.z), // Back (spine attachment point)
+        new THREE.Vector3(ribRadius * 0.7, vertebraPos.y - (i * 0.003), vertebraPos.z - ribRadius * 0.3),
+        new THREE.Vector3(ribRadius, vertebraPos.y - (i * 0.005), vertebraPos.z + 0.05),
+        new THREE.Vector3(ribRadius * 0.7, vertebraPos.y - (i * 0.003), vertebraPos.z + ribRadius * 0.3),
+        new THREE.Vector3(0, vertebraPos.y, vertebraPos.z + 0.2) // Front (sternum)
       ]);
       
       const ribGeometry = new THREE.TubeGeometry(ribCurve, 20, 0.02, 8, false);
       
       // Left rib
       const leftRib = new THREE.Mesh(ribGeometry, boneMaterial);
-      leftRib.rotation.x = vertebraAngle; // Match vertebra tilt
+      leftRib.rotation.x = vertebraRot.x; // Match vertebra tilt exactly
       leftRib.name = `leftRib_${i}`;
       spineGroup.add(leftRib);
       
       // Right rib (mirrored)
       const rightRib = new THREE.Mesh(ribGeometry, boneMaterial);
       rightRib.scale.x = -1;
-      rightRib.rotation.x = vertebraAngle; // Match vertebra tilt
+      rightRib.rotation.x = vertebraRot.x; // Match vertebra tilt exactly
       rightRib.name = `rightRib_${i}`;
       spineGroup.add(rightRib);
     }

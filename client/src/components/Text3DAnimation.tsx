@@ -354,6 +354,58 @@ export default function Text3DAnimation({
     // Create lumbar spine (L1-L5) with lordosis
     createSpineSegment(lumbarCount, lumbarLordosis, 'lumbar', currentY);
     
+    // Add connecting discs between spine regions
+    const addConnectingDisc = (vertebra1: THREE.Mesh, vertebra2: THREE.Mesh, name: string) => {
+      const discGeometry = new THREE.CylinderGeometry(
+        vertebraHeight * 0.35,
+        vertebraHeight * 0.35,
+        vertebraHeight * 0.3,
+        16
+      );
+      const discMaterial = new THREE.MeshPhongMaterial({ 
+        color: 0x4444ff,
+        opacity: 0.6,
+        transparent: true
+      });
+      const disc = new THREE.Mesh(discGeometry, discMaterial);
+      
+      // Position disc between vertebrae
+      disc.position.set(
+        (vertebra1.position.x + vertebra2.position.x) / 2,
+        (vertebra1.position.y + vertebra2.position.y) / 2,
+        (vertebra1.position.z + vertebra2.position.z) / 2
+      );
+      
+      // Calculate distance and scale if needed
+      const distance = vertebra1.position.distanceTo(vertebra2.position);
+      if (distance > vertebraHeight * 1.5) {
+        disc.scale.y = distance / (vertebraHeight * 0.3);
+      }
+      
+      // Orient disc to match curve
+      disc.rotation.x = (vertebra1.rotation.x + vertebra2.rotation.x) / 2;
+      disc.name = name;
+      spineGroup.add(disc);
+    };
+    
+    // Add disc between cervical and thoracic
+    if (allVertebrae[cervicalCount - 1] && allVertebrae[cervicalCount]) {
+      addConnectingDisc(
+        allVertebrae[cervicalCount - 1], 
+        allVertebrae[cervicalCount], 
+        'cervical_thoracic_disc'
+      );
+    }
+    
+    // Add disc between thoracic and lumbar
+    if (allVertebrae[cervicalCount + thoracicCount - 1] && allVertebrae[cervicalCount + thoracicCount]) {
+      addConnectingDisc(
+        allVertebrae[cervicalCount + thoracicCount - 1], 
+        allVertebrae[cervicalCount + thoracicCount], 
+        'thoracic_lumbar_disc'
+      );
+    }
+    
     // Create visual spine line to show the overall curve
     if (allVertebrae.length > 1) {
       const spinePoints: THREE.Vector3[] = [];

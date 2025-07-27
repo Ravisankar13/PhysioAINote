@@ -236,18 +236,63 @@ export default function Text3DAnimation({
     const spineGroup = new THREE.Group();
     spineGroup.name = 'spineGroup';
     
-    // Create individual vertebrae
+    // Create individual vertebrae with anatomical curves
     const vertebraHeight = 0.04;
-    const vertebraCount = 24; // 7 cervical + 12 thoracic + 5 lumbar
     const spineStartY = 0.9;
     
-    for (let i = 0; i < vertebraCount; i++) {
-      const vertebraGeometry = new THREE.CylinderGeometry(0.04, 0.04, vertebraHeight, 8);
-      const vertebra = new THREE.Mesh(vertebraGeometry, boneMaterial);
-      vertebra.position.y = spineStartY + (i * vertebraHeight * 1.2);
-      vertebra.name = `vertebra_${i}`;
-      spineGroup.add(vertebra);
-    }
+    // Define vertebrae regions
+    const cervicalCount = 7;
+    const thoracicCount = 12;
+    const lumbarCount = 5;
+    const totalVertebrae = cervicalCount + thoracicCount + lumbarCount;
+    
+    // Curve parameters (in radians) - using postural deviation values
+    const cervicalLordosis = -(25 + posturalDeviations.forwardHead * 0.5) * (Math.PI / 180); // Forward head increases cervical curve
+    const thoracicKyphosis = posturalDeviations.thoracicKyphosis * (Math.PI / 180);  // Direct from slider
+    const lumbarLordosis = posturalDeviations.lumbarLordosis * (Math.PI / 180);   // Direct from slider (already negative)
+    
+    let currentY = spineStartY;
+    let vertebraIndex = 0;
+    
+    // Helper function to create curved spine segment
+    const createSpineSegment = (count: number, curvature: number, regionName: string, startY: number) => {
+      const segmentHeight = count * vertebraHeight * 1.2;
+      const curveRadius = Math.abs(segmentHeight / (2 * Math.sin(Math.abs(curvature) / 2)));
+      
+      for (let i = 0; i < count; i++) {
+        const vertebraGeometry = new THREE.CylinderGeometry(0.04, 0.04, vertebraHeight, 8);
+        const vertebra = new THREE.Mesh(vertebraGeometry, boneMaterial);
+        
+        // Calculate position along curve
+        const t = i / (count - 1); // Normalized position (0 to 1)
+        const angle = curvature * (t - 0.5); // Center the curve
+        
+        // Position along the curve
+        const localY = t * segmentHeight;
+        const localZ = curveRadius * (1 - Math.cos(angle)) * Math.sign(curvature);
+        
+        vertebra.position.set(0, startY + localY, localZ * 0.3); // Scale Z for subtlety
+        
+        // Tilt vertebra to follow curve tangent
+        vertebra.rotation.x = angle * 0.5;
+        
+        vertebra.name = `${regionName}_vertebra_${i}`;
+        spineGroup.add(vertebra);
+        
+        vertebraIndex++;
+      }
+      
+      return startY + segmentHeight;
+    };
+    
+    // Create cervical spine (C1-C7) with lordosis
+    currentY = createSpineSegment(cervicalCount, cervicalLordosis, 'cervical', currentY);
+    
+    // Create thoracic spine (T1-T12) with kyphosis
+    currentY = createSpineSegment(thoracicCount, thoracicKyphosis, 'thoracic', currentY);
+    
+    // Create lumbar spine (L1-L5) with lordosis
+    createSpineSegment(lumbarCount, lumbarLordosis, 'lumbar', currentY);
     
     // Create sternum (breastbone)
     const sternumGeometry = new THREE.BoxGeometry(0.06, 0.4, 0.03);

@@ -258,6 +258,9 @@ export default function Text3DAnimation({
     const allVertebrae: THREE.Mesh[] = [];
     const thoracicVertebrae: THREE.Mesh[] = [];
     
+    // Track total vertebrae count across regions
+    let totalVertebraeCreated = 0;
+    
     // Helper function to create curved spine segment
     const createSpineSegment = (count: number, curvature: number, regionName: string, startY: number) => {
       const segmentHeight = count * vertebraHeight * 1.2;
@@ -326,10 +329,13 @@ export default function Text3DAnimation({
         
         // Store vertebrae for later reference
         allVertebrae.push(vertebra);
+        
+        // Only add to thoracicVertebrae if this is a thoracic region vertebra
         if (regionName === 'thoracic') {
           thoracicVertebrae.push(vertebra);
         }
         
+        totalVertebraeCreated++;
         vertebraIndex++;
       }
       
@@ -338,6 +344,9 @@ export default function Text3DAnimation({
     
     // Create cervical spine (C1-C7) with lordosis
     currentY = createSpineSegment(cervicalCount, cervicalLordosis, 'cervical', currentY);
+    
+    // Clear thoracicVertebrae array before creating thoracic spine
+    thoracicVertebrae.length = 0;
     
     // Create thoracic spine (T1-T12) with kyphosis
     currentY = createSpineSegment(thoracicCount, thoracicKyphosis, 'thoracic', currentY);
@@ -424,12 +433,15 @@ export default function Text3DAnimation({
       const sternumYOffset = 0; // Keep ribs horizontal
       const sternumZ = vertebraPos.z + frontExtension * Math.cos(ribAngle) + 0.05;
       
+      // Ribs should angle slightly downward from back to front
+      const ribDownwardAngle = 0.01 + (i * 0.002); // Slight downward slope
+      
       const ribCurve = new THREE.CatmullRomCurve3([
         new THREE.Vector3(0, vertebraPos.y, vertebraPos.z), // Back (spine attachment point)
-        new THREE.Vector3(ribRadius * 0.7, vertebraPos.y + sternumYOffset, vertebraPos.z + (sternumZ - vertebraPos.z) * 0.2),
-        new THREE.Vector3(ribRadius, vertebraPos.y + sternumYOffset, vertebraPos.z + (sternumZ - vertebraPos.z) * 0.5),
-        new THREE.Vector3(ribRadius * 0.7, vertebraPos.y + sternumYOffset, vertebraPos.z + (sternumZ - vertebraPos.z) * 0.8),
-        new THREE.Vector3(0, vertebraPos.y + sternumYOffset, sternumZ) // Front (sternum position)
+        new THREE.Vector3(ribRadius * 0.7, vertebraPos.y - ribDownwardAngle, vertebraPos.z + (sternumZ - vertebraPos.z) * 0.2),
+        new THREE.Vector3(ribRadius, vertebraPos.y - ribDownwardAngle * 2, vertebraPos.z + (sternumZ - vertebraPos.z) * 0.5),
+        new THREE.Vector3(ribRadius * 0.7, vertebraPos.y - ribDownwardAngle * 1.5, vertebraPos.z + (sternumZ - vertebraPos.z) * 0.8),
+        new THREE.Vector3(0, vertebraPos.y - ribDownwardAngle, sternumZ) // Front (sternum position)
       ]);
       
       // Make upper ribs thinner

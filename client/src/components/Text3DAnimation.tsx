@@ -187,7 +187,7 @@ export default function Text3DAnimation({
       }
       renderer.dispose();
     };
-  }, [rotation, limbScales]);
+  }, [rotation, limbScales, hipPathology, kneePathology, shoulderPathology]);
 
   // Generate animation from clinical text
   useEffect(() => {
@@ -195,6 +195,23 @@ export default function Text3DAnimation({
       generateAnimationFromText(clinicalText);
     }
   }, [clinicalText]);
+
+  // Update scapular positions when pathology changes
+  useEffect(() => {
+    if (!bonesRef.current['leftScapula'] || !bonesRef.current['rightScapula']) return;
+    
+    const wingingRad = (shoulderPathology.scapularWinging * Math.PI) / 180;
+    
+    // Update left scapula
+    const leftScapula = bonesRef.current['leftScapula'];
+    leftScapula.rotation.set(0, -0.3 - wingingRad, 0);
+    leftScapula.position.z = -0.12 - (wingingRad * 0.1);
+    
+    // Update right scapula
+    const rightScapula = bonesRef.current['rightScapula'];
+    rightScapula.rotation.set(0, 0.3 + wingingRad, 0);
+    rightScapula.position.z = -0.12 - (wingingRad * 0.1);
+  }, [shoulderPathology.scapularWinging]);
 
   const createSkeleton = (scene: THREE.Scene) => {
     const skeleton = new THREE.Group();
@@ -616,6 +633,7 @@ export default function Text3DAnimation({
     
     leftScapula.name = 'leftScapula';
     skeleton.add(leftScapula);
+    bonesRef.current['leftScapula'] = leftScapula;
     
     // Right scapula with winging pathology
     const rightScapula = new THREE.Mesh(scapula3D, boneMaterial);
@@ -628,6 +646,7 @@ export default function Text3DAnimation({
     rightScapula.scale.x = -1; // Mirror for right side
     rightScapula.name = 'rightScapula';
     skeleton.add(rightScapula);
+    bonesRef.current['rightScapula'] = rightScapula;
 
     // Legs with scaling
     const thighLength = 0.8 * limbScales.thigh * limbScales.overall;

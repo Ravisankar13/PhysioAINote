@@ -85,9 +85,10 @@ export default function VirtualPatientsFixed() {
     { id: 7, name: "Cervical Rotation Test", text: "Cervical spine rotation test", bodyPart: "neck" },
     { id: 8, name: "Lumbar Flexion Test", text: "Lumbar spine flexion test", bodyPart: "back" },
     { id: 9, name: "Ankle Dorsiflexion Test", text: "Ankle dorsiflexion test", bodyPart: "ankle" },
-    { id: 10, name: "Standing March Test", text: "Standing march test - alternating knee lifts", bodyPart: "general" },
-    { id: 11, name: "Ankle Inversion Test", text: "Ankle inversion test - subtalar joint movement", bodyPart: "ankle" },
-    { id: 12, name: "Ankle Eversion Test", text: "Ankle eversion test - subtalar joint movement", bodyPart: "ankle" }
+    { id: 10, name: "Ankle Plantarflexion Test", text: "Ankle plantarflexion test", bodyPart: "ankle" },
+    { id: 11, name: "Standing March Test", text: "Standing march test - alternating knee lifts", bodyPart: "general" },
+    { id: 12, name: "Ankle Inversion Test", text: "Ankle inversion test - subtalar joint movement", bodyPart: "ankle" },
+    { id: 13, name: "Ankle Eversion Test", text: "Ankle eversion test - subtalar joint movement", bodyPart: "ankle" }
   ];
 
   // Exercise movements data

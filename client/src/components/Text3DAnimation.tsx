@@ -217,17 +217,95 @@ export default function Text3DAnimation({
     const skeleton = new THREE.Group();
     skeletonRef.current = skeleton;
 
-    // Bone material
+    // Realistic bone material
     const boneMaterial = new THREE.MeshPhongMaterial({ 
-      color: 0xF5DEB3,
-      shininess: 30
+      color: 0xF5DEB3, // Bone color (off-white/ivory)
+      shininess: 25,
+      specular: 0x111111
     });
 
     // Joint material
     const jointMaterial = new THREE.MeshPhongMaterial({ 
-      color: 0xe74c3c,
-      shininess: 50
+      color: 0xFFAAAA,
+      shininess: 50,
+      opacity: 0.8,
+      transparent: true
     });
+
+    // Helper function to create anatomically accurate long bones
+    const createLongBone = (length: number, thickness: number, name: string): THREE.Group => {
+      const boneGroup = new THREE.Group();
+      
+      // Shaft (diaphysis)
+      const shaftGeometry = new THREE.CylinderGeometry(
+        thickness * 0.7,  // top radius
+        thickness * 0.7,  // bottom radius
+        length * 0.8,     // height (80% of total length)
+        12                // segments
+      );
+      const shaft = new THREE.Mesh(shaftGeometry, boneMaterial);
+      shaft.position.y = 0;
+      boneGroup.add(shaft);
+      
+      // Upper end (proximal epiphysis)
+      const upperEndGeometry = new THREE.SphereGeometry(thickness * 1.2, 12, 8);
+      const upperEnd = new THREE.Mesh(upperEndGeometry, boneMaterial);
+      upperEnd.position.y = length * 0.4;
+      upperEnd.scale.y = 0.8;
+      boneGroup.add(upperEnd);
+      
+      // Lower end (distal epiphysis)
+      const lowerEndGeometry = new THREE.SphereGeometry(thickness * 1.1, 12, 8);
+      const lowerEnd = new THREE.Mesh(lowerEndGeometry, boneMaterial);
+      lowerEnd.position.y = -length * 0.4;
+      lowerEnd.scale.y = 0.8;
+      boneGroup.add(lowerEnd);
+      
+      boneGroup.name = name;
+      return boneGroup;
+    };
+
+    // Helper function to create femur with anatomical head and neck
+    const createFemur = (length: number, side: 'left' | 'right'): THREE.Group => {
+      const femurGroup = new THREE.Group();
+      
+      // Shaft
+      const shaftGeometry = new THREE.CylinderGeometry(0.045, 0.055, length * 0.8, 12);
+      const shaft = new THREE.Mesh(shaftGeometry, boneMaterial);
+      shaft.position.y = -length * 0.1;
+      femurGroup.add(shaft);
+      
+      // Femoral head (ball joint)
+      const headGeometry = new THREE.SphereGeometry(0.08, 16, 12);
+      const head = new THREE.Mesh(headGeometry, boneMaterial);
+      head.position.y = length * 0.45;
+      head.position.x = side === 'left' ? 0.03 : -0.03;
+      femurGroup.add(head);
+      
+      // Neck (connecting head to shaft)
+      const neckGeometry = new THREE.CylinderGeometry(0.04, 0.05, 0.12, 8);
+      const neck = new THREE.Mesh(neckGeometry, boneMaterial);
+      neck.position.y = length * 0.38;
+      neck.position.x = side === 'left' ? 0.015 : -0.015;
+      neck.rotation.z = side === 'left' ? -Math.PI / 6 : Math.PI / 6;
+      femurGroup.add(neck);
+      
+      // Greater trochanter
+      const trochanterGeometry = new THREE.BoxGeometry(0.06, 0.1, 0.04);
+      const trochanter = new THREE.Mesh(trochanterGeometry, boneMaterial);
+      trochanter.position.y = length * 0.35;
+      trochanter.position.x = side === 'left' ? -0.04 : 0.04;
+      femurGroup.add(trochanter);
+      
+      // Condyles (knee joint)
+      const condyleGeometry = new THREE.BoxGeometry(0.08, 0.06, 0.1);
+      const condyles = new THREE.Mesh(condyleGeometry, boneMaterial);
+      condyles.position.y = -length * 0.45;
+      femurGroup.add(condyles);
+      
+      femurGroup.name = `${side}Femur`;
+      return femurGroup;
+    };
 
     // Create spine and ribcage instead of solid torso
     const torsoHeight = 1.2 * limbScales.torso * limbScales.overall;
@@ -536,12 +614,78 @@ export default function Text3DAnimation({
     skeleton.add(torsoReference);
     bonesRef.current['torso'] = torsoReference;
 
+    // Create anatomically accurate skull
+    const createSkull = (): THREE.Group => {
+      const skullGroup = new THREE.Group();
+      
+      // Cranium (main skull)
+      const craniumGeometry = new THREE.SphereGeometry(0.18, 16, 16);
+      const cranium = new THREE.Mesh(craniumGeometry, boneMaterial);
+      cranium.scale.set(1, 1.1, 0.95); // Slightly elongated vertically
+      cranium.position.y = 0.05;
+      skullGroup.add(cranium);
+      
+      // Face/maxilla
+      const faceGeometry = new THREE.BoxGeometry(0.15, 0.15, 0.12);
+      const face = new THREE.Mesh(faceGeometry, boneMaterial);
+      face.position.set(0, -0.05, 0.08);
+      skullGroup.add(face);
+      
+      // Eye sockets
+      const eyeSocketGeometry = new THREE.SphereGeometry(0.04, 12, 12);
+      const eyeSocketMaterial = new THREE.MeshPhongMaterial({ 
+        color: 0x333333,
+        opacity: 0.5,
+        transparent: true
+      });
+      
+      const leftEyeSocket = new THREE.Mesh(eyeSocketGeometry, eyeSocketMaterial);
+      leftEyeSocket.position.set(-0.05, 0, 0.15);
+      leftEyeSocket.scale.z = 0.5;
+      skullGroup.add(leftEyeSocket);
+      
+      const rightEyeSocket = new THREE.Mesh(eyeSocketGeometry, eyeSocketMaterial);
+      rightEyeSocket.position.set(0.05, 0, 0.15);
+      rightEyeSocket.scale.z = 0.5;
+      skullGroup.add(rightEyeSocket);
+      
+      // Nasal cavity
+      const nasalGeometry = new THREE.ConeGeometry(0.02, 0.04, 3);
+      const nasal = new THREE.Mesh(nasalGeometry, eyeSocketMaterial);
+      nasal.position.set(0, -0.02, 0.15);
+      nasal.rotation.x = Math.PI;
+      skullGroup.add(nasal);
+      
+      // Mandible (jaw)
+      const mandibleShape = new THREE.Shape();
+      mandibleShape.moveTo(-0.08, 0);
+      mandibleShape.quadraticCurveTo(-0.09, -0.05, -0.07, -0.08);
+      mandibleShape.lineTo(-0.05, -0.09);
+      mandibleShape.quadraticCurveTo(0, -0.1, 0.05, -0.09);
+      mandibleShape.lineTo(0.07, -0.08);
+      mandibleShape.quadraticCurveTo(0.09, -0.05, 0.08, 0);
+      mandibleShape.quadraticCurveTo(0, 0.02, -0.08, 0);
+      
+      const mandibleGeometry = new THREE.ExtrudeGeometry(mandibleShape, {
+        depth: 0.08,
+        bevelEnabled: true,
+        bevelThickness: 0.01,
+        bevelSize: 0.01
+      });
+      
+      const mandible = new THREE.Mesh(mandibleGeometry, boneMaterial);
+      mandible.position.set(0, -0.12, 0.04);
+      skullGroup.add(mandible);
+      
+      return skullGroup;
+    };
+    
     // Head - position based on scaled torso
-    const head = new THREE.SphereGeometry(0.2, 16, 16);
-    const headMesh = new THREE.Mesh(head, boneMaterial);
+    const headMesh = createSkull();
     headMesh.position.y = torsoHeight + 0.9 + 0.3;
     headMesh.name = 'head';
     skeleton.add(headMesh);
+    bonesRef.current['head'] = headMesh;
     
     // Create anatomically accurate pelvis with two innominate bones
     const pelvisGroup = new THREE.Group();
@@ -732,8 +876,62 @@ export default function Text3DAnimation({
     // Arms - Create proper anatomical arm structure with scaling
     const upperArmLength = 0.5 * limbScales.upperArm * limbScales.overall;
     const forearmLength = 0.45 * limbScales.forearm * limbScales.overall;
-    const upperArmGeometry = new THREE.CylinderGeometry(0.05, 0.045, upperArmLength, 8);
-    const forearmGeometry = new THREE.CylinderGeometry(0.045, 0.04, forearmLength, 8);
+    
+    // Create anatomically accurate humerus
+    const createHumerus = (length: number): THREE.Group => {
+      const humerusGroup = new THREE.Group();
+      
+      // Shaft
+      const shaftGeometry = new THREE.CylinderGeometry(0.035, 0.04, length * 0.8, 10);
+      const shaft = new THREE.Mesh(shaftGeometry, boneMaterial);
+      shaft.position.y = -length * 0.1;
+      humerusGroup.add(shaft);
+      
+      // Humeral head (ball joint)
+      const headGeometry = new THREE.SphereGeometry(0.06, 12, 10);
+      const head = new THREE.Mesh(headGeometry, boneMaterial);
+      head.position.y = length * 0.45;
+      humerusGroup.add(head);
+      
+      // Greater tubercle
+      const tubercleGeometry = new THREE.BoxGeometry(0.03, 0.04, 0.03);
+      const tubercle = new THREE.Mesh(tubercleGeometry, boneMaterial);
+      tubercle.position.set(0.035, length * 0.4, 0);
+      humerusGroup.add(tubercle);
+      
+      // Distal end (elbow joint area)
+      const distalGeometry = new THREE.BoxGeometry(0.06, 0.04, 0.05);
+      const distal = new THREE.Mesh(distalGeometry, boneMaterial);
+      distal.position.y = -length * 0.45;
+      humerusGroup.add(distal);
+      
+      return humerusGroup;
+    };
+    
+    // Create anatomically accurate forearm bones (radius and ulna)
+    const createForearm = (length: number): THREE.Group => {
+      const forearmGroup = new THREE.Group();
+      
+      // Radius (thumb side)
+      const radiusGeometry = new THREE.CylinderGeometry(0.02, 0.025, length * 0.95, 8);
+      const radius = new THREE.Mesh(radiusGeometry, boneMaterial);
+      radius.position.set(0.015, -length * 0.025, 0);
+      forearmGroup.add(radius);
+      
+      // Ulna (pinky side)
+      const ulnaGeometry = new THREE.CylinderGeometry(0.025, 0.02, length * 0.95, 8);
+      const ulna = new THREE.Mesh(ulnaGeometry, boneMaterial);
+      ulna.position.set(-0.015, -length * 0.025, 0);
+      forearmGroup.add(ulna);
+      
+      // Olecranon process (elbow point)
+      const olecranonGeometry = new THREE.BoxGeometry(0.03, 0.04, 0.03);
+      const olecranon = new THREE.Mesh(olecranonGeometry, boneMaterial);
+      olecranon.position.set(-0.015, length * 0.45, -0.02);
+      forearmGroup.add(olecranon);
+      
+      return forearmGroup;
+    };
     
     // Left arm group for hierarchical transformation with pathology
     const leftArmGroup = new THREE.Group();
@@ -752,8 +950,8 @@ export default function Text3DAnimation({
     );
     leftArmGroup.name = 'leftArmGroup';
     
-    // Left upper arm
-    const leftUpperArm = new THREE.Mesh(upperArmGeometry, boneMaterial);
+    // Left upper arm (humerus)
+    const leftUpperArm = createHumerus(upperArmLength);
     leftUpperArm.position.set(0, -upperArmLength / 2, 0);
     leftUpperArm.name = 'leftUpperArm';
     leftArmGroup.add(leftUpperArm);
@@ -774,7 +972,7 @@ export default function Text3DAnimation({
     leftElbowGroup.add(leftElbowJoint);
 
     // Left forearm attached to elbow group
-    const leftForearm = new THREE.Mesh(forearmGeometry, boneMaterial);
+    const leftForearm = createForearm(forearmLength);
     leftForearm.position.set(0, -forearmLength / 2, 0);
     leftForearm.name = 'leftForearm';
     leftElbowGroup.add(leftForearm);
@@ -791,8 +989,8 @@ export default function Text3DAnimation({
     );
     rightArmGroup.name = 'rightArmGroup';
     
-    // Right upper arm
-    const rightUpperArm = new THREE.Mesh(upperArmGeometry, boneMaterial);
+    // Right upper arm (humerus)
+    const rightUpperArm = createHumerus(upperArmLength);
     rightUpperArm.position.set(0, -upperArmLength / 2, 0);
     rightUpperArm.name = 'rightUpperArm';
     rightArmGroup.add(rightUpperArm);
@@ -811,7 +1009,7 @@ export default function Text3DAnimation({
     rightElbowGroup.add(rightElbowJoint);
 
     // Right forearm attached to elbow group
-    const rightForearm = new THREE.Mesh(forearmGeometry, boneMaterial);
+    const rightForearm = createForearm(forearmLength);
     rightForearm.position.set(0, -forearmLength / 2, 0);
     rightForearm.name = 'rightForearm';
     rightElbowGroup.add(rightForearm);
@@ -819,15 +1017,44 @@ export default function Text3DAnimation({
 
     skeleton.add(rightArmGroup);
 
-    // Add hands
-    const handGeometry = new THREE.SphereGeometry(0.06, 12, 12);
+    // Create anatomically accurate hand
+    const createHand = (): THREE.Group => {
+      const handGroup = new THREE.Group();
+      
+      // Palm
+      const palmGeometry = new THREE.BoxGeometry(0.08, 0.1, 0.02);
+      const palm = new THREE.Mesh(palmGeometry, boneMaterial);
+      palm.position.y = -0.05;
+      handGroup.add(palm);
+      
+      // Fingers (simplified)
+      const fingerGeometry = new THREE.CylinderGeometry(0.008, 0.008, 0.06, 6);
+      
+      // Index, middle, ring, pinky
+      for (let i = 0; i < 4; i++) {
+        const finger = new THREE.Mesh(fingerGeometry, boneMaterial);
+        finger.position.set(-0.03 + i * 0.02, -0.13, 0);
+        finger.rotation.z = (i - 1.5) * 0.05; // Slight spread
+        handGroup.add(finger);
+      }
+      
+      // Thumb
+      const thumb = new THREE.Mesh(fingerGeometry, boneMaterial);
+      thumb.position.set(-0.04, -0.08, 0.01);
+      thumb.rotation.z = -0.4;
+      thumb.scale.y = 0.7;
+      handGroup.add(thumb);
+      
+      return handGroup;
+    };
     
-    const leftHand = new THREE.Mesh(handGeometry, boneMaterial);
+    // Add hands
+    const leftHand = createHand();
     leftHand.position.set(0, -forearmLength - 0.05, 0);
     leftHand.name = 'leftHand';
     leftElbowGroup.add(leftHand); // Attach to elbow group
 
-    const rightHand = new THREE.Mesh(handGeometry, boneMaterial);
+    const rightHand = createHand();
     rightHand.position.set(0, -forearmLength - 0.05, 0);
     rightHand.name = 'rightHand';
     rightElbowGroup.add(rightHand); // Attach to elbow group
@@ -887,16 +1114,39 @@ export default function Text3DAnimation({
     // Legs with scaling
     const thighLength = 0.8 * limbScales.thigh * limbScales.overall;
     const shinLength = 0.8 * limbScales.shin * limbScales.overall;
-    const thighGeometry = new THREE.CylinderGeometry(0.08, 0.08, thighLength, 8);
-    const shinGeometry = new THREE.CylinderGeometry(0.08, 0.08, shinLength, 8);
+    
+    // Create anatomically accurate tibia
+    const createTibia = (length: number): THREE.Group => {
+      const tibiaGroup = new THREE.Group();
+      
+      // Shaft with triangular cross-section
+      const shaftGeometry = new THREE.CylinderGeometry(0.035, 0.045, length * 0.9, 8);
+      const shaft = new THREE.Mesh(shaftGeometry, boneMaterial);
+      shaft.position.y = -length * 0.05;
+      tibiaGroup.add(shaft);
+      
+      // Tibial plateau (top)
+      const plateauGeometry = new THREE.BoxGeometry(0.08, 0.02, 0.07);
+      const plateau = new THREE.Mesh(plateauGeometry, boneMaterial);
+      plateau.position.y = length * 0.45;
+      tibiaGroup.add(plateau);
+      
+      // Medial malleolus (ankle bone)
+      const malleolus = new THREE.SphereGeometry(0.025, 8, 6);
+      const medialMalleolus = new THREE.Mesh(malleolus, boneMaterial);
+      medialMalleolus.position.set(0.02, -length * 0.45, 0);
+      tibiaGroup.add(medialMalleolus);
+      
+      return tibiaGroup;
+    };
     
     // Left leg group for hierarchical transformation
     const leftLegGroup = new THREE.Group();
     leftLegGroup.position.set(-0.1, 0.6, 0); // Position at hip joint (below pelvis at 0.7) - closer together
     leftLegGroup.name = 'leftLegGroup';
     
-    // Left thigh attached to leg group
-    const leftThigh = new THREE.Mesh(thighGeometry, boneMaterial);
+    // Create anatomically accurate left femur
+    const leftThigh = createFemur(thighLength, 'left');
     leftThigh.position.set(0, -thighLength / 2, 0); // Relative to leg group
     
     // Apply femoral neck angle (coxa vara/valga)
@@ -927,8 +1177,8 @@ export default function Text3DAnimation({
     leftKneeGroup.add(leftKneeJoint);
     bonesRef.current['leftKneeGroup'] = leftKneeGroup;
 
-    // Left shin attached to knee group
-    const leftShin = new THREE.Mesh(shinGeometry, boneMaterial);
+    // Left tibia attached to knee group
+    const leftShin = createTibia(shinLength);
     leftShin.position.set(0, -shinLength / 2, 0); // Relative to knee group
     
     // Apply varus/valgus angle
@@ -1010,7 +1260,7 @@ export default function Text3DAnimation({
     rightLegGroup.name = 'rightLegGroup';
     
     // Right thigh attached to leg group
-    const rightThigh = new THREE.Mesh(thighGeometry, boneMaterial);
+    const rightThigh = createFemur(thighLength, 'right');
     rightThigh.position.set(0, -thighLength / 2, 0); // Relative to leg group
     
     // Apply femoral neck angle (coxa vara/valga) - mirror for right side
@@ -1038,7 +1288,7 @@ export default function Text3DAnimation({
     bonesRef.current['rightKneeGroup'] = rightKneeGroup;
 
     // Right shin attached to knee group
-    const rightShin = new THREE.Mesh(shinGeometry, boneMaterial);
+    const rightShin = createTibia(shinLength);
     rightShin.position.set(0, -shinLength / 2, 0); // Relative to knee group
     
     // Apply varus/valgus angle (opposite for right side)

@@ -39,6 +39,12 @@ export default function VirtualPatientsFixed() {
   const [acSeparation, setAcSeparation] = useState<number[]>([0]);
   const [ghSubluxation, setGhSubluxation] = useState<number[]>([0]);
   
+  // Ankle pathology states
+  const [subtalarStiffness, setSubtalarStiffness] = useState<number[]>([0]);
+  const [ankleInstability, setAnkleInstability] = useState<'none' | 'lateral' | 'medial' | 'combined'>('none');
+  const [hindfootAngle, setHindfootAngle] = useState<number[]>([0]);
+  const [ankleEffusion, setAnkleEffusion] = useState<number[]>([0]);
+  
   // Anthropometric states
   const [height, setHeight] = useState<number[]>([170]);
   const [weight, setWeight] = useState<number[]>([70]);
@@ -79,7 +85,9 @@ export default function VirtualPatientsFixed() {
     { id: 7, name: "Cervical Rotation Test", text: "Cervical spine rotation test", bodyPart: "neck" },
     { id: 8, name: "Lumbar Flexion Test", text: "Lumbar spine flexion test", bodyPart: "back" },
     { id: 9, name: "Ankle Dorsiflexion Test", text: "Ankle dorsiflexion test", bodyPart: "ankle" },
-    { id: 10, name: "Standing March Test", text: "Standing march test - alternating knee lifts", bodyPart: "general" }
+    { id: 10, name: "Standing March Test", text: "Standing march test - alternating knee lifts", bodyPart: "general" },
+    { id: 11, name: "Ankle Inversion Test", text: "Ankle inversion test - subtalar joint movement", bodyPart: "ankle" },
+    { id: 12, name: "Ankle Eversion Test", text: "Ankle eversion test - subtalar joint movement", bodyPart: "ankle" }
   ];
 
   // Exercise movements data
@@ -638,6 +646,99 @@ export default function VirtualPatientsFixed() {
                                 />
                                 <span className="text-sm text-gray-600">40°</span>
                                 <span className="text-sm font-medium ml-2">{tibialTorsion[0]}°</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Ankle Pathology Controls */}
+                        <div className="pb-4 border-b">
+                          <h4 className="font-medium mb-3">Ankle Pathology</h4>
+                          <div className="space-y-3">
+                            <div>
+                              <Label className="text-sm font-medium">Subtalar Joint Stiffness</Label>
+                              <div className="flex items-center gap-4 mt-2">
+                                <span className="text-sm text-gray-600">0%</span>
+                                <Slider
+                                  value={subtalarStiffness}
+                                  onValueChange={setSubtalarStiffness}
+                                  min={0}
+                                  max={100}
+                                  step={5}
+                                  className="flex-1"
+                                />
+                                <span className="text-sm text-gray-600">100%</span>
+                                <span className="text-sm font-medium ml-2">{subtalarStiffness[0]}%</span>
+                              </div>
+                              <p className="text-xs text-gray-500 mt-1">Affects inversion/eversion range of motion</p>
+                            </div>
+                            
+                            <div>
+                              <Label className="text-sm font-medium">Ankle Instability</Label>
+                              <div className="flex gap-2 mt-2">
+                                <Button 
+                                  variant={ankleInstability === 'none' ? "default" : "outline"} 
+                                  size="sm"
+                                  onClick={() => setAnkleInstability('none')}
+                                >
+                                  None
+                                </Button>
+                                <Button 
+                                  variant={ankleInstability === 'lateral' ? "default" : "outline"} 
+                                  size="sm"
+                                  onClick={() => setAnkleInstability('lateral')}
+                                >
+                                  Lateral
+                                </Button>
+                                <Button 
+                                  variant={ankleInstability === 'medial' ? "default" : "outline"} 
+                                  size="sm"
+                                  onClick={() => setAnkleInstability('medial')}
+                                >
+                                  Medial
+                                </Button>
+                                <Button 
+                                  variant={ankleInstability === 'combined' ? "default" : "outline"} 
+                                  size="sm"
+                                  onClick={() => setAnkleInstability('combined')}
+                                >
+                                  Combined
+                                </Button>
+                              </div>
+                            </div>
+                            
+                            <div>
+                              <Label className="text-sm font-medium">Hindfoot Varus/Valgus</Label>
+                              <div className="flex items-center gap-4 mt-2">
+                                <span className="text-sm text-gray-600">-15°</span>
+                                <Slider
+                                  value={hindfootAngle}
+                                  onValueChange={setHindfootAngle}
+                                  min={-15}
+                                  max={15}
+                                  step={1}
+                                  className="flex-1"
+                                />
+                                <span className="text-sm text-gray-600">15°</span>
+                                <span className="text-sm font-medium ml-2">{hindfootAngle[0]}°</span>
+                              </div>
+                              <p className="text-xs text-gray-500 mt-1">Negative = Varus, Positive = Valgus</p>
+                            </div>
+                            
+                            <div>
+                              <Label className="text-sm font-medium">Ankle Joint Effusion</Label>
+                              <div className="flex items-center gap-4 mt-2">
+                                <span className="text-sm text-gray-600">0%</span>
+                                <Slider
+                                  value={ankleEffusion}
+                                  onValueChange={setAnkleEffusion}
+                                  min={0}
+                                  max={100}
+                                  step={5}
+                                  className="flex-1"
+                                />
+                                <span className="text-sm text-gray-600">100%</span>
+                                <span className="text-sm font-medium ml-2">{ankleEffusion[0]}%</span>
                               </div>
                             </div>
                           </div>

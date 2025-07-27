@@ -688,27 +688,64 @@ export default function Text3DAnimation({
     leftKneeGroup.add(leftShin);
     bonesRef.current['leftShin'] = leftShin;
     
-    // Left ankle group - for proper foot hierarchy
+    // Left ankle complex - anatomically accurate with talocrural and subtalar joints
     const leftAnkleGroup = new THREE.Group();
     leftAnkleGroup.position.set(0, -shinLength, 0); // Position at ankle joint
     leftAnkleGroup.name = 'leftAnkleGroup';
     leftKneeGroup.add(leftAnkleGroup);
     
-    // Add visible ankle joint
-    const ankleJointGeometry = new THREE.SphereGeometry(0.06, 16, 16);
-    const ankleJointMaterial = new THREE.MeshPhongMaterial({ color: 0x0000ff }); // Blue color
-    const leftAnkleJoint = new THREE.Mesh(ankleJointGeometry, ankleJointMaterial);
-    leftAnkleJoint.position.set(0, 0, 0); // At ankle group origin
-    leftAnkleJoint.name = 'leftAnkleJoint';
-    leftAnkleGroup.add(leftAnkleJoint);
+    // Talocrural joint (ankle joint proper) - between tibia/fibula and talus
+    const talocruralJointGeometry = new THREE.SphereGeometry(0.04, 16, 16);
+    const talocruralJointMaterial = new THREE.MeshPhongMaterial({ color: 0xffaa00 }); // Orange color
+    const leftTalocruralJoint = new THREE.Mesh(talocruralJointGeometry, talocruralJointMaterial);
+    leftTalocruralJoint.position.set(0, 0, 0);
+    leftTalocruralJoint.name = 'leftTalocruralJoint';
+    leftAnkleGroup.add(leftTalocruralJoint);
     
-    // Left foot attached to ankle group
-    const footGeometry = new THREE.BoxGeometry(0.12, 0.06, 0.25);
-    const leftFoot = new THREE.Mesh(footGeometry, boneMaterial);
-    leftFoot.position.set(0, -0.03, 0.05); // Positioned directly at ankle with minimal gap
-    leftFoot.name = 'leftFoot';
-    leftAnkleGroup.add(leftFoot);
-    bonesRef.current['leftFoot'] = leftFoot;
+    // Talus bone
+    const talusGeometry = new THREE.BoxGeometry(0.06, 0.04, 0.05);
+    const leftTalus = new THREE.Mesh(talusGeometry, boneMaterial);
+    leftTalus.position.set(0, -0.03, 0);
+    leftTalus.name = 'leftTalus';
+    leftAnkleGroup.add(leftTalus);
+    bonesRef.current['leftTalus'] = leftTalus;
+    
+    // Subtalar joint group - for inversion/eversion
+    const leftSubtalarGroup = new THREE.Group();
+    leftSubtalarGroup.position.set(0, -0.05, 0); // Below talus
+    leftSubtalarGroup.name = 'leftSubtalarGroup';
+    leftAnkleGroup.add(leftSubtalarGroup);
+    bonesRef.current['leftSubtalarGroup'] = leftSubtalarGroup;
+    
+    // Subtalar joint visual
+    const subtalarJointGeometry = new THREE.SphereGeometry(0.035, 16, 16);
+    const subtalarJointMaterial = new THREE.MeshPhongMaterial({ color: 0xff6600 }); // Dark orange
+    const leftSubtalarJoint = new THREE.Mesh(subtalarJointGeometry, subtalarJointMaterial);
+    leftSubtalarJoint.position.set(0, 0, 0);
+    leftSubtalarJoint.name = 'leftSubtalarJoint';
+    leftSubtalarGroup.add(leftSubtalarJoint);
+    
+    // Calcaneus (heel bone)
+    const calcaneusGeometry = new THREE.BoxGeometry(0.08, 0.05, 0.12);
+    const leftCalcaneus = new THREE.Mesh(calcaneusGeometry, boneMaterial);
+    leftCalcaneus.position.set(0, -0.025, -0.02); // Positioned below subtalar joint
+    leftCalcaneus.name = 'leftCalcaneus';
+    leftSubtalarGroup.add(leftCalcaneus);
+    bonesRef.current['leftCalcaneus'] = leftCalcaneus;
+    
+    // Midfoot and forefoot
+    const midfootGeometry = new THREE.BoxGeometry(0.06, 0.03, 0.08);
+    const leftMidfoot = new THREE.Mesh(midfootGeometry, boneMaterial);
+    leftMidfoot.position.set(0, -0.04, 0.06);
+    leftMidfoot.name = 'leftMidfoot';
+    leftSubtalarGroup.add(leftMidfoot);
+    
+    const forefootGeometry = new THREE.BoxGeometry(0.05, 0.02, 0.06);
+    const leftForefoot = new THREE.Mesh(forefootGeometry, boneMaterial);
+    leftForefoot.position.set(0, -0.05, 0.12);
+    leftForefoot.name = 'leftForefoot';
+    leftSubtalarGroup.add(leftForefoot);
+    bonesRef.current['leftFoot'] = leftForefoot; // For backward compatibility
     
     skeleton.add(leftLegGroup);
 
@@ -759,24 +796,56 @@ export default function Text3DAnimation({
     rightKneeGroup.add(rightShin);
     bonesRef.current['rightShin'] = rightShin;
     
-    // Right ankle group - for proper foot hierarchy
+    // Right ankle complex - anatomically accurate with talocrural and subtalar joints
     const rightAnkleGroup = new THREE.Group();
     rightAnkleGroup.position.set(0, -shinLength, 0); // Position at ankle joint
     rightAnkleGroup.name = 'rightAnkleGroup';
     rightKneeGroup.add(rightAnkleGroup);
     
-    // Add visible ankle joint
-    const rightAnkleJoint = new THREE.Mesh(ankleJointGeometry, ankleJointMaterial);
-    rightAnkleJoint.position.set(0, 0, 0); // At ankle group origin
-    rightAnkleJoint.name = 'rightAnkleJoint';
-    rightAnkleGroup.add(rightAnkleJoint);
+    // Talocrural joint (ankle joint proper) - between tibia/fibula and talus
+    const rightTalocruralJoint = new THREE.Mesh(talocruralJointGeometry, talocruralJointMaterial);
+    rightTalocruralJoint.position.set(0, 0, 0);
+    rightTalocruralJoint.name = 'rightTalocruralJoint';
+    rightAnkleGroup.add(rightTalocruralJoint);
     
-    // Right foot attached to ankle group
-    const rightFoot = new THREE.Mesh(footGeometry, boneMaterial);
-    rightFoot.position.set(0, -0.03, 0.05); // Positioned directly at ankle with minimal gap
-    rightFoot.name = 'rightFoot';
-    rightAnkleGroup.add(rightFoot);
-    bonesRef.current['rightFoot'] = rightFoot;
+    // Talus bone
+    const rightTalus = new THREE.Mesh(talusGeometry, boneMaterial);
+    rightTalus.position.set(0, -0.03, 0);
+    rightTalus.name = 'rightTalus';
+    rightAnkleGroup.add(rightTalus);
+    bonesRef.current['rightTalus'] = rightTalus;
+    
+    // Subtalar joint group - for inversion/eversion
+    const rightSubtalarGroup = new THREE.Group();
+    rightSubtalarGroup.position.set(0, -0.05, 0); // Below talus
+    rightSubtalarGroup.name = 'rightSubtalarGroup';
+    rightAnkleGroup.add(rightSubtalarGroup);
+    bonesRef.current['rightSubtalarGroup'] = rightSubtalarGroup;
+    
+    // Subtalar joint visual
+    const rightSubtalarJoint = new THREE.Mesh(subtalarJointGeometry, subtalarJointMaterial);
+    rightSubtalarJoint.position.set(0, 0, 0);
+    rightSubtalarJoint.name = 'rightSubtalarJoint';
+    rightSubtalarGroup.add(rightSubtalarJoint);
+    
+    // Calcaneus (heel bone)
+    const rightCalcaneus = new THREE.Mesh(calcaneusGeometry, boneMaterial);
+    rightCalcaneus.position.set(0, -0.025, -0.02); // Positioned below subtalar joint
+    rightCalcaneus.name = 'rightCalcaneus';
+    rightSubtalarGroup.add(rightCalcaneus);
+    bonesRef.current['rightCalcaneus'] = rightCalcaneus;
+    
+    // Midfoot and forefoot
+    const rightMidfoot = new THREE.Mesh(midfootGeometry, boneMaterial);
+    rightMidfoot.position.set(0, -0.04, 0.06);
+    rightMidfoot.name = 'rightMidfoot';
+    rightSubtalarGroup.add(rightMidfoot);
+    
+    const rightForefoot = new THREE.Mesh(forefootGeometry, boneMaterial);
+    rightForefoot.position.set(0, -0.05, 0.12);
+    rightForefoot.name = 'rightForefoot';
+    rightSubtalarGroup.add(rightForefoot);
+    bonesRef.current['rightFoot'] = rightForefoot; // For backward compatibility
     
     skeleton.add(rightLegGroup);
 
@@ -919,6 +988,10 @@ export default function Text3DAnimation({
       animationFrames = generateGeneralMovementAnimation();
     } else if (isPhysicalTest && lowerText.includes('ankle plantarflexion')) {
       animationFrames = generateGeneralMovementAnimation();
+    } else if (isPhysicalTest && lowerText.includes('ankle inversion')) {
+      animationFrames = generateAnkleInversionAnimation();
+    } else if (isPhysicalTest && lowerText.includes('ankle eversion')) {
+      animationFrames = generateAnkleEversionAnimation();
     } else if (isPhysicalTest && lowerText.includes('cervical flexion')) {
       animationFrames = generateGeneralMovementAnimation();
     } else if (isPhysicalTest && lowerText.includes('cervical extension')) {
@@ -3008,6 +3081,208 @@ export default function Text3DAnimation({
           leftFoot: { position: [-0.15, 0.1, 0.65], rotation: [0, 0, 0] },
           rightFoot: { position: [0.15, 0.1, 0.65], rotation: [0, 0, 0] },
           spineGroup: { position: [0, -0.3, 0], rotation: [1.57, 0, 0] } // Back to horizontal spine
+        }
+      }
+    ];
+  };
+
+  // Ankle inversion animation - demonstrates subtalar joint movement
+  const generateAnkleInversionAnimation = (): AnimationKeyframe[] => {
+    return [
+      {
+        time: 0,
+        joints: {
+          // Starting position - neutral stance
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftLegGroup: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightLegGroup: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          rightKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          leftAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          rightAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          leftSubtalarGroup: { position: [0, -0.05, 0], rotation: [0, 0, 0] }, // Neutral
+          rightSubtalarGroup: { position: [0, -0.05, 0], rotation: [0, 0, 0] }, // Neutral
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
+        }
+      },
+      {
+        time: 1500,
+        joints: {
+          // Left ankle inversion (subtalar joint rotation)
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftLegGroup: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightLegGroup: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          rightKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          leftAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          rightAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          leftSubtalarGroup: { position: [0, -0.05, 0], rotation: [0, 0, 0.52] }, // 30° inversion
+          rightSubtalarGroup: { position: [0, -0.05, 0], rotation: [0, 0, 0] }, // Neutral
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
+        }
+      },
+      {
+        time: 3000,
+        joints: {
+          // Return to neutral
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftLegGroup: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightLegGroup: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          rightKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          leftAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          rightAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          leftSubtalarGroup: { position: [0, -0.05, 0], rotation: [0, 0, 0] }, // Neutral
+          rightSubtalarGroup: { position: [0, -0.05, 0], rotation: [0, 0, 0] }, // Neutral
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
+        }
+      },
+      {
+        time: 4500,
+        joints: {
+          // Right ankle inversion
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftLegGroup: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightLegGroup: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          rightKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          leftAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          rightAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          leftSubtalarGroup: { position: [0, -0.05, 0], rotation: [0, 0, 0] }, // Neutral
+          rightSubtalarGroup: { position: [0, -0.05, 0], rotation: [0, 0, -0.52] }, // 30° inversion
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
+        }
+      },
+      {
+        time: 6000,
+        joints: {
+          // Return to neutral
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftLegGroup: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightLegGroup: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          rightKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          leftAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          rightAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          leftSubtalarGroup: { position: [0, -0.05, 0], rotation: [0, 0, 0] }, // Neutral
+          rightSubtalarGroup: { position: [0, -0.05, 0], rotation: [0, 0, 0] }, // Neutral
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
+        }
+      }
+    ];
+  };
+
+  // Ankle eversion animation - demonstrates subtalar joint movement
+  const generateAnkleEversionAnimation = (): AnimationKeyframe[] => {
+    return [
+      {
+        time: 0,
+        joints: {
+          // Starting position - neutral stance
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftLegGroup: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightLegGroup: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          rightKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          leftAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          rightAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          leftSubtalarGroup: { position: [0, -0.05, 0], rotation: [0, 0, 0] }, // Neutral
+          rightSubtalarGroup: { position: [0, -0.05, 0], rotation: [0, 0, 0] }, // Neutral
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
+        }
+      },
+      {
+        time: 1500,
+        joints: {
+          // Left ankle eversion (subtalar joint rotation)
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftLegGroup: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightLegGroup: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          rightKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          leftAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          rightAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          leftSubtalarGroup: { position: [0, -0.05, 0], rotation: [0, 0, -0.26] }, // 15° eversion
+          rightSubtalarGroup: { position: [0, -0.05, 0], rotation: [0, 0, 0] }, // Neutral
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
+        }
+      },
+      {
+        time: 3000,
+        joints: {
+          // Return to neutral
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftLegGroup: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightLegGroup: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          rightKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          leftAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          rightAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          leftSubtalarGroup: { position: [0, -0.05, 0], rotation: [0, 0, 0] }, // Neutral
+          rightSubtalarGroup: { position: [0, -0.05, 0], rotation: [0, 0, 0] }, // Neutral
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
+        }
+      },
+      {
+        time: 4500,
+        joints: {
+          // Right ankle eversion
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftLegGroup: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightLegGroup: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          rightKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          leftAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          rightAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          leftSubtalarGroup: { position: [0, -0.05, 0], rotation: [0, 0, 0] }, // Neutral
+          rightSubtalarGroup: { position: [0, -0.05, 0], rotation: [0, 0, 0.26] }, // 15° eversion
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
+        }
+      },
+      {
+        time: 6000,
+        joints: {
+          // Return to neutral
+          head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
+          torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          leftLegGroup: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
+          rightLegGroup: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
+          leftKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          rightKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          leftAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          rightAnkleGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
+          leftSubtalarGroup: { position: [0, -0.05, 0], rotation: [0, 0, 0] }, // Neutral
+          rightSubtalarGroup: { position: [0, -0.05, 0], rotation: [0, 0, 0] }, // Neutral
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 0] }
         }
       }
     ];

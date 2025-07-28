@@ -1220,9 +1220,12 @@ export default function GameCompetitionPage() {
 
   const renderLightningDiagnosis = (content: any) => {
     console.log('renderLightningDiagnosis called with:', content);
+    console.log('Content keys:', Object.keys(content || {}));
+    console.log('Has patternRecognition?', !!content?.patternRecognition);
     
     // Check for Pattern Recognition format first
     if (content?.patternRecognition) {
+      console.log('Rendering Pattern Recognition content');
       return renderPatternRecognition(content.patternRecognition);
     }
     
@@ -2333,6 +2336,15 @@ Consider: Life support priorities, surgical needs, monitoring requirements, and 
       </div>
     );
   }
+
+  console.log('GameCompetitionPage render state:', {
+    gameStarted,
+    showResults,
+    submissionResult: !!submissionResult,
+    competition: competition?.title,
+    gameContent: !!gameContent,
+    contentKeys: gameContent ? Object.keys(gameContent) : []
+  });
 
   return (
     <div className="container mx-auto px-4 py-8">

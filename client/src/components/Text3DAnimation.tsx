@@ -318,7 +318,7 @@ export default function Text3DAnimation({
     
     // Create individual vertebrae with anatomical curves
     const vertebraHeight = 0.04;
-    const spineStartY = torsoHeight + 0.9 + 0.65; // Start spine higher, just below the raised head position
+    const spineStartY = torsoHeight + 0.9 - 0.05; // Start spine slightly below top of torso for cervical visibility
     
     // Define vertebrae regions
     const cervicalCount = 7;
@@ -383,8 +383,8 @@ export default function Text3DAnimation({
       // Determine vertebra sizes based on region with gradual transitions
       let startRadius: number, endRadius: number;
       if (regionName === 'cervical') {
-        startRadius = 0.045; // Increased significantly for clear visibility
-        endRadius = 0.05;   // Larger cervical vertebrae
+        startRadius = 0.035; // Slightly larger cervical vertebrae
+        endRadius = 0.04;   // For better visibility
       } else if (regionName === 'thoracic') {
         startRadius = 0.036;
         endRadius = 0.042;
@@ -411,8 +411,8 @@ export default function Text3DAnimation({
         const localY = i * baseSpacing;
         const localZ = Math.sin(angle) * segmentHeight * 0.25; // Increased curve displacement
         
-        // Position spine more posteriorly (towards back) - minimal offset for cervical visibility
-        const spineBackOffset = regionName === 'cervical' ? 0 : -0.08; // No backward offset for cervical vertebrae
+        // Position spine more posteriorly (towards back) - cervical slightly forward
+        const spineBackOffset = regionName === 'cervical' ? 0.02 : -0.08; // Cervical slightly forward for visibility
         vertebra.position.set(0, startY - localY, localZ + spineBackOffset);
         vertebra.rotation.x = angle * 0.5; // Increased rotation for more pronounced curve
         
@@ -689,9 +689,9 @@ export default function Text3DAnimation({
       return skullGroup;
     };
     
-    // Head - position based on scaled torso (raised to show cervical spine)
+    // Head - position based on scaled torso
     const headMesh = createSkull();
-    headMesh.position.y = torsoHeight + 0.9 + 0.8; // Increased to 0.8 to create clear gap for cervical spine
+    headMesh.position.y = torsoHeight + 0.9 + 0.15; // Position head just above torso with small gap
     headMesh.name = 'head';
     skeleton.add(headMesh);
     bonesRef.current['head'] = headMesh;

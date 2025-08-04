@@ -531,8 +531,8 @@ export default function Text3DAnimation({
       avgZ /= count;
       avgRotX /= count;
       
-      // Position sternum in front of the average thoracic position, but lower
-      sternum.position.set(0, avgY - 0.05, avgZ + 0.18);
+      // Position sternum in front of the average thoracic position
+      sternum.position.set(0, avgY, avgZ + 0.16);
       sternum.rotation.x = avgRotX * 0.8; // Slightly less tilted than vertebrae
     }
     sternum.name = 'sternum';
@@ -569,16 +569,16 @@ export default function Text3DAnimation({
       const sternumZ = vertebraPos.z + frontExtension * Math.cos(ribAngle) + 0.05;
       
       // Ribs should angle downward from back to front
-      // Lower the entire rib curve by offsetting Y position
-      const ribVerticalOffset = -0.1 - (i * 0.005); // Much lower ribs to expose neck
-      const ribDownwardAngle = 0.03 + (i * 0.004); // More aggressive downward slope
+      // Adjust rib positioning to be anatomically correct
+      const ribVerticalOffset = -0.02 - (i * 0.003); // Minimal offset to keep ribs at correct height
+      const ribDownwardAngle = 0.015 + (i * 0.002); // Gentle downward slope
       
       const ribCurve = new THREE.CatmullRomCurve3([
         new THREE.Vector3(0, vertebraPos.y + ribVerticalOffset, vertebraPos.z), // Back (spine attachment point)
-        new THREE.Vector3(ribRadius * 0.7, vertebraPos.y + ribVerticalOffset - ribDownwardAngle, vertebraPos.z + (sternumZ - vertebraPos.z) * 0.2),
-        new THREE.Vector3(ribRadius, vertebraPos.y + ribVerticalOffset - ribDownwardAngle * 2, vertebraPos.z + (sternumZ - vertebraPos.z) * 0.5),
-        new THREE.Vector3(ribRadius * 0.7, vertebraPos.y + ribVerticalOffset - ribDownwardAngle * 1.5, vertebraPos.z + (sternumZ - vertebraPos.z) * 0.8),
-        new THREE.Vector3(0, vertebraPos.y + ribVerticalOffset - ribDownwardAngle, sternumZ) // Front (sternum position)
+        new THREE.Vector3(ribRadius * 0.7, vertebraPos.y + ribVerticalOffset - ribDownwardAngle * 0.5, vertebraPos.z + (sternumZ - vertebraPos.z) * 0.2),
+        new THREE.Vector3(ribRadius, vertebraPos.y + ribVerticalOffset - ribDownwardAngle, vertebraPos.z + (sternumZ - vertebraPos.z) * 0.5),
+        new THREE.Vector3(ribRadius * 0.7, vertebraPos.y + ribVerticalOffset - ribDownwardAngle * 0.8, vertebraPos.z + (sternumZ - vertebraPos.z) * 0.8),
+        new THREE.Vector3(0, vertebraPos.y + ribVerticalOffset - ribDownwardAngle * 0.5, sternumZ) // Front (sternum position)
       ]);
       
       // Make upper ribs thinner

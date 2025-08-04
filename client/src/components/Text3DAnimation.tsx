@@ -1166,11 +1166,11 @@ export default function Text3DAnimation({
 
     // Add scapulae (shoulder blades)
     const scapulaGeometry = new THREE.Shape();
-    // Create a triangular wing-shaped scapula
+    // Create a larger triangular wing-shaped scapula
     scapulaGeometry.moveTo(0, 0);
-    scapulaGeometry.lineTo(0.15, -0.25);
-    scapulaGeometry.lineTo(0.05, -0.3);
-    scapulaGeometry.lineTo(-0.05, -0.2);
+    scapulaGeometry.lineTo(0.2, -0.35);
+    scapulaGeometry.lineTo(0.08, -0.4);
+    scapulaGeometry.lineTo(-0.08, -0.25);
     scapulaGeometry.closePath();
     
     const scapulaExtrudeSettings = {
@@ -1189,8 +1189,8 @@ export default function Text3DAnimation({
     
     // Apply scapular winging
     const wingingRad = (shoulderPathology.scapularWinging * Math.PI) / 180;
-    leftScapula.rotation.set(0, -0.3 - wingingRad, 0); // Add winging rotation
-    leftScapula.position.z = -0.12 - (wingingRad * 0.1); // Move backward with winging
+    leftScapula.rotation.set(0, -0.3 - wingingRad * 2, 0); // Add winging rotation - doubled effect
+    leftScapula.position.z = -0.12 - (wingingRad * 0.3); // Move backward with winging - increased effect
     
     leftScapula.name = 'leftScapula';
     skeleton.add(leftScapula);
@@ -1200,9 +1200,9 @@ export default function Text3DAnimation({
     const rightScapula = new THREE.Mesh(scapula3D, boneMaterial);
     rightScapula.position.set(0.22, torsoHeight + 0.9 - 0.25, -0.12); // Behind and to the side of the torso
     
-    // Apply scapular winging
-    rightScapula.rotation.set(0, 0.3 + wingingRad, 0); // Add winging rotation
-    rightScapula.position.z = -0.12 - (wingingRad * 0.1); // Move backward with winging
+    // Apply scapular winging  
+    rightScapula.rotation.set(0, 0.3 + wingingRad * 2, 0); // Add winging rotation - doubled effect
+    rightScapula.position.z = -0.12 - (wingingRad * 0.3); // Move backward with winging - increased effect
     
     rightScapula.scale.x = -1; // Mirror for right side
     rightScapula.name = 'rightScapula';

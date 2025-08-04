@@ -316,7 +316,7 @@ export default function Text3DAnimation({
     
     // Create individual vertebrae with anatomical curves
     const vertebraHeight = 0.04;
-    const spineStartY = 0.9;
+    const spineStartY = torsoHeight + 0.9 - 0.1; // Start spine at top of torso, just below head
     
     // Define vertebrae regions
     const cervicalCount = 7;
@@ -509,7 +509,7 @@ export default function Text3DAnimation({
     }
     
     // Create sternum (breastbone) - positioned to follow thoracic curve
-    const sternumGeometry = new THREE.BoxGeometry(0.06, 0.4, 0.03);
+    const sternumGeometry = new THREE.BoxGeometry(0.06, 0.35, 0.03);
     const sternum = new THREE.Mesh(sternumGeometry, boneMaterial);
     
     // Calculate sternum position based on actual thoracic vertebrae positions
@@ -570,7 +570,7 @@ export default function Text3DAnimation({
       
       // Ribs should angle downward from back to front
       // Adjust rib positioning to be anatomically correct
-      const ribVerticalOffset = -0.02 - (i * 0.003); // Minimal offset to keep ribs at correct height
+      const ribVerticalOffset = 0; // No offset needed now that spine is correctly positioned
       const ribDownwardAngle = 0.015 + (i * 0.002); // Gentle downward slope
       
       const ribCurve = new THREE.CatmullRomCurve3([

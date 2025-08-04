@@ -132,6 +132,8 @@ export default function Text3DAnimation({
   const [zoom, setZoom] = useState(1);
   const [isPinching, setIsPinching] = useState(false);
   const [lastPinchDistance, setLastPinchDistance] = useState(0);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
   const bonesRef = useRef<{ [key: string]: THREE.Mesh }>({});
 
   // Initialize Three.js scene
@@ -179,9 +181,14 @@ export default function Text3DAnimation({
         skeletonRef.current.rotation.x = rotation.x;
       }
       
-      // Apply zoom
+      // Apply zoom and pan
       const zoomValue = Math.max(0.5, Math.min(3, zoom)); // Clamp between 0.5 and 3
       camera.position.z = 3 / zoomValue;
+      camera.position.x = pan.x;
+      camera.position.y = 1 + pan.y;
+      
+      // Make camera look at the pan position
+      camera.lookAt(pan.x, 1 + pan.y, 0);
       
       renderer.render(scene, camera);
     };
@@ -196,7 +203,7 @@ export default function Text3DAnimation({
       }
       renderer.dispose();
     };
-  }, [rotation, zoom, limbScales, hipPathology, kneePathology, shoulderPathology, posturalDeviations]);
+  }, [rotation, zoom, pan, limbScales, hipPathology, kneePathology, shoulderPathology, posturalDeviations]);
 
   // Generate animation from clinical text
   useEffect(() => {
@@ -4068,30 +4075,47 @@ export default function Text3DAnimation({
 
   // Mouse event handlers for rotation
   const handleMouseDown = (e: React.MouseEvent) => {
-    setIsDragging(true);
+    if (e.shiftKey || e.button === 2) { // Shift key or right-click for panning
+      setIsPanning(true);
+      e.preventDefault();
+    } else {
+      setIsDragging(true);
+    }
     setDragStart({ x: e.clientX, y: e.clientY });
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging) return;
+    if (!isDragging && !isPanning) return;
     
     const deltaX = e.clientX - dragStart.x;
     const deltaY = e.clientY - dragStart.y;
     
-    setRotation({
-      x: rotation.x + deltaY * 0.01,
-      y: rotation.y + deltaX * 0.01
-    });
+    if (isPanning) {
+      // Pan movement - scale based on zoom level
+      const panScale = 0.005 / zoom;
+      setPan({
+        x: pan.x - deltaX * panScale,
+        y: pan.y + deltaY * panScale
+      });
+    } else {
+      // Rotation movement
+      setRotation({
+        x: rotation.x + deltaY * 0.01,
+        y: rotation.y + deltaX * 0.01
+      });
+    }
     
     setDragStart({ x: e.clientX, y: e.clientY });
   };
 
   const handleMouseUp = () => {
     setIsDragging(false);
+    setIsPanning(false);
   };
 
   const handleMouseLeave = () => {
     setIsDragging(false);
+    setIsPanning(false);
   };
 
   // Handle mouse wheel zoom
@@ -4151,11 +4175,22 @@ export default function Text3DAnimation({
     setZoom(1);
   };
 
+  const handleResetView = () => {
+    setRotation({ x: 0, y: 0 });
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  };
+
+  // Prevent context menu on right-click
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+  };
+
   return (
     <div className="relative">
       <div 
         ref={mountRef} 
-        className="w-full h-[300px] bg-gray-50 rounded-lg overflow-hidden cursor-move"
+        className={`w-full h-[300px] bg-gray-50 rounded-lg overflow-hidden ${isPanning ? 'cursor-grab' : 'cursor-move'}`}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
@@ -4164,16 +4199,17 @@ export default function Text3DAnimation({
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
+        onContextMenu={handleContextMenu}
       />
       <div className="absolute bottom-2 left-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-xs">
         3D Clinical Animation
       </div>
       <div className="absolute top-2 right-2 flex gap-2">
         <div className="bg-black bg-opacity-50 text-white px-2 py-1 rounded text-xs">
-          Click and drag to rotate • Scroll to zoom
+          Drag to rotate • Shift+drag or right-click to pan • Scroll to zoom
         </div>
         <button
-          onClick={() => setRotation({ x: 0, y: 0 })}
+          onClick={handleResetView}
           className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs transition-colors"
         >
           Reset View
@@ -4212,6 +4248,13 @@ export default function Text3DAnimation({
       {animationData.length > 0 && isPlaying && (
         <div className="absolute bottom-2 right-2 bg-blue-600 text-white px-2 py-1 rounded text-xs animate-pulse">
           Playing...
+        </div>
+      )}
+      
+      {/* Pan mode indicator */}
+      {(isPanning || isDragging) && (
+        <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none ${isPanning ? 'bg-green-600' : 'bg-blue-600'} bg-opacity-80 text-white px-3 py-1 rounded text-xs`}>
+          {isPanning ? 'Panning' : 'Rotating'}
         </div>
       )}
     </div>

@@ -318,7 +318,7 @@ export default function Text3DAnimation({
     
     // Create individual vertebrae with anatomical curves
     const vertebraHeight = 0.04;
-    const spineStartY = torsoHeight + 0.9 - 0.15; // Start spine lower so it connects from head to pelvis
+    const spineStartY = torsoHeight + 0.9 - 0.3; // Lower entire spine including cervical
     
     // Define vertebrae regions
     const cervicalCount = 7;
@@ -691,7 +691,7 @@ export default function Text3DAnimation({
     
     // Head - position based on scaled torso
     const headMesh = createSkull();
-    headMesh.position.y = torsoHeight + 0.9 + 0.25; // Positioned head appropriately above spine
+    headMesh.position.y = torsoHeight + 0.9 + 0.4; // Raised head position
     headMesh.name = 'head';
     skeleton.add(headMesh);
     bonesRef.current['head'] = headMesh;

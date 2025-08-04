@@ -1228,29 +1228,76 @@ export default function Text3DAnimation({
     const thighLength = 0.8 * limbScales.thigh * limbScales.overall;
     const shinLength = 0.8 * limbScales.shin * limbScales.overall;
     
-    // Create anatomically accurate tibia
+    // Create anatomically accurate tibia and fibula
     const createTibia = (length: number): THREE.Group => {
+      const lowerLegGroup = new THREE.Group();
+      
+      // TIBIA (larger, medial bone)
       const tibiaGroup = new THREE.Group();
       
-      // Shaft with triangular cross-section
-      const shaftGeometry = new THREE.CylinderGeometry(0.035, 0.045, length * 0.9, 8);
-      const shaft = new THREE.Mesh(shaftGeometry, boneMaterial);
-      shaft.position.y = -length * 0.05;
-      tibiaGroup.add(shaft);
+      // Tibial shaft with triangular cross-section
+      const tibiaShaftGeometry = new THREE.CylinderGeometry(0.035, 0.04, length * 0.85, 8);
+      const tibiaShaft = new THREE.Mesh(tibiaShaftGeometry, boneMaterial);
+      tibiaShaft.position.set(0.01, -length * 0.075, 0);
+      tibiaGroup.add(tibiaShaft);
       
-      // Tibial plateau (top)
+      // Tibial plateau (top) - wider for articulation with femur
       const plateauGeometry = new THREE.BoxGeometry(0.08, 0.02, 0.07);
       const plateau = new THREE.Mesh(plateauGeometry, boneMaterial);
       plateau.position.y = length * 0.45;
       tibiaGroup.add(plateau);
       
-      // Medial malleolus (ankle bone)
-      const malleolus = new THREE.SphereGeometry(0.025, 8, 6);
-      const medialMalleolus = new THREE.Mesh(malleolus, boneMaterial);
-      medialMalleolus.position.set(0.02, -length * 0.45, 0);
-      tibiaGroup.add(medialMalleolus);
+      // Medial malleolus (inner ankle bone)
+      const medialMalleolus = new THREE.SphereGeometry(0.025, 8, 6);
+      const medialMalleolusM = new THREE.Mesh(medialMalleolus, boneMaterial);
+      medialMalleolusM.position.set(0.02, -length * 0.45, 0);
+      tibiaGroup.add(medialMalleolusM);
       
-      return tibiaGroup;
+      // Tibial tuberosity (bump below knee)
+      const tuberosityGeometry = new THREE.BoxGeometry(0.025, 0.03, 0.02);
+      const tuberosity = new THREE.Mesh(tuberosityGeometry, boneMaterial);
+      tuberosity.position.set(0.01, length * 0.35, 0.03);
+      tibiaGroup.add(tuberosity);
+      
+      lowerLegGroup.add(tibiaGroup);
+      
+      // FIBULA (thinner, lateral bone)
+      const fibulaGroup = new THREE.Group();
+      
+      // Fibular shaft - thinner and more lateral
+      const fibulaShaftGeometry = new THREE.CylinderGeometry(0.015, 0.015, length * 0.9, 6);
+      const fibulaShaft = new THREE.Mesh(fibulaShaftGeometry, boneMaterial);
+      fibulaShaft.position.set(-0.03, -length * 0.05, -0.01);
+      fibulaGroup.add(fibulaShaft);
+      
+      // Fibular head (top)
+      const fibulaHeadGeometry = new THREE.SphereGeometry(0.02, 8, 6);
+      const fibulaHead = new THREE.Mesh(fibulaHeadGeometry, boneMaterial);
+      fibulaHead.position.set(-0.03, length * 0.4, -0.01);
+      fibulaGroup.add(fibulaHead);
+      
+      // Lateral malleolus (outer ankle bone) - more prominent than medial
+      const lateralMalleolus = new THREE.CylinderGeometry(0.02, 0.025, 0.04, 8);
+      const lateralMalleolusM = new THREE.Mesh(lateralMalleolus, boneMaterial);
+      lateralMalleolusM.position.set(-0.03, -length * 0.48, -0.01);
+      fibulaGroup.add(lateralMalleolusM);
+      
+      lowerLegGroup.add(fibulaGroup);
+      
+      // Interosseous membrane representation (connection between tibia and fibula)
+      const membraneGeometry = new THREE.PlaneGeometry(0.04, length * 0.8);
+      const membraneMaterial = new THREE.MeshPhongMaterial({ 
+        color: 0xF5DEB3, 
+        opacity: 0.3, 
+        transparent: true,
+        side: THREE.DoubleSide
+      });
+      const membrane = new THREE.Mesh(membraneGeometry, membraneMaterial);
+      membrane.position.set(-0.01, -length * 0.05, -0.005);
+      membrane.rotation.y = Math.PI / 2;
+      lowerLegGroup.add(membrane);
+      
+      return lowerLegGroup;
     };
     
     // Left leg group for hierarchical transformation

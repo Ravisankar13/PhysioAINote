@@ -761,122 +761,120 @@ export default function Text3DAnimation({
     skeleton.add(headMesh);
     bonesRef.current['head'] = headMesh;
     
-    // Create anatomically accurate pelvis with proper 3D orientation
+    // Create anatomically accurate pelvis with two innominate bones
     const pelvisGroup = new THREE.Group();
-    pelvisGroup.position.set(0, 0.8, 0);  // Raised slightly for better hip joint alignment
-    pelvisGroup.rotation.x = -Math.PI / 12; // 15 degree anterior pelvic tilt
+    pelvisGroup.position.set(0, 0.7, 0);  // Lowered from 0.9 to 0.7
     pelvisGroup.name = 'pelvisGroup';
     
-    // Function to create anatomically correct innominate bone
+    // Function to create one innominate bone as a unified butterfly-shaped structure
     const createInnominateBone = (side: 'left' | 'right') => {
       const innominateGroup = new THREE.Group();
       const sideMultiplier = side === 'left' ? -1 : 1;
       
-      // Create iliac wing using 3D geometry for proper depth
-      const iliumGeometry = new THREE.BoxGeometry(0.35, 0.5, 0.25); // Much larger iliac wing
-      const ilium = new THREE.Mesh(iliumGeometry, boneMaterial);
+      // Create the main innominate bone as one continuous butterfly-shaped structure
+      const innominateShape = new THREE.Shape();
       
-      // Position and shape the ilium with proper curves
-      ilium.position.set(0.15 * sideMultiplier, 0.15, -0.05);
-      ilium.rotation.y = -0.3 * sideMultiplier; // Curve backward
-      ilium.rotation.z = -0.15 * sideMultiplier; // Flare outward
-      ilium.scale.set(1, 1.2, 0.8); // Elongate vertically
+      // Start at the acetabulum region (hip socket location)
+      innominateShape.moveTo(0.1 * sideMultiplier, 0);
       
-      // Apply morphing to create curved iliac crest
-      const iliumVerts = ilium.geometry.attributes.position;
-      for (let i = 0; i < iliumVerts.count; i++) {
-        const y = iliumVerts.getY(i);
-        const x = iliumVerts.getX(i);
-        const z = iliumVerts.getZ(i);
-        
-        // Create curved iliac crest at top
-        if (y > 0.2) {
-          const curveFactor = (y - 0.2) * 2;
-          iliumVerts.setX(i, x + curveFactor * 0.1 * sideMultiplier);
-          iliumVerts.setZ(i, z - curveFactor * 0.05);
-        }
-        
-        // Create concave inner surface
-        if (x * sideMultiplier < 0) {
-          iliumVerts.setZ(i, z + Math.abs(x) * 0.3);
-        }
-      }
-      iliumVerts.needsUpdate = true;
-      ilium.geometry.computeVertexNormals();
+      // Trace up to create the large iliac wing (upper butterfly wing)
+      innominateShape.bezierCurveTo(
+        0.13 * sideMultiplier, 0.03,
+        0.2 * sideMultiplier, 0.1,
+        0.3 * sideMultiplier, 0.2  // Smaller iliac wing
+      );
       
-      innominateGroup.add(ilium);
+      // Iliac crest (top of the wing) - curved like butterfly wing edge
+      innominateShape.bezierCurveTo(
+        0.3 * sideMultiplier, 0.23,
+        0.23 * sideMultiplier, 0.26,
+        0.13 * sideMultiplier, 0.26
+      );
       
-      // Create acetabulum (hip socket) as deep cup
-      const acetabulumGroup = new THREE.Group();
-      acetabulumGroup.position.set(0.12 * sideMultiplier, -0.1, 0);
+      // Inner edge of iliac wing toward sacrum
+      innominateShape.bezierCurveTo(
+        0.07 * sideMultiplier, 0.23,
+        0.03 * sideMultiplier, 0.17,
+        0.03 * sideMultiplier, 0.1
+      );
       
-      // Outer rim of acetabulum
-      const rimGeometry = new THREE.TorusGeometry(0.06, 0.02, 8, 16, Math.PI * 1.5);
-      const rim = new THREE.Mesh(rimGeometry, boneMaterial);
-      rim.rotation.y = Math.PI / 2 + (Math.PI / 4 * sideMultiplier);
-      rim.rotation.z = -0.1 * sideMultiplier;
-      acetabulumGroup.add(rim);
+      // Curve down to sacroiliac joint area
+      innominateShape.lineTo(0.03 * sideMultiplier, 0);
       
-      // Deep socket interior
-      const socketGeometry = new THREE.SphereGeometry(0.05, 16, 16, 0, Math.PI);
+      // Move down posterior side (ischium region)
+      innominateShape.bezierCurveTo(
+        0.05 * sideMultiplier, -0.03,
+        0.08 * sideMultiplier, -0.07,
+        0.1 * sideMultiplier, -0.1  // Ischial tuberosity
+      );
+      
+      // Curve forward under obturator foramen
+      innominateShape.bezierCurveTo(
+        0.08 * sideMultiplier, -0.11,
+        0.05 * sideMultiplier, -0.1,
+        0.03 * sideMultiplier, -0.09
+      );
+      
+      // Move forward to pubis
+      innominateShape.bezierCurveTo(
+        0.01 * sideMultiplier, -0.07,
+        0, -0.05,
+        0, -0.02  // Meet at pubic symphysis
+      );
+      
+      // Superior pubic ramus back to acetabulum
+      innominateShape.bezierCurveTo(
+        0.01 * sideMultiplier, 0,
+        0.05 * sideMultiplier, 0.01,
+        0.1 * sideMultiplier, 0  // Back to start
+      );
+      
+      // Create obturator foramen as a hole in the shape
+      const foramenPath = new THREE.Path();
+      // Create oval hole for obturator foramen
+      const fx = 0.05 * sideMultiplier;
+      const fy = -0.05;
+      foramenPath.moveTo(fx + 0.02 * sideMultiplier, fy);
+      foramenPath.ellipse(
+        0, 0,  // Center offset
+        0.02,  // X radius (smaller)
+        0.03,  // Y radius (smaller)
+        0,     // Start angle
+        Math.PI * 2,  // End angle
+        false  // Clockwise
+      );
+      innominateShape.holes.push(foramenPath);
+      
+      // Extrude the unified shape
+      const innominateGeometry = new THREE.ExtrudeGeometry(innominateShape, {
+        depth: 0.1,
+        bevelEnabled: true,
+        bevelThickness: 0.02,
+        bevelSize: 0.02,
+        bevelSegments: 3
+      });
+      
+      // Create the mesh - no rotation needed, shape is already vertical
+      const innominate = new THREE.Mesh(innominateGeometry, boneMaterial);
+      innominate.position.set(0, 0, 0);
+      innominateGroup.add(innominate);
+      
+      // Add acetabulum (hip socket) as a separate spherical element
+      const coverageAngle = (hipPathology.acetabularCoverage / 100) * Math.PI;
+      const socketGeometry = new THREE.SphereGeometry(0.05, 20, 20, 0, coverageAngle);  // Smaller socket
       const socket = new THREE.Mesh(socketGeometry, boneMaterial);
-      socket.rotation.y = Math.PI / 2 * sideMultiplier;
-      socket.scale.set(1, 1, 0.8); // Slightly flatten
-      acetabulumGroup.add(socket);
+      socket.rotation.z = (Math.PI / 2) * sideMultiplier;
+      socket.position.set(0.1 * sideMultiplier, -0.03, 0);  // Adjusted position
+      socket.name = `${side}HipSocket`;
+      innominateGroup.add(socket);
       
-      innominateGroup.add(acetabulumGroup);
-      
-      // Create ischium (lower posterior part)
-      const ischiumGeometry = new THREE.BoxGeometry(0.1, 0.2, 0.12);
-      const ischium = new THREE.Mesh(ischiumGeometry, boneMaterial);
-      ischium.position.set(0.08 * sideMultiplier, -0.25, -0.08);
-      ischium.rotation.z = 0.2 * sideMultiplier;
-      
-      // Create ischial tuberosity (sit bone)
-      const tuberosityGeometry = new THREE.SphereGeometry(0.04, 8, 8);
-      const tuberosity = new THREE.Mesh(tuberosityGeometry, boneMaterial);
-      tuberosity.position.set(0, -0.08, -0.02);
-      tuberosity.scale.set(1.2, 1, 1.5);
-      ischium.add(tuberosity);
-      
-      innominateGroup.add(ischium);
-      
-      // Create pubis (front lower part)
-      const pubisGeometry = new THREE.BoxGeometry(0.08, 0.15, 0.06);
-      const pubis = new THREE.Mesh(pubisGeometry, boneMaterial);
-      pubis.position.set(0.03 * sideMultiplier, -0.2, 0.1);
-      pubis.rotation.z = -0.3 * sideMultiplier;
-      innominateGroup.add(pubis);
-      
-      // Create obturator foramen (large hole)
-      const foramenOuter = new THREE.TorusGeometry(0.05, 0.015, 8, 16);
-      const foramenMesh = new THREE.Mesh(foramenOuter, boneMaterial);
-      foramenMesh.position.set(0.06 * sideMultiplier, -0.18, 0.02);
-      foramenMesh.rotation.x = Math.PI / 2;
-      foramenMesh.scale.set(1.2, 1, 0.8);
-      innominateGroup.add(foramenMesh);
-      
-      // Add anatomical landmarks
-      // ASIS (Anterior Superior Iliac Spine)
-      const asisGeometry = new THREE.ConeGeometry(0.02, 0.04, 8);
-      const asis = new THREE.Mesh(asisGeometry, boneMaterial);
-      asis.position.set(0.25 * sideMultiplier, 0.35, 0.1);
-      asis.rotation.z = -Math.PI / 3 * sideMultiplier;
-      innominateGroup.add(asis);
-      
-      // PSIS (Posterior Superior Iliac Spine)
-      const psis = new THREE.Mesh(asisGeometry, boneMaterial);
-      psis.position.set(0.05 * sideMultiplier, 0.3, -0.2);
-      psis.rotation.x = Math.PI / 2;
-      innominateGroup.add(psis);
-      
-      // Greater sciatic notch
-      const notchGeometry = new THREE.TorusGeometry(0.06, 0.01, 8, 8, Math.PI);
-      const notch = new THREE.Mesh(notchGeometry, boneMaterial);
-      notch.position.set(0.08 * sideMultiplier, -0.05, -0.12);
-      notch.rotation.z = Math.PI / 2 * sideMultiplier;
-      notch.rotation.x = -Math.PI / 4;
-      innominateGroup.add(notch);
+      // Add ischial spine detail
+      const spineGeometry = new THREE.ConeGeometry(0.02, 0.04, 8);
+      const ischialSpine = new THREE.Mesh(spineGeometry, boneMaterial);
+      ischialSpine.rotation.z = -Math.PI / 4 * sideMultiplier;
+      ischialSpine.rotation.x = Math.PI / 2; // Point backward
+      ischialSpine.position.set(0.12 * sideMultiplier, -0.05, -0.05);
+      innominateGroup.add(ischialSpine);
       
       innominateGroup.name = `${side}Innominate`;
       return innominateGroup;
@@ -889,67 +887,33 @@ export default function Text3DAnimation({
     const rightInnominate = createInnominateBone('right');
     pelvisGroup.add(rightInnominate);
     
-    // Create pubic symphysis (cartilage connection)
-    const symphysisGeometry = new THREE.BoxGeometry(0.03, 0.06, 0.04);
-    const symphysisMaterial = new THREE.MeshPhongMaterial({ 
-      color: 0xCCCCCC,
-      opacity: 0.8,
-      transparent: true
+    // Add pubic symphysis (front connection between innominates)
+    const pubicGeometry = new THREE.CylinderGeometry(0.02, 0.02, 0.08, 8);
+    const pubicBone = new THREE.Mesh(pubicGeometry, boneMaterial);
+    pubicBone.rotation.z = Math.PI / 2;
+    pubicBone.position.set(0, -0.15, 0.08);
+    pelvisGroup.add(pubicBone);
+    
+    // Add sacrum (connects to innominates at back)
+    const sacrumShape = new THREE.Shape();
+    sacrumShape.moveTo(-0.05, 0);
+    sacrumShape.lineTo(0.05, 0);
+    sacrumShape.lineTo(0.03, -0.15);
+    sacrumShape.lineTo(-0.03, -0.15);
+    sacrumShape.closePath();
+    
+    const sacrumGeometry = new THREE.ExtrudeGeometry(sacrumShape, {
+      depth: 0.08,
+      bevelEnabled: true,
+      bevelThickness: 0.01,
+      bevelSize: 0.01,
+      bevelSegments: 2
     });
-    const pubicSymphysis = new THREE.Mesh(symphysisGeometry, symphysisMaterial);
-    pubicSymphysis.position.set(0, -0.22, 0.12);
-    pelvisGroup.add(pubicSymphysis);
     
-    // Create anatomically accurate sacrum
-    const sacrumGroup = new THREE.Group();
-    sacrumGroup.position.set(0, 0.05, -0.15);
-    sacrumGroup.rotation.x = 0.3; // Sacral angle
-    
-    // Main sacral body (5 fused vertebrae)
-    const sacrumGeometry = new THREE.BoxGeometry(0.1, 0.25, 0.08);
-    const sacrumMesh = new THREE.Mesh(sacrumGeometry, boneMaterial);
-    
-    // Taper the sacrum (wider at top, narrower at bottom)
-    const sacrumVerts = sacrumMesh.geometry.attributes.position;
-    for (let i = 0; i < sacrumVerts.count; i++) {
-      const y = sacrumVerts.getY(i);
-      const x = sacrumVerts.getX(i);
-      
-      // Create wedge shape
-      if (y < -0.1) {
-        const taperFactor = (y + 0.1) / -0.15;
-        sacrumVerts.setX(i, x * (1 - taperFactor * 0.5));
-      }
-      
-      // Create sacral curvature
-      const z = sacrumVerts.getZ(i);
-      sacrumVerts.setZ(i, z - Math.abs(y) * 0.2);
-    }
-    sacrumVerts.needsUpdate = true;
-    sacrumMesh.geometry.computeVertexNormals();
-    
-    sacrumGroup.add(sacrumMesh);
-    
-    // Add sacral foramina (holes)
-    for (let i = 0; i < 4; i++) {
-      const foramenGeometry = new THREE.SphereGeometry(0.008, 6, 6);
-      const leftForamen = new THREE.Mesh(foramenGeometry, boneMaterial);
-      leftForamen.position.set(-0.025, 0.08 - i * 0.05, 0.04);
-      sacrumGroup.add(leftForamen);
-      
-      const rightForamen = new THREE.Mesh(foramenGeometry, boneMaterial);
-      rightForamen.position.set(0.025, 0.08 - i * 0.05, 0.04);
-      sacrumGroup.add(rightForamen);
-    }
-    
-    // Coccyx (tailbone)
-    const coccyxGeometry = new THREE.ConeGeometry(0.02, 0.06, 6);
-    const coccyx = new THREE.Mesh(coccyxGeometry, boneMaterial);
-    coccyx.position.set(0, -0.15, -0.02);
-    coccyx.rotation.x = -0.3;
-    sacrumGroup.add(coccyx);
-    
-    pelvisGroup.add(sacrumGroup);
+    const sacrum = new THREE.Mesh(sacrumGeometry, boneMaterial);
+    sacrum.rotation.x = -Math.PI / 2;
+    sacrum.position.set(0, 0, -0.08);
+    pelvisGroup.add(sacrum);
     
     skeleton.add(pelvisGroup);
     
@@ -962,7 +926,7 @@ export default function Text3DAnimation({
       new THREE.BoxGeometry(0.01, 0.01, 0.01),
       new THREE.MeshBasicMaterial({ visible: false })
     );
-    pelvisReference.position.set(0, 0.8, 0);  // Match pelvisGroup position
+    pelvisReference.position.set(0, 0.7, 0);  // Match pelvisGroup position
     pelvisReference.name = 'pelvis';
     skeleton.add(pelvisReference);
     bonesRef.current['pelvis'] = pelvisReference;
@@ -1338,7 +1302,7 @@ export default function Text3DAnimation({
     
     // Left leg group for hierarchical transformation
     const leftLegGroup = new THREE.Group();
-    leftLegGroup.position.set(-0.12, 0.7, 0); // Position at hip joint aligned with new acetabulum
+    leftLegGroup.position.set(-0.1, 0.6, 0); // Position at hip joint (below pelvis at 0.7) - closer together
     leftLegGroup.name = 'leftLegGroup';
     
     // Create anatomically accurate left femur
@@ -1452,7 +1416,7 @@ export default function Text3DAnimation({
 
     // Right leg group for hierarchical transformation
     const rightLegGroup = new THREE.Group();
-    rightLegGroup.position.set(0.12, 0.7, 0); // Position at hip joint aligned with new acetabulum
+    rightLegGroup.position.set(0.1, 0.6, 0); // Position at hip joint (below pelvis at 0.7) - closer together
     rightLegGroup.name = 'rightLegGroup';
     
     // Right thigh attached to leg group
@@ -1579,25 +1543,25 @@ export default function Text3DAnimation({
     const femoralHeadGeometry = new THREE.SphereGeometry(0.05, 16, 16);
     
     const leftHip = new THREE.Mesh(femoralHeadGeometry, jointMaterial);
-    leftHip.position.set(-0.12, 0.7, 0); // Aligned with new acetabulum position
+    leftHip.position.set(-0.15, 0.85, 0); // Positioned to insert into hip socket
     leftHip.name = 'leftHip';
     skeleton.add(leftHip);
 
     const rightHip = new THREE.Mesh(femoralHeadGeometry, jointMaterial);
-    rightHip.position.set(0.12, 0.7, 0); // Aligned with new acetabulum position
+    rightHip.position.set(0.15, 0.85, 0); // Positioned to insert into hip socket
     rightHip.name = 'rightHip';
     skeleton.add(rightHip);
 
     // Knee joints - positioned between thigh and shin with varus/valgus adjustment
     const leftKnee = new THREE.Mesh(jointGeometry, jointMaterial);
     const leftKneeOffset = Math.sin(-varusValgusRad) * shinLength * 0.5;
-    leftKnee.position.set(-0.12 + leftKneeOffset, 0.7 - thighLength, 0); 
+    leftKnee.position.set(-0.15 + leftKneeOffset, 0.85 - thighLength, 0); 
     leftKnee.name = 'leftKnee';
     skeleton.add(leftKnee);
 
     const rightKnee = new THREE.Mesh(jointGeometry, jointMaterial);
     const rightKneeOffset = Math.sin(varusValgusRad) * shinLength * 0.5;
-    rightKnee.position.set(0.12 + rightKneeOffset, 0.7 - thighLength, 0);
+    rightKnee.position.set(0.15 + rightKneeOffset, 0.85 - thighLength, 0);
     rightKnee.name = 'rightKnee';
     skeleton.add(rightKnee);
     
@@ -1606,25 +1570,25 @@ export default function Text3DAnimation({
     const patellaOffset = (kneePathology.patellaHeight - 1.0) * 0.1; // Convert ratio to offset
     
     const leftPatella = new THREE.Mesh(patellaGeometry, boneMaterial);
-    leftPatella.position.set(-0.12, 0.7 - thighLength + patellaOffset, 0.05); // Slightly forward
+    leftPatella.position.set(-0.15, 0.85 - thighLength + patellaOffset, 0.05); // Slightly forward
     leftPatella.scale.set(1.2, 1, 0.8); // Flattened shape
     leftPatella.name = 'leftPatella';
     skeleton.add(leftPatella);
     
     const rightPatella = new THREE.Mesh(patellaGeometry, boneMaterial);
-    rightPatella.position.set(0.12, 0.7 - thighLength + patellaOffset, 0.05); // Slightly forward
+    rightPatella.position.set(0.15, 0.85 - thighLength + patellaOffset, 0.05); // Slightly forward
     rightPatella.scale.set(1.2, 1, 0.8); // Flattened shape
     rightPatella.name = 'rightPatella';
     skeleton.add(rightPatella);
 
     // Ankle joints - positioned at the end of shin
     const leftAnkle = new THREE.Mesh(jointGeometry, jointMaterial);
-    leftAnkle.position.set(-0.12, 0.7 - thighLength - shinLength, 0); // Adjusted for new hip position
+    leftAnkle.position.set(-0.15, 0.85 - thighLength - shinLength, 0); // Adjusted for raised hip
     leftAnkle.name = 'leftAnkle';
     skeleton.add(leftAnkle);
 
     const rightAnkle = new THREE.Mesh(jointGeometry, jointMaterial);
-    rightAnkle.position.set(0.12, 0.7 - thighLength - shinLength, 0); // Adjusted for new hip position
+    rightAnkle.position.set(0.15, 0.85 - thighLength - shinLength, 0); // Adjusted for raised hip
     rightAnkle.name = 'rightAnkle';
     skeleton.add(rightAnkle);
 

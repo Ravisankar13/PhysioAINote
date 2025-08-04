@@ -353,6 +353,104 @@ export const insertContinuousRecordingSessionSchema = createInsertSchema(continu
 export type InsertContinuousRecordingSession = z.infer<typeof insertContinuousRecordingSessionSchema>;
 export type ContinuousRecordingSession = typeof continuousRecordingSessions.$inferSelect;
 
+// Individual Virtual Patient 3D Model Configurations
+export const virtualPatientConfigs = pgTable("virtual_patient_configs", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  soapVirtualPatientId: integer("soap_virtual_patient_id"),
+  
+  // Patient Info
+  patient_name: text("patient_name").notNull(),
+  age: integer("age"),
+  gender: text("gender"),
+  chiefComplaint: text("chief_complaint"),
+  
+  // 3D Model Configuration
+  modelConfig: json("model_config").$type<{
+    // Limb Scaling
+    limbScales: {
+      overall: number;
+      upperArm: number;
+      forearm: number;
+      thigh: number;
+      shin: number;
+    };
+    
+    // Shoulder Pathologies
+    shoulderPathology: {
+      scapularWinging: number; // 0-20 degrees
+      acSeparation: number; // 0-3 grades
+      ghSubluxation: number; // 0-50%
+    };
+    
+    // Spinal Pathologies
+    spinalPathology: {
+      scoliosis: number; // 0-50 degrees
+      kyphosis: number; // 20-70 degrees
+      lordosis: number; // 20-70 degrees
+    };
+    
+    // Lower Limb Pathologies
+    lowerLimbPathology: {
+      genuVarum: number; // -30 to 30 degrees
+      genuValgum: number; // -30 to 30 degrees
+      patellaHeight: number; // 0.8-1.2 ratio
+    };
+  }>().notNull().default({
+    limbScales: {
+      overall: 1,
+      upperArm: 1,
+      forearm: 1,
+      thigh: 1,
+      shin: 1
+    },
+    shoulderPathology: {
+      scapularWinging: 0,
+      acSeparation: 0,
+      ghSubluxation: 0
+    },
+    spinalPathology: {
+      scoliosis: 0,
+      kyphosis: 45,
+      lordosis: 45
+    },
+    lowerLimbPathology: {
+      genuVarum: 0,
+      genuValgum: 0,
+      patellaHeight: 1
+    }
+  }),
+  
+  // Movement Data
+  capturedMovements: json("captured_movements").$type<Array<{
+    timestamp: string;
+    movementType: string;
+    poseData: any;
+    qualityScore: number;
+    notes: string;
+  }>>().default([]),
+  
+  // Clinical Notes
+  clinicalObservations: text("clinical_observations"),
+  treatmentPlan: text("treatment_plan"),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  lastModified: timestamp("last_modified").defaultNow().notNull(),
+});
+
+export const insertVirtualPatientConfigSchema = createInsertSchema(virtualPatientConfigs).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  lastModified: true,
+});
+
+export type InsertVirtualPatientConfig = z.infer<typeof insertVirtualPatientConfigSchema>;
+export type VirtualPatientConfig = typeof virtualPatientConfigs.$inferSelect;
+
 // Virtual Patients from SOAP Notes Schema
 export const soapVirtualPatients = pgTable("soap_virtual_patients", {
   id: serial("id").primaryKey(),

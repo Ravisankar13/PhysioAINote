@@ -63,6 +63,9 @@ import {
   continuousRecordingSessions,
   type ContinuousRecordingSession,
   type InsertContinuousRecordingSession,
+  virtualPatientConfigs,
+  type VirtualPatientConfig,
+  type InsertVirtualPatientConfig,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, isNull, sql, ilike } from "drizzle-orm";
@@ -365,6 +368,14 @@ export interface IStorage {
   getUserSoapVirtualPatients(userId: number): Promise<SoapVirtualPatient[]>;
   createSoapVirtualPatient(virtualPatient: InsertSoapVirtualPatient): Promise<SoapVirtualPatient>;
   updateSoapVirtualPatient(id: number, data: Partial<InsertSoapVirtualPatient>): Promise<SoapVirtualPatient>;
+  
+  // Virtual Patient Config Operations
+  getVirtualPatientConfig(id: number): Promise<VirtualPatientConfig | undefined>;
+  getUserVirtualPatientConfigs(userId: number): Promise<VirtualPatientConfig[]>;
+  getVirtualPatientConfigBySoapId(soapVirtualPatientId: number): Promise<VirtualPatientConfig | undefined>;
+  createVirtualPatientConfig(config: InsertVirtualPatientConfig): Promise<VirtualPatientConfig>;
+  updateVirtualPatientConfig(id: number, data: Partial<InsertVirtualPatientConfig>): Promise<VirtualPatientConfig>;
+  deleteVirtualPatientConfig(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2320,6 +2331,111 @@ export class DatabaseStorage implements IStorage {
       return result[0];
     } catch (error) {
       console.error("Error updating SOAP virtual patient:", error);
+      throw error;
+    }
+  }
+
+  async getSoapVirtualPatient(id: number): Promise<SoapVirtualPatient | undefined> {
+    try {
+      const result = await db
+        .select()
+        .from(soapVirtualPatients)
+        .where(eq(soapVirtualPatients.id, id))
+        .limit(1);
+      
+      return result[0];
+    } catch (error) {
+      console.error("Error getting SOAP virtual patient:", error);
+      throw error;
+    }
+  }
+
+  // Virtual Patient Config Operations
+  async getVirtualPatientConfig(id: number): Promise<VirtualPatientConfig | undefined> {
+    try {
+      const result = await db
+        .select()
+        .from(virtualPatientConfigs)
+        .where(eq(virtualPatientConfigs.id, id))
+        .limit(1);
+      
+      return result[0];
+    } catch (error) {
+      console.error("Error getting virtual patient config:", error);
+      throw error;
+    }
+  }
+
+  async getUserVirtualPatientConfigs(userId: number): Promise<VirtualPatientConfig[]> {
+    try {
+      const result = await db
+        .select()
+        .from(virtualPatientConfigs)
+        .where(eq(virtualPatientConfigs.userId, userId))
+        .orderBy(desc(virtualPatientConfigs.lastModified));
+      
+      return result;
+    } catch (error) {
+      console.error("Error getting user virtual patient configs:", error);
+      throw error;
+    }
+  }
+
+  async getVirtualPatientConfigBySoapId(soapVirtualPatientId: number): Promise<VirtualPatientConfig | undefined> {
+    try {
+      const result = await db
+        .select()
+        .from(virtualPatientConfigs)
+        .where(eq(virtualPatientConfigs.soapVirtualPatientId, soapVirtualPatientId))
+        .limit(1);
+      
+      return result[0];
+    } catch (error) {
+      console.error("Error getting virtual patient config by soap ID:", error);
+      throw error;
+    }
+  }
+
+  async createVirtualPatientConfig(config: InsertVirtualPatientConfig): Promise<VirtualPatientConfig> {
+    try {
+      const result = await db
+        .insert(virtualPatientConfigs)
+        .values(config)
+        .returning();
+      
+      return result[0];
+    } catch (error) {
+      console.error("Error creating virtual patient config:", error);
+      throw error;
+    }
+  }
+
+  async updateVirtualPatientConfig(id: number, data: Partial<InsertVirtualPatientConfig>): Promise<VirtualPatientConfig> {
+    try {
+      const result = await db
+        .update(virtualPatientConfigs)
+        .set({
+          ...data,
+          updatedAt: new Date(),
+          lastModified: new Date(),
+        })
+        .where(eq(virtualPatientConfigs.id, id))
+        .returning();
+      
+      return result[0];
+    } catch (error) {
+      console.error("Error updating virtual patient config:", error);
+      throw error;
+    }
+  }
+
+  async deleteVirtualPatientConfig(id: number): Promise<void> {
+    try {
+      await db
+        .delete(virtualPatientConfigs)
+        .where(eq(virtualPatientConfigs.id, id));
+    } catch (error) {
+      console.error("Error deleting virtual patient config:", error);
       throw error;
     }
   }

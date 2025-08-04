@@ -1,21 +1,31 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Loader2, Users, Camera, Activity, Stethoscope, Dumbbell } from "lucide-react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { Loader2, Users, Camera, Activity, Stethoscope, Dumbbell, Plus, Save, Trash2, Edit, X, Check } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { toast } from "@/hooks/use-toast";
 import Text3DAnimation from "@/components/Text3DAnimation";
-import type { SoapVirtualPatient } from "@shared/schema";
+import type { SoapVirtualPatient, VirtualPatientConfig, insertVirtualPatientConfigType } from "@shared/schema";
+import { queryClient } from "@/lib/queryClient";
+import { apiRequest } from "@/lib/queryClient";
 
 export default function VirtualPatientsFixed() {
   const [selectedPatient, setSelectedPatient] = useState<SoapVirtualPatient | null>(null);
+  const [selectedConfig, setSelectedConfig] = useState<VirtualPatientConfig | null>(null);
   const [selectedTest, setSelectedTest] = useState<string>("");
   const [selectedExercise, setSelectedExercise] = useState<string>("");
   const [animationSpeed, setAnimationSpeed] = useState<number[]>([1]);
   const [repetitions, setRepetitions] = useState<number[]>([10]);
   const [selectedSide, setSelectedSide] = useState<'both' | 'left' | 'right'>('both');
+  const [isCreatingNew, setIsCreatingNew] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingName, setEditingName] = useState("");
   
   // Limb scale states
   const [upperArmScale, setUpperArmScale] = useState<number[]>([1.0]);
@@ -68,12 +78,271 @@ export default function VirtualPatientsFixed() {
   const [circumduction, setCircumduction] = useState<boolean>(false);
   const [trendelenburg, setTrendelenburg] = useState<boolean>(false);
 
-  // Get all virtual patients for user
-  const { data: virtualPatients = [], isLoading: patientsLoading, error } = useQuery({
-    queryKey: ["/api/virtual-patients"],
+  // Get all SOAP virtual patients for user
+  const { data: virtualPatients = [], isLoading: patientsLoading, error: patientsError } = useQuery({
+    queryKey: ["/api/soap-virtual-patients"],
+  });
+
+  // Get all virtual patient configs for user
+  const { data: virtualPatientConfigs = [], isLoading: configsLoading, error: configsError } = useQuery({
+    queryKey: ["/api/virtual-patient-configs"],
   });
 
   const patientsArray = Array.isArray(virtualPatients) ? virtualPatients : [];
+  const configsArray = Array.isArray(virtualPatientConfigs) ? virtualPatientConfigs : [];
+
+  // Mutations for virtual patient configs
+  const createConfigMutation = useMutation({
+    mutationFn: async (data: insertVirtualPatientConfigType) => {
+      return await apiRequest("/api/virtual-patient-configs", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/virtual-patient-configs"] });
+      toast({
+        title: "Success",
+        description: "Virtual patient configuration created successfully",
+      });
+      setIsCreatingNew(false);
+      setEditingName("");
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to create configuration",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateConfigMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: Partial<VirtualPatientConfig> }) => {
+      return await apiRequest(`/api/virtual-patient-configs/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/virtual-patient-configs"] });
+      toast({
+        title: "Success",
+        description: "Virtual patient configuration updated successfully",
+      });
+      setIsEditing(false);
+      setEditingName("");
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to update configuration",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteConfigMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return await apiRequest(`/api/virtual-patient-configs/${id}`, {
+        method: "DELETE",
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/virtual-patient-configs"] });
+      toast({
+        title: "Success",
+        description: "Virtual patient configuration deleted successfully",
+      });
+      setSelectedConfig(null);
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to delete configuration",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Helper function to collect current configuration
+  const collectCurrentConfig = () => {
+    return {
+      skeletonConfig: {
+        limbs: {
+          upperArm: upperArmScale[0],
+          forearm: forearmScale[0],
+          thigh: thighScale[0],
+          shin: shinScale[0],
+          torso: torsoScale[0],
+          overall: overallScale[0]
+        },
+        anthropometrics: {
+          height: height[0],
+          weight: weight[0],
+          bodyType: bodyType
+        },
+        posture: {
+          forwardHead: forwardHead[0],
+          thoracicKyphosis: thoracicKyphosis[0],
+          lumbarLordosis: lumbarLordosis[0],
+          pelvicTilt: pelvicTilt[0],
+          shoulderHeight: shoulderHeight[0],
+          scoliosis: scoliosis[0]
+        },
+        movementQuality: {
+          speed: movementSpeed,
+          balance: balanceQuality,
+          coordination: coordination,
+          compensations: {
+            hipHike,
+            trunkLean,
+            circumduction,
+            trendelenburg
+          }
+        }
+      },
+      pathologies: [
+        ...(hipNeckAngle[0] !== 130 || hipAnteversion[0] !== 12 || acetabularCoverage[0] !== 75 ? [{
+          type: 'hip' as const,
+          parameters: {
+            neckAngle: hipNeckAngle[0],
+            anteversion: hipAnteversion[0],
+            acetabularCoverage: acetabularCoverage[0]
+          }
+        }] : []),
+        ...(kneeVarusValgus[0] !== 3 || patellaHeight[0] !== 1.0 || tibialTorsion[0] !== 10 ? [{
+          type: 'knee' as const,
+          parameters: {
+            varusValgus: kneeVarusValgus[0],
+            patellaHeight: patellaHeight[0],
+            tibialTorsion: tibialTorsion[0]
+          }
+        }] : []),
+        ...(scapularWinging[0] !== 3 || acSeparation[0] !== 0 || ghSubluxation[0] !== 0 ? [{
+          type: 'shoulder' as const,
+          parameters: {
+            scapularWinging: scapularWinging[0],
+            acSeparation: acSeparation[0],
+            ghSubluxation: ghSubluxation[0]
+          }
+        }] : []),
+        ...(subtalarStiffness[0] !== 0 || ankleInstability !== 'none' || hindfootAngle[0] !== 0 || ankleEffusion[0] !== 0 ? [{
+          type: 'ankle' as const,
+          parameters: {
+            subtalarStiffness: subtalarStiffness[0],
+            instability: ankleInstability,
+            hindfootAngle: hindfootAngle[0],
+            effusion: ankleEffusion[0]
+          }
+        }] : [])
+      ]
+    };
+  };
+
+  // Helper function to load configuration
+  const loadConfiguration = (config: VirtualPatientConfig) => {
+    const skeletonConfig = config.skeletonConfig as any || {};
+    const pathologies = config.pathologies as any[] || [];
+    
+    // Load limb scales
+    if (skeletonConfig.limbs) {
+      setUpperArmScale([skeletonConfig.limbs.upperArm || 1.0]);
+      setForearmScale([skeletonConfig.limbs.forearm || 1.0]);
+      setThighScale([skeletonConfig.limbs.thigh || 1.0]);
+      setShinScale([skeletonConfig.limbs.shin || 1.0]);
+      setTorsoScale([skeletonConfig.limbs.torso || 1.0]);
+      setOverallScale([skeletonConfig.limbs.overall || 1.0]);
+    }
+    
+    // Load anthropometrics
+    if (skeletonConfig.anthropometrics) {
+      setHeight([skeletonConfig.anthropometrics.height || 170]);
+      setWeight([skeletonConfig.anthropometrics.weight || 70]);
+      setBodyType(skeletonConfig.anthropometrics.bodyType || 'mesomorph');
+    }
+    
+    // Load posture
+    if (skeletonConfig.posture) {
+      setForwardHead([skeletonConfig.posture.forwardHead || 0]);
+      setThoracicKyphosis([skeletonConfig.posture.thoracicKyphosis || 35]);
+      setLumbarLordosis([skeletonConfig.posture.lumbarLordosis || -50]);
+      setPelvicTilt([skeletonConfig.posture.pelvicTilt || 8]);
+      setShoulderHeight([skeletonConfig.posture.shoulderHeight || 0]);
+      setScoliosis([skeletonConfig.posture.scoliosis || 0]);
+    }
+    
+    // Load movement quality
+    if (skeletonConfig.movementQuality) {
+      setMovementSpeed(skeletonConfig.movementQuality.speed || 'normal');
+      setBalanceQuality(skeletonConfig.movementQuality.balance || 'good');
+      setCoordination(skeletonConfig.movementQuality.coordination || 'smooth');
+      
+      if (skeletonConfig.movementQuality.compensations) {
+        setHipHike(skeletonConfig.movementQuality.compensations.hipHike || false);
+        setTrunkLean(skeletonConfig.movementQuality.compensations.trunkLean || false);
+        setCircumduction(skeletonConfig.movementQuality.compensations.circumduction || false);
+        setTrendelenburg(skeletonConfig.movementQuality.compensations.trendelenburg || false);
+      }
+    }
+    
+    // Load pathologies
+    pathologies.forEach((pathology: any) => {
+      if (pathology.type === 'hip' && pathology.parameters) {
+        setHipNeckAngle([pathology.parameters.neckAngle || 130]);
+        setHipAnteversion([pathology.parameters.anteversion || 12]);
+        setAcetabularCoverage([pathology.parameters.acetabularCoverage || 75]);
+      } else if (pathology.type === 'knee' && pathology.parameters) {
+        setKneeVarusValgus([pathology.parameters.varusValgus || 3]);
+        setPatellaHeight([pathology.parameters.patellaHeight || 1.0]);
+        setTibialTorsion([pathology.parameters.tibialTorsion || 10]);
+      } else if (pathology.type === 'shoulder' && pathology.parameters) {
+        setScapularWinging([pathology.parameters.scapularWinging || 3]);
+        setAcSeparation([pathology.parameters.acSeparation || 0]);
+        setGhSubluxation([pathology.parameters.ghSubluxation || 0]);
+      } else if (pathology.type === 'ankle' && pathology.parameters) {
+        setSubtalarStiffness([pathology.parameters.subtalarStiffness || 0]);
+        setAnkleInstability(pathology.parameters.instability || 'none');
+        setHindfootAngle([pathology.parameters.hindfootAngle || 0]);
+        setAnkleEffusion([pathology.parameters.effusion || 0]);
+      }
+    });
+  };
+
+  // Handle save configuration
+  const handleSaveConfig = () => {
+    if (!selectedConfig) return;
+    
+    const config = collectCurrentConfig();
+    updateConfigMutation.mutate({
+      id: selectedConfig.id,
+      data: {
+        skeletonConfig: config.skeletonConfig,
+        pathologies: config.pathologies,
+        lastModified: new Date()
+      }
+    });
+  };
+
+  // Handle create new configuration
+  const handleCreateConfig = () => {
+    if (!editingName.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter a patient name",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    const config = collectCurrentConfig();
+    createConfigMutation.mutate({
+      patientName: editingName.trim(),
+      soapVirtualPatientId: selectedPatient?.id || null,
+      skeletonConfig: config.skeletonConfig,
+      pathologies: config.pathologies
+    });
+  };
 
   // Assessment tests data
   const assessmentTests = [
@@ -108,7 +377,7 @@ export default function VirtualPatientsFixed() {
     { id: 12, name: "Calf Raise", text: "Calf raise exercise", bodyPart: "calf" }
   ];
 
-  if (patientsLoading) {
+  if (patientsLoading || configsLoading) {
     return (
       <div className="container mx-auto py-8 px-4">
         <div className="max-w-7xl mx-auto">
@@ -121,12 +390,12 @@ export default function VirtualPatientsFixed() {
     );
   }
 
-  if (error) {
+  if (patientsError || configsError) {
     return (
       <div className="container mx-auto py-8 px-4">
         <div className="max-w-7xl mx-auto">
           <div className="text-center py-12">
-            <p className="text-red-600">Error: {error.toString()}</p>
+            <p className="text-red-600">Error: {(patientsError || configsError)?.toString()}</p>
           </div>
         </div>
       </div>

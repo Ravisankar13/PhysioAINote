@@ -3190,6 +3190,26 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
 
+  // Get SOAP virtual patients for user
+  app.get("/api/soap-virtual-patients", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const virtualPatients = await storage.getUserSoapVirtualPatients(userId);
+      res.json(virtualPatients);
+    } catch (error) {
+      console.error("Error fetching SOAP virtual patients:", error);
+      if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
+      }
+    }
+  });
+
   // Create virtual patient from SOAP notes
   app.post("/api/soap-virtual-patients", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
@@ -3216,6 +3236,194 @@ Base your analysis on established postural assessment principles and correlate f
       res.json(virtualPatient);
     } catch (error) {
       console.error("Error creating virtual patient from SOAP:", error);
+      if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
+      }
+    }
+  });
+  
+  // Virtual Patient Config Routes
+  
+  // Get all virtual patient configs for user
+  app.get("/api/virtual-patient-configs", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const configs = await storage.getUserVirtualPatientConfigs(userId);
+      res.json(configs);
+    } catch (error) {
+      console.error("Error fetching virtual patient configs:", error);
+      if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
+      }
+    }
+  });
+
+  // Get single virtual patient config
+  app.get("/api/virtual-patient-configs/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const configId = parseInt(req.params.id);
+      if (isNaN(configId)) {
+        return res.status(400).json({ error: 'Invalid config ID' });
+      }
+
+      const config = await storage.getVirtualPatientConfig(configId);
+      if (!config) {
+        return res.status(404).json({ error: 'Virtual patient config not found' });
+      }
+
+      // Check ownership
+      if (config.userId !== userId) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      res.json(config);
+    } catch (error) {
+      console.error("Error fetching virtual patient config:", error);
+      if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
+      }
+    }
+  });
+
+  // Get virtual patient config by SOAP patient ID
+  app.get("/api/soap-virtual-patients/:soapId/config", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const soapId = parseInt(req.params.soapId);
+      if (isNaN(soapId)) {
+        return res.status(400).json({ error: 'Invalid SOAP patient ID' });
+      }
+
+      const config = await storage.getVirtualPatientConfigBySoapId(soapId);
+      if (!config) {
+        return res.status(404).json({ error: 'Virtual patient config not found' });
+      }
+
+      // Check ownership
+      if (config.userId !== userId) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      res.json(config);
+    } catch (error) {
+      console.error("Error fetching virtual patient config:", error);
+      if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
+      }
+    }
+  });
+
+  // Create virtual patient config
+  app.post("/api/virtual-patient-configs", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const configData = {
+        ...req.body,
+        userId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        lastModified: new Date()
+      };
+
+      const config = await storage.createVirtualPatientConfig(configData);
+      res.json(config);
+    } catch (error) {
+      console.error("Error creating virtual patient config:", error);
+      if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
+      }
+    }
+  });
+
+  // Update virtual patient config
+  app.put("/api/virtual-patient-configs/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const configId = parseInt(req.params.id);
+      if (isNaN(configId)) {
+        return res.status(400).json({ error: 'Invalid config ID' });
+      }
+
+      const config = await storage.getVirtualPatientConfig(configId);
+      if (!config) {
+        return res.status(404).json({ error: 'Virtual patient config not found' });
+      }
+
+      // Check ownership
+      if (config.userId !== userId) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      const updatedConfig = await storage.updateVirtualPatientConfig(configId, req.body);
+      res.json(updatedConfig);
+    } catch (error) {
+      console.error("Error updating virtual patient config:", error);
+      if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'An unknown error occurred' });
+      }
+    }
+  });
+
+  // Delete virtual patient config
+  app.delete("/api/virtual-patient-configs/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const configId = parseInt(req.params.id);
+      if (isNaN(configId)) {
+        return res.status(400).json({ error: 'Invalid config ID' });
+      }
+
+      const config = await storage.getVirtualPatientConfig(configId);
+      if (!config) {
+        return res.status(404).json({ error: 'Virtual patient config not found' });
+      }
+
+      // Check ownership
+      if (config.userId !== userId) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      await storage.deleteVirtualPatientConfig(configId);
+      res.json({ success: true, message: 'Virtual patient config deleted successfully' });
+    } catch (error) {
+      console.error("Error deleting virtual patient config:", error);
       if (error instanceof Error) {
         res.status(500).json({ error: error.message });
       } else {

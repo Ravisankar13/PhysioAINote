@@ -1340,7 +1340,8 @@ export default function Text3DAnimation({
     const patellaGeometry = new THREE.SphereGeometry(0.04, 12, 12);
     const leftPatella = new THREE.Mesh(patellaGeometry, boneMaterial);
     leftPatella.scale.set(1, 1.2, 0.5); // Flatten and elongate vertically
-    leftPatella.position.set(0, 0.02, 0.08); // In front of knee joint, slightly above
+    const patellaHeightOffset = (kneePathology.patellaHeight - 1.0) * 0.05; // Convert ratio to position offset
+    leftPatella.position.set(0, 0.02 + patellaHeightOffset, 0.08); // In front of knee joint, adjustable height
     leftPatella.name = 'leftPatella';
     leftKneeGroup.add(leftPatella);
     bonesRef.current['leftPatella'] = leftPatella;
@@ -1459,7 +1460,7 @@ export default function Text3DAnimation({
     // Add right patella (kneecap)
     const rightPatella = new THREE.Mesh(patellaGeometry, boneMaterial);
     rightPatella.scale.set(1, 1.2, 0.5); // Flatten and elongate vertically
-    rightPatella.position.set(0, 0.02, 0.08); // In front of knee joint, slightly above
+    rightPatella.position.set(0, 0.02 + patellaHeightOffset, 0.08); // In front of knee joint, adjustable height
     rightPatella.name = 'rightPatella';
     rightKneeGroup.add(rightPatella);
     bonesRef.current['rightPatella'] = rightPatella;

@@ -925,9 +925,9 @@ export default function Text3DAnimation({
       // Clavicles attach to sternum notches at z=0.25 (sternum position)
       const curve = new THREE.CatmullRomCurve3([
         new THREE.Vector3(0.03 * sideMultiplier, 0, 0.25),  // Sternal end (at sternum notch)
-        new THREE.Vector3(0.08 * sideMultiplier, -0.02, 0.15), // Mid-clavicle with slight depression
-        new THREE.Vector3(0.15 * sideMultiplier, -0.05, 0.05), // Lateral curve backward and lower
-        new THREE.Vector3(0.25 * sideMultiplier, -0.1, -0.02) // Acromial end (shoulder joint, backward and lower)
+        new THREE.Vector3(0.08 * sideMultiplier, -0.04, 0.15), // Mid-clavicle with more depression
+        new THREE.Vector3(0.15 * sideMultiplier, -0.08, 0.05), // Lateral curve backward and lower
+        new THREE.Vector3(0.25 * sideMultiplier, -0.15, -0.02) // Acromial end (shoulder joint, significantly lower)
       ]);
       
       // Create variable thickness along the clavicle
@@ -949,7 +949,7 @@ export default function Text3DAnimation({
         new THREE.BoxGeometry(0.06, 0.04, 0.05),
         boneMaterial
       );
-      acromialEnd.position.set(0.25 * sideMultiplier, -0.1, -0.02);
+      acromialEnd.position.set(0.25 * sideMultiplier, -0.15, -0.02);
       acromialEnd.rotation.y = sideMultiplier * Math.PI / 8;
       clavicleGroup.add(acromialEnd);
       

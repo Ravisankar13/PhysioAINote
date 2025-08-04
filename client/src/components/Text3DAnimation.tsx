@@ -129,6 +129,9 @@ export default function Text3DAnimation({
   const [rotation, setRotation] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [isPinching, setIsPinching] = useState(false);
+  const [lastPinchDistance, setLastPinchDistance] = useState(0);
   const bonesRef = useRef<{ [key: string]: THREE.Mesh }>({});
 
   // Initialize Three.js scene
@@ -176,6 +179,10 @@ export default function Text3DAnimation({
         skeletonRef.current.rotation.x = rotation.x;
       }
       
+      // Apply zoom
+      const zoomValue = Math.max(0.5, Math.min(3, zoom)); // Clamp between 0.5 and 3
+      camera.position.z = 3 / zoomValue;
+      
       renderer.render(scene, camera);
     };
     animate();
@@ -189,7 +196,7 @@ export default function Text3DAnimation({
       }
       renderer.dispose();
     };
-  }, [rotation, limbScales, hipPathology, kneePathology, shoulderPathology, posturalDeviations]);
+  }, [rotation, zoom, limbScales, hipPathology, kneePathology, shoulderPathology, posturalDeviations]);
 
   // Generate animation from clinical text
   useEffect(() => {
@@ -4087,6 +4094,63 @@ export default function Text3DAnimation({
     setIsDragging(false);
   };
 
+  // Handle mouse wheel zoom
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    setZoom(prevZoom => Math.max(0.5, Math.min(3, prevZoom * delta)));
+  };
+
+  // Handle touch events for pinch zoom
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      setIsPinching(true);
+      const touch1 = e.touches[0];
+      const touch2 = e.touches[1];
+      const distance = Math.hypot(
+        touch2.clientX - touch1.clientX,
+        touch2.clientY - touch1.clientY
+      );
+      setLastPinchDistance(distance);
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && isPinching) {
+      const touch1 = e.touches[0];
+      const touch2 = e.touches[1];
+      const distance = Math.hypot(
+        touch2.clientX - touch1.clientX,
+        touch2.clientY - touch1.clientY
+      );
+      
+      if (lastPinchDistance > 0) {
+        const scale = distance / lastPinchDistance;
+        setZoom(prevZoom => Math.max(0.5, Math.min(3, prevZoom * scale)));
+      }
+      
+      setLastPinchDistance(distance);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    setIsPinching(false);
+    setLastPinchDistance(0);
+  };
+
+  // Zoom button handlers
+  const handleZoomIn = () => {
+    setZoom(prevZoom => Math.min(3, prevZoom * 1.2));
+  };
+
+  const handleZoomOut = () => {
+    setZoom(prevZoom => Math.max(0.5, prevZoom * 0.8));
+  };
+
+  const handleResetZoom = () => {
+    setZoom(1);
+  };
+
   return (
     <div className="relative">
       <div 
@@ -4096,13 +4160,17 @@ export default function Text3DAnimation({
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseLeave}
+        onWheel={handleWheel}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
       />
       <div className="absolute bottom-2 left-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-xs">
         3D Clinical Animation
       </div>
       <div className="absolute top-2 right-2 flex gap-2">
         <div className="bg-black bg-opacity-50 text-white px-2 py-1 rounded text-xs">
-          Click and drag to rotate
+          Click and drag to rotate • Scroll to zoom
         </div>
         <button
           onClick={() => setRotation({ x: 0, y: 0 })}
@@ -4111,6 +4179,36 @@ export default function Text3DAnimation({
           Reset View
         </button>
       </div>
+      
+      {/* Zoom controls */}
+      <div className="absolute left-2 top-1/2 -translate-y-1/2 flex flex-col gap-2">
+        <button
+          onClick={handleZoomIn}
+          className="bg-white bg-opacity-90 hover:bg-opacity-100 text-gray-800 w-8 h-8 rounded flex items-center justify-center shadow-md transition-all"
+          title="Zoom In"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+          </svg>
+        </button>
+        <button
+          onClick={handleResetZoom}
+          className="bg-white bg-opacity-90 hover:bg-opacity-100 text-gray-800 w-8 h-8 rounded flex items-center justify-center shadow-md transition-all text-xs font-bold"
+          title="Reset Zoom"
+        >
+          {Math.round(zoom * 100)}%
+        </button>
+        <button
+          onClick={handleZoomOut}
+          className="bg-white bg-opacity-90 hover:bg-opacity-100 text-gray-800 w-8 h-8 rounded flex items-center justify-center shadow-md transition-all"
+          title="Zoom Out"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+          </svg>
+        </button>
+      </div>
+      
       {animationData.length > 0 && isPlaying && (
         <div className="absolute bottom-2 right-2 bg-blue-600 text-white px-2 py-1 rounded text-xs animate-pulse">
           Playing...

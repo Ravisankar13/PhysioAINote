@@ -866,19 +866,55 @@ export default function Text3DAnimation({
     skeleton.add(pelvisReference);
     bonesRef.current['pelvis'] = pelvisReference;
 
-    // Create clavicles (collar bones) to connect shoulders to torso
-    const clavicleGeometry = new THREE.CylinderGeometry(0.04, 0.04, 0.35, 8);
-    const clavicleY = 1.55; // Position at upper chest level, just below shoulders (1.65)
+    // Create anatomically accurate clavicles with S-curve
+    const createClavicle = (side: 'left' | 'right'): THREE.Group => {
+      const clavicleGroup = new THREE.Group();
+      const sideMultiplier = side === 'left' ? -1 : 1;
+      
+      // Create S-curved path for clavicle
+      const curve = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(0.03 * sideMultiplier, 0, 0.08),  // Sternal end (near sternum, forward)
+        new THREE.Vector3(0.08 * sideMultiplier, 0.02, 0.06), // Mid-clavicle with slight elevation
+        new THREE.Vector3(0.15 * sideMultiplier, 0.03, 0.02), // Lateral curve backward
+        new THREE.Vector3(0.25 * sideMultiplier, 0.05, -0.02) // Acromial end (shoulder joint, backward)
+      ]);
+      
+      // Create variable thickness along the clavicle
+      const clavicleGeometry = new THREE.TubeGeometry(curve, 20, 0.025, 8, false);
+      const clavicleMesh = new THREE.Mesh(clavicleGeometry, boneMaterial);
+      clavicleGroup.add(clavicleMesh);
+      
+      // Add medial (sternal) end enlargement
+      const sternalEnd = new THREE.Mesh(
+        new THREE.SphereGeometry(0.035, 8, 6),
+        boneMaterial
+      );
+      sternalEnd.position.set(0.03 * sideMultiplier, 0, 0.08);
+      sternalEnd.scale.set(1.2, 0.8, 1);
+      clavicleGroup.add(sternalEnd);
+      
+      // Add lateral (acromial) end enlargement
+      const acromialEnd = new THREE.Mesh(
+        new THREE.BoxGeometry(0.06, 0.04, 0.05),
+        boneMaterial
+      );
+      acromialEnd.position.set(0.25 * sideMultiplier, 0.05, -0.02);
+      acromialEnd.rotation.y = sideMultiplier * Math.PI / 8;
+      clavicleGroup.add(acromialEnd);
+      
+      return clavicleGroup;
+    };
     
-    const leftClavicle = new THREE.Mesh(clavicleGeometry, boneMaterial);
-    leftClavicle.position.set(-0.13, clavicleY, 0.05); // Slightly forward
-    leftClavicle.rotation.z = -Math.PI / 6;
+    // Position clavicles at shoulder level
+    const clavicleY = 1.65; // At shoulder level
+    
+    const leftClavicle = createClavicle('left');
+    leftClavicle.position.y = clavicleY;
     leftClavicle.name = 'leftClavicle';
     skeleton.add(leftClavicle);
-
-    const rightClavicle = new THREE.Mesh(clavicleGeometry, boneMaterial);
-    rightClavicle.position.set(0.13, clavicleY, 0.05); // Slightly forward
-    rightClavicle.rotation.z = Math.PI / 6;
+    
+    const rightClavicle = createClavicle('right');
+    rightClavicle.position.y = clavicleY;
     rightClavicle.name = 'rightClavicle';
     skeleton.add(rightClavicle);
 

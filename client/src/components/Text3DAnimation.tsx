@@ -5,6 +5,7 @@ interface Text3DAnimationProps {
   clinicalText: string;
   isPlaying: boolean;
   onTimeUpdate?: (time: number) => void;
+  selectedSide?: 'both' | 'left' | 'right';
   limbScales?: {
     upperArm: number;
     forearm: number;
@@ -67,7 +68,8 @@ interface AnimationKeyframe {
 export default function Text3DAnimation({ 
   clinicalText, 
   isPlaying, 
-  onTimeUpdate, 
+  onTimeUpdate,
+  selectedSide = 'both',
   limbScales = {
     upperArm: 1.0,
     forearm: 1.0,
@@ -192,9 +194,9 @@ export default function Text3DAnimation({
   // Generate animation from clinical text
   useEffect(() => {
     if (clinicalText) {
-      generateAnimationFromText(clinicalText);
+      generateAnimationFromText(clinicalText, selectedSide);
     }
-  }, [clinicalText]);
+  }, [clinicalText, selectedSide]);
 
   // Update scapular positions when pathology changes
   useEffect(() => {
@@ -1442,7 +1444,7 @@ export default function Text3DAnimation({
     scene.add(skeleton);
   };
 
-  const generateAnimationFromText = (text: string) => {
+  const generateAnimationFromText = (text: string, side: 'both' | 'left' | 'right' = 'both') => {
     const lowerText = text.toLowerCase();
     let animationFrames: AnimationKeyframe[] = [];
 
@@ -1467,13 +1469,13 @@ export default function Text3DAnimation({
     const isPhysicalTest = lowerText.includes('test') || lowerText.includes('examination') || lowerText.includes('assessment');
     
     if (isPhysicalTest && lowerText.includes('shoulder abduction')) {
-      animationFrames = generateShoulderAbductionTest();
+      animationFrames = generateShoulderAbductionTest(side);
     } else if (isPhysicalTest && lowerText.includes('shoulder flexion')) {
-      animationFrames = generateShoulderFlexionTest();
+      animationFrames = generateShoulderFlexionTest(side);
     } else if (isPhysicalTest && lowerText.includes('shoulder external rotation')) {
-      animationFrames = generateShoulderExternalRotationTest();
+      animationFrames = generateShoulderExternalRotationTest(side);
     } else if (isPhysicalTest && lowerText.includes('shoulder internal rotation')) {
-      animationFrames = generateShoulderInternalRotationTest();
+      animationFrames = generateShoulderInternalRotationTest(side);
     } else if (isPhysicalTest && lowerText.includes('scapula protraction')) {
       animationFrames = generateGeneralMovementAnimation();
     } else if (isPhysicalTest && lowerText.includes('scapula retraction')) {
@@ -1481,13 +1483,13 @@ export default function Text3DAnimation({
     } else if (isPhysicalTest && lowerText.includes('knee extension')) {
       animationFrames = generateGeneralMovementAnimation();
     } else if (isPhysicalTest && lowerText.includes('knee flexion')) {
-      animationFrames = generateKneeFlexionTest();
+      animationFrames = generateKneeFlexionTest(side);
     } else if (isPhysicalTest && lowerText.includes('hip flexion')) {
       animationFrames = generateGeneralMovementAnimation();
     } else if (isPhysicalTest && lowerText.includes('hip extension')) {
       animationFrames = generateGeneralMovementAnimation();
     } else if (isPhysicalTest && lowerText.includes('hip abduction')) {
-      animationFrames = generateHipAbductionTest();
+      animationFrames = generateHipAbductionTest(side);
     } else if (isPhysicalTest && lowerText.includes('hip adduction')) {
       animationFrames = generateGeneralMovementAnimation();
     } else if (isPhysicalTest && lowerText.includes('hip internal rotation')) {
@@ -1625,7 +1627,7 @@ export default function Text3DAnimation({
     ];
   };
 
-  const generateShoulderExternalRotationTest = (): AnimationKeyframe[] => {
+  const generateShoulderExternalRotationTest = (side: 'both' | 'left' | 'right' = 'both'): AnimationKeyframe[] => {
     return [
       {
         time: 0,
@@ -1653,12 +1655,12 @@ export default function Text3DAnimation({
           pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
           leftLegGroup: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
           rightLegGroup: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
-          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, -1.0, 0] }, // External rotation
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 1.0, 0] },
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, (side === 'both' || side === 'left') ? -1.0 : 0, 0] }, // External rotation
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, (side === 'both' || side === 'right') ? 1.0 : 0, 0] },
           leftElbowGroup: { position: [0, -0.5, 0], rotation: [-1.57, 0, 0] }, // Maintain elbow bend
           rightElbowGroup: { position: [0, -0.5, 0], rotation: [-1.57, 0, 0] },
-          leftScapula: { position: [-0.22, 1.55, -0.14], rotation: [0, -0.4, -0.1] }, // Slight retraction
-          rightScapula: { position: [0.22, 1.55, -0.14], rotation: [0, 0.4, 0.1] }
+          leftScapula: { position: [-0.22, 1.55, -0.14], rotation: [0, (side === 'both' || side === 'left') ? -0.4 : -0.3, (side === 'both' || side === 'left') ? -0.1 : 0] }, // Slight retraction
+          rightScapula: { position: [0.22, 1.55, -0.14], rotation: [0, (side === 'both' || side === 'right') ? 0.4 : 0.3, (side === 'both' || side === 'right') ? 0.1 : 0] }
         }
       },
       {
@@ -1681,7 +1683,7 @@ export default function Text3DAnimation({
     ];
   };
 
-  const generateShoulderInternalRotationTest = (): AnimationKeyframe[] => {
+  const generateShoulderInternalRotationTest = (side: 'both' | 'left' | 'right' = 'both'): AnimationKeyframe[] => {
     return [
       {
         time: 0,
@@ -1709,8 +1711,8 @@ export default function Text3DAnimation({
           pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
           leftLegGroup: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
           rightLegGroup: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
-          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 1.0, 0] }, // Internal rotation
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, -1.0, 0] },
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, (side === 'both' || side === 'left') ? 1.0 : 0, 0] }, // Internal rotation
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, (side === 'both' || side === 'right') ? -1.0 : 0, 0] },
           leftElbowGroup: { position: [0, -0.5, 0], rotation: [-1.57, 0, 0] }, // Maintain elbow bend
           rightElbowGroup: { position: [0, -0.5, 0], rotation: [-1.57, 0, 0] },
           leftScapula: { position: [-0.22, 1.55, -0.10], rotation: [0, -0.2, 0.1] }, // Slight protraction
@@ -1737,7 +1739,7 @@ export default function Text3DAnimation({
     ];
   };
 
-  const generateShoulderFlexionTest = (): AnimationKeyframe[] => {
+  const generateShoulderFlexionTest = (side: 'both' | 'left' | 'right' = 'both'): AnimationKeyframe[] => {
     return [
       {
         time: 0,
@@ -1779,16 +1781,16 @@ export default function Text3DAnimation({
           leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
           rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
           shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
-          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [-1.57, 0, 0] }, // 90 degrees forward
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [-1.57, 0, 0] },
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [(side === 'both' || side === 'left') ? -1.57 : 0, 0, 0] }, // 90 degrees forward
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [(side === 'both' || side === 'right') ? -1.57 : 0, 0, 0] },
           leftClavicle: { position: [-0.13, 1.7, 0], rotation: [0, 0, -0.52] },
           rightClavicle: { position: [0.13, 1.7, 0], rotation: [0, 0, 0.52] },
           leftAnkle: { position: [-0.15, -0.8, 0], rotation: [0, 0, 0] },
           rightAnkle: { position: [0.15, -0.8, 0], rotation: [0, 0, 0] },
           leftFoot: { position: [-0.15, -0.85, 0.05], rotation: [0, 0, 0] },
           rightFoot: { position: [0.15, -0.85, 0.05], rotation: [0, 0, 0] },
-          leftScapula: { position: [-0.22, 1.57, -0.11], rotation: [0.2, -0.3, -0.1] }, // Slight protraction
-          rightScapula: { position: [0.22, 1.57, -0.11], rotation: [0.2, 0.3, 0.1] }
+          leftScapula: { position: [-0.22, 1.57, -0.11], rotation: [(side === 'both' || side === 'left') ? 0.2 : 0, -0.3, (side === 'both' || side === 'left') ? -0.1 : 0] }, // Slight protraction
+          rightScapula: { position: [0.22, 1.57, -0.11], rotation: [(side === 'both' || side === 'right') ? 0.2 : 0, 0.3, (side === 'both' || side === 'right') ? 0.1 : 0] }
         }
       },
       {
@@ -1805,16 +1807,16 @@ export default function Text3DAnimation({
           leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
           rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
           shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
-          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [-3.14, 0, 0] }, // 180 degrees
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [-3.14, 0, 0] },
-          leftClavicle: { position: [-0.13, 1.72, 0], rotation: [-0.1, 0, -0.52] },
-          rightClavicle: { position: [0.13, 1.72, 0], rotation: [-0.1, 0, 0.52] },
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [(side === 'both' || side === 'left') ? -3.14 : 0, 0, 0] }, // 180 degrees
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [(side === 'both' || side === 'right') ? -3.14 : 0, 0, 0] },
+          leftClavicle: { position: [-0.13, 1.72, 0], rotation: [(side === 'both' || side === 'left') ? -0.1 : 0, 0, -0.52] },
+          rightClavicle: { position: [0.13, 1.72, 0], rotation: [(side === 'both' || side === 'right') ? -0.1 : 0, 0, 0.52] },
           leftAnkle: { position: [-0.15, -0.8, 0], rotation: [0, 0, 0] },
           rightAnkle: { position: [0.15, -0.8, 0], rotation: [0, 0, 0] },
           leftFoot: { position: [-0.15, -0.85, 0.05], rotation: [0, 0, 0] },
           rightFoot: { position: [0.15, -0.85, 0.05], rotation: [0, 0, 0] },
-          leftScapula: { position: [-0.24, 1.6, -0.09], rotation: [0.4, -0.4, -0.2] }, // Upward rotation
-          rightScapula: { position: [0.24, 1.6, -0.09], rotation: [0.4, 0.4, 0.2] }
+          leftScapula: { position: [-0.24, 1.6, -0.09], rotation: [(side === 'both' || side === 'left') ? 0.4 : 0, (side === 'both' || side === 'left') ? -0.4 : -0.3, (side === 'both' || side === 'left') ? -0.2 : 0] }, // Upward rotation
+          rightScapula: { position: [0.24, 1.6, -0.09], rotation: [(side === 'both' || side === 'right') ? 0.4 : 0, (side === 'both' || side === 'right') ? 0.4 : 0.3, (side === 'both' || side === 'right') ? 0.2 : 0] }
         }
       },
       {
@@ -2074,7 +2076,19 @@ export default function Text3DAnimation({
     ];
   }
 
-  const generateShoulderAbductionTest = (): AnimationKeyframe[] => {
+  const generateShoulderAbductionTest = (side: 'both' | 'left' | 'right' = 'both'): AnimationKeyframe[] => {
+    // Base keyframe values
+    const baseStartLeft = { position: [-0.25, 1.65, 0], rotation: [0, 0, 0.1] };
+    const baseStartRight = { position: [0.25, 1.65, 0], rotation: [0, 0, -0.1] };
+    const base90Left = { position: [-0.25, 1.65, 0], rotation: [0, 0, -1.57] };
+    const base90Right = { position: [0.25, 1.65, 0], rotation: [0, 0, 1.57] };
+    
+    // Determine which arms to move based on side selection
+    const leftArmStart = (side === 'both' || side === 'left') ? baseStartLeft : baseStartLeft;
+    const rightArmStart = (side === 'both' || side === 'right') ? baseStartRight : baseStartRight;
+    const leftArm90 = (side === 'both' || side === 'left') ? base90Left : baseStartLeft;
+    const rightArm90 = (side === 'both' || side === 'right') ? base90Right : baseStartRight;
+    
     return [
       {
         time: 0,
@@ -2090,8 +2104,8 @@ export default function Text3DAnimation({
           leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
           rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
           shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
-          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0.1] },
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, -0.1] },
+          leftArmGroup: leftArmStart,
+          rightArmGroup: rightArmStart,
           leftClavicle: { position: [-0.13, 1.7, 0], rotation: [0, 0, -0.52] },
           rightClavicle: { position: [0.13, 1.7, 0], rotation: [0, 0, 0.52] },
           leftAnkle: { position: [-0.15, -0.8, 0], rotation: [0, 0, 0] },
@@ -2116,16 +2130,16 @@ export default function Text3DAnimation({
           leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
           rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
           shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
-          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, -1.57] }, // 90 degrees out
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 1.57] },
-          leftClavicle: { position: [-0.13, 1.72, 0], rotation: [0, 0, -0.6] }, // Slight elevation
-          rightClavicle: { position: [0.13, 1.72, 0], rotation: [0, 0, 0.6] },
+          leftArmGroup: leftArm90,
+          rightArmGroup: rightArm90,
+          leftClavicle: { position: [-0.13, (side === 'both' || side === 'left') ? 1.72 : 1.7, 0], rotation: [0, 0, (side === 'both' || side === 'left') ? -0.6 : -0.52] },
+          rightClavicle: { position: [0.13, (side === 'both' || side === 'right') ? 1.72 : 1.7, 0], rotation: [0, 0, (side === 'both' || side === 'right') ? 0.6 : 0.52] },
           leftAnkle: { position: [-0.15, -0.8, 0], rotation: [0, 0, 0] },
           rightAnkle: { position: [0.15, -0.8, 0], rotation: [0, 0, 0] },
           leftFoot: { position: [-0.15, -0.85, 0.05], rotation: [0, 0, 0] },
           rightFoot: { position: [0.15, -0.85, 0.05], rotation: [0, 0, 0] },
-          leftScapula: { position: [-0.24, 1.58, -0.10], rotation: [0.3, -0.4, -0.3] }, // Upward rotation
-          rightScapula: { position: [0.24, 1.58, -0.10], rotation: [0.3, 0.4, 0.3] }
+          leftScapula: { position: [(side === 'both' || side === 'left') ? -0.24 : -0.22, (side === 'both' || side === 'left') ? 1.58 : 1.55, (side === 'both' || side === 'left') ? -0.10 : -0.12], rotation: [(side === 'both' || side === 'left') ? 0.3 : 0, (side === 'both' || side === 'left') ? -0.4 : -0.3, (side === 'both' || side === 'left') ? -0.3 : 0] },
+          rightScapula: { position: [(side === 'both' || side === 'right') ? 0.24 : 0.22, (side === 'both' || side === 'right') ? 1.58 : 1.55, (side === 'both' || side === 'right') ? -0.10 : -0.12], rotation: [(side === 'both' || side === 'right') ? 0.3 : 0, (side === 'both' || side === 'right') ? 0.4 : 0.3, (side === 'both' || side === 'right') ? 0.3 : 0] }
         }
       },
       {
@@ -2142,16 +2156,16 @@ export default function Text3DAnimation({
           leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
           rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
           shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
-          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, -3.14] }, // 180 degrees
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 3.14] },
-          leftClavicle: { position: [-0.13, 1.75, 0], rotation: [0, 0, -0.7] }, // More elevation
-          rightClavicle: { position: [0.13, 1.75, 0], rotation: [0, 0, 0.7] },
+          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, (side === 'both' || side === 'left') ? -3.14 : 0.1] },
+          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, (side === 'both' || side === 'right') ? 3.14 : -0.1] },
+          leftClavicle: { position: [-0.13, (side === 'both' || side === 'left') ? 1.75 : 1.7, 0], rotation: [0, 0, (side === 'both' || side === 'left') ? -0.7 : -0.52] },
+          rightClavicle: { position: [0.13, (side === 'both' || side === 'right') ? 1.75 : 1.7, 0], rotation: [0, 0, (side === 'both' || side === 'right') ? 0.7 : 0.52] },
           leftAnkle: { position: [-0.15, -0.8, 0], rotation: [0, 0, 0] },
           rightAnkle: { position: [0.15, -0.8, 0], rotation: [0, 0, 0] },
           leftFoot: { position: [-0.15, -0.85, 0.05], rotation: [0, 0, 0] },
           rightFoot: { position: [0.15, -0.85, 0.05], rotation: [0, 0, 0] },
-          leftScapula: { position: [-0.26, 1.62, -0.08], rotation: [0.5, -0.5, -0.4] }, // Maximum upward rotation
-          rightScapula: { position: [0.26, 1.62, -0.08], rotation: [0.5, 0.5, 0.4] }
+          leftScapula: { position: [(side === 'both' || side === 'left') ? -0.26 : -0.22, (side === 'both' || side === 'left') ? 1.62 : 1.55, (side === 'both' || side === 'left') ? -0.08 : -0.12], rotation: [(side === 'both' || side === 'left') ? 0.5 : 0, (side === 'both' || side === 'left') ? -0.5 : -0.3, (side === 'both' || side === 'left') ? -0.4 : 0] },
+          rightScapula: { position: [(side === 'both' || side === 'right') ? 0.26 : 0.22, (side === 'both' || side === 'right') ? 1.62 : 1.55, (side === 'both' || side === 'right') ? -0.08 : -0.12], rotation: [(side === 'both' || side === 'right') ? 0.5 : 0, (side === 'both' || side === 'right') ? 0.5 : 0.3, (side === 'both' || side === 'right') ? 0.4 : 0] }
         }
       },
       {
@@ -2168,16 +2182,16 @@ export default function Text3DAnimation({
           leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
           rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
           shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
-          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, -1.57] },
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, 1.57] },
-          leftClavicle: { position: [-0.13, 1.72, 0], rotation: [0, 0, -0.6] },
-          rightClavicle: { position: [0.13, 1.72, 0], rotation: [0, 0, 0.6] },
+          leftArmGroup: leftArm90,
+          rightArmGroup: rightArm90,
+          leftClavicle: { position: [-0.13, (side === 'both' || side === 'left') ? 1.72 : 1.7, 0], rotation: [0, 0, (side === 'both' || side === 'left') ? -0.6 : -0.52] },
+          rightClavicle: { position: [0.13, (side === 'both' || side === 'right') ? 1.72 : 1.7, 0], rotation: [0, 0, (side === 'both' || side === 'right') ? 0.6 : 0.52] },
           leftAnkle: { position: [-0.15, -0.8, 0], rotation: [0, 0, 0] },
           rightAnkle: { position: [0.15, -0.8, 0], rotation: [0, 0, 0] },
           leftFoot: { position: [-0.15, -0.85, 0.05], rotation: [0, 0, 0] },
           rightFoot: { position: [0.15, -0.85, 0.05], rotation: [0, 0, 0] },
-          leftScapula: { position: [-0.24, 1.58, -0.10], rotation: [0.3, -0.4, -0.3] },
-          rightScapula: { position: [0.24, 1.58, -0.10], rotation: [0.3, 0.4, 0.3] }
+          leftScapula: { position: [(side === 'both' || side === 'left') ? -0.24 : -0.22, (side === 'both' || side === 'left') ? 1.58 : 1.55, (side === 'both' || side === 'left') ? -0.10 : -0.12], rotation: [(side === 'both' || side === 'left') ? 0.3 : 0, (side === 'both' || side === 'left') ? -0.4 : -0.3, (side === 'both' || side === 'left') ? -0.3 : 0] },
+          rightScapula: { position: [(side === 'both' || side === 'right') ? 0.24 : 0.22, (side === 'both' || side === 'right') ? 1.58 : 1.55, (side === 'both' || side === 'right') ? -0.10 : -0.12], rotation: [(side === 'both' || side === 'right') ? 0.3 : 0, (side === 'both' || side === 'right') ? 0.4 : 0.3, (side === 'both' || side === 'right') ? 0.3 : 0] }
         }
       },
       {
@@ -2194,8 +2208,8 @@ export default function Text3DAnimation({
           leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
           rightKnee: { position: [0.15, 0, 0], rotation: [0, 0, 0] },
           shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
-          leftArmGroup: { position: [-0.25, 1.65, 0], rotation: [0, 0, 0.1] },
-          rightArmGroup: { position: [0.25, 1.65, 0], rotation: [0, 0, -0.1] },
+          leftArmGroup: leftArmStart,
+          rightArmGroup: rightArmStart,
           leftClavicle: { position: [-0.13, 1.7, 0], rotation: [0, 0, -0.52] },
           rightClavicle: { position: [0.13, 1.7, 0], rotation: [0, 0, 0.52] },
           leftAnkle: { position: [-0.15, -0.8, 0], rotation: [0, 0, 0] },
@@ -2547,7 +2561,7 @@ export default function Text3DAnimation({
     ];
   };
 
-  const generateHipAbductionTest = (): AnimationKeyframe[] => {
+  const generateHipAbductionTest = (side: 'both' | 'left' | 'right' = 'both'): AnimationKeyframe[] => {
     return [
       {
         time: 0,
@@ -2572,12 +2586,12 @@ export default function Text3DAnimation({
       {
         time: 1500,
         joints: {
-          // Right leg abducted to 30 degrees
+          // 30 degrees abduction
           head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
           torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
           pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
-          leftLegGroup: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
-          rightLegGroup: { position: [0.15, 0.8, 0], rotation: [0, 0, 0.52] }, // 30 degrees abduction
+          leftLegGroup: { position: [-0.15, 0.8, 0], rotation: [0, 0, (side === 'both' || side === 'left') ? -0.52 : 0] },
+          rightLegGroup: { position: [0.15, 0.8, 0], rotation: [0, 0, (side === 'both' || side === 'right') ? 0.52 : 0] },
           leftKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
           rightKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
           leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
@@ -2594,8 +2608,8 @@ export default function Text3DAnimation({
           head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
           torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
           pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
-          leftLegGroup: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
-          rightLegGroup: { position: [0.15, 0.8, 0], rotation: [0, 0, 0.78] }, // 45 degrees
+          leftLegGroup: { position: [-0.15, 0.8, 0], rotation: [0, 0, (side === 'both' || side === 'left') ? -0.78 : 0] },
+          rightLegGroup: { position: [0.15, 0.8, 0], rotation: [0, 0, (side === 'both' || side === 'right') ? 0.78 : 0] },
           leftKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
           rightKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
           leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
@@ -2695,7 +2709,7 @@ export default function Text3DAnimation({
     ];
   };
 
-  const generateKneeFlexionTest = (): AnimationKeyframe[] => {
+  const generateKneeFlexionTest = (side: 'both' | 'left' | 'right' = 'both'): AnimationKeyframe[] => {
     return [
       {
         time: 0,
@@ -2720,14 +2734,14 @@ export default function Text3DAnimation({
       {
         time: 1500,
         joints: {
-          // Right knee at 90 degrees flexion
+          // 90 degrees flexion
           head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
           torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
           pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
           leftLegGroup: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
           rightLegGroup: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
-          leftKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
-          rightKneeGroup: { position: [0, -0.8, 0], rotation: [1.57, 0, 0] }, // 90 degree bend
+          leftKneeGroup: { position: [0, -0.8, 0], rotation: [(side === 'both' || side === 'left') ? 1.57 : 0, 0, 0] },
+          rightKneeGroup: { position: [0, -0.8, 0], rotation: [(side === 'both' || side === 'right') ? 1.57 : 0, 0, 0] },
           leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
           rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
           leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },
@@ -2748,8 +2762,8 @@ export default function Text3DAnimation({
           pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
           leftLegGroup: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
           rightLegGroup: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
-          leftKneeGroup: { position: [0, -0.8, 0], rotation: [0, 0, 0] },
-          rightKneeGroup: { position: [0, -0.8, 0], rotation: [2.35, 0, 0] }, // 135 degrees
+          leftKneeGroup: { position: [0, -0.8, 0], rotation: [(side === 'both' || side === 'left') ? 2.35 : 0, 0, 0] },
+          rightKneeGroup: { position: [0, -0.8, 0], rotation: [(side === 'both' || side === 'right') ? 2.35 : 0, 0, 0] },
           leftHip: { position: [-0.15, 0.8, 0], rotation: [0, 0, 0] },
           rightHip: { position: [0.15, 0.8, 0], rotation: [0, 0, 0] },
           leftKnee: { position: [-0.15, 0, 0], rotation: [0, 0, 0] },

@@ -15,6 +15,7 @@ export default function VirtualPatientsFixed() {
   const [selectedExercise, setSelectedExercise] = useState<string>("");
   const [animationSpeed, setAnimationSpeed] = useState<number[]>([1]);
   const [repetitions, setRepetitions] = useState<number[]>([10]);
+  const [selectedSide, setSelectedSide] = useState<'both' | 'left' | 'right'>('both');
   
   // Limb scale states
   const [upperArmScale, setUpperArmScale] = useState<number[]>([1.0]);
@@ -278,6 +279,38 @@ export default function VirtualPatientsFixed() {
                     {/* Assessment Tests */}
                     <div>
                       <h4 className="font-medium mb-2 text-gray-700">Assessment Tests</h4>
+                      
+                      {/* Side Selection */}
+                      <div className="mb-4 p-3 border rounded-lg bg-gray-50">
+                        <Label className="text-sm font-medium mb-2 block">Select Side</Label>
+                        <div className="flex gap-2">
+                          <Button
+                            variant={selectedSide === 'both' ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setSelectedSide('both')}
+                            className="flex-1"
+                          >
+                            Both
+                          </Button>
+                          <Button
+                            variant={selectedSide === 'left' ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setSelectedSide('left')}
+                            className="flex-1"
+                          >
+                            Left
+                          </Button>
+                          <Button
+                            variant={selectedSide === 'right' ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setSelectedSide('right')}
+                            className="flex-1"
+                          >
+                            Right
+                          </Button>
+                        </div>
+                      </div>
+                      
                       <div className="space-y-2">
                         {assessmentTests.map((test) => (
                           <Button
@@ -334,6 +367,7 @@ export default function VirtualPatientsFixed() {
                         <Text3DAnimation 
                           clinicalText={selectedTest || selectedExercise}
                           isPlaying={true}
+                          selectedSide={selectedSide}
                           limbScales={{
                             upperArm: upperArmScale[0],
                             forearm: forearmScale[0],

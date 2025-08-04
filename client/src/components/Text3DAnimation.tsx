@@ -383,8 +383,8 @@ export default function Text3DAnimation({
       // Determine vertebra sizes based on region with gradual transitions
       let startRadius: number, endRadius: number;
       if (regionName === 'cervical') {
-        startRadius = 0.035; // Slightly larger cervical vertebrae
-        endRadius = 0.04;   // For better visibility
+        startRadius = 0.04; // Larger cervical vertebrae for visibility
+        endRadius = 0.045;  // Increased size
       } else if (regionName === 'thoracic') {
         startRadius = 0.036;
         endRadius = 0.042;
@@ -411,8 +411,8 @@ export default function Text3DAnimation({
         const localY = i * baseSpacing;
         const localZ = Math.sin(angle) * segmentHeight * 0.25; // Increased curve displacement
         
-        // Position spine more posteriorly (towards back) - cervical slightly forward
-        const spineBackOffset = regionName === 'cervical' ? 0.02 : -0.08; // Cervical slightly forward for visibility
+        // Position spine more posteriorly (towards back) - cervical more forward
+        const spineBackOffset = regionName === 'cervical' ? 0.05 : -0.08; // Cervical positioned forward for clear visibility
         vertebra.position.set(0, startY - localY, localZ + spineBackOffset);
         vertebra.rotation.x = angle * 0.5; // Increased rotation for more pronounced curve
         
@@ -691,7 +691,7 @@ export default function Text3DAnimation({
     
     // Head - position based on scaled torso
     const headMesh = createSkull();
-    headMesh.position.y = torsoHeight + 0.9 + 0.15; // Position head just above torso with small gap
+    headMesh.position.y = torsoHeight + 0.9 + 0.35; // Raised head to show cervical spine
     headMesh.name = 'head';
     skeleton.add(headMesh);
     bonesRef.current['head'] = headMesh;

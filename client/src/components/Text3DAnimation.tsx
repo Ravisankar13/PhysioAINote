@@ -326,10 +326,10 @@ export default function Text3DAnimation({
     const lumbarCount = 5;
     const totalVertebrae = cervicalCount + thoracicCount + lumbarCount;
     
-    // Curve parameters (in radians) - using postural deviation values
-    const cervicalLordosis = -(25 + posturalDeviations.forwardHead * 0.5) * (Math.PI / 180); // Forward head increases cervical curve
-    const thoracicKyphosis = posturalDeviations.thoracicKyphosis * (Math.PI / 180);  // Direct from slider
-    const lumbarLordosis = posturalDeviations.lumbarLordosis * (Math.PI / 180);   // Direct from slider (already negative)
+    // Curve parameters (in radians) - enhanced for more natural S-curve
+    const cervicalLordosis = -(35 + posturalDeviations.forwardHead * 0.5) * (Math.PI / 180); // Increased cervical lordosis
+    const thoracicKyphosis = (40 + posturalDeviations.thoracicKyphosis) * (Math.PI / 180);  // Natural thoracic kyphosis
+    const lumbarLordosis = -(40 + posturalDeviations.lumbarLordosis) * (Math.PI / 180);   // Increased lumbar lordosis
     
     let currentY = spineStartY;
     let vertebraIndex = 0;
@@ -407,12 +407,14 @@ export default function Text3DAnimation({
         // Calculate position along curve
         const angle = curvature * (t - 0.5); // Center the curve
         
-        // Position along the curve with reduced displacement for natural look
+        // Position along the curve with enhanced displacement for visible S-curve
         const localY = i * baseSpacing;
-        const localZ = Math.sin(angle) * segmentHeight * 0.15;
+        const localZ = Math.sin(angle) * segmentHeight * 0.25; // Increased curve displacement
         
-        vertebra.position.set(0, startY - localY, localZ);
-        vertebra.rotation.x = angle * 0.3;
+        // Position spine more posteriorly (towards back)
+        const spineBackOffset = -0.08; // Move spine backward
+        vertebra.position.set(0, startY - localY, localZ + spineBackOffset);
+        vertebra.rotation.x = angle * 0.5; // Increased rotation for more pronounced curve
         
         vertebra.name = `${regionName}_vertebra_${i}`;
         spineGroup.add(vertebra);
@@ -433,7 +435,7 @@ export default function Text3DAnimation({
           const nextT = Math.min((i + 1) / (count - 1), 1);
           const nextAngle = curvature * (nextT - 0.5);
           const nextY = startY - ((i + 1) * baseSpacing);
-          const nextZ = Math.sin(nextAngle) * segmentHeight * 0.15;
+          const nextZ = Math.sin(nextAngle) * segmentHeight * 0.25 + spineBackOffset;
           
           // Position disc between current and next vertebra
           disc.position.set(

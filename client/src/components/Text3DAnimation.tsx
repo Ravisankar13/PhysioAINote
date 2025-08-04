@@ -212,22 +212,7 @@ export default function Text3DAnimation({
     }
   }, [clinicalText, selectedSide]);
 
-  // Update scapular positions when pathology changes
-  useEffect(() => {
-    if (!bonesRef.current['leftScapula'] || !bonesRef.current['rightScapula']) return;
-    
-    const wingingRad = (shoulderPathology.scapularWinging * Math.PI) / 180;
-    
-    // Update left scapula
-    const leftScapula = bonesRef.current['leftScapula'];
-    leftScapula.rotation.set(0, -0.3 - wingingRad, 0);
-    leftScapula.position.z = -0.12 - (wingingRad * 0.1);
-    
-    // Update right scapula
-    const rightScapula = bonesRef.current['rightScapula'];
-    rightScapula.rotation.set(0, 0.3 + wingingRad, 0);
-    rightScapula.position.z = -0.12 - (wingingRad * 0.1);
-  }, [shoulderPathology.scapularWinging]);
+
 
   const createSkeleton = (scene: THREE.Scene) => {
     const skeleton = new THREE.Group();

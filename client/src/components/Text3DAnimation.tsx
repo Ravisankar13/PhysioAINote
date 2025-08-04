@@ -512,9 +512,58 @@ export default function Text3DAnimation({
       spineGroup.add(spineLineVisual);
     }
     
-    // Create sternum (breastbone) - positioned to follow thoracic curve
-    const sternumGeometry = new THREE.BoxGeometry(0.06, 0.35, 0.03);
-    const sternum = new THREE.Mesh(sternumGeometry, boneMaterial);
+    // Create anatomically accurate sternum with clavicular notches
+    const createSternum = (): THREE.Group => {
+      const sternumGroup = new THREE.Group();
+      
+      // Manubrium (upper part)
+      const manubriumShape = new THREE.Shape();
+      manubriumShape.moveTo(-0.04, 0.175);
+      manubriumShape.lineTo(0.04, 0.175);
+      manubriumShape.lineTo(0.035, 0.1);
+      manubriumShape.lineTo(-0.035, 0.1);
+      manubriumShape.closePath();
+      
+      const manubriumGeometry = new THREE.ExtrudeGeometry(manubriumShape, {
+        depth: 0.02,
+        bevelEnabled: true,
+        bevelThickness: 0.005,
+        bevelSize: 0.005,
+        bevelSegments: 2
+      });
+      
+      const manubrium = new THREE.Mesh(manubriumGeometry, boneMaterial);
+      sternumGroup.add(manubrium);
+      
+      // Body of sternum
+      const bodyGeometry = new THREE.BoxGeometry(0.06, 0.25, 0.02);
+      const sternumBody = new THREE.Mesh(bodyGeometry, boneMaterial);
+      sternumBody.position.y = -0.05;
+      sternumGroup.add(sternumBody);
+      
+      // Xiphoid process (lower tip)
+      const xiphoidGeometry = new THREE.ConeGeometry(0.02, 0.04, 6);
+      const xiphoid = new THREE.Mesh(xiphoidGeometry, boneMaterial);
+      xiphoid.position.set(0, -0.185, 0.005);
+      xiphoid.rotation.z = Math.PI;
+      sternumGroup.add(xiphoid);
+      
+      // Add clavicular notches (where clavicles attach)
+      const notchGeometry = new THREE.SphereGeometry(0.02, 8, 6);
+      const leftNotch = new THREE.Mesh(notchGeometry, boneMaterial);
+      leftNotch.position.set(-0.03, 0.175, 0.01);
+      leftNotch.scale.set(1.5, 0.8, 1);
+      sternumGroup.add(leftNotch);
+      
+      const rightNotch = new THREE.Mesh(notchGeometry, boneMaterial);
+      rightNotch.position.set(0.03, 0.175, 0.01);
+      rightNotch.scale.set(1.5, 0.8, 1);
+      sternumGroup.add(rightNotch);
+      
+      return sternumGroup;
+    };
+    
+    const sternum = createSternum();
     
     // Calculate sternum position based on actual thoracic vertebrae positions
     if (thoracicVertebrae.length > 0) {
@@ -612,6 +661,8 @@ export default function Text3DAnimation({
     
     skeleton.add(spineGroup);
     bonesRef.current['spineGroup'] = spineGroup; // Add spine group to bonesRef
+    
+
     
     // Create a reference torso mesh for animations (invisible)
     const torsoReference = new THREE.Mesh(
@@ -872,10 +923,11 @@ export default function Text3DAnimation({
       const sideMultiplier = side === 'left' ? -1 : 1;
       
       // Create S-curved path for clavicle with downward slope to shoulder
+      // Clavicles attach to sternum notches at z=0.25 (sternum position)
       const curve = new THREE.CatmullRomCurve3([
-        new THREE.Vector3(0.03 * sideMultiplier, 0, 0.08),  // Sternal end (near sternum, forward)
-        new THREE.Vector3(0.08 * sideMultiplier, -0.02, 0.06), // Mid-clavicle with slight depression
-        new THREE.Vector3(0.15 * sideMultiplier, -0.05, 0.02), // Lateral curve backward and lower
+        new THREE.Vector3(0.03 * sideMultiplier, 0, 0.25),  // Sternal end (at sternum notch)
+        new THREE.Vector3(0.08 * sideMultiplier, -0.02, 0.15), // Mid-clavicle with slight depression
+        new THREE.Vector3(0.15 * sideMultiplier, -0.05, 0.05), // Lateral curve backward and lower
         new THREE.Vector3(0.25 * sideMultiplier, -0.1, -0.02) // Acromial end (shoulder joint, backward and lower)
       ]);
       
@@ -889,7 +941,7 @@ export default function Text3DAnimation({
         new THREE.SphereGeometry(0.035, 8, 6),
         boneMaterial
       );
-      sternalEnd.position.set(0.03 * sideMultiplier, 0, 0.08);
+      sternalEnd.position.set(0.03 * sideMultiplier, 0, 0.25);
       sternalEnd.scale.set(1.2, 0.8, 1);
       clavicleGroup.add(sternalEnd);
       
@@ -905,8 +957,10 @@ export default function Text3DAnimation({
       return clavicleGroup;
     };
     
-    // Position clavicles at shoulder level
-    const clavicleY = 1.65; // At shoulder level
+    // Position clavicles at sternum's clavicular notch level
+    // Get sternum from spineGroup
+    const sternumMesh = spineGroup.getObjectByName('sternum') as THREE.Group;
+    const clavicleY = sternumMesh ? sternumMesh.position.y + 0.175 : torsoHeight + 0.9;
     
     const leftClavicle = createClavicle('left');
     leftClavicle.position.y = clavicleY;

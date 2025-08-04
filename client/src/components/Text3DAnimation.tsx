@@ -1335,6 +1335,16 @@ export default function Text3DAnimation({
     leftKneeJoint.position.set(0, 0, 0); // At knee group origin
     leftKneeJoint.name = 'leftKneeJoint';
     leftKneeGroup.add(leftKneeJoint);
+    
+    // Add left patella (kneecap)
+    const patellaGeometry = new THREE.SphereGeometry(0.04, 12, 12);
+    const leftPatella = new THREE.Mesh(patellaGeometry, boneMaterial);
+    leftPatella.scale.set(1, 1.2, 0.5); // Flatten and elongate vertically
+    leftPatella.position.set(0, 0.02, 0.08); // In front of knee joint, slightly above
+    leftPatella.name = 'leftPatella';
+    leftKneeGroup.add(leftPatella);
+    bonesRef.current['leftPatella'] = leftPatella;
+    
     bonesRef.current['leftKneeGroup'] = leftKneeGroup;
 
     // Left tibia attached to knee group
@@ -1445,6 +1455,15 @@ export default function Text3DAnimation({
     rightKneeJoint.position.set(0, 0, 0); // At knee group origin
     rightKneeJoint.name = 'rightKneeJoint';
     rightKneeGroup.add(rightKneeJoint);
+    
+    // Add right patella (kneecap)
+    const rightPatella = new THREE.Mesh(patellaGeometry, boneMaterial);
+    rightPatella.scale.set(1, 1.2, 0.5); // Flatten and elongate vertically
+    rightPatella.position.set(0, 0.02, 0.08); // In front of knee joint, slightly above
+    rightPatella.name = 'rightPatella';
+    rightKneeGroup.add(rightPatella);
+    bonesRef.current['rightPatella'] = rightPatella;
+    
     bonesRef.current['rightKneeGroup'] = rightKneeGroup;
 
     // Right shin attached to knee group
@@ -1565,21 +1584,7 @@ export default function Text3DAnimation({
     rightKnee.name = 'rightKnee';
     skeleton.add(rightKnee);
     
-    // Patella (kneecap) with adjustable height
-    const patellaGeometry = new THREE.SphereGeometry(0.03, 8, 8);
-    const patellaOffset = (kneePathology.patellaHeight - 1.0) * 0.1; // Convert ratio to offset
-    
-    const leftPatella = new THREE.Mesh(patellaGeometry, boneMaterial);
-    leftPatella.position.set(-0.15, 0.85 - thighLength + patellaOffset, 0.05); // Slightly forward
-    leftPatella.scale.set(1.2, 1, 0.8); // Flattened shape
-    leftPatella.name = 'leftPatella';
-    skeleton.add(leftPatella);
-    
-    const rightPatella = new THREE.Mesh(patellaGeometry, boneMaterial);
-    rightPatella.position.set(0.15, 0.85 - thighLength + patellaOffset, 0.05); // Slightly forward
-    rightPatella.scale.set(1.2, 1, 0.8); // Flattened shape
-    rightPatella.name = 'rightPatella';
-    skeleton.add(rightPatella);
+
 
     // Ankle joints - positioned at the end of shin
     const leftAnkle = new THREE.Mesh(jointGeometry, jointMaterial);

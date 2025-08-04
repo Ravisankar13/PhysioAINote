@@ -1166,11 +1166,11 @@ export default function Text3DAnimation({
 
     // Add scapulae (shoulder blades)
     const scapulaGeometry = new THREE.Shape();
-    // Create a larger triangular wing-shaped scapula
+    // Create a triangular wing-shaped scapula
     scapulaGeometry.moveTo(0, 0);
-    scapulaGeometry.lineTo(0.2, -0.35);
-    scapulaGeometry.lineTo(0.08, -0.4);
-    scapulaGeometry.lineTo(-0.08, -0.25);
+    scapulaGeometry.lineTo(0.15, -0.25);
+    scapulaGeometry.lineTo(0.05, -0.3);
+    scapulaGeometry.lineTo(-0.05, -0.2);
     scapulaGeometry.closePath();
     
     const scapulaExtrudeSettings = {

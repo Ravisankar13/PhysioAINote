@@ -462,16 +462,16 @@ export const soapVirtualPatients = pgTable("soap_virtual_patients", {
   
   // Basic Patient Information (matching actual database structure)
   title: text("title"),
-  patientProfile: json("patientProfile"),
-  clinicalPresentation: json("clinicalPresentation"),
-  physicalFindings: json("physicalFindings"),
-  assessmentPlan: json("assessmentPlan"),
-  bodyPart: bodyPartEnum("bodyPart").notNull(),
+  patientProfile: json("patient_profile"),
+  clinicalPresentation: json("clinical_presentation"),
+  physicalFindings: json("physical_findings"),
+  assessmentPlan: json("assessment_plan"),
+  bodyPart: bodyPartEnum("body_part").notNull(),
   
   // Motion Capture Data
-  motionData: json("motionData"),
-  hasMotionData: boolean("hasMotionData").default(false).notNull(),
-  aiGenerated: boolean("aiGenerated").default(false).notNull(),
+  motionData: json("motion_data"),
+  hasMotionData: boolean("has_motion_data").default(false).notNull(),
+  aiGenerated: boolean("ai_generated").default(false).notNull(),
   
   // 1. Anthropometric Measurements
   anthropometrics: json("anthropometrics").$type<{
@@ -487,7 +487,7 @@ export const soapVirtualPatients = pgTable("soap_virtual_patients", {
   }>(),
   
   // 2. Postural Deviations
-  posturalDeviations: json("posturalDeviations").$type<{
+  posturalDeviations: json("posturaldeviations").$type<{
     spinalCurves?: {
       cervicalLordosis?: number; // degrees (-30 to -60 normal)
       thoracicKyphosis?: number; // degrees (20 to 45 normal)
@@ -519,7 +519,7 @@ export const soapVirtualPatients = pgTable("soap_virtual_patients", {
   }>(),
   
   // 3. Movement Quality Parameters
-  movementQuality: json("movementQuality").$type<{
+  movementQuality: json("movementquality").$type<{
     rangeOfMotion?: {
       [joint: string]: {
         flexion?: number;

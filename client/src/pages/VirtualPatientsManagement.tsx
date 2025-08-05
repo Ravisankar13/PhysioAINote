@@ -117,9 +117,26 @@ export default function VirtualPatientsManagement() {
       setEditingName("");
     },
     onError: (error) => {
+      console.error("Create config error:", error);
+      let errorMessage = "Failed to create configuration";
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+        // Try to parse error response
+        try {
+          const match = error.message.match(/\{.*\}/);
+          if (match) {
+            const errorObj = JSON.parse(match[0]);
+            errorMessage = errorObj.error || errorMessage;
+          }
+        } catch (e) {
+          // Keep original error message if parsing fails
+        }
+      }
+      
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to create configuration",
+        description: errorMessage,
         variant: "destructive",
       });
     },

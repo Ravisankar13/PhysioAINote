@@ -3337,6 +3337,8 @@ Base your analysis on established postural assessment principles and correlate f
   // Create virtual patient config
   app.post("/api/virtual-patient-configs", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
+      console.log("POST /api/virtual-patient-configs - Request body:", JSON.stringify(req.body, null, 2));
+      
       const userId = req.user?.id;
       if (!userId) {
         return res.status(401).json({ error: 'User not authenticated' });
@@ -3350,10 +3352,13 @@ Base your analysis on established postural assessment principles and correlate f
         lastModified: new Date()
       };
 
+      console.log("Creating config with data:", JSON.stringify(configData, null, 2));
+
       const config = await storage.createVirtualPatientConfig(configData);
       res.json(config);
     } catch (error) {
       console.error("Error creating virtual patient config:", error);
+      console.error("Error stack:", error instanceof Error ? error.stack : "No stack trace");
       if (error instanceof Error) {
         res.status(500).json({ error: error.message });
       } else {

@@ -2398,14 +2398,18 @@ export class DatabaseStorage implements IStorage {
 
   async createVirtualPatientConfig(config: InsertVirtualPatientConfig): Promise<VirtualPatientConfig> {
     try {
+      console.log("Creating virtual patient config with data:", JSON.stringify(config, null, 2));
+      
       const result = await db
         .insert(virtualPatientConfigs)
         .values(config)
         .returning();
       
+      console.log("Successfully created virtual patient config:", result[0]);
       return result[0];
     } catch (error) {
       console.error("Error creating virtual patient config:", error);
+      console.error("Error details:", error instanceof Error ? error.message : "Unknown error");
       throw error;
     }
   }

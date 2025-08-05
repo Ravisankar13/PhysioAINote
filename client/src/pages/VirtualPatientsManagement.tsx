@@ -105,7 +105,7 @@ export default function VirtualPatientsManagement() {
   // Mutations for virtual patient configs
   const createConfigMutation = useMutation({
     mutationFn: async (data: InsertVirtualPatientConfig) => {
-      return await apiRequest("/api/virtual-patient-configs", "POST", data);
+      return await apiRequest("POST", "/api/virtual-patient-configs", data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/virtual-patient-configs"] });
@@ -144,7 +144,7 @@ export default function VirtualPatientsManagement() {
 
   const updateConfigMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: Partial<VirtualPatientConfig> }) => {
-      return await apiRequest(`/api/virtual-patient-configs/${id}`, "PUT", data);
+      return await apiRequest("PUT", `/api/virtual-patient-configs/${id}`, data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/virtual-patient-configs"] });

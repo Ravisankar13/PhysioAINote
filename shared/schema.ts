@@ -454,10 +454,10 @@ export type VirtualPatientConfig = typeof virtualPatientConfigs.$inferSelect;
 // Virtual Patients from SOAP Notes Schema
 export const soapVirtualPatients = pgTable("soap_virtual_patients", {
   id: serial("id").primaryKey(),
-  userId: integer("userId")
+  userId: integer("user_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
-  soapNoteId: integer("soapNoteId")
+  soapNoteId: integer("soap_note_id")
     .references(() => soapNotes.id, { onDelete: "cascade" }),
   
   // Basic Patient Information (matching actual database structure)
@@ -555,8 +555,8 @@ export const soapVirtualPatients = pgTable("soap_virtual_patients", {
     };
   }>(),
   
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 export const insertSoapVirtualPatientSchema = createInsertSchema(soapVirtualPatients).omit({

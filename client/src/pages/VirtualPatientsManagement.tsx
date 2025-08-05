@@ -48,6 +48,8 @@ export default function VirtualPatientsManagement() {
   const [kneeVarusValgus, setKneeVarusValgus] = useState<number[]>([3]);
   const [patellaHeight, setPatellaHeight] = useState<number[]>([1.0]);
   const [tibialTorsion, setTibialTorsion] = useState<number[]>([10]);
+  const [genuVarum, setGenuVarum] = useState<number[]>([0]);
+  const [genuValgum, setGenuValgum] = useState<number[]>([0]);
   
   // Shoulder pathology states
   const [scapularWinging, setScapularWinging] = useState<number[]>([3]);
@@ -81,6 +83,11 @@ export default function VirtualPatientsManagement() {
   const [trunkLean, setTrunkLean] = useState<boolean>(false);
   const [circumduction, setCircumduction] = useState<boolean>(false);
   const [trendelenburg, setTrendelenburg] = useState<boolean>(false);
+
+  // Get current user
+  const { data: user } = useQuery({
+    queryKey: ["/api/user"],
+  });
 
   // Get all SOAP virtual patients for user
   const { data: virtualPatients = [], isLoading: patientsLoading, error: patientsError } = useQuery({
@@ -359,6 +366,7 @@ export default function VirtualPatientsManagement() {
     };
     
     createConfigMutation.mutate({
+      userId: user?.id || 0,
       patient_name: editingName.trim(),
       soapVirtualPatientId: selectedPatient?.id || null,
       modelConfig: modelConfig
@@ -733,7 +741,7 @@ export default function VirtualPatientsManagement() {
                               <SelectValue placeholder="Select a test" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="">None</SelectItem>
+                              <SelectItem value="none">None</SelectItem>
                               {assessmentTests.map(test => (
                                 <SelectItem key={test.id} value={test.text}>
                                   {test.name}
@@ -750,7 +758,7 @@ export default function VirtualPatientsManagement() {
                               <SelectValue placeholder="Select an exercise" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="">None</SelectItem>
+                              <SelectItem value="none">None</SelectItem>
                               {exerciseMovements.map(exercise => (
                                 <SelectItem key={exercise.id} value={exercise.text}>
                                   {exercise.name}

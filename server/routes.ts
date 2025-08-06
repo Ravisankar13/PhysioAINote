@@ -58,6 +58,13 @@ import OpenAI from "openai";
 import { generateExercises, generateFallbackExercises, ExerciseGenerationRequest } from "./exerciseGenerator";
 import sessionRoutes from "./routes/sessionRoutes";
 import { config } from 'dotenv';
+import { 
+  analyzeMovementWithAI, 
+  generateVirtualPatientFromMovement,
+  getClinicalReasoning,
+  detectPathologyPatterns,
+  generateExercisePrescription
+} from './ai/movementAnalysis';
 config();
 
 // Helper functions for research article relevance scoring and note processing
@@ -3434,6 +3441,164 @@ Base your analysis on established postural assessment principles and correlate f
       } else {
         res.status(500).json({ error: 'An unknown error occurred' });
       }
+    }
+  });
+
+  // Movement Analysis AI Routes (Phase 2 & Phase 5)
+  
+  // Analyze captured movement with AI
+  app.post("/api/ai/analyze-movement", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { patientId, movementType, movementData, timestamp } = req.body;
+      
+      if (!movementType || !movementData || movementData.length === 0) {
+        return res.status(400).json({ error: 'Movement type and data are required' });
+      }
+
+      // Get patient history if available
+      let patientHistory = '';
+      if (patientId) {
+        const config = await storage.getVirtualPatientConfig(patientId);
+        if (config) {
+          patientHistory = JSON.stringify(config.modelConfig);
+        }
+      }
+
+      // Perform AI analysis
+      const analysisResult = await analyzeMovementWithAI(
+        movementType,
+        movementData,
+        patientHistory
+      );
+
+      res.json(analysisResult);
+    } catch (error) {
+      console.error("Movement analysis error:", error);
+      res.status(500).json({ error: 'Failed to analyze movement' });
+    }
+  });
+
+  // Generate virtual patient from movement data
+  app.post("/api/ai/generate-patient-from-movement", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { movementData, analysisResult } = req.body;
+      
+      if (!movementData || !analysisResult) {
+        return res.status(400).json({ error: 'Movement data and analysis are required' });
+      }
+
+      const virtualPatientConfig = await generateVirtualPatientFromMovement(
+        movementData,
+        analysisResult
+      );
+
+      res.json(virtualPatientConfig);
+    } catch (error) {
+      console.error("Virtual patient generation error:", error);
+      res.status(500).json({ error: 'Failed to generate virtual patient' });
+    }
+  });
+
+  // Get clinical reasoning for patient
+  app.post("/api/ai/clinical-reasoning", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { patientData, movementAnalysis, question } = req.body;
+      
+      if (!patientData || !movementAnalysis) {
+        return res.status(400).json({ error: 'Patient data and movement analysis are required' });
+      }
+
+      const reasoning = await getClinicalReasoning(
+        patientData,
+        movementAnalysis,
+        question
+      );
+
+      res.json({ reasoning });
+    } catch (error) {
+      console.error("Clinical reasoning error:", error);
+      res.status(500).json({ error: 'Failed to generate clinical reasoning' });
+    }
+  });
+
+  // Detect pathology patterns from movement
+  app.post("/api/ai/detect-pathology", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { movementData, movementType } = req.body;
+      
+      if (!movementData || !movementType) {
+        return res.status(400).json({ error: 'Movement data and type are required' });
+      }
+
+      const patterns = await detectPathologyPatterns(movementData, movementType);
+      res.json(patterns);
+    } catch (error) {
+      console.error("Pathology detection error:", error);
+      res.status(500).json({ error: 'Failed to detect pathology patterns' });
+    }
+  });
+
+  // Generate exercise prescription
+  app.post("/api/ai/generate-exercise-prescription", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { analysisResult, patientGoals, restrictions } = req.body;
+      
+      if (!analysisResult) {
+        return res.status(400).json({ error: 'Analysis result is required' });
+      }
+
+      const prescription = await generateExercisePrescription(
+        analysisResult,
+        patientGoals,
+        restrictions
+      );
+
+      res.json(prescription);
+    } catch (error) {
+      console.error("Exercise prescription error:", error);
+      res.status(500).json({ error: 'Failed to generate exercise prescription' });
+    }
+  });
+
+  // Save captured movement data
+  app.post("/api/virtual-patient-movements", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { patientId, movementType, capturedData, analysisResults, timestamp } = req.body;
+      
+      if (!patientId || !movementType || !capturedData) {
+        return res.status(400).json({ error: 'Patient ID, movement type, and captured data are required' });
+      }
+
+      // Update the virtual patient config with movement data
+      const config = await storage.getVirtualPatientConfig(patientId);
+      if (!config || config.userId !== userId) {
+        return res.status(404).json({ error: 'Virtual patient not found or access denied' });
+      }
+
+      // Add movement data to captured movements
+      const capturedMovements = config.capturedMovements || [];
+      capturedMovements.push({
+        timestamp,
+        movementType,
+        poseData: capturedData,
+        qualityScore: capturedData.reduce((sum: number, d: any) => sum + d.qualityScore, 0) / capturedData.length,
+        notes: analysisResults ? JSON.stringify(analysisResults) : ''
+      });
+
+      await storage.updateVirtualPatientConfig(patientId, {
+        capturedMovements,
+        lastModified: new Date()
+      });
+
+      res.json({ success: true, message: 'Movement data saved successfully' });
+    } catch (error) {
+      console.error("Error saving movement data:", error);
+      res.status(500).json({ error: 'Failed to save movement data' });
     }
   });
 

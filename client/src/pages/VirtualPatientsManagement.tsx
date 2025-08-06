@@ -15,6 +15,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
 import Text3DAnimation from "@/components/Text3DAnimation";
+import { MovementCapture } from "@/components/MovementCapture";
 import type { SoapVirtualPatient, VirtualPatientConfig, InsertVirtualPatientConfig } from "@shared/schema";
 import { queryClient } from "@/lib/queryClient";
 import { apiRequest } from "@/lib/queryClient";
@@ -1163,16 +1164,19 @@ export default function VirtualPatientsManagement() {
                     </CardHeader>
                     <CardContent>
                       <Tabs defaultValue="limbs" className="w-full">
-                        <TabsList className="grid w-full grid-cols-9">
+                        <TabsList className="grid w-full grid-cols-5 gap-1">
                           <TabsTrigger value="limbs">Limbs</TabsTrigger>
                           <TabsTrigger value="pathology">Pathology</TabsTrigger>
                           <TabsTrigger value="rom">ROM</TabsTrigger>
                           <TabsTrigger value="gait">Gait</TabsTrigger>
                           <TabsTrigger value="pain">Pain</TabsTrigger>
+                        </TabsList>
+                        <TabsList className="grid w-full grid-cols-5 gap-1 mt-2">
                           <TabsTrigger value="forces">Forces</TabsTrigger>
                           <TabsTrigger value="muscle">Muscle</TabsTrigger>
                           <TabsTrigger value="posture">Posture</TabsTrigger>
                           <TabsTrigger value="movement">Movement</TabsTrigger>
+                          <TabsTrigger value="capture" className="bg-blue-50">Capture</TabsTrigger>
                         </TabsList>
 
                         {/* Limbs Tab */}
@@ -3046,6 +3050,31 @@ export default function VirtualPatientsManagement() {
                               ))}
                             </div>
                           </div>
+                        </TabsContent>
+
+                        {/* Movement Capture Tab - Phase 2 & Phase 5 */}
+                        <TabsContent value="capture" className="mt-4">
+                          {selectedConfig && (
+                            <MovementCapture
+                              patientId={selectedConfig.id}
+                              selectedMovement={selectedTest}
+                              onCaptureComplete={(data) => {
+                                toast({
+                                  title: "Movement Captured",
+                                  description: `Successfully captured ${data.length} frames of movement data`,
+                                });
+                                // Refresh the patient config to show new captured movements
+                                queryClient.invalidateQueries({ queryKey: ['/api/virtual-patient-configs'] });
+                              }}
+                              onAnalysisComplete={(analysis) => {
+                                toast({
+                                  title: "Analysis Complete",
+                                  description: "AI movement analysis completed successfully",
+                                });
+                                console.log('Movement analysis:', analysis);
+                              }}
+                            />
+                          )}
                         </TabsContent>
                       </Tabs>
                     </CardContent>

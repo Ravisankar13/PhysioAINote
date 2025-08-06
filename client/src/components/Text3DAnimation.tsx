@@ -1012,10 +1012,10 @@ export default function Text3DAnimation({
       return clavicleGroup;
     };
     
-    // Position clavicles at sternum's clavicular notch level
-    // Get sternum from spineGroup
-    const sternumMesh = spineGroup.getObjectByName('sternum') as THREE.Group;
-    const clavicleY = sternumMesh ? sternumMesh.position.y + 0.175 : torsoHeight + 0.9;
+    // Position clavicles at proper shoulder level (upper chest/shoulder area)
+    // The shoulders should be positioned near the top of the torso
+    const shoulderHeight = 1.65; // Standard shoulder height for proper anatomical position
+    const clavicleY = shoulderHeight;
     
     // Create AC joint geometry (small sphere for the joint)
     const acJointGeometry = new THREE.SphereGeometry(0.03, 10, 10);

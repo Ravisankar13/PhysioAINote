@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Loader2, Users, Camera, Activity, Stethoscope, Dumbbell, Plus, Save, Trash2, Edit, X, Check, Settings, UserPlus, FileText } from "lucide-react";
+import { Loader2, Users, Camera, Activity, Stethoscope, Dumbbell, Plus, Save, Trash2, Edit, X, Check, Settings, UserPlus, FileText, Maximize2, Minimize2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -35,6 +35,7 @@ export default function VirtualPatientsManagement() {
   const [isEditing, setIsEditing] = useState(false);
   const [editingName, setEditingName] = useState("");
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   
   // Limb scale states
   const [upperArmScale, setUpperArmScale] = useState<number[]>([1.0]);
@@ -1082,14 +1083,31 @@ export default function VirtualPatientsManagement() {
                 </Card>
 
                 {/* 3D Preview and Configuration Tabs */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* 3D Preview */}
-                  <Card>
-                    <CardHeader>
+                <div className={isFullscreen ? "" : "grid grid-cols-1 lg:grid-cols-5 gap-6"}>
+                  {/* 3D Preview - Takes 60% width or full screen */}
+                  <Card className={isFullscreen ? "fixed inset-0 z-50 m-4" : "lg:col-span-3"}>
+                    <CardHeader className="flex flex-row items-center justify-between">
                       <CardTitle className="text-lg">3D Preview</CardTitle>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setIsFullscreen(!isFullscreen)}
+                        className="ml-auto"
+                      >
+                        {isFullscreen ? (
+                          <Minimize2 className="h-4 w-4" />
+                        ) : (
+                          <Maximize2 className="h-4 w-4" />
+                        )}
+                      </Button>
                     </CardHeader>
                     <CardContent>
-                      <div className="bg-gray-900 rounded-lg p-4" style={{ height: '500px' }}>
+                      <div 
+                        className="bg-gray-900 rounded-lg p-4" 
+                        style={isFullscreen 
+                          ? { height: 'calc(100vh - 160px)' }
+                          : { minHeight: '700px', height: 'calc(100vh - 400px)', maxHeight: '800px' }
+                        }>
                         <Text3DAnimation
                           clinicalText={selectedTest || selectedExercise || ""}
                           isPlaying={true}
@@ -1145,7 +1163,10 @@ export default function VirtualPatientsManagement() {
                       </div>
                       
                       {/* Test/Exercise Selection */}
-                      <div className="mt-4 space-y-3">
+                      <div className={isFullscreen 
+                        ? "absolute bottom-4 left-4 right-4 bg-white/90 backdrop-blur rounded-lg p-4 space-y-3 z-10"
+                        : "mt-4 space-y-3"
+                      }>
                         <div>
                           <Label>Assessment Test</Label>
                           <Select value={selectedTest} onValueChange={setSelectedTest}>
@@ -1183,8 +1204,9 @@ export default function VirtualPatientsManagement() {
                     </CardContent>
                   </Card>
 
-                  {/* Configuration Tabs */}
-                  <Card>
+                  {/* Configuration Tabs - Takes 40% width */}
+                  {!isFullscreen && (
+                  <Card className="lg:col-span-2">
                     <CardHeader>
                       <CardTitle className="text-lg">Patient Configuration</CardTitle>
                     </CardHeader>
@@ -3105,6 +3127,7 @@ export default function VirtualPatientsManagement() {
                       </Tabs>
                     </CardContent>
                   </Card>
+                  )}
                 </div>
               </div>
             ) : (

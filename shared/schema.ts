@@ -398,6 +398,96 @@ export const virtualPatientConfigs = pgTable("virtual_patient_configs", {
       genuValgum: number; // -30 to 30 degrees
       patellaHeight: number; // 0.8-1.2 ratio
     };
+    
+    // Range of Motion Limitations
+    romLimitations: {
+      // Hip ROM
+      hipFlexion: { left: number; right: number; }; // Normal: 120°
+      hipExtension: { left: number; right: number; }; // Normal: 30°
+      hipAbduction: { left: number; right: number; }; // Normal: 45°
+      hipAdduction: { left: number; right: number; }; // Normal: 30°
+      hipInternalRotation: { left: number; right: number; }; // Normal: 40°
+      hipExternalRotation: { left: number; right: number; }; // Normal: 45°
+      
+      // Knee ROM
+      kneeFlexion: { left: number; right: number; }; // Normal: 135°
+      kneeExtension: { left: number; right: number; }; // Normal: 0° (or -5° hyperextension)
+      
+      // Ankle ROM
+      ankleDorsiflexion: { left: number; right: number; }; // Normal: 20°
+      anklePlantarflexion: { left: number; right: number; }; // Normal: 45°
+      ankleInversion: { left: number; right: number; }; // Normal: 30°
+      ankleEversion: { left: number; right: number; }; // Normal: 20°
+      
+      // Shoulder ROM
+      shoulderFlexion: { left: number; right: number; }; // Normal: 180°
+      shoulderExtension: { left: number; right: number; }; // Normal: 60°
+      shoulderAbduction: { left: number; right: number; }; // Normal: 180°
+      shoulderInternalRotation: { left: number; right: number; }; // Normal: 70°
+      shoulderExternalRotation: { left: number; right: number; }; // Normal: 90°
+      
+      // Spine ROM
+      cervicalFlexion: number; // Normal: 50°
+      cervicalExtension: number; // Normal: 60°
+      cervicalRotation: { left: number; right: number; }; // Normal: 80°
+      thoracolumbarFlexion: number; // Normal: 80°
+      thoracolumbarExtension: number; // Normal: 30°
+      thoracolumbarRotation: { left: number; right: number; }; // Normal: 45°
+    };
+    
+    // Gait Patterns
+    gaitPattern: {
+      // Basic gait deviations
+      antalgia: 'none' | 'mild' | 'moderate' | 'severe';
+      trendelenburg: { left: boolean; right: boolean; };
+      duchenne: { left: boolean; right: boolean; };
+      circumduction: { left: boolean; right: boolean; };
+      hipHike: { left: boolean; right: boolean; };
+      steppage: { left: boolean; right: boolean; };
+      scissoring: boolean;
+      
+      // Gait phases
+      stancePhaseDeviation: {
+        heelStrike: 'normal' | 'absent' | 'excessive';
+        footFlat: 'normal' | 'prolonged' | 'reduced';
+        midstance: 'normal' | 'unstable' | 'shortened';
+        heelOff: 'normal' | 'early' | 'delayed';
+        toeOff: 'normal' | 'absent' | 'prolonged';
+      };
+      
+      // Gait parameters
+      stepLength: { left: number; right: number; }; // cm
+      strideLength: number; // cm
+      cadence: number; // steps/min
+      velocity: number; // m/s
+      baseOfSupport: number; // cm
+      toeAngle: { left: number; right: number; }; // degrees
+    };
+    
+    // Pain Mapping
+    painMapping: {
+      // Pain locations with intensity (0-10)
+      regions: Array<{
+        bodyPart: string; // e.g., "anterior_knee", "lateral_hip", "lower_back"
+        side: 'left' | 'right' | 'bilateral';
+        intensity: number; // 0-10 VAS scale
+        quality: 'sharp' | 'dull' | 'burning' | 'aching' | 'throbbing' | 'stabbing';
+        behavior: 'constant' | 'intermittent' | 'activity_related' | 'rest_pain';
+        aggravatingFactors: string[];
+        relievingFactors: string[];
+      }>;
+      
+      // Movement-related pain
+      movementPain: {
+        flexion: boolean;
+        extension: boolean;
+        rotation: boolean;
+        weightBearing: boolean;
+        nonWeightBearing: boolean;
+        startUp: boolean; // Pain on initial movement
+        endRange: boolean; // Pain at end of ROM
+      };
+    };
   }>().notNull().default({
     limbScales: {
       overall: 1,
@@ -420,6 +510,65 @@ export const virtualPatientConfigs = pgTable("virtual_patient_configs", {
       genuVarum: 0,
       genuValgum: 0,
       patellaHeight: 1
+    },
+    romLimitations: {
+      hipFlexion: { left: 120, right: 120 },
+      hipExtension: { left: 30, right: 30 },
+      hipAbduction: { left: 45, right: 45 },
+      hipAdduction: { left: 30, right: 30 },
+      hipInternalRotation: { left: 40, right: 40 },
+      hipExternalRotation: { left: 45, right: 45 },
+      kneeFlexion: { left: 135, right: 135 },
+      kneeExtension: { left: 0, right: 0 },
+      ankleDorsiflexion: { left: 20, right: 20 },
+      anklePlantarflexion: { left: 45, right: 45 },
+      ankleInversion: { left: 30, right: 30 },
+      ankleEversion: { left: 20, right: 20 },
+      shoulderFlexion: { left: 180, right: 180 },
+      shoulderExtension: { left: 60, right: 60 },
+      shoulderAbduction: { left: 180, right: 180 },
+      shoulderInternalRotation: { left: 70, right: 70 },
+      shoulderExternalRotation: { left: 90, right: 90 },
+      cervicalFlexion: 50,
+      cervicalExtension: 60,
+      cervicalRotation: { left: 80, right: 80 },
+      thoracolumbarFlexion: 80,
+      thoracolumbarExtension: 30,
+      thoracolumbarRotation: { left: 45, right: 45 }
+    },
+    gaitPattern: {
+      antalgia: 'none',
+      trendelenburg: { left: false, right: false },
+      duchenne: { left: false, right: false },
+      circumduction: { left: false, right: false },
+      hipHike: { left: false, right: false },
+      steppage: { left: false, right: false },
+      scissoring: false,
+      stancePhaseDeviation: {
+        heelStrike: 'normal',
+        footFlat: 'normal',
+        midstance: 'normal',
+        heelOff: 'normal',
+        toeOff: 'normal'
+      },
+      stepLength: { left: 65, right: 65 },
+      strideLength: 130,
+      cadence: 110,
+      velocity: 1.2,
+      baseOfSupport: 10,
+      toeAngle: { left: 7, right: 7 }
+    },
+    painMapping: {
+      regions: [],
+      movementPain: {
+        flexion: false,
+        extension: false,
+        rotation: false,
+        weightBearing: false,
+        nonWeightBearing: false,
+        startUp: false,
+        endRange: false
+      }
     }
   }),
   

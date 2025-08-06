@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
 import Text3DAnimation from "@/components/Text3DAnimation";
 import type { SoapVirtualPatient, VirtualPatientConfig, InsertVirtualPatientConfig } from "@shared/schema";
@@ -83,6 +84,30 @@ export default function VirtualPatientsManagement() {
   const [trunkLean, setTrunkLean] = useState<boolean>(false);
   const [circumduction, setCircumduction] = useState<boolean>(false);
   const [trendelenburg, setTrendelenburg] = useState<boolean>(false);
+  
+  // ROM Limitation states
+  const [hipFlexionROM, setHipFlexionROM] = useState<{ left: number; right: number }>({ left: 120, right: 120 });
+  const [hipExtensionROM, setHipExtensionROM] = useState<{ left: number; right: number }>({ left: 30, right: 30 });
+  const [kneeFlexionROM, setKneeFlexionROM] = useState<{ left: number; right: number }>({ left: 135, right: 135 });
+  const [kneeExtensionROM, setKneeExtensionROM] = useState<{ left: number; right: number }>({ left: 0, right: 0 });
+  const [ankleDorsiflexionROM, setAnkleDorsiflexionROM] = useState<{ left: number; right: number }>({ left: 20, right: 20 });
+  
+  // Gait Pattern states
+  const [antalgicGait, setAntalgicGait] = useState<'none' | 'mild' | 'moderate' | 'severe'>('none');
+  const [stepLength, setStepLength] = useState<{ left: number; right: number }>({ left: 65, right: 65 });
+  const [cadence, setCadence] = useState<number>(110);
+  const [gaitVelocity, setGaitVelocity] = useState<number>(1.2);
+  
+  // Pain Mapping states
+  const [painRegions, setPainRegions] = useState<Array<{
+    bodyPart: string;
+    side: 'left' | 'right' | 'bilateral';
+    intensity: number;
+    quality: 'sharp' | 'dull' | 'burning' | 'aching' | 'throbbing' | 'stabbing';
+  }>>([]);
+  const [flexionPain, setFlexionPain] = useState<boolean>(false);
+  const [extensionPain, setExtensionPain] = useState<boolean>(false);
+  const [weightBearingPain, setWeightBearingPain] = useState<boolean>(false);
 
   // Get current user
   const { data: user } = useQuery({
@@ -219,6 +244,38 @@ export default function VirtualPatientsManagement() {
             circumduction,
             trendelenburg
           }
+        },
+        romLimitations: {
+          hip: {
+            flexion: hipFlexionROM,
+            extension: hipExtensionROM
+          },
+          knee: {
+            flexion: kneeFlexionROM,
+            extension: kneeExtensionROM
+          },
+          ankle: {
+            dorsiflexion: ankleDorsiflexionROM
+          }
+        },
+        gaitPattern: {
+          antalgicGait: antalgicGait,
+          stepLength: stepLength,
+          cadence: cadence,
+          velocity: gaitVelocity,
+          compensations: {
+            trendelenburg: trendelenburg,
+            circumduction: circumduction,
+            hipHike: hipHike
+          }
+        },
+        painMapping: {
+          regions: painRegions,
+          movementPain: {
+            flexion: flexionPain,
+            extension: extensionPain,
+            weightBearing: weightBearingPain
+          }
         }
       },
       pathologies: [
@@ -294,6 +351,38 @@ export default function VirtualPatientsManagement() {
       setPatellaHeight([modelConfig.lowerLimbPathology.patellaHeight || 1]);
     }
     
+    // Load ROM limitations
+    if (modelConfig.romLimitations) {
+      if (modelConfig.romLimitations.hip) {
+        setHipFlexionROM(modelConfig.romLimitations.hip.flexion || { left: 120, right: 120 });
+        setHipExtensionROM(modelConfig.romLimitations.hip.extension || { left: 30, right: 30 });
+      }
+      if (modelConfig.romLimitations.knee) {
+        setKneeFlexionROM(modelConfig.romLimitations.knee.flexion || { left: 135, right: 135 });
+        setKneeExtensionROM(modelConfig.romLimitations.knee.extension || { left: 0, right: 0 });
+      }
+      if (modelConfig.romLimitations.ankle) {
+        setAnkleDorsiflexionROM(modelConfig.romLimitations.ankle.dorsiflexion || { left: 20, right: 20 });
+      }
+    }
+    
+    // Load gait pattern
+    if (modelConfig.gaitPattern) {
+      setAntalgicGait(modelConfig.gaitPattern.antalgicGait || 'none');
+      setStepLength(modelConfig.gaitPattern.stepLength || { left: 65, right: 65 });
+      setCadence(modelConfig.gaitPattern.cadence || 110);
+      setGaitVelocity(modelConfig.gaitPattern.velocity || 1.2);
+    }
+    
+    // Load pain mapping
+    if (modelConfig.painMapping) {
+      setPainRegions(modelConfig.painMapping.regions || []);
+      if (modelConfig.painMapping.movementPain) {
+        setFlexionPain(modelConfig.painMapping.movementPain.flexion || false);
+        setExtensionPain(modelConfig.painMapping.movementPain.extension || false);
+        setWeightBearingPain(modelConfig.painMapping.movementPain.weightBearing || false);
+      }
+    }
 
   };
 
@@ -324,6 +413,33 @@ export default function VirtualPatientsManagement() {
           genuVarum: genuVarum[0],
           genuValgum: genuValgum[0],
           patellaHeight: patellaHeight[0]
+        },
+        romLimitations: {
+          hip: {
+            flexion: hipFlexionROM,
+            extension: hipExtensionROM
+          },
+          knee: {
+            flexion: kneeFlexionROM,
+            extension: kneeExtensionROM
+          },
+          ankle: {
+            dorsiflexion: ankleDorsiflexionROM
+          }
+        },
+        gaitPattern: {
+          antalgicGait: antalgicGait,
+          stepLength: stepLength,
+          cadence: cadence,
+          velocity: gaitVelocity
+        },
+        painMapping: {
+          regions: painRegions,
+          movementPain: {
+            flexion: flexionPain,
+            extension: extensionPain,
+            weightBearing: weightBearingPain
+          }
         }
       };
       
@@ -343,7 +459,10 @@ export default function VirtualPatientsManagement() {
     coordination, hipHike, trunkLean, circumduction, trendelenburg,
     hipNeckAngle, hipAnteversion, acetabularCoverage, kneeVarusValgus,
     patellaHeight, tibialTorsion, scapularWinging, acSeparation, ghSubluxation,
-    subtalarStiffness, ankleInstability, hindfootAngle, ankleEffusion
+    subtalarStiffness, ankleInstability, hindfootAngle, ankleEffusion,
+    hipFlexionROM, hipExtensionROM, kneeFlexionROM, kneeExtensionROM,
+    ankleDorsiflexionROM, antalgicGait, stepLength, cadence, gaitVelocity,
+    painRegions, flexionPain, extensionPain, weightBearingPain
   ]);
 
   // Handle create new configuration
@@ -795,9 +914,12 @@ export default function VirtualPatientsManagement() {
                     </CardHeader>
                     <CardContent>
                       <Tabs defaultValue="limbs" className="w-full">
-                        <TabsList className="grid w-full grid-cols-4">
+                        <TabsList className="grid w-full grid-cols-7">
                           <TabsTrigger value="limbs">Limbs</TabsTrigger>
                           <TabsTrigger value="pathology">Pathology</TabsTrigger>
+                          <TabsTrigger value="rom">ROM</TabsTrigger>
+                          <TabsTrigger value="gait">Gait</TabsTrigger>
+                          <TabsTrigger value="pain">Pain</TabsTrigger>
                           <TabsTrigger value="posture">Posture</TabsTrigger>
                           <TabsTrigger value="movement">Movement</TabsTrigger>
                         </TabsList>
@@ -1449,6 +1571,400 @@ export default function VirtualPatientsManagement() {
                                   </SelectContent>
                                 </Select>
                               </div>
+                            </div>
+                          </div>
+                        </TabsContent>
+
+                        {/* ROM Tab */}
+                        <TabsContent value="rom" className="space-y-4 mt-4">
+                          <div>
+                            <h3 className="font-medium mb-3">Range of Motion Limitations</h3>
+                            
+                            {/* Hip ROM */}
+                            <div className="mb-4">
+                              <h4 className="text-sm font-medium mb-2">Hip</h4>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <Label className="text-xs">Flexion (L/R)</Label>
+                                  <div className="flex gap-2">
+                                    <Input
+                                      type="number"
+                                      value={hipFlexionROM.left}
+                                      onChange={(e) => setHipFlexionROM({...hipFlexionROM, left: Number(e.target.value)})}
+                                      className="h-8"
+                                      min={0}
+                                      max={150}
+                                    />
+                                    <Input
+                                      type="number"
+                                      value={hipFlexionROM.right}
+                                      onChange={(e) => setHipFlexionROM({...hipFlexionROM, right: Number(e.target.value)})}
+                                      className="h-8"
+                                      min={0}
+                                      max={150}
+                                    />
+                                  </div>
+                                  <p className="text-xs text-gray-500">Normal: 120°</p>
+                                </div>
+                                <div>
+                                  <Label className="text-xs">Extension (L/R)</Label>
+                                  <div className="flex gap-2">
+                                    <Input
+                                      type="number"
+                                      value={hipExtensionROM.left}
+                                      onChange={(e) => setHipExtensionROM({...hipExtensionROM, left: Number(e.target.value)})}
+                                      className="h-8"
+                                      min={0}
+                                      max={50}
+                                    />
+                                    <Input
+                                      type="number"
+                                      value={hipExtensionROM.right}
+                                      onChange={(e) => setHipExtensionROM({...hipExtensionROM, right: Number(e.target.value)})}
+                                      className="h-8"
+                                      min={0}
+                                      max={50}
+                                    />
+                                  </div>
+                                  <p className="text-xs text-gray-500">Normal: 30°</p>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Knee ROM */}
+                            <div className="mb-4">
+                              <h4 className="text-sm font-medium mb-2">Knee</h4>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <Label className="text-xs">Flexion (L/R)</Label>
+                                  <div className="flex gap-2">
+                                    <Input
+                                      type="number"
+                                      value={kneeFlexionROM.left}
+                                      onChange={(e) => setKneeFlexionROM({...kneeFlexionROM, left: Number(e.target.value)})}
+                                      className="h-8"
+                                      min={0}
+                                      max={160}
+                                    />
+                                    <Input
+                                      type="number"
+                                      value={kneeFlexionROM.right}
+                                      onChange={(e) => setKneeFlexionROM({...kneeFlexionROM, right: Number(e.target.value)})}
+                                      className="h-8"
+                                      min={0}
+                                      max={160}
+                                    />
+                                  </div>
+                                  <p className="text-xs text-gray-500">Normal: 135°</p>
+                                </div>
+                                <div>
+                                  <Label className="text-xs">Extension (L/R)</Label>
+                                  <div className="flex gap-2">
+                                    <Input
+                                      type="number"
+                                      value={kneeExtensionROM.left}
+                                      onChange={(e) => setKneeExtensionROM({...kneeExtensionROM, left: Number(e.target.value)})}
+                                      className="h-8"
+                                      min={-15}
+                                      max={10}
+                                    />
+                                    <Input
+                                      type="number"
+                                      value={kneeExtensionROM.right}
+                                      onChange={(e) => setKneeExtensionROM({...kneeExtensionROM, right: Number(e.target.value)})}
+                                      className="h-8"
+                                      min={-15}
+                                      max={10}
+                                    />
+                                  </div>
+                                  <p className="text-xs text-gray-500">Normal: 0° to -5°</p>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Ankle ROM */}
+                            <div className="mb-4">
+                              <h4 className="text-sm font-medium mb-2">Ankle</h4>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <Label className="text-xs">Dorsiflexion (L/R)</Label>
+                                  <div className="flex gap-2">
+                                    <Input
+                                      type="number"
+                                      value={ankleDorsiflexionROM.left}
+                                      onChange={(e) => setAnkleDorsiflexionROM({...ankleDorsiflexionROM, left: Number(e.target.value)})}
+                                      className="h-8"
+                                      min={0}
+                                      max={30}
+                                    />
+                                    <Input
+                                      type="number"
+                                      value={ankleDorsiflexionROM.right}
+                                      onChange={(e) => setAnkleDorsiflexionROM({...ankleDorsiflexionROM, right: Number(e.target.value)})}
+                                      className="h-8"
+                                      min={0}
+                                      max={30}
+                                    />
+                                  </div>
+                                  <p className="text-xs text-gray-500">Normal: 20°</p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </TabsContent>
+
+                        {/* Gait Tab */}
+                        <TabsContent value="gait" className="space-y-4 mt-4">
+                          <div>
+                            <h3 className="font-medium mb-3">Gait Analysis</h3>
+                            
+                            {/* Gait Pattern */}
+                            <div className="mb-4">
+                              <Label>Antalgic Gait Severity</Label>
+                              <Select 
+                                value={antalgicGait} 
+                                onValueChange={(value: any) => setAntalgicGait(value)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">None</SelectItem>
+                                  <SelectItem value="mild">Mild</SelectItem>
+                                  <SelectItem value="moderate">Moderate</SelectItem>
+                                  <SelectItem value="severe">Severe</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            {/* Step Length */}
+                            <div className="mb-4">
+                              <Label>Step Length (cm)</Label>
+                              <div className="flex gap-2">
+                                <div className="flex-1">
+                                  <Label className="text-xs">Left</Label>
+                                  <Input
+                                    type="number"
+                                    value={stepLength.left}
+                                    onChange={(e) => setStepLength({...stepLength, left: Number(e.target.value)})}
+                                    min={0}
+                                    max={100}
+                                  />
+                                </div>
+                                <div className="flex-1">
+                                  <Label className="text-xs">Right</Label>
+                                  <Input
+                                    type="number"
+                                    value={stepLength.right}
+                                    onChange={(e) => setStepLength({...stepLength, right: Number(e.target.value)})}
+                                    min={0}
+                                    max={100}
+                                  />
+                                </div>
+                              </div>
+                              <p className="text-xs text-gray-500 mt-1">Normal: 60-70 cm</p>
+                            </div>
+
+                            {/* Cadence */}
+                            <div className="mb-4">
+                              <div className="flex justify-between mb-1">
+                                <Label>Cadence</Label>
+                                <span className="text-sm text-gray-600">{cadence} steps/min</span>
+                              </div>
+                              <Slider
+                                value={[cadence]}
+                                onValueChange={(value) => setCadence(value[0])}
+                                min={60}
+                                max={140}
+                                step={1}
+                              />
+                              <p className="text-xs text-gray-500 mt-1">Normal: 100-120 steps/min</p>
+                            </div>
+
+                            {/* Velocity */}
+                            <div className="mb-4">
+                              <div className="flex justify-between mb-1">
+                                <Label>Gait Velocity</Label>
+                                <span className="text-sm text-gray-600">{gaitVelocity.toFixed(1)} m/s</span>
+                              </div>
+                              <Slider
+                                value={[gaitVelocity]}
+                                onValueChange={(value) => setGaitVelocity(value[0])}
+                                min={0.3}
+                                max={2.0}
+                                step={0.1}
+                              />
+                              <p className="text-xs text-gray-500 mt-1">Normal: 1.0-1.4 m/s</p>
+                            </div>
+
+                            {/* Compensatory Patterns */}
+                            <div className="mb-4">
+                              <Label className="mb-2">Compensatory Patterns</Label>
+                              <div className="space-y-2">
+                                <div className="flex items-center space-x-2">
+                                  <Checkbox 
+                                    checked={trendelenburg}
+                                    onCheckedChange={(checked) => setTrendelenburg(checked as boolean)}
+                                  />
+                                  <Label className="text-sm">Trendelenburg Gait</Label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <Checkbox 
+                                    checked={circumduction}
+                                    onCheckedChange={(checked) => setCircumduction(checked as boolean)}
+                                  />
+                                  <Label className="text-sm">Circumduction</Label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <Checkbox 
+                                    checked={hipHike}
+                                    onCheckedChange={(checked) => setHipHike(checked as boolean)}
+                                  />
+                                  <Label className="text-sm">Hip Hike</Label>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </TabsContent>
+
+                        {/* Pain Tab */}
+                        <TabsContent value="pain" className="space-y-4 mt-4">
+                          <div>
+                            <h3 className="font-medium mb-3">Pain Mapping</h3>
+                            
+                            {/* Pain with Movement */}
+                            <div className="mb-4">
+                              <Label className="mb-2">Pain with Movement</Label>
+                              <div className="space-y-2">
+                                <div className="flex items-center space-x-2">
+                                  <Checkbox 
+                                    checked={flexionPain}
+                                    onCheckedChange={(checked) => setFlexionPain(checked as boolean)}
+                                  />
+                                  <Label className="text-sm">Pain with Flexion</Label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <Checkbox 
+                                    checked={extensionPain}
+                                    onCheckedChange={(checked) => setExtensionPain(checked as boolean)}
+                                  />
+                                  <Label className="text-sm">Pain with Extension</Label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <Checkbox 
+                                    checked={weightBearingPain}
+                                    onCheckedChange={(checked) => setWeightBearingPain(checked as boolean)}
+                                  />
+                                  <Label className="text-sm">Pain with Weight Bearing</Label>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Pain Regions */}
+                            <div className="mb-4">
+                              <Label className="mb-2">Pain Regions</Label>
+                              <Button
+                                onClick={() => {
+                                  setPainRegions([...painRegions, {
+                                    bodyPart: 'anterior_knee',
+                                    side: 'left',
+                                    intensity: 5,
+                                    quality: 'aching'
+                                  }]);
+                                }}
+                                variant="outline"
+                                size="sm"
+                                className="mb-2"
+                              >
+                                Add Pain Region
+                              </Button>
+                              
+                              {painRegions.map((region, index) => (
+                                <div key={index} className="border p-3 rounded mb-2">
+                                  <div className="flex justify-between mb-2">
+                                    <Label className="text-sm">Region {index + 1}</Label>
+                                    <Button
+                                      onClick={() => {
+                                        setPainRegions(painRegions.filter((_, i) => i !== index));
+                                      }}
+                                      variant="ghost"
+                                      size="sm"
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                  
+                                  <div className="grid grid-cols-2 gap-2 mb-2">
+                                    <Input
+                                      placeholder="Body part"
+                                      value={region.bodyPart}
+                                      onChange={(e) => {
+                                        const updated = [...painRegions];
+                                        updated[index].bodyPart = e.target.value;
+                                        setPainRegions(updated);
+                                      }}
+                                      className="h-8"
+                                    />
+                                    <Select
+                                      value={region.side}
+                                      onValueChange={(value: any) => {
+                                        const updated = [...painRegions];
+                                        updated[index].side = value;
+                                        setPainRegions(updated);
+                                      }}
+                                    >
+                                      <SelectTrigger className="h-8">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="left">Left</SelectItem>
+                                        <SelectItem value="right">Right</SelectItem>
+                                        <SelectItem value="bilateral">Bilateral</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  
+                                  <div className="mb-2">
+                                    <div className="flex justify-between mb-1">
+                                      <Label className="text-xs">Intensity</Label>
+                                      <span className="text-xs text-gray-600">{region.intensity}/10</span>
+                                    </div>
+                                    <Slider
+                                      value={[region.intensity]}
+                                      onValueChange={(value) => {
+                                        const updated = [...painRegions];
+                                        updated[index].intensity = value[0];
+                                        setPainRegions(updated);
+                                      }}
+                                      min={0}
+                                      max={10}
+                                      step={1}
+                                      className="mb-2"
+                                    />
+                                  </div>
+                                  
+                                  <Select
+                                    value={region.quality}
+                                    onValueChange={(value: any) => {
+                                      const updated = [...painRegions];
+                                      updated[index].quality = value;
+                                      setPainRegions(updated);
+                                    }}
+                                  >
+                                    <SelectTrigger className="h-8">
+                                      <SelectValue placeholder="Pain quality" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="sharp">Sharp</SelectItem>
+                                      <SelectItem value="dull">Dull</SelectItem>
+                                      <SelectItem value="burning">Burning</SelectItem>
+                                      <SelectItem value="aching">Aching</SelectItem>
+                                      <SelectItem value="throbbing">Throbbing</SelectItem>
+                                      <SelectItem value="stabbing">Stabbing</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              ))}
                             </div>
                           </div>
                         </TabsContent>

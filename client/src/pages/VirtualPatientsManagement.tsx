@@ -1109,7 +1109,7 @@ export default function VirtualPatientsManagement() {
                           : { minHeight: '700px', height: 'calc(100vh - 400px)', maxHeight: '800px' }
                         }>
                         <Text3DAnimation
-                          clinicalText={selectedTest || selectedExercise || ""}
+                          clinicalText={(selectedTest === "none" || selectedExercise === "none") ? "" : (selectedTest || selectedExercise || "")}
                           isPlaying={true}
                           selectedSide={selectedSide}
                           limbScales={{

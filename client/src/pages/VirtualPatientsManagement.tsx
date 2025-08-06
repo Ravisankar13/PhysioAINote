@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Loader2, Users, Camera, Activity, Stethoscope, Dumbbell, Plus, Save, Trash2, Edit, X, Check, Settings, UserPlus } from "lucide-react";
+import { useLocation } from "wouter";
+import { Loader2, Users, Camera, Activity, Stethoscope, Dumbbell, Plus, Save, Trash2, Edit, X, Check, Settings, UserPlus, FileText } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
@@ -21,6 +23,7 @@ import { queryClient } from "@/lib/queryClient";
 import { apiRequest } from "@/lib/queryClient";
 
 export default function VirtualPatientsManagement() {
+  const [location, setLocation] = useLocation();
   const [selectedPatient, setSelectedPatient] = useState<SoapVirtualPatient | null>(null);
   const [selectedConfig, setSelectedConfig] = useState<VirtualPatientConfig | null>(null);
   const [selectedTest, setSelectedTest] = useState<string>("");
@@ -875,15 +878,27 @@ export default function VirtualPatientsManagement() {
                         }`}
                         onClick={() => handleSelectConfig(config)}
                       >
-                        <h3 className="font-medium text-gray-900">{config.patient_name}</h3>
-                        <p className="text-sm text-gray-500">
-                          Created: {new Date(config.createdAt).toLocaleDateString()}
-                        </p>
-                        {config.soapVirtualPatientId && (
-                          <p className="text-xs text-blue-600 mt-1">
-                            Linked to SOAP Patient #{config.soapVirtualPatientId}
-                          </p>
-                        )}
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <h3 className="font-medium text-gray-900">{config.patient_name}</h3>
+                            <p className="text-sm text-gray-500">
+                              Created: {new Date(config.createdAt).toLocaleDateString()}
+                            </p>
+                            {config.soapVirtualPatientId && (
+                              <p className="text-xs text-blue-600 mt-1">
+                                Linked to SOAP Patient #{config.soapVirtualPatientId}
+                              </p>
+                            )}
+                          </div>
+                          {config.soapVirtualPatientId && (
+                            <div className="ml-2">
+                              <Badge className="bg-blue-100 text-blue-800 text-xs">
+                                <FileText className="h-3 w-3 mr-1" />
+                                SOAP
+                              </Badge>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     ))
                   ) : (
@@ -1014,6 +1029,17 @@ export default function VirtualPatientsManagement() {
                       </div>
                       {selectedConfig && (
                         <div className="flex gap-2">
+                          {selectedConfig.soapVirtualPatientId && (
+                            <Button
+                              onClick={() => setLocation('/enhanced-soap-notes')}
+                              variant="outline"
+                              size="sm"
+                              className="flex items-center gap-2"
+                            >
+                              <FileText className="h-4 w-4" />
+                              View SOAP Note
+                            </Button>
+                          )}
                           {updateConfigMutation.isPending && (
                             <div className="flex items-center gap-2 text-sm text-green-600">
                               <Loader2 className="h-4 w-4 animate-spin" />

@@ -108,6 +108,50 @@ export default function VirtualPatientsManagement() {
   const [flexionPain, setFlexionPain] = useState<boolean>(false);
   const [extensionPain, setExtensionPain] = useState<boolean>(false);
   const [weightBearingPain, setWeightBearingPain] = useState<boolean>(false);
+  
+  // Force Calculation states (Phase 3)
+  const [bodyMass, setBodyMass] = useState<number>(70); // kg
+  const [groundReactionForce, setGroundReactionForce] = useState<{ 
+    vertical: number; 
+    anteroposterior: number; 
+    mediolateral: number 
+  }>({ vertical: 1.0, anteroposterior: 0.1, mediolateral: 0.05 }); // Normalized to body weight
+  
+  const [jointMoments, setJointMoments] = useState<{
+    hip: { flexion: number; abduction: number; rotation: number };
+    knee: { flexion: number; varus: number; rotation: number };
+    ankle: { dorsiflexion: number; inversion: number };
+  }>({
+    hip: { flexion: 0, abduction: 0, rotation: 0 },
+    knee: { flexion: 0, varus: 0, rotation: 0 },
+    ankle: { dorsiflexion: 0, inversion: 0 }
+  });
+  
+  const [muscleForces, setMuscleForces] = useState<{
+    quadriceps: number;
+    hamstrings: number;
+    gluteusMaximus: number;
+    gluteusMedius: number;
+    gastrocnemius: number;
+    tibialis: number;
+  }>({
+    quadriceps: 100,
+    hamstrings: 100,
+    gluteusMaximus: 100,
+    gluteusMedius: 100,
+    gastrocnemius: 100,
+    tibialis: 100
+  }); // Percentage of normal force
+
+  const [centerOfPressure, setCenterOfPressure] = useState<{
+    x: number; // medial-lateral displacement
+    y: number; // anterior-posterior displacement
+  }>({ x: 0, y: 0 }); // in cm from center
+
+  const [loadDistribution, setLoadDistribution] = useState<{
+    left: number;
+    right: number;
+  }>({ left: 50, right: 50 }); // percentage
 
   // Get current user
   const { data: user } = useQuery({
@@ -246,28 +290,51 @@ export default function VirtualPatientsManagement() {
           }
         },
         romLimitations: {
-          hip: {
-            flexion: hipFlexionROM,
-            extension: hipExtensionROM
-          },
-          knee: {
-            flexion: kneeFlexionROM,
-            extension: kneeExtensionROM
-          },
-          ankle: {
-            dorsiflexion: ankleDorsiflexionROM
-          }
+          hipFlexion: hipFlexionROM,
+          hipExtension: hipExtensionROM,
+          hipAbduction: { left: 45, right: 45 },
+          hipAdduction: { left: 30, right: 30 },
+          hipInternalRotation: { left: 40, right: 40 },
+          hipExternalRotation: { left: 45, right: 45 },
+          kneeFlexion: kneeFlexionROM,
+          kneeExtension: kneeExtensionROM,
+          ankleDorsiflexion: ankleDorsiflexionROM,
+          anklePlantarflexion: { left: 45, right: 45 },
+          ankleInversion: { left: 30, right: 30 },
+          ankleEversion: { left: 20, right: 20 },
+          shoulderFlexion: { left: 180, right: 180 },
+          shoulderExtension: { left: 60, right: 60 },
+          shoulderAbduction: { left: 180, right: 180 },
+          shoulderInternalRotation: { left: 70, right: 70 },
+          shoulderExternalRotation: { left: 90, right: 90 },
+          cervicalFlexion: 50,
+          cervicalExtension: 60,
+          cervicalRotation: { left: 80, right: 80 },
+          thoracolumbarFlexion: 80,
+          thoracolumbarExtension: 30,
+          thoracolumbarRotation: { left: 45, right: 45 }
         },
         gaitPattern: {
-          antalgicGait: antalgicGait,
-          stepLength: stepLength,
+          antalgia: antalgicGait ? 'moderate' : 'none',
+          trendelenburg: trendelenburg,
+          duchenne: { left: false, right: false },
+          circumduction: circumduction,
+          hipHike: hipHike,
+          steppage: { left: false, right: false },
+          scissoring: false,
+          stancePhaseDeviation: {
+            heelStrike: 'normal',
+            footFlat: 'normal',
+            midstance: 'normal',
+            heelOff: 'normal',
+            toeOff: 'normal'
+          },
+          stepLength: { left: stepLength, right: stepLength },
+          strideLength: stepLength * 2,
           cadence: cadence,
           velocity: gaitVelocity,
-          compensations: {
-            trendelenburg: trendelenburg,
-            circumduction: circumduction,
-            hipHike: hipHike
-          }
+          baseOfSupport: 10,
+          toeAngle: { left: 7, right: 7 }
         },
         painMapping: {
           regions: painRegions,
@@ -276,6 +343,14 @@ export default function VirtualPatientsManagement() {
             extension: extensionPain,
             weightBearing: weightBearingPain
           }
+        },
+        forceCalculations: {
+          bodyMass: bodyMass,
+          groundReactionForce: groundReactionForce,
+          jointMoments: jointMoments,
+          muscleForces: muscleForces,
+          centerOfPressure: centerOfPressure,
+          loadDistribution: loadDistribution
         }
       },
       pathologies: [
@@ -353,25 +428,30 @@ export default function VirtualPatientsManagement() {
     
     // Load ROM limitations
     if (modelConfig.romLimitations) {
-      if (modelConfig.romLimitations.hip) {
-        setHipFlexionROM(modelConfig.romLimitations.hip.flexion || { left: 120, right: 120 });
-        setHipExtensionROM(modelConfig.romLimitations.hip.extension || { left: 30, right: 30 });
-      }
-      if (modelConfig.romLimitations.knee) {
-        setKneeFlexionROM(modelConfig.romLimitations.knee.flexion || { left: 135, right: 135 });
-        setKneeExtensionROM(modelConfig.romLimitations.knee.extension || { left: 0, right: 0 });
-      }
-      if (modelConfig.romLimitations.ankle) {
-        setAnkleDorsiflexionROM(modelConfig.romLimitations.ankle.dorsiflexion || { left: 20, right: 20 });
-      }
+      setHipFlexionROM(modelConfig.romLimitations.hipFlexion || { left: 120, right: 120 });
+      setHipExtensionROM(modelConfig.romLimitations.hipExtension || { left: 30, right: 30 });
+      setKneeFlexionROM(modelConfig.romLimitations.kneeFlexion || { left: 135, right: 135 });
+      setKneeExtensionROM(modelConfig.romLimitations.kneeExtension || { left: 0, right: 0 });
+      setAnkleDorsiflexionROM(modelConfig.romLimitations.ankleDorsiflexion || { left: 20, right: 20 });
     }
     
     // Load gait pattern
     if (modelConfig.gaitPattern) {
-      setAntalgicGait(modelConfig.gaitPattern.antalgicGait || 'none');
-      setStepLength(modelConfig.gaitPattern.stepLength || { left: 65, right: 65 });
+      setAntalgicGait(modelConfig.gaitPattern.antalgia === 'moderate' || modelConfig.gaitPattern.antalgia === 'severe');
+      setStepLength(modelConfig.gaitPattern.stepLength ? 
+        (typeof modelConfig.gaitPattern.stepLength === 'object' ? 
+          modelConfig.gaitPattern.stepLength.left : modelConfig.gaitPattern.stepLength) : 65);
       setCadence(modelConfig.gaitPattern.cadence || 110);
       setGaitVelocity(modelConfig.gaitPattern.velocity || 1.2);
+      if (modelConfig.gaitPattern.trendelenburg) {
+        setTrendelenburg(modelConfig.gaitPattern.trendelenburg);
+      }
+      if (modelConfig.gaitPattern.circumduction) {
+        setCircumduction(modelConfig.gaitPattern.circumduction);
+      }
+      if (modelConfig.gaitPattern.hipHike) {
+        setHipHike(modelConfig.gaitPattern.hipHike);
+      }
     }
     
     // Load pain mapping
@@ -382,6 +462,30 @@ export default function VirtualPatientsManagement() {
         setExtensionPain(modelConfig.painMapping.movementPain.extension || false);
         setWeightBearingPain(modelConfig.painMapping.movementPain.weightBearing || false);
       }
+    }
+    
+    // Load force calculations (Phase 3)
+    if (modelConfig.forceCalculations) {
+      setBodyMass(modelConfig.forceCalculations.bodyMass || 70);
+      setGroundReactionForce(modelConfig.forceCalculations.groundReactionForce || 
+        { vertical: 1.0, anteroposterior: 0.1, mediolateral: 0.05 });
+      setJointMoments(modelConfig.forceCalculations.jointMoments || 
+        {
+          hip: { flexion: 0, abduction: 0, rotation: 0 },
+          knee: { flexion: 0, varus: 0, rotation: 0 },
+          ankle: { dorsiflexion: 0, inversion: 0 }
+        });
+      setMuscleForces(modelConfig.forceCalculations.muscleForces || 
+        {
+          quadriceps: 100,
+          hamstrings: 100,
+          gluteusMaximus: 100,
+          gluteusMedius: 100,
+          gastrocnemius: 100,
+          tibialis: 100
+        });
+      setCenterOfPressure(modelConfig.forceCalculations.centerOfPressure || { x: 0, y: 0 });
+      setLoadDistribution(modelConfig.forceCalculations.loadDistribution || { left: 50, right: 50 });
     }
 
   };
@@ -415,23 +519,51 @@ export default function VirtualPatientsManagement() {
           patellaHeight: patellaHeight[0]
         },
         romLimitations: {
-          hip: {
-            flexion: hipFlexionROM,
-            extension: hipExtensionROM
-          },
-          knee: {
-            flexion: kneeFlexionROM,
-            extension: kneeExtensionROM
-          },
-          ankle: {
-            dorsiflexion: ankleDorsiflexionROM
-          }
+          hipFlexion: hipFlexionROM,
+          hipExtension: hipExtensionROM,
+          hipAbduction: { left: 45, right: 45 },
+          hipAdduction: { left: 30, right: 30 },
+          hipInternalRotation: { left: 40, right: 40 },
+          hipExternalRotation: { left: 45, right: 45 },
+          kneeFlexion: kneeFlexionROM,
+          kneeExtension: kneeExtensionROM,
+          ankleDorsiflexion: ankleDorsiflexionROM,
+          anklePlantarflexion: { left: 45, right: 45 },
+          ankleInversion: { left: 30, right: 30 },
+          ankleEversion: { left: 20, right: 20 },
+          shoulderFlexion: { left: 180, right: 180 },
+          shoulderExtension: { left: 60, right: 60 },
+          shoulderAbduction: { left: 180, right: 180 },
+          shoulderInternalRotation: { left: 70, right: 70 },
+          shoulderExternalRotation: { left: 90, right: 90 },
+          cervicalFlexion: 50,
+          cervicalExtension: 60,
+          cervicalRotation: { left: 80, right: 80 },
+          thoracolumbarFlexion: 80,
+          thoracolumbarExtension: 30,
+          thoracolumbarRotation: { left: 45, right: 45 }
         },
         gaitPattern: {
-          antalgicGait: antalgicGait,
-          stepLength: stepLength,
+          antalgia: antalgicGait ? 'moderate' : 'none',
+          trendelenburg: trendelenburg,
+          duchenne: { left: false, right: false },
+          circumduction: circumduction,
+          hipHike: hipHike,
+          steppage: { left: false, right: false },
+          scissoring: false,
+          stancePhaseDeviation: {
+            heelStrike: 'normal',
+            footFlat: 'normal',
+            midstance: 'normal',
+            heelOff: 'normal',
+            toeOff: 'normal'
+          },
+          stepLength: { left: stepLength, right: stepLength },
+          strideLength: stepLength * 2,
           cadence: cadence,
-          velocity: gaitVelocity
+          velocity: gaitVelocity,
+          baseOfSupport: 10,
+          toeAngle: { left: 7, right: 7 }
         },
         painMapping: {
           regions: painRegions,
@@ -440,6 +572,14 @@ export default function VirtualPatientsManagement() {
             extension: extensionPain,
             weightBearing: weightBearingPain
           }
+        },
+        forceCalculations: {
+          bodyMass: bodyMass,
+          groundReactionForce: groundReactionForce,
+          jointMoments: jointMoments,
+          muscleForces: muscleForces,
+          centerOfPressure: centerOfPressure,
+          loadDistribution: loadDistribution
         }
       };
       
@@ -462,7 +602,9 @@ export default function VirtualPatientsManagement() {
     subtalarStiffness, ankleInstability, hindfootAngle, ankleEffusion,
     hipFlexionROM, hipExtensionROM, kneeFlexionROM, kneeExtensionROM,
     ankleDorsiflexionROM, antalgicGait, stepLength, cadence, gaitVelocity,
-    painRegions, flexionPain, extensionPain, weightBearingPain
+    painRegions, flexionPain, extensionPain, weightBearingPain,
+    bodyMass, groundReactionForce, jointMoments, muscleForces,
+    centerOfPressure, loadDistribution
   ]);
 
   // Handle create new configuration
@@ -914,12 +1056,13 @@ export default function VirtualPatientsManagement() {
                     </CardHeader>
                     <CardContent>
                       <Tabs defaultValue="limbs" className="w-full">
-                        <TabsList className="grid w-full grid-cols-7">
+                        <TabsList className="grid w-full grid-cols-8">
                           <TabsTrigger value="limbs">Limbs</TabsTrigger>
                           <TabsTrigger value="pathology">Pathology</TabsTrigger>
                           <TabsTrigger value="rom">ROM</TabsTrigger>
                           <TabsTrigger value="gait">Gait</TabsTrigger>
                           <TabsTrigger value="pain">Pain</TabsTrigger>
+                          <TabsTrigger value="forces">Forces</TabsTrigger>
                           <TabsTrigger value="posture">Posture</TabsTrigger>
                           <TabsTrigger value="movement">Movement</TabsTrigger>
                         </TabsList>
@@ -1305,6 +1448,362 @@ export default function VirtualPatientsManagement() {
                                   step={1}
                                 />
                                 <p className="text-xs text-gray-500 mt-1">0% = No swelling</p>
+                              </div>
+                            </div>
+                          </div>
+                        </TabsContent>
+
+                        {/* Forces Tab (Phase 3) */}
+                        <TabsContent value="forces" className="space-y-4 mt-4">
+                          <div>
+                            <h3 className="font-medium mb-3">Biomechanical Forces</h3>
+                            
+                            {/* Body Mass */}
+                            <div className="mb-4">
+                              <div className="flex justify-between mb-1">
+                                <Label>Body Mass</Label>
+                                <span className="text-sm text-gray-600">{bodyMass} kg</span>
+                              </div>
+                              <Slider
+                                value={[bodyMass]}
+                                onValueChange={(value) => setBodyMass(value[0])}
+                                min={30}
+                                max={150}
+                                step={1}
+                              />
+                            </div>
+
+                            {/* Ground Reaction Forces */}
+                            <div className="mb-4">
+                              <h4 className="text-sm font-medium mb-2">Ground Reaction Forces (× body weight)</h4>
+                              <div className="space-y-3">
+                                <div>
+                                  <div className="flex justify-between mb-1">
+                                    <Label className="text-xs">Vertical</Label>
+                                    <span className="text-xs text-gray-600">{groundReactionForce.vertical.toFixed(2)}× BW</span>
+                                  </div>
+                                  <Slider
+                                    value={[groundReactionForce.vertical]}
+                                    onValueChange={(value) => setGroundReactionForce({...groundReactionForce, vertical: value[0]})}
+                                    min={0.5}
+                                    max={2.5}
+                                    step={0.1}
+                                  />
+                                  <p className="text-xs text-gray-500">Normal walking: 1.0-1.2× BW</p>
+                                </div>
+                                
+                                <div>
+                                  <div className="flex justify-between mb-1">
+                                    <Label className="text-xs">Anterior-Posterior</Label>
+                                    <span className="text-xs text-gray-600">{groundReactionForce.anteroposterior.toFixed(2)}× BW</span>
+                                  </div>
+                                  <Slider
+                                    value={[groundReactionForce.anteroposterior]}
+                                    onValueChange={(value) => setGroundReactionForce({...groundReactionForce, anteroposterior: value[0]})}
+                                    min={-0.3}
+                                    max={0.3}
+                                    step={0.01}
+                                  />
+                                </div>
+                                
+                                <div>
+                                  <div className="flex justify-between mb-1">
+                                    <Label className="text-xs">Medial-Lateral</Label>
+                                    <span className="text-xs text-gray-600">{groundReactionForce.mediolateral.toFixed(2)}× BW</span>
+                                  </div>
+                                  <Slider
+                                    value={[groundReactionForce.mediolateral]}
+                                    onValueChange={(value) => setGroundReactionForce({...groundReactionForce, mediolateral: value[0]})}
+                                    min={-0.2}
+                                    max={0.2}
+                                    step={0.01}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Load Distribution */}
+                            <div className="mb-4">
+                              <h4 className="text-sm font-medium mb-2">Load Distribution</h4>
+                              <div className="flex gap-2">
+                                <div className="flex-1">
+                                  <Label className="text-xs">Left (%)</Label>
+                                  <Input
+                                    type="number"
+                                    value={loadDistribution.left}
+                                    onChange={(e) => {
+                                      const left = Number(e.target.value);
+                                      setLoadDistribution({ left, right: 100 - left });
+                                    }}
+                                    min={0}
+                                    max={100}
+                                  />
+                                </div>
+                                <div className="flex-1">
+                                  <Label className="text-xs">Right (%)</Label>
+                                  <Input
+                                    type="number"
+                                    value={loadDistribution.right}
+                                    disabled
+                                  />
+                                </div>
+                              </div>
+                              <p className="text-xs text-gray-500 mt-1">Normal: 50% each side</p>
+                            </div>
+
+                            {/* Joint Moments */}
+                            <div className="mb-4">
+                              <h4 className="text-sm font-medium mb-2">Joint Moments (Nm/kg)</h4>
+                              
+                              {/* Hip Moments */}
+                              <div className="mb-3">
+                                <Label className="text-xs font-medium">Hip</Label>
+                                <div className="grid grid-cols-3 gap-2 mt-1">
+                                  <div>
+                                    <Label className="text-xs">Flexion</Label>
+                                    <Input
+                                      type="number"
+                                      value={jointMoments.hip.flexion}
+                                      onChange={(e) => setJointMoments({
+                                        ...jointMoments,
+                                        hip: {...jointMoments.hip, flexion: Number(e.target.value)}
+                                      })}
+                                      className="h-8"
+                                      step={0.1}
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs">Abduction</Label>
+                                    <Input
+                                      type="number"
+                                      value={jointMoments.hip.abduction}
+                                      onChange={(e) => setJointMoments({
+                                        ...jointMoments,
+                                        hip: {...jointMoments.hip, abduction: Number(e.target.value)}
+                                      })}
+                                      className="h-8"
+                                      step={0.1}
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs">Rotation</Label>
+                                    <Input
+                                      type="number"
+                                      value={jointMoments.hip.rotation}
+                                      onChange={(e) => setJointMoments({
+                                        ...jointMoments,
+                                        hip: {...jointMoments.hip, rotation: Number(e.target.value)}
+                                      })}
+                                      className="h-8"
+                                      step={0.1}
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Knee Moments */}
+                              <div className="mb-3">
+                                <Label className="text-xs font-medium">Knee</Label>
+                                <div className="grid grid-cols-3 gap-2 mt-1">
+                                  <div>
+                                    <Label className="text-xs">Flexion</Label>
+                                    <Input
+                                      type="number"
+                                      value={jointMoments.knee.flexion}
+                                      onChange={(e) => setJointMoments({
+                                        ...jointMoments,
+                                        knee: {...jointMoments.knee, flexion: Number(e.target.value)}
+                                      })}
+                                      className="h-8"
+                                      step={0.1}
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs">Varus</Label>
+                                    <Input
+                                      type="number"
+                                      value={jointMoments.knee.varus}
+                                      onChange={(e) => setJointMoments({
+                                        ...jointMoments,
+                                        knee: {...jointMoments.knee, varus: Number(e.target.value)}
+                                      })}
+                                      className="h-8"
+                                      step={0.1}
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs">Rotation</Label>
+                                    <Input
+                                      type="number"
+                                      value={jointMoments.knee.rotation}
+                                      onChange={(e) => setJointMoments({
+                                        ...jointMoments,
+                                        knee: {...jointMoments.knee, rotation: Number(e.target.value)}
+                                      })}
+                                      className="h-8"
+                                      step={0.1}
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Ankle Moments */}
+                              <div className="mb-3">
+                                <Label className="text-xs font-medium">Ankle</Label>
+                                <div className="grid grid-cols-2 gap-2 mt-1">
+                                  <div>
+                                    <Label className="text-xs">Dorsiflexion</Label>
+                                    <Input
+                                      type="number"
+                                      value={jointMoments.ankle.dorsiflexion}
+                                      onChange={(e) => setJointMoments({
+                                        ...jointMoments,
+                                        ankle: {...jointMoments.ankle, dorsiflexion: Number(e.target.value)}
+                                      })}
+                                      className="h-8"
+                                      step={0.1}
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs">Inversion</Label>
+                                    <Input
+                                      type="number"
+                                      value={jointMoments.ankle.inversion}
+                                      onChange={(e) => setJointMoments({
+                                        ...jointMoments,
+                                        ankle: {...jointMoments.ankle, inversion: Number(e.target.value)}
+                                      })}
+                                      className="h-8"
+                                      step={0.1}
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Muscle Forces */}
+                            <div className="mb-4">
+                              <h4 className="text-sm font-medium mb-2">Muscle Force (% of normal)</h4>
+                              <div className="space-y-2">
+                                <div>
+                                  <div className="flex justify-between mb-1">
+                                    <Label className="text-xs">Quadriceps</Label>
+                                    <span className="text-xs text-gray-600">{muscleForces.quadriceps}%</span>
+                                  </div>
+                                  <Slider
+                                    value={[muscleForces.quadriceps]}
+                                    onValueChange={(value) => setMuscleForces({...muscleForces, quadriceps: value[0]})}
+                                    min={0}
+                                    max={150}
+                                    step={5}
+                                  />
+                                </div>
+                                
+                                <div>
+                                  <div className="flex justify-between mb-1">
+                                    <Label className="text-xs">Hamstrings</Label>
+                                    <span className="text-xs text-gray-600">{muscleForces.hamstrings}%</span>
+                                  </div>
+                                  <Slider
+                                    value={[muscleForces.hamstrings]}
+                                    onValueChange={(value) => setMuscleForces({...muscleForces, hamstrings: value[0]})}
+                                    min={0}
+                                    max={150}
+                                    step={5}
+                                  />
+                                </div>
+                                
+                                <div>
+                                  <div className="flex justify-between mb-1">
+                                    <Label className="text-xs">Gluteus Maximus</Label>
+                                    <span className="text-xs text-gray-600">{muscleForces.gluteusMaximus}%</span>
+                                  </div>
+                                  <Slider
+                                    value={[muscleForces.gluteusMaximus]}
+                                    onValueChange={(value) => setMuscleForces({...muscleForces, gluteusMaximus: value[0]})}
+                                    min={0}
+                                    max={150}
+                                    step={5}
+                                  />
+                                </div>
+                                
+                                <div>
+                                  <div className="flex justify-between mb-1">
+                                    <Label className="text-xs">Gluteus Medius</Label>
+                                    <span className="text-xs text-gray-600">{muscleForces.gluteusMedius}%</span>
+                                  </div>
+                                  <Slider
+                                    value={[muscleForces.gluteusMedius]}
+                                    onValueChange={(value) => setMuscleForces({...muscleForces, gluteusMedius: value[0]})}
+                                    min={0}
+                                    max={150}
+                                    step={5}
+                                  />
+                                </div>
+                                
+                                <div>
+                                  <div className="flex justify-between mb-1">
+                                    <Label className="text-xs">Gastrocnemius</Label>
+                                    <span className="text-xs text-gray-600">{muscleForces.gastrocnemius}%</span>
+                                  </div>
+                                  <Slider
+                                    value={[muscleForces.gastrocnemius]}
+                                    onValueChange={(value) => setMuscleForces({...muscleForces, gastrocnemius: value[0]})}
+                                    min={0}
+                                    max={150}
+                                    step={5}
+                                  />
+                                </div>
+                                
+                                <div>
+                                  <div className="flex justify-between mb-1">
+                                    <Label className="text-xs">Tibialis Anterior</Label>
+                                    <span className="text-xs text-gray-600">{muscleForces.tibialis}%</span>
+                                  </div>
+                                  <Slider
+                                    value={[muscleForces.tibialis]}
+                                    onValueChange={(value) => setMuscleForces({...muscleForces, tibialis: value[0]})}
+                                    min={0}
+                                    max={150}
+                                    step={5}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Center of Pressure */}
+                            <div className="mb-4">
+                              <h4 className="text-sm font-medium mb-2">Center of Pressure (cm from center)</h4>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <div className="flex justify-between mb-1">
+                                    <Label className="text-xs">Medial-Lateral</Label>
+                                    <span className="text-xs text-gray-600">{centerOfPressure.x.toFixed(1)} cm</span>
+                                  </div>
+                                  <Slider
+                                    value={[centerOfPressure.x]}
+                                    onValueChange={(value) => setCenterOfPressure({...centerOfPressure, x: value[0]})}
+                                    min={-10}
+                                    max={10}
+                                    step={0.5}
+                                  />
+                                  <p className="text-xs text-gray-500">+ = lateral, - = medial</p>
+                                </div>
+                                
+                                <div>
+                                  <div className="flex justify-between mb-1">
+                                    <Label className="text-xs">Anterior-Posterior</Label>
+                                    <span className="text-xs text-gray-600">{centerOfPressure.y.toFixed(1)} cm</span>
+                                  </div>
+                                  <Slider
+                                    value={[centerOfPressure.y]}
+                                    onValueChange={(value) => setCenterOfPressure({...centerOfPressure, y: value[0]})}
+                                    min={-10}
+                                    max={10}
+                                    step={0.5}
+                                  />
+                                  <p className="text-xs text-gray-500">+ = anterior, - = posterior</p>
+                                </div>
                               </div>
                             </div>
                           </div>

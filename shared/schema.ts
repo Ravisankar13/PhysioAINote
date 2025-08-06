@@ -488,6 +488,37 @@ export const virtualPatientConfigs = pgTable("virtual_patient_configs", {
         endRange: boolean; // Pain at end of ROM
       };
     };
+    
+    // Force Calculations (Phase 3)
+    forceCalculations?: {
+      bodyMass: number; // kg
+      groundReactionForce: {
+        vertical: number; // × body weight
+        anteroposterior: number; // × body weight
+        mediolateral: number; // × body weight
+      };
+      jointMoments: {
+        hip: { flexion: number; abduction: number; rotation: number; }; // Nm/kg
+        knee: { flexion: number; varus: number; rotation: number; }; // Nm/kg
+        ankle: { dorsiflexion: number; inversion: number; }; // Nm/kg
+      };
+      muscleForces: {
+        quadriceps: number; // % of normal
+        hamstrings: number;
+        gluteusMaximus: number;
+        gluteusMedius: number;
+        gastrocnemius: number;
+        tibialis: number;
+      };
+      centerOfPressure: {
+        x: number; // medial-lateral displacement (cm)
+        y: number; // anterior-posterior displacement (cm)
+      };
+      loadDistribution: {
+        left: number; // percentage
+        right: number; // percentage
+      };
+    };
   }>().notNull().default({
     limbScales: {
       overall: 1,
@@ -568,6 +599,35 @@ export const virtualPatientConfigs = pgTable("virtual_patient_configs", {
         nonWeightBearing: false,
         startUp: false,
         endRange: false
+      }
+    },
+    forceCalculations: {
+      bodyMass: 70,
+      groundReactionForce: {
+        vertical: 1.0,
+        anteroposterior: 0.1,
+        mediolateral: 0.05
+      },
+      jointMoments: {
+        hip: { flexion: 0, abduction: 0, rotation: 0 },
+        knee: { flexion: 0, varus: 0, rotation: 0 },
+        ankle: { dorsiflexion: 0, inversion: 0 }
+      },
+      muscleForces: {
+        quadriceps: 100,
+        hamstrings: 100,
+        gluteusMaximus: 100,
+        gluteusMedius: 100,
+        gastrocnemius: 100,
+        tibialis: 100
+      },
+      centerOfPressure: {
+        x: 0,
+        y: 0
+      },
+      loadDistribution: {
+        left: 50,
+        right: 50
       }
     }
   }),

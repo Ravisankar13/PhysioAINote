@@ -317,14 +317,13 @@ export const MovementCapture: React.FC<MovementCaptureProps> = ({
     
     try {
       // Send to AI analysis endpoint
-      const response = await fetch('/api/ai/analyze-movement', {
+      const response = await fetch('/api/movement-analysis', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          patientId,
           movementType,
           movementData: capturedData,
-          timestamp: new Date().toISOString()
+          patientHistory: `Patient ID: ${patientId}`
         })
       });
 

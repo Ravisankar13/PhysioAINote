@@ -3602,6 +3602,32 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
 
+  // AI-powered movement analysis
+  app.post("/api/movement-analysis", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { movementType, movementData, patientHistory } = req.body;
+      
+      if (!movementType || !movementData) {
+        return res.status(400).json({ error: 'Movement type and data are required' });
+      }
+
+      // Import the movement analysis service
+      const { analyzeMovementWithAI } = await import('./ai/movementAnalysis');
+      
+      // Perform AI analysis
+      const analysisResult = await analyzeMovementWithAI(
+        movementType,
+        movementData,
+        patientHistory
+      );
+
+      res.json(analysisResult);
+    } catch (error) {
+      console.error("Movement analysis error:", error);
+      res.status(500).json({ error: 'Failed to analyze movement' });
+    }
+  });
+
   // Rename virtual patient
   app.patch("/api/virtual-patients/:id/rename", ensureAuthenticated, async (req: Request, res: Response) => {
     try {

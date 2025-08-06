@@ -3886,6 +3886,63 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
 
+  // Generate Virtual Patient from SOAP Note
+  app.post("/api/ai/generate-virtual-patient-from-soap", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { soapNoteId, subjective, objective, assessment, plan, transcript } = req.body;
+
+      // Import the SOAP to Virtual Patient converter
+      const { generateVirtualPatientFromSOAP } = await import('./ai/soapToVirtualPatient');
+
+      // Generate virtual patient parameters from SOAP content
+      const virtualPatientData = await generateVirtualPatientFromSOAP({
+        subjective,
+        objective,
+        assessment,
+        plan,
+        transcript
+      });
+
+      // Create a new virtual patient configuration
+      const newConfig = await storage.createVirtualPatientConfig({
+        userId,
+        soapVirtualPatientId: soapNoteId || null,
+        name: virtualPatientData.patientName,
+        modelConfig: {
+          limbScales: virtualPatientData.limbScales,
+          shoulderPathology: virtualPatientData.shoulderPathology,
+          spinalPathology: virtualPatientData.spinalPathology,
+          lowerLimbPathology: virtualPatientData.lowerLimbPathology
+        },
+        description: `Generated from SOAP note - ${virtualPatientData.condition}`,
+        tags: [virtualPatientData.gaitPattern, ...virtualPatientData.painLocations]
+      });
+
+      res.json({
+        success: true,
+        message: 'Virtual patient generated from SOAP note successfully',
+        virtualPatient: newConfig,
+        clinicalData: {
+          condition: virtualPatientData.condition,
+          movementQuality: virtualPatientData.movementQuality,
+          functionalLimitations: virtualPatientData.functionalLimitations
+        }
+      });
+
+    } catch (error) {
+      console.error("Error generating virtual patient from SOAP:", error);
+      res.status(500).json({ 
+        error: 'Failed to generate virtual patient from SOAP note',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
   // Save 3D Visualization for Virtual Patient
   app.post("/api/virtual-patients/:id/save-3d-visualization", ensureAuthenticated, async (req: Request, res: Response) => {
     try {

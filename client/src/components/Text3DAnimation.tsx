@@ -53,6 +53,8 @@ interface Text3DAnimationProps {
       trendelenburg: boolean;
     };
   };
+  visualizationMode?: 'skeleton' | 'muscles' | 'combined';
+  onVisualizationModeChange?: (mode: 'skeleton' | 'muscles' | 'combined') => void;
 }
 
 interface AnimationKeyframe {
@@ -70,6 +72,8 @@ export default function Text3DAnimation({
   isPlaying, 
   onTimeUpdate,
   selectedSide = 'both',
+  visualizationMode = 'combined',
+  onVisualizationModeChange,
   limbScales = {
     upperArm: 1.0,
     forearm: 1.0,
@@ -134,7 +138,9 @@ export default function Text3DAnimation({
   const [lastPinchDistance, setLastPinchDistance] = useState(0);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
-  const bonesRef = useRef<{ [key: string]: THREE.Mesh }>({});
+  const bonesRef = useRef<{ [key: string]: THREE.Mesh | THREE.Group }>({});
+  const musclesRef = useRef<{ [key: string]: THREE.Mesh }>({});
+  const [internalVisualizationMode, setInternalVisualizationMode] = useState<'skeleton' | 'muscles' | 'combined'>(visualizationMode);
 
   // Initialize Three.js scene
   useEffect(() => {
@@ -247,6 +253,20 @@ export default function Text3DAnimation({
       setAnimationData(getDefaultStandingPosition());
     }
   }, [clinicalText, selectedSide]);
+
+  // Update visualization when mode changes
+  useEffect(() => {
+    setInternalVisualizationMode(visualizationMode);
+    updateVisualizationMode();
+  }, [visualizationMode]);
+
+  // Handle internal visualization mode changes
+  useEffect(() => {
+    updateVisualizationMode();
+    if (onVisualizationModeChange && internalVisualizationMode !== visualizationMode) {
+      onVisualizationModeChange(internalVisualizationMode);
+    }
+  }, [internalVisualizationMode]);
 
 
 
@@ -1622,6 +1642,284 @@ export default function Text3DAnimation({
     // Note: Feet are now created as part of the ankle groups above
 
     scene.add(skeleton);
+    
+    // Create muscles
+    createMuscles(scene, skeleton);
+  };
+
+  // Create muscle visualization system
+  const createMuscles = (scene: THREE.Scene, skeleton: THREE.Group) => {
+    const muscleGroup = new THREE.Group();
+    muscleGroup.name = 'muscleGroup';
+    
+    // Muscle material - semi-transparent red
+    const muscleMaterial = new THREE.MeshPhongMaterial({
+      color: 0xcc4444,
+      opacity: 0.7,
+      transparent: true,
+      shininess: 30,
+      specular: 0x111111
+    });
+
+    // Helper function to create parametric muscle shape (ellipsoid)
+    const createMuscle = (
+      radiusX: number, 
+      radiusY: number, 
+      radiusZ: number,
+      position: [number, number, number],
+      rotation: [number, number, number] = [0, 0, 0],
+      name: string
+    ): THREE.Mesh => {
+      const geometry = new THREE.SphereGeometry(1, 16, 12);
+      geometry.scale(radiusX, radiusY, radiusZ);
+      const muscle = new THREE.Mesh(geometry, muscleMaterial);
+      muscle.position.set(...position);
+      muscle.rotation.set(...rotation);
+      muscle.name = name;
+      muscle.castShadow = true;
+      muscle.receiveShadow = true;
+      musclesRef.current[name] = muscle;
+      return muscle;
+    };
+
+    // Helper function to create cylindrical muscle
+    const createCylindricalMuscle = (
+      radius: number,
+      length: number,
+      position: [number, number, number],
+      rotation: [number, number, number] = [0, 0, 0],
+      name: string
+    ): THREE.Mesh => {
+      const geometry = new THREE.CylinderGeometry(radius, radius * 0.7, length, 12);
+      const muscle = new THREE.Mesh(geometry, muscleMaterial);
+      muscle.position.set(...position);
+      muscle.rotation.set(...rotation);
+      muscle.name = name;
+      muscle.castShadow = true;
+      muscle.receiveShadow = true;
+      musclesRef.current[name] = muscle;
+      return muscle;
+    };
+
+    // === UPPER BODY MUSCLES ===
+    
+    // Deltoids (shoulder muscles)
+    const leftDeltoid = createMuscle(0.12, 0.15, 0.1, [-0.35, 1.65, 0], [0, 0, 0.2], 'leftDeltoid');
+    muscleGroup.add(leftDeltoid);
+    
+    const rightDeltoid = createMuscle(0.12, 0.15, 0.1, [0.35, 1.65, 0], [0, 0, -0.2], 'rightDeltoid');
+    muscleGroup.add(rightDeltoid);
+
+    // Biceps (upper arm front)
+    const leftBiceps = createCylindricalMuscle(0.06, 0.25, [-0.25, 1.45, 0.03], [0, 0, 0], 'leftBiceps');
+    muscleGroup.add(leftBiceps);
+    
+    const rightBiceps = createCylindricalMuscle(0.06, 0.25, [0.25, 1.45, 0.03], [0, 0, 0], 'rightBiceps');
+    muscleGroup.add(rightBiceps);
+
+    // Triceps (upper arm back)
+    const leftTriceps = createCylindricalMuscle(0.05, 0.25, [-0.25, 1.45, -0.03], [0, 0, 0], 'leftTriceps');
+    muscleGroup.add(leftTriceps);
+    
+    const rightTriceps = createCylindricalMuscle(0.05, 0.25, [0.25, 1.45, -0.03], [0, 0, 0], 'rightTriceps');
+    muscleGroup.add(rightTriceps);
+
+    // Pectorals (chest muscles)
+    const leftPectoral = createMuscle(0.15, 0.08, 0.06, [-0.08, 1.55, 0.08], [0, 0.3, 0], 'leftPectoral');
+    muscleGroup.add(leftPectoral);
+    
+    const rightPectoral = createMuscle(0.15, 0.08, 0.06, [0.08, 1.55, 0.08], [0, -0.3, 0], 'rightPectoral');
+    muscleGroup.add(rightPectoral);
+
+    // Trapezius (upper back/neck)
+    const trapezius = createMuscle(0.25, 0.12, 0.08, [0, 1.7, -0.1], [0, 0, 0], 'trapezius');
+    muscleGroup.add(trapezius);
+
+    // Latissimus dorsi (back muscles)
+    const leftLat = createMuscle(0.12, 0.25, 0.05, [-0.15, 1.35, -0.1], [0, 0, 0.2], 'leftLat');
+    muscleGroup.add(leftLat);
+    
+    const rightLat = createMuscle(0.12, 0.25, 0.05, [0.15, 1.35, -0.1], [0, 0, -0.2], 'rightLat');
+    muscleGroup.add(rightLat);
+
+    // === CORE MUSCLES ===
+    
+    // Rectus abdominis (abs)
+    const abs = createMuscle(0.15, 0.35, 0.05, [0, 1.1, 0.08], [0, 0, 0], 'abs');
+    muscleGroup.add(abs);
+
+    // Obliques (side abs)
+    const leftOblique = createMuscle(0.08, 0.25, 0.06, [-0.12, 1.1, 0.05], [0, 0, 0.1], 'leftOblique');
+    muscleGroup.add(leftOblique);
+    
+    const rightOblique = createMuscle(0.08, 0.25, 0.06, [0.12, 1.1, 0.05], [0, 0, -0.1], 'rightOblique');
+    muscleGroup.add(rightOblique);
+
+    // Erector spinae (lower back)
+    const erectorSpinae = createMuscle(0.18, 0.4, 0.06, [0, 1.0, -0.08], [0, 0, 0], 'erectorSpinae');
+    muscleGroup.add(erectorSpinae);
+
+    // === LOWER BODY MUSCLES ===
+    
+    // Glutes (buttocks)
+    const leftGlute = createMuscle(0.12, 0.15, 0.1, [-0.1, 0.75, -0.05], [0, 0, 0], 'leftGlute');
+    muscleGroup.add(leftGlute);
+    
+    const rightGlute = createMuscle(0.12, 0.15, 0.1, [0.1, 0.75, -0.05], [0, 0, 0], 'rightGlute');
+    muscleGroup.add(rightGlute);
+
+    // Quadriceps (front thigh) - 4 muscles per leg
+    const leftQuadriceps = createCylindricalMuscle(0.08, 0.35, [-0.1, 0.35, 0.05], [0, 0, 0], 'leftQuadriceps');
+    muscleGroup.add(leftQuadriceps);
+    
+    const rightQuadriceps = createCylindricalMuscle(0.08, 0.35, [0.1, 0.35, 0.05], [0, 0, 0], 'rightQuadriceps');
+    muscleGroup.add(rightQuadriceps);
+
+    // Hamstrings (back thigh)
+    const leftHamstring = createCylindricalMuscle(0.07, 0.35, [-0.1, 0.35, -0.05], [0, 0, 0], 'leftHamstring');
+    muscleGroup.add(leftHamstring);
+    
+    const rightHamstring = createCylindricalMuscle(0.07, 0.35, [0.1, 0.35, -0.05], [0, 0, 0], 'rightHamstring');
+    muscleGroup.add(rightHamstring);
+
+    // Hip flexors
+    const leftHipFlexor = createMuscle(0.06, 0.12, 0.04, [-0.08, 0.65, 0.08], [0, 0, 0.2], 'leftHipFlexor');
+    muscleGroup.add(leftHipFlexor);
+    
+    const rightHipFlexor = createMuscle(0.06, 0.12, 0.04, [0.08, 0.65, 0.08], [0, 0, -0.2], 'rightHipFlexor');
+    muscleGroup.add(rightHipFlexor);
+
+    // Calves (gastrocnemius)
+    const leftCalf = createMuscle(0.06, 0.15, 0.05, [-0.1, -0.15, -0.03], [0, 0, 0], 'leftCalf');
+    muscleGroup.add(leftCalf);
+    
+    const rightCalf = createMuscle(0.06, 0.15, 0.05, [0.1, -0.15, -0.03], [0, 0, 0], 'rightCalf');
+    muscleGroup.add(rightCalf);
+
+    // Tibialis anterior (shin muscles)
+    const leftTibialis = createCylindricalMuscle(0.03, 0.25, [-0.1, -0.15, 0.04], [0, 0, 0], 'leftTibialis');
+    muscleGroup.add(leftTibialis);
+    
+    const rightTibialis = createCylindricalMuscle(0.03, 0.25, [0.1, -0.15, 0.04], [0, 0, 0], 'rightTibialis');
+    muscleGroup.add(rightTibialis);
+
+    // Add muscle group to skeleton (so it rotates with it)
+    skeleton.add(muscleGroup);
+    
+    // Update visibility based on visualization mode
+    updateVisualizationMode();
+  };
+
+  // Update visualization mode (skeleton, muscles, or combined)
+  const updateVisualizationMode = () => {
+    if (!skeletonRef.current) return;
+    
+    const skeleton = skeletonRef.current;
+    const muscleGroup = skeleton.getObjectByName('muscleGroup');
+    
+    // Update bone visibility
+    skeleton.traverse((child) => {
+      if (child instanceof THREE.Mesh && child.parent !== muscleGroup) {
+        // This is a bone
+        child.visible = internalVisualizationMode === 'skeleton' || internalVisualizationMode === 'combined';
+        // Make bones slightly transparent when showing combined view
+        if (child.material && 'opacity' in child.material) {
+          child.material.opacity = internalVisualizationMode === 'combined' ? 0.5 : 1.0;
+          child.material.transparent = internalVisualizationMode === 'combined';
+        }
+      }
+    });
+    
+    // Update muscle visibility
+    if (muscleGroup) {
+      muscleGroup.visible = internalVisualizationMode === 'muscles' || internalVisualizationMode === 'combined';
+      // Adjust muscle opacity for combined view
+      muscleGroup.traverse((child) => {
+        if (child instanceof THREE.Mesh && child.material && 'opacity' in child.material) {
+          child.material.opacity = internalVisualizationMode === 'combined' ? 0.4 : 0.7;
+        }
+      });
+    }
+  };
+
+  // Update muscles based on joint angles (muscle dynamics)
+  const updateMuscleDynamics = (animationKeyframe: AnimationKeyframe) => {
+    if (!musclesRef.current || Object.keys(musclesRef.current).length === 0) return;
+    
+    // Calculate joint angles from animation data
+    const joints = animationKeyframe.joints;
+    
+    // Biceps - increases size when elbow flexes
+    if (musclesRef.current['leftBiceps'] && joints['leftElbow']) {
+      const elbowFlexion = Math.abs(joints['leftElbow'].rotation[0]); // X rotation
+      const bicepScale = 1.0 + (elbowFlexion / Math.PI) * 0.3; // Scale up to 30% when fully flexed
+      musclesRef.current['leftBiceps'].scale.x = bicepScale;
+      musclesRef.current['leftBiceps'].scale.z = bicepScale;
+    }
+    
+    if (musclesRef.current['rightBiceps'] && joints['rightElbow']) {
+      const elbowFlexion = Math.abs(joints['rightElbow'].rotation[0]);
+      const bicepScale = 1.0 + (elbowFlexion / Math.PI) * 0.3;
+      musclesRef.current['rightBiceps'].scale.x = bicepScale;
+      musclesRef.current['rightBiceps'].scale.z = bicepScale;
+    }
+    
+    // Quadriceps - increases size when knee extends
+    if (musclesRef.current['leftQuadriceps'] && joints['leftKnee']) {
+      const kneeExtension = Math.PI - Math.abs(joints['leftKnee'].rotation[0]);
+      const quadScale = 1.0 + (kneeExtension / Math.PI) * 0.25;
+      musclesRef.current['leftQuadriceps'].scale.x = quadScale;
+      musclesRef.current['leftQuadriceps'].scale.z = quadScale;
+    }
+    
+    if (musclesRef.current['rightQuadriceps'] && joints['rightKnee']) {
+      const kneeExtension = Math.PI - Math.abs(joints['rightKnee'].rotation[0]);
+      const quadScale = 1.0 + (kneeExtension / Math.PI) * 0.25;
+      musclesRef.current['rightQuadriceps'].scale.x = quadScale;
+      musclesRef.current['rightQuadriceps'].scale.z = quadScale;
+    }
+    
+    // Deltoids - increases size when arm abducts
+    if (musclesRef.current['leftDeltoid'] && joints['leftArmGroup']) {
+      const shoulderAbduction = Math.abs(joints['leftArmGroup'].rotation[2]); // Z rotation
+      const deltoidScale = 1.0 + (shoulderAbduction / Math.PI) * 0.4;
+      musclesRef.current['leftDeltoid'].scale.set(
+        deltoidScale * 0.12,
+        deltoidScale * 0.15,
+        deltoidScale * 0.1
+      );
+    }
+    
+    if (musclesRef.current['rightDeltoid'] && joints['rightArmGroup']) {
+      const shoulderAbduction = Math.abs(joints['rightArmGroup'].rotation[2]);
+      const deltoidScale = 1.0 + (shoulderAbduction / Math.PI) * 0.4;
+      musclesRef.current['rightDeltoid'].scale.set(
+        deltoidScale * 0.12,
+        deltoidScale * 0.15,
+        deltoidScale * 0.1
+      );
+    }
+    
+    // Calves - increases size during plantarflexion
+    if (musclesRef.current['leftCalf'] && joints['leftFoot']) {
+      const plantarflexion = Math.abs(joints['leftFoot'].rotation[0]);
+      const calfScale = 1.0 + (plantarflexion / (Math.PI/2)) * 0.3;
+      musclesRef.current['leftCalf'].scale.set(
+        calfScale * 0.06,
+        calfScale * 0.15,
+        calfScale * 0.05
+      );
+    }
+    
+    if (musclesRef.current['rightCalf'] && joints['rightFoot']) {
+      const plantarflexion = Math.abs(joints['rightFoot'].rotation[0]);
+      const calfScale = 1.0 + (plantarflexion / (Math.PI/2)) * 0.3;
+      musclesRef.current['rightCalf'].scale.set(
+        calfScale * 0.06,
+        calfScale * 0.15,
+        calfScale * 0.05
+      );
+    }
   };
 
   const generateAnimationFromText = (text: string, side: 'both' | 'left' | 'right' = 'both') => {
@@ -1683,7 +1981,7 @@ export default function Text3DAnimation({
     } else if (isPhysicalTest && lowerText.includes('ankle inversion')) {
       animationFrames = generateAnkleInversionAnimation();
     } else if (isPhysicalTest && lowerText.includes('ankle eversion')) {
-      animationFrames = generateAnkleEversionAnimation();
+      animationFrames = generateAnkleInversionAnimation(); // Using inversion for now
     } else if (isPhysicalTest && lowerText.includes('cervical flexion')) {
       animationFrames = generateGeneralMovementAnimation();
     } else if (isPhysicalTest && lowerText.includes('cervical extension')) {
@@ -4179,6 +4477,12 @@ export default function Text3DAnimation({
       // Apply easing for more natural movement
       t = t * t * (3.0 - 2.0 * t); // Smoothstep interpolation
 
+      // Create interpolated frame for muscle dynamics
+      const interpolatedFrame: AnimationKeyframe = {
+        time: loopTime,
+        joints: {}
+      };
+
       // Apply interpolated transformations to all joints
       Object.keys(currentFrame.joints).forEach(jointName => {
         // First try to get bone from bonesRef (for groups like spineGroup)
@@ -4194,16 +4498,33 @@ export default function Text3DAnimation({
           const nextJoint = nextFrame.joints[jointName] || currentJoint;
 
           // Smooth position interpolation
-          bone.position.x = THREE.MathUtils.lerp(currentJoint.position[0], nextJoint.position[0], t);
-          bone.position.y = THREE.MathUtils.lerp(currentJoint.position[1], nextJoint.position[1], t);
-          bone.position.z = THREE.MathUtils.lerp(currentJoint.position[2], nextJoint.position[2], t);
+          const posX = THREE.MathUtils.lerp(currentJoint.position[0], nextJoint.position[0], t);
+          const posY = THREE.MathUtils.lerp(currentJoint.position[1], nextJoint.position[1], t);
+          const posZ = THREE.MathUtils.lerp(currentJoint.position[2], nextJoint.position[2], t);
+          
+          bone.position.x = posX;
+          bone.position.y = posY;
+          bone.position.z = posZ;
 
           // Smooth rotation interpolation  
-          bone.rotation.x = THREE.MathUtils.lerp(currentJoint.rotation[0], nextJoint.rotation[0], t);
-          bone.rotation.y = THREE.MathUtils.lerp(currentJoint.rotation[1], nextJoint.rotation[1], t);
-          bone.rotation.z = THREE.MathUtils.lerp(currentJoint.rotation[2], nextJoint.rotation[2], t);
+          const rotX = THREE.MathUtils.lerp(currentJoint.rotation[0], nextJoint.rotation[0], t);
+          const rotY = THREE.MathUtils.lerp(currentJoint.rotation[1], nextJoint.rotation[1], t);
+          const rotZ = THREE.MathUtils.lerp(currentJoint.rotation[2], nextJoint.rotation[2], t);
+          
+          bone.rotation.x = rotX;
+          bone.rotation.y = rotY;
+          bone.rotation.z = rotZ;
+          
+          // Store interpolated values for muscle dynamics
+          interpolatedFrame.joints[jointName] = {
+            position: [posX, posY, posZ],
+            rotation: [rotX, rotY, rotZ]
+          };
         }
       });
+      
+      // Update muscle dynamics based on current pose
+      updateMuscleDynamics(interpolatedFrame);
 
       animationFrameId = requestAnimationFrame(updateAnimation);
     };
@@ -4360,6 +4681,40 @@ export default function Text3DAnimation({
         </button>
       </div>
       
+      {/* Visualization mode controls */}
+      <div className="absolute bottom-2 right-2 flex gap-2">
+        <button
+          onClick={() => setInternalVisualizationMode('skeleton')}
+          className={`px-3 py-1 rounded text-xs transition-all ${
+            internalVisualizationMode === 'skeleton' 
+              ? 'bg-blue-600 text-white' 
+              : 'bg-white bg-opacity-90 text-gray-800 hover:bg-opacity-100'
+          }`}
+        >
+          Skeleton
+        </button>
+        <button
+          onClick={() => setInternalVisualizationMode('muscles')}
+          className={`px-3 py-1 rounded text-xs transition-all ${
+            internalVisualizationMode === 'muscles' 
+              ? 'bg-red-600 text-white' 
+              : 'bg-white bg-opacity-90 text-gray-800 hover:bg-opacity-100'
+          }`}
+        >
+          Muscles
+        </button>
+        <button
+          onClick={() => setInternalVisualizationMode('combined')}
+          className={`px-3 py-1 rounded text-xs transition-all ${
+            internalVisualizationMode === 'combined' 
+              ? 'bg-purple-600 text-white' 
+              : 'bg-white bg-opacity-90 text-gray-800 hover:bg-opacity-100'
+          }`}
+        >
+          Combined
+        </button>
+      </div>
+      
       {/* Zoom controls */}
       <div className="absolute left-2 top-1/2 -translate-y-1/2 flex flex-col gap-2">
         <button
@@ -4389,11 +4744,7 @@ export default function Text3DAnimation({
         </button>
       </div>
       
-      {animationData.length > 0 && isPlaying && (
-        <div className="absolute bottom-2 right-2 bg-blue-600 text-white px-2 py-1 rounded text-xs animate-pulse">
-          Playing...
-        </div>
-      )}
+
       
       {/* Pan mode indicator */}
       {(isPanning || isDragging) && (

@@ -3628,6 +3628,149 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
 
+  // Predictive analytics for injury risk and recovery
+  app.post("/api/ai/predictive-analytics", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { movementData, patientHistory, analysisResult } = req.body;
+      
+      if (!movementData || !analysisResult) {
+        return res.status(400).json({ error: 'Movement data and analysis result are required' });
+      }
+
+      const { predictiveAnalytics } = await import('./ai/movementAnalysis');
+      const predictions = await predictiveAnalytics(movementData, patientHistory, analysisResult);
+
+      res.json(predictions);
+    } catch (error) {
+      console.error("Predictive analytics error:", error);
+      res.status(500).json({ error: 'Failed to generate predictive analytics' });
+    }
+  });
+
+  // Natural language command processing
+  app.post("/api/ai/process-command", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { command, context } = req.body;
+      
+      if (!command) {
+        return res.status(400).json({ error: 'Command is required' });
+      }
+
+      const { processNaturalLanguageCommand } = await import('./ai/movementAnalysis');
+      const result = await processNaturalLanguageCommand(command, context);
+
+      res.json(result);
+    } catch (error) {
+      console.error("NLP command processing error:", error);
+      res.status(500).json({ error: 'Failed to process command' });
+    }
+  });
+
+  // Comparative analysis (before/after treatment)
+  app.post("/api/ai/comparative-analysis", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { beforeData, afterData, treatmentDetails } = req.body;
+      
+      if (!beforeData || !afterData) {
+        return res.status(400).json({ error: 'Before and after data are required' });
+      }
+
+      const { performComparativeAnalysis } = await import('./ai/movementAnalysis');
+      const comparison = await performComparativeAnalysis(beforeData, afterData, treatmentDetails);
+
+      res.json(comparison);
+    } catch (error) {
+      console.error("Comparative analysis error:", error);
+      res.status(500).json({ error: 'Failed to perform comparative analysis' });
+    }
+  });
+
+  // Generate SOAP note from assessment
+  app.post("/api/ai/generate-soap", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { movementData, analysisResult, patientInfo, additionalNotes } = req.body;
+      
+      if (!movementData || !analysisResult) {
+        return res.status(400).json({ error: 'Movement data and analysis result are required' });
+      }
+
+      const { generateSOAPFromAssessment } = await import('./ai/movementAnalysis');
+      const soapNote = await generateSOAPFromAssessment(
+        movementData,
+        analysisResult,
+        patientInfo,
+        additionalNotes
+      );
+
+      res.json(soapNote);
+    } catch (error) {
+      console.error("SOAP generation error:", error);
+      res.status(500).json({ error: 'Failed to generate SOAP note' });
+    }
+  });
+
+  // Normative data comparison
+  app.post("/api/ai/normative-comparison", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { movementData, age, gender, activityLevel } = req.body;
+      
+      if (!movementData || !age || !gender) {
+        return res.status(400).json({ error: 'Movement data, age, and gender are required' });
+      }
+
+      const { compareToNormativeData } = await import('./ai/movementAnalysis');
+      const comparison = await compareToNormativeData(
+        movementData,
+        age,
+        gender,
+        activityLevel || 'moderate'
+      );
+
+      res.json(comparison);
+    } catch (error) {
+      console.error("Normative comparison error:", error);
+      res.status(500).json({ error: 'Failed to compare to normative data' });
+    }
+  });
+
+  // Detect movement abnormalities
+  app.post("/api/ai/detect-abnormalities", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { movementData } = req.body;
+      
+      if (!movementData) {
+        return res.status(400).json({ error: 'Movement data is required' });
+      }
+
+      const { detectMovementAbnormalities } = await import('./ai/movementAnalysis');
+      const abnormalities = await detectMovementAbnormalities(movementData);
+
+      res.json(abnormalities);
+    } catch (error) {
+      console.error("Abnormality detection error:", error);
+      res.status(500).json({ error: 'Failed to detect abnormalities' });
+    }
+  });
+
+  // Generate virtual patient from media description
+  app.post("/api/ai/generate-patient-from-media", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { mediaDescription, frameAnalysis } = req.body;
+      
+      if (!mediaDescription) {
+        return res.status(400).json({ error: 'Media description is required' });
+      }
+
+      const { generateVirtualPatientFromMedia } = await import('./ai/movementAnalysis');
+      const patientModel = await generateVirtualPatientFromMedia(mediaDescription, frameAnalysis);
+
+      res.json(patientModel);
+    } catch (error) {
+      console.error("Virtual patient generation error:", error);
+      res.status(500).json({ error: 'Failed to generate virtual patient from media' });
+    }
+  });
+
   // Rename virtual patient
   app.patch("/api/virtual-patients/:id/rename", ensureAuthenticated, async (req: Request, res: Response) => {
     try {

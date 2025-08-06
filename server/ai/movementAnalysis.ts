@@ -373,3 +373,376 @@ Return as structured JSON.`
     throw new Error('Failed to generate exercise prescription');
   }
 }
+
+// ============= ADDITIONAL PHASE 5 FEATURES =============
+
+// 1. Predictive Analytics
+export async function predictiveAnalytics(
+  movementData: MovementData[],
+  patientHistory: any,
+  analysisResult: MovementAnalysisResult
+): Promise<{
+  injuryRiskScore: number;
+  riskFactors: Array<{ factor: string; severity: string; likelihood: number }>;
+  recoveryTimeline: { optimistic: string; realistic: string; conservative: string };
+  treatmentOutcomePrediction: { successProbability: number; keyFactors: string[] };
+  performanceOptimization: string[];
+  preventiveMeasures: string[];
+}> {
+  try {
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        {
+          role: 'system',
+          content: `You are an expert in physiotherapy predictive analytics.
+          Analyze movement patterns and patient data to predict injury risks, recovery timelines, 
+          and treatment outcomes based on evidence-based research and clinical data.`
+        },
+        {
+          role: 'user',
+          content: `Movement Data: ${JSON.stringify(prepareMovementSummary(movementData), null, 2)}
+Patient History: ${JSON.stringify(patientHistory, null, 2)}
+Analysis Result: ${JSON.stringify(analysisResult, null, 2)}
+
+Provide predictive analytics including:
+1. Injury risk score (0-100)
+2. Specific risk factors with severity and likelihood
+3. Recovery timeline estimates (optimistic, realistic, conservative)
+4. Treatment outcome prediction with success probability
+5. Performance optimization recommendations
+6. Preventive measures to reduce injury risk
+
+Return as structured JSON.`
+        }
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.3,
+      max_tokens: 2000
+    });
+
+    return JSON.parse(response.choices[0].message.content || '{}');
+  } catch (error) {
+    console.error('Predictive analytics failed:', error);
+    throw new Error('Failed to generate predictive analytics');
+  }
+}
+
+// 2. Natural Language Processing for Voice Commands
+export async function processNaturalLanguageCommand(
+  command: string,
+  context?: any
+): Promise<{
+  intent: string;
+  parameters: Record<string, any>;
+  action: string;
+  response: string;
+}> {
+  try {
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        {
+          role: 'system',
+          content: `You are an AI assistant for a physiotherapy virtual patient system.
+          Parse natural language commands and convert them to system actions.
+          Commands can be about adjusting patient parameters, querying conditions, or clinical documentation.`
+        },
+        {
+          role: 'user',
+          content: `Command: "${command}"
+Context: ${JSON.stringify(context, null, 2)}
+
+Parse this command and return:
+1. Intent (what the user wants to do)
+2. Parameters extracted from the command
+3. Specific action to take
+4. Natural language response to the user
+
+Return as JSON.`
+        }
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.2,
+      max_tokens: 500
+    });
+
+    return JSON.parse(response.choices[0].message.content || '{}');
+  } catch (error) {
+    console.error('NLP command processing failed:', error);
+    throw new Error('Failed to process natural language command');
+  }
+}
+
+// 3. Smart Comparative Analysis
+export async function performComparativeAnalysis(
+  beforeData: MovementData[],
+  afterData: MovementData[],
+  treatmentDetails?: any
+): Promise<{
+  improvementScore: number;
+  changedMetrics: Array<{ metric: string; before: number; after: number; change: string; significance: string }>;
+  patternChanges: string[];
+  treatmentEffectiveness: string;
+  recommendations: string[];
+  visualProgressMarkers: Array<{ area: string; progress: number }>;
+}> {
+  try {
+    const beforeSummary = prepareMovementSummary(beforeData);
+    const afterSummary = prepareMovementSummary(afterData);
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        {
+          role: 'system',
+          content: `You are an expert in analyzing treatment effectiveness through movement comparison.
+          Compare before and after movement data to assess treatment progress and effectiveness.`
+        },
+        {
+          role: 'user',
+          content: `Before Treatment: ${JSON.stringify(beforeSummary, null, 2)}
+After Treatment: ${JSON.stringify(afterSummary, null, 2)}
+Treatment Details: ${JSON.stringify(treatmentDetails, null, 2)}
+
+Analyze the changes and provide:
+1. Overall improvement score (0-100)
+2. Specific metric changes with clinical significance
+3. Pattern changes observed
+4. Treatment effectiveness assessment
+5. Recommendations for continued treatment
+6. Visual progress markers for key areas
+
+Return as structured JSON.`
+        }
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.3,
+      max_tokens: 2000
+    });
+
+    return JSON.parse(response.choices[0].message.content || '{}');
+  } catch (error) {
+    console.error('Comparative analysis failed:', error);
+    throw new Error('Failed to perform comparative analysis');
+  }
+}
+
+// 4. Automated SOAP Note Generation from Virtual Patient Assessment
+export async function generateSOAPFromAssessment(
+  movementData: MovementData[],
+  analysisResult: MovementAnalysisResult,
+  patientInfo: any,
+  additionalNotes?: string
+): Promise<{
+  subjective: string;
+  objective: string;
+  assessment: string;
+  plan: string;
+  billingCodes: string[];
+  followUpRecommendations: string;
+}> {
+  try {
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        {
+          role: 'system',
+          content: `You are an expert physiotherapist generating comprehensive SOAP notes.
+          Create detailed, clinically accurate documentation based on virtual patient assessments.
+          Include relevant billing codes and follow-up recommendations.`
+        },
+        {
+          role: 'user',
+          content: `Movement Data: ${JSON.stringify(prepareMovementSummary(movementData), null, 2)}
+Analysis Result: ${JSON.stringify(analysisResult, null, 2)}
+Patient Info: ${JSON.stringify(patientInfo, null, 2)}
+Additional Notes: ${additionalNotes || 'None'}
+
+Generate a complete SOAP note including:
+1. Subjective findings
+2. Objective measurements and observations
+3. Clinical assessment
+4. Treatment plan
+5. Relevant billing codes
+6. Follow-up recommendations
+
+Return as structured JSON.`
+        }
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.3,
+      max_tokens: 2500
+    });
+
+    return JSON.parse(response.choices[0].message.content || '{}');
+  } catch (error) {
+    console.error('SOAP note generation failed:', error);
+    throw new Error('Failed to generate SOAP note');
+  }
+}
+
+// 5. Population-Based Normative Comparisons
+export async function compareToNormativeData(
+  movementData: MovementData[],
+  age: number,
+  gender: string,
+  activityLevel: string
+): Promise<{
+  percentileRankings: Record<string, number>;
+  deviationsFromNorm: Array<{ metric: string; deviation: string; significance: string }>;
+  ageAdjustedScore: number;
+  peerComparison: string;
+  normativeRecommendations: string[];
+}> {
+  try {
+    const movementSummary = prepareMovementSummary(movementData);
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        {
+          role: 'system',
+          content: `You are an expert in biomechanical analysis with access to normative data.
+          Compare patient movement patterns to population norms based on demographics.`
+        },
+        {
+          role: 'user',
+          content: `Movement Data: ${JSON.stringify(movementSummary, null, 2)}
+Demographics: Age: ${age}, Gender: ${gender}, Activity Level: ${activityLevel}
+
+Compare to normative data and provide:
+1. Percentile rankings for key metrics
+2. Significant deviations from age/gender norms
+3. Age-adjusted functional score
+4. Peer comparison narrative
+5. Recommendations based on normative gaps
+
+Return as structured JSON.`
+        }
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.3,
+      max_tokens: 1500
+    });
+
+    return JSON.parse(response.choices[0].message.content || '{}');
+  } catch (error) {
+    console.error('Normative comparison failed:', error);
+    throw new Error('Failed to compare to normative data');
+  }
+}
+
+// 6. Automatic Movement Abnormality Detection
+export async function detectMovementAbnormalities(
+  movementData: MovementData[]
+): Promise<{
+  abnormalities: Array<{
+    type: string;
+    severity: 'mild' | 'moderate' | 'severe';
+    timestamp: number;
+    description: string;
+    clinicalSignificance: string;
+  }>;
+  gaitPatterns: {
+    trendelenburg: boolean;
+    antalgic: boolean;
+    ataxic: boolean;
+    hemiplegic: boolean;
+    parkinsonian: boolean;
+    other: string[];
+  };
+  compensatoryPatterns: string[];
+  biomechanicalDeviations: Array<{ joint: string; deviation: string; magnitude: number }>;
+}> {
+  try {
+    const movementSummary = prepareMovementSummary(movementData);
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        {
+          role: 'system',
+          content: `You are an expert in detecting movement abnormalities and pathological gait patterns.
+          Identify specific abnormalities, their severity, and clinical significance.`
+        },
+        {
+          role: 'user',
+          content: `Movement Data: ${JSON.stringify(movementSummary, null, 2)}
+
+Detect and classify:
+1. Specific movement abnormalities with severity and timing
+2. Gait pattern classifications (Trendelenburg, antalgic, etc.)
+3. Compensatory movement patterns
+4. Biomechanical deviations from normal
+
+Return as structured JSON with detailed clinical descriptions.`
+        }
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.2,
+      max_tokens: 2000
+    });
+
+    return JSON.parse(response.choices[0].message.content || '{}');
+  } catch (error) {
+    console.error('Abnormality detection failed:', error);
+    throw new Error('Failed to detect movement abnormalities');
+  }
+}
+
+// 7. Virtual Patient Generation from Video/Image Analysis
+export async function generateVirtualPatientFromMedia(
+  mediaDescription: string,
+  frameAnalysis?: any[]
+): Promise<{
+  patientModel: {
+    bodyMetrics: Record<string, number>;
+    postureDeviations: string[];
+    apparentPathologies: string[];
+    movementCharacteristics: string[];
+  };
+  configurationSuggestions: {
+    limbScales: Record<string, number>;
+    romLimitations: Record<string, number>;
+    muscleParameters: Record<string, number>;
+    painRegions: string[];
+  };
+  confidenceScore: number;
+}> {
+  try {
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        {
+          role: 'system',
+          content: `You are an expert in biomechanical analysis and 3D modeling.
+          Generate accurate virtual patient configurations from visual data descriptions.`
+        },
+        {
+          role: 'user',
+          content: `Media Description: ${mediaDescription}
+Frame Analysis: ${JSON.stringify(frameAnalysis, null, 2)}
+
+Generate a virtual patient model including:
+1. Body metrics and proportions
+2. Detected posture deviations
+3. Apparent pathologies
+4. Movement characteristics
+5. Configuration parameters for 3D model
+6. Confidence score for accuracy
+
+Return as structured JSON.`
+        }
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.3,
+      max_tokens: 2000
+    });
+
+    return JSON.parse(response.choices[0].message.content || '{}');
+  } catch (error) {
+    console.error('Virtual patient generation from media failed:', error);
+    throw new Error('Failed to generate virtual patient from media');
+  }
+}

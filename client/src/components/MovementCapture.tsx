@@ -43,6 +43,9 @@ export const MovementCapture: React.FC<MovementCaptureProps> = ({
   const [movementType, setMovementType] = useState(selectedMovement);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResults, setAnalysisResults] = useState<any>(null);
+  const [predictiveResults, setPredictiveResults] = useState<any>(null);
+  const [abnormalityResults, setAbnormalityResults] = useState<any>(null);
+  const [showAdvancedAnalysis, setShowAdvancedAnalysis] = useState(false);
   const animationRef = useRef<number>();
 
   // Movement types for clinical assessment
@@ -316,8 +319,8 @@ export const MovementCapture: React.FC<MovementCaptureProps> = ({
     setIsAnalyzing(true);
     
     try {
-      // Send to AI analysis endpoint
-      const response = await fetch('/api/movement-analysis', {
+      // Primary movement analysis
+      const analysisResponse = await fetch('/api/movement-analysis', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -327,9 +330,40 @@ export const MovementCapture: React.FC<MovementCaptureProps> = ({
         })
       });
 
-      if (response.ok) {
-        const analysis = await response.json();
+      if (analysisResponse.ok) {
+        const analysis = await analysisResponse.json();
         setAnalysisResults(analysis);
+        
+        // Predictive analytics
+        const predictiveResponse = await fetch('/api/ai/predictive-analytics', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            movementData: capturedData,
+            patientHistory: { patientId },
+            analysisResult: analysis
+          })
+        });
+        
+        if (predictiveResponse.ok) {
+          const predictions = await predictiveResponse.json();
+          setPredictiveResults(predictions);
+        }
+        
+        // Abnormality detection
+        const abnormalityResponse = await fetch('/api/ai/detect-abnormalities', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            movementData: capturedData
+          })
+        });
+        
+        if (abnormalityResponse.ok) {
+          const abnormalities = await abnormalityResponse.json();
+          setAbnormalityResults(abnormalities);
+        }
+        
         if (onAnalysisComplete) {
           onAnalysisComplete(analysis);
         }
@@ -338,6 +372,32 @@ export const MovementCapture: React.FC<MovementCaptureProps> = ({
       console.error('Movement analysis failed:', error);
     } finally {
       setIsAnalyzing(false);
+    }
+  };
+  
+  // Generate SOAP note from analysis
+  const generateSOAPNote = async () => {
+    if (!analysisResults || !capturedData.length) return;
+    
+    try {
+      const response = await fetch('/api/ai/generate-soap', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          movementData: capturedData,
+          analysisResult: analysisResults,
+          patientInfo: { id: patientId },
+          additionalNotes: `Movement type: ${movementType}`
+        })
+      });
+      
+      if (response.ok) {
+        const soapNote = await response.json();
+        console.log('Generated SOAP note:', soapNote);
+        // Could open a modal or send to SOAP notes page
+      }
+    } catch (error) {
+      console.error('SOAP generation failed:', error);
     }
   };
 
@@ -534,7 +594,25 @@ export const MovementCapture: React.FC<MovementCaptureProps> = ({
           {/* Analysis Results */}
           {analysisResults && (
             <div className="space-y-3">
-              <h3 className="font-medium">AI Analysis Results</h3>
+              <div className="flex justify-between items-center">
+                <h3 className="font-medium">AI Analysis Results</h3>
+                <div className="flex gap-2">
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={() => setShowAdvancedAnalysis(!showAdvancedAnalysis)}
+                  >
+                    {showAdvancedAnalysis ? 'Hide' : 'Show'} Advanced
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={generateSOAPNote}
+                  >
+                    Generate SOAP
+                  </Button>
+                </div>
+              </div>
               
               {/* Movement Quality */}
               <div className="p-3 bg-gray-50 rounded-lg">
@@ -591,6 +669,88 @@ export const MovementCapture: React.FC<MovementCaptureProps> = ({
                     ))}
                   </ul>
                 </div>
+              )}
+              
+              {/* Advanced Analysis Section */}
+              {showAdvancedAnalysis && (
+                <>
+                  {/* Predictive Analytics */}
+                  {predictiveResults && (
+                    <div className="p-3 bg-purple-50 rounded-lg">
+                      <div className="text-sm font-medium mb-2 text-purple-900">Predictive Analytics</div>
+                      <div className="space-y-2 text-xs">
+                        {predictiveResults.injuryRiskScore && (
+                          <div className="flex justify-between">
+                            <span className="text-purple-700">Injury Risk Score:</span>
+                            <Badge variant={predictiveResults.injuryRiskScore > 70 ? "destructive" : predictiveResults.injuryRiskScore > 40 ? "secondary" : "default"}>
+                              {predictiveResults.injuryRiskScore}/100
+                            </Badge>
+                          </div>
+                        )}
+                        {predictiveResults.recoveryTimeline && (
+                          <div className="text-purple-700">
+                            <div className="font-medium">Recovery Timeline:</div>
+                            <div className="ml-2 mt-1">
+                              • Optimistic: {predictiveResults.recoveryTimeline.optimistic}<br/>
+                              • Realistic: {predictiveResults.recoveryTimeline.realistic}<br/>
+                              • Conservative: {predictiveResults.recoveryTimeline.conservative}
+                            </div>
+                          </div>
+                        )}
+                        {predictiveResults.treatmentOutcomePrediction && (
+                          <div className="flex justify-between">
+                            <span className="text-purple-700">Success Probability:</span>
+                            <span className="font-medium">{predictiveResults.treatmentOutcomePrediction.successProbability}%</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Movement Abnormalities */}
+                  {abnormalityResults && abnormalityResults.abnormalities && (
+                    <div className="p-3 bg-red-50 rounded-lg">
+                      <div className="text-sm font-medium mb-2 text-red-900">Detected Abnormalities</div>
+                      <div className="space-y-2">
+                        {abnormalityResults.abnormalities.map((abnormality: any, idx: number) => (
+                          <div key={idx} className="text-xs">
+                            <div className="flex items-center gap-2 mb-1">
+                              <Badge 
+                                variant={abnormality.severity === 'severe' ? 'destructive' : abnormality.severity === 'moderate' ? 'secondary' : 'outline'}
+                                className="text-xs"
+                              >
+                                {abnormality.severity}
+                              </Badge>
+                              <span className="font-medium text-red-900">{abnormality.type}</span>
+                            </div>
+                            <p className="text-red-700 ml-2">{abnormality.description}</p>
+                            <p className="text-red-600 ml-2 italic">{abnormality.clinicalSignificance}</p>
+                          </div>
+                        ))}
+                      </div>
+                      
+                      {/* Gait Patterns */}
+                      {abnormalityResults.gaitPatterns && (
+                        <div className="mt-3 pt-2 border-t border-red-200">
+                          <div className="text-xs font-medium text-red-900 mb-1">Gait Pattern Analysis</div>
+                          <div className="grid grid-cols-2 gap-1 text-xs">
+                            {Object.entries(abnormalityResults.gaitPatterns).map(([pattern, detected]) => {
+                              if (typeof detected === 'boolean' && detected) {
+                                return (
+                                  <div key={pattern} className="flex items-center gap-1">
+                                    <AlertCircle className="w-3 h-3 text-red-600" />
+                                    <span className="text-red-700 capitalize">{pattern.replace('_', ' ')}</span>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
               )}
 
               {/* Joint Angles */}

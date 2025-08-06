@@ -3912,15 +3912,14 @@ Base your analysis on established postural assessment principles and correlate f
       const newConfig = await storage.createVirtualPatientConfig({
         userId,
         soapVirtualPatientId: soapNoteId || null,
-        name: virtualPatientData.patientName,
+        patient_name: virtualPatientData.patientName,
+        chiefComplaint: virtualPatientData.condition,
         modelConfig: {
           limbScales: virtualPatientData.limbScales,
           shoulderPathology: virtualPatientData.shoulderPathology,
           spinalPathology: virtualPatientData.spinalPathology,
           lowerLimbPathology: virtualPatientData.lowerLimbPathology
-        },
-        description: `Generated from SOAP note - ${virtualPatientData.condition}`,
-        tags: [virtualPatientData.gaitPattern, ...virtualPatientData.painLocations]
+        }
       });
 
       res.json({

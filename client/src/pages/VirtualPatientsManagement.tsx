@@ -153,6 +153,113 @@ export default function VirtualPatientsManagement() {
     right: number;
   }>({ left: 50, right: 50 }); // percentage
 
+  // Phase 4: Muscle & Soft Tissue states
+  const [muscleVisualization, setMuscleVisualization] = useState<{
+    showMuscles: boolean;
+    muscleOpacity: number;
+    muscleLayer: 'superficial' | 'deep' | 'all';
+  }>({
+    showMuscles: true,
+    muscleOpacity: 0.7,
+    muscleLayer: 'superficial'
+  });
+
+  const [muscleBulk, setMuscleBulk] = useState<{
+    quadriceps: { left: number; right: number };
+    hamstrings: { left: number; right: number };
+    gastrocnemius: { left: number; right: number };
+    gluteusMaximus: { left: number; right: number };
+    gluteusMedius: { left: number; right: number };
+    tibialis: { left: number; right: number };
+    deltoid: { left: number; right: number };
+    biceps: { left: number; right: number };
+    triceps: { left: number; right: number };
+  }>({
+    quadriceps: { left: 100, right: 100 },
+    hamstrings: { left: 100, right: 100 },
+    gastrocnemius: { left: 100, right: 100 },
+    gluteusMaximus: { left: 100, right: 100 },
+    gluteusMedius: { left: 100, right: 100 },
+    tibialis: { left: 100, right: 100 },
+    deltoid: { left: 100, right: 100 },
+    biceps: { left: 100, right: 100 },
+    triceps: { left: 100, right: 100 }
+  });
+
+  const [muscleTone, setMuscleTone] = useState<{
+    upperLimb: { left: 'normal' | 'hypotonic' | 'hypertonic' | 'spastic'; right: 'normal' | 'hypotonic' | 'hypertonic' | 'spastic' };
+    lowerLimb: { left: 'normal' | 'hypotonic' | 'hypertonic' | 'spastic'; right: 'normal' | 'hypotonic' | 'hypertonic' | 'spastic' };
+    trunk: 'normal' | 'hypotonic' | 'hypertonic';
+  }>({
+    upperLimb: { left: 'normal', right: 'normal' },
+    lowerLimb: { left: 'normal', right: 'normal' },
+    trunk: 'normal'
+  });
+
+  const [triggerPoints, setTriggerPoints] = useState<Array<{
+    muscle: string;
+    location: { x: number; y: number; z: number };
+    severity: 'mild' | 'moderate' | 'severe';
+    referralPattern: string;
+  }>>([]);
+
+  const [softTissue, setSoftTissue] = useState<{
+    swelling: {
+      knee: { left: number; right: number };
+      ankle: { left: number; right: number };
+      shoulder: { left: number; right: number };
+      elbow: { left: number; right: number };
+    };
+    scarTissue: Array<{
+      location: string;
+      type: 'surgical' | 'traumatic';
+      maturity: 'acute' | 'subacute' | 'chronic';
+      adhesions: boolean;
+    }>;
+    fascialRestrictions: {
+      itBand: { left: boolean; right: boolean };
+      plantarFascia: { left: boolean; right: boolean };
+      thoracolumbar: boolean;
+    };
+  }>({
+    swelling: {
+      knee: { left: 0, right: 0 },
+      ankle: { left: 0, right: 0 },
+      shoulder: { left: 0, right: 0 },
+      elbow: { left: 0, right: 0 }
+    },
+    scarTissue: [],
+    fascialRestrictions: {
+      itBand: { left: false, right: false },
+      plantarFascia: { left: false, right: false },
+      thoracolumbar: false
+    }
+  });
+
+  const [tendonPathology, setTendonPathology] = useState<{
+    achilles: { left: 'normal' | 'tendinopathy' | 'partial_tear' | 'complete_tear'; right: 'normal' | 'tendinopathy' | 'partial_tear' | 'complete_tear' };
+    patellar: { left: 'normal' | 'tendinopathy' | 'partial_tear'; right: 'normal' | 'tendinopathy' | 'partial_tear' };
+    rotatorCuff: { left: 'normal' | 'tendinopathy' | 'partial_tear' | 'complete_tear'; right: 'normal' | 'tendinopathy' | 'partial_tear' | 'complete_tear' };
+  }>({
+    achilles: { left: 'normal', right: 'normal' },
+    patellar: { left: 'normal', right: 'normal' },
+    rotatorCuff: { left: 'normal', right: 'normal' }
+  });
+
+  const [ligamentInjuries, setLigamentInjuries] = useState<{
+    acl: { left: 'intact' | 'grade1' | 'grade2' | 'grade3'; right: 'intact' | 'grade1' | 'grade2' | 'grade3' };
+    pcl: { left: 'intact' | 'grade1' | 'grade2' | 'grade3'; right: 'intact' | 'grade1' | 'grade2' | 'grade3' };
+    mcl: { left: 'intact' | 'grade1' | 'grade2' | 'grade3'; right: 'intact' | 'grade1' | 'grade2' | 'grade3' };
+    lcl: { left: 'intact' | 'grade1' | 'grade2' | 'grade3'; right: 'intact' | 'grade1' | 'grade2' | 'grade3' };
+    atfl: { left: 'intact' | 'grade1' | 'grade2' | 'grade3'; right: 'intact' | 'grade1' | 'grade2' | 'grade3' };
+  }>({
+    acl: { left: 'intact', right: 'intact' },
+    pcl: { left: 'intact', right: 'intact' },
+    mcl: { left: 'intact', right: 'intact' },
+    lcl: { left: 'intact', right: 'intact' },
+    atfl: { left: 'intact', right: 'intact' }
+  });
+
   // Get current user
   const { data: user } = useQuery({
     queryKey: ["/api/user"],
@@ -1056,13 +1163,14 @@ export default function VirtualPatientsManagement() {
                     </CardHeader>
                     <CardContent>
                       <Tabs defaultValue="limbs" className="w-full">
-                        <TabsList className="grid w-full grid-cols-8">
+                        <TabsList className="grid w-full grid-cols-9">
                           <TabsTrigger value="limbs">Limbs</TabsTrigger>
                           <TabsTrigger value="pathology">Pathology</TabsTrigger>
                           <TabsTrigger value="rom">ROM</TabsTrigger>
                           <TabsTrigger value="gait">Gait</TabsTrigger>
                           <TabsTrigger value="pain">Pain</TabsTrigger>
                           <TabsTrigger value="forces">Forces</TabsTrigger>
+                          <TabsTrigger value="muscle">Muscle</TabsTrigger>
                           <TabsTrigger value="posture">Posture</TabsTrigger>
                           <TabsTrigger value="movement">Movement</TabsTrigger>
                         </TabsList>
@@ -1803,6 +1911,478 @@ export default function VirtualPatientsManagement() {
                                     step={0.5}
                                   />
                                   <p className="text-xs text-gray-500">+ = anterior, - = posterior</p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </TabsContent>
+
+                        {/* Muscle Tab - Phase 4 */}
+                        <TabsContent value="muscle" className="space-y-4 mt-4">
+                          <div>
+                            <h3 className="font-medium mb-3">Muscle Visualization</h3>
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between">
+                                <Label>Show Muscles</Label>
+                                <Switch 
+                                  checked={muscleVisualization.showMuscles}
+                                  onCheckedChange={(checked) => 
+                                    setMuscleVisualization({...muscleVisualization, showMuscles: checked})
+                                  }
+                                />
+                              </div>
+                              
+                              <div>
+                                <div className="flex justify-between mb-1">
+                                  <Label>Muscle Opacity</Label>
+                                  <span className="text-sm text-gray-600">{(muscleVisualization.muscleOpacity * 100).toFixed(0)}%</span>
+                                </div>
+                                <Slider
+                                  value={[muscleVisualization.muscleOpacity]}
+                                  onValueChange={(value) => 
+                                    setMuscleVisualization({...muscleVisualization, muscleOpacity: value[0]})
+                                  }
+                                  min={0}
+                                  max={1}
+                                  step={0.1}
+                                />
+                              </div>
+                              
+                              <div>
+                                <Label>Muscle Layer</Label>
+                                <Select 
+                                  value={muscleVisualization.muscleLayer} 
+                                  onValueChange={(value: 'superficial' | 'deep' | 'all') => 
+                                    setMuscleVisualization({...muscleVisualization, muscleLayer: value})
+                                  }
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="superficial">Superficial</SelectItem>
+                                    <SelectItem value="deep">Deep</SelectItem>
+                                    <SelectItem value="all">All Layers</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                          </div>
+
+                          <Separator />
+
+                          <div>
+                            <h3 className="font-medium mb-3">Muscle Bulk (% of Normal)</h3>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <h4 className="text-sm font-medium mb-2">Lower Limb</h4>
+                                <div className="space-y-2">
+                                  <div>
+                                    <div className="flex justify-between mb-1">
+                                      <Label className="text-xs">Quadriceps L/R</Label>
+                                      <span className="text-xs text-gray-600">
+                                        {muscleBulk.quadriceps.left}% / {muscleBulk.quadriceps.right}%
+                                      </span>
+                                    </div>
+                                    <div className="flex gap-2">
+                                      <Slider
+                                        value={[muscleBulk.quadriceps.left]}
+                                        onValueChange={(value) => 
+                                          setMuscleBulk({...muscleBulk, quadriceps: {...muscleBulk.quadriceps, left: value[0]}})
+                                        }
+                                        min={50}
+                                        max={150}
+                                        step={5}
+                                        className="flex-1"
+                                      />
+                                      <Slider
+                                        value={[muscleBulk.quadriceps.right]}
+                                        onValueChange={(value) => 
+                                          setMuscleBulk({...muscleBulk, quadriceps: {...muscleBulk.quadriceps, right: value[0]}})
+                                        }
+                                        min={50}
+                                        max={150}
+                                        step={5}
+                                        className="flex-1"
+                                      />
+                                    </div>
+                                  </div>
+                                  
+                                  <div>
+                                    <div className="flex justify-between mb-1">
+                                      <Label className="text-xs">Hamstrings L/R</Label>
+                                      <span className="text-xs text-gray-600">
+                                        {muscleBulk.hamstrings.left}% / {muscleBulk.hamstrings.right}%
+                                      </span>
+                                    </div>
+                                    <div className="flex gap-2">
+                                      <Slider
+                                        value={[muscleBulk.hamstrings.left]}
+                                        onValueChange={(value) => 
+                                          setMuscleBulk({...muscleBulk, hamstrings: {...muscleBulk.hamstrings, left: value[0]}})
+                                        }
+                                        min={50}
+                                        max={150}
+                                        step={5}
+                                        className="flex-1"
+                                      />
+                                      <Slider
+                                        value={[muscleBulk.hamstrings.right]}
+                                        onValueChange={(value) => 
+                                          setMuscleBulk({...muscleBulk, hamstrings: {...muscleBulk.hamstrings, right: value[0]}})
+                                        }
+                                        min={50}
+                                        max={150}
+                                        step={5}
+                                        className="flex-1"
+                                      />
+                                    </div>
+                                  </div>
+                                  
+                                  <div>
+                                    <div className="flex justify-between mb-1">
+                                      <Label className="text-xs">Gastrocnemius L/R</Label>
+                                      <span className="text-xs text-gray-600">
+                                        {muscleBulk.gastrocnemius.left}% / {muscleBulk.gastrocnemius.right}%
+                                      </span>
+                                    </div>
+                                    <div className="flex gap-2">
+                                      <Slider
+                                        value={[muscleBulk.gastrocnemius.left]}
+                                        onValueChange={(value) => 
+                                          setMuscleBulk({...muscleBulk, gastrocnemius: {...muscleBulk.gastrocnemius, left: value[0]}})
+                                        }
+                                        min={50}
+                                        max={150}
+                                        step={5}
+                                        className="flex-1"
+                                      />
+                                      <Slider
+                                        value={[muscleBulk.gastrocnemius.right]}
+                                        onValueChange={(value) => 
+                                          setMuscleBulk({...muscleBulk, gastrocnemius: {...muscleBulk.gastrocnemius, right: value[0]}})
+                                        }
+                                        min={50}
+                                        max={150}
+                                        step={5}
+                                        className="flex-1"
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              <div>
+                                <h4 className="text-sm font-medium mb-2">Upper Limb</h4>
+                                <div className="space-y-2">
+                                  <div>
+                                    <div className="flex justify-between mb-1">
+                                      <Label className="text-xs">Deltoid L/R</Label>
+                                      <span className="text-xs text-gray-600">
+                                        {muscleBulk.deltoid.left}% / {muscleBulk.deltoid.right}%
+                                      </span>
+                                    </div>
+                                    <div className="flex gap-2">
+                                      <Slider
+                                        value={[muscleBulk.deltoid.left]}
+                                        onValueChange={(value) => 
+                                          setMuscleBulk({...muscleBulk, deltoid: {...muscleBulk.deltoid, left: value[0]}})
+                                        }
+                                        min={50}
+                                        max={150}
+                                        step={5}
+                                        className="flex-1"
+                                      />
+                                      <Slider
+                                        value={[muscleBulk.deltoid.right]}
+                                        onValueChange={(value) => 
+                                          setMuscleBulk({...muscleBulk, deltoid: {...muscleBulk.deltoid, right: value[0]}})
+                                        }
+                                        min={50}
+                                        max={150}
+                                        step={5}
+                                        className="flex-1"
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <Separator />
+
+                          <div>
+                            <h3 className="font-medium mb-3">Muscle Tone</h3>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <Label className="text-sm">Upper Limb</Label>
+                                <div className="flex gap-2 mt-2">
+                                  <Select 
+                                    value={muscleTone.upperLimb.left}
+                                    onValueChange={(value: any) => 
+                                      setMuscleTone({...muscleTone, upperLimb: {...muscleTone.upperLimb, left: value}})
+                                    }
+                                  >
+                                    <SelectTrigger className="flex-1">
+                                      <SelectValue placeholder="Left" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="normal">Normal</SelectItem>
+                                      <SelectItem value="hypotonic">Hypotonic</SelectItem>
+                                      <SelectItem value="hypertonic">Hypertonic</SelectItem>
+                                      <SelectItem value="spastic">Spastic</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                  <Select 
+                                    value={muscleTone.upperLimb.right}
+                                    onValueChange={(value: any) => 
+                                      setMuscleTone({...muscleTone, upperLimb: {...muscleTone.upperLimb, right: value}})
+                                    }
+                                  >
+                                    <SelectTrigger className="flex-1">
+                                      <SelectValue placeholder="Right" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="normal">Normal</SelectItem>
+                                      <SelectItem value="hypotonic">Hypotonic</SelectItem>
+                                      <SelectItem value="hypertonic">Hypertonic</SelectItem>
+                                      <SelectItem value="spastic">Spastic</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              </div>
+                              
+                              <div>
+                                <Label className="text-sm">Lower Limb</Label>
+                                <div className="flex gap-2 mt-2">
+                                  <Select 
+                                    value={muscleTone.lowerLimb.left}
+                                    onValueChange={(value: any) => 
+                                      setMuscleTone({...muscleTone, lowerLimb: {...muscleTone.lowerLimb, left: value}})
+                                    }
+                                  >
+                                    <SelectTrigger className="flex-1">
+                                      <SelectValue placeholder="Left" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="normal">Normal</SelectItem>
+                                      <SelectItem value="hypotonic">Hypotonic</SelectItem>
+                                      <SelectItem value="hypertonic">Hypertonic</SelectItem>
+                                      <SelectItem value="spastic">Spastic</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                  <Select 
+                                    value={muscleTone.lowerLimb.right}
+                                    onValueChange={(value: any) => 
+                                      setMuscleTone({...muscleTone, lowerLimb: {...muscleTone.lowerLimb, right: value}})
+                                    }
+                                  >
+                                    <SelectTrigger className="flex-1">
+                                      <SelectValue placeholder="Right" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="normal">Normal</SelectItem>
+                                      <SelectItem value="hypotonic">Hypotonic</SelectItem>
+                                      <SelectItem value="hypertonic">Hypertonic</SelectItem>
+                                      <SelectItem value="spastic">Spastic</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <Separator />
+
+                          <div>
+                            <h3 className="font-medium mb-3">Soft Tissue & Tendons</h3>
+                            <div className="space-y-3">
+                              <div>
+                                <h4 className="text-sm font-medium mb-2">Joint Swelling (0-10)</h4>
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div>
+                                    <div className="flex justify-between mb-1">
+                                      <Label className="text-xs">Knee L/R</Label>
+                                      <span className="text-xs text-gray-600">
+                                        {softTissue.swelling.knee.left} / {softTissue.swelling.knee.right}
+                                      </span>
+                                    </div>
+                                    <div className="flex gap-2">
+                                      <Slider
+                                        value={[softTissue.swelling.knee.left]}
+                                        onValueChange={(value) => 
+                                          setSoftTissue({...softTissue, swelling: {...softTissue.swelling, knee: {...softTissue.swelling.knee, left: value[0]}}})
+                                        }
+                                        min={0}
+                                        max={10}
+                                        step={1}
+                                        className="flex-1"
+                                      />
+                                      <Slider
+                                        value={[softTissue.swelling.knee.right]}
+                                        onValueChange={(value) => 
+                                          setSoftTissue({...softTissue, swelling: {...softTissue.swelling, knee: {...softTissue.swelling.knee, right: value[0]}}})
+                                        }
+                                        min={0}
+                                        max={10}
+                                        step={1}
+                                        className="flex-1"
+                                      />
+                                    </div>
+                                  </div>
+                                  
+                                  <div>
+                                    <div className="flex justify-between mb-1">
+                                      <Label className="text-xs">Ankle L/R</Label>
+                                      <span className="text-xs text-gray-600">
+                                        {softTissue.swelling.ankle.left} / {softTissue.swelling.ankle.right}
+                                      </span>
+                                    </div>
+                                    <div className="flex gap-2">
+                                      <Slider
+                                        value={[softTissue.swelling.ankle.left]}
+                                        onValueChange={(value) => 
+                                          setSoftTissue({...softTissue, swelling: {...softTissue.swelling, ankle: {...softTissue.swelling.ankle, left: value[0]}}})
+                                        }
+                                        min={0}
+                                        max={10}
+                                        step={1}
+                                        className="flex-1"
+                                      />
+                                      <Slider
+                                        value={[softTissue.swelling.ankle.right]}
+                                        onValueChange={(value) => 
+                                          setSoftTissue({...softTissue, swelling: {...softTissue.swelling, ankle: {...softTissue.swelling.ankle, right: value[0]}}})
+                                        }
+                                        min={0}
+                                        max={10}
+                                        step={1}
+                                        className="flex-1"
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              <div>
+                                <h4 className="text-sm font-medium mb-2">Tendon Pathology</h4>
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div>
+                                    <Label className="text-xs">Achilles Tendon</Label>
+                                    <div className="flex gap-2 mt-1">
+                                      <Select 
+                                        value={tendonPathology.achilles.left}
+                                        onValueChange={(value: any) => 
+                                          setTendonPathology({...tendonPathology, achilles: {...tendonPathology.achilles, left: value}})
+                                        }
+                                      >
+                                        <SelectTrigger className="flex-1 h-8">
+                                          <SelectValue placeholder="Left" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="normal">Normal</SelectItem>
+                                          <SelectItem value="tendinopathy">Tendinopathy</SelectItem>
+                                          <SelectItem value="partial_tear">Partial Tear</SelectItem>
+                                          <SelectItem value="complete_tear">Complete Tear</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                      <Select 
+                                        value={tendonPathology.achilles.right}
+                                        onValueChange={(value: any) => 
+                                          setTendonPathology({...tendonPathology, achilles: {...tendonPathology.achilles, right: value}})
+                                        }
+                                      >
+                                        <SelectTrigger className="flex-1 h-8">
+                                          <SelectValue placeholder="Right" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="normal">Normal</SelectItem>
+                                          <SelectItem value="tendinopathy">Tendinopathy</SelectItem>
+                                          <SelectItem value="partial_tear">Partial Tear</SelectItem>
+                                          <SelectItem value="complete_tear">Complete Tear</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                  </div>
+                                  
+                                  <div>
+                                    <Label className="text-xs">Patellar Tendon</Label>
+                                    <div className="flex gap-2 mt-1">
+                                      <Select 
+                                        value={tendonPathology.patellar.left}
+                                        onValueChange={(value: any) => 
+                                          setTendonPathology({...tendonPathology, patellar: {...tendonPathology.patellar, left: value}})
+                                        }
+                                      >
+                                        <SelectTrigger className="flex-1 h-8">
+                                          <SelectValue placeholder="Left" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="normal">Normal</SelectItem>
+                                          <SelectItem value="tendinopathy">Tendinopathy</SelectItem>
+                                          <SelectItem value="partial_tear">Partial Tear</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                      <Select 
+                                        value={tendonPathology.patellar.right}
+                                        onValueChange={(value: any) => 
+                                          setTendonPathology({...tendonPathology, patellar: {...tendonPathology.patellar, right: value}})
+                                        }
+                                      >
+                                        <SelectTrigger className="flex-1 h-8">
+                                          <SelectValue placeholder="Right" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="normal">Normal</SelectItem>
+                                          <SelectItem value="tendinopathy">Tendinopathy</SelectItem>
+                                          <SelectItem value="partial_tear">Partial Tear</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              <div>
+                                <h4 className="text-sm font-medium mb-2">Fascial Restrictions</h4>
+                                <div className="space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <Label className="text-xs">IT Band (L)</Label>
+                                    <Switch 
+                                      checked={softTissue.fascialRestrictions.itBand.left}
+                                      onCheckedChange={(checked) => 
+                                        setSoftTissue({...softTissue, fascialRestrictions: {...softTissue.fascialRestrictions, itBand: {...softTissue.fascialRestrictions.itBand, left: checked}}})
+                                      }
+                                    />
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                    <Label className="text-xs">IT Band (R)</Label>
+                                    <Switch 
+                                      checked={softTissue.fascialRestrictions.itBand.right}
+                                      onCheckedChange={(checked) => 
+                                        setSoftTissue({...softTissue, fascialRestrictions: {...softTissue.fascialRestrictions, itBand: {...softTissue.fascialRestrictions.itBand, right: checked}}})
+                                      }
+                                    />
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                    <Label className="text-xs">Plantar Fascia (L)</Label>
+                                    <Switch 
+                                      checked={softTissue.fascialRestrictions.plantarFascia.left}
+                                      onCheckedChange={(checked) => 
+                                        setSoftTissue({...softTissue, fascialRestrictions: {...softTissue.fascialRestrictions, plantarFascia: {...softTissue.fascialRestrictions.plantarFascia, left: checked}}})
+                                      }
+                                    />
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                    <Label className="text-xs">Plantar Fascia (R)</Label>
+                                    <Switch 
+                                      checked={softTissue.fascialRestrictions.plantarFascia.right}
+                                      onCheckedChange={(checked) => 
+                                        setSoftTissue({...softTissue, fascialRestrictions: {...softTissue.fascialRestrictions, plantarFascia: {...softTissue.fascialRestrictions.plantarFascia, right: checked}}})
+                                      }
+                                    />
+                                  </div>
                                 </div>
                               </div>
                             </div>

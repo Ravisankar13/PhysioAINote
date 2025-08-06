@@ -519,6 +519,72 @@ export const virtualPatientConfigs = pgTable("virtual_patient_configs", {
         right: number; // percentage
       };
     };
+    
+    // Muscle & Soft Tissue (Phase 4)
+    muscleVisualization?: {
+      showMuscles: boolean;
+      muscleOpacity: number;
+      muscleLayer: 'superficial' | 'deep' | 'all';
+    };
+    
+    muscleBulk?: {
+      quadriceps: { left: number; right: number };
+      hamstrings: { left: number; right: number };
+      gastrocnemius: { left: number; right: number };
+      gluteusMaximus: { left: number; right: number };
+      gluteusMedius: { left: number; right: number };
+      tibialis: { left: number; right: number };
+      deltoid: { left: number; right: number };
+      biceps: { left: number; right: number };
+      triceps: { left: number; right: number };
+    };
+    
+    muscleTone?: {
+      upperLimb: { left: 'normal' | 'hypotonic' | 'hypertonic' | 'spastic'; right: 'normal' | 'hypotonic' | 'hypertonic' | 'spastic' };
+      lowerLimb: { left: 'normal' | 'hypotonic' | 'hypertonic' | 'spastic'; right: 'normal' | 'hypotonic' | 'hypertonic' | 'spastic' };
+      trunk: 'normal' | 'hypotonic' | 'hypertonic';
+    };
+    
+    triggerPoints?: Array<{
+      muscle: string;
+      location: { x: number; y: number; z: number };
+      severity: 'mild' | 'moderate' | 'severe';
+      referralPattern: string;
+    }>;
+    
+    softTissue?: {
+      swelling: {
+        knee: { left: number; right: number };
+        ankle: { left: number; right: number };
+        shoulder: { left: number; right: number };
+        elbow: { left: number; right: number };
+      };
+      scarTissue: Array<{
+        location: string;
+        type: 'surgical' | 'traumatic';
+        maturity: 'acute' | 'subacute' | 'chronic';
+        adhesions: boolean;
+      }>;
+      fascialRestrictions: {
+        itBand: { left: boolean; right: boolean };
+        plantarFascia: { left: boolean; right: boolean };
+        thoracolumbar: boolean;
+      };
+    };
+    
+    tendonPathology?: {
+      achilles: { left: 'normal' | 'tendinopathy' | 'partial_tear' | 'complete_tear'; right: 'normal' | 'tendinopathy' | 'partial_tear' | 'complete_tear' };
+      patellar: { left: 'normal' | 'tendinopathy' | 'partial_tear'; right: 'normal' | 'tendinopathy' | 'partial_tear' };
+      rotatorCuff: { left: 'normal' | 'tendinopathy' | 'partial_tear' | 'complete_tear'; right: 'normal' | 'tendinopathy' | 'partial_tear' | 'complete_tear' };
+    };
+    
+    ligamentInjuries?: {
+      acl: { left: 'intact' | 'grade1' | 'grade2' | 'grade3'; right: 'intact' | 'grade1' | 'grade2' | 'grade3' };
+      pcl: { left: 'intact' | 'grade1' | 'grade2' | 'grade3'; right: 'intact' | 'grade1' | 'grade2' | 'grade3' };
+      mcl: { left: 'intact' | 'grade1' | 'grade2' | 'grade3'; right: 'intact' | 'grade1' | 'grade2' | 'grade3' };
+      lcl: { left: 'intact' | 'grade1' | 'grade2' | 'grade3'; right: 'intact' | 'grade1' | 'grade2' | 'grade3' };
+      atfl: { left: 'intact' | 'grade1' | 'grade2' | 'grade3'; right: 'intact' | 'grade1' | 'grade2' | 'grade3' };
+    };
   }>().notNull().default({
     limbScales: {
       overall: 1,
@@ -629,6 +695,55 @@ export const virtualPatientConfigs = pgTable("virtual_patient_configs", {
         left: 50,
         right: 50
       }
+    },
+    // Phase 4 Muscle & Soft Tissue defaults
+    muscleVisualization: {
+      showMuscles: false,
+      muscleOpacity: 0.7,
+      muscleLayer: 'superficial' as const
+    },
+    muscleBulk: {
+      quadriceps: { left: 100, right: 100 },
+      hamstrings: { left: 100, right: 100 },
+      gastrocnemius: { left: 100, right: 100 },
+      gluteusMaximus: { left: 100, right: 100 },
+      gluteusMedius: { left: 100, right: 100 },
+      tibialis: { left: 100, right: 100 },
+      deltoid: { left: 100, right: 100 },
+      biceps: { left: 100, right: 100 },
+      triceps: { left: 100, right: 100 }
+    },
+    muscleTone: {
+      upperLimb: { left: 'normal' as const, right: 'normal' as const },
+      lowerLimb: { left: 'normal' as const, right: 'normal' as const },
+      trunk: 'normal' as const
+    },
+    triggerPoints: [],
+    softTissue: {
+      swelling: {
+        knee: { left: 0, right: 0 },
+        ankle: { left: 0, right: 0 },
+        shoulder: { left: 0, right: 0 },
+        elbow: { left: 0, right: 0 }
+      },
+      scarTissue: [],
+      fascialRestrictions: {
+        itBand: { left: false, right: false },
+        plantarFascia: { left: false, right: false },
+        thoracolumbar: false
+      }
+    },
+    tendonPathology: {
+      achilles: { left: 'normal' as const, right: 'normal' as const },
+      patellar: { left: 'normal' as const, right: 'normal' as const },
+      rotatorCuff: { left: 'normal' as const, right: 'normal' as const }
+    },
+    ligamentInjuries: {
+      acl: { left: 'intact' as const, right: 'intact' as const },
+      pcl: { left: 'intact' as const, right: 'intact' as const },
+      mcl: { left: 'intact' as const, right: 'intact' as const },
+      lcl: { left: 'intact' as const, right: 'intact' as const },
+      atfl: { left: 'intact' as const, right: 'intact' as const }
     }
   }),
   

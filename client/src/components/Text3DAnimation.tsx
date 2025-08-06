@@ -1076,6 +1076,65 @@ export default function Text3DAnimation({
     bonesRef.current['rightClavicle'] = rightClavicle;
     bonesRef.current['rightACJointGroup'] = rightACJointGroup;
 
+    // Create scapulae FIRST (before arms) - Now connected to AC joints
+    const scapulaGeometry = new THREE.Shape();
+    // Create a triangular wing-shaped scapula
+    scapulaGeometry.moveTo(0, 0);
+    scapulaGeometry.lineTo(0.15, -0.25);
+    scapulaGeometry.lineTo(0.05, -0.3);
+    scapulaGeometry.lineTo(-0.05, -0.2);
+    scapulaGeometry.closePath();
+    
+    const scapulaExtrudeSettings = {
+      depth: 0.02,
+      bevelEnabled: true,
+      bevelThickness: 0.01,
+      bevelSize: 0.01,
+      bevelSegments: 1
+    };
+    
+    const scapula3D = new THREE.ExtrudeGeometry(scapulaGeometry, scapulaExtrudeSettings);
+    
+    // Apply scapular winging pathology
+    const wingingRad = (shoulderPathology.scapularWinging * Math.PI) / 180;
+    
+    // LEFT SCAPULA - Attached to left AC joint
+    const leftScapulaGroup = new THREE.Group();
+    leftScapulaGroup.name = 'leftScapulaGroup';
+    // Position relative to AC joint - scapula sits below and behind the AC joint
+    leftScapulaGroup.position.set(0.03, -0.1, -0.1); 
+    
+    const leftScapula = new THREE.Mesh(scapula3D, boneMaterial);
+    // Apply scapular winging
+    leftScapula.rotation.set(0, -0.3 - wingingRad * 2, 0); // Add winging rotation
+    leftScapula.position.z = -wingingRad * 0.3; // Move backward with winging
+    leftScapula.name = 'leftScapula';
+    leftScapulaGroup.add(leftScapula);
+    
+    // Attach left scapula to left AC joint
+    leftACJointGroup.add(leftScapulaGroup);
+    bonesRef.current['leftScapula'] = leftScapula;
+    bonesRef.current['leftScapulaGroup'] = leftScapulaGroup;
+    
+    // RIGHT SCAPULA - Attached to right AC joint
+    const rightScapulaGroup = new THREE.Group();
+    rightScapulaGroup.name = 'rightScapulaGroup';
+    // Position relative to AC joint - scapula sits below and behind the AC joint
+    rightScapulaGroup.position.set(-0.03, -0.1, -0.1);
+    
+    const rightScapula = new THREE.Mesh(scapula3D, boneMaterial);
+    // Apply scapular winging  
+    rightScapula.rotation.set(0, 0.3 + wingingRad * 2, 0); // Add winging rotation
+    rightScapula.position.z = -wingingRad * 0.3; // Move backward with winging
+    rightScapula.scale.x = -1; // Mirror for right side
+    rightScapula.name = 'rightScapula';
+    rightScapulaGroup.add(rightScapula);
+    
+    // Attach right scapula to right AC joint
+    rightACJointGroup.add(rightScapulaGroup);
+    bonesRef.current['rightScapula'] = rightScapula;
+    bonesRef.current['rightScapulaGroup'] = rightScapulaGroup;
+
     // Arms - Create proper anatomical arm structure with scaling
     const upperArmLength = 0.5 * limbScales.upperArm * limbScales.overall;
     const forearmLength = 0.45 * limbScales.forearm * limbScales.overall;
@@ -1268,71 +1327,14 @@ export default function Text3DAnimation({
     rightHand.name = 'rightHand';
     rightElbowGroup.add(rightHand); // Attach to elbow group
 
+
+
     // Add upper body connection bones for better visual connectivity
     const shoulderConnectorGeometry = new THREE.BoxGeometry(0.5, 0.08, 0.08);
     const shoulderConnector = new THREE.Mesh(shoulderConnectorGeometry, boneMaterial);
     shoulderConnector.position.set(0, torsoHeight + 0.9 - 0.15, 0); // At shoulder level
     shoulderConnector.name = 'shoulderConnector';
     skeleton.add(shoulderConnector);
-
-    // Add scapulae (shoulder blades) - Now connected to AC joints
-    const scapulaGeometry = new THREE.Shape();
-    // Create a triangular wing-shaped scapula
-    scapulaGeometry.moveTo(0, 0);
-    scapulaGeometry.lineTo(0.15, -0.25);
-    scapulaGeometry.lineTo(0.05, -0.3);
-    scapulaGeometry.lineTo(-0.05, -0.2);
-    scapulaGeometry.closePath();
-    
-    const scapulaExtrudeSettings = {
-      depth: 0.02,
-      bevelEnabled: true,
-      bevelThickness: 0.01,
-      bevelSize: 0.01,
-      bevelSegments: 1
-    };
-    
-    const scapula3D = new THREE.ExtrudeGeometry(scapulaGeometry, scapulaExtrudeSettings);
-    
-    // Apply scapular winging pathology
-    const wingingRad = (shoulderPathology.scapularWinging * Math.PI) / 180;
-    
-    // LEFT SCAPULA - Attached to left AC joint
-    const leftScapulaGroup = new THREE.Group();
-    leftScapulaGroup.name = 'leftScapulaGroup';
-    // Position relative to AC joint - scapula sits below and behind the AC joint
-    leftScapulaGroup.position.set(0.03, -0.1, -0.1); 
-    
-    const leftScapula = new THREE.Mesh(scapula3D, boneMaterial);
-    // Apply scapular winging
-    leftScapula.rotation.set(0, -0.3 - wingingRad * 2, 0); // Add winging rotation
-    leftScapula.position.z = -wingingRad * 0.3; // Move backward with winging
-    leftScapula.name = 'leftScapula';
-    leftScapulaGroup.add(leftScapula);
-    
-    // Attach left scapula to left AC joint
-    leftACJointGroup.add(leftScapulaGroup);
-    bonesRef.current['leftScapula'] = leftScapula;
-    bonesRef.current['leftScapulaGroup'] = leftScapulaGroup;
-    
-    // RIGHT SCAPULA - Attached to right AC joint
-    const rightScapulaGroup = new THREE.Group();
-    rightScapulaGroup.name = 'rightScapulaGroup';
-    // Position relative to AC joint - scapula sits below and behind the AC joint
-    rightScapulaGroup.position.set(-0.03, -0.1, -0.1);
-    
-    const rightScapula = new THREE.Mesh(scapula3D, boneMaterial);
-    // Apply scapular winging  
-    rightScapula.rotation.set(0, 0.3 + wingingRad * 2, 0); // Add winging rotation
-    rightScapula.position.z = -wingingRad * 0.3; // Move backward with winging
-    rightScapula.scale.x = -1; // Mirror for right side
-    rightScapula.name = 'rightScapula';
-    rightScapulaGroup.add(rightScapula);
-    
-    // Attach right scapula to right AC joint
-    rightACJointGroup.add(rightScapulaGroup);
-    bonesRef.current['rightScapula'] = rightScapula;
-    bonesRef.current['rightScapulaGroup'] = rightScapulaGroup;
 
     // Legs with scaling
     const thighLength = 0.8 * limbScales.thigh * limbScales.overall;

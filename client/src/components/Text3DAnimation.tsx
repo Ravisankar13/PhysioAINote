@@ -4591,9 +4591,12 @@ export default function Text3DAnimation({
           const posY = THREE.MathUtils.lerp(currentJoint.position[1], nextJoint.position[1], t);
           const posZ = THREE.MathUtils.lerp(currentJoint.position[2], nextJoint.position[2], t);
           
-          bone.position.x = posX;
-          bone.position.y = posY;
-          bone.position.z = posZ;
+          // Skip position updates for arm groups - they're manually positioned at shoulder height
+          if (jointName !== 'leftArmGroup' && jointName !== 'rightArmGroup') {
+            bone.position.x = posX;
+            bone.position.y = posY;
+            bone.position.z = posZ;
+          }
 
           // Smooth rotation interpolation  
           const rotX = THREE.MathUtils.lerp(currentJoint.rotation[0], nextJoint.rotation[0], t);

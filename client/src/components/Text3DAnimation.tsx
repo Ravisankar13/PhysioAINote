@@ -1258,8 +1258,9 @@ export default function Text3DAnimation({
     leftElbowGroup.add(leftForearm);
     bonesRef.current['leftForearm'] = leftForearm;
 
-    // Attach arm to scapula so it moves with the shoulder complex
-    leftScapulaGroup.add(leftArmGroup);
+    // TEMPORARILY: Add arm directly to skeleton at proper shoulder height for debugging
+    leftArmGroup.position.set(-0.25, 1.6, 0); // Direct position at shoulder level
+    skeleton.add(leftArmGroup); // Add directly to skeleton instead of scapula
 
     // Right arm group for hierarchical transformation with pathology
     const rightArmGroup = new THREE.Group();
@@ -1300,8 +1301,9 @@ export default function Text3DAnimation({
     rightElbowGroup.add(rightForearm);
     bonesRef.current['rightForearm'] = rightForearm;
 
-    // Attach arm to scapula so it moves with the shoulder complex
-    rightScapulaGroup.add(rightArmGroup);
+    // TEMPORARILY: Add arm directly to skeleton at proper shoulder height for debugging
+    rightArmGroup.position.set(0.25, 1.6, 0); // Direct position at shoulder level
+    skeleton.add(rightArmGroup); // Add directly to skeleton instead of scapula
 
     // Create anatomically accurate hand
     const createHand = (): THREE.Group => {

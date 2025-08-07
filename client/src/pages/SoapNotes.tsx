@@ -11,10 +11,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { 
   Mic, MicOff, Upload, Users, User, FileAudio, Clock, Brain, 
   AlertCircle, CheckCircle2, UserPlus, MessageSquare, Lightbulb, 
-  Robot, Send, FileText, UserCheck, TrendingUp, Activity
+  Robot, Send, FileText, UserCheck, TrendingUp, Activity, ChartBar
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { SoapNote } from "@shared/schema";
+import ComparativeCaseAnalysis from "@/components/ComparativeCaseAnalysis";
 
 // Real-time AI assistance interfaces
 interface AISuggestion {
@@ -509,9 +510,10 @@ export default function SoapNotesPage() {
       </div>
 
       <Tabs defaultValue="recording" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="recording">Recording</TabsTrigger>
           <TabsTrigger value="current">Current Session</TabsTrigger>
+          <TabsTrigger value="analysis">Case Analysis</TabsTrigger>
           <TabsTrigger value="paperwork">AI Paperwork</TabsTrigger>
           <TabsTrigger value="history">History</TabsTrigger>
         </TabsList>
@@ -801,6 +803,28 @@ export default function SoapNotesPage() {
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+
+        {/* Case Analysis Tab */}
+        <TabsContent value="analysis">
+          <div className="space-y-4">
+            {activeSession?.id ? (
+              <ComparativeCaseAnalysis 
+                soapNoteId={activeSession.id}
+                onAnalysisComplete={() => {
+                  queryClient.invalidateQueries({ queryKey: ["/api/soap-notes"] });
+                }}
+              />
+            ) : (
+              <Card>
+                <CardContent className="py-12 text-center">
+                  <ChartBar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500 mb-4">No active session for analysis</p>
+                  <p className="text-sm text-gray-400">Create or select a SOAP note to perform comparative case analysis</p>
+                </CardContent>
+              </Card>
+            )}
+          </div>
         </TabsContent>
 
         {/* AI Paperwork Tab */}

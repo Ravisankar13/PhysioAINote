@@ -3051,3 +3051,290 @@ export const bodyScanRelations = relations(bodyScans, ({ one }) => ({
     references: [users.id],
   }),
 }));
+
+// ============================================
+// Comparative Case Analysis Tables
+// ============================================
+
+// Historical cases repository for comparative analysis
+export const historicalCases = pgTable("historical_cases", {
+  id: serial("id").primaryKey(),
+  
+  // Anonymized patient identifier (hashed for privacy)
+  anonymizedPatientHash: text("anonymized_patient_hash").notNull(),
+  clinicId: integer("clinic_id"), // For data segregation by clinic
+  
+  // Demographics (encoded for privacy)
+  demographicsVector: json("demographics_vector").notNull().$type<{
+    ageRange: string; // "20-30", "30-40", etc.
+    gender: string;
+    activityLevel: 'sedentary' | 'light' | 'moderate' | 'high' | 'athlete';
+    occupation: string; // General category, not specific job
+  }>(),
+  
+  // Clinical presentation embedding (vector for similarity search)
+  presentationEmbedding: json("presentation_embedding").notNull().$type<number[]>(),
+  
+  // Structured clinical data
+  clinicalData: json("clinical_data").notNull().$type<{
+    chiefComplaint: string;
+    bodyPart: string;
+    duration: string; // "acute", "subacute", "chronic"
+    onset: string; // "gradual", "sudden", "traumatic"
+    severity: number; // 1-10 scale
+    symptoms: string[];
+    aggravatingFactors: string[];
+    easingFactors: string[];
+    previousTreatments: string[];
+    comorbidities: string[];
+  }>(),
+  
+  // Objective findings
+  objectiveFindings: json("objective_findings").notNull().$type<{
+    posture: string[];
+    rangeOfMotion: { [key: string]: number };
+    strength: { [key: string]: number };
+    specialTests: { test: string; result: string }[];
+    palpation: string[];
+    functionalTests: string[];
+  }>(),
+  
+  // Assessment and diagnosis
+  assessment: json("assessment").notNull().$type<{
+    primaryDiagnosis: string;
+    secondaryDiagnoses: string[];
+    differentialDiagnoses: string[];
+    clinicalReasoning: string;
+    prognosticFactors: string[];
+  }>(),
+  
+  // Treatment pathway
+  treatmentPathway: json("treatment_pathway").notNull().$type<{
+    initialApproach: string[];
+    progressions: Array<{
+      week: number;
+      interventions: string[];
+      modifications: string[];
+    }>;
+    educationProvided: string[];
+    homeProgram: string[];
+  }>(),
+  
+  // Outcomes
+  outcomes: json("outcomes").notNull().$type<{
+    painReduction: number; // Percentage
+    functionImprovement: number; // Percentage  
+    patientSatisfaction: number; // 1-10
+    returnToActivity: boolean;
+    timeToRecovery: number; // Days
+    complications: string[];
+    adherence: number; // Percentage
+  }>(),
+  
+  // Success metrics
+  successScore: integer("success_score").notNull(), // 0-100
+  
+  // Metadata
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Case similarity cache for performance optimization
+export const caseSimilarities = pgTable("case_similarities", {
+  id: serial("id").primaryKey(),
+  case1Id: integer("case1_id").notNull().references(() => historicalCases.id, { onDelete: "cascade" }),
+  case2Id: integer("case2_id").notNull().references(() => historicalCases.id, { onDelete: "cascade" }),
+  similarityScore: integer("similarity_score").notNull(), // 0-100
+  
+  // Matching dimensions breakdown
+  matchingDimensions: json("matching_dimensions").notNull().$type<{
+    demographics: number;
+    presentation: number;
+    objective: number;
+    diagnosis: number;
+    overall: number;
+  }>(),
+  
+  calculatedAt: timestamp("calculated_at").defaultNow().notNull(),
+});
+
+// SOAP pattern analysis for smart suggestions
+export const soapPatterns = pgTable("soap_patterns", {
+  id: serial("id").primaryKey(),
+  conditionType: text("condition_type").notNull(),
+  sectionType: text("section_type").notNull(), // "subjective", "objective", "assessment", "plan"
+  
+  // Common findings and their frequency
+  commonFindings: json("common_findings").notNull().$type<Array<{
+    finding: string;
+    frequency: number; // Percentage
+    correlationWithOutcome: number; // -1 to 1
+  }>>(),
+  
+  // Successful patterns
+  successPatterns: json("success_patterns").$type<{
+    keyIndicators: string[];
+    criticalTests: string[];
+    effectiveInterventions: string[];
+  }>(),
+  
+  // Failure patterns to avoid
+  failurePatterns: json("failure_patterns").$type<{
+    missedRedFlags: string[];
+    ineffectiveApproaches: string[];
+    commonMistakes: string[];
+  }>(),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Comparative analysis results linked to SOAP notes
+export const comparativeAnalyses = pgTable("comparative_analyses", {
+  id: serial("id").primaryKey(),
+  soapNoteId: integer("soap_note_id").references(() => soapNotes.id, { onDelete: "cascade" }),
+  conversationId: integer("conversation_id").references(() => physioGptConversations.id),
+  
+  // Similar cases found
+  similarCaseIds: json("similar_case_ids").notNull().$type<number[]>(),
+  
+  // Analysis results
+  analysisResults: json("analysis_results").notNull().$type<{
+    topSimilarCases: Array<{
+      caseId: number;
+      similarity: number;
+      keyMatchingFactors: string[];
+    }>;
+    treatmentRecommendations: Array<{
+      approach: string;
+      successRate: number;
+      averageRecoveryTime: number;
+      considerations: string[];
+    }>;
+    prognosticFactors: {
+      positive: string[];
+      negative: string[];
+      modifiable: string[];
+    };
+    expectedOutcomes: {
+      painReduction: { min: number; max: number; average: number };
+      functionImprovement: { min: number; max: number; average: number };
+      timeToRecovery: { min: number; max: number; average: number };
+    };
+  }>(),
+  
+  // Confidence metrics
+  confidenceScore: integer("confidence_score").notNull(), // 0-100
+  sampleSize: integer("sample_size").notNull(), // Number of similar cases found
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Treatment outcome tracking for continuous learning
+export const treatmentOutcomes = pgTable("treatment_outcomes", {
+  id: serial("id").primaryKey(),
+  historicalCaseId: integer("historical_case_id").references(() => historicalCases.id),
+  soapNoteId: integer("soap_note_id").references(() => soapNotes.id),
+  
+  weekNumber: integer("week_number").notNull(),
+  
+  // Outcome measures
+  painLevel: integer("pain_level"), // 0-10
+  functionScore: integer("function_score"), // 0-100
+  patientGoalsMet: boolean("patient_goals_met"),
+  
+  // Complications or setbacks
+  complications: json("complications").$type<string[]>(),
+  
+  // Adherence tracking
+  adherenceRate: integer("adherence_rate"), // 0-100 percentage
+  
+  // Modifications made
+  treatmentModifications: json("treatment_modifications").$type<string[]>(),
+  
+  recordedAt: timestamp("recorded_at").defaultNow().notNull(),
+});
+
+// Insert schemas for comparative analysis tables
+export const insertHistoricalCaseSchema = createInsertSchema(historicalCases).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCaseSimilaritySchema = createInsertSchema(caseSimilarities).omit({
+  id: true,
+  calculatedAt: true,
+});
+
+export const insertSoapPatternSchema = createInsertSchema(soapPatterns).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertComparativeAnalysisSchema = createInsertSchema(comparativeAnalyses).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertTreatmentOutcomeSchema = createInsertSchema(treatmentOutcomes).omit({
+  id: true,
+  recordedAt: true,
+});
+
+// Types for comparative analysis tables
+export type HistoricalCase = typeof historicalCases.$inferSelect;
+export type InsertHistoricalCase = z.infer<typeof insertHistoricalCaseSchema>;
+
+export type CaseSimilarity = typeof caseSimilarities.$inferSelect;
+export type InsertCaseSimilarity = z.infer<typeof insertCaseSimilaritySchema>;
+
+export type SoapPattern = typeof soapPatterns.$inferSelect;
+export type InsertSoapPattern = z.infer<typeof insertSoapPatternSchema>;
+
+export type ComparativeAnalysis = typeof comparativeAnalyses.$inferSelect;
+export type InsertComparativeAnalysis = z.infer<typeof insertComparativeAnalysisSchema>;
+
+export type TreatmentOutcome = typeof treatmentOutcomes.$inferSelect;
+export type InsertTreatmentOutcome = z.infer<typeof insertTreatmentOutcomeSchema>;
+
+// Relations for comparative analysis tables
+export const historicalCaseRelations = relations(historicalCases, ({ many }) => ({
+  similarities1: many(caseSimilarities),
+  similarities2: many(caseSimilarities),
+  outcomes: many(treatmentOutcomes),
+}));
+
+export const caseSimilarityRelations = relations(caseSimilarities, ({ one }) => ({
+  case1: one(historicalCases, {
+    fields: [caseSimilarities.case1Id],
+    references: [historicalCases.id],
+  }),
+  case2: one(historicalCases, {
+    fields: [caseSimilarities.case2Id],
+    references: [historicalCases.id],
+  }),
+}));
+
+export const comparativeAnalysisRelations = relations(comparativeAnalyses, ({ one }) => ({
+  soapNote: one(soapNotes, {
+    fields: [comparativeAnalyses.soapNoteId],
+    references: [soapNotes.id],
+  }),
+  conversation: one(physioGptConversations, {
+    fields: [comparativeAnalyses.conversationId],
+    references: [physioGptConversations.id],
+  }),
+}));
+
+export const treatmentOutcomeRelations = relations(treatmentOutcomes, ({ one }) => ({
+  historicalCase: one(historicalCases, {
+    fields: [treatmentOutcomes.historicalCaseId],
+    references: [historicalCases.id],
+  }),
+  soapNote: one(soapNotes, {
+    fields: [treatmentOutcomes.soapNoteId],
+    references: [soapNotes.id],
+  }),
+}));

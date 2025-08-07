@@ -38,6 +38,7 @@ import { soapVirtualPatientService } from "./soapVirtualPatientService";
 import { documentGenerationService } from "./documentGenerationService";
 import { aiMovementGenerator } from "./aiMovementGenerator";
 import { youtubeAnalysisService } from "./youtubeAnalysisService";
+import { comparativeAnalysisService } from "./ai/comparativeAnalysis";
 
 import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, exercises, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, competitionParticipants, soapNotes, insertSoapNoteSchema, bodyScans, insertBodyScanSchema, tournamentParticipants, diagnosisDuelTournaments, gameContent, virtualPatients, patternRecognitionScores } from "@shared/schema";
 import { ZodError, z } from "zod";
@@ -8950,6 +8951,222 @@ Respond with only a number between 1-100 representing the relevance score.`;
 
     } catch (error: any) {
       console.error("Error transcribing and generating SOAP:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ============================================================================
+  // COMPARATIVE CASE ANALYSIS API ROUTES
+  // ============================================================================
+
+  // Perform comparative analysis for a SOAP note
+  app.post("/api/soap-notes/:id/comparative-analysis", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const soapNoteId = parseInt(req.params.id);
+      if (isNaN(soapNoteId)) {
+        return res.status(400).json({ error: 'Invalid SOAP note ID' });
+      }
+
+      // Check if user owns the SOAP note
+      const soapNote = await storage.getSoapNote(soapNoteId);
+      if (!soapNote || soapNote.userId !== userId) {
+        return res.status(404).json({ error: 'SOAP note not found' });
+      }
+
+      // Perform the comparative analysis
+      const analysis = await comparativeAnalysisService.performComparativeAnalysis(soapNoteId);
+      
+      res.status(201).json({
+        success: true,
+        analysis,
+        message: 'Comparative analysis completed successfully'
+      });
+    } catch (error: any) {
+      console.error("Error performing comparative analysis:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get comparative analysis for a SOAP note
+  app.get("/api/soap-notes/:id/comparative-analysis", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const soapNoteId = parseInt(req.params.id);
+      if (isNaN(soapNoteId)) {
+        return res.status(400).json({ error: 'Invalid SOAP note ID' });
+      }
+
+      // Get the analysis
+      const analysis = await storage.getComparativeAnalysis(soapNoteId);
+      
+      if (!analysis) {
+        return res.status(404).json({ error: 'No comparative analysis found for this SOAP note' });
+      }
+
+      res.json(analysis);
+    } catch (error: any) {
+      console.error("Error fetching comparative analysis:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get similar cases for a SOAP note
+  app.get("/api/soap-notes/:id/similar-cases", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const soapNoteId = parseInt(req.params.id);
+      const threshold = parseFloat(req.query.threshold as string) || 0.7;
+
+      if (isNaN(soapNoteId)) {
+        return res.status(400).json({ error: 'Invalid SOAP note ID' });
+      }
+
+      // Get the SOAP note
+      const soapNote = await storage.getSoapNote(soapNoteId);
+      if (!soapNote || soapNote.userId !== userId) {
+        return res.status(404).json({ error: 'SOAP note not found' });
+      }
+
+      // Find similar cases
+      const similarCases = await comparativeAnalysisService.findSimilarCases(soapNote, threshold);
+      
+      res.json({
+        soapNoteId,
+        threshold,
+        caseCount: similarCases.length,
+        cases: similarCases.slice(0, 10) // Return top 10 similar cases
+      });
+    } catch (error: any) {
+      console.error("Error finding similar cases:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get treatment pathway analysis
+  app.get("/api/soap-notes/:id/pathway-analysis", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const soapNoteId = parseInt(req.params.id);
+      if (isNaN(soapNoteId)) {
+        return res.status(400).json({ error: 'Invalid SOAP note ID' });
+      }
+
+      // Get the SOAP note
+      const soapNote = await storage.getSoapNote(soapNoteId);
+      if (!soapNote || soapNote.userId !== userId) {
+        return res.status(404).json({ error: 'SOAP note not found' });
+      }
+
+      // Find similar cases
+      const similarCases = await comparativeAnalysisService.findSimilarCases(soapNote);
+      
+      // Analyze treatment pathways
+      const pathwayAnalysis = await comparativeAnalysisService.analyzePathways(similarCases);
+      
+      res.json({
+        soapNoteId,
+        analysis: pathwayAnalysis,
+        basedOnCases: similarCases.length
+      });
+    } catch (error: any) {
+      console.error("Error analyzing treatment pathways:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get outcome predictions
+  app.get("/api/soap-notes/:id/outcome-predictions", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const soapNoteId = parseInt(req.params.id);
+      if (isNaN(soapNoteId)) {
+        return res.status(400).json({ error: 'Invalid SOAP note ID' });
+      }
+
+      // Get the SOAP note
+      const soapNote = await storage.getSoapNote(soapNoteId);
+      if (!soapNote || soapNote.userId !== userId) {
+        return res.status(404).json({ error: 'SOAP note not found' });
+      }
+
+      // Find similar cases
+      const similarCases = await comparativeAnalysisService.findSimilarCases(soapNote);
+      
+      // Generate predictions
+      const predictions = await comparativeAnalysisService.generatePredictions(similarCases, soapNote);
+      
+      res.json({
+        soapNoteId,
+        predictions,
+        basedOnCases: similarCases.length
+      });
+    } catch (error: any) {
+      console.error("Error generating outcome predictions:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get recent comparative analyses for user
+  app.get("/api/comparative-analyses/recent", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const limit = parseInt(req.query.limit as string) || 10;
+      
+      const recentAnalyses = await storage.getRecentAnalyses(userId, limit);
+      
+      res.json({
+        analyses: recentAnalyses,
+        count: recentAnalyses.length
+      });
+    } catch (error: any) {
+      console.error("Error fetching recent analyses:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get SOAP patterns for a condition
+  app.get("/api/soap-patterns/:conditionType", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { conditionType } = req.params;
+      const { sectionType } = req.query;
+      
+      const patterns = await storage.getSoapPatterns(
+        conditionType,
+        sectionType as string | undefined
+      );
+      
+      res.json({
+        conditionType,
+        sectionType: sectionType || 'all',
+        patterns
+      });
+    } catch (error: any) {
+      console.error("Error fetching SOAP patterns:", error);
       res.status(500).json({ error: error.message });
     }
   });

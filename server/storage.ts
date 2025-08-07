@@ -69,6 +69,21 @@ import {
   pathologyTemplates,
   type PathologyTemplate,
   type InsertPathologyTemplate,
+  historicalCases,
+  type HistoricalCase,
+  type InsertHistoricalCase,
+  caseSimilarities,
+  type CaseSimilarity,
+  type InsertCaseSimilarity,
+  soapPatterns,
+  type SoapPattern,
+  type InsertSoapPattern,
+  comparativeAnalyses,
+  type ComparativeAnalysis,
+  type InsertComparativeAnalysis,
+  treatmentOutcomes,
+  type TreatmentOutcome,
+  type InsertTreatmentOutcome,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, isNull, sql, ilike } from "drizzle-orm";
@@ -386,6 +401,31 @@ export interface IStorage {
   createPathologyTemplate(template: InsertPathologyTemplate): Promise<PathologyTemplate>;
   updatePathologyTemplate(id: number, data: Partial<InsertPathologyTemplate>): Promise<PathologyTemplate>;
   deletePathologyTemplate(id: number): Promise<void>;
+  
+  // Comparative Case Analysis Operations
+  createHistoricalCase(histCase: InsertHistoricalCase): Promise<HistoricalCase>;
+  getHistoricalCase(id: number): Promise<HistoricalCase | undefined>;
+  getSimilarCases(embedding: number[], threshold: number): Promise<HistoricalCase[]>;
+  updateHistoricalCaseOutcomes(id: number, outcomes: any): Promise<HistoricalCase>;
+  
+  // Case Similarity Operations
+  createCaseSimilarity(similarity: InsertCaseSimilarity): Promise<CaseSimilarity>;
+  getCaseSimilarities(caseId: number): Promise<CaseSimilarity[]>;
+  
+  // SOAP Pattern Operations
+  getSoapPatterns(conditionType: string, sectionType?: string): Promise<SoapPattern[]>;
+  createSoapPattern(pattern: InsertSoapPattern): Promise<SoapPattern>;
+  updateSoapPattern(id: number, data: Partial<InsertSoapPattern>): Promise<SoapPattern>;
+  
+  // Comparative Analysis Operations
+  createComparativeAnalysis(analysis: InsertComparativeAnalysis): Promise<ComparativeAnalysis>;
+  getComparativeAnalysis(soapNoteId?: number, conversationId?: number): Promise<ComparativeAnalysis | undefined>;
+  getRecentAnalyses(userId: number, limit?: number): Promise<ComparativeAnalysis[]>;
+  
+  // Treatment Outcome Operations  
+  createTreatmentOutcome(outcome: InsertTreatmentOutcome): Promise<TreatmentOutcome>;
+  getTreatmentOutcomes(caseId?: number, soapNoteId?: number): Promise<TreatmentOutcome[]>;
+  updateTreatmentOutcome(id: number, data: Partial<InsertTreatmentOutcome>): Promise<TreatmentOutcome>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2524,6 +2564,280 @@ export class DatabaseStorage implements IStorage {
         .where(eq(pathologyTemplates.id, id));
     } catch (error) {
       console.error("Error deleting pathology template:", error);
+      throw error;
+    }
+  }
+
+  // Comparative Case Analysis Operations
+  async createHistoricalCase(histCase: InsertHistoricalCase): Promise<HistoricalCase> {
+    try {
+      const result = await db
+        .insert(historicalCases)
+        .values(histCase)
+        .returning();
+      
+      return result[0];
+    } catch (error) {
+      console.error("Error creating historical case:", error);
+      throw error;
+    }
+  }
+
+  async getHistoricalCase(id: number): Promise<HistoricalCase | undefined> {
+    try {
+      const result = await db
+        .select()
+        .from(historicalCases)
+        .where(eq(historicalCases.id, id))
+        .limit(1);
+      
+      return result[0];
+    } catch (error) {
+      console.error("Error fetching historical case:", error);
+      throw error;
+    }
+  }
+
+  async getSimilarCases(embedding: number[], threshold: number): Promise<HistoricalCase[]> {
+    try {
+      // For now, return all cases and filter in application layer
+      // In production, this would use pgvector for similarity search
+      const allCases = await db.select().from(historicalCases);
+      
+      // Calculate cosine similarity in application layer
+      const casesWithSimilarity = allCases.map(caseItem => {
+        const caseEmbedding = caseItem.presentationEmbedding as number[];
+        const similarity = this.cosineSimilarity(embedding, caseEmbedding);
+        return { ...caseItem, similarity };
+      });
+      
+      // Filter by threshold and sort by similarity
+      return casesWithSimilarity
+        .filter(c => c.similarity >= threshold)
+        .sort((a, b) => b.similarity - a.similarity)
+        .slice(0, 20); // Limit to top 20 matches
+    } catch (error) {
+      console.error("Error finding similar cases:", error);
+      throw error;
+    }
+  }
+
+  // Helper function for cosine similarity
+  private cosineSimilarity(a: number[], b: number[]): number {
+    if (a.length !== b.length) return 0;
+    
+    let dotProduct = 0;
+    let normA = 0;
+    let normB = 0;
+    
+    for (let i = 0; i < a.length; i++) {
+      dotProduct += a[i] * b[i];
+      normA += a[i] * a[i];
+      normB += b[i] * b[i];
+    }
+    
+    if (normA === 0 || normB === 0) return 0;
+    return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+  }
+
+  async updateHistoricalCaseOutcomes(id: number, outcomes: any): Promise<HistoricalCase> {
+    try {
+      const result = await db
+        .update(historicalCases)
+        .set({
+          outcomes,
+          updatedAt: new Date(),
+        })
+        .where(eq(historicalCases.id, id))
+        .returning();
+      
+      return result[0];
+    } catch (error) {
+      console.error("Error updating historical case outcomes:", error);
+      throw error;
+    }
+  }
+
+  // Case Similarity Operations
+  async createCaseSimilarity(similarity: InsertCaseSimilarity): Promise<CaseSimilarity> {
+    try {
+      const result = await db
+        .insert(caseSimilarities)
+        .values(similarity)
+        .returning();
+      
+      return result[0];
+    } catch (error) {
+      console.error("Error creating case similarity:", error);
+      throw error;
+    }
+  }
+
+  async getCaseSimilarities(caseId: number): Promise<CaseSimilarity[]> {
+    try {
+      const result = await db
+        .select()
+        .from(caseSimilarities)
+        .where(or(
+          eq(caseSimilarities.case1Id, caseId),
+          eq(caseSimilarities.case2Id, caseId)
+        ))
+        .orderBy(desc(caseSimilarities.similarityScore));
+      
+      return result;
+    } catch (error) {
+      console.error("Error fetching case similarities:", error);
+      throw error;
+    }
+  }
+
+  // SOAP Pattern Operations
+  async getSoapPatterns(conditionType: string, sectionType?: string): Promise<SoapPattern[]> {
+    try {
+      let query = db
+        .select()
+        .from(soapPatterns)
+        .where(eq(soapPatterns.conditionType, conditionType));
+      
+      if (sectionType) {
+        query = query.where(eq(soapPatterns.sectionType, sectionType));
+      }
+      
+      return await query;
+    } catch (error) {
+      console.error("Error fetching SOAP patterns:", error);
+      throw error;
+    }
+  }
+
+  async createSoapPattern(pattern: InsertSoapPattern): Promise<SoapPattern> {
+    try {
+      const result = await db
+        .insert(soapPatterns)
+        .values(pattern)
+        .returning();
+      
+      return result[0];
+    } catch (error) {
+      console.error("Error creating SOAP pattern:", error);
+      throw error;
+    }
+  }
+
+  async updateSoapPattern(id: number, data: Partial<InsertSoapPattern>): Promise<SoapPattern> {
+    try {
+      const result = await db
+        .update(soapPatterns)
+        .set({
+          ...data,
+          updatedAt: new Date(),
+        })
+        .where(eq(soapPatterns.id, id))
+        .returning();
+      
+      return result[0];
+    } catch (error) {
+      console.error("Error updating SOAP pattern:", error);
+      throw error;
+    }
+  }
+
+  // Comparative Analysis Operations
+  async createComparativeAnalysis(analysis: InsertComparativeAnalysis): Promise<ComparativeAnalysis> {
+    try {
+      const result = await db
+        .insert(comparativeAnalyses)
+        .values(analysis)
+        .returning();
+      
+      return result[0];
+    } catch (error) {
+      console.error("Error creating comparative analysis:", error);
+      throw error;
+    }
+  }
+
+  async getComparativeAnalysis(soapNoteId?: number, conversationId?: number): Promise<ComparativeAnalysis | undefined> {
+    try {
+      let query = db.select().from(comparativeAnalyses);
+      
+      if (soapNoteId) {
+        query = query.where(eq(comparativeAnalyses.soapNoteId, soapNoteId));
+      } else if (conversationId) {
+        query = query.where(eq(comparativeAnalyses.conversationId, conversationId));
+      } else {
+        return undefined;
+      }
+      
+      const result = await query.limit(1);
+      return result[0];
+    } catch (error) {
+      console.error("Error fetching comparative analysis:", error);
+      throw error;
+    }
+  }
+
+  async getRecentAnalyses(userId: number, limit: number = 10): Promise<ComparativeAnalysis[]> {
+    try {
+      // Join with soap notes or conversations to filter by user
+      const result = await db
+        .select()
+        .from(comparativeAnalyses)
+        .leftJoin(soapNotes, eq(comparativeAnalyses.soapNoteId, soapNotes.id))
+        .where(eq(soapNotes.userId, userId))
+        .orderBy(desc(comparativeAnalyses.createdAt))
+        .limit(limit);
+      
+      return result.map(r => r.comparative_analyses);
+    } catch (error) {
+      console.error("Error fetching recent analyses:", error);
+      throw error;
+    }
+  }
+
+  // Treatment Outcome Operations
+  async createTreatmentOutcome(outcome: InsertTreatmentOutcome): Promise<TreatmentOutcome> {
+    try {
+      const result = await db
+        .insert(treatmentOutcomes)
+        .values(outcome)
+        .returning();
+      
+      return result[0];
+    } catch (error) {
+      console.error("Error creating treatment outcome:", error);
+      throw error;
+    }
+  }
+
+  async getTreatmentOutcomes(caseId?: number, soapNoteId?: number): Promise<TreatmentOutcome[]> {
+    try {
+      let query = db.select().from(treatmentOutcomes);
+      
+      if (caseId) {
+        query = query.where(eq(treatmentOutcomes.historicalCaseId, caseId));
+      } else if (soapNoteId) {
+        query = query.where(eq(treatmentOutcomes.soapNoteId, soapNoteId));
+      }
+      
+      return await query.orderBy(treatmentOutcomes.weekNumber);
+    } catch (error) {
+      console.error("Error fetching treatment outcomes:", error);
+      throw error;
+    }
+  }
+
+  async updateTreatmentOutcome(id: number, data: Partial<InsertTreatmentOutcome>): Promise<TreatmentOutcome> {
+    try {
+      const result = await db
+        .update(treatmentOutcomes)
+        .set(data)
+        .where(eq(treatmentOutcomes.id, id))
+        .returning();
+      
+      return result[0];
+    } catch (error) {
+      console.error("Error updating treatment outcome:", error);
       throw error;
     }
   }

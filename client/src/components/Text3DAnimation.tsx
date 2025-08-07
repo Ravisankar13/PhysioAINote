@@ -1013,17 +1013,19 @@ export default function Text3DAnimation({
     };
     
     // Position clavicles at proper shoulder level
-    // Shoulders should be at upper chest level, approximately 80% of the way up the torso
-    // The skeleton has a torsoHeight of 1.2, and the spine starts at torsoHeight + 0.6 = 1.8
-    // Shoulders should be positioned at about chest level, not at knee level
-    const properShoulderHeight = torsoHeight * 0.8 + 0.5; // Around 1.46 for proper shoulder position
-    const clavicleY = properShoulderHeight;
+    // The legs are at Y=0.6 (hip level)
+    // The spine starts at Y=1.8 (top of head area)  
+    // Shoulders should be between these, at upper chest level
+    // For a standing human, shoulders are typically at about 1.4-1.5 units
+    const shoulderHeight = 1.5; // Direct positioning at proper shoulder height
+    const clavicleY = shoulderHeight;
     
     console.log('Shoulder positioning:', { 
       torsoHeight,
       spineStartY, 
-      properShoulderHeight,
+      shoulderHeight,
       clavicleY,
+      legPosition: 0.6,
       thoracicVertebraeCount: thoracicVertebrae.length 
     });
     
@@ -1038,9 +1040,12 @@ export default function Text3DAnimation({
     
     // LEFT SHOULDER COMPLEX with AC Joint
     const leftClavicleGroup = new THREE.Group();
-    leftClavicleGroup.position.set(0, clavicleY, 0); // Explicitly set all coordinates
+    // Force position to proper shoulder height
+    const actualShoulderY = 1.5; // Shoulder height between spine (1.8) and hips (0.6)
+    leftClavicleGroup.position.set(0, actualShoulderY, 0);
     leftClavicleGroup.name = 'leftClavicleGroup';
     skeleton.add(leftClavicleGroup);
+    console.log('Left clavicle group position:', leftClavicleGroup.position);
     
     const leftClavicle = createClavicle('left');
     leftClavicle.name = 'leftClavicle';
@@ -1063,9 +1068,10 @@ export default function Text3DAnimation({
     
     // RIGHT SHOULDER COMPLEX with AC Joint
     const rightClavicleGroup = new THREE.Group();
-    rightClavicleGroup.position.set(0, clavicleY, 0); // Explicitly set all coordinates
+    rightClavicleGroup.position.set(0, actualShoulderY, 0); // Use same height as left
     rightClavicleGroup.name = 'rightClavicleGroup';
     skeleton.add(rightClavicleGroup);
+    console.log('Right clavicle group position:', rightClavicleGroup.position);
     
     const rightClavicle = createClavicle('right');
     rightClavicle.name = 'rightClavicle';

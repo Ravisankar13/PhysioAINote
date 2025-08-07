@@ -716,6 +716,7 @@ export default function Text3DAnimation({
     
     skeleton.add(spineGroup);
     bonesRef.current['spineGroup'] = spineGroup; // Add spine group to bonesRef
+    bonesRef.current['spine'] = spineGroup; // Alias for animation compatibility
     
 
     
@@ -801,6 +802,7 @@ export default function Text3DAnimation({
     headMesh.name = 'head';
     skeleton.add(headMesh);
     bonesRef.current['head'] = headMesh;
+    bonesRef.current['neck'] = headMesh; // Alias for animation compatibility (neck movement affects head)
     
     // Create anatomically accurate pelvis with two innominate bones
     const pelvisGroup = new THREE.Group();
@@ -1450,6 +1452,7 @@ export default function Text3DAnimation({
     leftThigh.name = 'leftThigh';
     leftLegGroup.add(leftThigh);
     bonesRef.current['leftThigh'] = leftThigh;
+    bonesRef.current['leftUpperLeg'] = leftThigh; // Alias for animation compatibility
     bonesRef.current['leftLegGroup'] = leftLegGroup;
 
     // Left knee group - for proper shin hierarchy
@@ -1493,6 +1496,7 @@ export default function Text3DAnimation({
     leftShin.name = 'leftShin';
     leftKneeGroup.add(leftShin);
     bonesRef.current['leftShin'] = leftShin;
+    bonesRef.current['leftLowerLeg'] = leftShin; // Alias for animation compatibility
     
     // Left ankle complex - anatomically accurate with talocrural and subtalar joints
     const leftAnkleGroup = new THREE.Group();
@@ -1522,6 +1526,7 @@ export default function Text3DAnimation({
     leftSubtalarGroup.name = 'leftSubtalarGroup';
     leftAnkleGroup.add(leftSubtalarGroup);
     bonesRef.current['leftSubtalarGroup'] = leftSubtalarGroup;
+    bonesRef.current['leftAnkleGroup'] = leftAnkleGroup; // Add missing ankle group reference
     
     // Subtalar joint visual
     const subtalarJointGeometry = new THREE.SphereGeometry(0.035, 16, 16);
@@ -1573,6 +1578,7 @@ export default function Text3DAnimation({
     rightThigh.name = 'rightThigh';
     rightLegGroup.add(rightThigh);
     bonesRef.current['rightThigh'] = rightThigh;
+    bonesRef.current['rightUpperLeg'] = rightThigh; // Alias for animation compatibility
     bonesRef.current['rightLegGroup'] = rightLegGroup;
 
     // Right knee group - for proper shin hierarchy
@@ -1610,6 +1616,7 @@ export default function Text3DAnimation({
     rightShin.name = 'rightShin';
     rightKneeGroup.add(rightShin);
     bonesRef.current['rightShin'] = rightShin;
+    bonesRef.current['rightLowerLeg'] = rightShin; // Alias for animation compatibility
     
     // Right ankle complex - anatomically accurate with talocrural and subtalar joints
     const rightAnkleGroup = new THREE.Group();
@@ -1636,6 +1643,7 @@ export default function Text3DAnimation({
     rightSubtalarGroup.name = 'rightSubtalarGroup';
     rightAnkleGroup.add(rightSubtalarGroup);
     bonesRef.current['rightSubtalarGroup'] = rightSubtalarGroup;
+    bonesRef.current['rightAnkleGroup'] = rightAnkleGroup; // Add missing ankle group reference
     
     // Subtalar joint visual
     const rightSubtalarJoint = new THREE.Mesh(subtalarJointGeometry, subtalarJointMaterial);
@@ -1696,11 +1704,13 @@ export default function Text3DAnimation({
     leftHip.position.set(-0.15, 0.85, 0); // Positioned to insert into hip socket
     leftHip.name = 'leftHip';
     skeleton.add(leftHip);
+    bonesRef.current['leftHip'] = leftHip;
 
     const rightHip = new THREE.Mesh(femoralHeadGeometry, jointMaterial);
     rightHip.position.set(0.15, 0.85, 0); // Positioned to insert into hip socket
     rightHip.name = 'rightHip';
     skeleton.add(rightHip);
+    bonesRef.current['rightHip'] = rightHip;
 
     // Knee joints - positioned between thigh and shin with varus/valgus adjustment
     const leftKnee = new THREE.Mesh(jointGeometry, jointMaterial);
@@ -1708,12 +1718,14 @@ export default function Text3DAnimation({
     leftKnee.position.set(-0.15 + leftKneeOffset, 0.85 - thighLength, 0); 
     leftKnee.name = 'leftKnee';
     skeleton.add(leftKnee);
+    bonesRef.current['leftKnee'] = leftKnee;
 
     const rightKnee = new THREE.Mesh(jointGeometry, jointMaterial);
     const rightKneeOffset = Math.sin(varusValgusRad) * shinLength * 0.5;
     rightKnee.position.set(0.15 + rightKneeOffset, 0.85 - thighLength, 0);
     rightKnee.name = 'rightKnee';
     skeleton.add(rightKnee);
+    bonesRef.current['rightKnee'] = rightKnee;
     
 
 
@@ -1722,11 +1734,13 @@ export default function Text3DAnimation({
     leftAnkle.position.set(-0.15, 0.85 - thighLength - shinLength, 0); // Adjusted for raised hip
     leftAnkle.name = 'leftAnkle';
     skeleton.add(leftAnkle);
+    bonesRef.current['leftAnkle'] = leftAnkle;
 
     const rightAnkle = new THREE.Mesh(jointGeometry, jointMaterial);
     rightAnkle.position.set(0.15, 0.85 - thighLength - shinLength, 0); // Adjusted for raised hip
     rightAnkle.name = 'rightAnkle';
     skeleton.add(rightAnkle);
+    bonesRef.current['rightAnkle'] = rightAnkle;
 
     // Note: Feet are now created as part of the ankle groups above
 

@@ -1012,10 +1012,17 @@ export default function Text3DAnimation({
       return clavicleGroup;
     };
     
-    // Position clavicles at proper shoulder level (upper chest/shoulder area)
-    // The shoulders should be positioned near the top of the torso
-    const shoulderHeight = 1.65; // Standard shoulder height for proper anatomical position
-    const clavicleY = shoulderHeight;
+    // Position clavicles at proper shoulder level based on actual thoracic vertebrae
+    // The clavicles should connect at approximately T1-T2 level
+    let clavicleY = torsoHeight + 0.4; // Default fallback position
+    
+    // If we have thoracic vertebrae, position clavicles at T1-T2 level
+    if (thoracicVertebrae.length > 0) {
+      // Get position of first thoracic vertebra (T1)
+      const t1Position = thoracicVertebrae[0].position.y;
+      // Clavicles attach slightly anterior and superior to T1
+      clavicleY = t1Position + 0.05; // Slightly above T1
+    }
     
     // Create AC joint geometry (small sphere for the joint)
     const acJointGeometry = new THREE.SphereGeometry(0.03, 10, 10);

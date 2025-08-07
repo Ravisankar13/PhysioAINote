@@ -1221,9 +1221,10 @@ export default function Text3DAnimation({
     const ghSubluxationOffset = (shoulderPathology.ghSubluxation / 100) * 0.1; // Percentage to offset
     
     // Position arm at glenoid fossa of scapula with pathology offsets
+    // Arms should attach at scapula's glenoid, not drop way below
     leftArmGroup.position.set(
       0.08, // Lateral position on scapula (glenoid)
-      -0.15 - acSeparationOffset - ghSubluxationOffset, // Below AC joint with pathology
+      -0.05 - acSeparationOffset - ghSubluxationOffset, // Slightly below scapula center with pathology
       0.02 + ghSubluxationOffset * 0.5  // Forward displacement with subluxation
     );
     leftArmGroup.name = 'leftArmGroup';
@@ -1264,9 +1265,10 @@ export default function Text3DAnimation({
     const rightArmGroup = new THREE.Group();
     
     // Position arm at glenoid fossa of scapula with pathology offsets
+    // Arms should attach at scapula's glenoid, not drop way below
     rightArmGroup.position.set(
       -0.08, // Lateral position on scapula (glenoid) - negative for right side
-      -0.15 - acSeparationOffset - ghSubluxationOffset, // Below AC joint with pathology
+      -0.05 - acSeparationOffset - ghSubluxationOffset, // Slightly below scapula center with pathology
       0.02 + ghSubluxationOffset * 0.5  // Forward displacement with subluxation
     );
     rightArmGroup.name = 'rightArmGroup';

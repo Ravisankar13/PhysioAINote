@@ -66,6 +66,9 @@ import {
   virtualPatientConfigs,
   type VirtualPatientConfig,
   type InsertVirtualPatientConfig,
+  pathologyTemplates,
+  type PathologyTemplate,
+  type InsertPathologyTemplate,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, isNull, sql, ilike } from "drizzle-orm";
@@ -376,6 +379,13 @@ export interface IStorage {
   createVirtualPatientConfig(config: InsertVirtualPatientConfig): Promise<VirtualPatientConfig>;
   updateVirtualPatientConfig(id: number, data: Partial<InsertVirtualPatientConfig>): Promise<VirtualPatientConfig>;
   deleteVirtualPatientConfig(id: number): Promise<void>;
+  
+  // Pathology Template Operations
+  getPathologyTemplates(category?: string): Promise<PathologyTemplate[]>;
+  getPathologyTemplate(id: number): Promise<PathologyTemplate | undefined>;
+  createPathologyTemplate(template: InsertPathologyTemplate): Promise<PathologyTemplate>;
+  updatePathologyTemplate(id: number, data: Partial<InsertPathologyTemplate>): Promise<PathologyTemplate>;
+  deletePathologyTemplate(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2440,6 +2450,80 @@ export class DatabaseStorage implements IStorage {
         .where(eq(virtualPatientConfigs.id, id));
     } catch (error) {
       console.error("Error deleting virtual patient config:", error);
+      throw error;
+    }
+  }
+
+  // Pathology Template Operations
+  async getPathologyTemplates(category?: string): Promise<PathologyTemplate[]> {
+    try {
+      const query = db.select().from(pathologyTemplates);
+      
+      if (category) {
+        return await query.where(eq(pathologyTemplates.category, category));
+      }
+      
+      return await query;
+    } catch (error) {
+      console.error("Error fetching pathology templates:", error);
+      throw error;
+    }
+  }
+
+  async getPathologyTemplate(id: number): Promise<PathologyTemplate | undefined> {
+    try {
+      const result = await db
+        .select()
+        .from(pathologyTemplates)
+        .where(eq(pathologyTemplates.id, id))
+        .limit(1);
+      
+      return result[0];
+    } catch (error) {
+      console.error("Error fetching pathology template:", error);
+      throw error;
+    }
+  }
+
+  async createPathologyTemplate(template: InsertPathologyTemplate): Promise<PathologyTemplate> {
+    try {
+      const result = await db
+        .insert(pathologyTemplates)
+        .values(template)
+        .returning();
+      
+      return result[0];
+    } catch (error) {
+      console.error("Error creating pathology template:", error);
+      throw error;
+    }
+  }
+
+  async updatePathologyTemplate(id: number, data: Partial<InsertPathologyTemplate>): Promise<PathologyTemplate> {
+    try {
+      const result = await db
+        .update(pathologyTemplates)
+        .set({
+          ...data,
+          updatedAt: new Date(),
+        })
+        .where(eq(pathologyTemplates.id, id))
+        .returning();
+      
+      return result[0];
+    } catch (error) {
+      console.error("Error updating pathology template:", error);
+      throw error;
+    }
+  }
+
+  async deletePathologyTemplate(id: number): Promise<void> {
+    try {
+      await db
+        .delete(pathologyTemplates)
+        .where(eq(pathologyTemplates.id, id));
+    } catch (error) {
+      console.error("Error deleting pathology template:", error);
       throw error;
     }
   }

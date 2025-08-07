@@ -769,6 +769,128 @@ export default function VirtualPatientsManagement() {
     loadConfiguration(config);
     setEditingName(config.patient_name);
   };
+  
+  // Handle loading pathology template
+  const handleLoadTemplate = async (templateId: string) => {
+    try {
+      const response = await fetch(`/api/pathology-templates/${templateId}`);
+      if (!response.ok) throw new Error('Failed to load template');
+      
+      const template = await response.json();
+      
+      // Apply anatomical deviations from template
+      if (template.anatomicalDeviations) {
+        const deviations = template.anatomicalDeviations;
+        
+        // Apply knee deviations
+        if (deviations.q_angle) {
+          // Convert Q-angle to varus/valgus
+          setKneeVarusValgus([deviations.q_angle.value - 15]); // Normal Q-angle is ~15 degrees
+        }
+        if (deviations.patella_alta) {
+          setPatellaHeight([deviations.patella_alta.value]);
+        }
+        if (deviations.tibial_rotation) {
+          setTibialTorsion([deviations.tibial_rotation.value]);
+        }
+        
+        // Apply hip deviations
+        if (deviations.pelvic_drop) {
+          setHipHike(true);
+          setTrendelenburg(true);
+        }
+        if (deviations.femoral_adduction) {
+          setGenuValgum([deviations.femoral_adduction.standing]);
+        }
+        
+        // Apply shoulder deviations
+        if (deviations.scapular_position) {
+          setScapularWinging([deviations.scapular_position.downward_rotation]);
+        }
+      }
+      
+      // Apply movement patterns
+      if (template.movementPatterns) {
+        const patterns = template.movementPatterns;
+        
+        if (patterns.trendelenburg_gait) {
+          setTrendelenburg(true);
+        }
+        if (patterns.single_leg_squat?.trendelenburg) {
+          setTrendelenburg(true);
+        }
+        if (patterns.single_leg_squat?.knee_valgus) {
+          setKneeVarusValgus([10]); // Valgus during movement
+        }
+      }
+      
+      // Apply joint restrictions
+      if (template.jointRestrictions) {
+        const restrictions = template.jointRestrictions;
+        
+        if (restrictions.knee_flexion) {
+          setKneeFlexionROM({
+            left: restrictions.knee_flexion.active,
+            right: restrictions.knee_flexion.active
+          });
+        }
+        if (restrictions.hip_internal_rotation) {
+          setHipFlexionROM({
+            left: restrictions.hip_internal_rotation.active,
+            right: restrictions.hip_internal_rotation.active
+          });
+        }
+        if (restrictions.hip_abduction) {
+          setHipExtensionROM({
+            left: restrictions.hip_abduction.active,
+            right: restrictions.hip_abduction.active
+          });
+        }
+        if (restrictions.shoulder_flexion) {
+          // Would need shoulder ROM states to be added
+        }
+      }
+      
+      // Apply pain patterns
+      if (template.painPatterns) {
+        const pain = template.painPatterns;
+        
+        if (pain.anterior_knee) {
+          setFlexionPain(true);
+          setWeightBearingPain(true);
+        }
+        if (pain.lateral_hip) {
+          setWeightBearingPain(true);
+        }
+        if (pain.arc_of_pain?.present) {
+          setFlexionPain(true);
+        }
+      }
+      
+      toast({
+        title: "Template Applied",
+        description: `${template.name} template has been loaded successfully`,
+      });
+      
+    } catch (error) {
+      console.error("Error loading template:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load pathology template",
+        variant: "destructive",
+      });
+    }
+  };
+  
+  // Navigate to pathology templates management
+  const loadPathologyTemplates = () => {
+    // This could open a dialog or navigate to a separate page
+    // For now, we'll just show a toast
+    toast({
+      title: "Coming Soon",
+      description: "Pathology templates management will be available soon",
+    });
+  };
 
   // Assessment tests data
   const assessmentTests = [
@@ -1374,9 +1496,38 @@ export default function VirtualPatientsManagement() {
                         <TabsContent value="pathology" className="space-y-4 mt-4">
                           <Alert>
                             <AlertDescription>
-                              Adjust pathological parameters to simulate various clinical conditions
+                              Adjust pathological parameters to simulate various clinical conditions or select a pre-configured template
                             </AlertDescription>
                           </Alert>
+
+                          {/* Pathology Template Selection */}
+                          <div className="p-4 bg-gray-50 rounded-lg">
+                            <Label className="text-base font-semibold mb-2 block">Load Pathology Template</Label>
+                            <div className="flex gap-2">
+                              <Select onValueChange={(templateId) => handleLoadTemplate(templateId)}>
+                                <SelectTrigger className="flex-1">
+                                  <SelectValue placeholder="Select a pathology template..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="1">Anterior Knee Pain Syndrome</SelectItem>
+                                  <SelectItem value="2">Subacromial Impingement</SelectItem>
+                                  <SelectItem value="3">Lateral Hip Pain</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => loadPathologyTemplates()}
+                                className="min-w-[100px]"
+                              >
+                                <Settings className="h-4 w-4 mr-1" />
+                                Manage
+                              </Button>
+                            </div>
+                            <p className="text-xs text-gray-500 mt-2">
+                              Templates provide pre-configured anatomical deviations for common pathologies
+                            </p>
+                          </div>
 
                           {/* Hip Pathology */}
                           <div>

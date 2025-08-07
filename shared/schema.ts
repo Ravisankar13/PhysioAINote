@@ -353,6 +353,72 @@ export const insertContinuousRecordingSessionSchema = createInsertSchema(continu
 export type InsertContinuousRecordingSession = z.infer<typeof insertContinuousRecordingSessionSchema>;
 export type ContinuousRecordingSession = typeof continuousRecordingSessions.$inferSelect;
 
+// Pathology Templates for common pain patterns
+export const pathologyTemplates = pgTable("pathology_templates", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  category: text("category").notNull(), // knee, shoulder, spine, hip, etc.
+  subcategory: text("subcategory"), // anterior, lateral, medial, etc.
+  description: text("description"),
+  
+  // The complete model configuration for this pathology
+  modelConfig: json("model_config").$type<{
+    limbScales: {
+      overall: number;
+      upperArm: number;
+      forearm: number;
+      thigh: number;
+      shin: number;
+    };
+    shoulderPathology: {
+      scapularWinging: number;
+      acSeparation: number;
+      ghSubluxation: number;
+    };
+    spinalPathology: {
+      scoliosis: number;
+      kyphosis: number;
+      lordosis: number;
+    };
+    lowerLimbPathology: {
+      genuVarum: number;
+      genuValgum: number;
+      patellaHeight: number;
+      qAngle: number; // Added Q-angle for knee pathologies
+      tibialTorsion: number; // Added tibial torsion
+    };
+    hipPathology: {
+      anteversion: number; // Femoral anteversion
+      retroversion: number; // Femoral retroversion
+      coxa_vara: number; // Hip angle variations
+      coxa_valga: number;
+    };
+    muscleImbalances: {
+      gluteMedWeakness: number; // 0-100% weakness
+      vmoWeakness: number; // VMO weakness for knee issues
+      itbTightness: number; // IT band tightness
+      hipFlexorTightness: number;
+      hamstringTightness: number;
+    };
+  }>().notNull(),
+  
+  // Common clinical findings associated with this pattern
+  clinicalFindings: json("clinical_findings").$type<string[]>(),
+  
+  // Typical movement patterns
+  movementPatterns: json("movement_patterns").$type<{
+    gaitDeviations: string[];
+    compensatoryPatterns: string[];
+    functionalLimitations: string[];
+  }>(),
+  
+  // Whether this is a system default template or user-created
+  isSystemDefault: boolean("is_system_default").default(false).notNull(),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 // Individual Virtual Patient 3D Model Configurations
 export const virtualPatientConfigs = pgTable("virtual_patient_configs", {
   id: serial("id").primaryKey(),
@@ -764,6 +830,15 @@ export const virtualPatientConfigs = pgTable("virtual_patient_configs", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   lastModified: timestamp("last_modified").defaultNow().notNull(),
 });
+
+export const insertPathologyTemplateSchema = createInsertSchema(pathologyTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertPathologyTemplate = z.infer<typeof insertPathologyTemplateSchema>;
+export type PathologyTemplate = typeof pathologyTemplates.$inferSelect;
 
 export const insertVirtualPatientConfigSchema = createInsertSchema(virtualPatientConfigs).omit({
   id: true,

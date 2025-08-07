@@ -3444,6 +3444,123 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
 
+  // Pathology Template Routes
+  
+  // Get all pathology templates
+  app.get("/api/pathology-templates", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const category = req.query.category as string | undefined;
+      const templates = await storage.getPathologyTemplates(category);
+      res.json(templates);
+    } catch (error) {
+      console.error("Error fetching pathology templates:", error);
+      res.status(500).json({ error: 'Failed to fetch pathology templates' });
+    }
+  });
+
+  // Get single pathology template
+  app.get("/api/pathology-templates/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const templateId = parseInt(req.params.id);
+      if (isNaN(templateId)) {
+        return res.status(400).json({ error: 'Invalid template ID' });
+      }
+
+      const template = await storage.getPathologyTemplate(templateId);
+      if (!template) {
+        return res.status(404).json({ error: 'Pathology template not found' });
+      }
+
+      res.json(template);
+    } catch (error) {
+      console.error("Error fetching pathology template:", error);
+      res.status(500).json({ error: 'Failed to fetch pathology template' });
+    }
+  });
+
+  // Create pathology template
+  app.post("/api/pathology-templates", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const templateData = {
+        ...req.body,
+        createdBy: userId
+      };
+
+      const template = await storage.createPathologyTemplate(templateData);
+      res.json(template);
+    } catch (error) {
+      console.error("Error creating pathology template:", error);
+      res.status(500).json({ error: 'Failed to create pathology template' });
+    }
+  });
+
+  // Update pathology template
+  app.put("/api/pathology-templates/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const templateId = parseInt(req.params.id);
+      if (isNaN(templateId)) {
+        return res.status(400).json({ error: 'Invalid template ID' });
+      }
+
+      const template = await storage.getPathologyTemplate(templateId);
+      if (!template) {
+        return res.status(404).json({ error: 'Pathology template not found' });
+      }
+
+      // Only allow creator to edit (or add admin check later)
+      if (template.createdBy !== userId) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      const updatedTemplate = await storage.updatePathologyTemplate(templateId, req.body);
+      res.json(updatedTemplate);
+    } catch (error) {
+      console.error("Error updating pathology template:", error);
+      res.status(500).json({ error: 'Failed to update pathology template' });
+    }
+  });
+
+  // Delete pathology template
+  app.delete("/api/pathology-templates/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const templateId = parseInt(req.params.id);
+      if (isNaN(templateId)) {
+        return res.status(400).json({ error: 'Invalid template ID' });
+      }
+
+      const template = await storage.getPathologyTemplate(templateId);
+      if (!template) {
+        return res.status(404).json({ error: 'Pathology template not found' });
+      }
+
+      // Only allow creator to delete (or add admin check later)
+      if (template.createdBy !== userId) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      await storage.deletePathologyTemplate(templateId);
+      res.json({ success: true, message: 'Pathology template deleted successfully' });
+    } catch (error) {
+      console.error("Error deleting pathology template:", error);
+      res.status(500).json({ error: 'Failed to delete pathology template' });
+    }
+  });
+
   // Movement Analysis AI Routes (Phase 2 & Phase 5)
   
   // Analyze captured movement with AI

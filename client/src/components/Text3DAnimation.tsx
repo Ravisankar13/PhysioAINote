@@ -2879,266 +2879,133 @@ export default function Text3DAnimation({
       {
         time: 0,
         joints: {
-          // Starting position - anatomically correct standing
+          // Starting position - standing upright (only use rotations for joints, position for main body parts)
           head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
-          neck: { position: [0, 1.75, 0], rotation: [0, 0, 0] },
           torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
           pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
-          spineGroup: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
-          spine: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          spineGroup: { position: [0, 0, 0], rotation: [0, 0, 0] },
           
-          // Hip joints
-          leftHip: { position: [-0.1, 0.9, 0], rotation: [0, 0, 0] },
-          rightHip: { position: [0.1, 0.9, 0], rotation: [0, 0, 0] },
-          leftInnominate: { position: [-0.1, 0.9, 0], rotation: [0, 0, 0] },
-          rightInnominate: { position: [0.1, 0.9, 0], rotation: [0, 0, 0] },
+          // Arms - neutral position
+          leftArmGroup: { position: [0, 0, 0], rotation: [-0.3, 0, 0] },
+          rightArmGroup: { position: [0, 0, 0], rotation: [-0.3, 0, 0] },
+          leftElbowGroup: { position: [0, 0, 0], rotation: [0, 0, 0] },
+          rightElbowGroup: { position: [0, 0, 0], rotation: [0, 0, 0] },
           
-          // Upper legs (femurs)
-          leftLegGroup: { position: [-0.1, 0.9, 0], rotation: [0, 0, 0] },
-          rightLegGroup: { position: [0.1, 0.9, 0], rotation: [0, 0, 0] },
-          leftUpperLeg: { position: [-0.1, 0.45, 0], rotation: [0, 0, 0] },
-          rightUpperLeg: { position: [0.1, 0.45, 0], rotation: [0, 0, 0] },
-          
-          // Knees
-          leftKnee: { position: [-0.1, 0.45, 0], rotation: [0, 0, 0] },
-          rightKnee: { position: [0.1, 0.45, 0], rotation: [0, 0, 0] },
-          leftKneeGroup: { position: [-0.1, 0.45, 0], rotation: [0, 0, 0] },
-          rightKneeGroup: { position: [0.1, 0.45, 0], rotation: [0, 0, 0] },
-          
-          // Lower legs
-          leftLowerLeg: { position: [-0.1, 0.225, 0], rotation: [0, 0, 0] },
-          rightLowerLeg: { position: [0.1, 0.225, 0], rotation: [0, 0, 0] },
-          
-          // Ankles and feet
-          leftAnkle: { position: [-0.1, 0, 0], rotation: [0, 0, 0] },
-          rightAnkle: { position: [0.1, 0, 0], rotation: [0, 0, 0] },
-          leftFoot: { position: [-0.1, -0.05, 0.05], rotation: [0, 0, 0] },
-          rightFoot: { position: [0.1, -0.05, 0.05], rotation: [0, 0, 0] },
-          
-          // Shoulder complex
-          shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
-          leftClavicleGroup: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
-          rightClavicleGroup: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
-          leftScapulaGroup: { position: [-0.15, 1.65, -0.05], rotation: [0, -0.3, 0] },
-          rightScapulaGroup: { position: [0.15, 1.65, -0.05], rotation: [0, 0.3, 0] },
-          
-          // Arms
-          leftArmGroup: { position: [0, 0, 0], rotation: [-0.8, 0, 0] },
-          rightArmGroup: { position: [0, 0, 0], rotation: [-0.8, 0, 0] },
-          leftElbowGroup: { position: [0, -0.3, 0], rotation: [0, 0, 0] },
-          rightElbowGroup: { position: [0, -0.3, 0], rotation: [0, 0, 0] }
+          // Legs - only rotate at joints, not position
+          leftLegGroup: { position: [0, 0, 0], rotation: [0, 0, 0] },
+          rightLegGroup: { position: [0, 0, 0], rotation: [0, 0, 0] },
+          leftKneeGroup: { position: [0, 0, 0], rotation: [0, 0, 0] },
+          rightKneeGroup: { position: [0, 0, 0], rotation: [0, 0, 0] },
+          leftAnkleGroup: { position: [0, 0, 0], rotation: [0, 0, 0] },
+          rightAnkleGroup: { position: [0, 0, 0], rotation: [0, 0, 0] }
         }
       },
       {
-        time: 1000,
+        time: 1500,
         joints: {
-          // Mid-squat position - coordinated movement
-          head: { position: [0, 1.5, 0.1], rotation: [0.05, 0, 0] },
-          neck: { position: [0, 1.35, 0.08], rotation: [0.05, 0, 0] },
-          torso: { position: [0, 0.85, 0.05], rotation: [0.15, 0, 0] },
-          pelvis: { position: [0, 0.55, -0.15], rotation: [0.2, 0, 0] },
-          spineGroup: { position: [0, 0.85, 0.05], rotation: [0.15, 0, 0] },
-          spine: { position: [0, 0.85, 0.05], rotation: [0.15, 0, 0] },
+          // HALFWAY DOWN - Coordinated descent
+          head: { position: [0, 1.45, 0.05], rotation: [0.05, 0, 0] },
+          torso: { position: [0, 0.8, 0.02], rotation: [0.15, 0, 0] },
+          pelvis: { position: [0, 0.5, -0.15], rotation: [0.25, 0, 0] },
+          spineGroup: { position: [0, -0.35, 0], rotation: [0.15, 0, 0] },
           
-          // Hip joints - follow pelvis backward movement
-          leftHip: { position: [-0.1, 0.55, -0.15], rotation: [-1.2, 0, 0] },
-          rightHip: { position: [0.1, 0.55, -0.15], rotation: [-1.2, 0, 0] },
-          leftInnominate: { position: [-0.1, 0.55, -0.15], rotation: [0.2, 0, 0.05] },
-          rightInnominate: { position: [0.1, 0.55, -0.15], rotation: [0.2, 0, -0.05] },
+          // Arms move forward
+          leftArmGroup: { position: [0, 0, 0], rotation: [-0.9, 0, 0.1] },
+          rightArmGroup: { position: [0, 0, 0], rotation: [-0.9, 0, -0.1] },
+          leftElbowGroup: { position: [0, 0, 0], rotation: [-0.15, 0, 0] },
+          rightElbowGroup: { position: [0, 0, 0], rotation: [-0.15, 0, 0] },
           
-          // Upper legs - thigh parallel to ground approach
-          leftLegGroup: { position: [-0.1, 0.55, -0.15], rotation: [-1.2, 0, 0] },
-          rightLegGroup: { position: [0.1, 0.55, -0.15], rotation: [-1.2, 0, 0] },
-          leftUpperLeg: { position: [-0.1, 0.3, 0.1], rotation: [-1.2, 0, 0] },
-          rightUpperLeg: { position: [0.1, 0.3, 0.1], rotation: [-1.2, 0, 0] },
+          // Hip flexion
+          leftLegGroup: { position: [0, 0, 0], rotation: [-0.7, 0, 0] },
+          rightLegGroup: { position: [0, 0, 0], rotation: [-0.7, 0, 0] },
           
-          // Knees - tracking forward
-          leftKnee: { position: [-0.1, 0.25, 0.15], rotation: [0, 0, 0] },
-          rightKnee: { position: [0.1, 0.25, 0.15], rotation: [0, 0, 0] },
-          leftKneeGroup: { position: [-0.1, 0.25, 0.15], rotation: [1.8, 0, 0] },
-          rightKneeGroup: { position: [0.1, 0.25, 0.15], rotation: [1.8, 0, 0] },
+          // Knee flexion
+          leftKneeGroup: { position: [0, 0, 0], rotation: [-1.3, 0, 0] },
+          rightKneeGroup: { position: [0, 0, 0], rotation: [-1.3, 0, 0] },
           
-          // Lower legs
-          leftLowerLeg: { position: [-0.1, 0.125, 0.05], rotation: [0, 0, 0] },
-          rightLowerLeg: { position: [0.1, 0.125, 0.05], rotation: [0, 0, 0] },
-          
-          // Ankles and feet - dorsiflexion
-          leftAnkle: { position: [-0.1, 0, 0], rotation: [0.25, 0, 0] },
-          rightAnkle: { position: [0.1, 0, 0], rotation: [0.25, 0, 0] },
-          leftFoot: { position: [-0.1, -0.05, 0.05], rotation: [0, 0, 0] },
-          rightFoot: { position: [0.1, -0.05, 0.05], rotation: [0, 0, 0] },
-          
-          // Shoulder complex - follows torso lean
-          shoulderConnector: { position: [0, 1.25, 0.08], rotation: [0.15, 0, 0] },
-          leftClavicleGroup: { position: [0, 1.25, 0.08], rotation: [0.1, 0, 0] },
-          rightClavicleGroup: { position: [0, 1.25, 0.08], rotation: [0.1, 0, 0] },
-          leftScapulaGroup: { position: [-0.15, 1.25, 0], rotation: [0.1, -0.3, 0] },
-          rightScapulaGroup: { position: [0.15, 1.25, 0], rotation: [0.1, 0.3, 0] },
-          
-          // Arms - forward for balance
-          leftArmGroup: { position: [0, 0, 0], rotation: [-1.2, 0, 0] },
-          rightArmGroup: { position: [0, 0, 0], rotation: [-1.2, 0, 0] },
-          leftElbowGroup: { position: [0, -0.3, 0], rotation: [0.2, 0, 0] },
-          rightElbowGroup: { position: [0, -0.3, 0], rotation: [0.2, 0, 0] }
-        }
-      },
-      {
-        time: 2000,
-        joints: {
-          // Bottom position - full depth squat with proper alignment
-          head: { position: [0, 1.15, 0.15], rotation: [0.1, 0, 0] },
-          neck: { position: [0, 1.0, 0.12], rotation: [0.1, 0, 0] },
-          torso: { position: [0, 0.5, 0.08], rotation: [0.25, 0, 0] },
-          pelvis: { position: [0, 0.2, -0.25], rotation: [0.35, 0, 0] },
-          spineGroup: { position: [0, 0.5, 0.08], rotation: [0.25, 0, 0] },
-          spine: { position: [0, 0.5, 0.08], rotation: [0.25, 0, 0] },
-          
-          // Hip joints - maximum flexion
-          leftHip: { position: [-0.1, 0.2, -0.25], rotation: [-1.8, 0, 0.1] },
-          rightHip: { position: [0.1, 0.2, -0.25], rotation: [-1.8, 0, -0.1] },
-          leftInnominate: { position: [-0.1, 0.2, -0.25], rotation: [0.35, 0, 0.1] },
-          rightInnominate: { position: [0.1, 0.2, -0.25], rotation: [0.35, 0, -0.1] },
-          
-          // Upper legs - thighs below parallel
-          leftLegGroup: { position: [-0.1, 0.2, -0.25], rotation: [-1.8, 0, 0] },
-          rightLegGroup: { position: [0.1, 0.2, -0.25], rotation: [-1.8, 0, 0] },
-          leftUpperLeg: { position: [-0.1, 0.15, 0.15], rotation: [-1.8, 0, 0] },
-          rightUpperLeg: { position: [0.1, 0.15, 0.15], rotation: [-1.8, 0, 0] },
-          
-          // Knees - maximum flexion
-          leftKnee: { position: [-0.1, 0.1, 0.2], rotation: [0, 0, 0] },
-          rightKnee: { position: [0.1, 0.1, 0.2], rotation: [0, 0, 0] },
-          leftKneeGroup: { position: [-0.1, 0.1, 0.2], rotation: [2.3, 0, 0] },
-          rightKneeGroup: { position: [0.1, 0.1, 0.2], rotation: [2.3, 0, 0] },
-          
-          // Lower legs - vertical orientation
-          leftLowerLeg: { position: [-0.1, 0.05, 0.05], rotation: [0, 0, 0] },
-          rightLowerLeg: { position: [0.1, 0.05, 0.05], rotation: [0, 0, 0] },
-          
-          // Ankles and feet - maximum dorsiflexion
-          leftAnkle: { position: [-0.1, 0, 0], rotation: [0.4, 0, 0] },
-          rightAnkle: { position: [0.1, 0, 0], rotation: [0.4, 0, 0] },
-          leftFoot: { position: [-0.1, -0.05, 0.05], rotation: [0, 0, 0] },
-          rightFoot: { position: [0.1, -0.05, 0.05], rotation: [0, 0, 0] },
-          
-          // Shoulder complex - follows torso
-          shoulderConnector: { position: [0, 0.9, 0.12], rotation: [0.25, 0, 0] },
-          leftClavicleGroup: { position: [0, 0.9, 0.12], rotation: [0.15, 0, 0] },
-          rightClavicleGroup: { position: [0, 0.9, 0.12], rotation: [0.15, 0, 0] },
-          leftScapulaGroup: { position: [-0.15, 0.9, 0.02], rotation: [0.2, -0.3, 0] },
-          rightScapulaGroup: { position: [0.15, 0.9, 0.02], rotation: [0.2, 0.3, 0] },
-          
-          // Arms - maximum forward reach for balance
-          leftArmGroup: { position: [0, 0, 0], rotation: [-1.5, 0, 0] },
-          rightArmGroup: { position: [0, 0, 0], rotation: [-1.5, 0, 0] },
-          leftElbowGroup: { position: [0, -0.3, 0], rotation: [0.3, 0, 0] },
-          rightElbowGroup: { position: [0, -0.3, 0], rotation: [0.3, 0, 0] }
+          // Ankle dorsiflexion
+          leftAnkleGroup: { position: [0, 0, 0], rotation: [0.25, 0, 0] },
+          rightAnkleGroup: { position: [0, 0, 0], rotation: [0.25, 0, 0] }
         }
       },
       {
         time: 3000,
         joints: {
-          // Mid-return position - same as mid-squat for symmetry
-          head: { position: [0, 1.5, 0.1], rotation: [0.05, 0, 0] },
-          neck: { position: [0, 1.35, 0.08], rotation: [0.05, 0, 0] },
-          torso: { position: [0, 0.85, 0.05], rotation: [0.15, 0, 0] },
-          pelvis: { position: [0, 0.55, -0.15], rotation: [0.2, 0, 0] },
-          spineGroup: { position: [0, 0.85, 0.05], rotation: [0.15, 0, 0] },
-          spine: { position: [0, 0.85, 0.05], rotation: [0.15, 0, 0] },
+          // BOTTOM POSITION - Full squat depth
+          head: { position: [0, 1.0, 0.1], rotation: [0.1, 0, 0] },
+          torso: { position: [0, 0.4, 0.05], rotation: [0.25, 0, 0] },
+          pelvis: { position: [0, 0.1, -0.25], rotation: [0.35, 0, 0] },
+          spineGroup: { position: [0, -0.7, 0], rotation: [0.25, 0, 0] },
           
-          // Hip joints - returning from full flexion
-          leftHip: { position: [-0.1, 0.55, -0.15], rotation: [-1.2, 0, 0] },
-          rightHip: { position: [0.1, 0.55, -0.15], rotation: [-1.2, 0, 0] },
-          leftInnominate: { position: [-0.1, 0.55, -0.15], rotation: [0.2, 0, 0.05] },
-          rightInnominate: { position: [0.1, 0.55, -0.15], rotation: [0.2, 0, -0.05] },
+          // Arms fully forward
+          leftArmGroup: { position: [0, 0, 0], rotation: [-1.3, 0, 0.15] },
+          rightArmGroup: { position: [0, 0, 0], rotation: [-1.3, 0, -0.15] },
+          leftElbowGroup: { position: [0, 0, 0], rotation: [-0.2, 0, 0] },
+          rightElbowGroup: { position: [0, 0, 0], rotation: [-0.2, 0, 0] },
           
-          // Upper legs - returning to upright
-          leftLegGroup: { position: [-0.1, 0.55, -0.15], rotation: [-1.2, 0, 0] },
-          rightLegGroup: { position: [0.1, 0.55, -0.15], rotation: [-1.2, 0, 0] },
-          leftUpperLeg: { position: [-0.1, 0.3, 0.1], rotation: [-1.2, 0, 0] },
-          rightUpperLeg: { position: [0.1, 0.3, 0.1], rotation: [-1.2, 0, 0] },
+          // Maximum hip flexion
+          leftLegGroup: { position: [0, 0, 0], rotation: [-1.3, 0, 0] },
+          rightLegGroup: { position: [0, 0, 0], rotation: [-1.3, 0, 0] },
           
-          // Knees - extending
-          leftKnee: { position: [-0.1, 0.25, 0.15], rotation: [0, 0, 0] },
-          rightKnee: { position: [0.1, 0.25, 0.15], rotation: [0, 0, 0] },
-          leftKneeGroup: { position: [-0.1, 0.25, 0.15], rotation: [1.8, 0, 0] },
-          rightKneeGroup: { position: [0.1, 0.25, 0.15], rotation: [1.8, 0, 0] },
+          // Maximum knee flexion
+          leftKneeGroup: { position: [0, 0, 0], rotation: [-2.2, 0, 0] },
+          rightKneeGroup: { position: [0, 0, 0], rotation: [-2.2, 0, 0] },
           
-          // Lower legs
-          leftLowerLeg: { position: [-0.1, 0.125, 0.05], rotation: [0, 0, 0] },
-          rightLowerLeg: { position: [0.1, 0.125, 0.05], rotation: [0, 0, 0] },
-          
-          // Ankles and feet - returning to neutral
-          leftAnkle: { position: [-0.1, 0, 0], rotation: [0.25, 0, 0] },
-          rightAnkle: { position: [0.1, 0, 0], rotation: [0.25, 0, 0] },
-          leftFoot: { position: [-0.1, -0.05, 0.05], rotation: [0, 0, 0] },
-          rightFoot: { position: [0.1, -0.05, 0.05], rotation: [0, 0, 0] },
-          
-          // Shoulder complex - returning upright
-          shoulderConnector: { position: [0, 1.25, 0.08], rotation: [0.15, 0, 0] },
-          leftClavicleGroup: { position: [0, 1.25, 0.08], rotation: [0.1, 0, 0] },
-          rightClavicleGroup: { position: [0, 1.25, 0.08], rotation: [0.1, 0, 0] },
-          leftScapulaGroup: { position: [-0.15, 1.25, 0], rotation: [0.1, -0.3, 0] },
-          rightScapulaGroup: { position: [0.15, 1.25, 0], rotation: [0.1, 0.3, 0] },
-          
-          // Arms - returning to initial position
-          leftArmGroup: { position: [0, 0, 0], rotation: [-1.2, 0, 0] },
-          rightArmGroup: { position: [0, 0, 0], rotation: [-1.2, 0, 0] },
-          leftElbowGroup: { position: [0, -0.3, 0], rotation: [0.2, 0, 0] },
-          rightElbowGroup: { position: [0, -0.3, 0], rotation: [0.2, 0, 0] }
+          // Maximum ankle dorsiflexion
+          leftAnkleGroup: { position: [0, 0, 0], rotation: [0.35, 0, 0] },
+          rightAnkleGroup: { position: [0, 0, 0], rotation: [0.35, 0, 0] }
         }
       },
       {
-        time: 4000,
+        time: 4500,
         joints: {
-          // Return to starting position - fully standing
+          // ASCENDING - Rising back up
+          head: { position: [0, 1.45, 0.05], rotation: [0.05, 0, 0] },
+          torso: { position: [0, 0.8, 0.02], rotation: [0.15, 0, 0] },
+          pelvis: { position: [0, 0.5, -0.15], rotation: [0.25, 0, 0] },
+          spineGroup: { position: [0, -0.35, 0], rotation: [0.15, 0, 0] },
+          
+          // Arms returning
+          leftArmGroup: { position: [0, 0, 0], rotation: [-0.9, 0, 0.1] },
+          rightArmGroup: { position: [0, 0, 0], rotation: [-0.9, 0, -0.1] },
+          leftElbowGroup: { position: [0, 0, 0], rotation: [-0.15, 0, 0] },
+          rightElbowGroup: { position: [0, 0, 0], rotation: [-0.15, 0, 0] },
+          
+          // Hip extending
+          leftLegGroup: { position: [0, 0, 0], rotation: [-0.7, 0, 0] },
+          rightLegGroup: { position: [0, 0, 0], rotation: [-0.7, 0, 0] },
+          
+          // Knee extending
+          leftKneeGroup: { position: [0, 0, 0], rotation: [-1.3, 0, 0] },
+          rightKneeGroup: { position: [0, 0, 0], rotation: [-1.3, 0, 0] },
+          
+          // Ankle returning
+          leftAnkleGroup: { position: [0, 0, 0], rotation: [0.25, 0, 0] },
+          rightAnkleGroup: { position: [0, 0, 0], rotation: [0.25, 0, 0] }
+        }
+      },
+      {
+        time: 6000,
+        joints: {
+          // BACK TO STANDING - Return to start position
           head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
-          neck: { position: [0, 1.75, 0], rotation: [0, 0, 0] },
           torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
           pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
-          spineGroup: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
-          spine: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
+          spineGroup: { position: [0, 0, 0], rotation: [0, 0, 0] },
           
-          // Hip joints
-          leftHip: { position: [-0.1, 0.9, 0], rotation: [0, 0, 0] },
-          rightHip: { position: [0.1, 0.9, 0], rotation: [0, 0, 0] },
-          leftInnominate: { position: [-0.1, 0.9, 0], rotation: [0, 0, 0] },
-          rightInnominate: { position: [0.1, 0.9, 0], rotation: [0, 0, 0] },
+          // Arms back to neutral
+          leftArmGroup: { position: [0, 0, 0], rotation: [-0.3, 0, 0] },
+          rightArmGroup: { position: [0, 0, 0], rotation: [-0.3, 0, 0] },
+          leftElbowGroup: { position: [0, 0, 0], rotation: [0, 0, 0] },
+          rightElbowGroup: { position: [0, 0, 0], rotation: [0, 0, 0] },
           
-          // Upper legs (femurs)
-          leftLegGroup: { position: [-0.1, 0.9, 0], rotation: [0, 0, 0] },
-          rightLegGroup: { position: [0.1, 0.9, 0], rotation: [0, 0, 0] },
-          leftUpperLeg: { position: [-0.1, 0.45, 0], rotation: [0, 0, 0] },
-          rightUpperLeg: { position: [0.1, 0.45, 0], rotation: [0, 0, 0] },
-          
-          // Knees
-          leftKnee: { position: [-0.1, 0.45, 0], rotation: [0, 0, 0] },
-          rightKnee: { position: [0.1, 0.45, 0], rotation: [0, 0, 0] },
-          leftKneeGroup: { position: [-0.1, 0.45, 0], rotation: [0, 0, 0] },
-          rightKneeGroup: { position: [0.1, 0.45, 0], rotation: [0, 0, 0] },
-          
-          // Lower legs
-          leftLowerLeg: { position: [-0.1, 0.225, 0], rotation: [0, 0, 0] },
-          rightLowerLeg: { position: [0.1, 0.225, 0], rotation: [0, 0, 0] },
-          
-          // Ankles and feet
-          leftAnkle: { position: [-0.1, 0, 0], rotation: [0, 0, 0] },
-          rightAnkle: { position: [0.1, 0, 0], rotation: [0, 0, 0] },
-          leftFoot: { position: [-0.1, -0.05, 0.05], rotation: [0, 0, 0] },
-          rightFoot: { position: [0.1, -0.05, 0.05], rotation: [0, 0, 0] },
-          
-          // Shoulder complex
-          shoulderConnector: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
-          leftClavicleGroup: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
-          rightClavicleGroup: { position: [0, 1.65, 0], rotation: [0, 0, 0] },
-          leftScapulaGroup: { position: [-0.15, 1.65, -0.05], rotation: [0, -0.3, 0] },
-          rightScapulaGroup: { position: [0.15, 1.65, -0.05], rotation: [0, 0.3, 0] },
-          
-          // Arms
-          leftArmGroup: { position: [0, 0, 0], rotation: [-0.8, 0, 0] },
-          rightArmGroup: { position: [0, 0, 0], rotation: [-0.8, 0, 0] },
-          leftElbowGroup: { position: [0, -0.3, 0], rotation: [0, 0, 0] },
-          rightElbowGroup: { position: [0, -0.3, 0], rotation: [0, 0, 0] }
+          // Legs fully extended
+          leftLegGroup: { position: [0, 0, 0], rotation: [0, 0, 0] },
+          rightLegGroup: { position: [0, 0, 0], rotation: [0, 0, 0] },
+          leftKneeGroup: { position: [0, 0, 0], rotation: [0, 0, 0] },
+          rightKneeGroup: { position: [0, 0, 0], rotation: [0, 0, 0] },
+          leftAnkleGroup: { position: [0, 0, 0], rotation: [0, 0, 0] },
+          rightAnkleGroup: { position: [0, 0, 0], rotation: [0, 0, 0] }
         }
       }
     ];

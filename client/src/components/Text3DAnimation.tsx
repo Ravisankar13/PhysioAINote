@@ -1053,7 +1053,7 @@ export default function Text3DAnimation({
     
     // Create left AC joint at lateral end of clavicle
     const leftACJointGroup = new THREE.Group();
-    leftACJointGroup.position.set(-0.25, -0.15, -0.02); // Position at lateral end of clavicle
+    leftACJointGroup.position.set(-0.25, 0, -0.02); // Position at same height as clavicle
     leftACJointGroup.name = 'leftACJointGroup';
     leftClavicleGroup.add(leftACJointGroup);
     
@@ -1079,7 +1079,7 @@ export default function Text3DAnimation({
     
     // Create right AC joint at lateral end of clavicle
     const rightACJointGroup = new THREE.Group();
-    rightACJointGroup.position.set(0.25, -0.15, -0.02); // Position at lateral end of clavicle
+    rightACJointGroup.position.set(0.25, 0, -0.02); // Position at same height as clavicle
     rightACJointGroup.name = 'rightACJointGroup';
     rightClavicleGroup.add(rightACJointGroup);
     
@@ -1117,8 +1117,8 @@ export default function Text3DAnimation({
     // LEFT SCAPULA - Attached to left AC joint
     const leftScapulaGroup = new THREE.Group();
     leftScapulaGroup.name = 'leftScapulaGroup';
-    // Position relative to AC joint - scapula sits below and behind the AC joint
-    leftScapulaGroup.position.set(0.03, -0.1, -0.1); 
+    // Position relative to AC joint - scapula sits slightly below and behind the AC joint
+    leftScapulaGroup.position.set(0.03, -0.03, -0.1); 
     
     const leftScapula = new THREE.Mesh(scapula3D, boneMaterial);
     // Apply scapular winging
@@ -1135,8 +1135,8 @@ export default function Text3DAnimation({
     // RIGHT SCAPULA - Attached to right AC joint
     const rightScapulaGroup = new THREE.Group();
     rightScapulaGroup.name = 'rightScapulaGroup';
-    // Position relative to AC joint - scapula sits below and behind the AC joint
-    rightScapulaGroup.position.set(-0.03, -0.1, -0.1);
+    // Position relative to AC joint - scapula sits slightly below and behind the AC joint
+    rightScapulaGroup.position.set(-0.03, -0.03, -0.1);
     
     const rightScapula = new THREE.Mesh(scapula3D, boneMaterial);
     // Apply scapular winging  
@@ -1221,10 +1221,10 @@ export default function Text3DAnimation({
     const ghSubluxationOffset = (shoulderPathology.ghSubluxation / 100) * 0.1; // Percentage to offset
     
     // Position arm at glenoid fossa of scapula with pathology offsets
-    // Arms should attach at scapula's glenoid, not drop way below
+    // Arms should attach at scapula's glenoid cavity at shoulder level
     leftArmGroup.position.set(
       0.08, // Lateral position on scapula (glenoid)
-      -0.05 - acSeparationOffset - ghSubluxationOffset, // Slightly below scapula center with pathology
+      0 - acSeparationOffset - ghSubluxationOffset, // At scapula center height with pathology
       0.02 + ghSubluxationOffset * 0.5  // Forward displacement with subluxation
     );
     leftArmGroup.name = 'leftArmGroup';
@@ -1265,10 +1265,10 @@ export default function Text3DAnimation({
     const rightArmGroup = new THREE.Group();
     
     // Position arm at glenoid fossa of scapula with pathology offsets
-    // Arms should attach at scapula's glenoid, not drop way below
+    // Arms should attach at scapula's glenoid cavity at shoulder level
     rightArmGroup.position.set(
       -0.08, // Lateral position on scapula (glenoid) - negative for right side
-      -0.05 - acSeparationOffset - ghSubluxationOffset, // Slightly below scapula center with pathology
+      0 - acSeparationOffset - ghSubluxationOffset, // At scapula center height with pathology
       0.02 + ghSubluxationOffset * 0.5  // Forward displacement with subluxation
     );
     rightArmGroup.name = 'rightArmGroup';

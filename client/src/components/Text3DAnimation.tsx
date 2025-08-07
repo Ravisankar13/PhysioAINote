@@ -964,15 +964,9 @@ export default function Text3DAnimation({
     bonesRef.current['leftInnominate'] = leftInnominate;
     bonesRef.current['rightInnominate'] = rightInnominate;
     
-    // Create invisible reference for animations
-    const pelvisReference = new THREE.Mesh(
-      new THREE.BoxGeometry(0.01, 0.01, 0.01),
-      new THREE.MeshBasicMaterial({ visible: false })
-    );
-    pelvisReference.position.set(0, 0.7, 0);  // Match pelvisGroup position
-    pelvisReference.name = 'pelvis';
-    skeleton.add(pelvisReference);
-    bonesRef.current['pelvis'] = pelvisReference;
+    // Reference the actual pelvisGroup for animations
+    bonesRef.current['pelvis'] = pelvisGroup;
+    bonesRef.current['pelvisGroup'] = pelvisGroup;
 
     // Create anatomically accurate clavicles with S-curve
     const createClavicle = (side: 'left' | 'right'): THREE.Group => {
@@ -1434,7 +1428,7 @@ export default function Text3DAnimation({
     
     // Left leg group for hierarchical transformation
     const leftLegGroup = new THREE.Group();
-    leftLegGroup.position.set(-0.1, 0.6, 0); // Position at hip joint (below pelvis at 0.7) - closer together
+    leftLegGroup.position.set(-0.1, -0.1, 0); // Position relative to pelvis (pelvis is at 0.7)
     leftLegGroup.name = 'leftLegGroup';
     
     // Create anatomically accurate left femur
@@ -1558,11 +1552,11 @@ export default function Text3DAnimation({
     leftSubtalarGroup.add(leftForefoot);
     bonesRef.current['leftFoot'] = leftForefoot; // For backward compatibility
     
-    skeleton.add(leftLegGroup);
+    pelvisGroup.add(leftLegGroup); // Attach to pelvis for hierarchical movement
 
     // Right leg group for hierarchical transformation
     const rightLegGroup = new THREE.Group();
-    rightLegGroup.position.set(0.1, 0.6, 0); // Position at hip joint (below pelvis at 0.7) - closer together
+    rightLegGroup.position.set(0.1, -0.1, 0); // Position relative to pelvis (pelvis is at 0.7)
     rightLegGroup.name = 'rightLegGroup';
     
     // Right thigh attached to leg group
@@ -1670,7 +1664,7 @@ export default function Text3DAnimation({
     rightSubtalarGroup.add(rightForefoot);
     bonesRef.current['rightFoot'] = rightForefoot; // For backward compatibility
     
-    skeleton.add(rightLegGroup);
+    pelvisGroup.add(rightLegGroup); // Attach to pelvis for hierarchical movement
 
     // Joints
     const jointGeometry = new THREE.SphereGeometry(0.08, 12, 12);
@@ -2882,7 +2876,7 @@ export default function Text3DAnimation({
           // Starting position - standing upright (only use rotations for joints, position for main body parts)
           head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
           torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
-          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          pelvisGroup: { position: [0, 0.7, 0], rotation: [0, 0, 0] },
           spineGroup: { position: [0, 0, 0], rotation: [0, 0, 0] },
           
           // Arms - neutral position
@@ -2906,7 +2900,7 @@ export default function Text3DAnimation({
           // HALFWAY DOWN - Coordinated descent
           head: { position: [0, 1.45, 0.05], rotation: [0.05, 0, 0] },
           torso: { position: [0, 0.8, 0.02], rotation: [0.15, 0, 0] },
-          pelvis: { position: [0, 0.5, -0.15], rotation: [0.25, 0, 0] },
+          pelvisGroup: { position: [0, 0.35, -0.15], rotation: [0.25, 0, 0] },
           spineGroup: { position: [0, -0.35, 0], rotation: [0.15, 0, 0] },
           
           // Arms move forward
@@ -2934,7 +2928,7 @@ export default function Text3DAnimation({
           // BOTTOM POSITION - Full squat depth
           head: { position: [0, 1.0, 0.1], rotation: [0.1, 0, 0] },
           torso: { position: [0, 0.4, 0.05], rotation: [0.25, 0, 0] },
-          pelvis: { position: [0, 0.1, -0.25], rotation: [0.35, 0, 0] },
+          pelvisGroup: { position: [0, -0.05, -0.25], rotation: [0.35, 0, 0] },
           spineGroup: { position: [0, -0.7, 0], rotation: [0.25, 0, 0] },
           
           // Arms fully forward
@@ -2962,7 +2956,7 @@ export default function Text3DAnimation({
           // ASCENDING - Rising back up
           head: { position: [0, 1.45, 0.05], rotation: [0.05, 0, 0] },
           torso: { position: [0, 0.8, 0.02], rotation: [0.15, 0, 0] },
-          pelvis: { position: [0, 0.5, -0.15], rotation: [0.25, 0, 0] },
+          pelvisGroup: { position: [0, 0.35, -0.15], rotation: [0.25, 0, 0] },
           spineGroup: { position: [0, -0.35, 0], rotation: [0.15, 0, 0] },
           
           // Arms returning
@@ -2990,7 +2984,7 @@ export default function Text3DAnimation({
           // BACK TO STANDING - Return to start position
           head: { position: [0, 1.9, 0], rotation: [0, 0, 0] },
           torso: { position: [0, 1.2, 0], rotation: [0, 0, 0] },
-          pelvis: { position: [0, 0.9, 0], rotation: [0, 0, 0] },
+          pelvisGroup: { position: [0, 0.7, 0], rotation: [0, 0, 0] },
           spineGroup: { position: [0, 0, 0], rotation: [0, 0, 0] },
           
           // Arms back to neutral

@@ -1691,50 +1691,33 @@ export default function Text3DAnimation({
     rightElbow.name = 'rightElbow';
     rightArmGroup.add(rightElbow);
 
-    // Hip joints - Femoral heads (ball joints)
+    // Hip joints - Femoral heads (ball joints) attached to pelvis
     const femoralHeadGeometry = new THREE.SphereGeometry(0.05, 16, 16);
     
     const leftHip = new THREE.Mesh(femoralHeadGeometry, jointMaterial);
-    leftHip.position.set(-0.15, 0.85, 0); // Positioned to insert into hip socket
+    leftHip.position.set(-0.1, -0.05, 0); // Positioned relative to pelvis
     leftHip.name = 'leftHip';
-    skeleton.add(leftHip);
+    pelvisGroup.add(leftHip); // Attach to pelvis group
     bonesRef.current['leftHip'] = leftHip;
 
     const rightHip = new THREE.Mesh(femoralHeadGeometry, jointMaterial);
-    rightHip.position.set(0.15, 0.85, 0); // Positioned to insert into hip socket
+    rightHip.position.set(0.1, -0.05, 0); // Positioned relative to pelvis
     rightHip.name = 'rightHip';
-    skeleton.add(rightHip);
+    pelvisGroup.add(rightHip); // Attach to pelvis group
     bonesRef.current['rightHip'] = rightHip;
 
-    // Knee joints - positioned between thigh and shin with varus/valgus adjustment
-    const leftKnee = new THREE.Mesh(jointGeometry, jointMaterial);
-    const leftKneeOffset = Math.sin(-varusValgusRad) * shinLength * 0.5;
-    leftKnee.position.set(-0.15 + leftKneeOffset, 0.85 - thighLength, 0); 
-    leftKnee.name = 'leftKnee';
-    skeleton.add(leftKnee);
-    bonesRef.current['leftKnee'] = leftKnee;
+    // Note: Knee joints are already created inside the knee groups with green material
+    // These are references for animation compatibility
+    bonesRef.current['leftKnee'] = leftKneeGroup;
 
-    const rightKnee = new THREE.Mesh(jointGeometry, jointMaterial);
-    const rightKneeOffset = Math.sin(varusValgusRad) * shinLength * 0.5;
-    rightKnee.position.set(0.15 + rightKneeOffset, 0.85 - thighLength, 0);
-    rightKnee.name = 'rightKnee';
-    skeleton.add(rightKnee);
-    bonesRef.current['rightKnee'] = rightKnee;
+    bonesRef.current['rightKnee'] = rightKneeGroup;
     
 
 
-    // Ankle joints - positioned at the end of shin
-    const leftAnkle = new THREE.Mesh(jointGeometry, jointMaterial);
-    leftAnkle.position.set(-0.15, 0.85 - thighLength - shinLength, 0); // Adjusted for raised hip
-    leftAnkle.name = 'leftAnkle';
-    skeleton.add(leftAnkle);
-    bonesRef.current['leftAnkle'] = leftAnkle;
-
-    const rightAnkle = new THREE.Mesh(jointGeometry, jointMaterial);
-    rightAnkle.position.set(0.15, 0.85 - thighLength - shinLength, 0); // Adjusted for raised hip
-    rightAnkle.name = 'rightAnkle';
-    skeleton.add(rightAnkle);
-    bonesRef.current['rightAnkle'] = rightAnkle;
+    // Note: Ankle joints are already created inside the ankle groups with orange material
+    // These references are for animation compatibility
+    bonesRef.current['leftAnkle'] = leftAnkleGroup;
+    bonesRef.current['rightAnkle'] = rightAnkleGroup;
 
     // Note: Feet are now created as part of the ankle groups above
 

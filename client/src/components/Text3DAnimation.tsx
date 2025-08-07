@@ -1013,17 +1013,16 @@ export default function Text3DAnimation({
     };
     
     // Position clavicles at proper shoulder level
-    // Shoulders should be at approximately the junction between cervical and thoracic spine
-    // The spine starts at spineStartY (1.8) and cervical spine is about 7 vertebrae
-    // Each vertebra is about 0.04 * 0.8 = 0.032 spacing
-    const cervicalHeight = 7 * 0.032; // Approximate height of cervical spine
-    const shoulderLevel = spineStartY - cervicalHeight - 0.05; // Just below cervical spine
-    const clavicleY = shoulderLevel;
+    // Shoulders should be at upper chest level, approximately 80% of the way up the torso
+    // The skeleton has a torsoHeight of 1.2, and the spine starts at torsoHeight + 0.6 = 1.8
+    // Shoulders should be positioned at about chest level, not at knee level
+    const properShoulderHeight = torsoHeight * 0.8 + 0.5; // Around 1.46 for proper shoulder position
+    const clavicleY = properShoulderHeight;
     
     console.log('Shoulder positioning:', { 
+      torsoHeight,
       spineStartY, 
-      cervicalHeight, 
-      shoulderLevel,
+      properShoulderHeight,
       clavicleY,
       thoracicVertebraeCount: thoracicVertebrae.length 
     });
@@ -1039,7 +1038,7 @@ export default function Text3DAnimation({
     
     // LEFT SHOULDER COMPLEX with AC Joint
     const leftClavicleGroup = new THREE.Group();
-    leftClavicleGroup.position.y = clavicleY;
+    leftClavicleGroup.position.set(0, clavicleY, 0); // Explicitly set all coordinates
     leftClavicleGroup.name = 'leftClavicleGroup';
     skeleton.add(leftClavicleGroup);
     
@@ -1064,7 +1063,7 @@ export default function Text3DAnimation({
     
     // RIGHT SHOULDER COMPLEX with AC Joint
     const rightClavicleGroup = new THREE.Group();
-    rightClavicleGroup.position.y = clavicleY;
+    rightClavicleGroup.position.set(0, clavicleY, 0); // Explicitly set all coordinates
     rightClavicleGroup.name = 'rightClavicleGroup';
     skeleton.add(rightClavicleGroup);
     

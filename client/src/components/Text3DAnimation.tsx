@@ -1220,13 +1220,7 @@ export default function Text3DAnimation({
     // Apply GH subluxation (inferior displacement and forward translation)
     const ghSubluxationOffset = (shoulderPathology.ghSubluxation / 100) * 0.1; // Percentage to offset
     
-    // Position arm at glenoid fossa of scapula with pathology offsets
-    // Arms should attach at scapula's glenoid cavity at shoulder level
-    leftArmGroup.position.set(
-      0.08, // Lateral position on scapula (glenoid)
-      0 - acSeparationOffset - ghSubluxationOffset, // At scapula center height with pathology
-      0.02 + ghSubluxationOffset * 0.5  // Forward displacement with subluxation
-    );
+    // DON'T set initial position - we'll set it when adding to skeleton
     leftArmGroup.name = 'leftArmGroup';
     bonesRef.current['leftArmGroup'] = leftArmGroup;
     
@@ -1258,20 +1252,14 @@ export default function Text3DAnimation({
     leftElbowGroup.add(leftForearm);
     bonesRef.current['leftForearm'] = leftForearm;
 
-    // TEMPORARILY: Add arm directly to skeleton at proper shoulder height for debugging
-    leftArmGroup.position.set(-0.25, 1.6, 0); // Direct position at shoulder level
-    skeleton.add(leftArmGroup); // Add directly to skeleton instead of scapula
+    // Add arm directly to skeleton at ACTUAL shoulder height
+    leftArmGroup.position.set(-0.25, 1.6, 0); // Position at shoulder level (below cervical spine)
+    skeleton.add(leftArmGroup);
 
     // Right arm group for hierarchical transformation with pathology
     const rightArmGroup = new THREE.Group();
     
-    // Position arm at glenoid fossa of scapula with pathology offsets
-    // Arms should attach at scapula's glenoid cavity at shoulder level
-    rightArmGroup.position.set(
-      -0.08, // Lateral position on scapula (glenoid) - negative for right side
-      0 - acSeparationOffset - ghSubluxationOffset, // At scapula center height with pathology
-      0.02 + ghSubluxationOffset * 0.5  // Forward displacement with subluxation
-    );
+    // DON'T set initial position - we'll set it when adding to skeleton
     rightArmGroup.name = 'rightArmGroup';
     bonesRef.current['rightArmGroup'] = rightArmGroup;
     
@@ -1301,9 +1289,9 @@ export default function Text3DAnimation({
     rightElbowGroup.add(rightForearm);
     bonesRef.current['rightForearm'] = rightForearm;
 
-    // TEMPORARILY: Add arm directly to skeleton at proper shoulder height for debugging
-    rightArmGroup.position.set(0.25, 1.6, 0); // Direct position at shoulder level
-    skeleton.add(rightArmGroup); // Add directly to skeleton instead of scapula
+    // Add arm directly to skeleton at ACTUAL shoulder height
+    rightArmGroup.position.set(0.25, 1.6, 0); // Position at shoulder level (below cervical spine)
+    skeleton.add(rightArmGroup);
 
     // Create anatomically accurate hand
     const createHand = (): THREE.Group => {

@@ -1013,11 +1013,11 @@ export default function Text3DAnimation({
     };
     
     // Position clavicles at proper shoulder level
-    // The legs are at Y=0.6 (hip level)
-    // The spine starts at Y=1.8 (top of head area)  
-    // Shoulders should be between these, at upper chest level
-    // For a standing human, shoulders are typically at about 1.4-1.5 units
-    const shoulderHeight = 1.5; // Direct positioning at proper shoulder height
+    // The cervical spine ends around C7/T1 junction
+    // We need shoulders to be just below the cervical spine
+    // Cervical spine has 7 vertebrae, each about 0.025 height
+    // Starting from spineStartY (1.776), minus 7 * 0.025 = 1.776 - 0.175 = ~1.6
+    const shoulderHeight = 1.65; // Position shoulders just below cervical spine
     const clavicleY = shoulderHeight;
     
     console.log('Shoulder positioning:', { 
@@ -1040,8 +1040,8 @@ export default function Text3DAnimation({
     
     // LEFT SHOULDER COMPLEX with AC Joint
     const leftClavicleGroup = new THREE.Group();
-    // Force position to proper shoulder height
-    const actualShoulderY = 1.5; // Shoulder height between spine (1.8) and hips (0.6)
+    // Force position to proper shoulder height - just below cervical spine
+    const actualShoulderY = shoulderHeight; // Use calculated shoulder height (1.65)
     leftClavicleGroup.position.set(0, actualShoulderY, 0);
     leftClavicleGroup.name = 'leftClavicleGroup';
     skeleton.add(leftClavicleGroup);

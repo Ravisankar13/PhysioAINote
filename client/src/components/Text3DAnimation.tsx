@@ -1254,9 +1254,12 @@ export default function Text3DAnimation({
 
     // Add arm directly to skeleton at ACTUAL shoulder height
     // Force arms to proper shoulder position (below cervical spine at C7/T1)
+    console.log('BEFORE SET - LEFT ARM POSITION:', leftArmGroup.position);
     leftArmGroup.position.set(-0.25, 1.55, 0); // Position just below cervical spine
+    console.log('AFTER SET - LEFT ARM POSITION:', leftArmGroup.position);
+    console.log('AFTER SET - LEFT ARM POSITION VALUES:', leftArmGroup.position.x, leftArmGroup.position.y, leftArmGroup.position.z);
     skeleton.add(leftArmGroup);
-    console.log('LEFT ARM POSITION SET TO:', leftArmGroup.position);
+    console.log('AFTER ADD TO SKELETON - LEFT ARM POSITION:', leftArmGroup.position);
 
     // Right arm group for hierarchical transformation with pathology
     const rightArmGroup = new THREE.Group();
@@ -1293,9 +1296,12 @@ export default function Text3DAnimation({
 
     // Add arm directly to skeleton at ACTUAL shoulder height
     // Force arms to proper shoulder position (below cervical spine at C7/T1)
+    console.log('BEFORE SET - RIGHT ARM POSITION:', rightArmGroup.position);
     rightArmGroup.position.set(0.25, 1.55, 0); // Position just below cervical spine
+    console.log('AFTER SET - RIGHT ARM POSITION:', rightArmGroup.position);
+    console.log('AFTER SET - RIGHT ARM POSITION VALUES:', rightArmGroup.position.x, rightArmGroup.position.y, rightArmGroup.position.z);
     skeleton.add(rightArmGroup);
-    console.log('RIGHT ARM POSITION SET TO:', rightArmGroup.position);
+    console.log('AFTER ADD TO SKELETON - RIGHT ARM POSITION:', rightArmGroup.position);
 
     // Create anatomically accurate hand
     const createHand = (): THREE.Group => {

@@ -865,6 +865,7 @@ export const soapVirtualPatients = pgTable("soap_virtual_patients", {
   clinicalPresentation: json("clinical_presentation"),
   physicalFindings: json("physical_findings"),
   assessmentPlan: json("assessment_plan"),
+  clinicalSummary: text("clinical_summary"), // Key clinical features summary
   bodyPart: bodyPartEnum("body_part").notNull(),
   
   // Motion Capture Data

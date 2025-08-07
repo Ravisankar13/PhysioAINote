@@ -1056,6 +1056,12 @@ export default function VirtualPatientsManagement() {
                       >
                         <p className="font-medium">{patient.title || `SOAP Patient ${patient.id}`}</p>
                         <p className="text-xs text-gray-500">{patient.bodyPart}</p>
+                        {patient.clinicalSummary && (
+                          <div className="mt-2 text-xs text-gray-600 bg-blue-50 p-2 rounded">
+                            <p className="font-semibold mb-1">Clinical Summary:</p>
+                            <div className="whitespace-pre-line">{patient.clinicalSummary}</div>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

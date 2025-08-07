@@ -355,12 +355,27 @@ export default function EnhancedSoapNotesPage() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/api/virtual-patients'] });
+      
+      // Display clinical summary if available
+      const description = data.virtualPatient?.clinicalSummary 
+        ? `Clinical Summary:\n${data.virtualPatient.clinicalSummary}`
+        : "Successfully created virtual patient from your SOAP note data.";
+      
       toast({
         title: "Virtual Patient Created",
-        description: "Successfully created virtual patient from your SOAP note data.",
+        description: description,
+        duration: 8000, // Show longer for clinical summary
       });
-      // Redirect to virtual patients page
-      setLocation('/virtual-patients');
+      
+      // Store the generated virtual patient ID for later use
+      if (data.virtualPatient?.id) {
+        setGeneratedVirtualPatientId(data.virtualPatient.id);
+      }
+      
+      // Redirect to virtual patients page after a short delay
+      setTimeout(() => {
+        setLocation('/virtual-patients');
+      }, 2000);
     },
     onError: (error) => {
       toast({
@@ -692,9 +707,17 @@ export default function EnhancedSoapNotesPage() {
       // Store the generated patient ID
       setGeneratedVirtualPatientId(data.virtualPatient.id);
       
+      // Create description with clinical summary if available
+      let description = `Successfully created privacy-preserving 3D patient model: ${data.virtualPatient.patient_name || data.virtualPatient.title}`;
+      
+      if (data.virtualPatient.clinicalSummary) {
+        description += `\n\nClinical Summary:\n${data.virtualPatient.clinicalSummary}`;
+      }
+      
       toast({
         title: "Virtual Patient Created",
-        description: `Successfully created privacy-preserving 3D patient model: ${data.virtualPatient.patient_name || data.virtualPatient.title}`,
+        description: description,
+        duration: 10000, // Show longer for clinical summary
       });
 
     } catch (error) {

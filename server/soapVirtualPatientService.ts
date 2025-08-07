@@ -38,6 +38,9 @@ export class SoapVirtualPatientService {
       // Generate virtual patient using AI with SOAP sections
       const virtualPatientData = await this.generateVirtualPatientFromSections(soapSections, transcript);
 
+      // Extract clinical summary
+      const clinicalSummary = virtualPatientData.clinicalSummary || null;
+
       // Determine body part from SOAP sections
       const bodyPart = this.extractBodyPartFromSOAP(soapSections);
 
@@ -46,7 +49,8 @@ export class SoapVirtualPatientService {
         userId,
         virtualPatientData,
         bodyPart,
-        soapSections
+        soapSections,
+        clinicalSummary
       });
 
       return {
@@ -101,6 +105,7 @@ export class SoapVirtualPatientService {
       const clinicalData = await this.generateVirtualPatientWithAI(note);
       
       // Extract only de-identified clinical patterns
+      const clinicalSummary = clinicalData.clinicalSummary || null;
       const clinicalPattern = clinicalData.clinicalPattern || {};
       const movementRestrictions = clinicalData.movementRestrictions || {};
       const anatomicalFindings = clinicalData.anatomicalFindings || {};
@@ -115,6 +120,7 @@ export class SoapVirtualPatientService {
         userId,
         soapNoteId: null, // PRIVACY: Do not link to original SOAP note
         title: vpName,
+        clinicalSummary, // Add the clinical summary here
         // Store only de-identified clinical patterns
         patientProfile: {
           condition: clinicalPattern.primaryCondition || "Clinical condition",
@@ -503,6 +509,7 @@ CRITICAL PRIVACY REQUIREMENTS:
 
 Return ONLY the de-identified clinical data in this JSON format:
 {
+  "clinicalSummary": "A concise summary of key clinical features in 3-5 bullet points. Each point should highlight specific movement triggers, pain locations, and functional limitations. Example: '• Anterior knee pain with squatting movements • Pain onset at 90° knee flexion • Limited terminal knee extension • Aggravated by weight-bearing activities'",
   "clinicalPattern": {
     "primaryCondition": "general condition type (e.g., 'shoulder impingement', 'lumbar disc')",
     "stage": "acute/subacute/chronic",
@@ -596,6 +603,7 @@ Return ONLY the de-identified clinical data in this JSON format:
     virtualPatientData: any;
     bodyPart: string;
     soapSections: any;
+    clinicalSummary?: string;
   }): Promise<any> {
     try {
       // Create timestamp-based name for SOAP virtual patients
@@ -639,6 +647,7 @@ Return ONLY the de-identified clinical data in this JSON format:
         userId: params.userId,
         soapNoteId: null, // No link to original SOAP note for privacy
         title: timestampName,
+        clinicalSummary: params.clinicalSummary || null, // Add clinical summary
         patientProfile: deidentifiedProfile, // Only clinical pattern, no personal data
         clinicalPresentation: clinicalPresentation,
         physicalFindings: physicalFindings,

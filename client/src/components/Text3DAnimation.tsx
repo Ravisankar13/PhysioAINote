@@ -1012,17 +1012,21 @@ export default function Text3DAnimation({
       return clavicleGroup;
     };
     
-    // Position clavicles at proper shoulder level based on actual thoracic vertebrae
-    // The clavicles should connect at approximately T1-T2 level
-    let clavicleY = torsoHeight + 0.4; // Default fallback position
+    // Position clavicles at proper shoulder level
+    // Shoulders should be at approximately the junction between cervical and thoracic spine
+    // The spine starts at spineStartY (1.8) and cervical spine is about 7 vertebrae
+    // Each vertebra is about 0.04 * 0.8 = 0.032 spacing
+    const cervicalHeight = 7 * 0.032; // Approximate height of cervical spine
+    const shoulderLevel = spineStartY - cervicalHeight - 0.05; // Just below cervical spine
+    const clavicleY = shoulderLevel;
     
-    // If we have thoracic vertebrae, position clavicles at T1-T2 level
-    if (thoracicVertebrae.length > 0) {
-      // Get position of first thoracic vertebra (T1)
-      const t1Position = thoracicVertebrae[0].position.y;
-      // Clavicles attach slightly anterior and superior to T1
-      clavicleY = t1Position + 0.05; // Slightly above T1
-    }
+    console.log('Shoulder positioning:', { 
+      spineStartY, 
+      cervicalHeight, 
+      shoulderLevel,
+      clavicleY,
+      thoracicVertebraeCount: thoracicVertebrae.length 
+    });
     
     // Create AC joint geometry (small sphere for the joint)
     const acJointGeometry = new THREE.SphereGeometry(0.03, 10, 10);

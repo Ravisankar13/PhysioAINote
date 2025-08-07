@@ -651,7 +651,7 @@ export default function EnhancedSoapNotesPage() {
     createVirtualPatientMutation.mutate(soapData);
   };
 
-  // Generate AI-powered virtual patient from SOAP note
+  // Generate AI-powered virtual patient from SOAP note (privacy-preserving)
   const generateAIVirtualPatient = async () => {
     if (!soapSections.subjective && !soapSections.objective && !soapSections.assessment) {
       toast({
@@ -665,17 +665,21 @@ export default function EnhancedSoapNotesPage() {
     setIsCreatingVirtualPatient(true);
 
     try {
-      const response = await fetch('/api/ai/generate-virtual-patient-from-soap', {
+      const response = await fetch('/api/soap-virtual-patients', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          subjective: soapSections.subjective,
-          objective: soapSections.objective,
-          assessment: soapSections.assessment,
-          plan: soapSections.plan,
-          transcript: realTimeTranscript
+          soapSections: {
+            subjective: soapSections.subjective,
+            objective: soapSections.objective,
+            assessment: soapSections.assessment,
+            plan: soapSections.plan,
+          },
+          transcript: realTimeTranscript,
+          sessionDuration: recordingTime,
+          timestamp: new Date().toISOString()
         }),
       });
 
@@ -690,7 +694,7 @@ export default function EnhancedSoapNotesPage() {
       
       toast({
         title: "Virtual Patient Created",
-        description: `Successfully generated virtual patient: ${data.virtualPatient.name}`,
+        description: `Successfully created privacy-preserving 3D patient model: ${data.virtualPatient.patient_name || data.virtualPatient.title}`,
       });
 
     } catch (error) {

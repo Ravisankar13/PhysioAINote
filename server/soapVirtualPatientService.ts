@@ -97,23 +97,56 @@ export class SoapVirtualPatientService {
         };
       }
 
-      // Generate virtual patient using AI
-      const virtualPatientData = await this.generateVirtualPatientWithAI(note);
+      // Generate PRIVACY-PRESERVING virtual patient using AI
+      const clinicalData = await this.generateVirtualPatientWithAI(note);
+      
+      // Extract only de-identified clinical patterns
+      const clinicalPattern = clinicalData.clinicalPattern || {};
+      const movementRestrictions = clinicalData.movementRestrictions || {};
+      const anatomicalFindings = clinicalData.anatomicalFindings || {};
+      const modelConfiguration = clinicalData.modelConfiguration || {};
 
-      // Create the virtual patient record
+      // Create timestamp-based name
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const vpName = `VP-${timestamp}`;
+      
+      // Create PRIVACY-PRESERVING virtual patient record with only clinical data
       const insertData: InsertSoapVirtualPatient = {
         userId,
-        soapNoteId,
-        patientProfile: virtualPatientData.patientProfile,
-        clinicalPresentation: virtualPatientData.clinicalPresentation,
-        physicalFindings: virtualPatientData.physicalFindings,
-        communicationStyle: virtualPatientData.communicationStyle,
-        bodyPart: note.bodyPart || "other",
-        complexity: virtualPatientData.complexity,
-        estimatedDuration: virtualPatientData.estimatedDuration,
-        prognosis: virtualPatientData.prognosis,
-        generationPrompt: virtualPatientData.generationPrompt,
-        generationModel: "gpt-4o"
+        soapNoteId: null, // PRIVACY: Do not link to original SOAP note
+        title: vpName,
+        // Store only de-identified clinical patterns
+        patientProfile: {
+          condition: clinicalPattern.primaryCondition || "Clinical condition",
+          stage: clinicalPattern.stage || "chronic",
+          severity: clinicalPattern.severity || "moderate",
+          laterality: clinicalPattern.laterality || "unilateral"
+        },
+        clinicalPresentation: {
+          primaryPattern: clinicalPattern.primaryCondition,
+          movementLimitations: movementRestrictions.limitedMovements || [],
+          functionalRestrictions: clinicalData.functionalLimitations?.primaryLimitations || [],
+          complexity: clinicalData.complexity || "intermediate"
+        },
+        physicalFindings: {
+          rangeOfMotion: movementRestrictions.rangeOfMotionDeficits || {},
+          posturalDeviations: anatomicalFindings.posturalDeviations || [],
+          compensatoryPatterns: movementRestrictions.compensatoryPatterns || [],
+          jointRestrictions: anatomicalFindings.jointRestrictions || []
+        },
+        assessmentPlan: {
+          treatmentFocus: clinicalData.treatmentFocus || [],
+          bodyRegion: modelConfiguration.bodyRegion || note.bodyPart
+        },
+        bodyPart: (modelConfiguration.bodyRegion || note.bodyPart || "other") as any,
+        // Store 3D model configuration
+        movementQuality: {
+          rangeOfMotion: modelConfiguration.requiredJointAngles || {},
+          movementSpeed: modelConfiguration.movementQualityScore ? 
+            (modelConfiguration.movementQualityScore > 70 ? 'normal' : 'slow') : 'slow',
+          compensatoryPatterns: movementRestrictions.compensatoryPatterns || []
+        },
+        aiGenerated: true
       };
 
       const newVirtualPatient = await db
@@ -144,11 +177,19 @@ export class SoapVirtualPatientService {
   }
 
   /**
-   * Generate virtual patient data using OpenAI
+   * Generate PRIVACY-PRESERVING virtual patient data using OpenAI
    */
   private async generateVirtualPatientWithAI(soapNote: SoapNote): Promise<any> {
     try {
-      const prompt = this.constructVirtualPatientPrompt(soapNote);
+      // Extract only clinical sections, no patient identifiers
+      const soapSections = {
+        subjective: soapNote.subjective || '',
+        objective: soapNote.objective || '',
+        assessment: soapNote.assessment || '',
+        plan: soapNote.plan || ''
+      };
+      
+      const prompt = this.constructPrivacyPreservingPrompt(soapSections);
 
       // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
       const response = await openai.chat.completions.create({
@@ -156,7 +197,7 @@ export class SoapVirtualPatientService {
         messages: [
           {
             role: "system",
-            content: "You are an expert physiotherapist creating realistic virtual patient profiles from clinical notes. Generate comprehensive, anonymized patient profiles that maintain clinical accuracy while protecting privacy."
+            content: "You are an expert physiotherapist extracting ONLY de-identified clinical patterns and movement restrictions for 3D model generation. DO NOT include any patient-specific information, names, dates, locations, or identifiable details."
           },
           {
             role: "user",
@@ -165,7 +206,7 @@ export class SoapVirtualPatientService {
         ],
         response_format: { type: "json_object" },
         temperature: 0.7,
-        max_tokens: 3000
+        max_tokens: 2000
       });
 
       const responseContent = response.choices[0].message.content;
@@ -173,10 +214,10 @@ export class SoapVirtualPatientService {
         throw new Error("Empty response from OpenAI");
       }
 
-      const virtualPatientData = JSON.parse(responseContent);
-      virtualPatientData.generationPrompt = prompt;
-
-      return virtualPatientData;
+      const clinicalData = JSON.parse(responseContent);
+      // Do not store the prompt as it may contain patient information
+      
+      return clinicalData;
 
     } catch (error) {
       console.error("Error generating virtual patient with AI:", error);
@@ -385,6 +426,7 @@ Return the virtual patient in JSON format with this exact structure:
 
   /**
    * Generate virtual patient data from SOAP sections
+   * PRIVACY-PRESERVING: Only extracts clinical patterns needed for 3D model, no patient data
    */
   private async generateVirtualPatientFromSections(
     soapSections: {
@@ -396,7 +438,7 @@ Return the virtual patient in JSON format with this exact structure:
     transcript?: string
   ): Promise<any> {
     try {
-      const prompt = this.constructVirtualPatientPromptFromSections(soapSections, transcript);
+      const prompt = this.constructPrivacyPreservingPrompt(soapSections);
 
       // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
       const response = await openai.chat.completions.create({
@@ -404,7 +446,7 @@ Return the virtual patient in JSON format with this exact structure:
         messages: [
           {
             role: "system",
-            content: "You are an expert physiotherapist creating realistic virtual patient profiles from clinical notes. Generate comprehensive, anonymized patient profiles that maintain clinical accuracy while protecting privacy."
+            content: "You are an expert physiotherapist extracting ONLY de-identified clinical patterns and movement restrictions for 3D model generation. DO NOT include any patient-specific information, names, dates, locations, or identifiable details."
           },
           {
             role: "user",
@@ -413,7 +455,7 @@ Return the virtual patient in JSON format with this exact structure:
         ],
         response_format: { type: "json_object" },
         temperature: 0.7,
-        max_tokens: 3000
+        max_tokens: 2000
       });
 
       const responseContent = response.choices[0].message.content;
@@ -421,10 +463,10 @@ Return the virtual patient in JSON format with this exact structure:
         throw new Error("Empty response from OpenAI");
       }
 
-      const virtualPatientData = JSON.parse(responseContent);
-      virtualPatientData.generationPrompt = prompt;
-
-      return virtualPatientData;
+      const clinicalData = JSON.parse(responseContent);
+      // Do not store the prompt as it may contain patient information
+      
+      return clinicalData;
 
     } catch (error) {
       console.error("Error generating virtual patient with AI:", error);
@@ -433,19 +475,19 @@ Return the virtual patient in JSON format with this exact structure:
   }
 
   /**
-   * Construct prompt for creating virtual patient from SOAP sections
+   * Construct PRIVACY-PRESERVING prompt for extracting clinical patterns only
    */
-  private constructVirtualPatientPromptFromSections(
+  private constructPrivacyPreservingPrompt(
     soapSections: {
       subjective: string;
       objective: string;
       assessment: string;
       plan: string;
-    },
-    transcript?: string
+    }
   ): string {
     return `
-Create a comprehensive virtual patient profile based on the following SOAP note sections. The virtual patient should be realistic, detailed, and suitable for training purposes while maintaining complete anonymization.
+Extract ONLY the clinical patterns, movement restrictions, and anatomical data needed for 3D model generation from the following SOAP notes. 
+DO NOT include any patient names, dates, ages, locations, or personally identifiable information.
 
 SOAP NOTE SECTIONS:
 Subjective: ${soapSections.subjective || 'Not provided'}
@@ -453,59 +495,63 @@ Objective: ${soapSections.objective || 'Not provided'}
 Assessment: ${soapSections.assessment || 'Not provided'}
 Plan: ${soapSections.plan || 'Not provided'}
 
-${transcript ? `Full Transcription: ${transcript}` : ''}
+CRITICAL PRIVACY REQUIREMENTS:
+- Extract ONLY clinical patterns and movement data
+- NO patient names, ages, dates, or locations
+- NO personal history or identifiable details
+- Focus ONLY on anatomical/biomechanical findings
 
-INSTRUCTIONS:
-1. Create a realistic patient profile that could have presented with the symptoms and findings described
-2. Anonymize completely - use fictional names and details
-3. Expand on the clinical information to create a comprehensive case
-4. Include realistic patient personality and communication style
-5. Ensure consistency between all sections
-6. Make the case appropriate for physiotherapy training
-
-Return the virtual patient in JSON format with this exact structure:
+Return ONLY the de-identified clinical data in this JSON format:
 {
-  "patientProfile": {
-    "name": "realistic fictional name",
-    "age": number (appropriate for condition),
-    "gender": "male/female/other",
-    "occupation": "relevant occupation",
-    "lifestyle": "lifestyle description including activity level",
-    "medicalHistory": ["relevant past medical conditions"],
-    "currentMedications": ["current medications if any"],
-    "familyHistory": "relevant family medical history"
+  "clinicalPattern": {
+    "primaryCondition": "general condition type (e.g., 'shoulder impingement', 'lumbar disc')",
+    "stage": "acute/subacute/chronic",
+    "severity": "mild/moderate/severe",
+    "laterality": "left/right/bilateral"
   },
-  "clinicalPresentation": {
-    "chiefComplaint": "main reason for seeking treatment",
-    "historyOfPresentIllness": "detailed history of current problem",
-    "painScale": number (0-10),
-    "functionalLimitations": ["specific functional restrictions"],
-    "symptomsTimeline": "when symptoms started and progression",
-    "aggravatingFactors": ["things that make symptoms worse"],
-    "relievingFactors": ["things that help symptoms"]
+  "movementRestrictions": {
+    "limitedMovements": ["list of restricted movements"],
+    "rangeOfMotionDeficits": {
+      "joint": "degrees or percentage of normal"
+    },
+    "painfulArcs": ["description of painful ranges"],
+    "compensatoryPatterns": ["observed compensations"]
   },
-  "physicalFindings": {
-    "inspection": "visual assessment findings",
-    "palpation": "palpation findings",
-    "rangeOfMotion": "ROM findings with measurements",
-    "strengthTesting": "strength testing results",
-    "specialTests": ["specific orthopedic tests performed"],
-    "neurologicalAssessment": "neurological findings",
-    "functionalTests": ["functional movement assessments"]
+  "anatomicalFindings": {
+    "posturalDeviations": ["observed postural issues"],
+    "muscleImbalances": ["tight/weak muscle groups"],
+    "jointRestrictions": ["specific joint limitations"],
+    "tissueQuality": "normal/guarded/hypersensitive"
   },
-  "communicationStyle": {
-    "personality": "patient personality traits",
-    "communicationPreferences": "how patient prefers to communicate",
-    "concerns": ["patient's main concerns and fears"],
-    "expectations": ["what patient hopes to achieve"],
-    "motivationLevel": "high/moderate/low with explanation",
-    "complianceHistory": "likelihood to follow treatment recommendations"
+  "functionalLimitations": {
+    "primaryLimitations": ["main functional restrictions"],
+    "mobilityLevel": "independent/assisted/dependent",
+    "weightBearingStatus": "full/partial/non-weight-bearing",
+    "gaitPattern": "normal/antalgic/trendelenburg/other"
+  },
+  "modelConfiguration": {
+    "bodyRegion": "shoulder/spine/hip/knee/ankle/multiple",
+    "requiredJointAngles": {
+      "joint": "angle in degrees"
+    },
+    "pathologyIndicators": ["visual indicators needed for 3D model"],
+    "movementQualityScore": 0-100
   },
   "complexity": "beginner/intermediate/advanced",
-  "estimatedDuration": "estimated treatment duration (e.g., 4-6 weeks)",
-  "prognosis": "expected outcome and recovery potential"
+  "treatmentFocus": ["primary treatment areas without specific interventions"]
 }
     `;
+  }
+
+  /**
+   * Legacy prompt method - kept for backward compatibility but redirects to privacy-preserving version
+   */
+  private constructVirtualPatientPromptFromSections(
+    soapSections: any,
+    transcript?: string
+  ): string {
+    // Redirect to privacy-preserving prompt
+    return this.constructPrivacyPreservingPrompt(soapSections);
   }
 
   /**
@@ -543,7 +589,7 @@ Return the virtual patient in JSON format with this exact structure:
   }
 
   /**
-   * Create compatible virtual patient for main virtual patients table
+   * Create PRIVACY-PRESERVING virtual patient storing only clinical patterns for 3D model
    */
   private async createCompatibleVirtualPatient(params: {
     userId: number;
@@ -556,57 +602,98 @@ Return the virtual patient in JSON format with this exact structure:
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T');
       const dateStr = timestamp[0];
       const timeStr = timestamp[1].split('.')[0];
-      const timestampName = `VP-${dateStr}-${timeStr}-${Math.floor(Math.random() * 1000)}Z`;
+      const timestampName = `VP-${dateStr}-${timeStr}-${Math.floor(Math.random() * 1000)}`;
 
-      // Create virtual patient directly in soapVirtualPatients table with animation fields
+      // Extract only de-identified clinical data for 3D model
+      const clinicalPattern = params.virtualPatientData.clinicalPattern || {};
+      const movementRestrictions = params.virtualPatientData.movementRestrictions || {};
+      const anatomicalFindings = params.virtualPatientData.anatomicalFindings || {};
+      const modelConfiguration = params.virtualPatientData.modelConfiguration || {};
+      
+      // Create privacy-preserving patient profile (no personal data)
+      const deidentifiedProfile = {
+        condition: clinicalPattern.primaryCondition || "Clinical condition",
+        stage: clinicalPattern.stage || "chronic",
+        severity: clinicalPattern.severity || "moderate",
+        laterality: clinicalPattern.laterality || "unilateral"
+      };
+
+      // Store only clinical presentation needed for 3D model
+      const clinicalPresentation = {
+        primaryPattern: clinicalPattern.primaryCondition,
+        movementLimitations: movementRestrictions.limitedMovements || [],
+        functionalRestrictions: params.virtualPatientData.functionalLimitations?.primaryLimitations || [],
+        complexity: params.virtualPatientData.complexity || "intermediate"
+      };
+
+      // Store only physical findings relevant to 3D model
+      const physicalFindings = {
+        rangeOfMotion: movementRestrictions.rangeOfMotionDeficits || {},
+        posturalDeviations: anatomicalFindings.posturalDeviations || [],
+        compensatoryPatterns: movementRestrictions.compensatoryPatterns || [],
+        jointRestrictions: anatomicalFindings.jointRestrictions || []
+      };
+
+      // Create virtual patient with ONLY de-identified clinical data
       const [createdPatient] = await db.insert(soapVirtualPatients).values({
         userId: params.userId,
-        soapNoteId: null, // No associated SOAP note since created from sections
+        soapNoteId: null, // No link to original SOAP note for privacy
         title: timestampName,
-        patientProfile: params.virtualPatientData.patientProfile || {},
-        clinicalPresentation: params.virtualPatientData.clinicalPresentation || {},
-        physicalFindings: params.virtualPatientData.physicalFindings || {},
-        assessmentPlan: params.virtualPatientData.assessmentPlan || {},
-        bodyPart: params.bodyPart as any,
+        patientProfile: deidentifiedProfile, // Only clinical pattern, no personal data
+        clinicalPresentation: clinicalPresentation,
+        physicalFindings: physicalFindings,
+        assessmentPlan: {
+          treatmentFocus: params.virtualPatientData.treatmentFocus || [],
+          bodyRegion: modelConfiguration.bodyRegion || params.bodyPart
+        },
+        bodyPart: (modelConfiguration.bodyRegion || params.bodyPart) as any,
         
-        // Initialize animation fields (this is crucial for animation support)
+        // Store 3D model configuration data
+        movementQuality: {
+          rangeOfMotion: modelConfiguration.requiredJointAngles || {},
+          movementSpeed: modelConfiguration.movementQualityScore ? 
+            (modelConfiguration.movementQualityScore > 70 ? 'normal' : 'slow') : 'slow',
+          compensatoryPatterns: movementRestrictions.compensatoryPatterns || []
+        },
+        
+        // Initialize animation fields
         motionData: null,
         hasMotionData: false,
-        aiGenerated: false,
+        aiGenerated: true, // Mark as AI-generated from SOAP
       }).returning();
 
-      // Return in expected format with compatible fields for frontend
+      // Return format for frontend with de-identified data only
       return {
         id: createdPatient.id,
         userId: createdPatient.userId,
         patient_name: timestampName,
-        age: params.virtualPatientData.patientProfile?.age || 35,
-        gender: params.virtualPatientData.patientProfile?.gender || "other",
-        chief_complaint: params.virtualPatientData.clinicalPresentation?.chiefComplaint || "Pain and functional limitations",
-        symptoms_description: params.virtualPatientData.clinicalPresentation?.historyOfPresentIllness || "Patient presents with symptoms requiring physiotherapy intervention",
-        body_part: params.bodyPart,
-        past_medical_history: Array.isArray(params.virtualPatientData.patientProfile?.medicalHistory) 
-          ? params.virtualPatientData.patientProfile.medicalHistory.join(', ') 
-          : params.virtualPatientData.patientProfile?.medicalHistory || "",
-        type: "original",
+        // Use generic demographic data - no patient specifics
+        age: 45, // Generic middle age
+        gender: "unspecified",
+        chief_complaint: clinicalPattern.primaryCondition || "Movement restriction",
+        symptoms_description: `${clinicalPattern.stage || 'Chronic'} ${clinicalPattern.severity || 'moderate'} condition affecting ${modelConfiguration.bodyRegion || params.bodyPart}`,
+        body_part: createdPatient.bodyPart,
+        past_medical_history: "", // No personal history stored
+        type: "ai_generated",
         hasBeenEdited: false,
         createdAt: createdPatient.createdAt,
         updatedAt: createdPatient.updatedAt,
         
-        // Include animation fields in response
+        // Include animation fields
         motionData: createdPatient.motionData,
         hasMotionData: createdPatient.hasMotionData,
-        aiGenerated: createdPatient.aiGenerated,
+        aiGenerated: true,
         
-        // Legacy compatibility fields
-        diagnosis: null,
-        differentialDiagnosis: null,
-        treatmentOptions: null,
-        relatedArticleIds: null
+        // Model configuration for 3D rendering
+        modelConfig: {
+          jointAngles: modelConfiguration.requiredJointAngles || {},
+          pathologyIndicators: modelConfiguration.pathologyIndicators || [],
+          movementQuality: modelConfiguration.movementQualityScore || 50
+        }
       };
 
     } catch (error) {
-      console.error("Error creating compatible virtual patient:", error);
+      console.error("Error creating privacy-preserving virtual patient:", error);
       throw new Error(`Failed to create virtual patient: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }

@@ -4591,8 +4591,14 @@ export default function Text3DAnimation({
           const posY = THREE.MathUtils.lerp(currentJoint.position[1], nextJoint.position[1], t);
           const posZ = THREE.MathUtils.lerp(currentJoint.position[2], nextJoint.position[2], t);
           
-          // Skip position updates for arm groups - they're manually positioned at shoulder height
-          if (jointName !== 'leftArmGroup' && jointName !== 'rightArmGroup') {
+          // Skip position updates for shoulder components - they're manually positioned
+          const skipPositionJoints = [
+            'leftArmGroup', 'rightArmGroup',
+            'leftClavicleGroup', 'rightClavicleGroup',
+            'leftScapulaGroup', 'rightScapulaGroup'
+          ];
+          
+          if (!skipPositionJoints.includes(jointName)) {
             bone.position.x = posX;
             bone.position.y = posY;
             bone.position.z = posZ;

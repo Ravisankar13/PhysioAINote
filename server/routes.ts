@@ -39,6 +39,7 @@ import { documentGenerationService } from "./documentGenerationService";
 import { aiMovementGenerator } from "./aiMovementGenerator";
 import { youtubeAnalysisService } from "./youtubeAnalysisService";
 import { comparativeAnalysisService } from "./ai/comparativeAnalysis";
+import { generateAISuggestions, applySuggestionToSoap } from "./services/aiSuggestionsService";
 
 import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, exercises, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, competitionParticipants, soapNotes, insertSoapNoteSchema, bodyScans, insertBodyScanSchema, tournamentParticipants, diagnosisDuelTournaments, gameContent, virtualPatients, patternRecognitionScores } from "@shared/schema";
 import { ZodError, z } from "zod";
@@ -446,6 +447,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
           assessment: "",
           plan: ""
         }
+      });
+    }
+  });
+
+  // Generate AI suggestions for SOAP notes
+  app.post('/api/generate-ai-suggestions', ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { soapSections, transcript } = req.body;
+      
+      if (!soapSections) {
+        return res.status(400).json({ error: 'SOAP sections are required' });
+      }
+
+      console.log('Generating AI suggestions for SOAP notes...');
+      const suggestions = await generateAISuggestions(soapSections, transcript);
+      
+      res.json({ suggestions });
+    } catch (error) {
+      console.error('Error generating AI suggestions:', error);
+      res.status(500).json({ 
+        error: 'Failed to generate suggestions',
+        suggestions: [] 
+      });
+    }
+  });
+
+  // Apply AI suggestion to SOAP notes
+  app.post('/api/apply-ai-suggestion', ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { suggestion, currentSections } = req.body;
+      
+      if (!suggestion || !currentSections) {
+        return res.status(400).json({ error: 'Suggestion and current sections are required' });
+      }
+
+      const updatedSections = applySuggestionToSoap(suggestion, currentSections);
+      
+      res.json({ updatedSections });
+    } catch (error) {
+      console.error('Error applying suggestion:', error);
+      res.status(500).json({ 
+        error: 'Failed to apply suggestion',
+        updatedSections: req.body.currentSections 
       });
     }
   });

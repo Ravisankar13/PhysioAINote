@@ -17,7 +17,7 @@ import {
   DollarSign, Calendar, Copy, ChevronDown, ChevronUp, 
   Star, AlertTriangle, BookOpen, Copy as CopyIcon,
   BarChart3, Briefcase, Camera, X, StopCircle, Loader2,
-  UserPlus, CheckCircle, AlertCircle, Split
+  UserPlus, CheckCircle, AlertCircle, Split, RefreshCw
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import MotionCapture from "@/components/MotionCapture";
@@ -25,12 +25,12 @@ import ComparativeCaseAnalysis from "@/components/ComparativeCaseAnalysis";
 
 // Real-time AI assistance interfaces
 interface AISuggestion {
-  id: number;
-  type: 'question' | 'treatment' | 'diagnosis' | 'administrative';
+  id: string;
+  type: 'assessment' | 'differential' | 'treatment' | 'red-flag' | 'documentation';
   suggestion: string;
   reasoning?: string;
-  priority: 'low' | 'medium' | 'high';
-  createdAt: string;
+  priority: 'high' | 'normal';
+  section?: 'subjective' | 'objective' | 'assessment' | 'plan';
 }
 
 interface PhysioGPTMessage {
@@ -101,6 +101,8 @@ export default function EnhancedSoapNotesPage() {
   const [showAIPanel, setShowAIPanel] = useState(true);
   const [isWebSocketConnected, setIsWebSocketConnected] = useState(false);
   const [expandedSections, setExpandedSections] = useState<{[key: string]: boolean}>({});
+  const [isGeneratingSuggestions, setIsGeneratingSuggestions] = useState(false);
+  const [lastSuggestionsUpdate, setLastSuggestionsUpdate] = useState<string>("");
   
   const [isCreatingVirtualPatient, setIsCreatingVirtualPatient] = useState(false);
   const [showMotionCaptureIntegration, setShowMotionCaptureIntegration] = useState(false);
@@ -143,6 +145,23 @@ export default function EnhancedSoapNotesPage() {
       setCurrentPatientNumber(activeContinuousSession.activeSession.currentPatientNumber || 1);
     }
   }, [activeContinuousSession, continuousSession]);
+
+  // Debounce timer for AI suggestions
+  useEffect(() => {
+    const currentContent = JSON.stringify(soapSections);
+    
+    // Only generate if content has changed and we have some content
+    if (currentContent !== lastSuggestionsUpdate && 
+        (soapSections.subjective || soapSections.objective || 
+         soapSections.assessment || soapSections.plan)) {
+      
+      const timer = setTimeout(() => {
+        generateAISuggestions();
+      }, 3000); // Wait 3 seconds after user stops typing
+      
+      return () => clearTimeout(timer);
+    }
+  }, [soapSections]);
 
   const startContinuousRecordingMutation = useMutation({
     mutationFn: async (sessionName?: string) => {
@@ -423,101 +442,13 @@ export default function EnhancedSoapNotesPage() {
   const soapNotes: any[] = [];
   const notesLoading = false;
 
-  // Generate AI suggestions based on current context
-  const generateAISuggestions = useCallback(async () => {
-    try {
-      const context = {
-        transcript: realTimeTranscript,
-        currentSection: 'subjective', // Default to subjective section
-        patientSymptoms: extractSymptomsFromTranscript(realTimeTranscript),
-        bodyPart: extractBodyPartFromTranscript(realTimeTranscript),
-        sessionDuration: Math.floor(recordingTime / 60)
-      };
-
-      const response = await fetch(`/api/soap-notes/demo-session/suggestions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ context }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        
-        // Convert backend response to frontend format
-        const suggestions: AISuggestion[] = [];
-        let id = 1;
-
-        // Add questions
-        data.questions?.forEach((question: string) => {
-          suggestions.push({
-            id: id++,
-            type: 'question',
-            suggestion: question,
-            reasoning: "AI-generated based on current conversation context",
-            priority: 'high',
-            createdAt: new Date().toISOString()
-          });
-        });
-
-        // Add treatments
-        data.treatments?.forEach((treatment: string) => {
-          suggestions.push({
-            id: id++,
-            type: 'treatment',
-            suggestion: treatment,
-            reasoning: "Evidence-based treatment recommendation",
-            priority: 'medium',
-            createdAt: new Date().toISOString()
-          });
-        });
-
-        // Add diagnoses
-        data.diagnoses?.forEach((diagnosis: string) => {
-          suggestions.push({
-            id: id++,
-            type: 'diagnosis',
-            suggestion: diagnosis,
-            reasoning: "Differential diagnosis consideration",
-            priority: 'medium',
-            createdAt: new Date().toISOString()
-          });
-        });
-
-        setAiSuggestions(suggestions);
-      }
-    } catch (error) {
-      console.error('Error generating AI suggestions:', error);
-      // Set fallback suggestions if API fails
-      setAiSuggestions([
-        {
-          id: 1,
-          type: 'question',
-          suggestion: "Ask about pain location and intensity",
-          reasoning: "Essential baseline information",
-          priority: 'high',
-          createdAt: new Date().toISOString()
-        }
-      ]);
-    }
-  }, [realTimeTranscript, recordingTime]);
+  // Old generateAISuggestions removed - using new enhanced version defined later
 
   // Mock WebSocket connection for demo
   const connectWebSocket = useCallback((sessionId: string, userId: number) => {
     console.log("Connecting WebSocket for real-time AI assistance...");
     setIsWebSocketConnected(true);
-    
-    // Generate initial AI suggestions
-    generateAISuggestions();
-  }, [generateAISuggestions]);
-
-  // Regenerate suggestions when transcript changes significantly
-  useEffect(() => {
-    if (realTimeTranscript.length > 100 && realTimeTranscript.length % 200 === 0) {
-      generateAISuggestions();
-    }
-  }, [realTimeTranscript, generateAISuggestions]);
+  }, []);
 
   // Timer effect - properly handle recording time updates
   useEffect(() => {
@@ -1146,32 +1077,69 @@ Generated by PhysioGPT Enhanced SOAP Notes
   };
 
   // Accept AI suggestion
-  const acceptSuggestion = (suggestion: AISuggestion) => {
-    // Add suggestion to appropriate SOAP section
-    if (suggestion.type === 'question') {
-      setSoapSections(prev => ({
-        ...prev,
-        subjective: prev.subjective + (prev.subjective ? '\n' : '') + `Ask: ${suggestion.suggestion}`
-      }));
-    } else if (suggestion.type === 'diagnosis') {
-      setSoapSections(prev => ({
-        ...prev,
-        assessment: prev.assessment + (prev.assessment ? '\n' : '') + suggestion.suggestion
-      }));
-    } else if (suggestion.type === 'treatment') {
-      setSoapSections(prev => ({
-        ...prev,
-        plan: prev.plan + (prev.plan ? '\n' : '') + suggestion.suggestion
-      }));
+  const acceptSuggestion = async (suggestion: AISuggestion) => {
+    try {
+      const response = await fetch('/api/apply-ai-suggestion', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          suggestion,
+          currentSections: soapSections
+        }),
+      });
+      
+      if (!response.ok) throw new Error('Failed to apply suggestion');
+      
+      const { updatedSections } = await response.json();
+      setSoapSections(updatedSections);
+      
+      // Remove the applied suggestion from the list
+      setAiSuggestions(prev => prev.filter(s => s.id !== suggestion.id));
+      
+      toast({
+        title: "Suggestion Applied",
+        description: "AI suggestion has been added to your SOAP notes",
+      });
+    } catch (error) {
+      console.error('Error applying suggestion:', error);
+      toast({
+        title: "Error",
+        description: "Failed to apply suggestion",
+        variant: "destructive",
+      });
     }
+  };
+
+  // Function to generate AI suggestions
+  const generateAISuggestions = async () => {
+    // Don't generate if sections are mostly empty
+    const hasContent = soapSections.subjective || soapSections.objective || 
+                      soapSections.assessment || soapSections.plan;
     
-    // Remove accepted suggestion
-    setAiSuggestions(prev => prev.filter(s => s.id !== suggestion.id));
+    if (!hasContent) return;
     
-    toast({
-      title: "Suggestion Applied",
-      description: "AI suggestion has been added to your SOAP note.",
-    });
+    setIsGeneratingSuggestions(true);
+    
+    try {
+      const response = await fetch('/api/generate-ai-suggestions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          soapSections,
+          transcript: realTimeTranscript
+        }),
+      });
+      
+      if (!response.ok) throw new Error('Failed to generate suggestions');
+      
+      const { suggestions } = await response.json();
+      setAiSuggestions(suggestions);
+      setLastSuggestionsUpdate(JSON.stringify(soapSections));
+    } catch (error) {
+      console.error('Error generating suggestions:', error);
+    } finally {
+      setIsGeneratingSuggestions(false);
+    }
   };
 
   // Create virtual patient from SOAP notes with optional motion capture data
@@ -2044,17 +2012,36 @@ Generated by PhysioGPT Enhanced SOAP Notes
             {/* AI Suggestions */}
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Lightbulb className="w-5 h-5" />
-                  AI Suggestions
+                <CardTitle className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Lightbulb className="w-5 h-5" />
+                    AI Suggestions
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => generateAISuggestions()}
+                    disabled={isGeneratingSuggestions}
+                  >
+                    {isGeneratingSuggestions ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="w-4 h-4" />
+                    )}
+                  </Button>
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="max-h-64 overflow-y-auto">
                   <div className="space-y-3">
-                    {aiSuggestions.length === 0 ? (
+                    {isGeneratingSuggestions ? (
+                      <div className="text-center py-4">
+                        <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-blue-600" />
+                        <p className="text-sm text-gray-600">Analyzing your notes for suggestions...</p>
+                      </div>
+                    ) : aiSuggestions.length === 0 ? (
                       <p className="text-sm text-gray-500 text-center py-4">
-                        AI suggestions will appear here during your session
+                        AI suggestions will appear here as you document your session
                       </p>
                     ) : (
                       aiSuggestions.map((suggestion) => (

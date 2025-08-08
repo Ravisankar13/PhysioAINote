@@ -3339,3 +3339,275 @@ export const treatmentOutcomeRelations = relations(treatmentOutcomes, ({ one }) 
     references: [soapNotes.id],
   }),
 }));
+
+// ============================================
+// FORUM INTEGRATION TABLES
+// ============================================
+
+// Forum post status enum
+export const forumPostStatusEnum = pgEnum("forum_post_status", [
+  "draft",
+  "pending_review",
+  "published",
+  "archived",
+  "deleted"
+]);
+
+// Forum categories specific to clinical cases
+export const forumCategoryEnum = pgEnum("forum_category", [
+  "assessment_help",
+  "treatment_advice",
+  "differential_diagnosis",
+  "case_study",
+  "evidence_request",
+  "technique_question",
+  "red_flags",
+  "outcome_discussion"
+]);
+
+// Forum posts created from SOAP notes
+export const forumPosts = pgTable("forum_posts", {
+  id: serial("id").primaryKey(),
+  
+  // Link to original SOAP note (optional - can be null if deleted for privacy)
+  soapNoteId: integer("soap_note_id").references(() => soapNotes.id, { onDelete: "set null" }),
+  
+  // Author information
+  authorId: integer("author_id").notNull().references(() => users.id),
+  isAnonymous: boolean("is_anonymous").notNull().default(false),
+  
+  // Post content - de-identified and sanitized
+  title: text("title").notNull(),
+  category: forumCategoryEnum("category").notNull(),
+  bodyParts: text("body_parts").array().default([]), // Multiple body parts can be involved
+  
+  // Clinical presentation (de-identified)
+  clinicalPresentation: json("clinical_presentation").$type<{
+    chiefComplaint: string;
+    symptoms: string[];
+    duration: string; // e.g., "3 weeks" not specific dates
+    mechanism: string; // How injury occurred
+    aggravatingFactors: string[];
+    easingFactors: string[];
+  }>().notNull(),
+  
+  // Objective findings (de-identified)
+  objectiveFindings: json("objective_findings").$type<{
+    movementTests: Array<{
+      test: string;
+      result: string;
+      side?: 'left' | 'right' | 'bilateral';
+    }>;
+    specialTests: Array<{
+      test: string;
+      result: string;
+      significance: string;
+    }>;
+    palpation: string[];
+    otherFindings: string[];
+  }>(),
+  
+  // Assessment considerations
+  assessmentConsiderations: json("assessment_considerations").$type<{
+    differentialDiagnosis: string[];
+    workingDiagnosis: string;
+    clinicalReasoning: string;
+    redFlags: string[];
+  }>(),
+  
+  // Questions for the community
+  questionsForCommunity: text("questions_for_community").array().notNull().default([]),
+  
+  // Virtual patient link (if shared)
+  virtualPatientId: integer("virtual_patient_id").references(() => virtualPatients.id, { onDelete: "set null" }),
+  shareVirtualPatient: boolean("share_virtual_patient").notNull().default(false),
+  
+  // Moderation and status
+  status: forumPostStatusEnum("status").notNull().default("pending_review"),
+  moderatorNotes: text("moderator_notes"),
+  moderatedBy: integer("moderated_by").references(() => users.id),
+  moderatedAt: timestamp("moderated_at"),
+  
+  // Engagement metrics
+  viewCount: integer("view_count").notNull().default(0),
+  helpfulCount: integer("helpful_count").notNull().default(0),
+  
+  // Timestamps
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  publishedAt: timestamp("published_at"),
+});
+
+// Forum replies/comments
+export const forumReplies = pgTable("forum_replies", {
+  id: serial("id").primaryKey(),
+  
+  postId: integer("post_id").notNull().references(() => forumPosts.id, { onDelete: "cascade" }),
+  authorId: integer("author_id").notNull().references(() => users.id),
+  parentReplyId: integer("parent_reply_id").references(() => forumReplies.id), // For nested replies
+  
+  // Reply content
+  content: text("content").notNull(),
+  
+  // Clinical recommendations (if provided)
+  clinicalRecommendations: json("clinical_recommendations").$type<{
+    treatmentSuggestions: string[];
+    exerciseSuggestions: string[];
+    assessmentSuggestions: string[];
+    evidenceLinks: Array<{
+      title: string;
+      url: string;
+      summary: string;
+    }>;
+  }>(),
+  
+  // Expert verification
+  isExpertVerified: boolean("is_expert_verified").notNull().default(false),
+  expertCredentials: text("expert_credentials"), // e.g., "MSc Physiotherapy, 15 years experience"
+  
+  // Engagement
+  helpfulCount: integer("helpful_count").notNull().default(0),
+  
+  // Moderation
+  isModerated: boolean("is_moderated").notNull().default(false),
+  moderatedBy: integer("moderated_by").references(() => users.id),
+  moderatedAt: timestamp("moderated_at"),
+  
+  // Timestamps
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Track which users found posts/replies helpful
+export const forumHelpfulVotes = pgTable("forum_helpful_votes", {
+  id: serial("id").primaryKey(),
+  
+  userId: integer("user_id").notNull().references(() => users.id),
+  postId: integer("post_id").references(() => forumPosts.id, { onDelete: "cascade" }),
+  replyId: integer("reply_id").references(() => forumReplies.id, { onDelete: "cascade" }),
+  
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Forum post sanitization audit log
+export const forumSanitizationLogs = pgTable("forum_sanitization_logs", {
+  id: serial("id").primaryKey(),
+  
+  soapNoteId: integer("soap_note_id").references(() => soapNotes.id, { onDelete: "set null" }),
+  forumPostId: integer("forum_post_id").references(() => forumPosts.id, { onDelete: "cascade" }),
+  
+  // What was removed/changed
+  sanitizationActions: json("sanitization_actions").$type<Array<{
+    field: string;
+    action: 'removed' | 'replaced' | 'generalized';
+    originalSnippet?: string; // Small snippet for audit
+    replacedWith?: string;
+  }>>().notNull(),
+  
+  // Compliance check
+  hipaaCompliant: boolean("hipaa_compliant").notNull().default(true),
+  gdprCompliant: boolean("gdpr_compliant").notNull().default(true),
+  
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Insert schemas for forum tables
+export const insertForumPostSchema = createInsertSchema(forumPosts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  viewCount: true,
+  helpfulCount: true,
+});
+
+export const insertForumReplySchema = createInsertSchema(forumReplies).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  helpfulCount: true,
+});
+
+export const insertForumHelpfulVoteSchema = createInsertSchema(forumHelpfulVotes).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertForumSanitizationLogSchema = createInsertSchema(forumSanitizationLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+// Types for forum tables
+export type ForumPost = typeof forumPosts.$inferSelect;
+export type InsertForumPost = z.infer<typeof insertForumPostSchema>;
+
+export type ForumReply = typeof forumReplies.$inferSelect;
+export type InsertForumReply = z.infer<typeof insertForumReplySchema>;
+
+export type ForumHelpfulVote = typeof forumHelpfulVotes.$inferSelect;
+export type InsertForumHelpfulVote = z.infer<typeof insertForumHelpfulVoteSchema>;
+
+export type ForumSanitizationLog = typeof forumSanitizationLogs.$inferSelect;
+export type InsertForumSanitizationLog = z.infer<typeof insertForumSanitizationLogSchema>;
+
+// Relations for forum tables
+export const forumPostRelations = relations(forumPosts, ({ one, many }) => ({
+  soapNote: one(soapNotes, {
+    fields: [forumPosts.soapNoteId],
+    references: [soapNotes.id],
+  }),
+  author: one(users, {
+    fields: [forumPosts.authorId],
+    references: [users.id],
+  }),
+  virtualPatient: one(virtualPatients, {
+    fields: [forumPosts.virtualPatientId],
+    references: [virtualPatients.id],
+  }),
+  replies: many(forumReplies),
+  helpfulVotes: many(forumHelpfulVotes),
+  sanitizationLogs: many(forumSanitizationLogs),
+}));
+
+export const forumReplyRelations = relations(forumReplies, ({ one, many }) => ({
+  post: one(forumPosts, {
+    fields: [forumReplies.postId],
+    references: [forumPosts.id],
+  }),
+  author: one(users, {
+    fields: [forumReplies.authorId],
+    references: [users.id],
+  }),
+  parentReply: one(forumReplies, {
+    fields: [forumReplies.parentReplyId],
+    references: [forumReplies.id],
+  }),
+  childReplies: many(forumReplies),
+  helpfulVotes: many(forumHelpfulVotes),
+}));
+
+export const forumHelpfulVoteRelations = relations(forumHelpfulVotes, ({ one }) => ({
+  user: one(users, {
+    fields: [forumHelpfulVotes.userId],
+    references: [users.id],
+  }),
+  post: one(forumPosts, {
+    fields: [forumHelpfulVotes.postId],
+    references: [forumPosts.id],
+  }),
+  reply: one(forumReplies, {
+    fields: [forumHelpfulVotes.replyId],
+    references: [forumReplies.id],
+  }),
+}));
+
+export const forumSanitizationLogRelations = relations(forumSanitizationLogs, ({ one }) => ({
+  soapNote: one(soapNotes, {
+    fields: [forumSanitizationLogs.soapNoteId],
+    references: [soapNotes.id],
+  }),
+  forumPost: one(forumPosts, {
+    fields: [forumSanitizationLogs.forumPostId],
+    references: [forumPosts.id],
+  }),
+}));

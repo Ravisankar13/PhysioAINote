@@ -84,6 +84,18 @@ import {
   treatmentOutcomes,
   type TreatmentOutcome,
   type InsertTreatmentOutcome,
+  forumPosts,
+  type ForumPost,
+  type InsertForumPost,
+  forumReplies,
+  type ForumReply,
+  type InsertForumReply,
+  forumHelpfulVotes,
+  type ForumHelpfulVote,
+  type InsertForumHelpfulVote,
+  forumSanitizationLogs,
+  type ForumSanitizationLog,
+  type InsertForumSanitizationLog,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, isNull, sql, ilike } from "drizzle-orm";
@@ -426,6 +438,41 @@ export interface IStorage {
   createTreatmentOutcome(outcome: InsertTreatmentOutcome): Promise<TreatmentOutcome>;
   getTreatmentOutcomes(caseId?: number, soapNoteId?: number): Promise<TreatmentOutcome[]>;
   updateTreatmentOutcome(id: number, data: Partial<InsertTreatmentOutcome>): Promise<TreatmentOutcome>;
+  
+  // Forum Operations
+  createForumPost(post: InsertForumPost): Promise<ForumPost>;
+  getForumPost(id: number): Promise<ForumPost | undefined>;
+  getForumPosts(params: {
+    category?: string;
+    bodyPart?: string;
+    status?: string;
+    authorId?: number;
+    page: number;
+    limit: number;
+  }): Promise<{ posts: ForumPost[]; total: number }>;
+  getUserForumPosts(userId: number): Promise<ForumPost[]>;
+  updateForumPost(id: number, data: Partial<InsertForumPost>): Promise<ForumPost>;
+  deleteForumPost(id: number): Promise<void>;
+  incrementForumPostViewCount(id: number): Promise<void>;
+  incrementForumPostHelpfulCount(id: number): Promise<void>;
+  searchForumPosts(params: {
+    query: string;
+    category?: string;
+    bodyPart?: string;
+    hasRedFlags?: boolean;
+  }): Promise<ForumPost[]>;
+  
+  // Forum Reply Operations
+  createForumReply(reply: InsertForumReply): Promise<ForumReply>;
+  getForumReplies(postId: number): Promise<ForumReply[]>;
+  incrementForumReplyHelpfulCount(id: number): Promise<void>;
+  
+  // Forum Helpful Vote Operations
+  createForumHelpfulVote(vote: InsertForumHelpfulVote): Promise<ForumHelpfulVote>;
+  getForumHelpfulVote(userId: number, postId?: number, replyId?: number): Promise<ForumHelpfulVote | undefined>;
+  
+  // Forum Sanitization Log Operations
+  createForumSanitizationLog(log: InsertForumSanitizationLog): Promise<ForumSanitizationLog>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2838,6 +2885,303 @@ export class DatabaseStorage implements IStorage {
       return result[0];
     } catch (error) {
       console.error("Error updating treatment outcome:", error);
+      throw error;
+    }
+  }
+
+  // Forum Operations
+  async createForumPost(post: InsertForumPost): Promise<ForumPost> {
+    try {
+      const result = await db
+        .insert(forumPosts)
+        .values(post)
+        .returning();
+      
+      return result[0];
+    } catch (error) {
+      console.error("Error creating forum post:", error);
+      throw error;
+    }
+  }
+
+  async getForumPost(id: number): Promise<ForumPost | undefined> {
+    try {
+      const result = await db
+        .select()
+        .from(forumPosts)
+        .where(eq(forumPosts.id, id));
+      
+      return result[0];
+    } catch (error) {
+      console.error("Error fetching forum post:", error);
+      throw error;
+    }
+  }
+
+  async getForumPosts(params: {
+    category?: string;
+    bodyPart?: string;
+    status?: string;
+    authorId?: number;
+    page: number;
+    limit: number;
+  }): Promise<{ posts: ForumPost[]; total: number }> {
+    try {
+      let conditions = [];
+      
+      if (params.category) {
+        conditions.push(eq(forumPosts.category, params.category as any));
+      }
+      
+      if (params.bodyPart) {
+        conditions.push(sql`${params.bodyPart} = ANY(${forumPosts.bodyParts})`);
+      }
+      
+      if (params.status) {
+        conditions.push(eq(forumPosts.status, params.status as any));
+      }
+      
+      if (params.authorId) {
+        conditions.push(eq(forumPosts.authorId, params.authorId));
+      }
+      
+      // Get total count
+      const countQuery = db
+        .select({ count: sql<number>`count(*)` })
+        .from(forumPosts);
+      
+      if (conditions.length > 0) {
+        countQuery.where(and(...conditions));
+      }
+      
+      const countResult = await countQuery;
+      const total = countResult[0]?.count || 0;
+      
+      // Get paginated posts
+      let query = db.select().from(forumPosts);
+      
+      if (conditions.length > 0) {
+        query = query.where(and(...conditions));
+      }
+      
+      const posts = await query
+        .orderBy(desc(forumPosts.createdAt))
+        .limit(params.limit)
+        .offset((params.page - 1) * params.limit);
+      
+      return { posts, total };
+    } catch (error) {
+      console.error("Error fetching forum posts:", error);
+      throw error;
+    }
+  }
+
+  async getUserForumPosts(userId: number): Promise<ForumPost[]> {
+    try {
+      return await db
+        .select()
+        .from(forumPosts)
+        .where(eq(forumPosts.authorId, userId))
+        .orderBy(desc(forumPosts.createdAt));
+    } catch (error) {
+      console.error("Error fetching user forum posts:", error);
+      throw error;
+    }
+  }
+
+  async updateForumPost(id: number, data: Partial<InsertForumPost>): Promise<ForumPost> {
+    try {
+      const result = await db
+        .update(forumPosts)
+        .set({
+          ...data,
+          updatedAt: new Date()
+        })
+        .where(eq(forumPosts.id, id))
+        .returning();
+      
+      return result[0];
+    } catch (error) {
+      console.error("Error updating forum post:", error);
+      throw error;
+    }
+  }
+
+  async deleteForumPost(id: number): Promise<void> {
+    try {
+      await db
+        .delete(forumPosts)
+        .where(eq(forumPosts.id, id));
+    } catch (error) {
+      console.error("Error deleting forum post:", error);
+      throw error;
+    }
+  }
+
+  async incrementForumPostViewCount(id: number): Promise<void> {
+    try {
+      await db
+        .update(forumPosts)
+        .set({
+          viewCount: sql`${forumPosts.viewCount} + 1`
+        })
+        .where(eq(forumPosts.id, id));
+    } catch (error) {
+      console.error("Error incrementing forum post view count:", error);
+      throw error;
+    }
+  }
+
+  async incrementForumPostHelpfulCount(id: number): Promise<void> {
+    try {
+      await db
+        .update(forumPosts)
+        .set({
+          helpfulCount: sql`${forumPosts.helpfulCount} + 1`
+        })
+        .where(eq(forumPosts.id, id));
+    } catch (error) {
+      console.error("Error incrementing forum post helpful count:", error);
+      throw error;
+    }
+  }
+
+  async searchForumPosts(params: {
+    query: string;
+    category?: string;
+    bodyPart?: string;
+    hasRedFlags?: boolean;
+  }): Promise<ForumPost[]> {
+    try {
+      let conditions = [];
+      
+      // Add text search condition
+      conditions.push(
+        or(
+          ilike(forumPosts.title, `%${params.query}%`),
+          sql`${forumPosts.questionsForCommunity}::text ILIKE '%${params.query}%'`
+        )
+      );
+      
+      if (params.category) {
+        conditions.push(eq(forumPosts.category, params.category as any));
+      }
+      
+      if (params.bodyPart) {
+        conditions.push(sql`${params.bodyPart} = ANY(${forumPosts.bodyParts})`);
+      }
+      
+      if (params.hasRedFlags) {
+        conditions.push(sql`jsonb_array_length((${forumPosts.assessmentConsiderations}->'redFlags')::jsonb) > 0`);
+      }
+      
+      // Only show published posts in search
+      conditions.push(eq(forumPosts.status, 'published'));
+      
+      return await db
+        .select()
+        .from(forumPosts)
+        .where(and(...conditions))
+        .orderBy(desc(forumPosts.helpfulCount), desc(forumPosts.createdAt))
+        .limit(50);
+    } catch (error) {
+      console.error("Error searching forum posts:", error);
+      throw error;
+    }
+  }
+
+  // Forum Reply Operations
+  async createForumReply(reply: InsertForumReply): Promise<ForumReply> {
+    try {
+      const result = await db
+        .insert(forumReplies)
+        .values(reply)
+        .returning();
+      
+      return result[0];
+    } catch (error) {
+      console.error("Error creating forum reply:", error);
+      throw error;
+    }
+  }
+
+  async getForumReplies(postId: number): Promise<ForumReply[]> {
+    try {
+      return await db
+        .select()
+        .from(forumReplies)
+        .where(eq(forumReplies.postId, postId))
+        .orderBy(forumReplies.createdAt);
+    } catch (error) {
+      console.error("Error fetching forum replies:", error);
+      throw error;
+    }
+  }
+
+  async incrementForumReplyHelpfulCount(id: number): Promise<void> {
+    try {
+      await db
+        .update(forumReplies)
+        .set({
+          helpfulCount: sql`${forumReplies.helpfulCount} + 1`
+        })
+        .where(eq(forumReplies.id, id));
+    } catch (error) {
+      console.error("Error incrementing forum reply helpful count:", error);
+      throw error;
+    }
+  }
+
+  // Forum Helpful Vote Operations
+  async createForumHelpfulVote(vote: InsertForumHelpfulVote): Promise<ForumHelpfulVote> {
+    try {
+      const result = await db
+        .insert(forumHelpfulVotes)
+        .values(vote)
+        .returning();
+      
+      return result[0];
+    } catch (error) {
+      console.error("Error creating forum helpful vote:", error);
+      throw error;
+    }
+  }
+
+  async getForumHelpfulVote(userId: number, postId?: number, replyId?: number): Promise<ForumHelpfulVote | undefined> {
+    try {
+      let conditions = [eq(forumHelpfulVotes.userId, userId)];
+      
+      if (postId) {
+        conditions.push(eq(forumHelpfulVotes.postId, postId));
+      }
+      
+      if (replyId) {
+        conditions.push(eq(forumHelpfulVotes.replyId, replyId));
+      }
+      
+      const result = await db
+        .select()
+        .from(forumHelpfulVotes)
+        .where(and(...conditions));
+      
+      return result[0];
+    } catch (error) {
+      console.error("Error fetching forum helpful vote:", error);
+      throw error;
+    }
+  }
+
+  // Forum Sanitization Log Operations
+  async createForumSanitizationLog(log: InsertForumSanitizationLog): Promise<ForumSanitizationLog> {
+    try {
+      const result = await db
+        .insert(forumSanitizationLogs)
+        .values(log)
+        .returning();
+      
+      return result[0];
+    } catch (error) {
+      console.error("Error creating forum sanitization log:", error);
       throw error;
     }
   }

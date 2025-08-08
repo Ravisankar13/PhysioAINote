@@ -6149,11 +6149,287 @@ Respond with only a number between 1-100 representing the relevance score.`;
     }
   });
 
+  // ==========================================
+  // FORUM INTEGRATION ROUTES  
+  // ==========================================
+  
+  // Sanitize SOAP note for forum posting
+  app.post("/api/forum/sanitize-soap", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { soapData, specificQuestions } = req.body;
+      
+      if (!soapData || !soapData.subjective || !soapData.objective || !soapData.assessment || !soapData.plan) {
+        return res.status(400).json({ error: "Invalid SOAP data provided" });
+      }
+      
+      // Sanitize the SOAP note for forum posting
+      const sanitizedPost = await ForumSanitizationService.sanitizeSoapForForum(
+        soapData,
+        specificQuestions
+      );
+      
+      // Generate preview
+      const preview = await ForumSanitizationService.generateForumPreview(sanitizedPost);
+      
+      // Validate privacy compliance
+      const isCompliant = ForumSanitizationService.validatePrivacyCompliance(preview);
+      
+      res.json({
+        sanitizedPost,
+        preview,
+        isCompliant,
+        requiresModeration: !isCompliant || sanitizedPost.assessmentConsiderations.redFlags.length > 0
+      });
+    } catch (error) {
+      console.error("Error sanitizing SOAP for forum:", error);
+      res.status(500).json({ error: "Failed to sanitize SOAP note for forum" });
+    }
+  });
+  
+  // Create forum post from sanitized SOAP
+  app.post("/api/forum/posts", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user!.id;
+      const { 
+        sanitizedPost, 
+        soapNoteId, 
+        virtualPatientId, 
+        shareVirtualPatient,
+        isAnonymous 
+      } = req.body;
+      
+      // Create forum post
+      const postData = {
+        soapNoteId: soapNoteId || null,
+        authorId: userId,
+        isAnonymous: isAnonymous || false,
+        title: sanitizedPost.title,
+        category: sanitizedPost.category,
+        bodyParts: sanitizedPost.bodyParts,
+        clinicalPresentation: sanitizedPost.clinicalPresentation,
+        objectiveFindings: sanitizedPost.objectiveFindings,
+        assessmentConsiderations: sanitizedPost.assessmentConsiderations,
+        questionsForCommunity: sanitizedPost.questionsForCommunity,
+        virtualPatientId: shareVirtualPatient ? virtualPatientId : null,
+        shareVirtualPatient: shareVirtualPatient || false,
+        status: sanitizedPost.assessmentConsiderations.redFlags?.length > 0 ? 'pending_review' : 'published',
+        publishedAt: sanitizedPost.assessmentConsiderations.redFlags?.length > 0 ? null : new Date()
+      };
+      
+      const forumPost = await storage.createForumPost(postData);
+      
+      // Create sanitization log
+      if (soapNoteId && sanitizedPost.sanitizationActions) {
+        await storage.createForumSanitizationLog({
+          soapNoteId,
+          forumPostId: forumPost.id,
+          sanitizationActions: sanitizedPost.sanitizationActions,
+          hipaaCompliant: true,
+          gdprCompliant: true
+        });
+      }
+      
+      res.json({
+        message: "Forum post created successfully",
+        postId: forumPost.id,
+        status: forumPost.status
+      });
+    } catch (error) {
+      console.error("Error creating forum post:", error);
+      res.status(500).json({ error: "Failed to create forum post" });
+    }
+  });
+  
+  // Get forum posts
+  app.get("/api/forum/posts", async (req: Request, res: Response) => {
+    try {
+      const { category, bodyPart, status, authorId, page = 1, limit = 20 } = req.query;
+      
+      const posts = await storage.getForumPosts({
+        category: category as string,
+        bodyPart: bodyPart as string, 
+        status: status as string || 'published',
+        authorId: authorId ? parseInt(authorId as string) : undefined,
+        page: parseInt(page as string),
+        limit: parseInt(limit as string)
+      });
+      
+      res.json(posts);
+    } catch (error) {
+      console.error("Error fetching forum posts:", error);
+      res.status(500).json({ error: "Failed to fetch forum posts" });
+    }
+  });
+  
+  // Get single forum post
+  app.get("/api/forum/posts/:id", async (req: Request, res: Response) => {
+    try {
+      const postId = parseInt(req.params.id);
+      const post = await storage.getForumPost(postId);
+      
+      if (!post) {
+        return res.status(404).json({ error: "Forum post not found" });
+      }
+      
+      // Increment view count
+      await storage.incrementForumPostViewCount(postId);
+      
+      res.json(post);
+    } catch (error) {
+      console.error("Error fetching forum post:", error);
+      res.status(500).json({ error: "Failed to fetch forum post" });
+    }
+  });
+  
+  // Create forum reply
+  app.post("/api/forum/posts/:id/replies", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const postId = parseInt(req.params.id);
+      const userId = req.user!.id;
+      const { 
+        content, 
+        clinicalRecommendations,
+        parentReplyId,
+        isExpertVerified,
+        expertCredentials
+      } = req.body;
+      
+      if (!content) {
+        return res.status(400).json({ error: "Reply content is required" });
+      }
+      
+      const reply = await storage.createForumReply({
+        postId,
+        authorId: userId,
+        parentReplyId: parentReplyId || null,
+        content,
+        clinicalRecommendations: clinicalRecommendations || null,
+        isExpertVerified: isExpertVerified || false,
+        expertCredentials: expertCredentials || null
+      });
+      
+      res.json(reply);
+    } catch (error) {
+      console.error("Error creating forum reply:", error);
+      res.status(500).json({ error: "Failed to create forum reply" });
+    }
+  });
+  
+  // Get forum replies
+  app.get("/api/forum/posts/:id/replies", async (req: Request, res: Response) => {
+    try {
+      const postId = parseInt(req.params.id);
+      const replies = await storage.getForumReplies(postId);
+      res.json(replies);
+    } catch (error) {
+      console.error("Error fetching forum replies:", error);
+      res.status(500).json({ error: "Failed to fetch forum replies" });
+    }
+  });
+  
+  // Vote helpful on post or reply
+  app.post("/api/forum/helpful", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user!.id;
+      const { postId, replyId } = req.body;
+      
+      if (!postId && !replyId) {
+        return res.status(400).json({ error: "Either postId or replyId is required" });
+      }
+      
+      // Check if user already voted
+      const existingVote = await storage.getForumHelpfulVote(userId, postId, replyId);
+      if (existingVote) {
+        return res.status(400).json({ error: "You have already marked this as helpful" });
+      }
+      
+      // Create vote
+      await storage.createForumHelpfulVote({
+        userId,
+        postId: postId || null,
+        replyId: replyId || null
+      });
+      
+      // Update helpful count
+      if (postId) {
+        await storage.incrementForumPostHelpfulCount(postId);
+      } else if (replyId) {
+        await storage.incrementForumReplyHelpfulCount(replyId);
+      }
+      
+      res.json({ message: "Marked as helpful" });
+    } catch (error) {
+      console.error("Error marking as helpful:", error);
+      res.status(500).json({ error: "Failed to mark as helpful" });
+    }
+  });
+  
+  // Search forum posts
+  app.get("/api/forum/search", async (req: Request, res: Response) => {
+    try {
+      const { q, category, bodyPart, hasRedFlags } = req.query;
+      
+      if (!q) {
+        return res.status(400).json({ error: "Search query is required" });
+      }
+      
+      const results = await storage.searchForumPosts({
+        query: q as string,
+        category: category as string,
+        bodyPart: bodyPart as string,
+        hasRedFlags: hasRedFlags === 'true'
+      });
+      
+      res.json(results);
+    } catch (error) {
+      console.error("Error searching forum posts:", error);
+      res.status(500).json({ error: "Failed to search forum posts" });
+    }
+  });
+  
+  // Get my forum posts
+  app.get("/api/forum/my-posts", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user!.id;
+      const posts = await storage.getUserForumPosts(userId);
+      res.json(posts);
+    } catch (error) {
+      console.error("Error fetching user forum posts:", error);
+      res.status(500).json({ error: "Failed to fetch your forum posts" });
+    }
+  });
+  
+  // Delete forum post (only author can delete)
+  app.delete("/api/forum/posts/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const postId = parseInt(req.params.id);
+      const userId = req.user!.id;
+      
+      const post = await storage.getForumPost(postId);
+      if (!post) {
+        return res.status(404).json({ error: "Forum post not found" });
+      }
+      
+      if (post.authorId !== userId) {
+        return res.status(403).json({ error: "You can only delete your own posts" });
+      }
+      
+      await storage.deleteForumPost(postId);
+      res.json({ message: "Forum post deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting forum post:", error);
+      res.status(500).json({ error: "Failed to delete forum post" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   // Import realtime virtual patient service
   const { RealtimeVirtualPatientService } = await import('./services/realtimeVirtualPatientService');
   const realtimeVPService = RealtimeVirtualPatientService.getInstance();
+  
+  // Import forum sanitization service
+  const { ForumSanitizationService } = await import('./services/forumSanitizationService');
 
   // Real-time AI WebSocket Server for SOAP Notes
   const wss = new WebSocketServer({ server: httpServer, path: '/ws/soap-ai' });

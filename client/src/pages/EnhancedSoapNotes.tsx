@@ -470,18 +470,6 @@ export default function EnhancedSoapNotesPage() {
     setIsWebSocketConnected(true);
   }, []);
 
-  // Trigger evidence generation when transcript changes significantly
-  useEffect(() => {
-    if (realTimeTranscript && realTimeTranscript.length > 100) {
-      // Generate evidence articles with a debounce
-      const timer = setTimeout(() => {
-        generateEvidenceArticles();
-      }, 5000); // 5 second delay
-      
-      return () => clearTimeout(timer);
-    }
-  }, [realTimeTranscript, generateEvidenceArticles]);
-
   // Timer effect - properly handle recording time updates
   useEffect(() => {
     if (isRecording && recordingStartTime) {
@@ -1014,6 +1002,18 @@ export default function EnhancedSoapNotesPage() {
       setIsLoadingEvidence(false);
     }
   }, [realTimeTranscript, soapSections]);
+
+  // Trigger evidence generation when transcript changes significantly
+  useEffect(() => {
+    if (realTimeTranscript && realTimeTranscript.length > 100) {
+      // Generate evidence articles with a debounce
+      const timer = setTimeout(() => {
+        generateEvidenceArticles();
+      }, 5000); // 5 second delay
+      
+      return () => clearTimeout(timer);
+    }
+  }, [realTimeTranscript, generateEvidenceArticles]);
 
   const generateTimeOffWork = async () => {
     try {

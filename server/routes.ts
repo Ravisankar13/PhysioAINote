@@ -3296,6 +3296,27 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
   
+  // Evidence Articles Route - Get relevant research based on SOAP content
+  app.post("/api/soap-notes/evidence-articles", async (req: Request, res: Response) => {
+    try {
+      const { transcript, soapSections } = req.body;
+      
+      // Import the evidence service
+      const { getRelevantEvidence } = await import('./services/evidenceArticlesService.js');
+      
+      // Get relevant evidence articles
+      const articles = await getRelevantEvidence(transcript, soapSections);
+      
+      res.json({ articles });
+    } catch (error) {
+      console.error("Error fetching evidence articles:", error);
+      res.status(500).json({ 
+        error: 'Failed to fetch evidence articles',
+        articles: [] 
+      });
+    }
+  });
+  
   // Virtual Patient Config Routes
   
   // Get all virtual patient configs for user

@@ -6430,6 +6430,9 @@ Respond with only a number between 1-100 representing the relevance score.`;
   
   // Import forum sanitization service
   const { ForumSanitizationService } = await import('./services/forumSanitizationService');
+  
+  // Import realtime document service
+  const { realtimeDocumentService } = await import('./services/realtimeDocumentService');
 
   // Real-time AI WebSocket Server for SOAP Notes
   const wss = new WebSocketServer({ server: httpServer, path: '/ws/soap-ai' });
@@ -6462,7 +6465,7 @@ Respond with only a number between 1-100 representing the relevance score.`;
           await realTimeAIService.generateSuggestions(data.context, parseInt(userId), sessionId);
         }
         
-        // Handle transcript updates for virtual patient
+        // Handle transcript updates for virtual patient and document generation
         if (data.type === 'transcript_update' && data.transcript) {
           // Analyze transcript for clinical parameters
           const clinicalParams = await realtimeVPService.analyzeTranscriptForParameters(data.transcript);
@@ -6473,6 +6476,55 @@ Respond with only a number between 1-100 representing the relevance score.`;
             parameters: realtimeVPService.toModelConfig(),
             timestamp: new Date().toISOString()
           }));
+          
+          // Detect document generation triggers
+          const detectedDocTypes = realtimeDocumentService.detectDocumentTriggers(data.transcript);
+          
+          // Generate documents for each detected type
+          for (const docType of detectedDocTypes) {
+            // Send immediate notification that document generation started
+            ws.send(JSON.stringify({
+              type: 'document_generation_started',
+              documentType: docType,
+              timestamp: new Date().toISOString()
+            }));
+            
+            // Generate document asynchronously
+            realtimeDocumentService.generateDocument({
+              type: docType as any,
+              soapData: data.soapSections || {
+                subjective: '',
+                objective: '',
+                assessment: '',
+                plan: ''
+              },
+              patientInfo: data.patientInfo,
+              sessionId: sessionId,
+              userId: parseInt(userId)
+            }).then(document => {
+              // Send document ready notification
+              ws.send(JSON.stringify({
+                type: 'document_ready',
+                document: {
+                  id: document.id,
+                  type: document.type,
+                  filename: document.filename,
+                  status: document.status,
+                  wordPath: document.wordPath,
+                  error: document.error
+                },
+                timestamp: new Date().toISOString()
+              }));
+            }).catch(error => {
+              console.error('Document generation error:', error);
+              ws.send(JSON.stringify({
+                type: 'document_error',
+                documentType: docType,
+                error: error.message,
+                timestamp: new Date().toISOString()
+              }));
+            });
+          }
         }
         
         // Handle reset request
@@ -6495,6 +6547,46 @@ Respond with only a number between 1-100 representing the relevance score.`;
   });
 
   console.log('🔗 Real-time AI WebSocket server started on /ws/soap-ai');
+  
+  // Document download endpoint
+  app.get('/api/documents/download/:documentId', async (req, res) => {
+    try {
+      const { documentId } = req.params;
+      const sessionId = req.query.sessionId as string;
+      
+      if (!sessionId) {
+        return res.status(400).json({ error: 'Session ID required' });
+      }
+      
+      // Get document from service
+      const documents = realtimeDocumentService.getSessionDocuments(sessionId);
+      const document = documents.find(d => d.id === documentId);
+      
+      if (!document || !document.wordPath) {
+        return res.status(404).json({ error: 'Document not found' });
+      }
+      
+      // Check if file exists
+      const fs = await import('fs/promises');
+      try {
+        await fs.access(document.wordPath);
+      } catch {
+        return res.status(404).json({ error: 'Document file not found' });
+      }
+      
+      // Set headers for download
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+      res.setHeader('Content-Disposition', `attachment; filename="${document.filename}.docx"`);
+      
+      // Stream the file
+      const createReadStream = (await import('fs')).createReadStream;
+      const stream = createReadStream(document.wordPath);
+      stream.pipe(res);
+    } catch (error) {
+      console.error('Document download error:', error);
+      res.status(500).json({ error: 'Failed to download document' });
+    }
+  });
 
   // Tournament WebSocket Server for real-time 1v1 matches
   const tournamentWss = new WebSocketServer({ server: httpServer, path: '/ws/tournaments' });

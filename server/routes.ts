@@ -6151,6 +6151,10 @@ Respond with only a number between 1-100 representing the relevance score.`;
 
   const httpServer = createServer(app);
 
+  // Import realtime virtual patient service
+  const { RealtimeVirtualPatientService } = await import('./services/realtimeVirtualPatientService');
+  const realtimeVPService = RealtimeVirtualPatientService.getInstance();
+
   // Real-time AI WebSocket Server for SOAP Notes
   const wss = new WebSocketServer({ server: httpServer, path: '/ws/soap-ai' });
   
@@ -6170,6 +6174,9 @@ Respond with only a number between 1-100 representing the relevance score.`;
     // Add client to real-time AI service
     realTimeAIService.addClient(clientId, ws, parseInt(userId), sessionId);
     
+    // Reset virtual patient parameters for new session
+    realtimeVPService.resetParameters();
+    
     ws.on('message', async (message) => {
       try {
         const data = JSON.parse(message.toString());
@@ -6177,6 +6184,28 @@ Respond with only a number between 1-100 representing the relevance score.`;
         if (data.type === 'context_update') {
           // Generate suggestions when context is updated
           await realTimeAIService.generateSuggestions(data.context, parseInt(userId), sessionId);
+        }
+        
+        // Handle transcript updates for virtual patient
+        if (data.type === 'transcript_update' && data.transcript) {
+          // Analyze transcript for clinical parameters
+          const clinicalParams = await realtimeVPService.analyzeTranscriptForParameters(data.transcript);
+          
+          // Send virtual patient update to client
+          ws.send(JSON.stringify({
+            type: 'virtual_patient_update',
+            parameters: realtimeVPService.toModelConfig(),
+            timestamp: new Date().toISOString()
+          }));
+        }
+        
+        // Handle reset request
+        if (data.type === 'reset_virtual_patient') {
+          realtimeVPService.resetParameters();
+          ws.send(JSON.stringify({
+            type: 'virtual_patient_reset',
+            timestamp: new Date().toISOString()
+          }));
         }
       } catch (error) {
         console.error('Error processing WebSocket message:', error);

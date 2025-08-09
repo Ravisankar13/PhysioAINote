@@ -40,9 +40,8 @@ import AssessmentTemplates, { type AssessmentTemplate } from "@/components/clini
 import AssessmentForm, { type AssessmentResults } from "@/components/clinical/AssessmentForm";
 import EvidenceBasedProtocols from "@/components/clinical/EvidenceBasedProtocols";
 import EvidenceDisplay from "@/components/clinical/EvidenceDisplay";
-import ColorCodedContent from "@/components/clinical/ColorCodedContent";
-import ColorCodeLegend from "@/components/clinical/ColorCodeLegend";
 import VirtualPatientSidebar from "@/components/virtualPatient/VirtualPatientSidebar";
+import FormattedResponse from "@/components/clinical/FormattedResponse";
 
 // Error Boundary Component
 class ErrorBoundary extends Component<{children: React.ReactNode}, {hasError: boolean}> {
@@ -139,7 +138,6 @@ export default function PhysioGPT() {
   const [selectedVirtualPatient, setSelectedVirtualPatient] = useState<any | null>(null);
   const [virtualPatientCollapsed, setVirtualPatientCollapsed] = useState(false);
   const [evidenceData, setEvidenceData] = useState<Map<number, PhysioGptResponse>>(new Map());
-  const [showColorLegend, setShowColorLegend] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -670,29 +668,29 @@ Please provide:
                           : 'bg-white border border-gray-200'
                       }`}
                     >
-                      <div className="prose prose-sm max-w-none">
-                        {showColorLegend && msg.role === 'assistant' ? (
-                          <ColorCodedContent content={msg.content} />
-                        ) : (
-                          <p className={msg.role === 'user' ? 'text-white' : 'text-gray-800'}>
-                            {msg.content}
-                          </p>
-                        )}
-                      </div>
+                      {msg.role === 'assistant' ? (
+                        <FormattedResponse 
+                          content={msg.content}
+                          evidenceGrade={
+                            evidenceData.has(selectedConversationId!) && index === messages.length - 1
+                              ? evidenceData.get(selectedConversationId!)?.evidenceGrade
+                              : undefined
+                          }
+                          confidenceLevel={
+                            evidenceData.has(selectedConversationId!) && index === messages.length - 1
+                              ? evidenceData.get(selectedConversationId!)?.confidenceLevel
+                              : undefined
+                          }
+                        />
+                      ) : (
+                        <p className="text-white">
+                          {msg.content}
+                        </p>
+                      )}
                       <div className={`text-xs mt-2 ${msg.role === 'user' ? 'text-white/70' : 'text-gray-400'}`}>
                         {formatTime(msg.createdAt)}
                       </div>
                     </div>
-                    
-                    {msg.role === 'assistant' && evidenceData.has(selectedConversationId!) && index === messages.length - 1 && (
-                      <div className="mt-3">
-                        <EvidenceDisplay
-                          evidenceGrade={evidenceData.get(selectedConversationId!)?.evidenceGrade}
-                          confidenceLevel={evidenceData.get(selectedConversationId!)?.confidenceLevel}
-                          researchPapers={evidenceData.get(selectedConversationId!)?.researchPapers}
-                        />
-                      </div>
-                    )}
                   </div>
                   {msg.role === 'user' && (
                     <Avatar className="h-8 w-8 border-2 border-teal-200">

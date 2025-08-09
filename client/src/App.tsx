@@ -43,7 +43,6 @@ import SharedCaseFormPage from "@/pages/SharedCaseFormPage";
 import CaseStudyPage from "@/pages/CaseStudyPage";
 import AdminDashboard from "@/pages/admin-dashboard";
 import PhysioGPT from "@/pages/PhysioGPT";
-import PhysioGPTv2 from "@/pages/PhysioGPTv2";
 import TrialWelcome from "@/pages/TrialWelcome";
 import CompetitionPage from "@/pages/CompetitionPage";
 import CompetitionParticipationPage from "@/pages/CompetitionParticipationPage";
@@ -161,9 +160,6 @@ function Router() {
           </Route>
           <Route path="/physiogpt">
             <ProtectedRoute component={PhysioGPT} />
-          </Route>
-          <Route path="/physiogpt-v2">
-            <ProtectedRoute component={PhysioGPTv2} />
           </Route>
           <Route path="/membership" component={Membership} />
           <Route path="/about" component={About} />

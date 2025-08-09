@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { 
   MessageCircle, 
@@ -27,7 +28,9 @@ import {
   FileText,
   BookOpen,
   Stethoscope,
-  AlertTriangle
+  AlertTriangle,
+  Menu,
+  X
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -137,6 +140,7 @@ export default function PhysioGPT() {
   const [virtualPatientCollapsed, setVirtualPatientCollapsed] = useState(false);
   const [evidenceData, setEvidenceData] = useState<Map<number, PhysioGptResponse>>(new Map());
   const [showColorLegend, setShowColorLegend] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
@@ -158,31 +162,6 @@ export default function PhysioGPT() {
   // Extract messages from conversation data
   const messages = conversationData?.messages || [];
 
-  // Debug logging for state tracking
-  useEffect(() => {
-    console.log("selectedConversationId changed:", selectedConversationId);
-    console.log("Query enabled:", !!selectedConversationId);
-    console.log("loadingMessages:", loadingMessages);
-    if (selectedConversationId) {
-      console.log("Should be querying:", `/api/physiogpt/conversations/${selectedConversationId}`);
-    }
-  }, [selectedConversationId, loadingMessages]);
-
-  // Log conversation data when it changes
-  useEffect(() => {
-    if (conversationData) {
-      console.log("Conversation data fetched:", conversationData);
-      console.log("Messages in conversation:", conversationData?.messages?.length || 0);
-      console.log("loadingMessages state:", loadingMessages);
-      console.log("selectedConversationId:", selectedConversationId);
-      console.log("messages array length:", messages.length);
-      if (conversationData?.messages?.length > 0) {
-        console.log("First message:", conversationData.messages[0]);
-        console.log("Last message:", conversationData.messages[conversationData.messages.length - 1]);
-      }
-    }
-  }, [conversationData, loadingMessages]);
-
   // Load patient context from URL parameters
   useEffect(() => {
     const urlParams = new URLSearchParams(location.split('?')[1] || '');
@@ -200,11 +179,9 @@ export default function PhysioGPT() {
             bodyPart: patientData.body_part,
           });
           
-          // Set initial message with patient context
           const contextMessage = `I would like to discuss patient: ${patientData.patient_name}, a ${patientData.age}-year-old ${patientData.gender} with ${patientData.chief_complaint} affecting the ${patientData.body_part}.`;
           setMessage(contextMessage);
           
-          // Set relevant suggestions
           setSuggestions([
             `What assessment tests would you recommend for this ${patientData.body_part} condition?`,
             `What are the potential differential diagnoses?`,
@@ -232,20 +209,16 @@ export default function PhysioGPT() {
 
   // Virtual patient selection handler
   const handleVirtualPatientSelect = (patient: any) => {
-    console.log("Virtual patient selected:", patient);
     setSelectedVirtualPatient(patient);
     
-    // Set patient context for chat
     setPatientContext({
       patientId: patient.id,
       patientName: patient.patientName,
       bodyPart: patient.bodyPart,
     });
 
-    // Create a new conversation for this patient analysis
     handleNewConversation();
 
-    // Set initial message with comprehensive patient context
     const contextMessage = `Analyze virtual patient case using ${patient.expertFramework} methodology:
 
 Patient: ${patient.patientName}
@@ -261,7 +234,6 @@ Please provide assessment recommendations following ${patient.expertFramework} a
 
     setMessage(contextMessage);
 
-    // Set relevant suggestions based on the expert framework
     const frameworkSuggestions = {
       'jo-gibson': [
         "What shoulder assessment tests would Jo Gibson recommend?",
@@ -319,7 +291,6 @@ Please provide assessment recommendations following ${patient.expertFramework} a
   // Send message mutation
   const sendMessageMutation = useMutation({
     mutationFn: async (messageContent: string) => {
-      console.log("Sending message:", messageContent);
       const response = await apiRequest("POST", "/api/physiogpt/chat", {
         message: messageContent,
         conversationId: selectedConversationId,
@@ -344,37 +315,22 @@ Please provide assessment recommendations following ${patient.expertFramework} a
         } : undefined
       });
       const result = await response.json();
-      console.log("Response received:", result);
       return result;
     },
     onSuccess: (data: PhysioGptResponse) => {
-      console.log("Message sent successfully, conversation ID:", data.conversationId);
-      console.log("Setting selectedConversationId to:", data.conversationId);
-      
-      // Store evidence data if available
       if (data.evidenceSummary || data.researchPapers || data.evidenceGrade) {
         setEvidenceData(prev => new Map(prev.set(data.conversationId, data)));
-        console.log("Stored evidence data for conversation:", data.conversationId);
       }
       
-      // Set conversation ID first
       setSelectedConversationId(data.conversationId);
       setSuggestions(data.suggestions || []);
       setMessage("");
       
-      // Small delay to ensure state is updated before queries
       setTimeout(() => {
-        console.log("Invalidating conversation queries for ID:", data.conversationId);
-        
-        // Invalidate conversations list
         queryClient.invalidateQueries({ queryKey: ["/api/physiogpt/conversations"] });
-        
-        // Force invalidate and refetch the specific conversation
         queryClient.invalidateQueries({ 
           queryKey: [`/api/physiogpt/conversations/${data.conversationId}`] 
         });
-        
-        // Force refetch
         queryClient.refetchQueries({ 
           queryKey: [`/api/physiogpt/conversations/${data.conversationId}`] 
         });
@@ -411,542 +367,468 @@ Please provide assessment recommendations following ${patient.expertFramework} a
 
   const handleSendMessage = (messageContent?: string) => {
     const content = messageContent || message.trim();
-    console.log("handleSendMessage called with:", content);
     if (!content) {
-      console.log("No content, returning early");
       return;
     }
-
-    console.log("Calling sendMessageMutation.mutate");
     sendMessageMutation.mutate(content);
   };
 
   const handleNewConversation = () => {
     setSelectedConversationId(null);
     setSuggestions([]);
-  };
-
-  const handleDeleteConversation = (conversationId: number) => {
-    deleteConversationMutation.mutate(conversationId);
-  };
-
-  const handleAssessmentComplete = (results: any) => {
-    setAssessmentResults(results);
+    setMessage("");
+    setPatientContext(null);
+    setSelectedBodyRegion(null);
+    setSelectedBodyRegionName(null);
+    setAssessmentResults(null);
     setSelectedAssessmentTemplate(null);
-    
-    // Create a message with assessment results to share with PhysioGPT
-    const assessmentSummary = `Assessment completed: ${results.templateName}
-Score: ${results.score || 'N/A'}
-Interpretation: ${results.interpretation || 'See detailed responses'}
-Key findings: ${Object.entries(results.responses).map(([q, a]) => `${q}: ${a}`).join(', ')}
-Recommendations: ${results.recommendations?.join('; ') || 'Standard care protocol'}`;
-    
-    // Switch to chat tab and send assessment results
-    setActiveTab("chat");
-    handleSendMessage(`Based on this clinical assessment: ${assessmentSummary}. Please provide evidence-based treatment recommendations and next steps.`);
+    setSelectedVirtualPatient(null);
   };
 
-  const handleBodyRegionSelect = (region: string, displayName: string) => {
-    setSelectedBodyRegion(region);
+  const handleSelectConversation = (conversationId: number) => {
+    setSelectedConversationId(conversationId);
+    setAssessmentResults(null);
+    setSelectedAssessmentTemplate(null);
+  };
+
+  const handleDeleteConversation = (conversationId: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (confirm("Are you sure you want to delete this conversation?")) {
+      deleteConversationMutation.mutate(conversationId);
+    }
+  };
+
+  const handleBodyPartSelected = (bodyPartId: string, displayName: string) => {
+    setSelectedBodyRegion(bodyPartId);
     setSelectedBodyRegionName(displayName);
-    setShow3DPanel(false);
     
-    // Add anatomical context suggestion
-    const contextMessage = `I have a question about ${displayName}`;
-    setMessage(contextMessage);
     setSuggestions([
-      `What are common conditions affecting the ${displayName}?`,
-      `Assessment techniques for ${displayName} injuries`,
-      `Evidence-based treatment protocols for ${displayName}`,
-      `Red flags to screen for in ${displayName} pain`
+      `What are the common causes of ${displayName.toLowerCase()} pain?`,
+      `What assessment tests should I perform for ${displayName.toLowerCase()} issues?`,
+      `What are the red flags for ${displayName.toLowerCase()} conditions?`,
+      `What exercises would you recommend for ${displayName.toLowerCase()} rehabilitation?`
     ]);
+    
+    toast({
+      title: "Body Region Selected",
+      description: `Now focused on ${displayName} assessment and treatment`,
+    });
   };
 
-  const handleSuggestionClick = (suggestion: string) => {
-    setMessage(suggestion);
+  const handleTemplateSelect = (template: AssessmentTemplate) => {
+    setSelectedAssessmentTemplate(template);
+    setActiveTab("assessment");
   };
 
-  // Auto-scroll to bottom when new messages arrive
+  const handleAssessmentComplete = (results: AssessmentResults) => {
+    setAssessmentResults(results);
+    
+    const assessmentMessage = `Based on the assessment results:
+${results.findings.join(', ')}
+
+Please provide:
+1. Likely diagnosis
+2. Recommended treatment plan
+3. Key exercises
+4. Red flags to monitor`;
+
+    setMessage(assessmentMessage);
+    setActiveTab("chat");
+  };
+
   useEffect(() => {
-    if (shouldAutoScroll && messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (shouldAutoScroll && messages.length > 0) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
-  }, [conversationData, shouldAutoScroll]);
+  }, [messages, shouldAutoScroll]);
 
-  // Auto-select latest conversation when conversations load
-  useEffect(() => {
-    if (conversations.length > 0 && !selectedConversationId) {
-      setSelectedConversationId(conversations[0].id);
-    }
-  }, [conversations, selectedConversationId]);
-
-  const checkScrollPosition = () => {
-    if (scrollAreaRef.current) {
-      const { scrollTop, scrollHeight, clientHeight } = scrollAreaRef.current;
-      const isAtBottom = scrollTop + clientHeight >= scrollHeight - 50;
-      setShouldAutoScroll(isAtBottom);
-    }
+  const formatTime = (date: Date | string) => {
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    return dateObj.toLocaleTimeString('en-US', { 
+      hour: 'numeric', 
+      minute: '2-digit',
+      hour12: true 
+    });
   };
-
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-        <Card className="w-96">
-          <CardContent className="p-6 text-center">
-            <Brain className="h-12 w-12 text-blue-600 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold mb-2">PhysioGPT</h2>
-            <p className="text-muted-foreground mb-4">
-              Please log in to access your AI physiotherapy assistant.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      <div className="container mx-auto p-2 sm:p-4 lg:p-6">
-        <div className={`flex flex-col lg:grid gap-2 sm:gap-4 lg:gap-6 h-[calc(100vh-2rem)] sm:h-[calc(100vh-4rem)] lg:h-[calc(100vh-6rem)] ${
-          showVirtualPatients 
-            ? show3DPanel 
-              ? 'lg:grid-cols-5' 
-              : 'lg:grid-cols-4'
-            : show3DPanel 
-              ? 'lg:grid-cols-4' 
-              : 'lg:grid-cols-3'
-        }`}>
-          {/* Sidebar - Conversations */}
-          <div className="lg:col-span-1 h-48 lg:h-full">
-            <Card className="h-full flex flex-col">
-              <CardHeader className="flex-shrink-0 p-3 sm:p-6">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm sm:text-lg">Conversations</CardTitle>
-                  <Button
-                    onClick={handleNewConversation}
-                    size="sm"
-                    className="h-7 w-7 sm:h-8 sm:w-8 p-0"
-                  >
-                    <Plus className="h-3 w-3 sm:h-4 sm:w-4" />
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="flex-1 p-2 sm:p-4 overflow-hidden">
-                <ScrollArea className="h-full">
-                  {loadingConversations ? (
-                    <div className="space-y-2 sm:space-y-3">
-                      {[1, 2, 3].map((i) => (
-                        <div key={i} className="p-2 sm:p-3 rounded-lg border animate-pulse">
-                          <div className="h-3 sm:h-4 bg-gray-200 rounded mb-1 sm:mb-2" />
-                          <div className="h-2 sm:h-3 bg-gray-200 rounded w-2/3" />
-                        </div>
-                      ))}
-                    </div>
-                  ) : conversations.length === 0 ? (
-                    <div className="text-center py-4 sm:py-8">
-                      <MessageCircle className="mx-auto h-6 w-6 sm:h-8 sm:w-8 text-gray-400 mb-2" />
-                      <p className="text-xs sm:text-sm text-muted-foreground">
-                        No conversations yet
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="space-y-1 sm:space-y-2">
-                      {conversations.map((conversation) => (
-                        <div
-                          key={conversation.id}
-                          className={`group p-2 sm:p-3 rounded-lg cursor-pointer transition-colors ${
-                            selectedConversationId === conversation.id
-                              ? "bg-blue-50 border-blue-200"
-                              : "hover:bg-gray-50"
-                          }`}
-                          onClick={() => setSelectedConversationId(conversation.id)}
-                        >
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium text-xs sm:text-sm truncate">
-                                {conversation.title}
-                              </p>
-                              <div className="flex items-center gap-1 mt-0.5 sm:mt-1">
-                                <Clock className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-gray-400" />
-                                <span className="text-xs text-muted-foreground">
-                                  {new Date(conversation.updatedAt).toLocaleDateString()}
-                                </span>
-                              </div>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-5 w-5 sm:h-6 sm:w-6 p-0 opacity-0 group-hover:opacity-100 lg:opacity-100"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteConversation(conversation.id);
-                              }}
-                            >
-                              <Trash2 className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </ScrollArea>
-              </CardContent>
-            </Card>
+    <div className="flex h-[calc(100vh-4rem)] bg-gradient-to-br from-gray-50 via-white to-gray-50">
+      {/* Collapsible Sidebar */}
+      <div className={`${sidebarCollapsed ? 'w-0' : 'w-80'} transition-all duration-300 ease-in-out overflow-hidden border-r border-teal-100 bg-white/95 backdrop-blur-sm`}>
+        <div className="p-4 h-full flex flex-col">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-gradient-to-br from-teal-500 to-teal-600 rounded-lg">
+                <Brain className="h-5 w-5 text-white" />
+              </div>
+              <h2 className="text-lg font-semibold bg-gradient-to-r from-teal-600 to-teal-700 bg-clip-text text-transparent">
+                AI Assistant
+              </h2>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setSidebarCollapsed(true)}
+              className="hover:bg-teal-50 text-teal-600"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
           </div>
 
-          {/* Main Interface with Tabs */}
-          <div className={`${
-            showVirtualPatients 
-              ? show3DPanel 
-                ? 'lg:col-span-2' 
-                : 'lg:col-span-2'
-              : show3DPanel 
-                ? 'lg:col-span-2' 
-                : 'lg:col-span-2'
-          } transition-all flex-1 lg:flex-initial`}>
-            <Card className="h-full flex flex-col">
-              <CardHeader className="flex-shrink-0 p-3 sm:p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 sm:gap-3">
-                    <div className="p-1.5 sm:p-2 bg-blue-100 rounded-lg">
-                      <Brain className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
-                    </div>
-                    <div className="min-w-0">
-                      <CardTitle className="flex items-center gap-1 sm:gap-2 text-sm sm:text-base">
-                        PhysioGPT
-                        <Badge variant="secondary" className="text-xs hidden sm:inline-flex">
-                          Clinical AI Assistant
-                        </Badge>
-                      </CardTitle>
-                      <p className="text-xs sm:text-sm text-muted-foreground hidden sm:block">
-                        Evidence-based physiotherapy guidance and clinical assessments
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-1 sm:gap-2">
-                    {patientContext && (
-                      <Badge variant="default" className="text-xs bg-green-600 hidden sm:inline-flex">
-                        Patient: {patientContext.patientName} ({patientContext.bodyPart})
-                      </Badge>
-                    )}
-                    {selectedBodyRegionName && !patientContext && (
-                      <Badge variant="outline" className="text-xs hidden sm:inline-flex">
-                        Context: {selectedBodyRegionName}
-                      </Badge>
-                    )}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowVirtualPatients(!showVirtualPatients)}
-                      className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm h-7 sm:h-8"
-                    >
-                      <User className="h-3 w-3 sm:h-4 sm:w-4" />
-                      <span className="hidden sm:inline">{showVirtualPatients ? 'Hide' : 'Show'} Patients</span>
-                      <span className="sm:hidden">VP</span>
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShow3DPanel(!show3DPanel)}
-                      className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm h-7 sm:h-8"
-                    >
-                      <Activity className="h-3 w-3 sm:h-4 sm:w-4" />
-                      <span className="hidden sm:inline">{show3DPanel ? 'Hide' : 'Show'} 3D Model</span>
-                      <span className="sm:hidden">3D</span>
-                    </Button>
-                  </div>
+          <Button 
+            onClick={handleNewConversation}
+            className="w-full mb-4 bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 text-white shadow-sm"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            New Conversation
+          </Button>
+
+          <ScrollArea className="flex-1">
+            <div className="space-y-2">
+              {loadingConversations ? (
+                <>
+                  <Skeleton className="h-16 w-full rounded-lg" />
+                  <Skeleton className="h-16 w-full rounded-lg" />
+                  <Skeleton className="h-16 w-full rounded-lg" />
+                </>
+              ) : conversations.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <MessageCircle className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                  <p className="text-sm">No conversations yet</p>
+                  <p className="text-xs mt-1">Start a new conversation above</p>
                 </div>
-              </CardHeader>
-
-              {/* Tabs */}
-              <div className="px-3 sm:px-6 pt-2 pb-0 border-b">
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                  <TabsList className="grid w-full grid-cols-3 h-8 sm:h-10">
-                    <TabsTrigger value="chat" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm px-2 sm:px-3">
-                      <MessageCircle className="h-3 w-3 sm:h-4 sm:w-4" />
-                      <span className="hidden sm:inline">Chat</span>
-                    </TabsTrigger>
-                    <TabsTrigger value="assessments" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm px-2 sm:px-3">
-                      <Stethoscope className="h-3 w-3 sm:h-4 sm:w-4" />
-                      <span className="hidden sm:inline">Assessments</span>
-                      <span className="sm:hidden">Assess</span>
-                    </TabsTrigger>
-                    <TabsTrigger value="protocols" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm px-2 sm:px-3">
-                      <BookOpen className="h-3 w-3 sm:h-4 sm:w-4" />
-                      <span className="hidden sm:inline">Protocols</span>
-                      <span className="sm:hidden">Proto</span>
-                    </TabsTrigger>
-                  </TabsList>
-                </Tabs>
-              </div>
-
-              <CardContent className="flex-1 flex flex-col p-0 min-h-0">
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col h-full">
-                  {/* Chat Tab */}
-                  {activeTab === 'chat' && (
-                    <div className="flex-1 flex flex-col">
-                      <div 
-                        ref={scrollAreaRef}
-                        className="flex-1 overflow-y-auto px-3 sm:px-6 min-h-[50vh] sm:min-h-[60vh] max-h-[calc(100vh-300px)] sm:max-h-[calc(90vh-150px)]"
-                        onScroll={checkScrollPosition}
-                      >
-                      {!selectedConversationId ? (
-                        <div className="flex items-center justify-center h-full py-4">
-                          <div className="text-center space-y-3 sm:space-y-4 max-w-md px-4">
-                            <div className="p-3 sm:p-4 bg-blue-50 rounded-full mx-auto w-fit">
-                              <Brain className="h-6 w-6 sm:h-8 sm:w-8 text-blue-600" />
-                            </div>
-                            <div>
-                              <h3 className="text-base sm:text-lg font-semibold mb-1 sm:mb-2">
-                                Welcome to PhysioGPT
-                              </h3>
-                              <p className="text-muted-foreground text-xs sm:text-sm leading-relaxed">
-                                Ask me anything about physiotherapy, patient assessment, 
-                                treatment planning, or clinical reasoning. I'm here to help 
-                                with evidence-based guidance for your practice.
-                              </p>
-                            </div>
-                            
-                            <div className="space-y-2 pt-2 sm:pt-4">
-                              <p className="text-xs sm:text-sm font-medium text-gray-700">Try asking:</p>
-                              <div className="space-y-1.5 sm:space-y-2">
-                                {[
-                                  "How should I assess a patient with shoulder impingement?",
-                                  "What exercises work best for chronic low back pain?",
-                                  "How do I differentiate between different types of headaches?"
-                                ].map((suggestion, index) => (
-                                  <button
-                                    key={index}
-                                    onClick={() => handleSuggestionClick(suggestion)}
-                                    className="block w-full text-left p-2 sm:p-3 text-xs sm:text-sm bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                                  >
-                                    {suggestion}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
+              ) : (
+                conversations.map((conv) => (
+                  <Card
+                    key={conv.id}
+                    className={`cursor-pointer transition-all hover:shadow-md hover:border-teal-200 ${
+                      selectedConversationId === conv.id 
+                        ? 'border-teal-400 bg-gradient-to-br from-teal-50 to-mint-50 shadow-md' 
+                        : 'hover:bg-gray-50'
+                    }`}
+                    onClick={() => handleSelectConversation(conv.id)}
+                  >
+                    <CardContent className="p-3">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-medium text-sm truncate text-gray-800">
+                            {conv.title}
+                          </h3>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Clock className="h-3 w-3 text-gray-400" />
+                            <span className="text-xs text-gray-500">
+                              {new Date(conv.createdAt).toLocaleDateString()}
+                            </span>
                           </div>
                         </div>
-                      ) : loadingMessages ? (
-                        <div className="space-y-4 p-4">
-                          {[1, 2].map((i) => (
-                            <div key={i} className="flex gap-3">
-                              <div className="w-8 h-8 bg-gray-200 rounded-full animate-pulse" />
-                              <div className="flex-1 space-y-2">
-                                <div className="h-4 bg-gray-200 rounded animate-pulse" />
-                                <div className="h-4 bg-gray-200 rounded w-3/4 animate-pulse" />
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : messages && messages.length > 0 ? (
-                        <div className="space-y-3 sm:space-y-6 p-2 sm:p-4">
-                          {/* Color Code Legend */}
-                          <ColorCodeLegend 
-                            isVisible={showColorLegend}
-                            onToggle={() => setShowColorLegend(!showColorLegend)}
-                          />
-                          {messages.map((msg: any, index: number) => (
-                            <div
-                              key={msg?.id || index}
-                              className={`flex gap-2 sm:gap-3 ${
-                                msg?.role === "user" ? "justify-end" : "justify-start"
-                              }`}
-                            >
-                              {msg?.role === "assistant" && (
-                                <Avatar className="w-6 h-6 sm:w-8 sm:h-8 flex-shrink-0">
-                                  <AvatarFallback className="bg-blue-600 text-white">
-                                    <Bot className="h-3 w-3 sm:h-4 sm:w-4" />
-                                  </AvatarFallback>
-                                </Avatar>
-                              )}
-                              
-                              <div
-                                className={`max-w-[85%] sm:max-w-[80%] ${
-                                  msg?.role === "user"
-                                    ? "bg-blue-600 text-white"
-                                    : "bg-gray-100 text-gray-900"
-                                } rounded-lg p-2 sm:p-3`}
-                              >
-                                {msg?.role === "assistant" ? (
-                                  <ColorCodedContent content={msg?.content || "No content available"} />
-                                ) : (
-                                  <div className="whitespace-pre-wrap text-xs sm:text-sm leading-relaxed">
-                                    {msg?.content || "No content available"}
-                                  </div>
-                                )}
-                                
-                                {/* Evidence Display for Assistant Messages */}
-                                {msg?.role === "assistant" && selectedConversationId && evidenceData.has(selectedConversationId) && (
-                                  <EvidenceDisplay
-                                    evidenceSummary={evidenceData.get(selectedConversationId)?.evidenceSummary}
-                                    researchPapers={evidenceData.get(selectedConversationId)?.researchPapers}
-                                    evidenceGrade={evidenceData.get(selectedConversationId)?.evidenceGrade}
-                                    confidenceLevel={evidenceData.get(selectedConversationId)?.confidenceLevel}
-                                  />
-                                )}
-                                
-                                <div className="text-xs opacity-70 mt-1 sm:mt-2">
-                                  {msg?.createdAt ? new Date(msg.createdAt).toLocaleTimeString() : ""}
-                                </div>
-                              </div>
-
-                              {msg?.role === "user" && (
-                                <Avatar className="w-6 h-6 sm:w-8 sm:h-8 flex-shrink-0">
-                                  <AvatarFallback className="bg-gray-600 text-white">
-                                    <User className="h-3 w-3 sm:h-4 sm:w-4" />
-                                  </AvatarFallback>
-                                </Avatar>
-                              )}
-                            </div>
-                          ))}
-                          <div ref={messagesEndRef} />
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-center h-full">
-                          <div className="text-center text-muted-foreground">
-                            <p>No messages in this conversation yet.</p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Suggestions */}
-                    {suggestions.length > 0 && (
-                      <div className="px-3 sm:px-6 py-2 sm:py-3 border-t bg-gray-50 flex-shrink-0">
-                        <div className="flex items-center gap-1 sm:gap-2 mb-1 sm:mb-2">
-                          <Lightbulb className="h-3 w-3 sm:h-4 sm:w-4 text-amber-600" />
-                          <span className="text-xs sm:text-sm font-medium text-gray-700">
-                            Suggested follow-ups:
-                          </span>
-                        </div>
-                        <div className="flex flex-wrap gap-1 sm:gap-2">
-                          {suggestions.map((suggestion, index) => (
-                            <Badge
-                              key={index}
-                              variant="secondary"
-                              className="cursor-pointer hover:bg-blue-100 transition-colors text-xs sm:text-sm px-2 py-1"
-                              onClick={() => handleSuggestionClick(suggestion)}
-                            >
-                              {suggestion}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Message Input */}
-                    <div className="p-3 sm:p-6 border-t flex-shrink-0 bg-white relative z-10">
-                      <div className="flex gap-2 sm:gap-3">
-                        <Input
-                          value={message}
-                          onChange={(e) => setMessage(e.target.value)}
-                          placeholder="Ask about your patients or clinical practice..."
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" && !e.shiftKey) {
-                              e.preventDefault();
-                              handleSendMessage();
-                            }
-                          }}
-                          disabled={sendMessageMutation.isPending}
-                          className="flex-1 text-sm sm:text-base h-9 sm:h-10"
-                        />
                         <Button
-                          onClick={() => handleSendMessage()}
-                          disabled={!message.trim() || sendMessageMutation.isPending}
-                          size="sm"
-                          className="flex-shrink-0 h-9 w-9 sm:h-10 sm:w-10 p-0"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 hover:bg-red-50 hover:text-red-600"
+                          onClick={(e) => handleDeleteConversation(conv.id, e)}
                         >
-                          {sendMessageMutation.isPending ? (
-                            <div className="h-3 w-3 sm:h-4 sm:w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                          ) : (
-                            <Send className="h-3 w-3 sm:h-4 sm:w-4" />
-                          )}
+                          <Trash2 className="h-3 w-3" />
                         </Button>
                       </div>
-                    </div>
-                    </div>
-                  )}
+                    </CardContent>
+                  </Card>
+                ))
+              )}
+            </div>
+          </ScrollArea>
 
-                  {/* Assessments Tab */}
-                  {activeTab === 'assessments' && (
-                    <div className="flex-1 overflow-y-auto">
-                      {selectedAssessmentTemplate ? (
-                        <div className="p-3">
-                          <AssessmentForm
-                            template={selectedAssessmentTemplate}
-                            onComplete={setAssessmentResults}
-                            onBack={() => setSelectedAssessmentTemplate(null)}
-                          />
-                        </div>
-                      ) : (
-                        <AssessmentTemplates
-                          onSelectTemplate={setSelectedAssessmentTemplate}
-                          selectedBodyPart={selectedBodyRegion || undefined}
-                        />
-                      )}
-                    </div>
-                  )}
-
-                  {/* Protocols Tab */}
-                  {activeTab === 'protocols' && (
-                    <div className="flex-1 overflow-y-auto">
-                      <EvidenceBasedProtocols
-                        selectedBodyPart={selectedBodyRegion || undefined}
-                      />
-                    </div>
-                  )}
-                </Tabs>
-              </CardContent>
-            </Card>
+          {/* Quick Actions */}
+          <div className="mt-4 space-y-2">
+            <Button
+              variant="outline"
+              className="w-full justify-start hover:bg-teal-50 hover:border-teal-300"
+              onClick={() => setShowVirtualPatients(!showVirtualPatients)}
+            >
+              <Stethoscope className="h-4 w-4 mr-2 text-teal-600" />
+              Virtual Patients
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full justify-start hover:bg-teal-50 hover:border-teal-300"
+              onClick={() => setShow3DPanel(!show3DPanel)}
+            >
+              <Activity className="h-4 w-4 mr-2 text-teal-600" />
+              3D Anatomy
+            </Button>
           </div>
-
-          {/* Virtual Patient Sidebar */}
-          {showVirtualPatients && (
-            <div className="lg:col-span-1 h-64 sm:h-80 lg:h-full">
-              <VirtualPatientSidebar
-                onPatientSelect={handleVirtualPatientSelect}
-                selectedPatientId={selectedVirtualPatient?.id}
-                isCollapsed={virtualPatientCollapsed}
-                onToggleCollapse={() => setVirtualPatientCollapsed(!virtualPatientCollapsed)}
-              />
-            </div>
-          )}
-
-          {/* 3D Skeleton Panel */}
-          {show3DPanel && (
-            <div className="lg:col-span-1 h-64 sm:h-80 lg:h-full">
-              <div className="h-full">
-                <Card className="h-full">
-                  <CardHeader className="p-3">
-                    <CardTitle className="text-sm">3D Body Model</CardTitle>
-                  </CardHeader>
-                  <CardContent className="h-full p-0">
-                    <div className="h-full">
-                      <ErrorBoundary>
-                        <Suspense fallback={
-                          <div className="h-full bg-gray-50 rounded-lg flex items-center justify-center">
-                            <div className="text-center">
-                              <Loader2 className="h-8 w-8 mx-auto mb-2 text-blue-500 animate-spin" />
-                              <p className="text-sm text-gray-600">Loading 3D Model...</p>
-                            </div>
-                          </div>
-                        }>
-                          <InteractiveSkeleton
-                            onRegionSelect={handleBodyRegionSelect}
-                            selectedRegion={selectedBodyRegion || undefined}
-                          />
-                        </Suspense>
-                      </ErrorBoundary>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
-          )}
         </div>
       </div>
+
+      {/* Toggle Sidebar Button (when collapsed) */}
+      {sidebarCollapsed && (
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setSidebarCollapsed(false)}
+          className="absolute left-4 top-20 z-10 bg-white shadow-md hover:bg-teal-50"
+        >
+          <Menu className="h-4 w-4 text-teal-600" />
+        </Button>
+      )}
+
+      {/* Main Chat Area */}
+      <div className="flex-1 flex flex-col">
+        {/* Header */}
+        <div className="bg-gradient-to-r from-teal-600 via-teal-500 to-mint-500 text-white p-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Brain className="h-6 w-6" />
+              <div>
+                <h1 className="text-xl font-bold">PhysioGPT Assistant</h1>
+                <p className="text-xs opacity-90">Evidence-based clinical support</p>
+              </div>
+            </div>
+            {patientContext && (
+              <Badge className="bg-white/20 text-white border-white/30">
+                Patient: {patientContext.patientName}
+              </Badge>
+            )}
+          </div>
+        </div>
+
+        {/* Messages Area */}
+        <ScrollArea className="flex-1 p-4" ref={scrollAreaRef}>
+          {!selectedConversationId ? (
+            <div className="h-full flex items-center justify-center">
+              <div className="text-center max-w-md">
+                <div className="mb-6 relative">
+                  <div className="absolute inset-0 bg-gradient-to-r from-teal-200 to-mint-200 blur-3xl opacity-30"></div>
+                  <Brain className="h-16 w-16 mx-auto text-teal-600 relative" />
+                </div>
+                <h2 className="text-2xl font-bold mb-2 bg-gradient-to-r from-teal-600 to-teal-700 bg-clip-text text-transparent">
+                  Welcome to PhysioGPT
+                </h2>
+                <p className="text-gray-600 mb-6">
+                  Your AI-powered physiotherapy assistant. Ask me anything about assessment, treatment, or clinical reasoning.
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <Button
+                    variant="outline"
+                    className="justify-start hover:bg-teal-50 hover:border-teal-300"
+                    onClick={() => handleSendMessage("What are the latest evidence-based treatments for lower back pain?")}
+                  >
+                    <Lightbulb className="h-4 w-4 mr-2 text-teal-600" />
+                    Back Pain Rx
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="justify-start hover:bg-teal-50 hover:border-teal-300"
+                    onClick={() => handleSendMessage("How do I assess shoulder impingement?")}
+                  >
+                    <FileText className="h-4 w-4 mr-2 text-teal-600" />
+                    Shoulder Tests
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="justify-start hover:bg-teal-50 hover:border-teal-300"
+                    onClick={() => handleSendMessage("What are red flags for cervical spine?")}
+                  >
+                    <AlertTriangle className="h-4 w-4 mr-2 text-teal-600" />
+                    Red Flags
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="justify-start hover:bg-teal-50 hover:border-teal-300"
+                    onClick={() => handleSendMessage("Explain central sensitization")}
+                  >
+                    <BookOpen className="h-4 w-4 mr-2 text-teal-600" />
+                    Pain Science
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : loadingMessages ? (
+            <div className="space-y-4">
+              <Skeleton className="h-20 w-3/4" />
+              <Skeleton className="h-20 w-2/3 ml-auto" />
+              <Skeleton className="h-20 w-3/4" />
+            </div>
+          ) : (
+            <div className="space-y-4 max-w-4xl mx-auto">
+              {messages.map((msg, index) => (
+                <div
+                  key={msg.id}
+                  className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fadeIn`}
+                >
+                  {msg.role === 'assistant' && (
+                    <Avatar className="h-8 w-8 border-2 border-teal-200">
+                      <AvatarFallback className="bg-gradient-to-br from-teal-500 to-teal-600 text-white">
+                        <Bot className="h-4 w-4" />
+                      </AvatarFallback>
+                    </Avatar>
+                  )}
+                  <div className={`max-w-[70%] ${msg.role === 'user' ? 'order-first' : ''}`}>
+                    <div
+                      className={`rounded-2xl p-4 shadow-sm ${
+                        msg.role === 'user'
+                          ? 'bg-gradient-to-br from-teal-500 to-teal-600 text-white'
+                          : 'bg-white border border-gray-200'
+                      }`}
+                    >
+                      <div className="prose prose-sm max-w-none">
+                        {showColorLegend && msg.role === 'assistant' ? (
+                          <ColorCodedContent content={msg.content} />
+                        ) : (
+                          <p className={msg.role === 'user' ? 'text-white' : 'text-gray-800'}>
+                            {msg.content}
+                          </p>
+                        )}
+                      </div>
+                      <div className={`text-xs mt-2 ${msg.role === 'user' ? 'text-white/70' : 'text-gray-400'}`}>
+                        {formatTime(msg.createdAt)}
+                      </div>
+                    </div>
+                    
+                    {msg.role === 'assistant' && evidenceData.has(selectedConversationId!) && index === messages.length - 1 && (
+                      <div className="mt-3">
+                        <EvidenceDisplay
+                          evidenceGrade={evidenceData.get(selectedConversationId!)?.evidenceGrade}
+                          confidenceLevel={evidenceData.get(selectedConversationId!)?.confidenceLevel}
+                          researchPapers={evidenceData.get(selectedConversationId!)?.researchPapers}
+                        />
+                      </div>
+                    )}
+                  </div>
+                  {msg.role === 'user' && (
+                    <Avatar className="h-8 w-8 border-2 border-teal-200">
+                      <AvatarFallback className="bg-gradient-to-br from-gray-100 to-gray-200">
+                        <User className="h-4 w-4 text-gray-600" />
+                      </AvatarFallback>
+                    </Avatar>
+                  )}
+                </div>
+              ))}
+              {sendMessageMutation.isPending && (
+                <div className="flex gap-3 animate-pulse">
+                  <Avatar className="h-8 w-8 border-2 border-teal-200">
+                    <AvatarFallback className="bg-gradient-to-br from-teal-500 to-teal-600 text-white">
+                      <Bot className="h-4 w-4" />
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-teal-600" />
+                      <span className="text-sm text-gray-500">Thinking...</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+          )}
+        </ScrollArea>
+
+        {/* Suggestions */}
+        {suggestions.length > 0 && (
+          <div className="px-4 pb-2">
+            <ScrollArea className="w-full" orientation="horizontal">
+              <div className="flex gap-2 pb-2">
+                {suggestions.map((suggestion, index) => (
+                  <Button
+                    key={index}
+                    variant="outline"
+                    size="sm"
+                    className="whitespace-nowrap hover:bg-teal-50 hover:border-teal-300 hover:text-teal-700"
+                    onClick={() => handleSendMessage(suggestion)}
+                  >
+                    <Lightbulb className="h-3 w-3 mr-1" />
+                    {suggestion}
+                  </Button>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+        )}
+
+        {/* Input Area */}
+        <div className="p-4 border-t bg-white/95 backdrop-blur-sm">
+          <div className="max-w-4xl mx-auto">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSendMessage();
+              }}
+              className="flex gap-2"
+            >
+              <Input
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                placeholder={
+                  selectedBodyRegion 
+                    ? `Ask about ${selectedBodyRegionName}...`
+                    : "Ask me anything about physiotherapy..."
+                }
+                disabled={sendMessageMutation.isPending}
+                className="flex-1 border-gray-200 focus:border-teal-400 focus:ring-teal-400"
+              />
+              <Button 
+                type="submit" 
+                disabled={!message.trim() || sendMessageMutation.isPending}
+                className="bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 text-white shadow-sm"
+              >
+                {sendMessageMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+              </Button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      {/* Optional Panels */}
+      {show3DPanel && (
+        <div className="w-96 border-l bg-white p-4">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold">3D Anatomy</h3>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShow3DPanel(false)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          <ErrorBoundary>
+            <Suspense fallback={
+              <div className="h-96 flex items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
+              </div>
+            }>
+              <InteractiveSkeleton
+                onBodyPartSelected={handleBodyPartSelected}
+                selectedBodyPart={selectedBodyRegion}
+              />
+            </Suspense>
+          </ErrorBoundary>
+        </div>
+      )}
+
+      {showVirtualPatients && (
+        <VirtualPatientSidebar
+          onClose={() => setShowVirtualPatients(false)}
+          onSelectPatient={handleVirtualPatientSelect}
+          collapsed={virtualPatientCollapsed}
+          onToggleCollapse={() => setVirtualPatientCollapsed(!virtualPatientCollapsed)}
+        />
+      )}
+
+      {showColorLegend && <ColorCodeLegend />}
+
+      {/* Mobile Floating Action Button */}
+      <Button
+        className="fixed bottom-20 right-4 md:hidden rounded-full shadow-lg bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700"
+        size="icon"
+        onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+      >
+        <Menu className="h-5 w-5" />
+      </Button>
     </div>
   );
 }

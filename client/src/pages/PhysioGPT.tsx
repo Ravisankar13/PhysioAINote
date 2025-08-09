@@ -817,7 +817,7 @@ Please provide:
         />
       )}
 
-      {showColorLegend && <ColorCodeLegend />}
+
 
       {/* Mobile Floating Action Button */}
       <Button

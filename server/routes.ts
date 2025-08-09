@@ -59,6 +59,7 @@ import Stripe from "stripe";
 import OpenAI from "openai";
 import { generateExercises, generateFallbackExercises, ExerciseGenerationRequest } from "./exerciseGenerator";
 import sessionRoutes from "./routes/sessionRoutes";
+import patientFingerprintRoutes from "./routes/patientFingerprint";
 import { config } from 'dotenv';
 import { 
   analyzeMovementWithAI, 
@@ -295,6 +296,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Register session routes
   app.use(sessionRoutes);
+  
+  // Register patient fingerprint routes
+  app.use(patientFingerprintRoutes);
 
   app.get('/api/openai-validate', async (req: Request, res: Response) => {
     try {

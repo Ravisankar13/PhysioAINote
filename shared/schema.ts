@@ -1478,6 +1478,28 @@ export const insertVirtualPatientResearchConsentSchema = createInsertSchema(virt
 export type InsertVirtualPatientResearchConsent = z.infer<typeof insertVirtualPatientResearchConsentSchema>;
 export type VirtualPatientResearchConsent = typeof virtualPatientResearchConsent.$inferSelect;
 
+// Anonymous Patient Fingerprints Table
+// Stores only hashed identifiers and progression markers - NO medical data
+export const patientFingerprints = pgTable("patient_fingerprints", {
+  id: serial("id").primaryKey(),
+  patientHash: text("patient_hash").notNull().unique(), // SHA-256 hash of voice + clinical patterns
+  visitCount: integer("visit_count").default(1).notNull(),
+  lastVisitDate: timestamp("last_visit_date").defaultNow().notNull(),
+  clinicalProgressionMarkers: json("clinical_progression_markers").$type<number[]>().default([]).notNull(), // Array of 0-1 scores
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertPatientFingerprintSchema = createInsertSchema(patientFingerprints).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  lastVisitDate: true,
+});
+
+export type InsertPatientFingerprint = z.infer<typeof insertPatientFingerprintSchema>;
+export type PatientFingerprint = typeof patientFingerprints.$inferSelect;
+
 // Research Data Requests
 export const researchDataRequests = pgTable("research_data_requests", {
   id: serial("id").primaryKey(),

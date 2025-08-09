@@ -96,6 +96,9 @@ import {
   forumSanitizationLogs,
   type ForumSanitizationLog,
   type InsertForumSanitizationLog,
+  patientFingerprints,
+  type PatientFingerprint,
+  type InsertPatientFingerprint,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, isNull, sql, ilike } from "drizzle-orm";
@@ -473,6 +476,16 @@ export interface IStorage {
   
   // Forum Sanitization Log Operations
   createForumSanitizationLog(log: InsertForumSanitizationLog): Promise<ForumSanitizationLog>;
+
+  // Patient Fingerprint Operations (Anonymous Follow-up Recognition)
+  getPatientFingerprint(patientHash: string): Promise<PatientFingerprint | undefined>;
+  createPatientFingerprint(fingerprint: InsertPatientFingerprint): Promise<PatientFingerprint>;
+  updatePatientFingerprint(
+    patientHash: string,
+    visitCount: number,
+    progressionMarker?: number
+  ): Promise<PatientFingerprint>;
+  findSimilarPatientFingerprints(patientHash: string): Promise<PatientFingerprint[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -3182,6 +3195,96 @@ export class DatabaseStorage implements IStorage {
       return result[0];
     } catch (error) {
       console.error("Error creating forum sanitization log:", error);
+      throw error;
+    }
+  }
+
+  // Patient Fingerprint Operations
+  async getPatientFingerprint(patientHash: string): Promise<PatientFingerprint | undefined> {
+    try {
+      const result = await db
+        .select()
+        .from(patientFingerprints)
+        .where(eq(patientFingerprints.patientHash, patientHash));
+      
+      return result[0];
+    } catch (error) {
+      console.error("Error fetching patient fingerprint:", error);
+      throw error;
+    }
+  }
+
+  async createPatientFingerprint(fingerprint: InsertPatientFingerprint): Promise<PatientFingerprint> {
+    try {
+      const result = await db
+        .insert(patientFingerprints)
+        .values(fingerprint)
+        .returning();
+      
+      return result[0];
+    } catch (error) {
+      console.error("Error creating patient fingerprint:", error);
+      throw error;
+    }
+  }
+
+  async updatePatientFingerprint(
+    patientHash: string,
+    visitCount: number,
+    progressionMarker?: number
+  ): Promise<PatientFingerprint> {
+    try {
+      const existing = await this.getPatientFingerprint(patientHash);
+      if (!existing) {
+        throw new Error("Patient fingerprint not found");
+      }
+
+      const markers = existing.clinicalProgressionMarkers || [];
+      if (progressionMarker !== undefined) {
+        markers.push(progressionMarker);
+        // Keep only last 10 progression markers
+        if (markers.length > 10) {
+          markers.shift();
+        }
+      }
+
+      const result = await db
+        .update(patientFingerprints)
+        .set({
+          visitCount,
+          lastVisitDate: new Date(),
+          clinicalProgressionMarkers: markers,
+          updatedAt: new Date(),
+        })
+        .where(eq(patientFingerprints.patientHash, patientHash))
+        .returning();
+      
+      return result[0];
+    } catch (error) {
+      console.error("Error updating patient fingerprint:", error);
+      throw error;
+    }
+  }
+
+  async findSimilarPatientFingerprints(patientHash: string): Promise<PatientFingerprint[]> {
+    try {
+      // Get all fingerprints
+      const allFingerprints = await db
+        .select()
+        .from(patientFingerprints)
+        .orderBy(desc(patientFingerprints.lastVisitDate))
+        .limit(100);
+      
+      // Find similar hashes using prefix matching (fuzzy match)
+      const prefix = patientHash.substring(0, 16);
+      const similar = allFingerprints.filter(fp => 
+        fp.patientHash.substring(0, 16) === prefix && 
+        fp.patientHash !== patientHash
+      );
+      
+      return similar.slice(0, 5); // Return top 5 similar fingerprints
+    } catch (error) {
+      console.error("Error finding similar patient fingerprints:", error);
       throw error;
     }
   }

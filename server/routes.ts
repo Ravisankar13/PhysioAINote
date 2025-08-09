@@ -6433,6 +6433,9 @@ Respond with only a number between 1-100 representing the relevance score.`;
   
   // Import realtime document service
   const { realtimeDocumentService } = await import('./services/realtimeDocumentService');
+  
+  // Import clinical decision service
+  const { clinicalDecisionService } = await import('./services/clinicalDecisionService');
 
   // Real-time AI WebSocket Server for SOAP Notes
   const wss = new WebSocketServer({ server: httpServer, path: '/ws/soap-ai' });
@@ -6547,6 +6550,98 @@ Respond with only a number between 1-100 representing the relevance score.`;
   });
 
   console.log('🔗 Real-time AI WebSocket server started on /ws/soap-ai');
+  
+  // Clinical Decision Support Endpoints
+  
+  // Detect red flags in transcript
+  app.post('/api/clinical-decision/red-flags', async (req, res) => {
+    try {
+      const { transcript } = req.body;
+      
+      if (!transcript) {
+        return res.status(400).json({ error: 'Transcript required' });
+      }
+      
+      const alerts = clinicalDecisionService.detectRedFlags(transcript);
+      res.json({ alerts });
+    } catch (error) {
+      console.error('Error detecting red flags:', error);
+      res.status(500).json({ error: 'Failed to analyze red flags' });
+    }
+  });
+  
+  // Generate differential diagnoses
+  app.post('/api/clinical-decision/differentials', async (req, res) => {
+    try {
+      const { transcript, soapSections } = req.body;
+      
+      if (!transcript && !soapSections) {
+        return res.status(400).json({ error: 'Transcript or SOAP sections required' });
+      }
+      
+      const differentials = await clinicalDecisionService.generateDifferentialDiagnoses(
+        transcript,
+        soapSections
+      );
+      res.json({ differentials });
+    } catch (error) {
+      console.error('Error generating differentials:', error);
+      res.status(500).json({ error: 'Failed to generate differential diagnoses' });
+    }
+  });
+  
+  // Match clinical guidelines
+  app.post('/api/clinical-decision/guidelines', async (req, res) => {
+    try {
+      const { transcript, assessment } = req.body;
+      
+      const guidelines = clinicalDecisionService.matchClinicalGuidelines(
+        transcript || '',
+        assessment || ''
+      );
+      res.json({ guidelines });
+    } catch (error) {
+      console.error('Error matching guidelines:', error);
+      res.status(500).json({ error: 'Failed to match clinical guidelines' });
+    }
+  });
+  
+  // Get evidence-based recommendations
+  app.post('/api/clinical-decision/recommendations', async (req, res) => {
+    try {
+      const { diagnosis, patientContext } = req.body;
+      
+      if (!diagnosis) {
+        return res.status(400).json({ error: 'Diagnosis required' });
+      }
+      
+      const recommendations = await clinicalDecisionService.getEvidenceBasedRecommendations(
+        diagnosis,
+        patientContext || ''
+      );
+      res.json({ recommendations });
+    } catch (error) {
+      console.error('Error getting recommendations:', error);
+      res.status(500).json({ error: 'Failed to get treatment recommendations' });
+    }
+  });
+  
+  // Check contraindications
+  app.post('/api/clinical-decision/contraindications', async (req, res) => {
+    try {
+      const { medications, conditions, allergies } = req.body;
+      
+      const contraindications = await clinicalDecisionService.checkContraindications(
+        medications || [],
+        conditions || [],
+        allergies || []
+      );
+      res.json({ contraindications });
+    } catch (error) {
+      console.error('Error checking contraindications:', error);
+      res.status(500).json({ error: 'Failed to check contraindications' });
+    }
+  });
   
   // Document download endpoint
   app.get('/api/documents/download/:documentId', async (req, res) => {

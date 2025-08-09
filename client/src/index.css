@@ -3,27 +3,34 @@
 @tailwind utilities;
 
 :root {
-  /* PhysioConversation-inspired colors */
-  --background: 0 0% 100%;
-  --foreground: 222 47% 11%;
-  --muted: 210 40% 96.1%;
-  --muted-foreground: 215 16% 47%;
+  /* Professional Medical Theme Colors */
+  --background: 0 0% 98%; /* Light gray background */
+  --foreground: 180 29% 15%; /* Deep teal text */
+  --muted: 180 10% 94%;
+  --muted-foreground: 180 15% 45%;
   --popover: 0 0% 100%;
-  --popover-foreground: 222 47% 11%;
+  --popover-foreground: 180 29% 15%;
   --card: 0 0% 100%;
-  --card-foreground: 222 47% 11%;
-  --border: 214 32% 91%;
-  --input: 214 32% 91%;
-  --primary: 196 100% 47%; /* Bright cyan blue */
+  --card-foreground: 180 29% 15%;
+  --border: 180 15% 88%;
+  --input: 180 15% 88%;
+  --primary: 181 59% 28%; /* Deep medical teal */
   --primary-foreground: 0 0% 100%;
-  --secondary: 172 66% 50%; /* Teal accent */
+  --secondary: 168 76% 42%; /* Soft mint accent */
   --secondary-foreground: 0 0% 100%;
-  --accent: 210 40% 96.1%;
-  --accent-foreground: 222 47% 11%;
+  --accent: 168 76% 95%;
+  --accent-foreground: 180 29% 15%;
   --destructive: 0 84.2% 60.2%;
   --destructive-foreground: 60 9.1% 97.8%;
-  --ring: 196 100% 47%;
-  --radius: 0.5rem;
+  --ring: 181 59% 28%;
+  --radius: 0.75rem;
+  
+  /* Medical theme specific colors */
+  --medical-teal: 181 59% 28%;
+  --medical-mint: 168 76% 42%;
+  --medical-emerald: 158 64% 52%;
+  --medical-amber: 38 92% 50%;
+  --medical-gray: 180 10% 94%;
 }
 
 .dark {
@@ -81,4 +88,80 @@
 
 .animate-blink {
   animation: blink 0.8s infinite;
+}
+
+/* PhysioGPT Medical Theme Styles */
+.medical-card {
+  @apply bg-white rounded-xl shadow-sm border border-gray-100 transition-all hover:shadow-md;
+}
+
+.medical-gradient-header {
+  background: linear-gradient(135deg, hsl(181 59% 28%) 0%, hsl(168 76% 42%) 100%);
+  @apply text-white;
+}
+
+.medical-button-primary {
+  @apply bg-[hsl(181,59%,28%)] hover:bg-[hsl(181,59%,23%)] text-white font-medium transition-all;
+}
+
+.medical-button-secondary {
+  @apply bg-[hsl(168,76%,42%)] hover:bg-[hsl(168,76%,37%)] text-white font-medium transition-all;
+}
+
+/* Enhanced message bubbles */
+.message-bubble-user {
+  @apply bg-gradient-to-r from-[hsl(181,59%,28%)] to-[hsl(181,59%,33%)] text-white rounded-2xl shadow-sm;
+}
+
+.message-bubble-assistant {
+  @apply bg-gray-50 border border-gray-200 text-gray-800 rounded-2xl;
+}
+
+/* Subtle animations */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-in {
+  animation: slideIn 0.3s ease-out;
+}
+
+/* Floating action button */
+.floating-action-button {
+  @apply fixed bottom-6 right-6 w-14 h-14 bg-[hsl(181,59%,28%)] text-white rounded-full shadow-lg hover:shadow-xl transition-all flex items-center justify-center z-40;
+}
+
+/* Better loading states */
+.skeleton-loading {
+  @apply animate-pulse bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%];
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* Improved typography */
+.medical-heading {
+  @apply font-semibold text-[hsl(180,29%,15%)] tracking-tight;
+}
+
+.medical-body {
+  @apply text-gray-700 leading-relaxed;
+}
+
+.medical-meta {
+  @apply text-gray-500 text-sm;
 }

@@ -455,6 +455,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Chunked transcription endpoint for long recordings (up to 45 minutes)
+  app.post('/api/transcribe-chunk', upload.single('audio'), async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: 'No audio chunk uploaded' });
+      }
+
+      const chunkIndex = parseInt(req.body.chunkIndex || '0');
+      const totalChunks = parseInt(req.body.totalChunks || '1');
+
+      console.log(`Processing audio chunk ${chunkIndex + 1}/${totalChunks}, size: ${req.file.size} bytes`);
+
+      // Get file stats for debugging
+      const stats = fs.statSync(req.file.path);
+      console.log(`Chunk file size: ${stats.size} bytes (${(stats.size / 1024 / 1024).toFixed(2)}MB)`);
+
+      // Try transcribing the chunk
+      let transcription;
+      try {
+        // Use a shorter timeout for chunks since they're smaller
+        const timeoutMs = 120000; // 2 minutes per chunk should be plenty
+        
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error("Chunk transcription timeout")), timeoutMs);
+        });
+
+        // Race the transcription against the timeout
+        transcription = await Promise.race([
+          transcribeAudio(req.file.path),
+          timeoutPromise
+        ]);
+
+        console.log(`Chunk ${chunkIndex + 1} transcribed successfully: ${transcription.length} characters`);
+      } catch (error) {
+        console.error(`Error transcribing chunk ${chunkIndex + 1}:`, error);
+        
+        // For failed chunks, return empty transcription so the process can continue
+        return res.json({
+          transcription: '',
+          chunkIndex,
+          totalChunks,
+          error: 'Chunk transcription failed but process will continue'
+        });
+      }
+
+      // Clean up the temporary file
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (cleanupError) {
+        console.log('Failed to clean up temp file:', cleanupError);
+      }
+
+      // Return the chunk transcription
+      res.json({
+        transcription,
+        chunkIndex,
+        totalChunks,
+        success: true
+      });
+      
+    } catch (error: any) {
+      console.error('Unexpected error in chunk transcription:', error);
+      res.status(500).json({
+        error: 'Failed to process audio chunk',
+        chunkIndex: req.body.chunkIndex || 0,
+        totalChunks: req.body.totalChunks || 1
+      });
+    }
+  });
+
   // Generate AI suggestions for SOAP notes
   app.post('/api/generate-ai-suggestions', ensureAuthenticated, async (req: Request, res: Response) => {
     try {

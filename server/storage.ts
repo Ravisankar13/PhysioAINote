@@ -101,7 +101,7 @@ import {
   type InsertPatientFingerprint,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, or, isNull, sql, ilike } from "drizzle-orm";
+import { eq, desc, and, or, isNull, sql, ilike, not } from "drizzle-orm";
 import {
   calculateAgeRange,
   deIdentifyNote,
@@ -2209,7 +2209,7 @@ export class DatabaseStorage implements IStorage {
         .where(
           and(
             eq(soapNotes.userId, userId),
-            ne(soapNotes.sessionStatus, "completed")
+            not(eq(soapNotes.sessionStatus, "completed"))
           )
         )
         .orderBy(desc(soapNotes.createdAt))

@@ -56,11 +56,11 @@ export async function transcribeAudio(filePath: string): Promise<string> {
         const fileToUse = tempOptimizedFile || filePath;
         const audioReadStream = fs.createReadStream(fileToUse);
         
-        // Setup timeout promise
+        // Setup timeout promise - increased for longer recordings
         const timeoutPromise = new Promise<never>((_, reject) => {
           const timeoutId = setTimeout(() => {
-            reject(new Error('OpenAI API request timed out after 30 seconds'));
-          }, 30000); // 30 second timeout
+            reject(new Error('OpenAI API request timed out after 90 seconds'));
+          }, 90000); // 90 second timeout for better reliability
           
           // Clean up timeout if the API call completes
           audioReadStream.on('close', () => clearTimeout(timeoutId));

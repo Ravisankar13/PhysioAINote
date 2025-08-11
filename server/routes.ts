@@ -369,7 +369,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         // Calculate timeout based on file size (longer files need more time)
         const fileSizeMB = req.file.size / (1024 * 1024);
-        const timeoutMs = Math.max(15000, Math.min(300000, fileSizeMB * 8000)); // 15s to 5 minutes based on file size
+        // Increased timeout: minimum 30s, 30s per MB, max 10 minutes
+        const timeoutMs = Math.max(30000, Math.min(600000, fileSizeMB * 30000));
         
         console.log(`File size: ${fileSizeMB.toFixed(2)}MB, using timeout: ${timeoutMs}ms`);
         

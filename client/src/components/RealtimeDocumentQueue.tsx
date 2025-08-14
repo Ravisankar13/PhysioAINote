@@ -22,9 +22,9 @@ interface GeneratedDocument {
 }
 
 interface RealtimeDocumentQueueProps {
-  webSocket: WebSocket | null;
   sessionId: string;
   isRecording: boolean;
+  pollInterval?: number;
 }
 
 const documentTypeLabels: Record<string, string> = {
@@ -51,113 +51,136 @@ const documentTypeIcons: Record<string, React.ReactNode> = {
   'time_off_work': <Clock className="w-4 h-4" />
 };
 
-export function RealtimeDocumentQueue({ webSocket, sessionId, isRecording }: RealtimeDocumentQueueProps) {
+export function RealtimeDocumentQueue({ sessionId, isRecording, pollInterval = 5000 }: RealtimeDocumentQueueProps) {
   const [documents, setDocuments] = useState<GeneratedDocument[]>([]);
   const [generatingTypes, setGeneratingTypes] = useState<Set<string>>(new Set());
   const [showQueue, setShowQueue] = useState(true);
+  const [pollingDocuments, setPollingDocuments] = useState<Map<string, NodeJS.Timeout>>(new Map());
   const { toast } = useToast();
 
-  useEffect(() => {
-    if (!webSocket) return;
-
-    const handleMessage = (event: MessageEvent) => {
+  // Function to add a document to the queue for polling
+  const addDocumentForPolling = (documentId: string, documentType: string, documentName: string) => {
+    // Add to generating types
+    setGeneratingTypes(prev => new Set([...prev, documentType]));
+    
+    // Add placeholder document
+    const placeholderDoc: GeneratedDocument = {
+      id: documentId,
+      type: documentType,
+      filename: `${documentType}_${Date.now()}`,
+      status: 'generating'
+    };
+    
+    setDocuments(prev => [placeholderDoc, ...prev]);
+    
+    // Start polling for document status
+    const interval = setInterval(async () => {
       try {
-        const data = JSON.parse(event.data);
+        const response = await fetch(`/api/documents/status/${documentId}?sessionId=${sessionId}`, {
+          credentials: 'include'
+        });
         
-        if (data.type === 'document_generation_started') {
-          // Add to generating types
-          setGeneratingTypes(prev => new Set([...prev, data.documentType]));
+        if (response.ok) {
+          const data = await response.json();
           
-          // Show toast notification
-          toast({
-            title: "Generating Document",
-            description: `Creating ${documentTypeLabels[data.documentType] || data.documentType}...`,
-            duration: 3000,
-          });
-          
-          // Add placeholder document
-          const placeholderDoc: GeneratedDocument = {
-            id: `temp-${data.documentType}-${Date.now()}`,
-            type: data.documentType,
-            filename: `${data.documentType}_${Date.now()}`,
-            status: 'generating'
-          };
-          
-          setDocuments(prev => [placeholderDoc, ...prev]);
-        }
-        
-        if (data.type === 'document_ready') {
-          const { document } = data;
-          
-          // Remove from generating types
-          setGeneratingTypes(prev => {
-            const newSet = new Set(prev);
-            newSet.delete(document.type);
-            return newSet;
-          });
-          
-          // Update document in queue
-          setDocuments(prev => {
-            // Remove placeholder and add real document
-            const filtered = prev.filter(d => !d.id.startsWith(`temp-${document.type}`));
-            return [document, ...filtered];
-          });
-          
-          // Show success toast with download button
-          toast({
-            title: "Document Ready",
-            description: (
-              <div className="flex items-center justify-between">
-                <span>{documentTypeLabels[document.type]} is ready!</span>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => downloadDocument(document)}
-                >
-                  <Download className="w-3 h-3 mr-1" />
-                  Download
-                </Button>
-              </div>
-            ),
-            duration: 10000,
-          });
-        }
-        
-        if (data.type === 'document_error') {
-          // Remove from generating types
-          setGeneratingTypes(prev => {
-            const newSet = new Set(prev);
-            newSet.delete(data.documentType);
-            return newSet;
-          });
-          
-          // Update document status to error
-          setDocuments(prev => prev.map(doc => {
-            if (doc.id.startsWith(`temp-${data.documentType}`)) {
-              return { ...doc, status: 'error', error: data.error };
-            }
-            return doc;
-          }));
-          
-          // Show error toast
-          toast({
-            title: "Document Generation Failed",
-            description: `Failed to create ${documentTypeLabels[data.documentType]}: ${data.error}`,
-            variant: "destructive",
-            duration: 5000,
-          });
+          if (data.status === 'ready') {
+            // Clear interval
+            clearInterval(interval);
+            setPollingDocuments(prev => {
+              const newMap = new Map(prev);
+              newMap.delete(documentId);
+              return newMap;
+            });
+            
+            // Remove from generating types
+            setGeneratingTypes(prev => {
+              const newSet = new Set(prev);
+              newSet.delete(documentType);
+              return newSet;
+            });
+            
+            // Update document in queue
+            const readyDoc: GeneratedDocument = {
+              id: documentId,
+              type: documentType,
+              filename: data.filename || `${documentType}_${Date.now()}`,
+              status: 'ready',
+              wordPath: data.downloadUrl,
+              generatedAt: new Date()
+            };
+            
+            setDocuments(prev => prev.map(d => d.id === documentId ? readyDoc : d));
+            
+            // Show success toast with download button
+            toast({
+              title: "Document Ready",
+              description: (
+                <div className="flex items-center justify-between">
+                  <span>{documentName} is ready!</span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => downloadDocument(readyDoc)}
+                  >
+                    <Download className="w-3 h-3 mr-1" />
+                    Download
+                  </Button>
+                </div>
+              ),
+              duration: 10000,
+            });
+          } else if (data.status === 'error') {
+            // Clear interval
+            clearInterval(interval);
+            setPollingDocuments(prev => {
+              const newMap = new Map(prev);
+              newMap.delete(documentId);
+              return newMap;
+            });
+            
+            // Update document status to error
+            setDocuments(prev => prev.map(d => 
+              d.id === documentId 
+                ? { ...d, status: 'error', error: data.error } 
+                : d
+            ));
+            
+            // Remove from generating types
+            setGeneratingTypes(prev => {
+              const newSet = new Set(prev);
+              newSet.delete(documentType);
+              return newSet;
+            });
+            
+            toast({
+              title: "Document Generation Failed",
+              description: `Failed to generate ${documentName}: ${data.error || 'Unknown error'}`,
+              variant: "destructive"
+            });
+          }
         }
       } catch (error) {
-        console.error('Error processing document WebSocket message:', error);
+        console.error(`Error polling document status ${documentId}:`, error);
       }
-    };
-
-    webSocket.addEventListener('message', handleMessage);
+    }, pollInterval);
+    
+    // Store interval for cleanup
+    setPollingDocuments(prev => new Map(prev).set(documentId, interval));
+  };
+  
+  // Expose function to parent component for adding documents
+  useEffect(() => {
+    // Attach function to window for parent access
+    (window as any).addDocumentToQueue = addDocumentForPolling;
     
     return () => {
-      webSocket.removeEventListener('message', handleMessage);
+      // Cleanup polling intervals
+      pollingDocuments.forEach(interval => clearInterval(interval));
+      delete (window as any).addDocumentToQueue;
     };
-  }, [webSocket, toast]);
+  }, [pollingDocuments]);
+
+
 
   const downloadDocument = async (document: GeneratedDocument) => {
     try {

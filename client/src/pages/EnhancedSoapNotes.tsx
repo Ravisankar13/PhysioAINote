@@ -162,14 +162,13 @@ export default function EnhancedSoapNotesPage() {
   const painAnalysisIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
-  const wsRef = useRef<WebSocket | null>(null);
+
   
   // State for virtual patient parameters
   const [virtualPatientParams, setVirtualPatientParams] = useState<any>(null);
   
   // WebSocket state (kept for compatibility but not used)
-  const [isWebSocketConnected, setIsWebSocketConnected] = useState(false);
-  const [webSocketConnection, setWebSocketConnection] = useState<WebSocket | null>(null);
+
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -664,11 +663,12 @@ export default function EnhancedSoapNotesPage() {
 
   // Track generated documents to prevent duplicates
   const [generatedDocuments, setGeneratedDocuments] = useState<Set<string>>(new Set());
+  const [generatingDocuments, setGeneratingDocuments] = useState<Map<string, boolean>>(new Map());
   const lastDocumentCheck = useRef<string>('');
 
   // Function to detect document generation triggers in transcript
-  const detectDocumentTriggers = (transcript: string) => {
-    if (!transcript || !webSocketConnection || webSocketConnection.readyState !== WebSocket.OPEN) {
+  const detectDocumentTriggers = async (transcript: string) => {
+    if (!transcript || transcript.length < 20) {
       return;
     }
     
@@ -688,56 +688,89 @@ export default function EnhancedSoapNotesPage() {
     
     // Document trigger patterns
     const documentTriggers = [
-      { pattern: /doctor['']?s?\s*(report|letter|note)/i, type: 'doctor_report' },
-      { pattern: /medical\s*certificate/i, type: 'time_off_work' },
-      { pattern: /time\s*off\s*work/i, type: 'time_off_work' },
-      { pattern: /sick\s*(note|leave|certificate)/i, type: 'time_off_work' },
-      { pattern: /ahtr\s*(form)?/i, type: 'ahtr' },
-      { pattern: /allied\s*health\s*treatment/i, type: 'ahtr' },
-      { pattern: /discharge\s*(summary|letter|note)/i, type: 'discharge_summary' },
-      { pattern: /imaging\s*(referral|request)/i, type: 'imaging_referral' },
-      { pattern: /x-?ray\s*(referral|request)/i, type: 'imaging_referral' },
-      { pattern: /mri\s*(referral|request)/i, type: 'imaging_referral' },
-      { pattern: /insurance\s*(form|documentation|claim)/i, type: 'insurance' },
-      { pattern: /work\s*cover/i, type: 'insurance' },
-      { pattern: /return\s*to\s*work/i, type: 'return_to_work' },
-      { pattern: /fitness\s*for\s*work/i, type: 'return_to_work' },
-      { pattern: /specialist\s*referral/i, type: 'specialist_referral' },
-      { pattern: /progress\s*(report|note)/i, type: 'progress_report' },
+      { pattern: /doctor['']?s?\s*(report|letter|note)/i, type: 'doctor_report', name: "Doctor's Report" },
+      { pattern: /medical\s*certificate/i, type: 'time_off_work', name: 'Medical Certificate' },
+      { pattern: /time\s*off\s*work/i, type: 'time_off_work', name: 'Time Off Work Certificate' },
+      { pattern: /sick\s*(note|leave|certificate)/i, type: 'time_off_work', name: 'Sick Leave Certificate' },
+      { pattern: /ahtr\s*(form)?/i, type: 'ahtr', name: 'AHTR Form' },
+      { pattern: /allied\s*health\s*treatment/i, type: 'ahtr', name: 'Allied Health Treatment Request' },
+      { pattern: /discharge\s*(summary|letter|note)/i, type: 'discharge_summary', name: 'Discharge Summary' },
+      { pattern: /imaging\s*(referral|request)/i, type: 'imaging_referral', name: 'Imaging Referral' },
+      { pattern: /x-?ray\s*(referral|request)/i, type: 'imaging_referral', name: 'X-Ray Referral' },
+      { pattern: /mri\s*(referral|request)/i, type: 'imaging_referral', name: 'MRI Referral' },
+      { pattern: /insurance\s*(form|documentation|claim)/i, type: 'insurance', name: 'Insurance Documentation' },
+      { pattern: /work\s*cover/i, type: 'insurance', name: 'WorkCover Documentation' },
+      { pattern: /return\s*to\s*work/i, type: 'return_to_work', name: 'Return to Work Certificate' },
+      { pattern: /fitness\s*for\s*work/i, type: 'return_to_work', name: 'Fitness for Work Certificate' },
+      { pattern: /specialist\s*referral/i, type: 'specialist_referral', name: 'Specialist Referral' },
+      { pattern: /progress\s*(report|note)/i, type: 'progress_report', name: 'Progress Report' },
     ];
     
     // Check each trigger pattern
-    documentTriggers.forEach(({ pattern, type }) => {
-      if (pattern.test(lowerNewContent) && !generatedDocuments.has(type)) {
-        // Mark as generated to prevent duplicates
-        setGeneratedDocuments(prev => new Set([...prev, type]));
-        
-        // Send WebSocket message to trigger document generation
-        const message = {
-          type: 'generate_document',
-          documentType: type,
-          sessionId: sessionId || `session-${Date.now()}`,
-          soapData: {
-            subjective: soapSections.subjective,
-            objective: soapSections.objective,
-            assessment: soapSections.assessment,
-            plan: soapSections.plan,
-          },
-          transcript: transcript.slice(-1000), // Send last 1000 chars for context
-          timestamp: new Date().toISOString()
-        };
+    for (const { pattern, type, name } of documentTriggers) {
+      if (pattern.test(lowerNewContent) && !generatedDocuments.has(type) && !generatingDocuments.get(type)) {
+        // Mark as generating to prevent duplicates
+        setGeneratingDocuments(prev => new Map(prev).set(type, true));
         
         console.log(`🎯 Automatic document trigger detected: ${type}`);
         
         // Show toast notification
         toast({
           title: "Document Generation Started",
-          description: `Automatically generating ${type.replace(/_/g, ' ')} based on conversation`,
+          description: `Automatically generating ${name} based on conversation`,
         });
         
-        webSocketConnection.send(JSON.stringify(message));
+        try {
+          // Send HTTP request to trigger document generation
+          const response = await fetch('/api/documents/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              documentType: type,
+              sessionId: sessionId || `session-${Date.now()}`,
+              soapData: {
+                subjective: soapSections.subjective,
+                objective: soapSections.objective,
+                assessment: soapSections.assessment,
+                plan: soapSections.plan,
+              },
+              transcript: transcript.slice(-1000), // Send last 1000 chars for context
+              timestamp: new Date().toISOString()
+            })
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            console.log(`Document generation initiated: ${data.documentId}`);
+            
+            // Mark as generated
+            setGeneratedDocuments(prev => new Set([...prev, type]));
+            
+            // Add document to queue for polling in RealtimeDocumentQueue
+            if ((window as any).addDocumentToQueue) {
+              (window as any).addDocumentToQueue(data.documentId, type, name);
+            }
+          } else {
+            console.error(`Failed to generate document: ${type}`);
+            toast({
+              title: "Document Generation Failed",
+              description: `Could not generate ${name}. Please try using the manual buttons.`,
+              variant: "destructive"
+            });
+          }
+        } catch (error) {
+          console.error(`Error generating document ${type}:`, error);
+        } finally {
+          // Remove from generating set
+          setGeneratingDocuments(prev => {
+            const newMap = new Map(prev);
+            newMap.delete(type);
+            return newMap;
+          });
+        }
       }
-    });
+    }
   };
 
   // Function to analyze pain locations from transcript
@@ -1942,32 +1975,6 @@ Generated by PhysioGPT Enhanced SOAP Notes
   // Start audio recording for up to 45-minute sessions using progressive chunking
   const startRecording = async () => {
     try {
-      // Establish WebSocket connection for real-time document generation
-      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const currentSessionId = sessionId || `session-${Date.now()}`;
-      const currentUserId = userData?.id || '0';
-      const wsUrl = `${protocol}//${window.location.host}/ws/soap-ai?sessionId=${currentSessionId}&userId=${currentUserId}`;
-      const ws = new WebSocket(wsUrl);
-      
-      ws.onopen = () => {
-        console.log('WebSocket connected for document generation');
-        setIsWebSocketConnected(true);
-        setWebSocketConnection(ws);
-      };
-      
-      ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        setIsWebSocketConnected(false);
-      };
-      
-      ws.onclose = () => {
-        console.log('WebSocket disconnected');
-        setIsWebSocketConnected(false);
-        setWebSocketConnection(null);
-      };
-      
-      wsRef.current = ws;
-      
       // Reset document generation tracker for new session
       setGeneratedDocuments(new Set());
       lastDocumentCheck.current = '';
@@ -2158,14 +2165,6 @@ Generated by PhysioGPT Enhanced SOAP Notes
         painAnalysisIntervalRef.current = null;
       }
       
-      // Close WebSocket connection
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
-      setWebSocketConnection(null);
-      setIsWebSocketConnected(false);
-      
       // Update total session time to current recording time for preservation
       setTotalSessionTime(recordingTime);
       
@@ -2197,14 +2196,6 @@ Generated by PhysioGPT Enhanced SOAP Notes
         clearInterval(painAnalysisIntervalRef.current);
         painAnalysisIntervalRef.current = null;
       }
-      
-      // Close WebSocket connection
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
-      setWebSocketConnection(null);
-      setIsWebSocketConnected(false);
       
       setRealTimeTranscript("Processing audio recording with AI transcription...");
       
@@ -2310,9 +2301,9 @@ Generated by PhysioGPT Enhanced SOAP Notes
             Live AI assistance for clinical documentation and decision support
           </p>
           <div className="flex items-center gap-2 mt-2">
-            <div className={`w-3 h-3 rounded-full ${isWebSocketConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+            <div className={`w-3 h-3 rounded-full ${isRecording ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
             <span className="text-sm text-gray-600">
-              AI Assistant: {isWebSocketConnected ? 'Connected' : 'Disconnected'}
+              AI Assistant: {isRecording ? 'Active' : 'Ready'}
             </span>
           </div>
         </div>
@@ -3205,7 +3196,7 @@ Generated by PhysioGPT Enhanced SOAP Notes
 
             {/* Real-Time Virtual Patient */}
             <RealtimeVirtualPatient 
-              webSocket={webSocketConnection}
+              webSocket={null}
               isRecording={isRecording}
               className="mb-6"
               parameters={virtualPatientParams}
@@ -3213,9 +3204,9 @@ Generated by PhysioGPT Enhanced SOAP Notes
 
             {/* Real-Time Document Generation Queue */}
             <RealtimeDocumentQueue
-              webSocket={webSocketConnection}
               sessionId={sessionId || ''}
               isRecording={isRecording}
+              pollInterval={3000}
             />
 
             {/* Clinical Decision Support System */}

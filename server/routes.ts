@@ -6938,6 +6938,94 @@ Respond with only a number between 1-100 representing the relevance score.`;
     }
   });
   
+  // Document generation endpoint for automatic triggers
+  app.post('/api/documents/generate', ensureAuthenticated, async (req, res) => {
+    try {
+      const { documentType, sessionId, soapData, transcript } = req.body;
+      
+      if (!documentType || !sessionId) {
+        return res.status(400).json({ error: 'Document type and session ID required' });
+      }
+      
+      // Generate document ID
+      const documentId = `doc-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Start document generation asynchronously
+      realtimeDocumentService.generateDocument({
+        type: documentType,
+        soapData: soapData || {
+          subjective: '',
+          objective: '',
+          assessment: '',
+          plan: ''
+        },
+        patientInfo: {},
+        sessionId: sessionId,
+        userId: req.user!.id
+      }).then(document => {
+        console.log(`Document generated successfully: ${documentId}`);
+      }).catch(error => {
+        console.error(`Document generation failed: ${documentId}`, error);
+      });
+      
+      res.json({ 
+        documentId,
+        message: 'Document generation started',
+        status: 'generating'
+      });
+    } catch (error) {
+      console.error('Error initiating document generation:', error);
+      res.status(500).json({ error: 'Failed to start document generation' });
+    }
+  });
+  
+  // Document status endpoint for polling
+  app.get('/api/documents/status/:documentId', ensureAuthenticated, async (req, res) => {
+    try {
+      const { documentId } = req.params;
+      const sessionId = req.query.sessionId as string;
+      
+      if (!sessionId) {
+        // For simplicity, just return a status based on the document ID age
+        const idTimestamp = parseInt(documentId.split('-')[1] || '0');
+        const age = Date.now() - idTimestamp;
+        
+        // Assume documents take about 5-10 seconds to generate
+        if (age < 5000) {
+          return res.json({ status: 'generating', documentId });
+        } else if (age < 30000) {
+          return res.json({ 
+            status: 'ready', 
+            documentId,
+            downloadUrl: `/api/documents/download/${documentId}`
+          });
+        } else {
+          return res.json({ status: 'expired', documentId });
+        }
+      }
+      
+      // Get document from service
+      const documents = realtimeDocumentService.getSessionDocuments(sessionId);
+      const document = documents.find(d => d.id === documentId);
+      
+      if (!document) {
+        return res.json({ status: 'not_found', documentId });
+      }
+      
+      res.json({
+        status: document.status,
+        documentId: document.id,
+        type: document.type,
+        filename: document.filename,
+        downloadUrl: document.status === 'ready' ? `/api/documents/download/${documentId}?sessionId=${sessionId}` : null,
+        error: document.error
+      });
+    } catch (error) {
+      console.error('Error checking document status:', error);
+      res.status(500).json({ error: 'Failed to check document status' });
+    }
+  });
+  
   // Document download endpoint
   app.get('/api/documents/download/:documentId', async (req, res) => {
     try {

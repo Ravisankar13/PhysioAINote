@@ -6576,8 +6576,12 @@ Respond with only a number between 1-100 representing the relevance score.`;
       // Client is still alive
     });
     
-    // Add client to real-time AI service
-    realTimeAIService.addClient(clientId, ws, parseInt(userId), sessionId);
+    // Add client to real-time AI service - but wrap in try-catch to prevent crashes
+    try {
+      realTimeAIService.addClient(clientId, ws, parseInt(userId), sessionId);
+    } catch (error) {
+      console.error(`[WebSocket] Error adding client to AI service:`, error);
+    }
     
     // Reset virtual patient parameters for new session
     realtimeVPService.resetParameters();

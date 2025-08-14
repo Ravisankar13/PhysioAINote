@@ -47,11 +47,8 @@ export class RealTimeAIService {
       this.connectedClients.delete(clientId);
     });
 
-    // Send welcome message
-    this.sendToClient(clientId, {
-      type: 'connected',
-      message: 'Real-time AI assistance connected'
-    });
+    // Don't send any message immediately - wait for client to send connection_init first
+    // This prevents potential issues with messages being sent before connection is fully established
   }
 
   /**
@@ -65,9 +62,13 @@ export class RealTimeAIService {
    * Send message to specific client
    */
   private sendToClient(clientId: string, data: any) {
-    const client = this.connectedClients.get(clientId);
-    if (client && client.ws.readyState === WebSocket.OPEN) {
-      client.ws.send(JSON.stringify(data));
+    try {
+      const client = this.connectedClients.get(clientId);
+      if (client && client.ws.readyState === WebSocket.OPEN) {
+        client.ws.send(JSON.stringify(data));
+      }
+    } catch (error) {
+      console.error(`[RealTimeAIService] Error sending to client ${clientId}:`, error);
     }
   }
 
@@ -75,10 +76,18 @@ export class RealTimeAIService {
    * Broadcast to all clients in a session
    */
   private broadcastToSession(sessionId: string, data: any) {
-    for (const [clientId, client] of this.connectedClients) {
-      if (client.sessionId === sessionId && client.ws.readyState === WebSocket.OPEN) {
-        client.ws.send(JSON.stringify(data));
+    try {
+      for (const [clientId, client] of this.connectedClients) {
+        if (client.sessionId === sessionId && client.ws.readyState === WebSocket.OPEN) {
+          try {
+            client.ws.send(JSON.stringify(data));
+          } catch (error) {
+            console.error(`[RealTimeAIService] Error broadcasting to client ${clientId}:`, error);
+          }
+        }
       }
+    } catch (error) {
+      console.error(`[RealTimeAIService] Error in broadcastToSession:`, error);
     }
   }
 

@@ -6538,46 +6538,58 @@ Respond with only a number between 1-100 representing the relevance score.`;
   const wss = new WebSocketServer({ server: httpServer, path: '/ws/soap-ai' });
   
   wss.on('connection', (ws: WebSocket, req) => {
+    let clientId: string = '';
+    let pingInterval: NodeJS.Timeout;
+    
+    // Set up error handler immediately to catch any issues
+    ws.on('error', (error) => {
+      console.error(`[WebSocket] Connection error:`, error);
+      if (clientId) {
+        console.error(`[WebSocket] Error for client ${clientId}:`, error);
+      }
+    });
+    
     try {
       const url = new URL(req.url!, `http://${req.headers.host}`);
       const sessionId = url.searchParams.get('sessionId');
       const userId = url.searchParams.get('userId');
       
       console.log(`[WebSocket] New connection attempt - sessionId: ${sessionId}, userId: ${userId}`);
-      console.log(`[WebSocket] Headers:`, req.headers);
-      console.log(`[WebSocket] URL:`, req.url);
       
       if (!sessionId || !userId) {
         console.error('[WebSocket] Closing connection - missing sessionId or userId');
-        ws.close(1000, 'Missing sessionId or userId');
+        ws.close(1002, 'Missing sessionId or userId');
         return;
       }
 
-    const clientId = `${userId}-${sessionId}-${Date.now()}`;
-    console.log(`[WebSocket] Client connected: ${clientId}`);
-    
-    // Set up keep-alive ping to prevent connection timeout
-    const pingInterval = setInterval(() => {
-      if (ws.readyState === WebSocket.OPEN) {
-        try {
-          ws.ping();
-        } catch (error) {
-          console.error(`[WebSocket] Ping error for client ${clientId}:`, error);
+      clientId = `${userId}-${sessionId}-${Date.now()}`;
+      console.log(`[WebSocket] Client connected: ${clientId}`);
+      
+      // Send immediate welcome message to confirm connection
+      ws.send(JSON.stringify({
+        type: 'connection_established',
+        clientId,
+        timestamp: new Date().toISOString()
+      }));
+      
+      // Set up keep-alive ping to prevent connection timeout
+      pingInterval = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          try {
+            ws.ping();
+          } catch (error) {
+            console.error(`[WebSocket] Ping error for client ${clientId}:`, error);
+            clearInterval(pingInterval);
+          }
+        } else {
           clearInterval(pingInterval);
         }
-      } else {
-        clearInterval(pingInterval);
-      }
-    }, 30000); // Ping every 30 seconds
-    
-    // Ensure WebSocket is properly configured
-    ws.on('error', (error) => {
-      console.error(`[WebSocket] Error for client ${clientId}:`, error);
-    });
-    
-    ws.on('pong', () => {
-      // Client is still alive
-    });
+      }, 30000); // Ping every 30 seconds
+      
+      // Handle pong responses
+      ws.on('pong', () => {
+        // Client is still alive
+      });
     
     // Add client to real-time AI service - but wrap in try-catch to prevent crashes
     try {
@@ -6748,8 +6760,12 @@ Respond with only a number between 1-100 representing the relevance score.`;
 
     ws.on('close', (code, reason) => {
       console.log(`[WebSocket] Client disconnected: ${clientId}, code: ${code}, reason: ${reason}`);
-      clearInterval(pingInterval);
-      realTimeAIService.removeClient(clientId);
+      if (pingInterval) {
+        clearInterval(pingInterval);
+      }
+      if (clientId) {
+        realTimeAIService.removeClient(clientId);
+      }
     });
     
     } catch (error) {

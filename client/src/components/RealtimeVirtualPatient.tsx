@@ -42,12 +42,14 @@ interface RealtimeVirtualPatientProps {
   webSocket?: WebSocket | null;
   isRecording: boolean;
   className?: string;
+  parameters?: VirtualPatientParameters | null;
 }
 
 export function RealtimeVirtualPatient({ 
   webSocket, 
   isRecording,
-  className 
+  className,
+  parameters: externalParameters 
 }: RealtimeVirtualPatientProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -538,6 +540,21 @@ export function RealtimeVirtualPatient({
     setDetectedConditions(conditions);
     setLastUpdate(new Date().toLocaleTimeString());
   }, []);
+
+  // Update skeleton when external parameters change
+  useEffect(() => {
+    if (externalParameters && sceneRef.current) {
+      console.log('[RealtimeVirtualPatient] Updating with external parameters:', externalParameters);
+      setParameters(externalParameters);
+      updateSkeleton(externalParameters);
+      setLastUpdate(new Date().toLocaleTimeString());
+      
+      // Update detected conditions based on pain locations
+      if (externalParameters.painLocations && externalParameters.painLocations.length > 0) {
+        setDetectedConditions(externalParameters.painLocations);
+      }
+    }
+  }, [externalParameters, updateSkeleton]);
 
   // Listen for WebSocket updates
   useEffect(() => {

@@ -9289,7 +9289,7 @@ Respond with only a number between 1-100 representing the relevance score.`;
         return res.status(400).json({ error: 'Audio chunk is required' });
       }
 
-      console.log(`Processing real-time chunk: ${audioFile.size} bytes`);
+      console.log(`[REAL-TIME] Processing chunk: ${audioFile.size} bytes at ${new Date().toLocaleTimeString()}`);
 
       // Save audio chunk temporarily for transcription
       const tempPath = path.join(os.tmpdir(), `chunk_${Date.now()}.webm`);
@@ -9310,14 +9310,18 @@ Respond with only a number between 1-100 representing the relevance score.`;
       const contextWords = fullContext.split(' ');
       const recentContext = contextWords.slice(-1500).join(' '); // ~5 minutes of speech
 
+      console.log(`[REAL-TIME] Transcription complete: ${chunkTranscript.substring(0, 100)}...`);
+
       // Generate SOAP sections progressively
       const soapSections = await soapNotesService.generateProgressiveSoapSections(
         recentContext,
         chunkTranscript
       );
+      console.log(`[REAL-TIME] SOAP sections generated`);
 
       // Generate AI suggestions based on current context
       const aiSuggestions = await soapNotesService.generateAISuggestions(recentContext);
+      console.log(`[REAL-TIME] AI suggestions generated: ${aiSuggestions.length} suggestions`);
 
       // Check for patient switch
       const patientSwitch = await soapNotesService.analyzePatientSwitch(
@@ -9325,13 +9329,16 @@ Respond with only a number between 1-100 representing the relevance score.`;
         progressiveTranscript
       );
 
-      res.json({
+      const response = {
         transcription: chunkTranscript,
         soapSections,
         aiSuggestions,
         patientSwitch,
         timestamp: new Date().toISOString()
-      });
+      };
+      
+      console.log(`[REAL-TIME] Sending response with SOAP sections:`, Object.keys(soapSections));
+      res.json(response);
     } catch (error: any) {
       console.error("Error processing real-time chunk:", error);
       res.status(500).json({ error: error.message });

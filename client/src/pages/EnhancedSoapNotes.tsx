@@ -17,7 +17,8 @@ import {
   DollarSign, Calendar, Copy, ChevronDown, ChevronUp, 
   Star, AlertTriangle, BookOpen, Copy as CopyIcon,
   BarChart3, Briefcase, Camera, X, StopCircle, Loader2,
-  UserPlus, CheckCircle, AlertCircle, Split, RefreshCw
+  UserPlus, CheckCircle, AlertCircle, Split, RefreshCw,
+  Save, ClipboardList
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import MotionCapture from "@/components/MotionCapture";
@@ -104,6 +105,7 @@ export default function EnhancedSoapNotesPage() {
   const [isContinuousMode, setIsContinuousMode] = useState(false);
   const [continuousSession, setContinuousSession] = useState<any>(null);
   const [currentPatientSegments, setCurrentPatientSegments] = useState<any[]>([]);
+  const [lastPageStateSave, setLastPageStateSave] = useState<Date | null>(null);
 
   const [newPatientName, setNewPatientName] = useState("");
   const [showPatientSwitchDialog, setShowPatientSwitchDialog] = useState(false);
@@ -240,6 +242,11 @@ export default function EnhancedSoapNotesPage() {
 
   const endContinuousRecordingMutation = useMutation({
     mutationFn: async (sessionId: string) => {
+      // Save final state before ending
+      if (continuousSession?.session?.sessionId) {
+        await savePageState(continuousSession.session.sessionId, currentPatientNumber);
+      }
+      
       const response = await fetch('/api/continuous-recording/end', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -267,8 +274,166 @@ export default function EnhancedSoapNotesPage() {
     },
   });
 
+  // Helper function to capture complete page state
+  const capturePageState = () => {
+    const pageState = {
+      // SOAP Note Content
+      soapSections,
+      
+      // Virtual Patient 3D Model Data
+      virtualPatientData: {
+        painLocations,
+        shoulderPathology,
+        spinalPathology,
+        lowerLimbPathology,
+        limbScales,
+        modelConfig: {
+          shoulderPathology,
+          spinalPathology,
+          lowerLimbPathology,
+          limbScales
+        }
+      },
+      
+      // Clinical Decision Support Data
+      clinicalDecisionData: {
+        redFlags,
+        differentials,
+        guidelines
+      },
+      
+      // AI Suggestions
+      aiSuggestions,
+      
+      // PhysioGPT Chat History
+      physioGPTData: {
+        chatMessages,
+        streamingMessage
+      },
+      
+      // Evidence Articles
+      evidenceArticles,
+      
+      // Patient Fingerprint Data
+      patientFingerprint: transcript ? {
+        transcript,
+        identificationInfo,
+        isFollowUpPatient
+      } : null,
+      
+      // UI State (collapsed panels, selected tabs, etc.)
+      uiState: {
+        currentPatientNumber,
+        patientName: newPatientName || `Patient ${currentPatientNumber}`,
+        recordingTime,
+        totalSessionTime
+      },
+      
+      // Timestamp
+      savedAt: new Date().toISOString()
+    };
+    
+    return pageState;
+  };
+
+  // Helper function to save page state to server
+  const savePageState = async (sessionId: string, patientSequence: number) => {
+    try {
+      const pageState = capturePageState();
+      
+      const response = await fetch(`/api/continuous-recording/${sessionId}/save-page-state`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          patientSequence,
+          pageState
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to save page state');
+      }
+      
+      console.log(`✓ Page state saved for Patient ${patientSequence}`);
+      setLastPageStateSave(new Date());
+      return response.json();
+    } catch (error) {
+      console.error('Error saving page state:', error);
+      toast({
+        title: "Warning",
+        description: "Failed to save page state. Your data may not be preserved.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Helper function to restore page state from server
+  const restorePageState = async (sessionId: string, patientSequence: number) => {
+    try {
+      const response = await fetch(`/api/continuous-recording/${sessionId}/page-state/${patientSequence}`);
+      
+      if (!response.ok) {
+        if (response.status === 404) {
+          console.log(`No saved state found for Patient ${patientSequence}`);
+          return false;
+        }
+        throw new Error('Failed to retrieve page state');
+      }
+      
+      const data = await response.json();
+      const pageState = data.pageState;
+      
+      // Restore all state components
+      if (pageState.soapSections) setSoapSections(pageState.soapSections);
+      if (pageState.virtualPatientData) {
+        setPainLocations(pageState.virtualPatientData.painLocations || []);
+        setShoulderPathology(pageState.virtualPatientData.shoulderPathology || null);
+        setSpinalPathology(pageState.virtualPatientData.spinalPathology || null);
+        setLowerLimbPathology(pageState.virtualPatientData.lowerLimbPathology || null);
+        setLimbScales(pageState.virtualPatientData.limbScales || {});
+      }
+      if (pageState.clinicalDecisionData) {
+        setRedFlags(pageState.clinicalDecisionData.redFlags || []);
+        setDifferentials(pageState.clinicalDecisionData.differentials || []);
+        setGuidelines(pageState.clinicalDecisionData.guidelines || []);
+      }
+      if (pageState.aiSuggestions) setAiSuggestions(pageState.aiSuggestions);
+      if (pageState.physioGPTData) {
+        setChatMessages(pageState.physioGPTData.chatMessages || []);
+        setStreamingMessage(pageState.physioGPTData.streamingMessage || null);
+      }
+      if (pageState.evidenceArticles) setEvidenceArticles(pageState.evidenceArticles);
+      if (pageState.patientFingerprint) {
+        setTranscript(pageState.patientFingerprint.transcript || '');
+        setIdentificationInfo(pageState.patientFingerprint.identificationInfo || null);
+        setIsFollowUpPatient(pageState.patientFingerprint.isFollowUpPatient || false);
+      }
+      
+      console.log(`✓ Page state restored for Patient ${patientSequence}`);
+      toast({
+        title: "Patient Data Restored",
+        description: `Loaded saved data for Patient ${patientSequence}`,
+      });
+      
+      return true;
+    } catch (error) {
+      console.error('Error restoring page state:', error);
+      toast({
+        title: "Warning",
+        description: "Failed to restore previous patient data. Starting fresh.",
+        variant: "destructive"
+      });
+      return false;
+    }
+  };
+
   const manualPatientSwitchMutation = useMutation({
     mutationFn: async ({ sessionId, newPatientName }: { sessionId: string, newPatientName?: string }) => {
+      // Save current patient state before switching
+      if (continuousSession?.session?.sessionId) {
+        await savePageState(continuousSession.session.sessionId, currentPatientNumber);
+      }
+      
       const response = await fetch(`/api/continuous-recording/${sessionId}/switch-patient`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -291,6 +456,18 @@ export default function EnhancedSoapNotesPage() {
         assessment: '',
         plan: ''
       });
+      
+      // Clear other state for new patient
+      setPainLocations([]);
+      setRedFlags([]);
+      setDifferentials([]);
+      setGuidelines([]);
+      setAiSuggestions([]);
+      setEvidenceArticles([]);
+      setChatMessages([]);
+      setTranscript('');
+      setIdentificationInfo(null);
+      setIsFollowUpPatient(false);
       
       // Refresh completed notes to show the newly generated note
       refetchCompletedNotes();
@@ -1662,6 +1839,21 @@ Generated by PhysioGPT Enhanced SOAP Notes
     }
   };
 
+  // Auto-save page state during continuous recording
+  useEffect(() => {
+    if (!isContinuousMode || !isRecording || !continuousSession?.session?.sessionId) {
+      return;
+    }
+    
+    // Auto-save every 2 minutes during recording
+    const autoSaveInterval = setInterval(async () => {
+      console.log(`⏱️ Auto-saving page state for Patient ${currentPatientNumber}...`);
+      await savePageState(continuousSession.session.sessionId, currentPatientNumber);
+    }, 120000); // 2 minutes
+    
+    return () => clearInterval(autoSaveInterval);
+  }, [isContinuousMode, isRecording, continuousSession, currentPatientNumber]);
+
   // Continuous recording helper functions
 
 
@@ -2358,6 +2550,87 @@ Generated by PhysioGPT Enhanced SOAP Notes
             </Card>
 
             {/* Completed SOAP Notes from Continuous Session */}
+            {/* Patient State Navigator for Continuous Recording */}
+            {isContinuousMode && continuousSession?.session?.sessionId && (
+              <Card className="p-4 bg-gradient-to-r from-violet-50 to-indigo-50 border-violet-200">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-lg font-semibold text-violet-900 flex items-center">
+                    <ClipboardList className="w-5 h-5 mr-2" />
+                    Patient Session Navigator
+                  </h3>
+                  <Badge variant="secondary" className="bg-violet-100 text-violet-800">
+                    {completedSoapNotes.length + 1} Patients Total
+                  </Badge>
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  {/* Previous patients */}
+                  {completedSoapNotes.map((note: any, index: number) => (
+                    <Button
+                      key={note.id}
+                      variant="outline"
+                      size="sm"
+                      className="border-violet-300 hover:bg-violet-100"
+                      onClick={async () => {
+                        // Save current state first
+                        await savePageState(continuousSession.session.sessionId, currentPatientNumber);
+                        // Restore selected patient state
+                        const restored = await restorePageState(
+                          continuousSession.session.sessionId, 
+                          note.patientSequenceNumber || index + 1
+                        );
+                        if (restored) {
+                          setCurrentPatientNumber(note.patientSequenceNumber || index + 1);
+                        }
+                      }}
+                    >
+                      <User className="w-4 h-4 mr-1" />
+                      Patient {note.patientSequenceNumber || index + 1}
+                      {note.patientName && ` (${note.patientName})`}
+                    </Button>
+                  ))}
+                  {/* Current patient */}
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="bg-violet-600 hover:bg-violet-700"
+                    disabled
+                  >
+                    <User className="w-4 h-4 mr-1" />
+                    Patient {currentPatientNumber} (Current)
+                  </Button>
+                </div>
+                <div className="mt-3 flex items-center justify-between">
+                  <div className="text-sm text-violet-700">
+                    Click on any patient to restore their complete session data.
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {lastPageStateSave && (
+                      <span className="text-xs text-violet-600">
+                        Last saved: {lastPageStateSave.toLocaleTimeString()}
+                      </span>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-violet-300 hover:bg-violet-100"
+                      onClick={async () => {
+                        if (continuousSession?.session?.sessionId) {
+                          await savePageState(continuousSession.session.sessionId, currentPatientNumber);
+                          toast({
+                            title: "State Saved",
+                            description: `Patient ${currentPatientNumber} data saved successfully.`,
+                          });
+                        }
+                      }}
+                    >
+                      <Save className="w-4 h-4 mr-1" />
+                      Save Now
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            )}
+
             {isContinuousMode && completedSoapNotes.length > 0 && (
               <Card>
                 <CardHeader>

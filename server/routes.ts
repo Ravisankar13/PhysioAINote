@@ -11552,6 +11552,156 @@ Respond in JSON format:
   });
 
   // ============================================================================
+  // CONTINUOUS RECORDING PAGE STATE MANAGEMENT (TEMPORARY STORAGE)
+  // ============================================================================
+
+  // Save complete page state during continuous recording
+  app.post("/api/continuous-recording/:sessionId/save-page-state", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { sessionId } = req.params;
+      const { patientSequence, pageState } = req.body;
+      
+      if (!patientSequence || !pageState) {
+        return res.status(400).json({ error: 'Missing required fields: patientSequence, pageState' });
+      }
+
+      // Check if note exists for this patient sequence
+      const existingNote = await storage.getContinuousSessionNoteBySequence(sessionId, patientSequence);
+      
+      let savedNote;
+      if (existingNote) {
+        // Update existing note
+        savedNote = await storage.updateContinuousSessionNote(existingNote.id, {
+          pageState,
+        });
+      } else {
+        // Create new note
+        savedNote = await storage.createContinuousSessionNote({
+          sessionId,
+          userId,
+          patientSequence,
+          pageState,
+        });
+      }
+      
+      res.json({ 
+        success: true, 
+        noteId: savedNote.id,
+        message: 'Page state saved successfully' 
+      });
+    } catch (error: any) {
+      console.error("Error saving page state:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get page state for a specific patient in the session
+  app.get("/api/continuous-recording/:sessionId/page-state/:patientSequence", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { sessionId, patientSequence } = req.params;
+      const note = await storage.getContinuousSessionNoteBySequence(sessionId, parseInt(patientSequence));
+      
+      if (!note) {
+        return res.status(404).json({ error: 'Page state not found for this patient' });
+      }
+      
+      // Verify the note belongs to the requesting user
+      if (note.userId !== userId) {
+        return res.status(403).json({ error: 'Unauthorized' });
+      }
+      
+      res.json({
+        patientSequence: note.patientSequence,
+        pageState: note.pageState,
+        createdAt: note.createdAt,
+        expiresAt: note.expiresAt
+      });
+    } catch (error: any) {
+      console.error("Error retrieving page state:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get all page states for a session
+  app.get("/api/continuous-recording/:sessionId/all-page-states", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { sessionId } = req.params;
+      const notes = await storage.getContinuousSessionNotesBySession(sessionId);
+      
+      // Filter to only return notes for the requesting user
+      const userNotes = notes.filter(note => note.userId === userId);
+      
+      res.json(userNotes.map(note => ({
+        patientSequence: note.patientSequence,
+        pageState: note.pageState,
+        createdAt: note.createdAt,
+        expiresAt: note.expiresAt
+      })));
+    } catch (error: any) {
+      console.error("Error retrieving all page states:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Delete page state for a specific patient (optional cleanup)
+  app.delete("/api/continuous-recording/:sessionId/page-state/:patientSequence", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { sessionId, patientSequence } = req.params;
+      const note = await storage.getContinuousSessionNoteBySequence(sessionId, parseInt(patientSequence));
+      
+      if (!note) {
+        return res.status(404).json({ error: 'Page state not found' });
+      }
+      
+      // Verify ownership
+      if (note.userId !== userId) {
+        return res.status(403).json({ error: 'Unauthorized' });
+      }
+      
+      await storage.deleteContinuousSessionNote(note.id);
+      res.json({ success: true, message: 'Page state deleted successfully' });
+    } catch (error: any) {
+      console.error("Error deleting page state:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Cleanup expired page states (scheduled job endpoint)
+  app.post("/api/continuous-recording/cleanup-expired-states", async (req: Request, res: Response) => {
+    try {
+      const deletedCount = await storage.deleteExpiredContinuousSessionNotes();
+      res.json({ 
+        success: true, 
+        deletedCount,
+        message: `Cleaned up ${deletedCount} expired page states` 
+      });
+    } catch (error: any) {
+      console.error("Error cleaning up expired states:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ============================================================================
   // VIRTUAL PATIENT CREATION API ROUTES
   // ============================================================================
 

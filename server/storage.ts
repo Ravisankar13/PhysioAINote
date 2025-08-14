@@ -99,6 +99,9 @@ import {
   patientFingerprints,
   type PatientFingerprint,
   type InsertPatientFingerprint,
+  continuousSessionNotes,
+  type ContinuousSessionNote,
+  type InsertContinuousSessionNote,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, isNull, sql, ilike, not } from "drizzle-orm";
@@ -486,6 +489,22 @@ export interface IStorage {
     progressionMarker?: number
   ): Promise<PatientFingerprint>;
   findSimilarPatientFingerprints(patientHash: string): Promise<PatientFingerprint[]>;
+
+  // Continuous Recording Session Operations
+  createContinuousRecordingSession(data: InsertContinuousRecordingSession): Promise<ContinuousRecordingSession>;
+  getContinuousRecordingSession(id: number): Promise<ContinuousRecordingSession | undefined>;
+  getContinuousRecordingSessionBySessionId(sessionId: string): Promise<ContinuousRecordingSession | undefined>;
+  updateContinuousRecordingSession(id: number, data: Partial<ContinuousRecordingSession>): Promise<ContinuousRecordingSession>;
+  getActiveContinuousRecordingSession(userId: number): Promise<ContinuousRecordingSession | undefined>;
+
+  // Continuous Session Notes Operations (Temporary Storage)
+  createContinuousSessionNote(note: InsertContinuousSessionNote): Promise<ContinuousSessionNote>;
+  getContinuousSessionNote(id: number): Promise<ContinuousSessionNote | undefined>;
+  getContinuousSessionNotesBySession(sessionId: string): Promise<ContinuousSessionNote[]>;
+  getContinuousSessionNoteBySequence(sessionId: string, patientSequence: number): Promise<ContinuousSessionNote | undefined>;
+  updateContinuousSessionNote(id: number, data: Partial<InsertContinuousSessionNote>): Promise<ContinuousSessionNote>;
+  deleteContinuousSessionNote(id: number): Promise<void>;
+  deleteExpiredContinuousSessionNotes(): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2349,6 +2368,117 @@ export class DatabaseStorage implements IStorage {
       return session;
     } catch (error) {
       console.error("Error getting active continuous recording session:", error);
+      throw error;
+    }
+  }
+
+  // Continuous Session Notes Methods (Temporary Storage with 24-hour retention)
+  async createContinuousSessionNote(note: InsertContinuousSessionNote): Promise<ContinuousSessionNote> {
+    try {
+      // Set expiry to 24 hours from now
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + 24);
+      
+      const [createdNote] = await db
+        .insert(continuousSessionNotes)
+        .values({
+          ...note,
+          expiresAt
+        })
+        .returning();
+      
+      return createdNote;
+    } catch (error) {
+      console.error("Error creating continuous session note:", error);
+      throw error;
+    }
+  }
+
+  async getContinuousSessionNote(id: number): Promise<ContinuousSessionNote | undefined> {
+    try {
+      const [note] = await db
+        .select()
+        .from(continuousSessionNotes)
+        .where(eq(continuousSessionNotes.id, id))
+        .limit(1);
+      
+      return note;
+    } catch (error) {
+      console.error("Error getting continuous session note:", error);
+      throw error;
+    }
+  }
+
+  async getContinuousSessionNotesBySession(sessionId: string): Promise<ContinuousSessionNote[]> {
+    try {
+      const notes = await db
+        .select()
+        .from(continuousSessionNotes)
+        .where(eq(continuousSessionNotes.sessionId, sessionId))
+        .orderBy(continuousSessionNotes.patientSequence);
+      
+      return notes;
+    } catch (error) {
+      console.error("Error getting continuous session notes by session:", error);
+      throw error;
+    }
+  }
+
+  async getContinuousSessionNoteBySequence(sessionId: string, patientSequence: number): Promise<ContinuousSessionNote | undefined> {
+    try {
+      const [note] = await db
+        .select()
+        .from(continuousSessionNotes)
+        .where(and(
+          eq(continuousSessionNotes.sessionId, sessionId),
+          eq(continuousSessionNotes.patientSequence, patientSequence)
+        ))
+        .limit(1);
+      
+      return note;
+    } catch (error) {
+      console.error("Error getting continuous session note by sequence:", error);
+      throw error;
+    }
+  }
+
+  async updateContinuousSessionNote(id: number, data: Partial<InsertContinuousSessionNote>): Promise<ContinuousSessionNote> {
+    try {
+      const [updatedNote] = await db
+        .update(continuousSessionNotes)
+        .set(data)
+        .where(eq(continuousSessionNotes.id, id))
+        .returning();
+      
+      return updatedNote;
+    } catch (error) {
+      console.error("Error updating continuous session note:", error);
+      throw error;
+    }
+  }
+
+  async deleteContinuousSessionNote(id: number): Promise<void> {
+    try {
+      await db
+        .delete(continuousSessionNotes)
+        .where(eq(continuousSessionNotes.id, id));
+    } catch (error) {
+      console.error("Error deleting continuous session note:", error);
+      throw error;
+    }
+  }
+
+  async deleteExpiredContinuousSessionNotes(): Promise<number> {
+    try {
+      const now = new Date();
+      const result = await db
+        .delete(continuousSessionNotes)
+        .where(sql`${continuousSessionNotes.expiresAt} < ${now}`)
+        .returning({ id: continuousSessionNotes.id });
+      
+      return result.length;
+    } catch (error) {
+      console.error("Error deleting expired continuous session notes:", error);
       throw error;
     }
   }

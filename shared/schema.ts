@@ -179,6 +179,113 @@ export const continuousRecordingSessions = pgTable("continuous_recording_session
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// Temporary storage for complete patient consultation snapshots (24-hour retention)
+export const continuousSessionNotes = pgTable("continuous_session_notes", {
+  id: serial("id").primaryKey(),
+  sessionId: text("session_id")
+    .notNull()
+    .references(() => continuousRecordingSessions.sessionId, { onDelete: "cascade" }),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  patientSequence: integer("patient_sequence").notNull(), // Patient 1, 2, 3 etc
+  patientName: text("patient_name"), // Optional patient name if captured
+  
+  // SOAP Note Content
+  soapNote: json("soap_note").$type<{
+    subjective: string;
+    objective: string;
+    assessment: string;
+    plan: string;
+    transcription: string;
+    recordingDuration: number;
+    timestamp: string;
+  }>().notNull(),
+  
+  // Virtual Patient Data
+  virtualPatient: json("virtual_patient").$type<{
+    painLocations: Array<{
+      bodyPart: string;
+      severity: number;
+      type: string;
+      coordinates: { x: number; y: number; z: number };
+      color: string;
+    }>;
+    posture: string;
+    movement: string;
+    gait: string;
+    skeletonConfig?: any;
+  }>(),
+  
+  // Clinical Decision Support
+  clinicalDecision: json("clinical_decision").$type<{
+    differentials: Array<{
+      diagnosis: string;
+      probability: number;
+      supportingSymptoms: string[];
+      additionalTestsNeeded: string[];
+      icd10Code?: string;
+    }>;
+    redFlags: Array<{
+      level: string;
+      condition: string;
+      matchedText: string;
+      recommendations: string[];
+    }>;
+    guidelines: Array<{
+      condition: string;
+      source: string;
+      year: number;
+      recommendations: string[];
+      redFlags?: string[];
+      specialTests?: string[];
+      imaging?: string[];
+    }>;
+  }>(),
+  
+  // AI Suggestions
+  aiSuggestions: json("ai_suggestions").$type<Array<{
+    id: string;
+    category: string;
+    suggestion: string;
+    timestamp: string;
+    applied?: boolean;
+  }>>(),
+  
+  // PhysioGPT Chat History
+  physioGptChat: json("physio_gpt_chat").$type<Array<{
+    role: string;
+    content: string;
+    timestamp: string;
+  }>>(),
+  
+  // Evidence Articles
+  evidenceArticles: json("evidence_articles").$type<Array<{
+    id: string;
+    title: string;
+    authors: string[];
+    year: number;
+    keyFindings: string[];
+    clinicalApplication: string;
+    relevanceScore: number;
+    source?: string;
+  }>>(),
+  
+  // Patient Fingerprint
+  patientFingerprint: json("patient_fingerprint").$type<{
+    isReturningPatient: boolean;
+    visitNumber: number;
+    daysSinceLastVisit?: number;
+    progressionTrend?: string;
+  }>(),
+  
+  // Timestamps
+  consultationStart: timestamp("consultation_start").notNull(),
+  consultationEnd: timestamp("consultation_end"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  expiresAt: timestamp("expires_at").notNull(), // Set to 24 hours from creation
+});
+
 // Users
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -352,6 +459,15 @@ export const insertContinuousRecordingSessionSchema = createInsertSchema(continu
 
 export type InsertContinuousRecordingSession = z.infer<typeof insertContinuousRecordingSessionSchema>;
 export type ContinuousRecordingSession = typeof continuousRecordingSessions.$inferSelect;
+
+// Continuous Session Notes schema types
+export const insertContinuousSessionNoteSchema = createInsertSchema(continuousSessionNotes).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertContinuousSessionNote = z.infer<typeof insertContinuousSessionNoteSchema>;
+export type ContinuousSessionNote = typeof continuousSessionNotes.$inferSelect;
 
 // Pathology Templates for common pain patterns
 export const pathologyTemplates = pgTable("pathology_templates", {

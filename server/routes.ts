@@ -6542,17 +6542,33 @@ Respond with only a number between 1-100 representing the relevance score.`;
     const sessionId = url.searchParams.get('sessionId');
     const userId = url.searchParams.get('userId');
     
+    console.log(`[WebSocket] New connection attempt - sessionId: ${sessionId}, userId: ${userId}`);
+    
     if (!sessionId || !userId) {
+      console.error('[WebSocket] Closing connection - missing sessionId or userId');
       ws.close(1000, 'Missing sessionId or userId');
       return;
     }
 
     const clientId = `${userId}-${sessionId}-${Date.now()}`;
-    console.log(`WebSocket client connected: ${clientId}`);
+    console.log(`[WebSocket] Client connected: ${clientId}`);
+    
+    // Set up keep-alive ping to prevent connection timeout
+    const pingInterval = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.ping();
+      } else {
+        clearInterval(pingInterval);
+      }
+    }, 30000); // Ping every 30 seconds
     
     // Ensure WebSocket is properly configured
     ws.on('error', (error) => {
-      console.error(`WebSocket error for client ${clientId}:`, error);
+      console.error(`[WebSocket] Error for client ${clientId}:`, error);
+    });
+    
+    ws.on('pong', () => {
+      // Client is still alive
     });
     
     // Add client to real-time AI service
@@ -6699,8 +6715,9 @@ Respond with only a number between 1-100 representing the relevance score.`;
       }
     });
 
-    ws.on('close', () => {
-      console.log(`WebSocket client disconnected: ${clientId}`);
+    ws.on('close', (code, reason) => {
+      console.log(`[WebSocket] Client disconnected: ${clientId}, code: ${code}, reason: ${reason}`);
+      clearInterval(pingInterval);
       realTimeAIService.removeClient(clientId);
     });
   });

@@ -6533,6 +6533,9 @@ Respond with only a number between 1-100 representing the relevance score.`;
   
   // Import clinical decision service
   const { clinicalDecisionService } = await import('./services/clinicalDecisionService');
+  
+  // Import realtime pain analysis service
+  const { realtimePainAnalysisService } = await import('./services/realtimePainAnalysisService');
 
   // Real-time AI WebSocket Server for SOAP Notes
   const wss = new WebSocketServer({ server: httpServer, path: '/ws/soap-ai' });
@@ -6775,6 +6778,25 @@ Respond with only a number between 1-100 representing the relevance score.`;
   });
 
   console.log('🔗 Real-time AI WebSocket server started on /ws/soap-ai');
+  
+  // Real-time pain analysis endpoint
+  app.post('/api/analyze-pain-locations', async (req, res) => {
+    try {
+      const { transcript } = req.body;
+      
+      if (!transcript) {
+        return res.status(400).json({ error: 'Transcript required' });
+      }
+      
+      console.log('[API] Analyzing pain locations from transcript');
+      const virtualPatientParams = await realtimePainAnalysisService.analyzeTranscript(transcript);
+      
+      res.json(virtualPatientParams);
+    } catch (error) {
+      console.error('Error analyzing pain locations:', error);
+      res.status(500).json({ error: 'Failed to analyze pain locations' });
+    }
+  });
   
   // Clinical Decision Support Endpoints
   

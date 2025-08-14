@@ -7054,8 +7054,9 @@ Respond with only a number between 1-100 representing the relevance score.`;
         return res.status(400).json({ error: 'Session ID required' });
       }
       
-      // Get document from service
-      const documents = realtimeDocumentService.getSessionDocuments(sessionId);
+      // Get document from database
+      console.log(`Getting documents for session ${sessionId}:`, await storage.getGeneratedDocumentsBySession(sessionId));
+      const documents = await storage.getGeneratedDocumentsBySession(sessionId);
       console.log(`Found ${documents.length} documents for session ${sessionId}`);
       const document = documents.find(d => d.id === documentId);
       

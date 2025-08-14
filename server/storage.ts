@@ -508,6 +508,12 @@ export interface IStorage {
   updateContinuousSessionNote(id: number, data: Partial<InsertContinuousSessionNote>): Promise<ContinuousSessionNote>;
   deleteContinuousSessionNote(id: number): Promise<void>;
   deleteExpiredContinuousSessionNotes(): Promise<number>;
+  
+  // Generated Documents Operations
+  createGeneratedDocument(document: InsertGeneratedDocument): Promise<GeneratedDocument>;
+  getGeneratedDocument(documentId: string): Promise<GeneratedDocument | undefined>;
+  getGeneratedDocumentsBySession(sessionId: string, userId?: number): Promise<GeneratedDocument[]>;
+  updateGeneratedDocument(documentId: string, updates: Partial<GeneratedDocument>): Promise<GeneratedDocument | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -942,15 +948,17 @@ export class DatabaseStorage implements IStorage {
     return results.length > 0 ? results[0] : undefined;
   }
 
-  async getGeneratedDocumentsBySession(sessionId: string, userId: number): Promise<GeneratedDocument[]> {
+  async getGeneratedDocumentsBySession(sessionId: string, userId?: number): Promise<GeneratedDocument[]> {
+    const conditions = [eq(generatedDocuments.sessionId, sessionId)];
+    if (userId !== undefined) {
+      conditions.push(eq(generatedDocuments.userId, userId));
+    }
+    
     return await db
       .select()
       .from(generatedDocuments)
       .where(
-        and(
-          eq(generatedDocuments.sessionId, sessionId),
-          eq(generatedDocuments.userId, userId)
-        )
+        conditions.length > 1 ? and(...conditions) : conditions[0]
       )
       .orderBy(desc(generatedDocuments.generatedAt));
   }

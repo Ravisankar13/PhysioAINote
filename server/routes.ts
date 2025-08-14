@@ -6966,8 +6966,9 @@ Respond with only a number between 1-100 representing the relevance score.`;
           patientInfo: {},
           sessionId: sessionId,
           userId: req.user!.id,
-          documentId: documentId  // Pass the ID to the service
-        });
+          documentId: documentId,  // Pass the ID to the service
+          transcript: transcript  // Pass transcript for fallback content generation
+        } as any);
         
         console.log(`Document generated successfully: ${documentId} for session: ${sessionId}`);
         console.log(`Document stored with status: ${document.status}, path: ${document.wordPath}`);

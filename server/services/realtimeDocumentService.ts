@@ -214,8 +214,25 @@ export class RealtimeDocumentService {
 
   // Generate document content using OpenAI
   private async generateDocumentContent(request: DocumentGenerationRequest): Promise<any> {
+    // Check if SOAP data has actual content or just placeholders
+    const hasValidSoapData = 
+      request.soapData.subjective && 
+      request.soapData.subjective.length > 20 &&
+      !request.soapData.subjective.includes('to be documented');
+    
+    // If SOAP data is empty or contains placeholders, generate from transcript
+    const transcript = (request as any).transcript;
+    const shouldUseTranscript = !hasValidSoapData && transcript && transcript.length > 50;
+    
     const prompts = {
-      'doctor_report': `Generate a comprehensive doctor's report based on the following SOAP note. Include all relevant clinical findings, diagnosis, treatment plan, and recommendations. Format as a professional medical report.
+      'doctor_report': shouldUseTranscript 
+        ? `Generate a comprehensive doctor's report based on the following patient consultation transcript. Extract relevant clinical information, identify the chief complaint, assessment, and create a treatment plan. Format as a professional medical report.
+
+Patient Consultation Transcript:
+${transcript}
+
+Generate a structured report with sections for: Patient Presentation, Clinical Findings, Assessment/Diagnosis, Treatment Plan, and Recommendations. Be specific based on the information provided in the transcript.`
+        : `Generate a comprehensive doctor's report based on the following SOAP note. Include all relevant clinical findings, diagnosis, treatment plan, and recommendations. Format as a professional medical report.
 
 SOAP Note:
 Subjective: ${request.soapData.subjective}

@@ -6538,22 +6538,20 @@ Respond with only a number between 1-100 representing the relevance score.`;
   const wss = new WebSocketServer({ server: httpServer, path: '/ws/soap-ai' });
   
   wss.on('connection', (ws: WebSocket, req) => {
-    const url = new URL(req.url!, `http://${req.headers.host}`);
-    const sessionId = url.searchParams.get('sessionId');
-    const userId = url.searchParams.get('userId');
-    
-    console.log(`[WebSocket] New connection attempt - sessionId: ${sessionId}, userId: ${userId}`);
-    
-    // Add immediate error handler
-    ws.on('error', (error) => {
-      console.error('[WebSocket] Immediate connection error:', error);
-    });
-    
-    if (!sessionId || !userId) {
-      console.error('[WebSocket] Closing connection - missing sessionId or userId');
-      ws.close(1000, 'Missing sessionId or userId');
-      return;
-    }
+    try {
+      const url = new URL(req.url!, `http://${req.headers.host}`);
+      const sessionId = url.searchParams.get('sessionId');
+      const userId = url.searchParams.get('userId');
+      
+      console.log(`[WebSocket] New connection attempt - sessionId: ${sessionId}, userId: ${userId}`);
+      console.log(`[WebSocket] Headers:`, req.headers);
+      console.log(`[WebSocket] URL:`, req.url);
+      
+      if (!sessionId || !userId) {
+        console.error('[WebSocket] Closing connection - missing sessionId or userId');
+        ws.close(1000, 'Missing sessionId or userId');
+        return;
+      }
 
     const clientId = `${userId}-${sessionId}-${Date.now()}`;
     console.log(`[WebSocket] Client connected: ${clientId}`);
@@ -6753,6 +6751,11 @@ Respond with only a number between 1-100 representing the relevance score.`;
       clearInterval(pingInterval);
       realTimeAIService.removeClient(clientId);
     });
+    
+    } catch (error) {
+      console.error('[WebSocket] Error in connection handler:', error);
+      ws.close(1011, 'Server error');
+    }
   });
 
   console.log('🔗 Real-time AI WebSocket server started on /ws/soap-ai');

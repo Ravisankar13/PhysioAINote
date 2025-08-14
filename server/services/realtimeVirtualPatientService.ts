@@ -215,37 +215,99 @@ export class RealtimeVirtualPatientService {
     const lowerText = transcript.toLowerCase();
     const quickParams: any = {};
     
-    // Pain keywords and locations
-    const painKeywords = ['pain', 'hurt', 'ache', 'sore', 'tender', 'sharp', 'dull'];
-    const bodyParts = ['shoulder', 'neck', 'back', 'knee', 'hip', 'ankle', 'elbow', 'spine', 'lumbar', 'cervical'];
+    // Pain keywords and locations - expanded list
+    const painKeywords = ['pain', 'hurt', 'ache', 'sore', 'tender', 'sharp', 'dull', 'burning', 'throbbing', 'stiff', 'tight', 'discomfort'];
+    const bodyParts = [
+      'shoulder', 'neck', 'back', 'knee', 'hip', 'ankle', 'elbow', 'spine', 
+      'lumbar', 'cervical', 'thoracic', 'wrist', 'hand', 'foot', 'heel',
+      'calf', 'thigh', 'hamstring', 'quadriceps', 'glute', 'buttock', 'leg', 'arm'
+    ];
     
     const painLocations: string[] = [];
+    
+    // More aggressive detection - check each body part
     bodyParts.forEach(part => {
-      painKeywords.forEach(pain => {
-        if (lowerText.includes(part) && lowerText.includes(pain)) {
-          const partIndex = lowerText.indexOf(part);
-          const painIndex = lowerText.indexOf(pain);
-          if (Math.abs(partIndex - painIndex) < 50) {
-            painLocations.push(part);
+      if (lowerText.includes(part)) {
+        // Check if any pain keyword is in the transcript
+        let hasPain = false;
+        painKeywords.forEach(pain => {
+          if (lowerText.includes(pain)) {
+            const partIndex = lowerText.indexOf(part);
+            const painIndex = lowerText.indexOf(pain);
+            // Increase distance threshold to 100 characters
+            if (Math.abs(partIndex - painIndex) < 100) {
+              hasPain = true;
+            }
           }
+        });
+        
+        // Also check for common pain phrases
+        if (hasPain || 
+            lowerText.includes(`${part} pain`) ||
+            lowerText.includes(`${part} hurts`) ||
+            lowerText.includes(`painful ${part}`) ||
+            lowerText.includes(`my ${part}`) ||
+            lowerText.includes(`the ${part}`) ||
+            lowerText.includes(`right ${part}`) ||
+            lowerText.includes(`left ${part}`) ||
+            lowerText.includes(`severe ${part}`) ||
+            lowerText.includes(`patient has ${part}`) ||
+            lowerText.includes(`patient presents with ${part}`)) {
+          painLocations.push(part);
+        }
+      }
+    });
+    
+    // Check for side-specific pain
+    ['right', 'left'].forEach(side => {
+      bodyParts.forEach(part => {
+        if (lowerText.includes(`${side} ${part}`)) {
+          painLocations.push(`${side} ${part}`);
         }
       });
     });
     
+    // Remove duplicates and set painLocations
     if (painLocations.length > 0) {
       quickParams.painLocations = [...new Set(painLocations)];
+      console.log('[RealtimeVirtualPatientService] Quick analysis detected pain locations:', quickParams.painLocations);
     }
     
     // Movement restrictions
-    if (lowerText.includes('limited') || lowerText.includes('restricted')) {
+    if (lowerText.includes('limited') || lowerText.includes('restricted') || lowerText.includes('reduced')) {
       quickParams.movementRestrictions = { detected: true };
     }
     
     // Posture issues
-    if (lowerText.includes('slouch') || lowerText.includes('forward head') || lowerText.includes('kyphosis')) {
+    if (lowerText.includes('slouch') || lowerText.includes('forward head') || lowerText.includes('kyphosis') || lowerText.includes('rounded')) {
       quickParams.posturalDeviations = ['forward posture detected'];
     }
     
+    // Pathology detection
+    quickParams.shoulderPathology = {};
+    quickParams.spinalPathology = {};
+    quickParams.lowerLimbPathology = {};
+    
+    if (lowerText.includes('impingement')) {
+      quickParams.shoulderPathology.impingement = true;
+    }
+    if (lowerText.includes('frozen shoulder')) {
+      quickParams.shoulderPathology.frozenShoulder = true;
+    }
+    if (lowerText.includes('rotator cuff')) {
+      quickParams.shoulderPathology.rotatorCuffTear = true;
+    }
+    if (lowerText.includes('kyphosis')) {
+      quickParams.spinalPathology.kyphosis = 45;
+    }
+    if (lowerText.includes('lordosis')) {
+      quickParams.spinalPathology.lordosis = 40;
+    }
+    if (lowerText.includes('trendelenburg')) {
+      quickParams.lowerLimbPathology.trendelenburg = true;
+    }
+    
+    console.log('[RealtimeVirtualPatientService] Quick analysis result:', JSON.stringify(quickParams, null, 2));
     return quickParams;
   }
 

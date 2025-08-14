@@ -337,6 +337,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     await capturePaypalOrder(req, res);
   });
 
+  // Quick transcription for real-time visual updates
+  app.post('/api/transcribe-quick', upload.single('audio'), async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: 'No audio file provided' });
+      }
+
+      const audioPath = req.file.path;
+      
+      // Quick transcription without SOAP generation
+      const transcription = await transcribeAudio(audioPath);
+      
+      // Clean up
+      await fs.unlink(audioPath);
+      
+      res.json({ transcription });
+    } catch (error: any) {
+      console.error('Quick transcription error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.post('/api/transcribe', upload.single('audio'), async (req: Request, res: Response) => {
     try {
       if (!req.file) {
@@ -6534,6 +6556,9 @@ Respond with only a number between 1-100 representing the relevance score.`;
     // Reset virtual patient parameters for new session
     realtimeVPService.resetParameters();
     
+    // Track the latest transcript for this session
+    let latestTranscript = '';
+    
     ws.on('message', async (message) => {
       try {
         const data = JSON.parse(message.toString());
@@ -6545,6 +6570,9 @@ Respond with only a number between 1-100 representing the relevance score.`;
         
         // Handle quick realtime updates for immediate visual feedback
         if (data.type === 'realtime_update' && data.transcript) {
+          // Store latest transcript
+          latestTranscript = data.transcript;
+          
           // Quick analysis for immediate feedback
           const quickParams = await realtimeVPService.quickAnalyzeTranscript(data.transcript);
           
@@ -6555,6 +6583,22 @@ Respond with only a number between 1-100 representing the relevance score.`;
             parameters: quickParams,
             timestamp: new Date().toISOString()
           }));
+        }
+        
+        // Handle request for visual update
+        if (data.type === 'request_visual_update') {
+          // Use the latest stored transcript for quick analysis
+          if (latestTranscript) {
+            const quickParams = await realtimeVPService.quickAnalyzeTranscript(latestTranscript);
+            
+            // Send quick update to client
+            ws.send(JSON.stringify({
+              type: 'realtime_update',
+              transcript: latestTranscript,
+              parameters: quickParams,
+              timestamp: new Date().toISOString()
+            }));
+          }
         }
         
         // Handle transcript updates for virtual patient and document generation

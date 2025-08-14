@@ -7032,15 +7032,20 @@ Respond with only a number between 1-100 representing the relevance score.`;
       const { documentId } = req.params;
       const sessionId = req.query.sessionId as string;
       
+      console.log(`Download request for document ${documentId} with session ${sessionId}`);
+      
       if (!sessionId) {
         return res.status(400).json({ error: 'Session ID required' });
       }
       
       // Get document from service
       const documents = realtimeDocumentService.getSessionDocuments(sessionId);
+      console.log(`Found ${documents.length} documents for session ${sessionId}`);
       const document = documents.find(d => d.id === documentId);
       
       if (!document || !document.wordPath) {
+        console.log(`Document not found: ${documentId} in session ${sessionId}`);
+        console.log(`Available documents:`, documents.map(d => d.id));
         return res.status(404).json({ error: 'Document not found' });
       }
       

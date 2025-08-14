@@ -182,9 +182,9 @@ export function RealtimeDocumentQueue({ sessionId, isRecording, pollInterval = 5
 
 
 
-  const downloadDocument = async (document: GeneratedDocument) => {
+  const downloadDocument = async (doc: GeneratedDocument) => {
     try {
-      const response = await fetch(`/api/documents/download/${document.id}?sessionId=${sessionId}`);
+      const response = await fetch(`/api/documents/download/${doc.id}?sessionId=${sessionId}`);
       
       if (!response.ok) {
         throw new Error('Failed to download document');
@@ -192,17 +192,17 @@ export function RealtimeDocumentQueue({ sessionId, isRecording, pollInterval = 5
       
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = window.document.createElement('a');
       a.href = url;
-      a.download = `${document.filename}.docx`;
-      document.body.appendChild(a);
+      a.download = `${doc.filename}.docx`;
+      window.document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      window.document.body.removeChild(a);
       
       toast({
         title: "Downloaded",
-        description: `${documentTypeLabels[document.type]} downloaded successfully`,
+        description: `${documentTypeLabels[doc.type]} downloaded successfully`,
       });
     } catch (error) {
       console.error('Download error:', error);

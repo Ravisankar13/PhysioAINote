@@ -9456,6 +9456,7 @@ Respond with only a number between 1-100 representing the relevance score.`;
     try {
       const audioFile = req.file;
       const progressiveTranscript = req.body.progressiveTranscript || '';
+      const isCompleteAudio = req.body.isCompleteAudio === 'true';
 
       if (!audioFile) {
         return res.status(400).json({ error: 'Audio chunk is required' });
@@ -9463,11 +9464,26 @@ Respond with only a number between 1-100 representing the relevance score.`;
 
       console.log(`[REAL-TIME] Processing chunk: ${audioFile.size} bytes at ${new Date().toLocaleTimeString()}`);
 
-      // Use the already uploaded file path directly
-      const chunkTranscript = await transcribeAudio(audioFile.path);
+      // Transcribe the complete audio
+      const fullTranscript = await transcribeAudio(audioFile.path);
       
       // Clean up temp file after transcription
       fs.unlinkSync(audioFile.path);
+      
+      // Extract only the new portion by removing the progressive transcript from the full transcript
+      let chunkTranscript = fullTranscript;
+      if (isCompleteAudio && progressiveTranscript) {
+        // Find the new content by removing the already processed portion
+        const progressiveLength = progressiveTranscript.length;
+        if (fullTranscript.length > progressiveLength) {
+          // Extract the new portion
+          chunkTranscript = fullTranscript.substring(progressiveLength).trim();
+          if (!chunkTranscript) {
+            // If no new content, use the last portion of the full transcript
+            chunkTranscript = fullTranscript.split(' ').slice(-50).join(' ');
+          }
+        }
+      }
 
       // Combine with progressive transcript for context
       const fullContext = progressiveTranscript 

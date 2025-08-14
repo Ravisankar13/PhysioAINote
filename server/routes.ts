@@ -6544,6 +6544,11 @@ Respond with only a number between 1-100 representing the relevance score.`;
     
     console.log(`[WebSocket] New connection attempt - sessionId: ${sessionId}, userId: ${userId}`);
     
+    // Add immediate error handler
+    ws.on('error', (error) => {
+      console.error('[WebSocket] Immediate connection error:', error);
+    });
+    
     if (!sessionId || !userId) {
       console.error('[WebSocket] Closing connection - missing sessionId or userId');
       ws.close(1000, 'Missing sessionId or userId');

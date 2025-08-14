@@ -406,19 +406,25 @@ export function RealtimeVirtualPatient({
 
   // Listen for WebSocket updates
   useEffect(() => {
-    if (!webSocket) return;
+    if (!webSocket) {
+      console.log('[RealtimeVirtualPatient] No WebSocket connection available');
+      return;
+    }
 
     const handleMessage = (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data);
+        console.log('[RealtimeVirtualPatient] Received message type:', data.type);
         
         if (data.type === 'virtual_patient_update') {
-          setParameters(data.parameters);
-          updateSkeleton(data.parameters);
+          console.log('[RealtimeVirtualPatient] Processing virtual patient update with parameters:', data.parameters);
+          setParameters(data.parameters || {});
+          updateSkeleton(data.parameters || {});
           
           // Extract pain indicators and keywords from transcript
           if (data.transcript) {
             const { keywords, painLocations } = extractClinicalKeywords(data.transcript);
+            console.log('[RealtimeVirtualPatient] Extracted keywords:', keywords, 'Pain locations:', painLocations);
             setRecentKeywords(keywords);
             
             // Add new pain indicators
@@ -431,6 +437,9 @@ export function RealtimeVirtualPatient({
               }]);
             });
           }
+          
+          // Mark as listening when we get updates
+          setIsListening(true);
         } else if (data.type === 'realtime_update') {
           // Quick updates for immediate feedback
           if (data.transcript) {
@@ -449,14 +458,16 @@ export function RealtimeVirtualPatient({
           setRecentKeywords([]);
         }
       } catch (error) {
-        console.error('Error processing virtual patient update:', error);
+        console.error('[RealtimeVirtualPatient] Error processing message:', error);
       }
     };
 
     webSocket.addEventListener('message', handleMessage);
+    console.log('[RealtimeVirtualPatient] WebSocket listener attached');
     
     return () => {
       webSocket.removeEventListener('message', handleMessage);
+      console.log('[RealtimeVirtualPatient] WebSocket listener removed');
     };
   }, [webSocket, updateSkeleton, extractClinicalKeywords]);
 

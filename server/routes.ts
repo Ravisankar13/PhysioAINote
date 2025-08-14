@@ -6550,6 +6550,11 @@ Respond with only a number between 1-100 representing the relevance score.`;
     const clientId = `${userId}-${sessionId}-${Date.now()}`;
     console.log(`WebSocket client connected: ${clientId}`);
     
+    // Ensure WebSocket is properly configured
+    ws.on('error', (error) => {
+      console.error(`WebSocket error for client ${clientId}:`, error);
+    });
+    
     // Add client to real-time AI service
     realTimeAIService.addClient(clientId, ws, parseInt(userId), sessionId);
     
@@ -6589,12 +6594,17 @@ Respond with only a number between 1-100 representing the relevance score.`;
           const quickParams = realtimeVPService.quickAnalyzeTranscript(data.transcript);
           
           // Send virtual patient update to client
-          ws.send(JSON.stringify({
-            type: 'virtual_patient_update',
-            parameters: quickParams,
-            transcript: data.transcript,
-            timestamp: new Date().toISOString()
-          }));
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+              type: 'virtual_patient_update',
+              parameters: quickParams,
+              transcript: data.transcript,
+              timestamp: new Date().toISOString()
+            }));
+            console.log('[WebSocket] Sent virtual_patient_update with parameters:', quickParams);
+          } else {
+            console.log('[WebSocket] Cannot send update - WebSocket not open, state:', ws.readyState);
+          }
         }
         
         // Handle request for visual update

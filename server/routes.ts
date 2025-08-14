@@ -7016,12 +7016,16 @@ Respond with only a number between 1-100 representing the relevance score.`;
         }
       }
       
-      // Get document from service
-      const documents = realtimeDocumentService.getSessionDocuments(sessionId);
-      const document = documents.find(d => d.id === documentId);
+      // Get document from database
+      const document = await storage.getGeneratedDocument(documentId);
       
-      if (!document) {
+      if (!document || document.sessionId !== sessionId) {
         return res.json({ status: 'not_found', documentId });
+      }
+      
+      // Verify user owns this document
+      if (document.userId !== req.user!.id) {
+        return res.status(403).json({ error: 'Access denied' });
       }
       
       res.json({

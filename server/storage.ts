@@ -83,6 +83,9 @@ import {
   type InsertComparativeAnalysis,
   treatmentOutcomes,
   type TreatmentOutcome,
+  generatedDocuments,
+  type GeneratedDocument,
+  type InsertGeneratedDocument,
   type InsertTreatmentOutcome,
   forumPosts,
   type ForumPost,
@@ -920,6 +923,45 @@ export class DatabaseStorage implements IStorage {
       .where(eq(researchArticles.id, id))
       .returning();
     return result[0];
+  }
+
+  // Generated Documents Methods
+  async createGeneratedDocument(document: InsertGeneratedDocument): Promise<GeneratedDocument> {
+    const result = await db
+      .insert(generatedDocuments)
+      .values(document)
+      .returning();
+    return result[0];
+  }
+
+  async getGeneratedDocument(documentId: string): Promise<GeneratedDocument | undefined> {
+    const results = await db
+      .select()
+      .from(generatedDocuments)
+      .where(eq(generatedDocuments.id, documentId));
+    return results.length > 0 ? results[0] : undefined;
+  }
+
+  async getGeneratedDocumentsBySession(sessionId: string, userId: number): Promise<GeneratedDocument[]> {
+    return await db
+      .select()
+      .from(generatedDocuments)
+      .where(
+        and(
+          eq(generatedDocuments.sessionId, sessionId),
+          eq(generatedDocuments.userId, userId)
+        )
+      )
+      .orderBy(desc(generatedDocuments.generatedAt));
+  }
+
+  async updateGeneratedDocument(documentId: string, updates: Partial<GeneratedDocument>): Promise<GeneratedDocument | undefined> {
+    const result = await db
+      .update(generatedDocuments)
+      .set(updates)
+      .where(eq(generatedDocuments.id, documentId))
+      .returning();
+    return result.length > 0 ? result[0] : undefined;
   }
 
   // User Membership Methods

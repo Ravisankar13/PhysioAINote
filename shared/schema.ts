@@ -1819,6 +1819,30 @@ export const insertExerciseSchema = createInsertSchema(exercises).omit({
 export type InsertExercise = z.infer<typeof insertExerciseSchema>;
 export type Exercise = typeof exercises.$inferSelect;
 
+// Generated Documents Schema
+export const generatedDocuments = pgTable("generated_documents", {
+  id: text("id").primaryKey(), // Using document ID as primary key
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  sessionId: text("session_id").notNull(),
+  type: text("type").notNull(), // doctor_report, ahtr, discharge_summary, etc.
+  filename: text("filename").notNull(),
+  status: text("status").notNull(), // generating, ready, error
+  wordPath: text("word_path"), // Path to Word document
+  pdfPath: text("pdf_path"), // Path to PDF document
+  error: text("error"), // Error message if generation failed
+  metadata: json("metadata").$type<any>(), // Additional metadata
+  generatedAt: timestamp("generated_at").defaultNow().notNull(),
+});
+
+export const insertGeneratedDocumentSchema = createInsertSchema(generatedDocuments).omit({
+  generatedAt: true,
+});
+
+export type InsertGeneratedDocument = z.infer<typeof insertGeneratedDocumentSchema>;
+export type GeneratedDocument = typeof generatedDocuments.$inferSelect;
+
 // Patient Session Schema
 export const patientSessions = pgTable("patient_sessions", {
   id: serial("id").primaryKey(),

@@ -3,6 +3,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { randomUUID } from 'crypto';
 import OpenAI from 'openai';
+import { storage } from '../storage';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -136,27 +137,35 @@ export class RealtimeDocumentService {
   // Generate document based on type
   public async generateDocument(request: DocumentGenerationRequest): Promise<GeneratedDocument> {
     const documentId = request.documentId || randomUUID();
-    const document: GeneratedDocument = {
+    
+    // Create initial document record in database
+    const dbDocument = await storage.createGeneratedDocument({
       id: documentId,
+      userId: request.userId || 1, // Default to 1 if not provided
+      sessionId: request.sessionId,
       type: request.type,
       filename: `${request.type}_${Date.now()}`,
-      generatedAt: new Date(),
-      status: 'generating'
-    };
-
-    // Add to queue
-    if (!this.documentQueue.has(request.sessionId)) {
-      this.documentQueue.set(request.sessionId, []);
-    }
-    this.documentQueue.get(request.sessionId)!.push(document);
-    console.log(`Document ${documentId} added to queue for session ${request.sessionId}`);
+      status: 'generating',
+      wordPath: null,
+      pdfPath: null,
+      error: null,
+      metadata: null
+    });
+    
+    console.log(`Document ${documentId} created in database for session ${request.sessionId}`);
 
     // Prevent duplicate generations
     const generationKey = `${request.sessionId}_${request.type}`;
     if (this.activeGenerations.has(generationKey)) {
-      document.status = 'error';
-      document.error = 'Already generating this document type';
-      return document;
+      await storage.updateGeneratedDocument(documentId, {
+        status: 'error',
+        error: 'Already generating this document type'
+      });
+      return {
+        ...dbDocument,
+        status: 'error',
+        error: 'Already generating this document type'
+      };
     }
 
     this.activeGenerations.add(generationKey);
@@ -167,19 +176,40 @@ export class RealtimeDocumentService {
       
       // Create Word document
       const wordPath = await this.createWordDocument(request.type, content, documentId);
-      document.wordPath = wordPath;
       
-      // Update status
-      document.status = 'ready';
+      // Update document in database
+      const updatedDocument = await storage.updateGeneratedDocument(documentId, {
+        status: 'ready',
+        wordPath: wordPath
+      });
+      
+      console.log(`Document ${documentId} updated in database with status: ready, path: ${wordPath}`);
+      
+      return {
+        id: documentId,
+        type: request.type,
+        filename: dbDocument.filename,
+        wordPath: wordPath,
+        status: 'ready',
+        generatedAt: dbDocument.generatedAt
+      };
     } catch (error) {
       console.error('Document generation error:', error);
-      document.status = 'error';
-      document.error = error.message;
+      await storage.updateGeneratedDocument(documentId, {
+        status: 'error',
+        error: error.message
+      });
+      return {
+        id: documentId,
+        type: request.type,
+        filename: dbDocument.filename,
+        status: 'error',
+        error: error.message,
+        generatedAt: dbDocument.generatedAt
+      };
     } finally {
       this.activeGenerations.delete(generationKey);
     }
-
-    return document;
   }
 
   // Generate document content using OpenAI

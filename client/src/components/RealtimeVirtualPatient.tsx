@@ -389,6 +389,11 @@ export function RealtimeVirtualPatient({
       console.log('[RealtimeVirtualPatient] Visualizing pain locations:', params.painLocations);
       
       params.painLocations.forEach(location => {
+        // Skip null or undefined locations
+        if (!location) {
+          console.log('[RealtimeVirtualPatient] Skipping null/undefined location');
+          return;
+        }
         const lowerLocation = location.toLowerCase();
         
         // Create glowing pain indicator sphere

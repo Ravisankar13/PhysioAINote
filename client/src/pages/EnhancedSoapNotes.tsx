@@ -508,9 +508,14 @@ export default function EnhancedSoapNotesPage() {
         
         // Ensure we have the expected structure
         if (params.painLocations && Array.isArray(params.painLocations)) {
-          const locations = params.painLocations.map((loc: any) => 
-            typeof loc === 'string' ? loc : loc.location
-          );
+          const locations = params.painLocations.map((loc: any) => {
+            if (typeof loc === 'string') return loc;
+            // Handle object format from API - convert bodyPart to readable location
+            if (loc.bodyPart) {
+              return loc.bodyPart.replace(/_/g, ' '); // Convert "right_shoulder" to "right shoulder"
+            }
+            return loc.location || 'unknown';
+          });
           console.log('[PainAnalysis] Setting pain locations:', locations);
           setVirtualPatientParams({ painLocations: locations });
         } else {

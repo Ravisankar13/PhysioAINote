@@ -6950,32 +6950,41 @@ Respond with only a number between 1-100 representing the relevance score.`;
       // Generate document ID
       const documentId = `doc-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       
-      // Start document generation asynchronously
-      const documentPromise = realtimeDocumentService.generateDocument({
-        type: documentType,
-        soapData: soapData || {
-          subjective: '',
-          objective: '',
-          assessment: '',
-          plan: ''
-        },
-        patientInfo: {},
-        sessionId: sessionId,
-        userId: req.user!.id,
-        documentId: documentId  // Pass the ID to the service
-      });
+      // Generate document synchronously and wait for it to complete
+      console.log(`Starting document generation: ${documentId} for session: ${sessionId}`);
       
-      documentPromise.then(document => {
-        console.log(`Document generated successfully: ${documentId}`);
-      }).catch(error => {
-        console.error(`Document generation failed: ${documentId}`, error);
-      });
-      
-      res.json({ 
-        documentId,
-        message: 'Document generation started',
-        status: 'generating'
-      });
+      try {
+        // Wait for document to be generated
+        const document = await realtimeDocumentService.generateDocument({
+          type: documentType,
+          soapData: soapData || {
+            subjective: '',
+            objective: '',
+            assessment: '',
+            plan: ''
+          },
+          patientInfo: {},
+          sessionId: sessionId,
+          userId: req.user!.id,
+          documentId: documentId  // Pass the ID to the service
+        });
+        
+        console.log(`Document generated successfully: ${documentId} for session: ${sessionId}`);
+        console.log(`Document stored with status: ${document.status}, path: ${document.wordPath}`);
+        
+        res.json({ 
+          documentId,
+          message: 'Document generated successfully',
+          status: document.status,
+          wordPath: document.wordPath
+        });
+      } catch (error) {
+        console.error(`Document generation failed: ${documentId} for session: ${sessionId}`, error);
+        res.status(500).json({ 
+          error: 'Failed to generate document',
+          documentId 
+        });
+      }
     } catch (error) {
       console.error('Error initiating document generation:', error);
       res.status(500).json({ error: 'Failed to start document generation' });

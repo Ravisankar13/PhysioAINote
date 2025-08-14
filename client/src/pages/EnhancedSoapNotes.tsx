@@ -742,14 +742,27 @@ export default function EnhancedSoapNotesPage() {
           
           if (response.ok) {
             const data = await response.json();
-            console.log(`Document generation initiated: ${data.documentId}`);
+            console.log(`Document generation response:`, data);
             
             // Mark as generated
             setGeneratedDocuments(prev => new Set([...prev, type]));
             
-            // Add document to queue for polling in RealtimeDocumentQueue
-            if ((window as any).addDocumentToQueue) {
-              (window as any).addDocumentToQueue(data.documentId, type, name);
+            // If document is already ready, show success immediately
+            if (data.status === 'ready' && data.wordPath) {
+              toast({
+                title: "Document Ready",
+                description: `${name} has been generated successfully!`,
+              });
+              
+              // Still add to queue for display
+              if ((window as any).addDocumentToQueue) {
+                (window as any).addDocumentToQueue(data.documentId, type, name);
+              }
+            } else {
+              // Add document to queue for polling if still generating
+              if ((window as any).addDocumentToQueue) {
+                (window as any).addDocumentToQueue(data.documentId, type, name);
+              }
             }
           } else {
             console.error(`Failed to generate document: ${type}`);

@@ -149,6 +149,7 @@ export class RealtimeDocumentService {
       this.documentQueue.set(request.sessionId, []);
     }
     this.documentQueue.get(request.sessionId)!.push(document);
+    console.log(`Document ${documentId} added to queue for session ${request.sessionId}`);
 
     // Prevent duplicate generations
     const generationKey = `${request.sessionId}_${request.type}`;
@@ -404,7 +405,12 @@ ${JSON.stringify(request.soapData, null, 2)}`
 
   // Get documents for a session
   public getSessionDocuments(sessionId: string): GeneratedDocument[] {
-    return this.documentQueue.get(sessionId) || [];
+    const documents = this.documentQueue.get(sessionId) || [];
+    console.log(`Getting documents for session ${sessionId}: found ${documents.length} documents`);
+    if (documents.length > 0) {
+      console.log(`Document IDs:`, documents.map(d => d.id));
+    }
+    return documents;
   }
 
   // Clear session documents

@@ -60,25 +60,69 @@ export function RealtimeDocumentQueue({ sessionId, isRecording, pollInterval = 5
 
   // Function to add a document to the queue for polling
   const addDocumentForPolling = (documentId: string, documentType: string, documentName: string) => {
-    // Add to generating types
-    setGeneratingTypes(prev => new Set([...prev, documentType]));
-    
-    // Add placeholder document
-    const placeholderDoc: GeneratedDocument = {
-      id: documentId,
-      type: documentType,
-      filename: `${documentType}_${Date.now()}`,
-      status: 'generating'
-    };
-    
-    setDocuments(prev => [placeholderDoc, ...prev]);
-    
-    // Start polling for document status
-    const interval = setInterval(async () => {
-      try {
-        const response = await fetch(`/api/documents/status/${documentId}?sessionId=${sessionId}`, {
-          credentials: 'include'
-        });
+    // First check if document is already ready
+    fetch(`/api/documents/status/${documentId}?sessionId=${sessionId}`, {
+      credentials: 'include'
+    }).then(async response => {
+      if (response.ok) {
+        const data = await response.json();
+        
+        if (data.status === 'ready') {
+          // Document is already ready, add it immediately
+          const readyDoc: GeneratedDocument = {
+            id: documentId,
+            type: documentType,
+            filename: data.filename || `${documentType}_${Date.now()}`,
+            status: 'ready',
+            wordPath: data.downloadUrl,
+            generatedAt: new Date()
+          };
+          
+          setDocuments(prev => [readyDoc, ...prev]);
+          
+          // Show success toast with download button
+          toast({
+            title: "Document Ready",
+            description: (
+              <div className="flex items-center justify-between">
+                <span>{documentName} is ready!</span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => downloadDocument(readyDoc)}
+                >
+                  <Download className="w-3 h-3 mr-1" />
+                  Download
+                </Button>
+              </div>
+            ),
+            duration: 10000,
+          });
+          
+          return; // Don't start polling
+        }
+      }
+      
+      // If not ready, start polling
+      // Add to generating types
+      setGeneratingTypes(prev => new Set([...prev, documentType]));
+      
+      // Add placeholder document
+      const placeholderDoc: GeneratedDocument = {
+        id: documentId,
+        type: documentType,
+        filename: `${documentType}_${Date.now()}`,
+        status: 'generating'
+      };
+      
+      setDocuments(prev => [placeholderDoc, ...prev]);
+      
+      // Start polling for document status
+      const interval = setInterval(async () => {
+        try {
+          const response = await fetch(`/api/documents/status/${documentId}?sessionId=${sessionId}`, {
+            credentials: 'include'
+          });
         
         if (response.ok) {
           const data = await response.json();
@@ -164,8 +208,11 @@ export function RealtimeDocumentQueue({ sessionId, isRecording, pollInterval = 5
       }
     }, pollInterval);
     
-    // Store interval for cleanup
-    setPollingDocuments(prev => new Map(prev).set(documentId, interval));
+      // Store interval for cleanup
+      setPollingDocuments(prev => new Map(prev).set(documentId, interval));
+    }).catch(error => {
+      console.error('Error checking initial document status:', error);
+    });
   };
   
   // Expose function to parent component for adding documents

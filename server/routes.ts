@@ -9279,6 +9279,65 @@ Respond with only a number between 1-100 representing the relevance score.`;
     }
   });
 
+  // Real-time SOAP chunk processing endpoint
+  app.post("/api/soap-notes/real-time-chunk", upload.single('audio'), async (req: Request, res: Response) => {
+    try {
+      const audioFile = req.file;
+      const progressiveTranscript = req.body.progressiveTranscript || '';
+
+      if (!audioFile) {
+        return res.status(400).json({ error: 'Audio chunk is required' });
+      }
+
+      console.log(`Processing real-time chunk: ${audioFile.size} bytes`);
+
+      // Save audio chunk temporarily for transcription
+      const tempPath = path.join(os.tmpdir(), `chunk_${Date.now()}.webm`);
+      fs.writeFileSync(tempPath, audioFile.buffer);
+
+      // Transcribe the audio chunk
+      const chunkTranscript = await transcribeAudio(tempPath);
+      
+      // Clean up temp file
+      fs.unlinkSync(tempPath);
+
+      // Combine with progressive transcript for context
+      const fullContext = progressiveTranscript 
+        ? `${progressiveTranscript} ${chunkTranscript}`
+        : chunkTranscript;
+
+      // Generate/update SOAP sections using AI with the last 5 minutes of context
+      const contextWords = fullContext.split(' ');
+      const recentContext = contextWords.slice(-1500).join(' '); // ~5 minutes of speech
+
+      // Generate SOAP sections progressively
+      const soapSections = await soapNotesService.generateProgressiveSoapSections(
+        recentContext,
+        chunkTranscript
+      );
+
+      // Generate AI suggestions based on current context
+      const aiSuggestions = await soapNotesService.generateAISuggestions(recentContext);
+
+      // Check for patient switch
+      const patientSwitch = await soapNotesService.analyzePatientSwitch(
+        chunkTranscript,
+        progressiveTranscript
+      );
+
+      res.json({
+        transcription: chunkTranscript,
+        soapSections,
+        aiSuggestions,
+        patientSwitch,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error: any) {
+      console.error("Error processing real-time chunk:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // ============================================================================
   // AI AUTOMATIC PAPERWORK API ROUTES
   // ============================================================================

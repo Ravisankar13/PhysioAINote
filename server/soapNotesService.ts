@@ -364,6 +364,131 @@ Respond with JSON in this format:
   }
 
   /**
+   * Generates progressive SOAP sections for real-time updates
+   */
+  async generateProgressiveSoapSections(
+    recentContext: string,
+    newChunk: string
+  ): Promise<{
+    subjective: string;
+    objective: string;
+    assessment: string;
+    plan: string;
+  }> {
+    try {
+      const prompt = `
+You are analyzing a real-time physiotherapy consultation. Based on the recent conversation context and the latest chunk, progressively update the SOAP note sections.
+
+Recent Context (last 5 minutes):
+"${recentContext}"
+
+New Information:
+"${newChunk}"
+
+Generate updated SOAP sections incorporating the new information. Be concise but comprehensive.
+Focus on clinically relevant information and maintain professional medical documentation standards.
+
+Respond with JSON in this format:
+{
+  "subjective": "Patient's reported symptoms, history, and concerns",
+  "objective": "Observable findings, measurements, and test results",
+  "assessment": "Clinical analysis and diagnosis",
+  "plan": "Treatment plan and recommendations"
+}
+`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: "You are an expert physiotherapist creating progressive SOAP notes during a live consultation. Update sections as new information becomes available."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.3,
+        max_tokens: 1000
+      });
+
+      const result = JSON.parse(response.choices[0].message.content || '{}');
+      
+      return {
+        subjective: result.subjective || '',
+        objective: result.objective || '',
+        assessment: result.assessment || '',
+        plan: result.plan || ''
+      };
+    } catch (error) {
+      console.error("Error generating progressive SOAP sections:", error);
+      return {
+        subjective: '',
+        objective: '',
+        assessment: '',
+        plan: ''
+      };
+    }
+  }
+
+  /**
+   * Generates AI suggestions for real-time assistance
+   */
+  async generateAISuggestions(context: string): Promise<any[]> {
+    try {
+      const prompt = `
+Based on this physiotherapy consultation context, provide 3-5 clinical suggestions or considerations.
+
+Context:
+"${context}"
+
+Focus on:
+1. Potential red flags or safety concerns
+2. Differential diagnoses to consider
+3. Assessment techniques or tests to perform
+4. Treatment options or modifications
+5. Documentation reminders
+
+Respond with JSON array of suggestions in this format:
+[
+  {
+    "id": "unique_id",
+    "type": "assessment|differential|treatment|red-flag|documentation",
+    "suggestion": "The specific suggestion",
+    "reasoning": "Brief clinical reasoning",
+    "priority": "high|normal"
+  }
+]
+`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: "You are an expert physiotherapist providing real-time clinical decision support."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.4,
+        max_tokens: 800
+      });
+
+      const result = JSON.parse(response.choices[0].message.content || '{"suggestions":[]}');
+      return result.suggestions || [];
+    } catch (error) {
+      console.error("Error generating AI suggestions:", error);
+      return [];
+    }
+  }
+
+  /**
    * Generates automatic paperwork for a SOAP note using AI
    */
   async generateAutomaticPaperwork(soapNoteId: number): Promise<SoapNote> {

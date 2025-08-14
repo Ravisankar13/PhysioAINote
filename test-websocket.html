@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Test</title>
+</head>
+<body>
+    <h1>WebSocket Virtual Patient Test</h1>
+    <button onclick="connect()">Connect</button>
+    <button onclick="sendUpdate()">Send Test Update</button>
+    <button onclick="disconnect()">Disconnect</button>
+    <div id="status">Not connected</div>
+    <div id="messages"></div>
+    
+    <script>
+        let ws = null;
+        
+        function connect() {
+            const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+            const wsUrl = `${protocol}//${window.location.host}/ws/soap-ai?sessionId=test-${Date.now()}&userId=1`;
+            
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = () => {
+                document.getElementById('status').textContent = 'Connected';
+                console.log('WebSocket connected');
+                
+                // Send init message
+                ws.send(JSON.stringify({
+                    type: 'connection_init',
+                    sessionId: 'test',
+                    userId: 1,
+                    timestamp: new Date().toISOString()
+                }));
+            };
+            
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                console.log('Message received:', data);
+                
+                const messagesDiv = document.getElementById('messages');
+                const msgElement = document.createElement('div');
+                msgElement.textContent = `${new Date().toLocaleTimeString()} - Type: ${data.type}`;
+                
+                if (data.type === 'virtual_patient_update') {
+                    msgElement.style.color = 'green';
+                    msgElement.textContent += ` - Parameters: ${JSON.stringify(data.parameters)}`;
+                }
+                
+                messagesDiv.appendChild(msgElement);
+            };
+            
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                document.getElementById('status').textContent = 'Error';
+            };
+            
+            ws.onclose = () => {
+                console.log('WebSocket disconnected');
+                document.getElementById('status').textContent = 'Disconnected';
+            };
+        }
+        
+        function sendUpdate() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'realtime_update',
+                    transcript: 'The patient has severe shoulder pain and knee pain. The pain is sharp and aching.',
+                    timestamp: new Date().toISOString()
+                }));
+                console.log('Sent test update');
+            }
+        }
+        
+        function disconnect() {
+            if (ws) {
+                ws.close();
+            }
+        }
+    </script>
+</body>
+</html>

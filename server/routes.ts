@@ -6562,6 +6562,18 @@ Respond with only a number between 1-100 representing the relevance score.`;
     ws.on('message', async (message) => {
       try {
         const data = JSON.parse(message.toString());
+        console.log(`WebSocket message received - type: ${data.type}`);
+        
+        // Handle connection initialization
+        if (data.type === 'connection_init') {
+          console.log(`Connection initialized for session ${data.sessionId}`);
+          // Send initial acknowledgment
+          ws.send(JSON.stringify({
+            type: 'connection_ack',
+            timestamp: new Date().toISOString()
+          }));
+          return;
+        }
         
         if (data.type === 'context_update') {
           // Generate suggestions when context is updated

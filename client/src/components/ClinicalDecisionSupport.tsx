@@ -61,7 +61,7 @@ export function ClinicalDecisionSupport({
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [expandedDifferential, setExpandedDifferential] = useState<string | null>(null);
   const [expandedGuideline, setExpandedGuideline] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState('alerts');
+  const [activeTab, setActiveTab] = useState('diagnosis');
   const { toast } = useToast();
 
   // Analyze transcript for red flags in real-time
@@ -196,6 +196,10 @@ export function ClinicalDecisionSupport({
       <CardContent>
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="diagnosis" className="flex items-center gap-1">
+              <Stethoscope className="w-4 h-4" />
+              Differentials
+            </TabsTrigger>
             <TabsTrigger value="alerts" className="flex items-center gap-1">
               <ShieldAlert className="w-4 h-4" />
               Red Flags
@@ -204,10 +208,6 @@ export function ClinicalDecisionSupport({
                   {redFlags.length}
                 </Badge>
               )}
-            </TabsTrigger>
-            <TabsTrigger value="diagnosis" className="flex items-center gap-1">
-              <Stethoscope className="w-4 h-4" />
-              Differentials
             </TabsTrigger>
             <TabsTrigger value="guidelines" className="flex items-center gap-1">
               <Book className="w-4 h-4" />

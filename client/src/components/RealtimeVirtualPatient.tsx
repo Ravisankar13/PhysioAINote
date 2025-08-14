@@ -185,6 +185,14 @@ export function RealtimeVirtualPatient({
     const animate = () => {
       animationIdRef.current = requestAnimationFrame(animate);
       controls.update();
+      
+      // Animate pain spheres
+      scene.children.forEach(child => {
+        if (child.name === 'painSphere' && (child as any).animationFunction) {
+          (child as any).animationFunction();
+        }
+      });
+      
       renderer.render(scene, camera);
     };
     animate();
@@ -216,7 +224,7 @@ export function RealtimeVirtualPatient({
     
     // Material for bones
     const boneMaterial = new THREE.MeshPhongMaterial({ 
-      color: 0xe8e8e8,
+      color: 0x4a5568,  // Default gray-blue color
       shininess: 30,
       specular: 0x444444
     });
@@ -358,7 +366,134 @@ export function RealtimeVirtualPatient({
 
   // Update skeleton based on parameters
   const updateSkeleton = useCallback((params: VirtualPatientParameters) => {
-    if (!skeletonRef.current) return;
+    if (!skeletonRef.current || !sceneRef.current) return;
+
+    // First, reset all bone colors to default
+    skeletonRef.current.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        const material = child.material as THREE.MeshPhongMaterial;
+        if (material.color) {
+          material.color.setHex(0x4a5568); // Default bone color
+        }
+      }
+    });
+
+    // Remove existing pain spheres
+    const painSpheres = sceneRef.current.children.filter(child => child.name === 'painSphere');
+    painSpheres.forEach(sphere => sceneRef.current!.remove(sphere));
+
+    // Visualize pain locations with color changes and glowing spheres
+    if (params.painLocations && params.painLocations.length > 0) {
+      console.log('[RealtimeVirtualPatient] Visualizing pain locations:', params.painLocations);
+      
+      params.painLocations.forEach(location => {
+        const lowerLocation = location.toLowerCase();
+        
+        // Create glowing pain indicator sphere
+        const painGeometry = new THREE.SphereGeometry(0.15, 16, 16);
+        const painMaterial = new THREE.MeshPhongMaterial({
+          color: 0xff0000,
+          emissive: 0xff0000,
+          emissiveIntensity: 0.5,
+          transparent: true,
+          opacity: 0.6
+        });
+        const painSphere = new THREE.Mesh(painGeometry, painMaterial);
+        painSphere.name = 'painSphere';
+
+        // Position pain sphere based on location
+        let positioned = false;
+        
+        if (lowerLocation.includes('shoulder')) {
+          const side = lowerLocation.includes('left') ? -1 : lowerLocation.includes('right') ? 1 : 1;
+          painSphere.position.set(side * 0.25, 1.5, 0);
+          positioned = true;
+          // Color the shoulder area
+          const armName = side === -1 ? 'leftArm' : 'rightArm';
+          const arm = skeletonRef.current.getObjectByName(armName);
+          if (arm) {
+            arm.traverse((child) => {
+              if (child instanceof THREE.Mesh && child.position.y > 1.3) {
+                const material = child.material as THREE.MeshPhongMaterial;
+                material.color.setHex(0xff6b6b);
+              }
+            });
+          }
+        } else if (lowerLocation.includes('neck') || lowerLocation.includes('cervical')) {
+          painSphere.position.set(0, 1.7, 0);
+          positioned = true;
+        } else if (lowerLocation.includes('back') || lowerLocation.includes('lumbar') || lowerLocation.includes('spine')) {
+          painSphere.position.set(0, 1.2, -0.1);
+          positioned = true;
+          // Color the spine
+          skeletonRef.current.traverse((child) => {
+            if (child instanceof THREE.Mesh && child.parent?.position.y === 0.8) {
+              const material = child.material as THREE.MeshPhongMaterial;
+              material.color.setHex(0xff6b6b);
+            }
+          });
+        } else if (lowerLocation.includes('knee')) {
+          const side = lowerLocation.includes('left') ? -1 : lowerLocation.includes('right') ? 1 : 0;
+          if (side !== 0) {
+            painSphere.position.set(side * 0.15, 0.2, 0);
+            positioned = true;
+            // Color the knee area
+            const legName = side === -1 ? 'leftLeg' : 'rightLeg';
+            const leg = skeletonRef.current.getObjectByName(legName);
+            if (leg) {
+              leg.traverse((child) => {
+                if (child instanceof THREE.Mesh && Math.abs(child.position.y - 0.2) < 0.1) {
+                  const material = child.material as THREE.MeshPhongMaterial;
+                  material.color.setHex(0xff6b6b);
+                }
+              });
+            }
+          }
+        } else if (lowerLocation.includes('hip')) {
+          const side = lowerLocation.includes('left') ? -1 : lowerLocation.includes('right') ? 1 : 1;
+          painSphere.position.set(side * 0.15, 0.7, 0);
+          positioned = true;
+          // Color the hip area
+          const legName = side === -1 ? 'leftLeg' : 'rightLeg';
+          const leg = skeletonRef.current.getObjectByName(legName);
+          if (leg) {
+            leg.traverse((child) => {
+              if (child instanceof THREE.Mesh && child.position.y > 0.6) {
+                const material = child.material as THREE.MeshPhongMaterial;
+                material.color.setHex(0xff6b6b);
+              }
+            });
+          }
+        } else if (lowerLocation.includes('ankle') || lowerLocation.includes('foot')) {
+          const side = lowerLocation.includes('left') ? -1 : lowerLocation.includes('right') ? 1 : 0;
+          if (side !== 0) {
+            painSphere.position.set(side * 0.15, -0.15, 0);
+            positioned = true;
+          }
+        } else if (lowerLocation.includes('elbow')) {
+          const side = lowerLocation.includes('left') ? -1 : lowerLocation.includes('right') ? 1 : 1;
+          painSphere.position.set(side * 0.25, 1.1, 0);
+          positioned = true;
+        }
+
+        // Add pulsing animation to pain sphere
+        if (positioned) {
+          sceneRef.current.add(painSphere);
+          
+          // Animate the pain sphere
+          const animatePainSphere = () => {
+            const time = Date.now() * 0.001;
+            painSphere.scale.setScalar(1 + Math.sin(time * 3) * 0.2);
+            if (painMaterial.emissiveIntensity) {
+              painMaterial.emissiveIntensity = 0.3 + Math.sin(time * 2) * 0.2;
+            }
+          };
+          
+          // Store animation function for later use
+          (painSphere as any).animationFunction = animatePainSphere;
+        }
+      });
+    }
 
     // Update limb scaling
     if (params.limbScales) {

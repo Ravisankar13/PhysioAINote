@@ -1,4 +1,5 @@
 import { Document, Packer, Paragraph, HeadingLevel, AlignmentType } from 'docx';
+import { PDFDocument, PDFForm, rgb, StandardFonts } from 'pdf-lib';
 import fs from 'fs/promises';
 import path from 'path';
 import { randomUUID } from 'crypto';
@@ -174,22 +175,31 @@ export class RealtimeDocumentService {
       // Generate content using OpenAI
       const content = await this.generateDocumentContent(request);
       
-      // Create Word document
-      const wordPath = await this.createWordDocument(request.type, content, documentId);
+      let documentPath: string;
+      let pathField: 'wordPath' | 'pdfPath';
+      
+      // Handle AHTR as PDF form filling, others as Word documents
+      if (request.type === 'ahtr') {
+        documentPath = await this.fillAHTRPdfForm(content, documentId);
+        pathField = 'pdfPath';
+      } else {
+        documentPath = await this.createWordDocument(request.type, content, documentId);
+        pathField = 'wordPath';
+      }
       
       // Update document in database
       const updatedDocument = await storage.updateGeneratedDocument(documentId, {
         status: 'ready',
-        wordPath: wordPath
+        [pathField]: documentPath
       });
       
-      console.log(`Document ${documentId} updated in database with status: ready, path: ${wordPath}`);
+      console.log(`Document ${documentId} updated in database with status: ready, path: ${documentPath}`);
       
       return {
         id: documentId,
         type: request.type,
         filename: dbDocument.filename,
-        wordPath: wordPath,
+        [pathField]: documentPath,
         status: 'ready',
         generatedAt: dbDocument.generatedAt
       };
@@ -242,12 +252,36 @@ Plan: ${request.soapData.plan}
 
 Generate a structured report with sections for: Patient Presentation, Clinical Examination, Diagnosis, Treatment Plan, Prognosis, and Recommendations.`,
 
-      'ahtr': `Generate an Allied Health Treatment Request (AHTR) form based on the following clinical information. Include all necessary sections for insurance/funding approval.
+      'ahtr': shouldUseTranscript 
+        ? `Generate a comprehensive Allied Health Treatment Request based on the following patient consultation transcript. Extract clinical information, identify treatment goals, barriers to recovery, and create an intervention plan.
 
-Clinical Information:
-${JSON.stringify(request.soapData, null, 2)}
+Patient Consultation Transcript:
+${transcript}
 
-Include: Patient details, Diagnosis codes, Clinical justification, Treatment goals, Proposed treatment plan, Expected outcomes, and Duration of treatment.`,
+Generate the following sections with specific details from the transcript:
+1. Compensable injury/illness
+2. Current clinical signs and symptoms
+3. Pre-injury capacity vs Current capacity
+4. Barriers to recovery
+5. Treatment goals (SMART format)
+6. Intervention plan
+7. Number of sessions needed`
+        : `Generate a comprehensive Allied Health Treatment Request based on the following SOAP note.
+
+SOAP Note:
+Subjective: ${request.soapData.subjective}
+Objective: ${request.soapData.objective}
+Assessment: ${request.soapData.assessment}
+Plan: ${request.soapData.plan}
+
+Generate the following sections:
+1. Compensable injury/illness
+2. Current clinical signs and symptoms
+3. Pre-injury capacity vs Current capacity
+4. Barriers to recovery
+5. Treatment goals (SMART format)
+6. Intervention plan
+7. Number of sessions needed`,
 
       'discharge_summary': `Generate a comprehensive discharge summary including: Admission reason, Clinical course, Treatments provided, Current status, Discharge instructions, Follow-up recommendations.
 
@@ -339,6 +373,140 @@ ${JSON.stringify(request.soapData, null, 2)}`
     }
 
     return sections;
+  }
+
+  // Fill AHTR PDF form with generated content
+  private async fillAHTRPdfForm(content: any, documentId: string): Promise<string> {
+    try {
+      // Load the template PDF
+      const templatePath = path.join(process.cwd(), 'server', 'templates', 'ahtr-template.pdf');
+      const existingPdfBytes = await fs.readFile(templatePath);
+      const pdfDoc = await PDFDocument.load(existingPdfBytes);
+      
+      // Parse AI-generated content to extract structured data
+      const ahtrData = typeof content === 'string' ? this.parseAHTRContent(content) : content;
+      
+      // Get the first page
+      const pages = pdfDoc.getPages();
+      const firstPage = pages[0];
+      const { width, height } = firstPage.getSize();
+      
+      // Embed font
+      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      const fontSize = 10;
+      
+      // Add content to specific positions on the PDF
+      // Request number and date
+      firstPage.drawText(documentId.substring(0, 8), {
+        x: 150,
+        y: height - 95,
+        size: fontSize,
+        font,
+        color: rgb(0, 0, 0),
+      });
+      
+      firstPage.drawText(new Date().toLocaleDateString('en-AU'), {
+        x: 450,
+        y: height - 95,
+        size: fontSize,
+        font,
+        color: rgb(0, 0, 0),
+      });
+      
+      // Compensable injury/illness
+      if (ahtrData.injury) {
+        const injuryText = this.wrapText(ahtrData.injury, 80);
+        let yPos = height - 220;
+        injuryText.forEach(line => {
+          firstPage.drawText(line, {
+            x: 50,
+            y: yPos,
+            size: fontSize,
+            font,
+            color: rgb(0, 0, 0),
+          });
+          yPos -= 12;
+        });
+      }
+      
+      // Current clinical signs and symptoms
+      if (ahtrData.symptoms) {
+        const symptomsText = this.wrapText(ahtrData.symptoms, 80);
+        let yPos = height - 280;
+        symptomsText.forEach(line => {
+          firstPage.drawText(line, {
+            x: 50,
+            y: yPos,
+            size: fontSize,
+            font,
+            color: rgb(0, 0, 0),
+          });
+          yPos -= 12;
+        });
+      }
+      
+      // Save the filled PDF
+      const pdfBytes = await pdfDoc.save();
+      
+      // Create documents directory if it doesn't exist
+      const documentsDir = path.join(process.cwd(), 'documents');
+      await fs.mkdir(documentsDir, { recursive: true });
+      
+      // Save the PDF file
+      const filename = `ahtr_${documentId}.pdf`;
+      const filePath = path.join(documentsDir, filename);
+      await fs.writeFile(filePath, pdfBytes);
+      
+      console.log(`AHTR PDF created: ${filePath}`);
+      return filePath;
+      
+    } catch (error) {
+      console.error('Error filling AHTR PDF form:', error);
+      throw error;
+    }
+  }
+  
+  // Helper function to wrap text
+  private wrapText(text: string, maxCharsPerLine: number): string[] {
+    const words = text.split(' ');
+    const lines: string[] = [];
+    let currentLine = '';
+    
+    for (const word of words) {
+      if ((currentLine + ' ' + word).length > maxCharsPerLine) {
+        if (currentLine) lines.push(currentLine);
+        currentLine = word;
+      } else {
+        currentLine = currentLine ? `${currentLine} ${word}` : word;
+      }
+    }
+    
+    if (currentLine) lines.push(currentLine);
+    return lines;
+  }
+  
+  // Parse AHTR content from AI response
+  private parseAHTRContent(content: string): any {
+    const ahtrData: any = {
+      injury: '',
+      symptoms: '',
+      barriers: '',
+      goals: { work: {}, activity: {} },
+      intervention: '',
+      sessions: ''
+    };
+    
+    // Extract sections using regex patterns
+    const injuryMatch = content.match(/(?:compensable injury|injury\/illness)[:\s]*([^]*?)(?:\n\d+\.|Current clinical|$)/i);
+    if (injuryMatch) ahtrData.injury = injuryMatch[1].trim();
+    
+    const symptomsMatch = content.match(/(?:clinical signs|symptoms)[:\s]*([^]*?)(?:\n\d+\.|Pre-injury|$)/i);
+    if (symptomsMatch) ahtrData.symptoms = symptomsMatch[1].trim();
+    
+    const barriersMatch = content.match(/(?:barriers to recovery)[:\s]*([^]*?)(?:\n\d+\.|Treatment goals|$)/i);
+    if (barriersMatch) ahtrData.barriers = barriersMatch[1].trim();
+    
+    return ahtrData;
   }
 
   // Create Word document

@@ -7063,28 +7063,37 @@ Respond with only a number between 1-100 representing the relevance score.`;
         }
       }
       
-      if (!document || !document.wordPath) {
+      // Check if document has either Word or PDF path
+      const documentPath = document.pdfPath || document.wordPath;
+      if (!document || !documentPath) {
         console.log(`Document not found: ${documentId}`);
         return res.status(404).json({ error: 'Document not found' });
       }
       
-      console.log(`Found document: ${documentId} with path: ${document.wordPath}`);
+      console.log(`Found document: ${documentId} with path: ${documentPath}`);
       
       // Check if file exists
       const fs = await import('fs/promises');
       try {
-        await fs.access(document.wordPath);
+        await fs.access(documentPath);
       } catch {
         return res.status(404).json({ error: 'Document file not found' });
       }
       
+      // Determine content type and extension based on document type
+      const isPdf = document.type === 'ahtr' || documentPath.endsWith('.pdf');
+      const contentType = isPdf 
+        ? 'application/pdf'
+        : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      const extension = isPdf ? 'pdf' : 'docx';
+      
       // Set headers for download
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-      res.setHeader('Content-Disposition', `attachment; filename="${document.filename}.docx"`);
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Content-Disposition', `attachment; filename="${document.filename}.${extension}"`);
       
       // Stream the file
       const createReadStream = (await import('fs')).createReadStream;
-      const stream = createReadStream(document.wordPath);
+      const stream = createReadStream(documentPath);
       stream.pipe(res);
     } catch (error) {
       console.error('Document download error:', error);

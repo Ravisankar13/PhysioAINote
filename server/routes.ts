@@ -6748,6 +6748,54 @@ Respond with only a number between 1-100 representing the relevance score.`;
           }
         }
         
+        // Handle explicit document generation request
+        if (data.type === 'generate_document' && data.documentType) {
+          console.log(`[WebSocket] Explicit document generation request: ${data.documentType}`);
+          
+          // Send immediate notification that document generation started
+          ws.send(JSON.stringify({
+            type: 'document_generation_started',
+            documentType: data.documentType,
+            timestamp: new Date().toISOString()
+          }));
+          
+          // Generate document asynchronously
+          realtimeDocumentService.generateDocument({
+            type: data.documentType as any,
+            soapData: data.soapData || {
+              subjective: '',
+              objective: '',
+              assessment: '',
+              plan: ''
+            },
+            patientInfo: data.patientInfo,
+            sessionId: data.sessionId || sessionId,
+            userId: parseInt(userId)
+          }).then(document => {
+            // Send document ready notification
+            ws.send(JSON.stringify({
+              type: 'document_ready',
+              document: {
+                id: document.id,
+                type: document.type,
+                filename: document.filename,
+                status: document.status,
+                wordPath: document.wordPath,
+                error: document.error
+              },
+              timestamp: new Date().toISOString()
+            }));
+          }).catch(error => {
+            console.error('Document generation error:', error);
+            ws.send(JSON.stringify({
+              type: 'document_error',
+              documentType: data.documentType,
+              error: error.message,
+              timestamp: new Date().toISOString()
+            }));
+          });
+        }
+        
         // Handle reset request
         if (data.type === 'reset_virtual_patient') {
           realtimeVPService.resetParameters();

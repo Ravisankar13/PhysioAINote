@@ -62,6 +62,59 @@ export function RealtimeVirtualPatient({
   const [isExpanded, setIsExpanded] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<string>('');
   const [detectedConditions, setDetectedConditions] = useState<string[]>([]);
+  const [painIndicators, setPainIndicators] = useState<Array<{
+    location: string;
+    intensity: number;
+    type: string;
+    timestamp: Date;
+  }>>([]);
+  const [isListening, setIsListening] = useState(false);
+  const [recentKeywords, setRecentKeywords] = useState<string[]>([]);
+  const [movementRestrictions, setMovementRestrictions] = useState<Record<string, number>>({});
+
+  // Extract clinical keywords from transcript
+  const extractClinicalKeywords = useCallback((text: string) => {
+    const painKeywords = ['pain', 'hurt', 'ache', 'sore', 'tender', 'sharp', 'dull', 'burning', 'throbbing'];
+    const bodyParts = [
+      'shoulder', 'neck', 'back', 'spine', 'knee', 'hip', 'ankle', 'elbow', 'wrist',
+      'lumbar', 'cervical', 'thoracic', 'heel', 'foot', 'leg', 'arm', 'hand'
+    ];
+    const movements = ['flexion', 'extension', 'rotation', 'abduction', 'adduction', 'bend', 'straighten'];
+    
+    const lowerText = text.toLowerCase();
+    const foundKeywords: string[] = [];
+    const foundPainLocations: string[] = [];
+    
+    // Find pain locations
+    bodyParts.forEach(part => {
+      if (lowerText.includes(part)) {
+        // Check if pain keyword is near body part (within 50 characters)
+        painKeywords.forEach(pain => {
+          const painIndex = lowerText.indexOf(pain);
+          const partIndex = lowerText.indexOf(part);
+          if (painIndex !== -1 && partIndex !== -1 && Math.abs(painIndex - partIndex) < 50) {
+            foundPainLocations.push(part);
+            foundKeywords.push(`${part} ${pain}`);
+          }
+        });
+      }
+    });
+    
+    // Find movement restrictions
+    movements.forEach(movement => {
+      if (lowerText.includes(movement)) {
+        bodyParts.forEach(part => {
+          const moveIndex = lowerText.indexOf(movement);
+          const partIndex = lowerText.indexOf(part);
+          if (moveIndex !== -1 && partIndex !== -1 && Math.abs(moveIndex - partIndex) < 30) {
+            foundKeywords.push(`${part} ${movement}`);
+          }
+        });
+      }
+    });
+    
+    return { keywords: foundKeywords, painLocations: foundPainLocations };
+  }, []);
 
   // Initialize Three.js scene
   useEffect(() => {
@@ -362,10 +415,38 @@ export function RealtimeVirtualPatient({
         if (data.type === 'virtual_patient_update') {
           setParameters(data.parameters);
           updateSkeleton(data.parameters);
+          
+          // Extract pain indicators and keywords from transcript
+          if (data.transcript) {
+            const { keywords, painLocations } = extractClinicalKeywords(data.transcript);
+            setRecentKeywords(keywords);
+            
+            // Add new pain indicators
+            painLocations.forEach(location => {
+              setPainIndicators(prev => [...prev, {
+                location,
+                intensity: 5, // Default intensity
+                type: 'aching',
+                timestamp: new Date()
+              }]);
+            });
+          }
+        } else if (data.type === 'realtime_update') {
+          // Quick updates for immediate feedback
+          if (data.transcript) {
+            const { keywords, painLocations } = extractClinicalKeywords(data.transcript);
+            setRecentKeywords(keywords);
+            setParameters(prev => ({
+              ...prev,
+              painLocations: [...(prev.painLocations || []), ...painLocations]
+            }));
+          }
         } else if (data.type === 'virtual_patient_reset') {
           setParameters({});
           updateSkeleton({});
           setDetectedConditions([]);
+          setPainIndicators([]);
+          setRecentKeywords([]);
         }
       } catch (error) {
         console.error('Error processing virtual patient update:', error);
@@ -377,7 +458,7 @@ export function RealtimeVirtualPatient({
     return () => {
       webSocket.removeEventListener('message', handleMessage);
     };
-  }, [webSocket, updateSkeleton]);
+  }, [webSocket, updateSkeleton, extractClinicalKeywords]);
 
   // Reset skeleton
   const handleReset = () => {
@@ -452,6 +533,55 @@ export function RealtimeVirtualPatient({
               </div>
             )}
           </div>
+
+          {/* Recording Status and Listening Indicator */}
+          {isRecording && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <div className="flex items-center gap-2">
+                <div className="flex gap-1">
+                  <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                  <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse delay-100"></div>
+                  <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse delay-200"></div>
+                </div>
+                <span className="text-sm font-medium text-blue-800">
+                  Listening for clinical findings...
+                </span>
+              </div>
+              {recentKeywords.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {recentKeywords.slice(-5).map((keyword, idx) => (
+                    <span key={idx} className="text-xs bg-white px-2 py-1 rounded-md text-blue-700">
+                      {keyword}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Pain Indicators */}
+          {painIndicators.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-gray-700">Pain Indicators:</p>
+              <div className="grid grid-cols-2 gap-2">
+                {painIndicators.slice(-4).map((pain, index) => (
+                  <div key={index} className="bg-red-50 border border-red-200 rounded-lg p-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-red-800 capitalize">
+                        {pain.location}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        {[...Array(Math.min(pain.intensity, 5))].map((_, i) => (
+                          <div key={i} className="w-2 h-2 bg-red-500 rounded-full"></div>
+                        ))}
+                      </div>
+                    </div>
+                    <span className="text-xs text-red-600">{pain.type}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Detected Conditions */}
           {detectedConditions.length > 0 && (

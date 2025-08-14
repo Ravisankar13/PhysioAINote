@@ -210,6 +210,45 @@ export class RealtimeVirtualPatientService {
     };
   }
 
+  // Quick analysis for immediate visual feedback (no AI, just keyword extraction)
+  quickAnalyzeTranscript(transcript: string): any {
+    const lowerText = transcript.toLowerCase();
+    const quickParams: any = {};
+    
+    // Pain keywords and locations
+    const painKeywords = ['pain', 'hurt', 'ache', 'sore', 'tender', 'sharp', 'dull'];
+    const bodyParts = ['shoulder', 'neck', 'back', 'knee', 'hip', 'ankle', 'elbow', 'spine', 'lumbar', 'cervical'];
+    
+    const painLocations: string[] = [];
+    bodyParts.forEach(part => {
+      painKeywords.forEach(pain => {
+        if (lowerText.includes(part) && lowerText.includes(pain)) {
+          const partIndex = lowerText.indexOf(part);
+          const painIndex = lowerText.indexOf(pain);
+          if (Math.abs(partIndex - painIndex) < 50) {
+            painLocations.push(part);
+          }
+        }
+      });
+    });
+    
+    if (painLocations.length > 0) {
+      quickParams.painLocations = [...new Set(painLocations)];
+    }
+    
+    // Movement restrictions
+    if (lowerText.includes('limited') || lowerText.includes('restricted')) {
+      quickParams.movementRestrictions = { detected: true };
+    }
+    
+    // Posture issues
+    if (lowerText.includes('slouch') || lowerText.includes('forward head') || lowerText.includes('kyphosis')) {
+      quickParams.posturalDeviations = ['forward posture detected'];
+    }
+    
+    return quickParams;
+  }
+
   getCurrentParameters(): ClinicalParameter {
     return this.currentParameters;
   }

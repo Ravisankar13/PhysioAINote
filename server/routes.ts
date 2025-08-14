@@ -6543,6 +6543,20 @@ Respond with only a number between 1-100 representing the relevance score.`;
           await realTimeAIService.generateSuggestions(data.context, parseInt(userId), sessionId);
         }
         
+        // Handle quick realtime updates for immediate visual feedback
+        if (data.type === 'realtime_update' && data.transcript) {
+          // Quick analysis for immediate feedback
+          const quickParams = await realtimeVPService.quickAnalyzeTranscript(data.transcript);
+          
+          // Send quick update to client
+          ws.send(JSON.stringify({
+            type: 'realtime_update',
+            transcript: data.transcript,
+            parameters: quickParams,
+            timestamp: new Date().toISOString()
+          }));
+        }
+        
         // Handle transcript updates for virtual patient and document generation
         if (data.type === 'transcript_update' && data.transcript) {
           // Analyze transcript for clinical parameters
@@ -6552,6 +6566,7 @@ Respond with only a number between 1-100 representing the relevance score.`;
           ws.send(JSON.stringify({
             type: 'virtual_patient_update',
             parameters: realtimeVPService.toModelConfig(),
+            transcript: data.transcript,
             timestamp: new Date().toISOString()
           }));
           

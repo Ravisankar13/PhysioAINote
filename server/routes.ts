@@ -6556,7 +6556,12 @@ Respond with only a number between 1-100 representing the relevance score.`;
     // Set up keep-alive ping to prevent connection timeout
     const pingInterval = setInterval(() => {
       if (ws.readyState === WebSocket.OPEN) {
-        ws.ping();
+        try {
+          ws.ping();
+        } catch (error) {
+          console.error(`[WebSocket] Ping error for client ${clientId}:`, error);
+          clearInterval(pingInterval);
+        }
       } else {
         clearInterval(pingInterval);
       }
@@ -6587,12 +6592,21 @@ Respond with only a number between 1-100 representing the relevance score.`;
         
         // Handle connection initialization
         if (data.type === 'connection_init') {
-          console.log(`Connection initialized for session ${data.sessionId}`);
+          console.log(`[WebSocket] Connection initialized for session ${data.sessionId}`);
           // Send initial acknowledgment
-          ws.send(JSON.stringify({
-            type: 'connection_ack',
-            timestamp: new Date().toISOString()
-          }));
+          try {
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({
+                type: 'connection_ack',
+                timestamp: new Date().toISOString()
+              }));
+              console.log('[WebSocket] Sent connection_ack');
+            } else {
+              console.log('[WebSocket] Cannot send connection_ack - WebSocket not open');
+            }
+          } catch (error) {
+            console.error('[WebSocket] Error sending connection_ack:', error);
+          }
           return;
         }
         
@@ -6610,16 +6624,20 @@ Respond with only a number between 1-100 representing the relevance score.`;
           const quickParams = realtimeVPService.quickAnalyzeTranscript(data.transcript);
           
           // Send virtual patient update to client
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
-              type: 'virtual_patient_update',
-              parameters: quickParams,
-              transcript: data.transcript,
-              timestamp: new Date().toISOString()
-            }));
-            console.log('[WebSocket] Sent virtual_patient_update with parameters:', quickParams);
-          } else {
-            console.log('[WebSocket] Cannot send update - WebSocket not open, state:', ws.readyState);
+          try {
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({
+                type: 'virtual_patient_update',
+                parameters: quickParams,
+                transcript: data.transcript,
+                timestamp: new Date().toISOString()
+              }));
+              console.log('[WebSocket] Sent virtual_patient_update with parameters:', quickParams);
+            } else {
+              console.log('[WebSocket] Cannot send update - WebSocket not open, state:', ws.readyState);
+            }
+          } catch (error) {
+            console.error('[WebSocket] Error sending virtual_patient_update:', error);
           }
         }
         
@@ -6630,12 +6648,18 @@ Respond with only a number between 1-100 representing the relevance score.`;
             const quickParams = realtimeVPService.quickAnalyzeTranscript(latestTranscript);
             
             // Send virtual patient update to client
-            ws.send(JSON.stringify({
-              type: 'virtual_patient_update',
-              parameters: quickParams,
-              transcript: latestTranscript,
-              timestamp: new Date().toISOString()
-            }));
+            try {
+              if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                  type: 'virtual_patient_update',
+                  parameters: quickParams,
+                  transcript: latestTranscript,
+                  timestamp: new Date().toISOString()
+                }));
+              }
+            } catch (error) {
+              console.error('[WebSocket] Error sending virtual_patient_update:', error);
+            }
           }
         }
         

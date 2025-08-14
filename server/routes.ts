@@ -6951,7 +6951,7 @@ Respond with only a number between 1-100 representing the relevance score.`;
       const documentId = `doc-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       
       // Start document generation asynchronously
-      realtimeDocumentService.generateDocument({
+      const documentPromise = realtimeDocumentService.generateDocument({
         type: documentType,
         soapData: soapData || {
           subjective: '',
@@ -6961,8 +6961,11 @@ Respond with only a number between 1-100 representing the relevance score.`;
         },
         patientInfo: {},
         sessionId: sessionId,
-        userId: req.user!.id
-      }).then(document => {
+        userId: req.user!.id,
+        documentId: documentId  // Pass the ID to the service
+      });
+      
+      documentPromise.then(document => {
         console.log(`Document generated successfully: ${documentId}`);
       }).catch(error => {
         console.error(`Document generation failed: ${documentId}`, error);

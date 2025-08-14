@@ -21,6 +21,7 @@ interface DocumentGenerationRequest {
   };
   sessionId: string;
   userId?: number;
+  documentId?: string;  // Optional document ID to use instead of generating one
 }
 
 interface GeneratedDocument {
@@ -134,7 +135,7 @@ export class RealtimeDocumentService {
 
   // Generate document based on type
   public async generateDocument(request: DocumentGenerationRequest): Promise<GeneratedDocument> {
-    const documentId = randomUUID();
+    const documentId = request.documentId || randomUUID();
     const document: GeneratedDocument = {
       id: documentId,
       type: request.type,

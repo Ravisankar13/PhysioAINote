@@ -9291,15 +9291,11 @@ Respond with only a number between 1-100 representing the relevance score.`;
 
       console.log(`[REAL-TIME] Processing chunk: ${audioFile.size} bytes at ${new Date().toLocaleTimeString()}`);
 
-      // Save audio chunk temporarily for transcription
-      const tempPath = path.join(os.tmpdir(), `chunk_${Date.now()}.webm`);
-      fs.writeFileSync(tempPath, audioFile.buffer);
-
-      // Transcribe the audio chunk
-      const chunkTranscript = await transcribeAudio(tempPath);
+      // Use the already uploaded file path directly
+      const chunkTranscript = await transcribeAudio(audioFile.path);
       
-      // Clean up temp file
-      fs.unlinkSync(tempPath);
+      // Clean up temp file after transcription
+      fs.unlinkSync(audioFile.path);
 
       // Combine with progressive transcript for context
       const fullContext = progressiveTranscript 

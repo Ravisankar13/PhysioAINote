@@ -6574,13 +6574,13 @@ Respond with only a number between 1-100 representing the relevance score.`;
           latestTranscript = data.transcript;
           
           // Quick analysis for immediate feedback
-          const quickParams = await realtimeVPService.quickAnalyzeTranscript(data.transcript);
+          const quickParams = realtimeVPService.quickAnalyzeTranscript(data.transcript);
           
-          // Send quick update to client
+          // Send virtual patient update to client
           ws.send(JSON.stringify({
-            type: 'realtime_update',
-            transcript: data.transcript,
+            type: 'virtual_patient_update',
             parameters: quickParams,
+            transcript: data.transcript,
             timestamp: new Date().toISOString()
           }));
         }
@@ -6589,13 +6589,13 @@ Respond with only a number between 1-100 representing the relevance score.`;
         if (data.type === 'request_visual_update') {
           // Use the latest stored transcript for quick analysis
           if (latestTranscript) {
-            const quickParams = await realtimeVPService.quickAnalyzeTranscript(latestTranscript);
+            const quickParams = realtimeVPService.quickAnalyzeTranscript(latestTranscript);
             
-            // Send quick update to client
+            // Send virtual patient update to client
             ws.send(JSON.stringify({
-              type: 'realtime_update',
-              transcript: latestTranscript,
+              type: 'virtual_patient_update',
               parameters: quickParams,
+              transcript: latestTranscript,
               timestamp: new Date().toISOString()
             }));
           }

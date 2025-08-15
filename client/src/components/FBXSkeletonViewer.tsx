@@ -235,34 +235,66 @@ export default function FBXSkeletonViewer({
     };
   }, []);
 
+  // React to configuration changes
+  useEffect(() => {
+    if (modelRef.current && modelConfig) {
+      applyModelConfiguration(modelRef.current, modelConfig);
+    }
+  }, [modelConfig]);
+
   // Apply model configuration (limb scales, pathologies, etc.)
   const applyModelConfiguration = (model: THREE.Group, config: any) => {
     if (!config) return;
 
-    // Apply limb scales
+    // Apply limb scales using exact bone names from the FBX
     if (config.limbScales) {
-      // Find and scale specific bones/limbs
-      model.traverse((child) => {
-        if (child instanceof THREE.Bone) {
-          // Apply scaling based on bone name
-          // You'll need to map your FBX bone names to the configuration
-          if (child.name.toLowerCase().includes('upperarm')) {
-            child.scale.setScalar(config.limbScales.upperArm || 1);
-          } else if (child.name.toLowerCase().includes('forearm')) {
-            child.scale.setScalar(config.limbScales.forearm || 1);
-          } else if (child.name.toLowerCase().includes('thigh')) {
-            child.scale.setScalar(config.limbScales.thigh || 1);
-          } else if (child.name.toLowerCase().includes('shin')) {
-            child.scale.setScalar(config.limbScales.shin || 1);
-          } else if (child.name.toLowerCase().includes('spine') || child.name.toLowerCase().includes('torso')) {
-            child.scale.setScalar(config.limbScales.torso || 1);
-          }
-        }
-      });
+      // Upper arm scaling
+      if (config.limbScales.upperArm !== undefined) {
+        const rightArm = boneMap.current['HumerusR'];
+        const leftArm = boneMap.current['HumerusL'];
+        if (rightArm) rightArm.scale.setScalar(config.limbScales.upperArm);
+        if (leftArm) leftArm.scale.setScalar(config.limbScales.upperArm);
+      }
+      
+      // Forearm scaling
+      if (config.limbScales.forearm !== undefined) {
+        const rightForearm = boneMap.current['Radius_AlnaR'];
+        const leftForearm = boneMap.current['Radius_AlnaL'];
+        if (rightForearm) rightForearm.scale.setScalar(config.limbScales.forearm);
+        if (leftForearm) leftForearm.scale.setScalar(config.limbScales.forearm);
+      }
+      
+      // Thigh scaling
+      if (config.limbScales.thigh !== undefined) {
+        const rightThigh = boneMap.current['FemurR'];
+        const leftThigh = boneMap.current['FemurL'];
+        if (rightThigh) rightThigh.scale.setScalar(config.limbScales.thigh);
+        if (leftThigh) leftThigh.scale.setScalar(config.limbScales.thigh);
+      }
+      
+      // Shin scaling  
+      if (config.limbScales.shin !== undefined) {
+        const rightShin = boneMap.current['fibula_tibiaR'];
+        const leftShin = boneMap.current['fibula_tibiaL'];
+        if (rightShin) rightShin.scale.setScalar(config.limbScales.shin);
+        if (leftShin) leftShin.scale.setScalar(config.limbScales.shin);
+      }
+      
+      // Torso/Spine scaling
+      if (config.limbScales.torso !== undefined) {
+        const spine = boneMap.current['Spine'];
+        const spine1 = boneMap.current['Spine_1'];
+        const spine2 = boneMap.current['Spine_2'];
+        const ribCage = boneMap.current['RibCage'];
+        if (spine) spine.scale.setScalar(config.limbScales.torso);
+        if (spine1) spine1.scale.setScalar(config.limbScales.torso);
+        if (spine2) spine2.scale.setScalar(config.limbScales.torso);
+        if (ribCage) ribCage.scale.setScalar(config.limbScales.torso);
+      }
 
-      // Apply overall scale
-      if (config.limbScales.overall) {
-        model.scale.multiplyScalar(config.limbScales.overall);
+      // Apply overall scale to the entire model
+      if (config.limbScales.overall !== undefined) {
+        model.scale.set(0.025 * config.limbScales.overall, 0.025 * config.limbScales.overall, 0.025 * config.limbScales.overall);
       }
     }
 
@@ -282,12 +314,14 @@ export default function FBXSkeletonViewer({
 
   // Apply shoulder pathology
   const applyShoulderPathology = (model: THREE.Group, pathology: any) => {
-    // Find shoulder bones and apply transformations
-    const leftShoulder = boneMap.current['LeftShoulder'] || boneMap.current['L_Shoulder'];
-    const rightShoulder = boneMap.current['RightShoulder'] || boneMap.current['R_Shoulder'];
+    // Use correct bone names from the FBX
+    const leftShoulder = boneMap.current['Humerus_rootL'];
+    const rightShoulder = boneMap.current['Humerus_rootR'];
+    const leftArm = boneMap.current['HumerusL'];
+    const rightArm = boneMap.current['HumerusR'];
 
-    if (pathology.scapularWinging && (leftShoulder || rightShoulder)) {
-      const wingAngle = (pathology.scapularWinging / 10) * Math.PI / 6; // Convert to radians
+    if (pathology.scapularWinging !== undefined && (leftShoulder || rightShoulder)) {
+      const wingAngle = (pathology.scapularWinging / 10) * 0.3; // Reduced for subtlety
       if (leftShoulder) {
         leftShoulder.rotation.z = wingAngle;
       }
@@ -296,58 +330,69 @@ export default function FBXSkeletonViewer({
       }
     }
 
-    if (pathology.acSeparation && rightShoulder) {
-      rightShoulder.position.y += pathology.acSeparation * 0.01;
+    if (pathology.acSeparation !== undefined && rightShoulder) {
+      rightShoulder.position.y += pathology.acSeparation * 0.002;
     }
 
-    if (pathology.ghSubluxation && leftShoulder) {
-      leftShoulder.position.x -= pathology.ghSubluxation * 0.01;
+    if (pathology.ghSubluxation !== undefined && leftArm && rightArm) {
+      leftArm.position.x -= pathology.ghSubluxation * 0.002;
+      rightArm.position.x += pathology.ghSubluxation * 0.002;
     }
   };
 
   // Apply spinal pathology
   const applySpinalPathology = (model: THREE.Group, pathology: any) => {
-    // Find spine bones and apply transformations
-    const spine = boneMap.current['Spine'] || boneMap.current['Spine1'];
+    // Use correct spine bone names from the FBX
+    const spine = boneMap.current['Spine'];
+    const spine1 = boneMap.current['Spine_1'];
+    const spine2 = boneMap.current['Spine_2'];
     
-    if (spine) {
-      if (pathology.scoliosis) {
-        spine.rotation.z = (pathology.scoliosis / 100) * Math.PI / 4;
-      }
-      
-      if (pathology.kyphosis) {
-        spine.rotation.x = (pathology.kyphosis / 100) * Math.PI / 6;
-      }
+    if (pathology.scoliosis !== undefined) {
+      const curve = (pathology.scoliosis / 100) * Math.PI / 8;
+      if (spine) spine.rotation.z = curve * 0.5;
+      if (spine1) spine1.rotation.z = curve;
+      if (spine2) spine2.rotation.z = -curve * 0.5;
+    }
+    
+    if (pathology.kyphosis !== undefined && spine2) {
+      spine2.rotation.x = (pathology.kyphosis / 100) * Math.PI / 6;
+    }
 
-      if (pathology.lordosis) {
-        spine.rotation.x = -(pathology.lordosis / 100) * Math.PI / 6;
-      }
+    if (pathology.lordosis !== undefined && spine1) {
+      spine1.rotation.x = -(pathology.lordosis / 100) * Math.PI / 6;
     }
   };
 
   // Apply lower limb pathology
   const applyLowerLimbPathology = (model: THREE.Group, pathology: any) => {
-    // Find leg bones and apply transformations
-    const leftKnee = boneMap.current['LeftKnee'] || boneMap.current['L_Knee'];
-    const rightKnee = boneMap.current['RightKnee'] || boneMap.current['R_Knee'];
+    // Use correct bone names from the FBX
+    const leftKnee = boneMap.current['fibula_tibiaL'];
+    const rightKnee = boneMap.current['fibula_tibiaR'];
+    const leftFemur = boneMap.current['FemurL'];
+    const rightFemur = boneMap.current['FemurR'];
 
-    if (pathology.kneeVarusValgus) {
-      if (leftKnee) {
-        leftKnee.rotation.z = (pathology.kneeVarusValgus / 100) * Math.PI / 8;
-      }
-      if (rightKnee) {
-        rightKnee.rotation.z = -(pathology.kneeVarusValgus / 100) * Math.PI / 8;
-      }
+    if (pathology.kneeVarusValgus !== undefined) {
+      const angle = (pathology.kneeVarusValgus / 100) * Math.PI / 8;
+      if (leftKnee) leftKnee.rotation.z = angle;
+      if (rightKnee) rightKnee.rotation.z = -angle;
     }
 
-    if (pathology.genuVarum && leftKnee && rightKnee) {
-      leftKnee.rotation.z = (pathology.genuVarum / 100) * Math.PI / 10;
-      rightKnee.rotation.z = (pathology.genuVarum / 100) * Math.PI / 10;
+    if (pathology.genuVarum !== undefined && leftKnee && rightKnee) {
+      const angle = (pathology.genuVarum / 100) * Math.PI / 10;
+      leftKnee.rotation.z = angle;
+      rightKnee.rotation.z = angle;
     }
 
-    if (pathology.genuValgum && leftKnee && rightKnee) {
-      leftKnee.rotation.z = -(pathology.genuValgum / 100) * Math.PI / 10;
-      rightKnee.rotation.z = -(pathology.genuValgum / 100) * Math.PI / 10;
+    if (pathology.genuValgum !== undefined && leftKnee && rightKnee) {
+      const angle = -(pathology.genuValgum / 100) * Math.PI / 10;
+      leftKnee.rotation.z = angle;
+      rightKnee.rotation.z = angle;
+    }
+    
+    if (pathology.tibialTorsion !== undefined && leftKnee && rightKnee) {
+      const torsion = (pathology.tibialTorsion / 100) * Math.PI / 6;
+      leftKnee.rotation.y = torsion;
+      rightKnee.rotation.y = torsion;
     }
   };
 

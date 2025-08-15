@@ -108,10 +108,13 @@ export default function FBXSkeletonViewer({
     const loader = new FBXLoader();
     setLoading(true);
     setError(null);
+    
+    console.log('Starting to load FBX model from /skeleton-model.fbx');
 
     loader.load(
       '/skeleton-model.fbx',
       (fbx: THREE.Group) => {
+        console.log('FBX model loaded successfully', fbx);
         modelRef.current = fbx;
         
         // Scale and position the model

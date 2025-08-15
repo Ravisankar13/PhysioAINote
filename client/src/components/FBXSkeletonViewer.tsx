@@ -53,8 +53,8 @@ export default function FBXSkeletonViewer({
       0.1,
       1000
     );
-    camera.position.set(0, 1.5, 2.5); // Moved camera closer
-    camera.lookAt(0, 1, 0);
+    camera.position.set(0, 1.2, 1.5); // Even closer camera position
+    camera.lookAt(0, 0.8, 0); // Looking at center of skeleton
     cameraRef.current = camera;
 
     // Renderer setup
@@ -69,9 +69,9 @@ export default function FBXSkeletonViewer({
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
-    controls.minDistance = 1;  // Allow closer zoom
-    controls.maxDistance = 5;  // Limit max zoom out
-    controls.target.set(0, 1, 0);
+    controls.minDistance = 0.5;  // Allow very close zoom
+    controls.maxDistance = 3;  // Further limit max zoom out
+    controls.target.set(0, 0.8, 0); // Focus on center of skeleton
     controls.update();
     controlsRef.current = controls;
 
@@ -117,9 +117,9 @@ export default function FBXSkeletonViewer({
         console.log('FBX model loaded successfully', fbx);
         modelRef.current = fbx;
         
-        // Scale and position the model - increased scale for better visibility
-        fbx.scale.set(0.015, 0.015, 0.015); // Increased scale by 50%
-        fbx.position.set(0, 0, 0);
+        // Scale and position the model - further increased for better visibility
+        fbx.scale.set(0.025, 0.025, 0.025); // Significantly increased scale
+        fbx.position.set(0, 0.2, 0); // Slightly raised to center in view
         
         // Enable shadows
         fbx.traverse((child: THREE.Object3D) => {

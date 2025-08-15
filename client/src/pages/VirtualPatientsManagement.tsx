@@ -16,7 +16,7 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
-import Text3DAnimation from "@/components/Text3DAnimation";
+import FBXSkeletonViewer from "@/components/FBXSkeletonViewer";
 import { MovementCapture } from "@/components/MovementCapture";
 import type { SoapVirtualPatient, VirtualPatientConfig, InsertVirtualPatientConfig } from "@shared/schema";
 import { queryClient } from "@/lib/queryClient";
@@ -1236,57 +1236,40 @@ export default function VirtualPatientsManagement() {
                           ? { height: 'calc(100vh - 160px)' }
                           : { minHeight: '700px', height: 'calc(100vh - 400px)', maxHeight: '800px' }
                         }>
-                        <Text3DAnimation
-                          clinicalText={(selectedTest === "none" || selectedExercise === "none") ? "" : (selectedTest || selectedExercise || "")}
-                          isPlaying={true}
-                          selectedSide={selectedSide}
-                          limbScales={{
-                            upperArm: upperArmScale[0],
-                            forearm: forearmScale[0],
-                            thigh: thighScale[0],
-                            shin: shinScale[0],
-                            torso: torsoScale[0],
-                            overall: overallScale[0]
-                          }}
-                          hipPathology={{
-                            neckAngle: hipNeckAngle[0],
-                            anteversion: hipAnteversion[0],
-                            acetabularCoverage: acetabularCoverage[0]
-                          }}
-                          kneePathology={{
-                            varusValgus: kneeVarusValgus[0],
-                            patellaHeight: patellaHeight[0],
-                            tibialTorsion: tibialTorsion[0]
-                          }}
-                          shoulderPathology={{
-                            scapularWinging: scapularWinging[0],
-                            acSeparation: acSeparation[0],
-                            ghSubluxation: ghSubluxation[0]
-                          }}
-                          anthropometric={{
-                            height: height[0],
-                            weight: weight[0],
-                            bodyType: bodyType
-                          }}
-                          posturalDeviations={{
-                            forwardHead: forwardHead[0],
-                            thoracicKyphosis: thoracicKyphosis[0],
-                            lumbarLordosis: lumbarLordosis[0],
-                            pelvicTilt: pelvicTilt[0],
-                            shoulderHeight: shoulderHeight[0],
-                            scoliosis: scoliosis[0]
-                          }}
-                          movementQuality={{
-                            speed: movementSpeed,
-                            balance: balanceQuality,
-                            coordination: coordination,
-                            compensations: {
-                              hipHike,
-                              trunkLean,
-                              circumduction,
-                              trendelenburg
+                        <FBXSkeletonViewer
+                          modelConfig={{
+                            limbScales: {
+                              upperArm: upperArmScale[0],
+                              forearm: forearmScale[0],
+                              thigh: thighScale[0],
+                              shin: shinScale[0],
+                              torso: torsoScale[0],
+                              overall: overallScale[0]
+                            },
+                            shoulderPathology: {
+                              scapularWinging: scapularWinging[0],
+                              acSeparation: acSeparation[0],
+                              ghSubluxation: ghSubluxation[0]
+                            },
+                            spinalPathology: {
+                              scoliosis: scoliosis[0],
+                              kyphosis: thoracicKyphosis[0],
+                              lordosis: lumbarLordosis[0]
+                            },
+                            lowerLimbPathology: {
+                              kneeVarusValgus: kneeVarusValgus[0],
+                              genuVarum: genuVarum[0],
+                              genuValgum: genuValgum[0],
+                              patellaHeight: patellaHeight[0],
+                              tibialTorsion: tibialTorsion[0]
                             }
                           }}
+                          selectedTest={selectedTest === "none" ? undefined : selectedTest}
+                          selectedExercise={selectedExercise === "none" ? undefined : selectedExercise}
+                          animationSpeed={animationSpeed[0]}
+                          repetitions={repetitions[0]}
+                          selectedSide={selectedSide}
+                          isFullscreen={isFullscreen}
                         />
                       </div>
                       

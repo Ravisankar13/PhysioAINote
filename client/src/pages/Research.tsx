@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ExternalLink, BookOpen, Info, Award, Calendar, Users, Video, Play, Clock, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
+import { ExternalLink, BookOpen, Info, Award, Calendar, Users, Video, Play, Clock, CheckCircle, AlertCircle, Loader2, Search, Database, Globe } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { apiRequest } from "@/lib/queryClient";
 import { 
@@ -23,6 +23,7 @@ import {
   PaginationEllipsis 
 } from "@/components/ui/pagination";
 import MembershipRequired from "@/components/MembershipRequired";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface ResearchArticle {
   id: number;
@@ -110,6 +111,277 @@ function formatDuration(seconds: number): string {
     return `${hours}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
   }
   return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+}
+
+function LiveResearchSearch() {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedDatabase, setSelectedDatabase] = useState("all");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter a search query",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsSearching(true);
+    setHasSearched(true);
+
+    try {
+      let endpoint = "/api/research/search-all";
+      let params = { query: searchQuery, maxResultsPerSource: 10 };
+      
+      if (selectedDatabase !== "all") {
+        endpoint = `/api/research/${selectedDatabase}`;
+        params = { query: searchQuery, maxResults: 20 };
+      }
+
+      const response = await apiRequest(endpoint, {
+        method: "GET",
+        params
+      });
+
+      setSearchResults(response.data || []);
+      
+      if (response.data.length === 0) {
+        toast({
+          title: "No results",
+          description: "No articles found matching your search query",
+        });
+      } else {
+        toast({
+          title: "Search complete",
+          description: `Found ${response.data.length} articles from ${selectedDatabase === 'all' ? 'multiple databases' : selectedDatabase}`,
+        });
+      }
+    } catch (error) {
+      console.error("Search error:", error);
+      toast({
+        title: "Search failed",
+        description: "Failed to search research databases. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const saveArticles = async () => {
+    if (searchResults.length === 0) return;
+
+    try {
+      await apiRequest("/api/research/save", {
+        method: "POST",
+        body: { articles: searchResults }
+      });
+
+      toast({
+        title: "Success",
+        description: `Saved ${searchResults.length} articles to your database`,
+      });
+
+      // Refresh the saved articles
+      queryClient.invalidateQueries({ queryKey: ["/api/research"] });
+    } catch (error) {
+      console.error("Save error:", error);
+      toast({
+        title: "Save failed",
+        description: "Failed to save articles. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Globe className="h-5 w-5" />
+          Live Research Database Search
+        </CardTitle>
+        <CardDescription>
+          Search real-time physiotherapy research from PubMed, CrossRef, and Semantic Scholar
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Search Controls */}
+        <div className="space-y-4">
+          <div className="flex gap-4">
+            <div className="flex-1">
+              <Label htmlFor="search-query">Search Query</Label>
+              <Input
+                id="search-query"
+                placeholder="e.g., rotator cuff rehabilitation, knee osteoarthritis exercise..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+              />
+            </div>
+            <div className="w-48">
+              <Label htmlFor="database">Database</Label>
+              <Select value={selectedDatabase} onValueChange={setSelectedDatabase}>
+                <SelectTrigger id="database">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Databases</SelectItem>
+                  <SelectItem value="pubmed">PubMed</SelectItem>
+                  <SelectItem value="crossref">CrossRef</SelectItem>
+                  <SelectItem value="semantic-scholar">Semantic Scholar</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          
+          <div className="flex gap-2">
+            <Button 
+              onClick={handleSearch} 
+              disabled={isSearching || !searchQuery.trim()}
+              className="flex items-center gap-2"
+            >
+              {isSearching ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Searching...
+                </>
+              ) : (
+                <>
+                  <Search className="h-4 w-4" />
+                  Search
+                </>
+              )}
+            </Button>
+            
+            {searchResults.length > 0 && (
+              <Button 
+                onClick={saveArticles}
+                variant="outline"
+                className="flex items-center gap-2"
+              >
+                <Database className="h-4 w-4" />
+                Save {searchResults.length} Articles
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* Info Alert */}
+        {!hasSearched && (
+          <Alert>
+            <Info className="h-4 w-4" />
+            <AlertDescription>
+              Search for the latest physiotherapy research from multiple academic databases. 
+              Results are fetched in real-time and can be saved to your local database for offline access.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Search Results */}
+        {searchResults.length > 0 && (
+          <div className="space-y-4 mt-6">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold">
+                Search Results ({searchResults.length})
+              </h3>
+              <div className="flex gap-2">
+                {selectedDatabase === 'all' && (
+                  <>
+                    <Badge variant="outline">PubMed</Badge>
+                    <Badge variant="outline">CrossRef</Badge>
+                    <Badge variant="outline">Semantic Scholar</Badge>
+                  </>
+                )}
+              </div>
+            </div>
+            
+            <div className="space-y-4">
+              {searchResults.map((article, index) => (
+                <Card key={index} className="p-4">
+                  <div className="space-y-2">
+                    <div className="flex items-start justify-between gap-4">
+                      <h4 className="font-semibold text-sm leading-tight flex-1">
+                        {article.title}
+                      </h4>
+                      <Badge variant="secondary" className="shrink-0">
+                        {article.source}
+                      </Badge>
+                    </div>
+                    
+                    <p className="text-xs text-muted-foreground">
+                      {article.authors} • {article.journal} • {article.year}
+                    </p>
+                    
+                    <p className="text-sm text-muted-foreground line-clamp-3">
+                      {article.abstract}
+                    </p>
+                    
+                    {article.keyFindings && article.keyFindings.length > 0 && (
+                      <div className="pt-2">
+                        <p className="text-xs font-semibold mb-1">Key Findings:</p>
+                        <ul className="text-xs text-muted-foreground space-y-1">
+                          {article.keyFindings.slice(0, 2).map((finding: string, i: number) => (
+                            <li key={i} className="line-clamp-1">• {finding}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    
+                    {article.tags && article.tags.length > 0 && (
+                      <div className="flex gap-1 flex-wrap pt-2">
+                        {article.tags.map((tag: string, i: number) => (
+                          <Badge key={i} variant="outline" className="text-xs">
+                            {tag}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                    
+                    <div className="flex items-center gap-4 pt-2">
+                      <a 
+                        href={article.url} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-xs text-primary hover:underline flex items-center gap-1"
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                        View Article
+                      </a>
+                      {article.doi && (
+                        <span className="text-xs text-muted-foreground">
+                          DOI: {article.doi}
+                        </span>
+                      )}
+                      {article.citationCount && (
+                        <span className="text-xs text-muted-foreground">
+                          {article.citationCount} citations
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* No Results */}
+        {hasSearched && searchResults.length === 0 && !isSearching && (
+          <div className="text-center py-8 text-muted-foreground">
+            <p>No articles found matching your search query.</p>
+            <p className="text-sm mt-2">Try different keywords or search in a specific database.</p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 function VideoAnalysisComponent() {
@@ -779,8 +1051,9 @@ export default function Research() {
           </div>
         
         <Tabs defaultValue="articles" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 max-w-md mx-auto">
-            <TabsTrigger value="articles">Research Articles</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-3 max-w-lg mx-auto">
+            <TabsTrigger value="articles">Saved Articles</TabsTrigger>
+            <TabsTrigger value="live-search">Live Search</TabsTrigger>
             <TabsTrigger value="video-analysis">Video Analysis</TabsTrigger>
           </TabsList>
           
@@ -972,6 +1245,10 @@ export default function Research() {
             </Tabs>
           </CardContent>
         </Card>
+          </TabsContent>
+          
+          <TabsContent value="live-search">
+            <LiveResearchSearch />
           </TabsContent>
           
           <TabsContent value="video-analysis">

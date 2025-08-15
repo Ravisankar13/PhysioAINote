@@ -40,6 +40,7 @@ import { aiMovementGenerator } from "./aiMovementGenerator";
 import { youtubeAnalysisService } from "./youtubeAnalysisService";
 import { comparativeAnalysisService } from "./ai/comparativeAnalysis";
 import { generateAISuggestions, applySuggestionToSoap } from "./services/aiSuggestionsService";
+import { ResearchService } from "./services/researchService";
 
 import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, exercises, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, competitionParticipants, soapNotes, insertSoapNoteSchema, bodyScans, insertBodyScanSchema, tournamentParticipants, diagnosisDuelTournaments, gameContent, virtualPatients, patternRecognitionScores } from "@shared/schema";
 import { ZodError, z } from "zod";
@@ -1093,6 +1094,99 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Search PubMed for research articles
+  app.get("/api/research/pubmed", async (req: Request, res: Response) => {
+    try {
+      const query = req.query.query as string;
+      const maxResults = parseInt(req.query.maxResults as string || '20');
+      
+      if (!query) {
+        return res.status(400).json({ error: 'Query parameter is required' });
+      }
+
+      const articles = await ResearchService.searchPubMed(query, maxResults);
+      res.json({ data: articles, source: 'PubMed' });
+    } catch (error) {
+      console.error('Error searching PubMed:', error);
+      res.status(500).json({ error: 'Failed to search PubMed' });
+    }
+  });
+
+  // Search CrossRef for research articles
+  app.get("/api/research/crossref", async (req: Request, res: Response) => {
+    try {
+      const query = req.query.query as string;
+      const maxResults = parseInt(req.query.maxResults as string || '20');
+      
+      if (!query) {
+        return res.status(400).json({ error: 'Query parameter is required' });
+      }
+
+      const articles = await ResearchService.searchCrossRef(query, maxResults);
+      res.json({ data: articles, source: 'CrossRef' });
+    } catch (error) {
+      console.error('Error searching CrossRef:', error);
+      res.status(500).json({ error: 'Failed to search CrossRef' });
+    }
+  });
+
+  // Search Semantic Scholar for research articles
+  app.get("/api/research/semantic-scholar", async (req: Request, res: Response) => {
+    try {
+      const query = req.query.query as string;
+      const maxResults = parseInt(req.query.maxResults as string || '20');
+      
+      if (!query) {
+        return res.status(400).json({ error: 'Query parameter is required' });
+      }
+
+      const articles = await ResearchService.searchSemanticScholar(query, maxResults);
+      res.json({ data: articles, source: 'Semantic Scholar' });
+    } catch (error) {
+      console.error('Error searching Semantic Scholar:', error);
+      res.status(500).json({ error: 'Failed to search Semantic Scholar' });
+    }
+  });
+
+  // Search all databases for research articles
+  app.get("/api/research/search-all", async (req: Request, res: Response) => {
+    try {
+      const query = req.query.query as string;
+      const maxResultsPerSource = parseInt(req.query.maxResultsPerSource as string || '10');
+      
+      if (!query) {
+        return res.status(400).json({ error: 'Query parameter is required' });
+      }
+
+      const articles = await ResearchService.searchAllDatabases(query, maxResultsPerSource);
+      res.json({ 
+        data: articles, 
+        totalResults: articles.length,
+        sources: ['PubMed', 'CrossRef', 'Semantic Scholar'] 
+      });
+    } catch (error) {
+      console.error('Error searching all databases:', error);
+      res.status(500).json({ error: 'Failed to search research databases' });
+    }
+  });
+
+  // Save articles to database (for caching)
+  app.post("/api/research/save", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { articles } = req.body;
+      
+      if (!articles || !Array.isArray(articles)) {
+        return res.status(400).json({ error: 'Articles array is required' });
+      }
+
+      await ResearchService.saveArticles(articles);
+      res.json({ message: 'Articles saved successfully' });
+    } catch (error) {
+      console.error('Error saving articles:', error);
+      res.status(500).json({ error: 'Failed to save articles' });
+    }
+  });
+
   // Trigger AI analysis for pending research articles
   app.post("/api/research/trigger-analysis", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
@@ -1670,6 +1764,91 @@ Base your analysis on established postural assessment principles and correlate f
     } catch (error) {
       console.error("Error populating sample articles:", error);
       res.status(500).json({ error: "Failed to populate sample articles" });
+    }
+  });
+
+  // Live Research Search Routes
+  app.get("/api/research/search-all", async (req: Request, res: Response) => {
+    try {
+      const { query, maxResultsPerSource = 10 } = req.query;
+      
+      if (!query || typeof query !== 'string') {
+        return res.status(400).json({ error: "Query parameter is required" });
+      }
+
+      const articles = await ResearchService.searchAllDatabases(
+        query, 
+        Number(maxResultsPerSource)
+      );
+      
+      res.json(articles);
+    } catch (error) {
+      console.error("Error searching all databases:", error);
+      res.status(500).json({ error: "Failed to search research databases" });
+    }
+  });
+
+  app.get("/api/research/pubmed", async (req: Request, res: Response) => {
+    try {
+      const { query, maxResults = 20 } = req.query;
+      
+      if (!query || typeof query !== 'string') {
+        return res.status(400).json({ error: "Query parameter is required" });
+      }
+
+      const articles = await ResearchService.searchPubMed(query, Number(maxResults));
+      res.json(articles);
+    } catch (error) {
+      console.error("Error searching PubMed:", error);
+      res.status(500).json({ error: "Failed to search PubMed" });
+    }
+  });
+
+  app.get("/api/research/crossref", async (req: Request, res: Response) => {
+    try {
+      const { query, maxResults = 20 } = req.query;
+      
+      if (!query || typeof query !== 'string') {
+        return res.status(400).json({ error: "Query parameter is required" });
+      }
+
+      const articles = await ResearchService.searchCrossRef(query, Number(maxResults));
+      res.json(articles);
+    } catch (error) {
+      console.error("Error searching CrossRef:", error);
+      res.status(500).json({ error: "Failed to search CrossRef" });
+    }
+  });
+
+  app.get("/api/research/semantic-scholar", async (req: Request, res: Response) => {
+    try {
+      const { query, maxResults = 20 } = req.query;
+      
+      if (!query || typeof query !== 'string') {
+        return res.status(400).json({ error: "Query parameter is required" });
+      }
+
+      const articles = await ResearchService.searchSemanticScholar(query, Number(maxResults));
+      res.json(articles);
+    } catch (error) {
+      console.error("Error searching Semantic Scholar:", error);
+      res.status(500).json({ error: "Failed to search Semantic Scholar" });
+    }
+  });
+
+  app.post("/api/research/save", async (req: Request, res: Response) => {
+    try {
+      const { articles } = req.body;
+      
+      if (!articles || !Array.isArray(articles)) {
+        return res.status(400).json({ error: "Articles array is required" });
+      }
+
+      await ResearchService.saveArticles(articles);
+      res.json({ message: `Saved ${articles.length} articles to database` });
+    } catch (error) {
+      console.error("Error saving articles:", error);
+      res.status(500).json({ error: "Failed to save articles" });
     }
   });
 

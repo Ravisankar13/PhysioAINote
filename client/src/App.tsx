@@ -21,6 +21,7 @@ import StaticPosturalAnalysisPage from "@/pages/StaticPosturalAnalysisPage";
 import IntegratedClinicalAssessment from "@/pages/IntegratedClinicalAssessment";
 import IntelligentAssessment from "@/pages/IntelligentAssessment";
 import ResearchHub from "@/pages/ResearchHub";
+import Research from "@/pages/Research";
 import ResearchGaps from "@/pages/ResearchGaps";
 import CreateResearchProject from "@/pages/CreateResearchProject";
 import Membership from "@/pages/Membership";
@@ -83,7 +84,7 @@ function Router() {
             <ProtectedRoute component={EnhancedSoapNotes} />
           </Route>
           <Route path="/shared-notes" component={SharedNotes} />
-          <Route path="/research" component={ResearchHub} />
+          <Route path="/research" component={Research} />
           <Route path="/research/gaps" component={ResearchGaps} />
           <Route path="/my-notes">
             <ProtectedRoute component={MyNotes} />

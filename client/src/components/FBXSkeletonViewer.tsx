@@ -53,7 +53,7 @@ export default function FBXSkeletonViewer({
       0.1,
       1000
     );
-    camera.position.set(0, 2, 5);
+    camera.position.set(0, 1.5, 2.5); // Moved camera closer
     camera.lookAt(0, 1, 0);
     cameraRef.current = camera;
 
@@ -69,8 +69,8 @@ export default function FBXSkeletonViewer({
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
-    controls.minDistance = 2;
-    controls.maxDistance = 10;
+    controls.minDistance = 1;  // Allow closer zoom
+    controls.maxDistance = 5;  // Limit max zoom out
     controls.target.set(0, 1, 0);
     controls.update();
     controlsRef.current = controls;
@@ -117,8 +117,8 @@ export default function FBXSkeletonViewer({
         console.log('FBX model loaded successfully', fbx);
         modelRef.current = fbx;
         
-        // Scale and position the model
-        fbx.scale.set(0.01, 0.01, 0.01); // Adjust scale as needed
+        // Scale and position the model - increased scale for better visibility
+        fbx.scale.set(0.015, 0.015, 0.015); // Increased scale by 50%
         fbx.position.set(0, 0, 0);
         
         // Enable shadows

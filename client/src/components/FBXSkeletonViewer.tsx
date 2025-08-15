@@ -53,8 +53,8 @@ export default function FBXSkeletonViewer({
       0.1,
       1000
     );
-    camera.position.set(0, 1.5, 2.5); // Moved camera closer
-    camera.lookAt(0, 1, 0);
+    camera.position.set(0, 1, 3); // Adjusted for standing skeleton
+    camera.lookAt(0, 0.8, 0); // Look at mid-height of skeleton
     cameraRef.current = camera;
 
     // Renderer setup
@@ -71,7 +71,7 @@ export default function FBXSkeletonViewer({
     controls.dampingFactor = 0.05;
     controls.minDistance = 1;  // Allow closer zoom
     controls.maxDistance = 5;  // Limit max zoom out
-    controls.target.set(0, 1, 0);
+    controls.target.set(0, 0.8, 0); // Target the center of the standing skeleton
     controls.update();
     controlsRef.current = controls;
 
@@ -120,6 +120,11 @@ export default function FBXSkeletonViewer({
         // Scale and position the model - increased scale for better visibility
         fbx.scale.set(0.015, 0.015, 0.015); // Increased scale by 50%
         fbx.position.set(0, 0, 0);
+        
+        // Fix initial rotation to make skeleton stand upright
+        // Rotate 90 degrees around X-axis if the skeleton is lying down
+        fbx.rotation.x = -Math.PI / 2; // Rotate to stand up
+        fbx.rotation.y = Math.PI; // Face forward
         
         // Enable shadows
         fbx.traverse((child: THREE.Object3D) => {
@@ -287,9 +292,17 @@ export default function FBXSkeletonViewer({
   // Apply spinal pathology
   const applySpinalPathology = (model: THREE.Group, pathology: any) => {
     // Find spine bones and apply transformations
-    const spine = boneMap.current['Spine'] || boneMap.current['Spine1'];
+    // Based on the console logs, the bones are named: Spine, Spine_1, Spine_2
+    const spine = boneMap.current['Spine'];
+    const spine1 = boneMap.current['Spine_1'];
+    const spine2 = boneMap.current['Spine_2'];
     
+    // Fix the base spine rotation to vertical alignment
     if (spine) {
+      // Reset to proper vertical alignment
+      spine.rotation.set(0, 0, 0);
+      spine.position.set(0, 0, 0);
+      
       if (pathology.scoliosis) {
         spine.rotation.z = (pathology.scoliosis / 100) * Math.PI / 4;
       }
@@ -300,6 +313,21 @@ export default function FBXSkeletonViewer({
 
       if (pathology.lordosis) {
         spine.rotation.x = -(pathology.lordosis / 100) * Math.PI / 6;
+      }
+    }
+    
+    // Apply progressive rotation to upper spine segments
+    if (spine1) {
+      spine1.rotation.set(0, 0, 0);
+      if (pathology.scoliosis) {
+        spine1.rotation.z = (pathology.scoliosis / 200) * Math.PI / 4;
+      }
+    }
+    
+    if (spine2) {
+      spine2.rotation.set(0, 0, 0);
+      if (pathology.scoliosis) {
+        spine2.rotation.z = (pathology.scoliosis / 300) * Math.PI / 4;
       }
     }
   };

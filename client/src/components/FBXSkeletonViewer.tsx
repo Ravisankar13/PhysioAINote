@@ -109,9 +109,12 @@ export default function FBXSkeletonViewer({
     setLoading(true);
     setError(null);
     
+    console.log('Starting to load FBX model from /skeleton-model.fbx');
+
     loader.load(
       '/skeleton-model.fbx',
       (fbx: THREE.Group) => {
+        console.log('FBX model loaded successfully', fbx);
         modelRef.current = fbx;
         
         // Scale and position the model - further increased for better visibility
@@ -133,37 +136,26 @@ export default function FBXSkeletonViewer({
           // Store bone references for animation
           if (child instanceof THREE.Bone) {
             boneMap.current[child.name] = child;
+            console.log('Found bone:', child.name);
+            
+            // Diagnostic logging for spine bones
+            if (child.name.toLowerCase().includes('spine') || 
+                child.name.toLowerCase().includes('pelvis') || 
+                child.name.toLowerCase().includes('ribcage')) {
+              console.log(`Bone: ${child.name}`);
+              console.log(`  - World Position:`, child.getWorldPosition(new THREE.Vector3()));
+              console.log(`  - Local Position:`, child.position);
+              console.log(`  - Rotation (euler):`, child.rotation);
+              console.log(`  - Scale:`, child.scale);
+              
+              // Check parent bone
+              if (child.parent && child.parent instanceof THREE.Bone) {
+                console.log(`  - Parent: ${child.parent.name}`);
+              }
+            }
           }
         });
 
-        // Fix bone positions to create a normal human skeleton
-        fbx.traverse((child: THREE.Object3D) => {
-          if (child instanceof THREE.Bone) {
-            // Fix the massive Y offset on the Spine bone
-            if (child.name === 'Spine') {
-              child.position.y = 1.2; // Normal height above pelvis
-              child.position.z = 0;
-            }
-            // Fix RibCage position
-            else if (child.name === 'RibCage') {
-              child.position.y = 0.8;
-              child.position.z = 0;
-            }
-            // Fix Pelvis Z position
-            else if (child.name === 'Pelvis') {
-              child.position.z = 0;
-            }
-            // Fix Pelvis_width Z position
-            else if (child.name === 'Pelvis_width') {
-              child.position.z = 0.5; // Small offset for width
-            }
-            // Fix leg root positions if needed
-            else if (child.name === 'Femur_RootR' || child.name === 'Femur_RootL') {
-              child.position.z = 0;
-            }
-          }
-        });
-        
         scene.add(fbx);
         
         // Add bone visualization helper

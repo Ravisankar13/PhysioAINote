@@ -23,7 +23,7 @@ type AuthContextType = {
   error: Error | null;
   loginMutation: UseMutationResult<UserWithTrialInfo, Error, LoginData>;
   logoutMutation: UseMutationResult<void, Error, void>;
-  registerMutation: UseMutationResult<UserWithTrialInfo, Error, InsertUser>;
+  registerMutation: UseMutationResult<UserWithTrialInfo & { checkoutUrl?: string }, Error, InsertUser>;
 };
 
 type LoginData = Pick<InsertUser, "username" | "password"> & { rememberMe: boolean };
@@ -99,7 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   const registerMutation = useMutation({
-    mutationFn: async (credentials: InsertUser) => {
+    mutationFn: async (credentials: InsertUser): Promise<UserWithTrialInfo & { checkoutUrl?: string }> => {
       console.log("Attempting to register user:", {
         username: credentials.username,
       });
@@ -121,21 +121,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         const userData = await res.json();
-        console.log("Registration successful, user data:", userData);
+        console.log("Registration successful, full response:", userData);
         return userData;
       } catch (error) {
         console.error("Registration error:", error);
         throw error;
       }
     },
-    onSuccess: (user: UserWithTrialInfo) => {
-      console.log("Setting user data in query cache after registration");
-      queryClient.setQueryData(["/api/user"], user);
+    onSuccess: (userData: UserWithTrialInfo & { checkoutUrl?: string }) => {
+      console.log("Registration mutation onSuccess, userData:", userData);
+      
+      // Check if we have a Stripe checkout URL - if so, DON'T set user data yet
+      // Let the Stripe flow complete first
+      if (userData.checkoutUrl) {
+        console.log("Stripe checkout URL found, not setting user data yet");
+        // Don't set user data or show toast - let auth-page handle the redirect
+        return;
+      }
+      
+      // Only set user data if no checkout URL (fallback scenario)
+      console.log("No checkout URL, setting user data in query cache");
+      queryClient.setQueryData(["/api/user"], userData);
       // Invalidate any queries that depend on authentication
       queryClient.invalidateQueries();
       
       // Show trial success message and redirect to home with trial visible
-      if (user.trialInfo?.isInTrial) {
+      if (userData.trialInfo?.isInTrial) {
         toast({
           title: "Welcome to PhysioAI!",
           description: "Your 14-day free trial has started",

@@ -1350,7 +1350,7 @@ ${analysisResult.prognosis}
                   </p>
                 </div>
                 
-                {analysisResult.differentialDiagnoses && analysisResult.differentialDiagnoses.length > 0 && (
+                {analysisResult.differentialDiagnoses && Array.isArray(analysisResult.differentialDiagnoses) && analysisResult.differentialDiagnoses.length > 0 && (
                   <div>
                     <h4 className="font-semibold text-sm mb-2">Differential Diagnoses</h4>
                     <div className="flex flex-wrap gap-2">
@@ -1371,7 +1371,7 @@ ${analysisResult.prognosis}
                   </div>
                 )}
 
-                {analysisResult.redFlagsIdentified && analysisResult.redFlagsIdentified.length > 0 && (
+                {analysisResult.redFlagsIdentified && Array.isArray(analysisResult.redFlagsIdentified) && analysisResult.redFlagsIdentified.length > 0 && (
                   <Alert className="border-red-200 bg-red-50">
                     <AlertTriangle className="h-4 w-4 text-red-600" />
                     <AlertDescription>
@@ -1425,7 +1425,7 @@ ${analysisResult.prognosis}
                   </TabsList>
 
                   <TabsContent value="primary" className="space-y-4">
-                    {analysisResult.treatmentPlan.primary.map((treatment, idx) => (
+                    {analysisResult.treatmentPlan.primary && Array.isArray(analysisResult.treatmentPlan.primary) && analysisResult.treatmentPlan.primary.map((treatment, idx) => (
                       <div key={idx} className="border rounded-lg p-4 space-y-2">
                         <div className="flex items-start justify-between">
                           <h4 className="font-semibold">{treatment.interventionType || treatment.description}</h4>
@@ -1460,7 +1460,7 @@ ${analysisResult.prognosis}
                   </TabsContent>
 
                   <TabsContent value="exercises" className="space-y-4">
-                    {analysisResult.treatmentPlan.exercises.map((exercise, idx) => (
+                    {analysisResult.treatmentPlan.exercises && Array.isArray(analysisResult.treatmentPlan.exercises) && analysisResult.treatmentPlan.exercises.map((exercise, idx) => (
                       <div key={idx} className="border rounded-lg p-4 space-y-2">
                         <h4 className="font-semibold">{exercise.description}</h4>
                         <p className="text-sm">{exercise.dosage}</p>
@@ -1470,7 +1470,7 @@ ${analysisResult.prognosis}
                   </TabsContent>
 
                   <TabsContent value="manual" className="space-y-4">
-                    {analysisResult.treatmentPlan.manualTherapy.map((technique, idx) => (
+                    {analysisResult.treatmentPlan.manualTherapy && Array.isArray(analysisResult.treatmentPlan.manualTherapy) && analysisResult.treatmentPlan.manualTherapy.map((technique, idx) => (
                       <div key={idx} className="border rounded-lg p-4 space-y-2">
                         <h4 className="font-semibold">{technique.description}</h4>
                         <p className="text-sm">{technique.dosage}</p>
@@ -1479,7 +1479,7 @@ ${analysisResult.prognosis}
                   </TabsContent>
 
                   <TabsContent value="secondary" className="space-y-4">
-                    {analysisResult.treatmentPlan.secondary.map((treatment, idx) => (
+                    {analysisResult.treatmentPlan.secondary && Array.isArray(analysisResult.treatmentPlan.secondary) && analysisResult.treatmentPlan.secondary.map((treatment, idx) => (
                       <div key={idx} className="border rounded-lg p-4 space-y-2">
                         <h4 className="font-semibold">{treatment.description}</h4>
                         <p className="text-sm text-muted-foreground">{treatment.expectedOutcomes}</p>
@@ -1496,7 +1496,7 @@ ${analysisResult.prognosis}
                 <CardTitle className="flex items-center justify-between">
                   <span className="flex items-center gap-2">
                     <BookOpen className="h-5 w-5" />
-                    Supporting Research ({analysisResult.matchedResearch.length})
+                    Supporting Research ({analysisResult.matchedResearch && Array.isArray(analysisResult.matchedResearch) ? analysisResult.matchedResearch.length : 0})
                   </span>
                   <Badge variant="secondary" className="text-xs">
                     Live + Database
@@ -1506,7 +1506,7 @@ ${analysisResult.prognosis}
               <CardContent>
                 <ScrollArea className="h-[300px]">
                   <div className="space-y-3">
-                    {analysisResult.matchedResearch.map((article, idx) => (
+                    {analysisResult.matchedResearch && Array.isArray(analysisResult.matchedResearch) && analysisResult.matchedResearch.map((article, idx) => (
                       <div key={idx} className="border rounded-lg p-3 space-y-2">
                         <div className="flex items-start justify-between gap-2">
                           <h4 className="font-medium text-sm flex-1">{article.title}</h4>
@@ -1562,7 +1562,7 @@ ${analysisResult.prognosis}
             </Card>
 
             {/* Research Gaps */}
-            {analysisResult.researchGaps && analysisResult.researchGaps.length > 0 && (
+            {analysisResult.researchGaps && Array.isArray(analysisResult.researchGaps) && analysisResult.researchGaps.length > 0 && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">

@@ -61,6 +61,7 @@ import OpenAI from "openai";
 
 import sessionRoutes from "./routes/sessionRoutes";
 import patientFingerprintRoutes from "./routes/patientFingerprint";
+import subscriptionRoutes from "./routes/subscription";
 import { config } from 'dotenv';
 import { 
   analyzeMovementWithAI, 
@@ -300,6 +301,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Register patient fingerprint routes
   app.use(patientFingerprintRoutes);
+  
+  // Register subscription routes
+  app.use('/api/subscription', subscriptionRoutes);
 
   app.get('/api/openai-validate', async (req: Request, res: Response) => {
     try {

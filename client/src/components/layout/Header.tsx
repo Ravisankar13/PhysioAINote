@@ -50,6 +50,7 @@ const Header = () => {
     { to: "/virtual-patients", label: "Virtual Patients" },
     { to: "/body-scanner", label: "Body Scanner" },
     { to: "/movement-analysis", label: "Movement Analysis" },
+    { to: "/pricing", label: "Pricing" },
     { to: "/membership", label: "Membership" },
   ];
 

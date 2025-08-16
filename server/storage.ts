@@ -145,7 +145,13 @@ export interface IStorage {
   ): Promise<User>;
   updateUserStripeInfo(
     userId: number,
-    data: { customerId: string; subscriptionId: string }
+    data: { 
+      customerId?: string; 
+      subscriptionId?: string;
+      priceId?: string;
+      tier?: "basic" | "standard" | "premium";
+      status?: string;
+    }
   ): Promise<User>;
 
   // Trial Management Operations
@@ -1062,14 +1068,24 @@ export class DatabaseStorage implements IStorage {
 
   async updateUserStripeInfo(
     userId: number,
-    data: { customerId: string; subscriptionId: string }
+    data: { 
+      customerId?: string; 
+      subscriptionId?: string;
+      priceId?: string;
+      tier?: "basic" | "standard" | "premium";
+      status?: string;
+    }
   ): Promise<User> {
+    const updateData: any = {};
+    if (data.customerId !== undefined) updateData.stripeCustomerId = data.customerId;
+    if (data.subscriptionId !== undefined) updateData.stripeSubscriptionId = data.subscriptionId;
+    if (data.priceId !== undefined) updateData.stripePriceId = data.priceId;
+    if (data.tier !== undefined) updateData.membershipTier = data.tier;
+    if (data.status !== undefined) updateData.subscriptionStatus = data.status;
+
     const result = await db
       .update(users)
-      .set({
-        stripeCustomerId: data.customerId,
-        stripeSubscriptionId: data.subscriptionId,
-      })
+      .set(updateData)
       .where(eq(users.id, userId))
       .returning();
     return result[0];

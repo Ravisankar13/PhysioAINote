@@ -25,6 +25,7 @@ import Research from "@/pages/Research";
 import ResearchGaps from "@/pages/ResearchGaps";
 import CreateResearchProject from "@/pages/CreateResearchProject";
 import Membership from "@/pages/Membership";
+import Pricing from "@/pages/Pricing";
 
 import ManualTherapyPage from "@/pages/ManualTherapyPage";
 import TestAudioTranscription from "@/pages/TestAudioTranscription";
@@ -171,6 +172,8 @@ function Router() {
             <ProtectedRoute component={PhysioGPT} />
           </Route>
           <Route path="/membership" component={Membership} />
+          <Route path="/pricing" component={Pricing} />
+          <Route path="/subscription" component={Pricing} />
           <Route path="/about" component={About} />
           <Route path="/contact" component={Contact} />
           <Route path="/terms" component={Terms} />

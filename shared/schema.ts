@@ -302,9 +302,12 @@ export const users = pgTable("users", {
   trialStartDate: timestamp("trial_start_date"),
   trialEndDate: timestamp("trial_end_date"),
   hasUsedTrial: boolean("has_used_trial").default(false).notNull(),
+  isOnTrial: boolean("is_on_trial").default(false).notNull(),
   paypalSubscriptionId: text("paypal_subscription_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),
   stripeCustomerId: text("stripe_customer_id"),
+  stripePriceId: text("stripe_price_id"), // Store the current price ID for easy upgrades/downgrades
+  subscriptionStatus: text("subscription_status"), // active, trialing, canceled, past_due, etc.
   // isAdmin will be added in the future via migration
   // isAdmin: boolean("is_admin").default(false),
   

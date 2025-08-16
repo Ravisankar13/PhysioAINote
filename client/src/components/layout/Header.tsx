@@ -49,6 +49,7 @@ const Header = () => {
     { to: "/manual-therapy", label: "Manual Therapy" },
     { to: "/virtual-patients", label: "Virtual Patients" },
     { to: "/body-scanner", label: "Body Scanner" },
+    { to: "/movement-analysis", label: "Movement Analysis" },
     { to: "/membership", label: "Membership" },
   ];
 
@@ -219,6 +220,14 @@ const Header = () => {
                       <div className="flex items-center cursor-pointer w-full">
                         <Bone className="mr-2 h-4 w-4" />
                         <span>Manual Therapy</span>
+                      </div>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="flex items-center" asChild>
+                    <Link to="/movement-analysis">
+                      <div className="flex items-center cursor-pointer w-full">
+                        <Activity className="mr-2 h-4 w-4" />
+                        <span>Movement Analysis</span>
                       </div>
                     </Link>
                   </DropdownMenuItem>

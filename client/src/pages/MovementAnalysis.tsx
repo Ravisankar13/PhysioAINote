@@ -48,6 +48,13 @@ import {
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { queryClient } from '@/lib/queryClient';
+import {
+  analyzeRunningMechanics,
+  detectRunningImpairments,
+  generateRunningRecommendations,
+  resetRunningAnalysis,
+  type RunningMetrics
+} from '@/utils/runningBiomechanics';
 import type { 
   MovementSession, 
   JointMeasurement,
@@ -81,6 +88,24 @@ const ASSESSMENT_TESTS: AssessmentTest[] = [
       'Hip hinge pattern',
       'Trunk position',
       'Ankle mobility'
+    ]
+  },
+  {
+    id: 'running',
+    name: 'Running Analysis',
+    description: 'Comprehensive running mechanics assessment',
+    duration: 60,
+    instructions: [
+      'Run at comfortable pace (treadmill or in place)',
+      'Maintain consistent speed',
+      'Natural arm swing',
+      'Continue for full assessment duration'
+    ],
+    keyPoints: [
+      'Cadence & stride length',
+      'Foot strike pattern',
+      'Vertical oscillation',
+      'Hip & knee mechanics'
     ]
   },
   {
@@ -163,6 +188,7 @@ export default function MovementAnalysis() {
   const [isPaused, setIsPaused] = useState(false);
   const [selectedTest, setSelectedTest] = useState<AssessmentTest>(ASSESSMENT_TESTS[0]);
   const [currentMetrics, setCurrentMetrics] = useState<MovementMetrics | null>(null);
+  const [runningMetrics, setRunningMetrics] = useState<RunningMetrics | null>(null);
   const [recordedData, setRecordedData] = useState<any[]>([]);
   const [impairments, setImpairments] = useState<string[]>([]);
   const [sessionStartTime, setSessionStartTime] = useState<number | null>(null);
@@ -253,33 +279,46 @@ export default function MovementAnalysis() {
         radius: 3
       });
 
-      // Analyze movement
-      const metrics = analyzeMovementQuality(results.poseLandmarks);
-      setCurrentMetrics(metrics);
-
-      // Detect impairments
-      const detectedImpairments: string[] = [];
+      // Analyze movement based on selected test
+      let detectedImpairments: string[] = [];
       
-      // Check for knee valgus
-      const leftKneeValgus = detectKneeValgus(results.poseLandmarks, 'left');
-      const rightKneeValgus = detectKneeValgus(results.poseLandmarks, 'right');
-      
-      if (leftKneeValgus.present) {
-        detectedImpairments.push(`Left knee valgus (${leftKneeValgus.severity})`);
-      }
-      if (rightKneeValgus.present) {
-        detectedImpairments.push(`Right knee valgus (${rightKneeValgus.severity})`);
-      }
+      if (selectedTest.id === 'running') {
+        // Running-specific analysis
+        const runMetrics = analyzeRunningMechanics(results.poseLandmarks);
+        setRunningMetrics(runMetrics);
+        
+        // Detect running impairments
+        detectedImpairments = detectRunningImpairments(runMetrics);
+        
+        // Still calculate general metrics for visualization
+        const metrics = analyzeMovementQuality(results.poseLandmarks);
+        setCurrentMetrics(metrics);
+      } else {
+        // General movement analysis
+        const metrics = analyzeMovementQuality(results.poseLandmarks);
+        setCurrentMetrics(metrics);
+        
+        // Check for knee valgus
+        const leftKneeValgus = detectKneeValgus(results.poseLandmarks, 'left');
+        const rightKneeValgus = detectKneeValgus(results.poseLandmarks, 'right');
+        
+        if (leftKneeValgus.present) {
+          detectedImpairments.push(`Left knee valgus (${leftKneeValgus.severity})`);
+        }
+        if (rightKneeValgus.present) {
+          detectedImpairments.push(`Right knee valgus (${rightKneeValgus.severity})`);
+        }
 
-      // Check for Trendelenburg
-      if (detectTrendelenburg(results.poseLandmarks)) {
-        detectedImpairments.push('Trendelenburg sign detected');
-      }
+        // Check for Trendelenburg
+        if (detectTrendelenburg(results.poseLandmarks)) {
+          detectedImpairments.push('Trendelenburg sign detected');
+        }
 
-      // Check trunk lean
-      const trunkLean = calculateTrunkLean(results.poseLandmarks);
-      if (Math.abs(trunkLean) > 10) {
-        detectedImpairments.push(`Excessive trunk lean (${trunkLean.toFixed(1)}°)`);
+        // Check trunk lean
+        const trunkLean = calculateTrunkLean(results.poseLandmarks);
+        if (Math.abs(trunkLean) > 10) {
+          detectedImpairments.push(`Excessive trunk lean (${trunkLean.toFixed(1)}°)`);
+        }
       }
 
       setImpairments(detectedImpairments);
@@ -314,7 +353,7 @@ export default function MovementAnalysis() {
     }
 
     ctx.restore();
-  }, [isRecording, isPaused, sessionStartTime]);
+  }, [isRecording, isPaused, sessionStartTime, selectedTest]);
 
   // Toggle fullscreen mode
   const toggleFullscreen = () => {
@@ -369,6 +408,13 @@ export default function MovementAnalysis() {
     setSessionStartTime(Date.now());
     setElapsedTime(0);
     setRecordedData([]);
+    
+    // Reset running analysis if starting a running test
+    if (selectedTest.id === 'running') {
+      resetRunningAnalysis();
+      setRunningMetrics(null);
+    }
+    
     toast({
       title: "Recording Started",
       description: `Performing ${selectedTest.name}`,
@@ -471,7 +517,21 @@ export default function MovementAnalysis() {
         averageSymmetry: avgSymmetry.toFixed(1),
         averageStability: avgStability.toFixed(1),
         impairments: [...new Set(recordedData.flatMap(d => d.impairments))],
-        recommendations: generateRecommendations(impairments)
+        recommendations: selectedTest.id === 'running' 
+          ? generateRunningRecommendations(impairments)
+          : generateRecommendations(impairments),
+        // Add running-specific metrics if applicable
+        ...(selectedTest.id === 'running' && runningMetrics ? {
+          runningMetrics: {
+            cadence: runningMetrics.cadence,
+            footStrike: runningMetrics.footStrike,
+            verticalOscillation: runningMetrics.verticalOscillation,
+            strideLength: runningMetrics.strideLength,
+            groundContactTime: runningMetrics.groundContactTime,
+            overstriding: runningMetrics.overstriding,
+            crossoverGait: runningMetrics.crossoverGait
+          }
+        } : {})
       }
     };
 
@@ -676,7 +736,122 @@ export default function MovementAnalysis() {
                   </CardHeader>
                   <CardContent>
                     <ScrollArea className="h-[400px]">
-                      {currentMetrics ? (
+                      {selectedTest.id === 'running' && runningMetrics ? (
+                        <div className="space-y-4">
+                          {/* Cadence */}
+                          <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-sm font-medium">Cadence</span>
+                              <Badge variant={
+                                runningMetrics.cadence >= 170 && runningMetrics.cadence <= 180 ? 'default' :
+                                runningMetrics.cadence >= 160 && runningMetrics.cadence <= 190 ? 'secondary' : 'destructive'
+                              }>
+                                {runningMetrics.cadence} SPM
+                              </Badge>
+                            </div>
+                          </div>
+
+                          {/* Foot Strike */}
+                          <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-sm font-medium">Foot Strike</span>
+                              <Badge variant={
+                                runningMetrics.footStrike === 'midfoot' ? 'default' :
+                                runningMetrics.footStrike === 'forefoot' ? 'secondary' : 'outline'
+                              }>
+                                {runningMetrics.footStrike.toUpperCase()}
+                              </Badge>
+                            </div>
+                          </div>
+
+                          <Separator />
+
+                          {/* Vertical Oscillation */}
+                          <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-sm font-medium">Vertical Oscillation</span>
+                              <span className="text-sm">{runningMetrics.verticalOscillation.toFixed(1)}cm</span>
+                            </div>
+                            <Progress 
+                              value={Math.min(100, (10 - runningMetrics.verticalOscillation) * 10)} 
+                              className="h-2" 
+                            />
+                          </div>
+
+                          {/* Arm Swing Symmetry */}
+                          <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-sm font-medium">Arm Swing Symmetry</span>
+                              <span className="text-sm">{runningMetrics.armSwingSymmetry.toFixed(0)}%</span>
+                            </div>
+                            <Progress value={runningMetrics.armSwingSymmetry} className="h-2" />
+                          </div>
+
+                          {/* Ground Contact Time */}
+                          <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-sm font-medium">Ground Contact Time</span>
+                              <span className="text-sm">{runningMetrics.groundContactTime}ms</span>
+                            </div>
+                          </div>
+
+                          <Separator />
+
+                          {/* Running Mechanics */}
+                          <div>
+                            <h4 className="text-sm font-medium mb-3">Running Mechanics</h4>
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between text-xs">
+                                <span>Stride Length</span>
+                                <span>{runningMetrics.strideLength.toFixed(2)}x leg</span>
+                              </div>
+                              <div className="flex items-center justify-between text-xs">
+                                <span>Trunk Lean</span>
+                                <span className={Math.abs(runningMetrics.trunkLean) < 10 ? 'text-green-600' : 'text-orange-600'}>
+                                  {runningMetrics.trunkLean > 0 ? '+' : ''}{runningMetrics.trunkLean.toFixed(1)}°
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between text-xs">
+                                <span>Knee Flexion</span>
+                                <span>{runningMetrics.kneeFlexion}°</span>
+                              </div>
+                              <div className="flex items-center justify-between text-xs">
+                                <span>Hip Extension</span>
+                                <span>{runningMetrics.hipExtension}°</span>
+                              </div>
+                              <div className="flex items-center justify-between text-xs">
+                                <span>Pelvic Drop</span>
+                                <span className={runningMetrics.pelvicDrop < 5 ? 'text-green-600' : 'text-orange-600'}>
+                                  {runningMetrics.pelvicDrop.toFixed(1)}cm
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Issues */}
+                          <div>
+                            <h4 className="text-sm font-medium mb-2">Issues Detected</h4>
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2 text-xs">
+                                {runningMetrics.overstriding ? (
+                                  <XCircle className="h-3 w-3 text-red-600" />
+                                ) : (
+                                  <CheckCircle className="h-3 w-3 text-green-600" />
+                                )}
+                                <span>Overstriding {runningMetrics.overstriding ? 'Detected' : 'Not Detected'}</span>
+                              </div>
+                              <div className="flex items-center gap-2 text-xs">
+                                {runningMetrics.crossoverGait ? (
+                                  <XCircle className="h-3 w-3 text-red-600" />
+                                ) : (
+                                  <CheckCircle className="h-3 w-3 text-green-600" />
+                                )}
+                                <span>Crossover Gait {runningMetrics.crossoverGait ? 'Present' : 'Normal'}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ) : currentMetrics ? (
                         <div className="space-y-4">
                           {/* Movement Quality */}
                           <div>
@@ -771,7 +946,10 @@ export default function MovementAnalysis() {
                           <div>
                             <h4 className="text-sm font-medium mb-3">Recommendations</h4>
                             <div className="space-y-2">
-                              {generateRecommendations(impairments).map((rec, i) => (
+                              {(selectedTest.id === 'running' 
+                                ? generateRunningRecommendations(impairments)
+                                : generateRecommendations(impairments)
+                              ).map((rec, i) => (
                                 <div key={i} className="flex items-start gap-2">
                                   <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
                                   <p className="text-xs text-gray-700">{rec}</p>

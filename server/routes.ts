@@ -6079,12 +6079,62 @@ Respond with only a number between 1-100 representing the relevance score.`;
         await storage.updateStripeCustomerId(userId, customerId);
       }
 
-      // Define price IDs for each tier
-      const PRICE_IDS = {
-        basic: process.env.STRIPE_PRICE_BASIC || 'price_basic_placeholder',
-        standard: process.env.STRIPE_PRICE_STANDARD || 'price_standard_placeholder',
-        premium: process.env.STRIPE_PRICE_PREMIUM || 'price_premium_placeholder',
-      };
+      // Create or get existing products and prices
+      let PRICE_IDS: Record<string, string> = {};
+      
+      try {
+        // Check if products exist, if not create them
+        const products = await stripe.products.list({ limit: 100 });
+        
+        const tiers = [
+          { key: 'basic', name: 'Basic Plan', price: 3900, description: '10 PhysioGPT sessions/month' },
+          { key: 'standard', name: 'Standard Plan', price: 9900, description: '100 PhysioGPT sessions/month' },
+          { key: 'premium', name: 'Premium Plan', price: 19900, description: 'Unlimited PhysioGPT sessions' },
+        ];
+        
+        for (const tierInfo of tiers) {
+          let product = products.data.find(p => p.name === `PhysioAI ${tierInfo.name}`);
+          
+          if (!product) {
+            product = await stripe.products.create({
+              name: `PhysioAI ${tierInfo.name}`,
+              description: tierInfo.description,
+            });
+          }
+          
+          // Check if price exists for this product
+          const prices = await stripe.prices.list({ 
+            product: product.id,
+            limit: 100 
+          });
+          
+          let price = prices.data.find(p => 
+            p.unit_amount === tierInfo.price && 
+            p.recurring?.interval === 'month'
+          );
+          
+          if (!price) {
+            price = await stripe.prices.create({
+              product: product.id,
+              unit_amount: tierInfo.price,
+              currency: 'usd',
+              recurring: {
+                interval: 'month',
+              },
+            });
+          }
+          
+          PRICE_IDS[tierInfo.key] = price.id;
+        }
+      } catch (error) {
+        console.error("Error creating Stripe products/prices:", error);
+        // Fallback to test price IDs if creation fails
+        PRICE_IDS = {
+          basic: 'price_1QZKBUQgGBJQM85ZJhVyIdGD',
+          standard: 'price_1QZKBhQgGBJQM85ZXxoYjKcP',
+          premium: 'price_1QZKBrQgGBJQM85ZPcqLJQI0',
+        };
+      }
 
       // Create checkout session with 14-day trial
       const session = await stripe.checkout.sessions.create({

@@ -179,6 +179,7 @@ export default function MovementAnalysis() {
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const poseRef = useRef<Pose | null>(null);
   const cameraRef = useRef<Camera | null>(null);
   const animationFrameRef = useRef<number>();
@@ -314,6 +315,41 @@ export default function MovementAnalysis() {
 
     ctx.restore();
   }, [isRecording, isPaused, sessionStartTime]);
+
+  // Toggle fullscreen mode
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement && containerRef.current) {
+      containerRef.current.requestFullscreen().then(() => {
+        setIsFullscreen(true);
+      }).catch((err) => {
+        console.error('Failed to enter fullscreen:', err);
+        // Fallback to just UI fullscreen
+        setIsFullscreen(!isFullscreen);
+      });
+    } else if (document.fullscreenElement) {
+      document.exitFullscreen().then(() => {
+        setIsFullscreen(false);
+      }).catch((err) => {
+        console.error('Failed to exit fullscreen:', err);
+        setIsFullscreen(!isFullscreen);
+      });
+    } else {
+      // Fallback for when browser fullscreen isn't available
+      setIsFullscreen(!isFullscreen);
+    }
+  };
+
+  // Listen for fullscreen changes
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    };
+  }, []);
 
   // Timer for recording duration
   useEffect(() => {
@@ -479,54 +515,51 @@ export default function MovementAnalysis() {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Activity className="h-6 w-6 text-blue-600" />
-            <h1 className="text-2xl font-bold">Movement Analysis & Biomechanics</h1>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowSettings(!showSettings)}
-            >
-              <Settings className="h-4 w-4 mr-2" />
-              Settings
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsFullscreen(!isFullscreen)}
-            >
-              {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-            </Button>
+    <div ref={containerRef} className="h-screen flex flex-col bg-gray-50">
+      {/* Header - Hide in fullscreen */}
+      {!isFullscreen && (
+        <div className="bg-white border-b px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <Activity className="h-6 w-6 text-blue-600" />
+              <h1 className="text-2xl font-bold">Movement Analysis & Biomechanics</h1>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowSettings(!showSettings)}
+              >
+                <Settings className="h-4 w-4 mr-2" />
+                Settings
+              </Button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Main Content */}
-      <div className={`flex-1 flex ${isFullscreen ? 'p-2' : 'p-4'} gap-4 overflow-hidden`}>
+      <div className={`flex-1 flex ${isFullscreen ? 'p-0' : 'p-4'} gap-4 overflow-hidden ${isFullscreen ? 'bg-black' : ''}`}>
         {/* Left Panel - Video Feed */}
         <div className={`${isFullscreen ? 'flex-1' : 'w-3/4'} flex flex-col gap-4`}>
-          <Card className="flex-1 overflow-hidden">
-            <CardHeader className="pb-4">
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <CameraIcon className="h-5 w-5" />
-                  Live Movement Capture
-                </CardTitle>
-                {isRecording && (
-                  <Badge variant={isPaused ? "secondary" : "destructive"} className="animate-pulse">
-                    {isPaused ? 'PAUSED' : 'RECORDING'} - {Math.floor(elapsedTime / 60)}:{(elapsedTime % 60).toString().padStart(2, '0')}
-                  </Badge>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="p-0 relative">
-              <div className="relative aspect-video bg-black">
+          <Card className={`flex-1 overflow-hidden ${isFullscreen ? 'border-0 rounded-none bg-black' : ''}`}>
+            {!isFullscreen && (
+              <CardHeader className="pb-4">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <CameraIcon className="h-5 w-5" />
+                    Live Movement Capture
+                  </CardTitle>
+                  {isRecording && (
+                    <Badge variant={isPaused ? "secondary" : "destructive"} className="animate-pulse">
+                      {isPaused ? 'PAUSED' : 'RECORDING'} - {Math.floor(elapsedTime / 60)}:{(elapsedTime % 60).toString().padStart(2, '0')}
+                    </Badge>
+                  )}
+                </div>
+              </CardHeader>
+            )}
+            <CardContent className={`p-0 relative ${isFullscreen ? 'h-full' : ''}`}>
+              <div className={`relative ${isFullscreen ? 'h-full' : 'aspect-video'} bg-black`}>
                 <video
                   ref={videoRef}
                   className="absolute inset-0 w-full h-full object-cover hidden"
@@ -560,6 +593,25 @@ export default function MovementAnalysis() {
                     </>
                   )}
                 </div>
+                
+                {/* Fullscreen Toggle Button */}
+                <Button
+                  onClick={toggleFullscreen}
+                  className="absolute top-4 right-4 bg-black/50 hover:bg-black/70 text-white"
+                  size="sm"
+                  title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+                >
+                  {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                </Button>
+                
+                {/* Recording Status in Fullscreen */}
+                {isFullscreen && isRecording && (
+                  <div className="absolute top-4 left-4">
+                    <Badge variant={isPaused ? "secondary" : "destructive"} className="animate-pulse text-lg px-4 py-2">
+                      {isPaused ? 'PAUSED' : 'RECORDING'} - {Math.floor(elapsedTime / 60)}:{(elapsedTime % 60).toString().padStart(2, '0')}
+                    </Badge>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>

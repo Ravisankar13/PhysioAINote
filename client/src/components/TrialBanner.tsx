@@ -9,6 +9,7 @@ import { Clock, Star, CheckCircle, AlertCircle } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import TrialSelectionModal from "./TrialSelectionModal";
 
 interface TrialStatus {
   hasUsedTrial: boolean;
@@ -22,6 +23,7 @@ export default function TrialBanner() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [location, setLocation] = useLocation();
+  const [showTrialModal, setShowTrialModal] = useState(false);
 
   // Fetch trial status
   const { data: trialStatus, isLoading } = useQuery<TrialStatus>({
@@ -39,37 +41,41 @@ export default function TrialBanner() {
     }
   }, [user, trialStatus, location]);
 
-  // Start trial mutation
+  // Start trial mutation - now redirects to Stripe checkout
   const startTrialMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/trial/start");
+      const response = await apiRequest("POST", "/api/trial/start", { tier: 'basic' });
       return await response.json();
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/trial/status"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
-      toast({
-        title: "Free Trial Activated!",
-        description: "You now have 14 days of premium access to all features.",
-      });
+      if (data.checkoutUrl) {
+        // Redirect to Stripe checkout
+        window.location.href = data.checkoutUrl;
+      } else {
+        toast({
+          title: "Processing...",
+          description: data.message || "Setting up your trial checkout...",
+        });
+      }
     },
     onError: (error: any) => {
       toast({
-        title: "Trial Activation Failed",
-        description: error.message || "Unable to start your free trial. Please try again.",
+        title: "Trial Setup Failed",
+        description: error.message || "Unable to set up your free trial. Please try again.",
         variant: "destructive",
       });
     },
   });
 
-  // Handle trial button click
+  // Handle trial button click - now shows modal
   const handleStartTrial = () => {
     if (!user) {
       // Redirect to auth page with trial intent
       setLocation('/auth?autoStartTrial=true&returnTo=' + encodeURIComponent(location));
       return;
     }
-    startTrialMutation.mutate();
+    // Show modal for tier selection
+    setShowTrialModal(true);
   };
 
   // Show for non-authenticated users or when trial status is loading for authenticated users
@@ -147,7 +153,12 @@ export default function TrialBanner() {
 
   // Show trial offer for users who haven't used it
   return (
-    <Card className="mb-6 border-2 border-blue-300 bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 shadow-lg">
+    <>
+      <TrialSelectionModal 
+        open={showTrialModal} 
+        onClose={() => setShowTrialModal(false)} 
+      />
+      <Card className="mb-6 border-2 border-blue-300 bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 shadow-lg">
       <CardHeader className="pb-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-t-lg">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -159,7 +170,7 @@ export default function TrialBanner() {
                 🎉 Start Your 14-Day FREE Trial Now!
               </CardTitle>
               <CardDescription className="text-blue-100 text-base">
-                Full premium access - cancel anytime
+                Full premium access - First payment after 14 days - Cancel anytime
               </CardDescription>
             </div>
           </div>
@@ -196,19 +207,19 @@ export default function TrialBanner() {
             <ul className="text-sm text-blue-800 space-y-1">
               <li className="flex items-center gap-2">
                 <Clock className="h-3 w-3 text-blue-600" />
-                14 days full access
+                14 days FREE - then $39/month
               </li>
               <li className="flex items-center gap-2">
                 <CheckCircle className="h-3 w-3 text-green-600" />
-                Cancel anytime
+                Card required (charged after trial)
               </li>
               <li className="flex items-center gap-2">
                 <CheckCircle className="h-3 w-3 text-green-600" />
-                No commitment
+                Cancel anytime before trial ends
               </li>
               <li className="flex items-center gap-2">
                 <CheckCircle className="h-3 w-3 text-green-600" />
-                Premium features included
+                Full premium access immediately
               </li>
             </ul>
           </div>
@@ -235,10 +246,16 @@ export default function TrialBanner() {
           </Button>
         </div>
         
-        <p className="text-xs text-blue-600 text-center mt-3">
-          Your trial will automatically start when you click the button above.
-        </p>
+        <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+          <p className="text-xs text-blue-700 text-center font-medium">
+            ✓ Secure payment via Stripe • ✓ Card required for trial • ✓ First charge after 14 days
+          </p>
+          <p className="text-xs text-blue-600 text-center mt-1">
+            You won't be charged today. Your first payment of $39 will be processed after your 14-day trial ends.
+          </p>
+        </div>
       </CardContent>
     </Card>
+    </>
   );
 }

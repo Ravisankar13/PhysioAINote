@@ -6046,9 +6046,11 @@ Respond with only a number between 1-100 representing the relevance score.`;
   }
 
   // Free Trial Management Routes
+  // This endpoint now creates a Stripe checkout session for trial with payment method collection
   app.post("/api/trial/start", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const userId = req.user!.id;
+      const { tier = 'basic' } = req.body; // Default to basic tier
       
       // Check if user has already used their trial
       const trialStatus = await storage.getUserTrialStatus(userId);
@@ -6058,16 +6060,64 @@ Respond with only a number between 1-100 representing the relevance score.`;
         });
       }
 
-      // Start the free trial
-      const updatedUser = await storage.startFreeTrial(userId);
+      // Import stripe if not already available
+      const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+      
+      // Get or create Stripe customer
+      const user = await storage.getUser(userId);
+      let customerId = user?.stripeCustomerId;
+      
+      if (!customerId) {
+        const customer = await stripe.customers.create({
+          email: user?.email || undefined,
+          metadata: {
+            userId: userId.toString(),
+            username: user?.username || '',
+          },
+        });
+        customerId = customer.id;
+        await storage.updateStripeCustomerId(userId, customerId);
+      }
+
+      // Define price IDs for each tier
+      const PRICE_IDS = {
+        basic: process.env.STRIPE_PRICE_BASIC || 'price_basic_placeholder',
+        standard: process.env.STRIPE_PRICE_STANDARD || 'price_standard_placeholder',
+        premium: process.env.STRIPE_PRICE_PREMIUM || 'price_premium_placeholder',
+      };
+
+      // Create checkout session with 14-day trial
+      const session = await stripe.checkout.sessions.create({
+        customer: customerId,
+        payment_method_types: ['card'],
+        line_items: [{
+          price: PRICE_IDS[tier as keyof typeof PRICE_IDS],
+          quantity: 1,
+        }],
+        mode: 'subscription',
+        subscription_data: {
+          trial_period_days: 14,
+          metadata: {
+            userId: userId.toString(),
+            tier: tier,
+          },
+        },
+        success_url: `${req.protocol}://${req.get('host')}/pricing?trial_activated=true`,
+        cancel_url: `${req.protocol}://${req.get('host')}/pricing?trial_cancelled=true`,
+        metadata: {
+          userId: userId.toString(),
+          tier: tier,
+        },
+      });
+
       res.json({ 
-        message: "14-day free trial activated successfully!",
-        trialEndDate: updatedUser.trialEndDate,
-        membershipTier: updatedUser.membershipTier
+        checkoutUrl: session.url,
+        sessionId: session.id,
+        message: "Redirecting to secure checkout to start your 14-day free trial..."
       });
     } catch (error) {
-      console.error("Error starting free trial:", error);
-      res.status(500).json({ error: "Unable to start free trial" });
+      console.error("Error creating trial checkout session:", error);
+      res.status(500).json({ error: "Unable to create checkout session for free trial" });
     }
   });
 

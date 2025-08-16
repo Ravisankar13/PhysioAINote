@@ -201,6 +201,7 @@ export default function MovementAnalysis() {
     gender: '',
     complaint: ''
   });
+  const [cameraStatus, setCameraStatus] = useState<'initializing' | 'ready' | 'error' | 'permission-needed'>('initializing');
   
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -215,38 +216,108 @@ export default function MovementAnalysis() {
   useEffect(() => {
     if (!videoRef.current || !canvasRef.current) return;
 
-    const pose = new Pose({
-      locateFile: (file) => {
-        return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
-      }
-    });
-
-    pose.setOptions({
-      modelComplexity: 2,
-      smoothLandmarks: true,
-      enableSegmentation: false,
-      minDetectionConfidence: 0.5,
-      minTrackingConfidence: 0.5
-    });
-
-    pose.onResults(onPoseResults);
-    poseRef.current = pose;
-
-    const camera = new Camera(videoRef.current, {
-      onFrame: async () => {
-        if (poseRef.current && !isPaused) {
-          await poseRef.current.send({ image: videoRef.current! });
+    const initializeCamera = async () => {
+      try {
+        // Check if we're in a secure context
+        if (!window.isSecureContext) {
+          console.error('Camera access requires HTTPS or localhost');
+          setCameraStatus('error');
+          toast({
+            title: "Camera Access Denied",
+            description: "This feature requires a secure connection (HTTPS). Please ensure you're accessing the site via HTTPS.",
+            variant: "destructive",
+          });
+          return;
         }
-      },
-      width: 1920,
-      height: 1080
-    });
 
-    cameraRef.current = camera;
-    camera.start();
+        // Check for camera permissions
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          console.error('getUserMedia is not supported');
+          setCameraStatus('error');
+          toast({
+            title: "Camera Not Supported",
+            description: "Your browser doesn't support camera access. Please use a modern browser.",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        // Request camera permission first
+        setCameraStatus('permission-needed');
+        try {
+          await navigator.mediaDevices.getUserMedia({ video: true });
+          setCameraStatus('initializing');
+        } catch (permissionError) {
+          console.error('Camera permission denied:', permissionError);
+          setCameraStatus('error');
+          toast({
+            title: "Camera Permission Denied",
+            description: "Please allow camera access in your browser settings and refresh the page.",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        const pose = new Pose({
+          locateFile: (file) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
+          }
+        });
+
+        pose.setOptions({
+          modelComplexity: 2,
+          smoothLandmarks: true,
+          enableSegmentation: false,
+          minDetectionConfidence: 0.5,
+          minTrackingConfidence: 0.5
+        });
+
+        pose.onResults(onPoseResults);
+        poseRef.current = pose;
+
+        const camera = new Camera(videoRef.current, {
+          onFrame: async () => {
+            if (poseRef.current && !isPaused) {
+              await poseRef.current.send({ image: videoRef.current! });
+            }
+          },
+          width: 1920,
+          height: 1080,
+          facingMode: 'user'
+        });
+
+        cameraRef.current = camera;
+        
+        // Start camera with error handling
+        await camera.start().then(() => {
+          setCameraStatus('ready');
+          console.log('Camera started successfully');
+        }).catch((error: any) => {
+          console.error('Camera start error:', error);
+          setCameraStatus('error');
+          toast({
+            title: "Camera Error",
+            description: "Failed to start camera. Please check camera permissions and try again.",
+            variant: "destructive",
+          });
+        });
+
+      } catch (error) {
+        console.error('Camera initialization error:', error);
+        toast({
+          title: "Initialization Error",
+          description: "Failed to initialize movement analysis. Please refresh and try again.",
+          variant: "destructive",
+        });
+      }
+    };
+
+    initializeCamera();
 
     return () => {
-      camera.stop();
+      if (cameraRef.current) {
+        cameraRef.current.stop();
+      }
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }
@@ -632,6 +703,41 @@ export default function MovementAnalysis() {
                   width={1920}
                   height={1080}
                 />
+                
+                {/* Camera Status Indicator */}
+                {cameraStatus !== 'ready' && (
+                  <div className="absolute top-4 left-4 bg-black/70 text-white p-4 rounded-lg">
+                    {cameraStatus === 'initializing' && (
+                      <div className="flex items-center gap-2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                        <span>Initializing camera...</span>
+                      </div>
+                    )}
+                    {cameraStatus === 'permission-needed' && (
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="h-4 w-4 text-yellow-500" />
+                        <span>Please allow camera access when prompted</span>
+                      </div>
+                    )}
+                    {cameraStatus === 'error' && (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <XCircle className="h-4 w-4 text-red-500" />
+                          <span>Camera access failed</span>
+                        </div>
+                        <div className="text-sm text-gray-300">
+                          <p>Troubleshooting tips:</p>
+                          <ul className="list-disc list-inside mt-1">
+                            <li>Ensure you're using HTTPS (not HTTP)</li>
+                            <li>Allow camera permissions in browser settings</li>
+                            <li>Check if camera is being used by another app</li>
+                            <li>Try refreshing the page</li>
+                          </ul>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
                 
                 {/* Overlay Controls */}
                 <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2">

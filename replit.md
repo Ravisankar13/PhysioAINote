@@ -28,6 +28,9 @@ Preferred communication style: Simple, everyday language.
 - **ORM**: Drizzle ORM
 - **Migrations**: Drizzle Kit
 
+### Deployment Considerations
+- **Camera Access Requirements**: Movement Analysis page requires HTTPS for camera access in production. Replit automatically provides HTTPS for deployments at `https://your-app.replit.app`. Users must grant camera permissions when prompted.
+
 ### Key Features & Design Patterns
 - **AI Integration (Phase 5 - Completed Jan 2025)**: Leverages OpenAI GPT-4o for clinical analysis, content generation, and specialized models for virtual patient analysis based on expert physiotherapy methodologies (Jo Gibson, Alison Grimaldi, Leanne Bisset, Clinical Edge, Physio Network, Sports Map). Includes AI-powered research gap analysis, exercise generation, real-time movement analysis from webcam capture, automatic virtual patient generation from movement data, and PRIVACY-PRESERVING SOAP-to-Virtual-Patient conversion (extracts only de-identified clinical patterns needed for 3D models - no patient data stored).
 - **Clinical Documentation**: AI-enhanced SOAP note generation, OpenAI Whisper for audio transcription, automated PII de-identification, and version control for notes. Features an AI Automatic Paperwork System for generating various clinical documents.

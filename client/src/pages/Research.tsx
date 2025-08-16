@@ -1059,10 +1059,10 @@ export default function Research() {
             </p>
           </div>
         
-        <Tabs defaultValue="articles" className="w-full">
+        <Tabs defaultValue="live-search" className="w-full">
           <TabsList className="grid w-full grid-cols-3 max-w-lg mx-auto">
-            <TabsTrigger value="articles">Saved Articles</TabsTrigger>
             <TabsTrigger value="live-search">Live Search</TabsTrigger>
+            <TabsTrigger value="articles">Saved Articles</TabsTrigger>
             <TabsTrigger value="video-analysis">Video Analysis</TabsTrigger>
           </TabsList>
           

@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ExternalLink, BookOpen, Info, Award, Calendar, Users, Video, Play, Clock, CheckCircle, AlertCircle, Loader2, Search, Database, Globe, FileText, UserCheck, Activity, Target, Brain, TrendingUp, AlertTriangle, ChevronRight, Download, Share2, ClipboardList } from "lucide-react";
+import { ExternalLink, BookOpen, Info, Award, Calendar, Users, Video, Play, Clock, CheckCircle, AlertCircle, Loader2, Search, Database, Globe, FileText, UserCheck, Activity, Target, Brain, TrendingUp, AlertTriangle, ChevronRight, Download, Share2, ClipboardList, Sparkles } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { apiRequest } from "@/lib/queryClient";
 import { 
@@ -74,32 +74,37 @@ interface ClinicalCase {
 }
 
 interface TreatmentRecommendation {
-  interventionType: string;
+  interventionType?: string;
   description: string;
+  specificProtocol?: string;
   dosage: string;
   frequency: string;
   duration: string;
   evidenceLevel: string;
-  supportingStudies: ResearchArticle[];
+  supportingStudies?: any[];
   expectedOutcomes: string;
-  contraindications: string[];
+  contraindications?: string[];
 }
 
 interface CaseAnalysisResult {
   clinicalFeatures: string[];
   primaryDiagnosis: string;
   differentialDiagnoses: string[];
-  matchedResearch: ResearchArticle[];
+  matchedResearch: any[];
+  liveResearchSummary?: string;
   treatmentPlan: {
     primary: TreatmentRecommendation[];
     secondary: TreatmentRecommendation[];
     exercises: TreatmentRecommendation[];
     manualTherapy: TreatmentRecommendation[];
+    evidenceQuality?: string;
   };
   prognosis: string;
   redFlagsIdentified: string[];
   clinicalReasoning: string;
+  researchGaps?: string[];
   confidenceScore: number;
+  lastUpdated?: string;
 }
 
 interface YouTubeVideoInfo {
@@ -1323,6 +1328,11 @@ ${analysisResult.prognosis}
                     Clinical Analysis
                   </span>
                   <div className="flex items-center gap-2">
+                    {analysisResult.lastUpdated && (
+                      <Badge variant="secondary" className="text-xs">
+                        Live Research
+                      </Badge>
+                    )}
                     <Badge variant="outline">
                       Confidence: {Math.round(analysisResult.confidenceScore * 100)}%
                     </Badge>
@@ -1340,7 +1350,7 @@ ${analysisResult.prognosis}
                   </p>
                 </div>
                 
-                {analysisResult.differentialDiagnoses.length > 0 && (
+                {analysisResult.differentialDiagnoses && analysisResult.differentialDiagnoses.length > 0 && (
                   <div>
                     <h4 className="font-semibold text-sm mb-2">Differential Diagnoses</h4>
                     <div className="flex flex-wrap gap-2">
@@ -1351,7 +1361,17 @@ ${analysisResult.prognosis}
                   </div>
                 )}
 
-                {analysisResult.redFlagsIdentified.length > 0 && (
+                {analysisResult.liveResearchSummary && (
+                  <div className="border-l-4 border-blue-500 pl-4 py-2 bg-blue-50 rounded">
+                    <h4 className="font-semibold text-sm mb-1 flex items-center gap-2">
+                      <Sparkles className="h-4 w-4" />
+                      Latest Research Insights
+                    </h4>
+                    <p className="text-sm text-gray-700">{analysisResult.liveResearchSummary}</p>
+                  </div>
+                )}
+
+                {analysisResult.redFlagsIdentified && analysisResult.redFlagsIdentified.length > 0 && (
                   <Alert className="border-red-200 bg-red-50">
                     <AlertTriangle className="h-4 w-4 text-red-600" />
                     <AlertDescription>
@@ -1364,15 +1384,35 @@ ${analysisResult.prognosis}
                     </AlertDescription>
                   </Alert>
                 )}
+
+                {analysisResult.clinicalReasoning && (
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <h4 className="font-semibold text-sm mb-1">Clinical Reasoning</h4>
+                    <p className="text-sm text-gray-700">{analysisResult.clinicalReasoning}</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
             {/* Treatment Recommendations */}
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Target className="h-5 w-5" />
-                  Evidence-Based Treatment Plan
+                <CardTitle className="flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <Target className="h-5 w-5" />
+                    Evidence-Based Treatment Plan
+                  </span>
+                  {analysisResult.treatmentPlan?.evidenceQuality && (
+                    <Badge 
+                      variant={
+                        analysisResult.treatmentPlan.evidenceQuality === 'High' ? 'default' :
+                        analysisResult.treatmentPlan.evidenceQuality === 'Moderate' ? 'secondary' :
+                        'outline'
+                      }
+                    >
+                      {analysisResult.treatmentPlan.evidenceQuality} Evidence
+                    </Badge>
+                  )}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -1388,9 +1428,15 @@ ${analysisResult.prognosis}
                     {analysisResult.treatmentPlan.primary.map((treatment, idx) => (
                       <div key={idx} className="border rounded-lg p-4 space-y-2">
                         <div className="flex items-start justify-between">
-                          <h4 className="font-semibold">{treatment.description}</h4>
+                          <h4 className="font-semibold">{treatment.interventionType || treatment.description}</h4>
                           <Badge variant="outline">{treatment.evidenceLevel}</Badge>
                         </div>
+                        {treatment.specificProtocol && (
+                          <div className="bg-blue-50 p-2 rounded text-sm">
+                            <span className="font-medium">Research Protocol: </span>
+                            {treatment.specificProtocol}
+                          </div>
+                        )}
                         <div className="grid grid-cols-3 gap-2 text-sm">
                           <div>
                             <span className="text-muted-foreground">Dosage:</span> {treatment.dosage}
@@ -1403,6 +1449,12 @@ ${analysisResult.prognosis}
                           </div>
                         </div>
                         <p className="text-sm text-muted-foreground">{treatment.expectedOutcomes}</p>
+                        {treatment.supportingStudies && treatment.supportingStudies.length > 0 && (
+                          <div className="text-xs text-gray-500 pt-2 border-t">
+                            <span className="font-medium">Supporting Studies: </span>
+                            {treatment.supportingStudies.slice(0, 2).join(", ")}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </TabsContent>
@@ -1441,20 +1493,46 @@ ${analysisResult.prognosis}
             {/* Matched Research */}
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BookOpen className="h-5 w-5" />
-                  Supporting Research ({analysisResult.matchedResearch.length})
+                <CardTitle className="flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <BookOpen className="h-5 w-5" />
+                    Supporting Research ({analysisResult.matchedResearch.length})
+                  </span>
+                  <Badge variant="secondary" className="text-xs">
+                    Live + Database
+                  </Badge>
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <ScrollArea className="h-[300px]">
                   <div className="space-y-3">
                     {analysisResult.matchedResearch.map((article, idx) => (
-                      <div key={idx} className="border rounded-lg p-3 space-y-1">
-                        <h4 className="font-medium text-sm">{article.title}</h4>
+                      <div key={idx} className="border rounded-lg p-3 space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <h4 className="font-medium text-sm flex-1">{article.title}</h4>
+                          <div className="flex gap-1">
+                            {article.source && (
+                              <Badge variant="outline" className="text-xs">
+                                {article.source}
+                              </Badge>
+                            )}
+                            {article.relevanceScore && article.relevanceScore > 50 && (
+                              <Badge variant="secondary" className="text-xs">
+                                {article.relevanceScore}%
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
                         <p className="text-xs text-muted-foreground">
-                          {article.authors} • {article.journal}
+                          {article.authors && (Array.isArray(article.authors) ? article.authors.join(", ") : article.authors)} 
+                          {article.journal && ` • ${article.journal}`}
+                          {article.year && ` • ${article.year}`}
                         </p>
+                        {article.abstract && (
+                          <p className="text-xs text-gray-600 line-clamp-2">
+                            {article.abstract}
+                          </p>
+                        )}
                         <Button 
                           variant="link" 
                           size="sm" 
@@ -1482,6 +1560,28 @@ ${analysisResult.prognosis}
                 <p className="text-sm">{analysisResult.prognosis}</p>
               </CardContent>
             </Card>
+
+            {/* Research Gaps */}
+            {analysisResult.researchGaps && analysisResult.researchGaps.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <AlertCircle className="h-5 w-5" />
+                    Research Gaps Identified
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-2">
+                    {analysisResult.researchGaps.map((gap, idx) => (
+                      <li key={idx} className="flex items-start gap-2 text-sm">
+                        <span className="text-muted-foreground">•</span>
+                        <span>{gap}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+            )}
           </>
         ) : (
           <Card>

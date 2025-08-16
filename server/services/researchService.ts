@@ -2,6 +2,7 @@ import axios from 'axios';
 import { db } from '../db';
 import { researchArticles } from '@shared/schema';
 import { eq, desc, like, or, and, gte } from 'drizzle-orm';
+import OpenAI from 'openai';
 
 interface PubMedArticle {
   uid: string;
@@ -465,32 +466,45 @@ export class ResearchService {
   }
 
   /**
-   * Analyze a clinical case and generate treatment recommendations
+   * Analyze a clinical case and generate treatment recommendations with live research integration
    */
   static async analyzeClinicalCase(caseData: any): Promise<any> {
     try {
       // Extract key terms from the case for research matching
       const searchTerms = this.extractSearchTermsFromCase(caseData);
       
-      // Search for relevant research
-      const matchedArticles = await this.searchRelevantArticles(searchTerms);
+      // Fetch live research from multiple databases in parallel
+      const [localArticles, liveResearch] = await Promise.all([
+        this.searchRelevantArticles(searchTerms),
+        this.fetchLiveResearch(searchTerms, caseData)
+      ]);
       
-      // Generate clinical analysis
+      // Combine and deduplicate articles
+      const allArticles = this.combineAndDeduplicateArticles(localArticles, liveResearch);
+      
+      // Use AI to analyze research and generate evidence-based recommendations
+      const aiAnalysis = await this.generateAIAnalysis(caseData, allArticles);
+      
+      // Generate comprehensive clinical analysis
       const analysis = {
         clinicalFeatures: this.extractClinicalFeatures(caseData),
-        primaryDiagnosis: this.generatePrimaryDiagnosis(caseData),
-        differentialDiagnoses: this.generateDifferentialDiagnoses(caseData),
-        matchedResearch: matchedArticles.slice(0, 10), // Top 10 relevant articles
+        primaryDiagnosis: aiAnalysis.primaryDiagnosis || this.generatePrimaryDiagnosis(caseData),
+        differentialDiagnoses: aiAnalysis.differentialDiagnoses || this.generateDifferentialDiagnoses(caseData),
+        matchedResearch: allArticles.slice(0, 15), // Top 15 relevant articles from all sources
+        liveResearchSummary: aiAnalysis.researchSummary,
         treatmentPlan: {
-          primary: this.generatePrimaryTreatments(caseData, matchedArticles),
-          secondary: this.generateSecondaryTreatments(caseData),
-          exercises: this.generateExerciseRecommendations(caseData),
-          manualTherapy: this.generateManualTherapyRecommendations(caseData)
+          primary: aiAnalysis.primaryTreatments || this.generatePrimaryTreatments(caseData, allArticles),
+          secondary: aiAnalysis.secondaryTreatments || this.generateSecondaryTreatments(caseData),
+          exercises: aiAnalysis.exerciseRecommendations || this.generateExerciseRecommendations(caseData),
+          manualTherapy: aiAnalysis.manualTherapyRecommendations || this.generateManualTherapyRecommendations(caseData),
+          evidenceQuality: aiAnalysis.evidenceQuality
         },
-        prognosis: this.generatePrognosis(caseData),
+        prognosis: aiAnalysis.prognosis || this.generatePrognosis(caseData),
         redFlagsIdentified: this.identifyRedFlags(caseData),
-        clinicalReasoning: this.generateClinicalReasoning(caseData),
-        confidenceScore: this.calculateConfidenceScore(caseData)
+        clinicalReasoning: aiAnalysis.clinicalReasoning || this.generateClinicalReasoning(caseData),
+        researchGaps: aiAnalysis.researchGaps,
+        confidenceScore: aiAnalysis.confidenceScore || this.calculateConfidenceScore(caseData),
+        lastUpdated: new Date().toISOString()
       };
       
       return analysis;
@@ -732,5 +746,264 @@ export class ResearchService {
     if (caseData.symptomSeverity) score += 0.05;
     
     return Math.min(score, 0.95); // Cap at 95% confidence
+  }
+
+  /**
+   * Fetch live research from multiple databases
+   */
+  private static async fetchLiveResearch(searchTerms: string, caseData: any): Promise<any[]> {
+    try {
+      // Build intelligent search queries based on the case
+      const queries = this.buildSearchQueries(caseData, searchTerms);
+      
+      // Fetch from multiple sources in parallel
+      const [pubmedResults, crossrefResults, semanticResults] = await Promise.all([
+        this.searchPubMed(queries.primary, 10).catch(() => []),
+        this.searchCrossRef(queries.primary, 10).catch(() => []),
+        this.searchSemanticScholar(queries.primary, 10).catch(() => [])
+      ]);
+      
+      // Format and combine results
+      const formattedResults = [
+        ...this.formatPubMedResults(pubmedResults),
+        ...this.formatCrossRefResults(crossrefResults),
+        ...this.formatSemanticScholarResults(semanticResults)
+      ];
+      
+      // Sort by relevance and recency
+      return formattedResults.sort((a, b) => {
+        const scoreA = this.calculateRelevanceScore(a, caseData);
+        const scoreB = this.calculateRelevanceScore(b, caseData);
+        return scoreB - scoreA;
+      });
+    } catch (error) {
+      console.error('Error fetching live research:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Build intelligent search queries from case data
+   */
+  private static buildSearchQueries(caseData: any, baseTerms: string): any {
+    const complaint = caseData.primaryComplaint?.toLowerCase() || '';
+    const findings = caseData.keyFindings?.toLowerCase() || '';
+    const tests = caseData.specialTests?.toLowerCase() || '';
+    
+    // Build primary query with most relevant terms
+    let primary = baseTerms;
+    
+    // Add condition-specific search terms
+    if (complaint.includes('shoulder')) {
+      primary += ' (rotator cuff OR impingement OR adhesive capsulitis)';
+    } else if (complaint.includes('back') || complaint.includes('lumbar')) {
+      primary += ' (low back pain OR lumbar spine OR disc herniation)';
+    } else if (complaint.includes('knee')) {
+      primary += ' (patellofemoral OR meniscus OR ACL OR osteoarthritis knee)';
+    } else if (complaint.includes('neck')) {
+      primary += ' (cervical spine OR neck pain OR whiplash)';
+    }
+    
+    // Add treatment-focused terms
+    primary += ' (treatment OR therapy OR rehabilitation OR exercise OR manual therapy)';
+    
+    // Add recency filter for last 3 years
+    const currentYear = new Date().getFullYear();
+    primary += ` (${currentYear - 3}:${currentYear}[dp])`;
+    
+    return {
+      primary,
+      secondary: `${complaint} physiotherapy treatment`,
+      tertiary: `${findings} rehabilitation exercise`
+    };
+  }
+
+  /**
+   * Format PubMed results for consistency
+   */
+  private static formatPubMedResults(results: any[]): any[] {
+    return results.map(article => ({
+      title: article.title,
+      authors: article.authors,
+      journal: article.source,
+      year: article.year || new Date(article.pubdate).getFullYear(),
+      doi: article.doi,
+      abstract: article.abstract,
+      source: 'PubMed',
+      pmid: article.pmid,
+      url: `https://pubmed.ncbi.nlm.nih.gov/${article.pmid}/`,
+      relevanceScore: 0
+    }));
+  }
+
+  /**
+   * Format CrossRef results for consistency
+   */
+  private static formatCrossRefResults(results: any[]): any[] {
+    return results.map(work => ({
+      title: work.title?.[0] || 'Untitled',
+      authors: work.author?.map(a => `${a.given || ''} ${a.family || ''}`).filter(n => n.trim()),
+      journal: work['container-title']?.[0] || work.publisher,
+      year: work.published?.['date-parts']?.[0]?.[0] || new Date().getFullYear(),
+      doi: work.DOI,
+      abstract: work.abstract,
+      source: 'CrossRef',
+      score: work.score,
+      url: `https://doi.org/${work.DOI}`,
+      relevanceScore: 0
+    }));
+  }
+
+  /**
+   * Format Semantic Scholar results for consistency
+   */
+  private static formatSemanticScholarResults(results: any[]): any[] {
+    return results.map(paper => ({
+      title: paper.title,
+      authors: paper.authors?.map(a => a.name),
+      journal: paper.venue,
+      year: paper.year,
+      abstract: paper.abstract,
+      source: 'Semantic Scholar',
+      citationCount: paper.citationCount,
+      influentialCitationCount: paper.influentialCitationCount,
+      url: `https://www.semanticscholar.org/paper/${paper.paperId}`,
+      relevanceScore: 0
+    }));
+  }
+
+  /**
+   * Calculate relevance score for sorting
+   */
+  private static calculateRelevanceScore(article: any, caseData: any): number {
+    let score = 0;
+    
+    // Recency bonus (papers from last 2 years)
+    const currentYear = new Date().getFullYear();
+    if (article.year >= currentYear - 2) score += 20;
+    else if (article.year >= currentYear - 5) score += 10;
+    
+    // Citation count bonus
+    if (article.citationCount > 100) score += 15;
+    else if (article.citationCount > 50) score += 10;
+    else if (article.citationCount > 20) score += 5;
+    
+    // Title relevance
+    const title = article.title?.toLowerCase() || '';
+    const complaint = caseData.primaryComplaint?.toLowerCase() || '';
+    if (title.includes(complaint)) score += 25;
+    if (title.includes('treatment') || title.includes('therapy')) score += 15;
+    if (title.includes('exercise') || title.includes('rehabilitation')) score += 10;
+    
+    // Abstract relevance
+    const abstract = article.abstract?.toLowerCase() || '';
+    if (abstract.includes(complaint)) score += 20;
+    if (abstract.includes('randomized') || abstract.includes('systematic review')) score += 15;
+    if (abstract.includes('clinical trial')) score += 10;
+    
+    // Source quality bonus
+    if (article.source === 'PubMed') score += 10;
+    if (article.source === 'Semantic Scholar' && article.influentialCitationCount > 10) score += 10;
+    
+    article.relevanceScore = score;
+    return score;
+  }
+
+  /**
+   * Combine and deduplicate articles from multiple sources
+   */
+  private static combineAndDeduplicateArticles(local: any[], live: any[]): any[] {
+    const combined = [...local, ...live];
+    const seen = new Set();
+    const deduplicated = [];
+    
+    for (const article of combined) {
+      // Create a unique key based on title and year
+      const key = `${article.title?.toLowerCase().substring(0, 50)}_${article.year}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        deduplicated.push(article);
+      }
+    }
+    
+    // Sort by relevance score
+    return deduplicated.sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
+  }
+
+  /**
+   * Generate AI-powered analysis of research and case
+   */
+  private static async generateAIAnalysis(caseData: any, articles: any[]): Promise<any> {
+    try {
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      
+      // Prepare research summaries for AI analysis
+      const researchSummaries = articles.slice(0, 10).map(a => ({
+        title: a.title,
+        year: a.year,
+        abstract: a.abstract?.substring(0, 500),
+        keyFindings: a.keyFindings,
+        source: a.source
+      }));
+      
+      const prompt = `You are an expert physiotherapist and clinical researcher analyzing a patient case with the latest research evidence. 
+
+PATIENT CASE:
+${JSON.stringify(caseData, null, 2)}
+
+RELEVANT RESEARCH (Top 10 most relevant studies):
+${JSON.stringify(researchSummaries, null, 2)}
+
+Please provide a comprehensive evidence-based analysis in JSON format including:
+
+1. primaryDiagnosis: Most likely diagnosis based on case presentation and research evidence
+2. differentialDiagnoses: Array of 3-5 alternative diagnoses to consider
+3. researchSummary: Brief summary of key findings from the research relevant to this case
+4. primaryTreatments: Array of primary treatment recommendations with specific parameters from research:
+   - interventionType
+   - description
+   - specificProtocol (exact parameters from research)
+   - dosage
+   - frequency
+   - duration
+   - evidenceLevel (A, B, or C)
+   - supportingStudies (titles of supporting research)
+   - expectedOutcomes
+   - contraindications
+5. secondaryTreatments: Array of adjunct treatments
+6. exerciseRecommendations: Array of specific exercises with parameters from research
+7. manualTherapyRecommendations: Array of manual therapy techniques with evidence
+8. prognosis: Expected recovery timeline based on research for similar cases
+9. clinicalReasoning: Detailed clinical reasoning linking assessment findings to treatment choices
+10. researchGaps: Areas where more research is needed for this condition
+11. evidenceQuality: Overall quality of evidence (High/Moderate/Low) with justification
+12. confidenceScore: Confidence in recommendations (0-1) based on evidence quality and case match
+
+Ensure all recommendations are directly supported by the research provided. Include specific treatment parameters (sets, reps, frequency, duration) extracted from the studies.`;
+
+      const response = await openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are an expert physiotherapist providing evidence-based clinical analysis. Always respond with valid JSON.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.3,
+        max_tokens: 4000
+      });
+      
+      const analysis = JSON.parse(response.choices[0].message.content || '{}');
+      return analysis;
+    } catch (error) {
+      console.error('Error generating AI analysis:', error);
+      // Return empty object to fall back to basic analysis
+      return {};
+    }
   }
 }

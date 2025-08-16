@@ -3904,3 +3904,6 @@ export const exerciseProgressRelations = relations(exerciseProgress, ({ one }) =
     references: [programExercises.id],
   }),
 }));
+
+// Export all movement analysis schema tables
+export * from './movementAnalysisSchema';

@@ -55,6 +55,7 @@ import CompetitionResultsPage from "@/pages/CompetitionResultsPage";
 import GameCompetitions from "@/pages/GameCompetitions";
 import GameCompetitionPage from "@/pages/GameCompetitionPage";
 import ExerciseProgramBuilder from "@/pages/ExerciseProgramBuilder";
+import MovementAnalysis from "@/pages/MovementAnalysis";
 
 import TournamentWaitingRoom from "@/pages/TournamentWaitingRoom";
 import TournamentMatchPage from "@/pages/TournamentMatchPage";
@@ -97,6 +98,9 @@ function Router() {
           <Route path="/manual-therapy" component={ManualTherapyPage} />
           <Route path="/exercise-programs">
             <ProtectedRoute component={ExerciseProgramBuilder} />
+          </Route>
+          <Route path="/movement-analysis">
+            <ProtectedRoute component={MovementAnalysis} />
           </Route>
           <Route path="/skeleton-3d-tool" component={Skeleton3DTool} />
           <Route path="/motion-capture" component={MotionCapturePage} />

@@ -6554,6 +6554,241 @@ Respond with only a number between 1-100 representing the relevance score.`;
     }
   });
 
+  // Movement Analysis API Routes
+  app.post("/api/movement-analysis/sessions", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user!.id;
+      const sessionData = req.body;
+      
+      // Import movement analysis schema
+      const { 
+        movementSessions, 
+        jointMeasurements,
+        movementImpairments,
+        assessmentReports 
+      } = await import('@shared/movementAnalysisSchema');
+      
+      // Create session
+      const [session] = await db.insert(movementSessions).values({
+        userId,
+        patientName: sessionData.patientName,
+        patientAge: sessionData.patientAge,
+        patientGender: sessionData.patientGender,
+        chiefComplaint: sessionData.chiefComplaint,
+        assessmentType: sessionData.assessmentType,
+        duration: sessionData.duration,
+        overallQuality: sessionData.overallQuality,
+        notes: sessionData.notes || null
+      }).returning();
+      
+      // Store measurements
+      if (sessionData.measurements && sessionData.measurements.length > 0) {
+        for (const measurement of sessionData.measurements) {
+          if (measurement.metrics && measurement.metrics.jointAngles) {
+            for (const angle of measurement.metrics.jointAngles) {
+              await db.insert(jointMeasurements).values({
+                sessionId: session.id,
+                timestamp: measurement.timestamp / 1000, // Convert to seconds
+                jointName: angle.joint,
+                angleType: 'flexion', // Could be enhanced based on angle data
+                angle: angle.angle,
+                plane: angle.plane,
+                side: angle.side || null,
+                normalRangeMin: angle.normalRange.min,
+                normalRangeMax: angle.normalRange.max,
+                isWithinNormal: angle.isWithinNormal,
+                deviationPercentage: angle.isWithinNormal ? 0 : 
+                  ((angle.angle - angle.normalRange.max) / angle.normalRange.max) * 100
+              });
+            }
+          }
+          
+          // Store impairments
+          if (measurement.impairments && measurement.impairments.length > 0) {
+            for (const impairment of measurement.impairments) {
+              const impairmentType = impairment.includes('knee valgus') ? 'knee_valgus' :
+                                    impairment.includes('Trendelenburg') ? 'trendelenburg' :
+                                    impairment.includes('trunk lean') ? 'forward_head' : 'compensation';
+                                    
+              const severity = impairment.includes('mild') ? 'mild' :
+                              impairment.includes('moderate') ? 'moderate' :
+                              impairment.includes('severe') ? 'severe' : 'moderate';
+              
+              await db.insert(movementImpairments).values({
+                sessionId: session.id,
+                impairmentType: impairmentType as any,
+                severity,
+                timestamp: measurement.timestamp / 1000,
+                description: impairment,
+                clinicalSignificance: 'Requires intervention',
+                affectedJoints: [],
+                recommendedInterventions: []
+              });
+            }
+          }
+        }
+      }
+      
+      // Generate AI-powered analysis report
+      if (sessionData.measurements && sessionData.measurements.length > 0) {
+        const { analyzeMovementWithAI } = await import('./ai/movementAnalysis');
+        const aiAnalysis = await analyzeMovementWithAI({
+          sessionData,
+          measurements: sessionData.measurements
+        });
+        
+        // Store assessment report
+        await db.insert(assessmentReports).values({
+          sessionId: session.id,
+          summary: aiAnalysis.summary,
+          keyFindings: aiAnalysis.keyFindings,
+          impairmentsSummary: aiAnalysis.impairmentsSummary,
+          recommendations: aiAnalysis.recommendations,
+          functionalLimitations: aiAnalysis.functionalLimitations,
+          goals: aiAnalysis.goals,
+          prognosis: aiAnalysis.prognosis
+        });
+      }
+      
+      res.json({ 
+        message: "Movement analysis session saved successfully",
+        sessionId: session.id 
+      });
+    } catch (error) {
+      console.error("Error saving movement analysis session:", error);
+      res.status(500).json({ error: "Failed to save movement analysis session" });
+    }
+  });
+  
+  // Get movement analysis sessions
+  app.get("/api/movement-analysis/sessions", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user!.id;
+      const { movementSessions } = await import('@shared/movementAnalysisSchema');
+      
+      const sessions = await db.select()
+        .from(movementSessions)
+        .where(eq(movementSessions.userId, userId))
+        .orderBy(sql`${movementSessions.createdAt} DESC`);
+      
+      res.json(sessions);
+    } catch (error) {
+      console.error("Error fetching movement analysis sessions:", error);
+      res.status(500).json({ error: "Failed to fetch movement analysis sessions" });
+    }
+  });
+  
+  // Get single movement analysis session with details
+  app.get("/api/movement-analysis/sessions/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const sessionId = parseInt(req.params.id);
+      const userId = req.user!.id;
+      
+      const { 
+        movementSessions, 
+        jointMeasurements,
+        movementImpairments,
+        assessmentReports 
+      } = await import('@shared/movementAnalysisSchema');
+      
+      // Get session
+      const [session] = await db.select()
+        .from(movementSessions)
+        .where(sql`${movementSessions.id} = ${sessionId} AND ${movementSessions.userId} = ${userId}`);
+      
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+      
+      // Get measurements
+      const measurements = await db.select()
+        .from(jointMeasurements)
+        .where(eq(jointMeasurements.sessionId, sessionId));
+      
+      // Get impairments
+      const impairments = await db.select()
+        .from(movementImpairments)
+        .where(eq(movementImpairments.sessionId, sessionId));
+      
+      // Get report
+      const [report] = await db.select()
+        .from(assessmentReports)
+        .where(eq(assessmentReports.sessionId, sessionId));
+      
+      res.json({
+        session,
+        measurements,
+        impairments,
+        report
+      });
+    } catch (error) {
+      console.error("Error fetching movement analysis session:", error);
+      res.status(500).json({ error: "Failed to fetch movement analysis session" });
+    }
+  });
+  
+  // Generate virtual patient from movement analysis
+  app.post("/api/movement-analysis/generate-virtual-patient", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { sessionId } = req.body;
+      const userId = req.user!.id;
+      
+      const { 
+        movementSessions,
+        jointMeasurements,
+        movementImpairments 
+      } = await import('@shared/movementAnalysisSchema');
+      
+      // Get session data
+      const [session] = await db.select()
+        .from(movementSessions)
+        .where(sql`${movementSessions.id} = ${sessionId} AND ${movementSessions.userId} = ${userId}`);
+      
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+      
+      // Get measurements and impairments
+      const measurements = await db.select()
+        .from(jointMeasurements)
+        .where(eq(jointMeasurements.sessionId, sessionId));
+      
+      const impairments = await db.select()
+        .from(movementImpairments)
+        .where(eq(movementImpairments.sessionId, sessionId));
+      
+      // Generate virtual patient using AI
+      const { generateVirtualPatientFromMovement } = await import('./ai/movementAnalysis');
+      const virtualPatientData = await generateVirtualPatientFromMovement({
+        session,
+        measurements,
+        impairments
+      });
+      
+      // Save virtual patient
+      const [virtualPatient] = await db.insert(virtualPatients).values({
+        userId,
+        patientName: virtualPatientData.patientName,
+        limbScales: virtualPatientData.limbScales,
+        shoulderPathology: virtualPatientData.shoulderPathology,
+        spinalPathology: virtualPatientData.spinalPathology,
+        lowerLimbPathology: virtualPatientData.lowerLimbPathology,
+        modelConfig: virtualPatientData.modelConfig,
+        description: virtualPatientData.description,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }).returning();
+      
+      res.json({
+        message: "Virtual patient generated successfully",
+        virtualPatient
+      });
+    } catch (error) {
+      console.error("Error generating virtual patient:", error);
+      res.status(500).json({ error: "Failed to generate virtual patient" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   // Import realtime virtual patient service

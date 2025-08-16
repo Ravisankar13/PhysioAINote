@@ -255,8 +255,8 @@ function extractTreatmentTerms(text: string): string[] {
   return Array.from(treatmentTerms);
 }
 
-// Initialize Stripe with secret key
-const stripe = new Stripe('sk_test_51RP2StQgGBJQM85ZPrDkbY7AHdR6P5wrPjnA6pduuVnGjWX6kzSTQoQBp13lzq2ICGsKWay6NmVsym7whYJqWqqX009jZOQTgI', {
+// Initialize Stripe with secret key from environment
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_51RP2StQgGBJQM85ZPrDkbY7AHdR6P5wrPjnA6pduuVnGjWX6kzSTQoQBp13lzq2ICGsKWay6NmVsym7whYJqWqqX009jZOQTgI', {
   apiVersion: '2023-10-16',
 });
 
@@ -6060,8 +6060,8 @@ Respond with only a number between 1-100 representing the relevance score.`;
         });
       }
 
-      // Import stripe if not already available
-      const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+      // Use the Stripe instance already initialized at the top of the file
+      // stripe is already imported and initialized
       
       // Get or create Stripe customer
       const user = await storage.getUser(userId);

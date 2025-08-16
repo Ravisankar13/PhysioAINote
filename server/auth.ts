@@ -124,17 +124,12 @@ export function setupAuth(app: Express) {
         return res.status(400).json({ message: "Username already exists" });
       }
 
-      // Set up 14-day free trial for new users
-      const now = new Date();
-      const trialEndDate = new Date(now.getTime() + (14 * 24 * 60 * 60 * 1000)); // 14 days from now
-
+      // Create user WITHOUT automatic trial - users must provide payment details through Stripe
       const user = await storage.createUser({
         ...req.body,
         password: await hashPassword(req.body.password),
-        membershipTier: "basic", // Start with basic tier during trial
-        trialStartDate: now,
-        trialEndDate: trialEndDate,
-        hasUsedTrial: true, // Mark that they've used their trial
+        membershipTier: "basic", // Default tier, no trial
+        hasUsedTrial: false, // They haven't used their trial yet (must go through Stripe checkout)
       });
 
       req.login(user, (err) => {
@@ -143,11 +138,7 @@ export function setupAuth(app: Express) {
         const { password, ...userWithoutPassword } = user;
         res.status(201).json({
           ...userWithoutPassword,
-          trialInfo: {
-            isInTrial: true,
-            trialEndsAt: trialEndDate,
-            daysRemaining: 14
-          }
+          trialInfo: null // No trial until they go through Stripe checkout
         });
       });
     } catch (err) {

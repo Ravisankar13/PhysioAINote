@@ -122,18 +122,11 @@ const AuthPage = () => {
 
   // Handle registration form submission
   function onRegisterSubmit(data: RegisterFormValues) {
-    const params = new URLSearchParams(window.location.search);
-    const autoStartTrial = params.get('autoStartTrial') === 'true';
-    const returnTo = params.get('returnTo') || '/';
-
     registerMutation.mutate(data, {
       onSuccess: () => {
-        if (autoStartTrial) {
-          // Redirect to return page with trial activation parameter
-          setLocation(`${returnTo}?autoStartTrial=true`);
-        } else {
-          setLocation("/");
-        }
+        // Simply redirect to home page after registration
+        // Users will need to explicitly start trial through Stripe checkout
+        setLocation("/");
       },
     });
   }
@@ -171,22 +164,22 @@ const AuthPage = () => {
                 <LockKeyhole className="h-6 w-6" />
               </div>
               <h1 className="text-3xl font-bold">
-                {isTrialFlow ? "Start Your 14-Day Free Trial" : "Welcome to PhysioAI"}
+                {isTrialFlow ? "Create Your Account" : "Welcome to PhysioAI"}
               </h1>
               <p className="text-muted-foreground">
                 {isTrialFlow 
-                  ? "Create your account to activate 14 days of premium access - no payment required"
+                  ? "Create your account, then choose a subscription plan with a 14-day free trial"
                   : "Sign in to your account or create a new one to access the AI-powered clinical note generation"
                 }
               </p>
               {isTrialFlow && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
-                  <div className="font-medium mb-1">Your 14-day trial includes:</div>
+                  <div className="font-medium mb-1">After creating your account:</div>
                   <ul className="text-xs space-y-0.5">
-                    <li>• AI-powered PhysioGPT assistant</li>
-                    <li>• Virtual patient case studies</li>
-                    <li>• Advanced 3D anatomy tools</li>
-                    <li>• Research library access</li>
+                    <li>• Choose from Basic ($39), Standard ($99), or Premium ($199) plans</li>
+                    <li>• Get 14 days free with payment details required</li>
+                    <li>• First payment after your trial ends</li>
+                    <li>• Cancel anytime during your trial</li>
                   </ul>
                 </div>
               )}

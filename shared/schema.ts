@@ -308,6 +308,7 @@ export const users = pgTable("users", {
   stripeCustomerId: text("stripe_customer_id"),
   stripePriceId: text("stripe_price_id"), // Store the current price ID for easy upgrades/downgrades
   subscriptionStatus: text("subscription_status"), // active, trialing, canceled, past_due, etc.
+  onboardingRequired: boolean("onboarding_required").default(false).notNull(), // Track if user needs to complete payment setup
   // isAdmin will be added in the future via migration
   // isAdmin: boolean("is_admin").default(false),
   

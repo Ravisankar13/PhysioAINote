@@ -6182,6 +6182,72 @@ Respond with only a number between 1-100 representing the relevance score.`;
     }
   });
 
+  // Verify subscription after Stripe checkout
+  app.post("/api/verify-subscription", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { sessionId } = req.body;
+      const userId = req.user!.id;
+      
+      if (!sessionId) {
+        return res.status(400).json({ error: "Session ID required" });
+      }
+
+      // Retrieve the checkout session from Stripe
+      const session = await stripe.checkout.sessions.retrieve(sessionId, {
+        expand: ['subscription', 'customer']
+      });
+
+      if (session.payment_status !== 'paid' && session.payment_status !== 'no_payment_required') {
+        return res.status(400).json({ error: "Payment not completed" });
+      }
+
+      // Update user subscription details
+      const subscription = session.subscription as any;
+      const tier = session.metadata?.tier || 'basic';
+      
+      await storage.updateUserSubscription(userId, {
+        stripeSubscriptionId: subscription?.id,
+        stripeCustomerId: session.customer as string,
+        membershipTier: tier as any,
+        subscriptionStatus: subscription?.status || 'trialing',
+        isOnTrial: true,
+        trialStartDate: new Date(),
+        trialEndDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 days from now
+        hasUsedTrial: true,
+        onboardingRequired: false, // Mark onboarding as complete
+      });
+
+      res.json({ 
+        success: true,
+        tier: tier,
+        message: "Subscription verified successfully" 
+      });
+    } catch (error) {
+      console.error("Error verifying subscription:", error);
+      res.status(500).json({ error: "Unable to verify subscription" });
+    }
+  });
+
+  // Complete onboarding (mark user as onboarded)
+  app.post("/api/complete-onboarding", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user!.id;
+      
+      // Update user to mark onboarding as complete
+      await storage.updateUser(userId, {
+        onboardingRequired: false
+      });
+
+      res.json({ 
+        success: true,
+        message: "Onboarding completed successfully" 
+      });
+    } catch (error) {
+      console.error("Error completing onboarding:", error);
+      res.status(500).json({ error: "Unable to complete onboarding" });
+    }
+  });
+
   // Research Platform API Routes
 
   // Research Projects

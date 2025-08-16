@@ -124,22 +124,123 @@ export function setupAuth(app: Express) {
         return res.status(400).json({ message: "Username already exists" });
       }
 
-      // Create user WITHOUT automatic trial - users must provide payment details through Stripe
+      // Create user with onboarding required flag
       const user = await storage.createUser({
         ...req.body,
         password: await hashPassword(req.body.password),
-        membershipTier: "basic", // Default tier, no trial
-        hasUsedTrial: false, // They haven't used their trial yet (must go through Stripe checkout)
+        membershipTier: "basic", // Default tier
+        hasUsedTrial: false, // They haven't used their trial yet
+        onboardingRequired: true, // Mark that they need to complete Stripe onboarding
       });
 
-      req.login(user, (err) => {
+      req.login(user, async (err) => {
         if (err) return next(err);
-        // Don't send the password hash to the client
-        const { password, ...userWithoutPassword } = user;
-        res.status(201).json({
-          ...userWithoutPassword,
-          trialInfo: null // No trial until they go through Stripe checkout
-        });
+        
+        // Immediately create Stripe checkout session for trial
+        try {
+          // Import Stripe (will be available from routes.ts)
+          const Stripe = require('stripe');
+          const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_51RP2StQgGBJQM85ZPrDkbY7AHdR6P5wrPjnA6pduuVnGjWX6kzSTQoQBp13lzq2ICGsKWay6NmVsym7whYJqWqqX009jZOQTgI', {
+            apiVersion: '2023-10-16',
+          });
+
+          // Get or create Stripe customer
+          let customerId = user.stripeCustomerId;
+          
+          if (!customerId) {
+            const customer = await stripe.customers.create({
+              email: user.email || undefined,
+              metadata: {
+                userId: user.id.toString(),
+                username: user.username || '',
+              },
+            });
+            customerId = customer.id;
+            await storage.updateStripeCustomerId(user.id, customerId);
+          }
+
+          // Create or get products and prices
+          const products = await stripe.products.list({ limit: 100 });
+          
+          // Default to basic tier for new registrations
+          const tierInfo = { 
+            key: 'basic', 
+            name: 'Basic Plan', 
+            price: 3900, 
+            description: '10 PhysioGPT sessions/month' 
+          };
+          
+          let product = products.data.find(p => p.name === `PhysioAI ${tierInfo.name}`);
+          
+          if (!product) {
+            product = await stripe.products.create({
+              name: `PhysioAI ${tierInfo.name}`,
+              description: tierInfo.description,
+            });
+          }
+          
+          // Check if price exists for this product
+          const prices = await stripe.prices.list({ 
+            product: product.id,
+            limit: 100 
+          });
+          
+          let price = prices.data.find(p => 
+            p.unit_amount === tierInfo.price && 
+            p.recurring?.interval === 'month'
+          );
+          
+          if (!price) {
+            price = await stripe.prices.create({
+              product: product.id,
+              unit_amount: tierInfo.price,
+              currency: 'usd',
+              recurring: {
+                interval: 'month',
+              },
+            });
+          }
+
+          // Create checkout session with 14-day trial
+          const session = await stripe.checkout.sessions.create({
+            customer: customerId,
+            payment_method_types: ['card'],
+            line_items: [{
+              price: price.id,
+              quantity: 1,
+            }],
+            mode: 'subscription',
+            subscription_data: {
+              trial_period_days: 14,
+              metadata: {
+                userId: user.id.toString(),
+                tier: 'basic',
+              },
+            },
+            success_url: `${req.protocol}://${req.get('host')}/onboarding-complete?session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: `${req.protocol}://${req.get('host')}/registration-incomplete`,
+            metadata: {
+              userId: user.id.toString(),
+              tier: 'basic',
+            },
+          });
+
+          // Don't send the password hash to the client
+          const { password, ...userWithoutPassword } = user;
+          res.status(201).json({
+            ...userWithoutPassword,
+            checkoutUrl: session.url, // Send Stripe checkout URL for immediate redirect
+            message: "Registration successful. Redirecting to secure payment setup..."
+          });
+        } catch (stripeError) {
+          console.error("Error creating Stripe checkout session:", stripeError);
+          // Still return success but without checkout URL (fallback)
+          const { password, ...userWithoutPassword } = user;
+          res.status(201).json({
+            ...userWithoutPassword,
+            requiresOnboarding: true
+          });
+        }
       });
     } catch (err) {
       next(err);

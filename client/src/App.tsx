@@ -26,6 +26,8 @@ import ResearchGaps from "@/pages/ResearchGaps";
 import CreateResearchProject from "@/pages/CreateResearchProject";
 // Membership page redirects to Pricing now
 import Pricing from "@/pages/Pricing";
+import OnboardingComplete from "@/pages/OnboardingComplete";
+import RegistrationIncomplete from "@/pages/RegistrationIncomplete";
 
 import ManualTherapyPage from "@/pages/ManualTherapyPage";
 import TestAudioTranscription from "@/pages/TestAudioTranscription";
@@ -185,6 +187,10 @@ function Router() {
           <Route path="/auth" component={AuthPage} />
           <Route path="/trial-welcome">
             <ProtectedRoute component={TrialWelcome} />
+          </Route>
+          <Route path="/onboarding-complete" component={OnboardingComplete} />
+          <Route path="/registration-incomplete">
+            <ProtectedRoute component={RegistrationIncomplete} />
           </Route>
           <Route path="/admin">
             <ProtectedRoute component={AdminDashboard} />

@@ -123,10 +123,18 @@ const AuthPage = () => {
   // Handle registration form submission
   function onRegisterSubmit(data: RegisterFormValues) {
     registerMutation.mutate(data, {
-      onSuccess: () => {
-        // Simply redirect to home page after registration
-        // Users will need to explicitly start trial through Stripe checkout
-        setLocation("/");
+      onSuccess: (response) => {
+        // If Stripe checkout URL is provided, redirect to it immediately
+        if (response.checkoutUrl) {
+          console.log("Redirecting to Stripe checkout for payment setup...");
+          window.location.href = response.checkoutUrl;
+        } else if (response.requiresOnboarding) {
+          // Fallback: if Stripe failed but user was created, redirect to onboarding page
+          setLocation("/registration-incomplete");
+        } else {
+          // Default: redirect to home page
+          setLocation("/");
+        }
       },
     });
   }

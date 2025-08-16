@@ -153,6 +153,18 @@ export interface IStorage {
       status?: string;
     }
   ): Promise<User>;
+  updateUser(userId: number, data: Partial<User>): Promise<User>;
+  updateUserSubscription(userId: number, data: {
+    stripeSubscriptionId?: string;
+    stripeCustomerId?: string;
+    membershipTier?: string;
+    subscriptionStatus?: string;
+    isOnTrial?: boolean;
+    trialStartDate?: Date;
+    trialEndDate?: Date;
+    hasUsedTrial?: boolean;
+    onboardingRequired?: boolean;
+  }): Promise<User>;
 
   // Trial Management Operations
   startFreeTrial(userId: number): Promise<User>;
@@ -1082,6 +1094,45 @@ export class DatabaseStorage implements IStorage {
     if (data.priceId !== undefined) updateData.stripePriceId = data.priceId;
     if (data.tier !== undefined) updateData.membershipTier = data.tier;
     if (data.status !== undefined) updateData.subscriptionStatus = data.status;
+
+    const result = await db
+      .update(users)
+      .set(updateData)
+      .where(eq(users.id, userId))
+      .returning();
+    return result[0];
+  }
+
+  async updateUser(userId: number, data: Partial<User>): Promise<User> {
+    const result = await db
+      .update(users)
+      .set(data as any)
+      .where(eq(users.id, userId))
+      .returning();
+    return result[0];
+  }
+
+  async updateUserSubscription(userId: number, data: {
+    stripeSubscriptionId?: string;
+    stripeCustomerId?: string;
+    membershipTier?: string;
+    subscriptionStatus?: string;
+    isOnTrial?: boolean;
+    trialStartDate?: Date;
+    trialEndDate?: Date;
+    hasUsedTrial?: boolean;
+    onboardingRequired?: boolean;
+  }): Promise<User> {
+    const updateData: any = {};
+    if (data.stripeSubscriptionId !== undefined) updateData.stripeSubscriptionId = data.stripeSubscriptionId;
+    if (data.stripeCustomerId !== undefined) updateData.stripeCustomerId = data.stripeCustomerId;
+    if (data.membershipTier !== undefined) updateData.membershipTier = data.membershipTier;
+    if (data.subscriptionStatus !== undefined) updateData.subscriptionStatus = data.subscriptionStatus;
+    if (data.isOnTrial !== undefined) updateData.isOnTrial = data.isOnTrial;
+    if (data.trialStartDate !== undefined) updateData.trialStartDate = data.trialStartDate;
+    if (data.trialEndDate !== undefined) updateData.trialEndDate = data.trialEndDate;
+    if (data.hasUsedTrial !== undefined) updateData.hasUsedTrial = data.hasUsedTrial;
+    if (data.onboardingRequired !== undefined) updateData.onboardingRequired = data.onboardingRequired;
 
     const result = await db
       .update(users)

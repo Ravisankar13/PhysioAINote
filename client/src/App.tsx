@@ -24,7 +24,7 @@ import ResearchHub from "@/pages/ResearchHub";
 import Research from "@/pages/Research";
 import ResearchGaps from "@/pages/ResearchGaps";
 import CreateResearchProject from "@/pages/CreateResearchProject";
-import Membership from "@/pages/Membership";
+// Membership page redirects to Pricing now
 import Pricing from "@/pages/Pricing";
 
 import ManualTherapyPage from "@/pages/ManualTherapyPage";
@@ -171,7 +171,12 @@ function Router() {
           <Route path="/physiogpt">
             <ProtectedRoute component={PhysioGPT} />
           </Route>
-          <Route path="/membership" component={Membership} />
+          <Route path="/membership">
+            {() => {
+              window.location.href = "/pricing";
+              return null;
+            }}
+          </Route>
           <Route path="/pricing" component={Pricing} />
           <Route path="/subscription" component={Pricing} />
           <Route path="/about" component={About} />

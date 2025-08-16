@@ -51,7 +51,6 @@ const Header = () => {
     { to: "/body-scanner", label: "Body Scanner" },
     { to: "/movement-analysis", label: "Movement Analysis" },
     { to: "/pricing", label: "Pricing" },
-    { to: "/membership", label: "Membership" },
   ];
 
   const isActive = (path: string) => location === path;
@@ -242,10 +241,10 @@ const Header = () => {
                   </DropdownMenuItem>
 
                   <DropdownMenuItem className="flex items-center" asChild>
-                    <Link to="/membership">
+                    <Link to="/pricing">
                       <div className="flex items-center cursor-pointer w-full">
                         <CreditCard className="mr-2 h-4 w-4" />
-                        <span>Membership</span>
+                        <span>Pricing</span>
                       </div>
                     </Link>
                   </DropdownMenuItem>
@@ -346,12 +345,12 @@ const Header = () => {
                             Manual Therapy
                           </span>
                         </Link>
-                        <Link to="/membership">
+                        <Link to="/pricing">
                           <span
                             className="px-2 py-2 text-base block cursor-pointer text-muted-foreground hover:text-foreground"
                             onClick={() => setOpen(false)}
                           >
-                            Membership
+                            Pricing
                           </span>
                         </Link>
                         <span

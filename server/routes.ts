@@ -13696,57 +13696,96 @@ Respond in JSON format:
   // Search exercises from external API (ExerciseDB)
   app.get("/api/external/exercises/search", async (req: Request, res: Response) => {
     try {
-      const { muscle, bodyPart, equipment, name } = req.query;
+      const { muscle, bodyPart, equipment, name, limit = 20, offset = 0 } = req.query;
       
+      // Check for API key
+      const rapidApiKey = process.env.RAPIDAPI_KEY;
+      if (!rapidApiKey) {
+        console.log('RapidAPI key not configured, using sample data');
+        // Return sample exercises when API key is not available
+        const sampleExercises = [
+          {
+            id: "0001",
+            name: "3/4 sit-up",
+            target: "abs",
+            bodyPart: "waist",
+            equipment: "body weight",
+            gifUrl: "https://v2.exercisedb.io/image/0001",
+            instructions: [
+              "Lie flat on your back with your knees bent and feet flat on the ground.",
+              "Place your hands behind your head or across your chest.",
+              "Engage your abs and lift your upper body towards your knees.",
+              "Pause for a moment at the top, then slowly lower back down.",
+              "Repeat for the desired number of repetitions."
+            ]
+          },
+          {
+            id: "0002",
+            name: "45° side bend",
+            target: "abs",
+            bodyPart: "waist",
+            equipment: "body weight",
+            gifUrl: "https://v2.exercisedb.io/image/0002",
+            instructions: [
+              "Stand with your feet shoulder-width apart.",
+              "Hold a dumbbell or weight plate with one hand.",
+              "Bend to the side at a 45-degree angle.",
+              "Return to the starting position.",
+              "Repeat on the other side."
+            ]
+          }
+        ];
+        return res.json(sampleExercises);
+      }
+
       // Build query parameters for ExerciseDB API
       let apiUrl = 'https://exercisedb.p.rapidapi.com/exercises';
       
-      if (bodyPart) {
-        apiUrl = `https://exercisedb.p.rapidapi.com/exercises/bodyPart/${bodyPart}`;
-      } else if (muscle) {
-        apiUrl = `https://exercisedb.p.rapidapi.com/exercises/target/${muscle}`;
-      } else if (equipment) {
-        apiUrl = `https://exercisedb.p.rapidapi.com/exercises/equipment/${equipment}`;
+      if (bodyPart && bodyPart !== 'all') {
+        apiUrl = `https://exercisedb.p.rapidapi.com/exercises/bodyPart/${encodeURIComponent(bodyPart as string)}`;
+      } else if (muscle && muscle !== 'all') {
+        apiUrl = `https://exercisedb.p.rapidapi.com/exercises/target/${encodeURIComponent(muscle as string)}`;
+      } else if (equipment && equipment !== 'all') {
+        apiUrl = `https://exercisedb.p.rapidapi.com/exercises/equipment/${encodeURIComponent(equipment as string)}`;
       } else if (name) {
-        apiUrl = `https://exercisedb.p.rapidapi.com/exercises/name/${name}`;
+        apiUrl = `https://exercisedb.p.rapidapi.com/exercises/name/${encodeURIComponent(name as string)}`;
       }
 
-      // Note: ExerciseDB requires RapidAPI key
-      // For now, we'll use mock data
-      const mockExercises = [
-        {
-          id: "0001",
-          name: "3/4 sit-up",
-          target: "abs",
-          bodyPart: "waist",
-          equipment: "body weight",
-          gifUrl: "https://v2.exercisedb.io/image/0001",
-          instructions: [
-            "Lie flat on your back with your knees bent and feet flat on the ground.",
-            "Place your hands behind your head or across your chest.",
-            "Engage your abs and lift your upper body towards your knees.",
-            "Pause for a moment at the top, then slowly lower back down.",
-            "Repeat for the desired number of repetitions."
-          ]
-        },
-        {
-          id: "0002",
-          name: "45° side bend",
-          target: "abs",
-          bodyPart: "waist",
-          equipment: "body weight",
-          gifUrl: "https://v2.exercisedb.io/image/0002",
-          instructions: [
-            "Stand with your feet shoulder-width apart.",
-            "Hold a dumbbell or weight plate with one hand.",
-            "Bend to the side at a 45-degree angle.",
-            "Return to the starting position.",
-            "Repeat on the other side."
-          ]
-        }
-      ];
+      // Add pagination parameters
+      apiUrl += `?limit=${limit}&offset=${offset}`;
 
-      res.json(mockExercises);
+      console.log('Fetching exercises from ExerciseDB:', apiUrl);
+
+      // Make the API request
+      const response = await fetch(apiUrl, {
+        method: 'GET',
+        headers: {
+          'X-RapidAPI-Key': rapidApiKey,
+          'X-RapidAPI-Host': 'exercisedb.p.rapidapi.com'
+        }
+      });
+
+      if (!response.ok) {
+        console.error('ExerciseDB API error:', response.status, response.statusText);
+        throw new Error(`ExerciseDB API error: ${response.status}`);
+      }
+
+      const exercises = await response.json();
+      
+      // Transform the data to ensure consistent format
+      const formattedExercises = Array.isArray(exercises) ? exercises.map((exercise: any) => ({
+        id: exercise.id,
+        name: exercise.name,
+        target: exercise.target,
+        bodyPart: exercise.bodyPart,
+        equipment: exercise.equipment,
+        gifUrl: exercise.gifUrl,
+        instructions: exercise.instructions || [],
+        secondaryMuscles: exercise.secondaryMuscles || []
+      })) : [];
+
+      console.log(`Retrieved ${formattedExercises.length} exercises from ExerciseDB`);
+      res.json(formattedExercises);
     } catch (error) {
       console.error('Error searching external exercises:', error);
       res.status(500).json({ error: 'Failed to search exercises' });
@@ -13756,20 +13795,79 @@ Respond in JSON format:
   // Get body parts list for exercise filtering
   app.get("/api/external/exercises/bodyparts", async (req: Request, res: Response) => {
     try {
+      const rapidApiKey = process.env.RAPIDAPI_KEY;
+      
+      if (!rapidApiKey) {
+        // Return static list when API key is not available
+        const bodyParts = [
+          "back", "cardio", "chest", "lower arms", "lower legs",
+          "neck", "shoulders", "upper arms", "upper legs", "waist"
+        ];
+        return res.json(bodyParts);
+      }
+
+      // Fetch from ExerciseDB API
+      const response = await fetch('https://exercisedb.p.rapidapi.com/exercises/bodyPartList', {
+        method: 'GET',
+        headers: {
+          'X-RapidAPI-Key': rapidApiKey,
+          'X-RapidAPI-Host': 'exercisedb.p.rapidapi.com'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`ExerciseDB API error: ${response.status}`);
+      }
+
+      const bodyParts = await response.json();
+      res.json(bodyParts);
+    } catch (error) {
+      console.error('Error fetching body parts:', error);
+      // Fallback to static list on error
       const bodyParts = [
         "back", "cardio", "chest", "lower arms", "lower legs",
         "neck", "shoulders", "upper arms", "upper legs", "waist"
       ];
       res.json(bodyParts);
-    } catch (error) {
-      console.error('Error fetching body parts:', error);
-      res.status(500).json({ error: 'Failed to fetch body parts' });
     }
   });
 
   // Get equipment list for exercise filtering
   app.get("/api/external/exercises/equipment", async (req: Request, res: Response) => {
     try {
+      const rapidApiKey = process.env.RAPIDAPI_KEY;
+      
+      if (!rapidApiKey) {
+        // Return static list when API key is not available
+        const equipment = [
+          "assisted", "band", "barbell", "body weight", "bosu ball",
+          "cable", "dumbbell", "elliptical machine", "ez barbell", "hammer",
+          "kettlebell", "leverage machine", "medicine ball", "olympic barbell",
+          "resistance band", "roller", "rope", "skierg machine", "sled machine",
+          "smith machine", "stability ball", "stationary bike", "stepmill machine",
+          "tire", "trap bar", "upper body ergometer", "weighted", "wheel roller"
+        ];
+        return res.json(equipment);
+      }
+
+      // Fetch from ExerciseDB API
+      const response = await fetch('https://exercisedb.p.rapidapi.com/exercises/equipmentList', {
+        method: 'GET',
+        headers: {
+          'X-RapidAPI-Key': rapidApiKey,
+          'X-RapidAPI-Host': 'exercisedb.p.rapidapi.com'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`ExerciseDB API error: ${response.status}`);
+      }
+
+      const equipment = await response.json();
+      res.json(equipment);
+    } catch (error) {
+      console.error('Error fetching equipment list:', error);
+      // Fallback to static list on error
       const equipment = [
         "assisted", "band", "barbell", "body weight", "bosu ball",
         "cable", "dumbbell", "elliptical machine", "ez barbell", "hammer",
@@ -13779,15 +13877,44 @@ Respond in JSON format:
         "tire", "trap bar", "upper body ergometer", "weighted", "wheel roller"
       ];
       res.json(equipment);
-    } catch (error) {
-      console.error('Error fetching equipment list:', error);
-      res.status(500).json({ error: 'Failed to fetch equipment list' });
     }
   });
 
   // Get muscle groups list for exercise filtering
   app.get("/api/external/exercises/muscles", async (req: Request, res: Response) => {
     try {
+      const rapidApiKey = process.env.RAPIDAPI_KEY;
+      
+      if (!rapidApiKey) {
+        // Return static list when API key is not available
+        const muscles = [
+          "abductors", "abs", "adductors", "biceps", "calves",
+          "cardiovascular system", "delts", "forearms", "glutes",
+          "hamstrings", "lats", "levator scapulae", "pectorals",
+          "quads", "serratus anterior", "spine", "traps", "triceps",
+          "upper back"
+        ];
+        return res.json(muscles);
+      }
+
+      // Fetch from ExerciseDB API
+      const response = await fetch('https://exercisedb.p.rapidapi.com/exercises/targetList', {
+        method: 'GET',
+        headers: {
+          'X-RapidAPI-Key': rapidApiKey,
+          'X-RapidAPI-Host': 'exercisedb.p.rapidapi.com'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`ExerciseDB API error: ${response.status}`);
+      }
+
+      const muscles = await response.json();
+      res.json(muscles);
+    } catch (error) {
+      console.error('Error fetching muscle groups:', error);
+      // Fallback to static list on error
       const muscles = [
         "abductors", "abs", "adductors", "biceps", "calves",
         "cardiovascular system", "delts", "forearms", "glutes",
@@ -13796,9 +13923,6 @@ Respond in JSON format:
         "upper back"
       ];
       res.json(muscles);
-    } catch (error) {
-      console.error('Error fetching muscle groups:', error);
-      res.status(500).json({ error: 'Failed to fetch muscle groups' });
     }
   });
 

@@ -211,8 +211,8 @@ export default function MovementAnalysis() {
           await poseRef.current.send({ image: videoRef.current! });
         }
       },
-      width: 1280,
-      height: 720
+      width: 1920,
+      height: 1080
     });
 
     cameraRef.current = camera;
@@ -508,9 +508,9 @@ export default function MovementAnalysis() {
       </div>
 
       {/* Main Content */}
-      <div className={`flex-1 flex ${isFullscreen ? 'p-2' : 'p-6'} gap-6 overflow-hidden`}>
+      <div className={`flex-1 flex ${isFullscreen ? 'p-2' : 'p-4'} gap-4 overflow-hidden`}>
         {/* Left Panel - Video Feed */}
-        <div className={`${isFullscreen ? 'flex-1' : 'w-2/3'} flex flex-col gap-4`}>
+        <div className={`${isFullscreen ? 'flex-1' : 'w-3/4'} flex flex-col gap-4`}>
           <Card className="flex-1 overflow-hidden">
             <CardHeader className="pb-4">
               <div className="flex items-center justify-between">
@@ -536,8 +536,8 @@ export default function MovementAnalysis() {
                 <canvas
                   ref={canvasRef}
                   className="absolute inset-0 w-full h-full"
-                  width={1280}
-                  height={720}
+                  width={1920}
+                  height={1080}
                 />
                 
                 {/* Overlay Controls */}
@@ -609,7 +609,7 @@ export default function MovementAnalysis() {
 
         {/* Right Panel - Metrics and Analysis */}
         {!isFullscreen && (
-          <div className="w-1/3 flex flex-col gap-4">
+          <div className="w-1/4 flex flex-col gap-4">
             <Tabs defaultValue="metrics" className="flex-1">
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="metrics">Metrics</TabsTrigger>

@@ -45,7 +45,11 @@ export default function ExerciseProgramBuilder() {
 
   // Search exercises from external API
   const { data: searchResults, isLoading: searchLoading, refetch: searchExercises } = useQuery({
-    queryKey: ["/api/external/exercises/search", { bodyPart: selectedBodyPart, equipment: selectedEquipment, name: searchQuery }],
+    queryKey: ["/api/external/exercises/search", { 
+      bodyPart: selectedBodyPart === "all" ? "" : selectedBodyPart, 
+      equipment: selectedEquipment === "all" ? "" : selectedEquipment, 
+      name: searchQuery 
+    }],
     enabled: false,
   });
 
@@ -646,7 +650,7 @@ export default function ExerciseProgramBuilder() {
                   <SelectValue placeholder="Body Part" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Body Parts</SelectItem>
+                  <SelectItem value="all">All Body Parts</SelectItem>
                   {bodyParts?.map((part: string) => (
                     <SelectItem key={part} value={part}>
                       {part.charAt(0).toUpperCase() + part.slice(1)}
@@ -662,7 +666,7 @@ export default function ExerciseProgramBuilder() {
                   <SelectValue placeholder="Equipment" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Equipment</SelectItem>
+                  <SelectItem value="all">All Equipment</SelectItem>
                   {equipmentList?.map((item: string) => (
                     <SelectItem key={item} value={item}>
                       {item.charAt(0).toUpperCase() + item.slice(1)}

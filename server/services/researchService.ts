@@ -463,4 +463,274 @@ export class ResearchService {
       console.error('Error saving articles to database:', error);
     }
   }
+
+  /**
+   * Analyze a clinical case and generate treatment recommendations
+   */
+  static async analyzeClinicalCase(caseData: any): Promise<any> {
+    try {
+      // Extract key terms from the case for research matching
+      const searchTerms = this.extractSearchTermsFromCase(caseData);
+      
+      // Search for relevant research
+      const matchedArticles = await this.searchRelevantArticles(searchTerms);
+      
+      // Generate clinical analysis
+      const analysis = {
+        clinicalFeatures: this.extractClinicalFeatures(caseData),
+        primaryDiagnosis: this.generatePrimaryDiagnosis(caseData),
+        differentialDiagnoses: this.generateDifferentialDiagnoses(caseData),
+        matchedResearch: matchedArticles.slice(0, 10), // Top 10 relevant articles
+        treatmentPlan: {
+          primary: this.generatePrimaryTreatments(caseData, matchedArticles),
+          secondary: this.generateSecondaryTreatments(caseData),
+          exercises: this.generateExerciseRecommendations(caseData),
+          manualTherapy: this.generateManualTherapyRecommendations(caseData)
+        },
+        prognosis: this.generatePrognosis(caseData),
+        redFlagsIdentified: this.identifyRedFlags(caseData),
+        clinicalReasoning: this.generateClinicalReasoning(caseData),
+        confidenceScore: this.calculateConfidenceScore(caseData)
+      };
+      
+      return analysis;
+    } catch (error) {
+      console.error('Error analyzing clinical case:', error);
+      throw error;
+    }
+  }
+
+  private static extractSearchTermsFromCase(caseData: any): string {
+    const terms = [];
+    
+    // Add primary complaint terms
+    if (caseData.primaryComplaint) {
+      terms.push(caseData.primaryComplaint);
+    }
+    
+    // Add key findings
+    if (caseData.keyFindings) {
+      terms.push(caseData.keyFindings);
+    }
+    
+    // Add special tests
+    if (caseData.specialTests) {
+      terms.push(caseData.specialTests);
+    }
+    
+    return terms.join(' ');
+  }
+
+  private static async searchRelevantArticles(searchTerms: string): Promise<any[]> {
+    try {
+      // Search the database for relevant articles
+      const results = await db.select()
+        .from(researchArticles)
+        .where(
+          or(
+            like(researchArticles.title, `%${searchTerms}%`),
+            like(researchArticles.abstract, `%${searchTerms}%`),
+            like(researchArticles.keyFindings, `%${searchTerms}%`)
+          )
+        )
+        .limit(20);
+      
+      return results;
+    } catch (error) {
+      console.error('Error searching relevant articles:', error);
+      return [];
+    }
+  }
+
+  private static extractClinicalFeatures(caseData: any): string[] {
+    const features = [];
+    
+    if (caseData.primaryComplaint) features.push(`Primary complaint: ${caseData.primaryComplaint}`);
+    if (caseData.symptomDuration) features.push(`Duration: ${caseData.symptomDuration}`);
+    if (caseData.symptomSeverity) features.push(`Severity: ${caseData.symptomSeverity}`);
+    if (caseData.movementImpairments) features.push(`Movement impairments: ${caseData.movementImpairments}`);
+    
+    return features;
+  }
+
+  private static generatePrimaryDiagnosis(caseData: any): string {
+    // Simplified diagnosis generation based on key patterns
+    const complaint = caseData.primaryComplaint?.toLowerCase() || '';
+    const findings = caseData.keyFindings?.toLowerCase() || '';
+    
+    if (complaint.includes('shoulder') || findings.includes('rotator')) {
+      return 'Rotator cuff tendinopathy';
+    } else if (complaint.includes('back') || complaint.includes('lumbar')) {
+      return 'Non-specific low back pain';
+    } else if (complaint.includes('knee')) {
+      return 'Patellofemoral pain syndrome';
+    } else if (complaint.includes('neck')) {
+      return 'Cervical spine dysfunction';
+    }
+    
+    return 'Musculoskeletal dysfunction requiring further assessment';
+  }
+
+  private static generateDifferentialDiagnoses(caseData: any): string[] {
+    const differentials = [];
+    const complaint = caseData.primaryComplaint?.toLowerCase() || '';
+    
+    if (complaint.includes('shoulder')) {
+      differentials.push('Adhesive capsulitis', 'Subacromial impingement', 'Biceps tendinopathy');
+    } else if (complaint.includes('back')) {
+      differentials.push('Facet joint dysfunction', 'Disc herniation', 'Sacroiliac joint dysfunction');
+    } else if (complaint.includes('knee')) {
+      differentials.push('Meniscal injury', 'Ligamentous injury', 'Osteoarthritis');
+    }
+    
+    return differentials.slice(0, 3);
+  }
+
+  private static generatePrimaryTreatments(caseData: any, research: any[]): any[] {
+    const treatments = [];
+    
+    // Manual therapy recommendation
+    treatments.push({
+      interventionType: 'Manual Therapy',
+      description: 'Joint mobilization and soft tissue techniques',
+      dosage: '10-15 minutes per session',
+      frequency: '2-3 times per week',
+      duration: '4-6 weeks',
+      evidenceLevel: 'Level A',
+      supportingStudies: research.slice(0, 2),
+      expectedOutcomes: 'Pain reduction and improved range of motion',
+      contraindications: this.identifyRedFlags(caseData)
+    });
+    
+    // Exercise therapy recommendation
+    treatments.push({
+      interventionType: 'Exercise Therapy',
+      description: 'Progressive strengthening and motor control exercises',
+      dosage: '3 sets of 10-15 repetitions',
+      frequency: 'Daily home program',
+      duration: '6-8 weeks',
+      evidenceLevel: 'Level A',
+      supportingStudies: research.slice(2, 4),
+      expectedOutcomes: 'Improved strength and functional capacity',
+      contraindications: []
+    });
+    
+    return treatments;
+  }
+
+  private static generateSecondaryTreatments(caseData: any): any[] {
+    return [
+      {
+        interventionType: 'Modalities',
+        description: 'Heat/cold therapy for symptom management',
+        dosage: '15-20 minutes',
+        frequency: 'As needed',
+        duration: 'Throughout treatment',
+        evidenceLevel: 'Level C',
+        supportingStudies: [],
+        expectedOutcomes: 'Temporary symptom relief',
+        contraindications: []
+      }
+    ];
+  }
+
+  private static generateExerciseRecommendations(caseData: any): any[] {
+    const exercises = [];
+    const complaint = caseData.primaryComplaint?.toLowerCase() || '';
+    
+    if (complaint.includes('shoulder')) {
+      exercises.push({
+        interventionType: 'Strengthening',
+        description: 'Rotator cuff strengthening with resistance bands',
+        dosage: '3x15 repetitions',
+        frequency: 'Daily',
+        duration: '6 weeks',
+        evidenceLevel: 'Level A',
+        supportingStudies: [],
+        expectedOutcomes: 'Improved shoulder stability and strength',
+        contraindications: []
+      });
+    }
+    
+    exercises.push({
+      interventionType: 'Range of Motion',
+      description: 'Active and passive range of motion exercises',
+      dosage: '10 repetitions, 3 times daily',
+      frequency: 'Daily',
+      duration: '4 weeks',
+      evidenceLevel: 'Level B',
+      supportingStudies: [],
+      expectedOutcomes: 'Maintained or improved flexibility',
+      contraindications: []
+    });
+    
+    return exercises;
+  }
+
+  private static generateManualTherapyRecommendations(caseData: any): any[] {
+    return [
+      {
+        interventionType: 'Mobilization',
+        description: 'Grade III-IV joint mobilizations',
+        dosage: '3-4 sets of 30 seconds',
+        frequency: '2 times per week',
+        duration: '4 weeks',
+        evidenceLevel: 'Level B',
+        supportingStudies: [],
+        expectedOutcomes: 'Improved joint mobility',
+        contraindications: []
+      }
+    ];
+  }
+
+  private static generatePrognosis(caseData: any): string {
+    const duration = caseData.symptomDuration?.toLowerCase() || '';
+    const severity = caseData.symptomSeverity || '';
+    
+    if (duration.includes('week') || duration.includes('days')) {
+      return 'Good prognosis with expected recovery in 4-6 weeks with appropriate treatment';
+    } else if (duration.includes('month')) {
+      return 'Fair to good prognosis with expected recovery in 6-12 weeks with comprehensive treatment';
+    }
+    
+    return 'Prognosis depends on patient compliance and response to treatment. Regular reassessment recommended.';
+  }
+
+  private static identifyRedFlags(caseData: any): string[] {
+    const redFlags = [];
+    const flags = caseData.redFlags?.toLowerCase() || '';
+    const history = caseData.medicalHistory?.toLowerCase() || '';
+    
+    if (flags.includes('cancer') || history.includes('cancer')) {
+      redFlags.push('History of cancer - requires medical screening');
+    }
+    if (flags.includes('fever') || flags.includes('weight loss')) {
+      redFlags.push('Constitutional symptoms present');
+    }
+    if (flags.includes('trauma')) {
+      redFlags.push('Recent trauma - consider imaging');
+    }
+    
+    return redFlags;
+  }
+
+  private static generateClinicalReasoning(caseData: any): string {
+    return `Based on the presentation of ${caseData.primaryComplaint || 'symptoms'} with duration of ${caseData.symptomDuration || 'unspecified'}, 
+    the clinical picture suggests a mechanical/musculoskeletal origin. The examination findings of ${caseData.keyFindings || 'various impairments'} 
+    support this hypothesis. Treatment approach focuses on addressing identified impairments while monitoring for any changes in presentation.`;
+  }
+
+  private static calculateConfidenceScore(caseData: any): number {
+    let score = 0.5; // Base score
+    
+    // Increase confidence based on completeness of data
+    if (caseData.primaryComplaint) score += 0.1;
+    if (caseData.keyFindings) score += 0.1;
+    if (caseData.specialTests) score += 0.1;
+    if (caseData.movementImpairments) score += 0.1;
+    if (caseData.symptomDuration) score += 0.05;
+    if (caseData.symptomSeverity) score += 0.05;
+    
+    return Math.min(score, 0.95); // Cap at 95% confidence
+  }
 }

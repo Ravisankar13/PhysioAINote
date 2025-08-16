@@ -1210,6 +1210,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Analyze clinical case for evidence-based treatment recommendations
+  app.post("/api/research/analyze-case", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { caseData } = req.body;
+      
+      if (!caseData) {
+        return res.status(400).json({ error: 'Case data is required' });
+      }
+
+      const analysis = await ResearchService.analyzeClinicalCase(caseData);
+      res.json(analysis);
+    } catch (error) {
+      console.error("Error analyzing clinical case:", error);
+      res.status(500).json({ error: "Failed to analyze clinical case" });
+    }
+  });
+
   // AI diagnosis routes
   app.post("/api/ai-diagnosis", ensureAuthenticated, async (req: Request, res: Response) => {
     try {

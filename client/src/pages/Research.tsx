@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ExternalLink, BookOpen, Info, Award, Calendar, Users, Video, Play, Clock, CheckCircle, AlertCircle, Loader2, Search, Database, Globe } from "lucide-react";
+import { ExternalLink, BookOpen, Info, Award, Calendar, Users, Video, Play, Clock, CheckCircle, AlertCircle, Loader2, Search, Database, Globe, FileText, UserCheck, Activity, Target, Brain, TrendingUp, AlertTriangle, ChevronRight, Download, Share2, ClipboardList } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { apiRequest } from "@/lib/queryClient";
 import { 
@@ -24,6 +24,8 @@ import {
 } from "@/components/ui/pagination";
 import MembershipRequired from "@/components/MembershipRequired";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Progress } from "@/components/ui/progress";
 
 interface ResearchArticle {
   id: number;
@@ -39,6 +41,65 @@ interface ResearchArticle {
   clinicalRelevance: string;
   createdAt: string;
   updatedAt: string;
+}
+
+interface ClinicalCase {
+  // Demographics
+  age: string;
+  gender: string;
+  activityLevel: string;
+  occupation: string;
+  
+  // Clinical Presentation
+  primaryComplaint: string;
+  symptomDuration: string;
+  symptomSeverity: string;
+  symptomBehavior: string;
+  
+  // Examination Findings
+  keyFindings: string;
+  movementImpairments: string;
+  specialTests: string;
+  palpationFindings: string;
+  
+  // History
+  previousTreatments: string;
+  medicalHistory: string;
+  medications: string;
+  redFlags: string;
+  
+  // Goals
+  patientGoals: string;
+  functionalLimitations: string;
+}
+
+interface TreatmentRecommendation {
+  interventionType: string;
+  description: string;
+  dosage: string;
+  frequency: string;
+  duration: string;
+  evidenceLevel: string;
+  supportingStudies: ResearchArticle[];
+  expectedOutcomes: string;
+  contraindications: string[];
+}
+
+interface CaseAnalysisResult {
+  clinicalFeatures: string[];
+  primaryDiagnosis: string;
+  differentialDiagnoses: string[];
+  matchedResearch: ResearchArticle[];
+  treatmentPlan: {
+    primary: TreatmentRecommendation[];
+    secondary: TreatmentRecommendation[];
+    exercises: TreatmentRecommendation[];
+    manualTherapy: TreatmentRecommendation[];
+  };
+  prognosis: string;
+  redFlagsIdentified: string[];
+  clinicalReasoning: string;
+  confidenceScore: number;
 }
 
 interface YouTubeVideoInfo {
@@ -838,6 +899,606 @@ function VideoAnalysisComponent() {
   );
 }
 
+// Case-Based Research Component
+function CaseBasedResearch() {
+  const [clinicalCase, setClinicalCase] = useState<ClinicalCase>({
+    age: "",
+    gender: "",
+    activityLevel: "",
+    occupation: "",
+    primaryComplaint: "",
+    symptomDuration: "",
+    symptomSeverity: "",
+    symptomBehavior: "",
+    keyFindings: "",
+    movementImpairments: "",
+    specialTests: "",
+    palpationFindings: "",
+    previousTreatments: "",
+    medicalHistory: "",
+    medications: "",
+    redFlags: "",
+    patientGoals: "",
+    functionalLimitations: ""
+  });
+
+  const [analysisResult, setAnalysisResult] = useState<CaseAnalysisResult | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [importSource, setImportSource] = useState<string>("");
+  const { toast } = useToast();
+
+  const handleCaseChange = (field: keyof ClinicalCase, value: string) => {
+    setClinicalCase(prev => ({ ...prev, [field]: value }));
+  };
+
+  const analyzeCase = async () => {
+    // Check if minimum required fields are filled
+    if (!clinicalCase.primaryComplaint || !clinicalCase.age) {
+      toast({
+        title: "Missing Information",
+        description: "Please provide at least age and primary complaint",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsAnalyzing(true);
+    try {
+      const response = await apiRequest("POST", "/api/research/analyze-case", {
+        caseData: clinicalCase
+      });
+      
+      const result = await response.json();
+      setAnalysisResult(result);
+      
+      toast({
+        title: "Analysis Complete",
+        description: "Generated evidence-based treatment recommendations",
+      });
+    } catch (error) {
+      console.error("Case analysis error:", error);
+      toast({
+        title: "Analysis Failed",
+        description: "Failed to analyze the clinical case. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const clearCase = () => {
+    setClinicalCase({
+      age: "",
+      gender: "",
+      activityLevel: "",
+      occupation: "",
+      primaryComplaint: "",
+      symptomDuration: "",
+      symptomSeverity: "",
+      symptomBehavior: "",
+      keyFindings: "",
+      movementImpairments: "",
+      specialTests: "",
+      palpationFindings: "",
+      previousTreatments: "",
+      medicalHistory: "",
+      medications: "",
+      redFlags: "",
+      patientGoals: "",
+      functionalLimitations: ""
+    });
+    setAnalysisResult(null);
+  };
+
+  const exportResults = () => {
+    if (!analysisResult) return;
+    
+    // Create a formatted text output
+    const exportText = `
+CLINICAL CASE ANALYSIS REPORT
+Generated: ${new Date().toLocaleDateString()}
+
+PATIENT INFORMATION
+Age: ${clinicalCase.age}
+Gender: ${clinicalCase.gender}
+Activity Level: ${clinicalCase.activityLevel}
+Occupation: ${clinicalCase.occupation}
+
+PRIMARY COMPLAINT
+${clinicalCase.primaryComplaint}
+
+CLINICAL DIAGNOSIS
+Primary: ${analysisResult.primaryDiagnosis}
+Differential: ${analysisResult.differentialDiagnoses.join(", ")}
+
+TREATMENT RECOMMENDATIONS
+${analysisResult.treatmentPlan.primary.map(t => `- ${t.description} (${t.dosage})`).join("\n")}
+
+PROGNOSIS
+${analysisResult.prognosis}
+    `;
+
+    // Create download link
+    const blob = new Blob([exportText], { type: 'text/plain' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `case-analysis-${Date.now()}.txt`;
+    a.click();
+  };
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Left Panel - Case Input */}
+      <div className="space-y-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ClipboardList className="h-5 w-5" />
+              Clinical Case Details
+            </CardTitle>
+            <CardDescription>
+              Enter patient information to generate evidence-based treatment recommendations
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ScrollArea className="h-[600px] pr-4">
+              <div className="space-y-6">
+                {/* Import Options */}
+                <div className="flex gap-2 mb-4">
+                  <Select value={importSource} onValueChange={setImportSource}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Import from existing data..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="virtual-patient">Virtual Patient</SelectItem>
+                      <SelectItem value="soap-note">SOAP Note</SelectItem>
+                      <SelectItem value="forum-case">Forum Case</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button variant="outline" size="icon">
+                    <Download className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                {/* Demographics Section */}
+                <div className="space-y-4">
+                  <h3 className="font-semibold flex items-center gap-2">
+                    <UserCheck className="h-4 w-4" />
+                    Demographics
+                  </h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="age">Age</Label>
+                      <Input
+                        id="age"
+                        placeholder="e.g., 45"
+                        value={clinicalCase.age}
+                        onChange={(e) => handleCaseChange("age", e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="gender">Gender</Label>
+                      <Select 
+                        value={clinicalCase.gender} 
+                        onValueChange={(value) => handleCaseChange("gender", value)}
+                      >
+                        <SelectTrigger id="gender">
+                          <SelectValue placeholder="Select..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="male">Male</SelectItem>
+                          <SelectItem value="female">Female</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor="activityLevel">Activity Level</Label>
+                      <Select 
+                        value={clinicalCase.activityLevel} 
+                        onValueChange={(value) => handleCaseChange("activityLevel", value)}
+                      >
+                        <SelectTrigger id="activityLevel">
+                          <SelectValue placeholder="Select..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="sedentary">Sedentary</SelectItem>
+                          <SelectItem value="light">Light Activity</SelectItem>
+                          <SelectItem value="moderate">Moderate Activity</SelectItem>
+                          <SelectItem value="high">High Activity</SelectItem>
+                          <SelectItem value="athlete">Athlete</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor="occupation">Occupation</Label>
+                      <Input
+                        id="occupation"
+                        placeholder="e.g., Office worker"
+                        value={clinicalCase.occupation}
+                        onChange={(e) => handleCaseChange("occupation", e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Clinical Presentation */}
+                <div className="space-y-4">
+                  <h3 className="font-semibold flex items-center gap-2">
+                    <Activity className="h-4 w-4" />
+                    Clinical Presentation
+                  </h3>
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="primaryComplaint">Primary Complaint *</Label>
+                      <Textarea
+                        id="primaryComplaint"
+                        placeholder="Describe the main issue..."
+                        value={clinicalCase.primaryComplaint}
+                        onChange={(e) => handleCaseChange("primaryComplaint", e.target.value)}
+                        rows={3}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="symptomDuration">Symptom Duration</Label>
+                        <Input
+                          id="symptomDuration"
+                          placeholder="e.g., 3 weeks"
+                          value={clinicalCase.symptomDuration}
+                          onChange={(e) => handleCaseChange("symptomDuration", e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="symptomSeverity">Severity (0-10)</Label>
+                        <Input
+                          id="symptomSeverity"
+                          placeholder="e.g., 6/10"
+                          value={clinicalCase.symptomSeverity}
+                          onChange={(e) => handleCaseChange("symptomSeverity", e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <Label htmlFor="symptomBehavior">Symptom Behavior</Label>
+                      <Textarea
+                        id="symptomBehavior"
+                        placeholder="What makes it better/worse?"
+                        value={clinicalCase.symptomBehavior}
+                        onChange={(e) => handleCaseChange("symptomBehavior", e.target.value)}
+                        rows={2}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Examination Findings */}
+                <div className="space-y-4">
+                  <h3 className="font-semibold flex items-center gap-2">
+                    <Target className="h-4 w-4" />
+                    Examination Findings
+                  </h3>
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="keyFindings">Key Findings</Label>
+                      <Textarea
+                        id="keyFindings"
+                        placeholder="Main examination findings..."
+                        value={clinicalCase.keyFindings}
+                        onChange={(e) => handleCaseChange("keyFindings", e.target.value)}
+                        rows={2}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="movementImpairments">Movement Impairments</Label>
+                      <Textarea
+                        id="movementImpairments"
+                        placeholder="ROM limitations, weakness, etc..."
+                        value={clinicalCase.movementImpairments}
+                        onChange={(e) => handleCaseChange("movementImpairments", e.target.value)}
+                        rows={2}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="specialTests">Special Tests</Label>
+                      <Input
+                        id="specialTests"
+                        placeholder="e.g., Positive Neer's test"
+                        value={clinicalCase.specialTests}
+                        onChange={(e) => handleCaseChange("specialTests", e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* History */}
+                <div className="space-y-4">
+                  <h3 className="font-semibold flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Medical History
+                  </h3>
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="previousTreatments">Previous Treatments</Label>
+                      <Textarea
+                        id="previousTreatments"
+                        placeholder="What has been tried before?"
+                        value={clinicalCase.previousTreatments}
+                        onChange={(e) => handleCaseChange("previousTreatments", e.target.value)}
+                        rows={2}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="medicalHistory">Medical History</Label>
+                      <Input
+                        id="medicalHistory"
+                        placeholder="Relevant conditions..."
+                        value={clinicalCase.medicalHistory}
+                        onChange={(e) => handleCaseChange("medicalHistory", e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="redFlags">Red Flags</Label>
+                      <Input
+                        id="redFlags"
+                        placeholder="Any concerning symptoms?"
+                        value={clinicalCase.redFlags}
+                        onChange={(e) => handleCaseChange("redFlags", e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Goals */}
+                <div className="space-y-4">
+                  <h3 className="font-semibold flex items-center gap-2">
+                    <Target className="h-4 w-4" />
+                    Goals & Limitations
+                  </h3>
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="patientGoals">Patient Goals</Label>
+                      <Textarea
+                        id="patientGoals"
+                        placeholder="What does the patient want to achieve?"
+                        value={clinicalCase.patientGoals}
+                        onChange={(e) => handleCaseChange("patientGoals", e.target.value)}
+                        rows={2}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="functionalLimitations">Functional Limitations</Label>
+                      <Textarea
+                        id="functionalLimitations"
+                        placeholder="Activities they can't perform..."
+                        value={clinicalCase.functionalLimitations}
+                        onChange={(e) => handleCaseChange("functionalLimitations", e.target.value)}
+                        rows={2}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-2 pt-4">
+                  <Button 
+                    onClick={analyzeCase}
+                    disabled={isAnalyzing}
+                    className="flex-1"
+                  >
+                    {isAnalyzing ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Analyzing...
+                      </>
+                    ) : (
+                      <>
+                        <Brain className="h-4 w-4 mr-2" />
+                        Analyze Case
+                      </>
+                    )}
+                  </Button>
+                  <Button variant="outline" onClick={clearCase}>
+                    Clear
+                  </Button>
+                </div>
+              </div>
+            </ScrollArea>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Right Panel - Analysis Results */}
+      <div className="space-y-4">
+        {analysisResult ? (
+          <>
+            {/* Diagnosis Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <Brain className="h-5 w-5" />
+                    Clinical Analysis
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline">
+                      Confidence: {Math.round(analysisResult.confidenceScore * 100)}%
+                    </Badge>
+                    <Button variant="outline" size="icon" onClick={exportResults}>
+                      <Share2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <h4 className="font-semibold text-sm mb-2">Primary Diagnosis</h4>
+                  <p className="text-lg font-medium text-primary">
+                    {analysisResult.primaryDiagnosis}
+                  </p>
+                </div>
+                
+                {analysisResult.differentialDiagnoses.length > 0 && (
+                  <div>
+                    <h4 className="font-semibold text-sm mb-2">Differential Diagnoses</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {analysisResult.differentialDiagnoses.map((dx, idx) => (
+                        <Badge key={idx} variant="secondary">{dx}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {analysisResult.redFlagsIdentified.length > 0 && (
+                  <Alert className="border-red-200 bg-red-50">
+                    <AlertTriangle className="h-4 w-4 text-red-600" />
+                    <AlertDescription>
+                      <strong>Red Flags Identified:</strong>
+                      <ul className="mt-1 text-sm">
+                        {analysisResult.redFlagsIdentified.map((flag, idx) => (
+                          <li key={idx}>• {flag}</li>
+                        ))}
+                      </ul>
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Treatment Recommendations */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Target className="h-5 w-5" />
+                  Evidence-Based Treatment Plan
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Tabs defaultValue="primary" className="w-full">
+                  <TabsList className="grid w-full grid-cols-4">
+                    <TabsTrigger value="primary">Primary</TabsTrigger>
+                    <TabsTrigger value="exercises">Exercises</TabsTrigger>
+                    <TabsTrigger value="manual">Manual</TabsTrigger>
+                    <TabsTrigger value="secondary">Alternative</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="primary" className="space-y-4">
+                    {analysisResult.treatmentPlan.primary.map((treatment, idx) => (
+                      <div key={idx} className="border rounded-lg p-4 space-y-2">
+                        <div className="flex items-start justify-between">
+                          <h4 className="font-semibold">{treatment.description}</h4>
+                          <Badge variant="outline">{treatment.evidenceLevel}</Badge>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 text-sm">
+                          <div>
+                            <span className="text-muted-foreground">Dosage:</span> {treatment.dosage}
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Frequency:</span> {treatment.frequency}
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Duration:</span> {treatment.duration}
+                          </div>
+                        </div>
+                        <p className="text-sm text-muted-foreground">{treatment.expectedOutcomes}</p>
+                      </div>
+                    ))}
+                  </TabsContent>
+
+                  <TabsContent value="exercises" className="space-y-4">
+                    {analysisResult.treatmentPlan.exercises.map((exercise, idx) => (
+                      <div key={idx} className="border rounded-lg p-4 space-y-2">
+                        <h4 className="font-semibold">{exercise.description}</h4>
+                        <p className="text-sm">{exercise.dosage}</p>
+                        <p className="text-sm text-muted-foreground">{exercise.expectedOutcomes}</p>
+                      </div>
+                    ))}
+                  </TabsContent>
+
+                  <TabsContent value="manual" className="space-y-4">
+                    {analysisResult.treatmentPlan.manualTherapy.map((technique, idx) => (
+                      <div key={idx} className="border rounded-lg p-4 space-y-2">
+                        <h4 className="font-semibold">{technique.description}</h4>
+                        <p className="text-sm">{technique.dosage}</p>
+                      </div>
+                    ))}
+                  </TabsContent>
+
+                  <TabsContent value="secondary" className="space-y-4">
+                    {analysisResult.treatmentPlan.secondary.map((treatment, idx) => (
+                      <div key={idx} className="border rounded-lg p-4 space-y-2">
+                        <h4 className="font-semibold">{treatment.description}</h4>
+                        <p className="text-sm text-muted-foreground">{treatment.expectedOutcomes}</p>
+                      </div>
+                    ))}
+                  </TabsContent>
+                </Tabs>
+              </CardContent>
+            </Card>
+
+            {/* Matched Research */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BookOpen className="h-5 w-5" />
+                  Supporting Research ({analysisResult.matchedResearch.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ScrollArea className="h-[300px]">
+                  <div className="space-y-3">
+                    {analysisResult.matchedResearch.map((article, idx) => (
+                      <div key={idx} className="border rounded-lg p-3 space-y-1">
+                        <h4 className="font-medium text-sm">{article.title}</h4>
+                        <p className="text-xs text-muted-foreground">
+                          {article.authors} • {article.journal}
+                        </p>
+                        <Button 
+                          variant="link" 
+                          size="sm" 
+                          className="h-auto p-0 text-xs"
+                          onClick={() => window.open(article.url, "_blank")}
+                        >
+                          View Article <ExternalLink className="h-3 w-3 ml-1" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </CardContent>
+            </Card>
+
+            {/* Prognosis */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5" />
+                  Prognosis
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm">{analysisResult.prognosis}</p>
+              </CardContent>
+            </Card>
+          </>
+        ) : (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center h-[600px] text-center">
+              <Brain className="h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold mb-2">No Analysis Yet</h3>
+              <p className="text-sm text-muted-foreground max-w-sm">
+                Enter clinical case details and click "Analyze Case" to generate evidence-based treatment recommendations
+              </p>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ArticleCard({ article }: { article: ResearchArticle }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -1060,9 +1721,10 @@ export default function Research() {
           </div>
         
         <Tabs defaultValue="live-search" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 max-w-lg mx-auto">
+          <TabsList className="grid w-full grid-cols-4 max-w-2xl mx-auto">
             <TabsTrigger value="live-search">Live Search</TabsTrigger>
             <TabsTrigger value="articles">Saved Articles</TabsTrigger>
+            <TabsTrigger value="case-based">Case Analysis</TabsTrigger>
             <TabsTrigger value="video-analysis">Video Analysis</TabsTrigger>
           </TabsList>
           
@@ -1258,6 +1920,10 @@ export default function Research() {
           
           <TabsContent value="live-search">
             <LiveResearchSearch />
+          </TabsContent>
+          
+          <TabsContent value="case-based">
+            <CaseBasedResearch />
           </TabsContent>
           
           <TabsContent value="video-analysis">

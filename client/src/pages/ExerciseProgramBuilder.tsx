@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -48,6 +48,13 @@ export default function ExerciseProgramBuilder() {
     queryKey: ["/api/external/exercises/search", { bodyPart: selectedBodyPart, equipment: selectedEquipment, name: searchQuery }],
     enabled: false,
   });
+
+  // Auto-search when dialog opens
+  useEffect(() => {
+    if (isExerciseSearchOpen && !searchResults) {
+      searchExercises();
+    }
+  }, [isExerciseSearchOpen]);
 
   // Create program mutation
   const createProgramMutation = useMutation({
@@ -196,13 +203,21 @@ export default function ExerciseProgramBuilder() {
             Create and manage custom exercise programs with animated demonstrations
           </p>
         </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              New Program
-            </Button>
-          </DialogTrigger>
+        <div className="flex gap-2">
+          <Button
+            variant="secondary"
+            onClick={() => setIsExerciseSearchOpen(true)}
+          >
+            <Search className="h-4 w-4 mr-2" />
+            Browse Exercises
+          </Button>
+          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                New Program
+              </Button>
+            </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Create New Exercise Program</DialogTitle>
@@ -304,7 +319,8 @@ export default function ExerciseProgramBuilder() {
               <Button type="submit" className="w-full">Create Program</Button>
             </form>
           </DialogContent>
-        </Dialog>
+          </Dialog>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -603,39 +619,53 @@ export default function ExerciseProgramBuilder() {
       <Dialog open={isExerciseSearchOpen} onOpenChange={setIsExerciseSearchOpen}>
         <DialogContent className="max-w-4xl max-h-[80vh]">
           <DialogHeader>
-            <DialogTitle>Add Exercises to Program</DialogTitle>
+            <DialogTitle>Browse Exercise Database</DialogTitle>
+            <p className="text-sm text-muted-foreground mt-1">
+              Search over 1300 exercises with animated demonstrations from ExerciseDB
+            </p>
           </DialogHeader>
           <div className="space-y-4">
             <div className="flex gap-2">
               <div className="flex-1">
                 <Input
-                  placeholder="Search exercises..."
+                  placeholder="Search by exercise name..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      searchExercises();
+                    }
+                  }}
                 />
               </div>
-              <Select value={selectedBodyPart} onValueChange={setSelectedBodyPart}>
+              <Select value={selectedBodyPart} onValueChange={(value) => {
+                setSelectedBodyPart(value);
+                searchExercises();
+              }}>
                 <SelectTrigger className="w-[180px]">
                   <SelectValue placeholder="Body Part" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All</SelectItem>
+                  <SelectItem value="">All Body Parts</SelectItem>
                   {bodyParts?.map((part: string) => (
                     <SelectItem key={part} value={part}>
-                      {part}
+                      {part.charAt(0).toUpperCase() + part.slice(1)}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <Select value={selectedEquipment} onValueChange={setSelectedEquipment}>
+              <Select value={selectedEquipment} onValueChange={(value) => {
+                setSelectedEquipment(value);
+                searchExercises();
+              }}>
                 <SelectTrigger className="w-[180px]">
                   <SelectValue placeholder="Equipment" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All</SelectItem>
+                  <SelectItem value="">All Equipment</SelectItem>
                   {equipmentList?.map((item: string) => (
                     <SelectItem key={item} value={item}>
-                      {item}
+                      {item.charAt(0).toUpperCase() + item.slice(1)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -690,7 +720,8 @@ export default function ExerciseProgramBuilder() {
                 </div>
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
-                  Click search to find exercises
+                  <p className="mb-2">Select filters and click search to browse exercises</p>
+                  <p className="text-sm">Or type an exercise name to search directly</p>
                 </div>
               )}
             </ScrollArea>

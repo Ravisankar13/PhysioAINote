@@ -159,7 +159,7 @@ export default function TrialBanner() {
                 🎉 Start Your 14-Day FREE Trial Now!
               </CardTitle>
               <CardDescription className="text-blue-100 text-base">
-                Full premium access - no credit card required, cancel anytime
+                Full premium access - cancel anytime
               </CardDescription>
             </div>
           </div>
@@ -200,15 +200,15 @@ export default function TrialBanner() {
               </li>
               <li className="flex items-center gap-2">
                 <CheckCircle className="h-3 w-3 text-green-600" />
-                No credit card required
-              </li>
-              <li className="flex items-center gap-2">
-                <CheckCircle className="h-3 w-3 text-green-600" />
                 Cancel anytime
               </li>
               <li className="flex items-center gap-2">
                 <CheckCircle className="h-3 w-3 text-green-600" />
                 No commitment
+              </li>
+              <li className="flex items-center gap-2">
+                <CheckCircle className="h-3 w-3 text-green-600" />
+                Premium features included
               </li>
             </ul>
           </div>
@@ -237,7 +237,6 @@ export default function TrialBanner() {
         
         <p className="text-xs text-blue-600 text-center mt-3">
           Your trial will automatically start when you click the button above.
-          No payment information required.
         </p>
       </CardContent>
     </Card>

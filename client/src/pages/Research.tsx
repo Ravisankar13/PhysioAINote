@@ -144,14 +144,26 @@ function LiveResearchSearch() {
         params = { query: searchQuery, maxResults: 20 };
       }
 
-      const response = await apiRequest(endpoint, {
-        method: "GET",
-        params
+      const url = new URL(endpoint, window.location.origin);
+      Object.entries(params).forEach(([key, value]) => {
+        url.searchParams.append(key, String(value));
       });
-
-      setSearchResults(response.data || []);
       
-      if (response.data.length === 0) {
+      const response = await fetch(url.toString(), {
+        method: "GET",
+        credentials: "include"
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+
+      setSearchResults(data.data || data || []);
+      
+      const resultsArray = data.data || data || [];
+      if (resultsArray.length === 0) {
         toast({
           title: "No results",
           description: "No articles found matching your search query",
@@ -159,7 +171,7 @@ function LiveResearchSearch() {
       } else {
         toast({
           title: "Search complete",
-          description: `Found ${response.data.length} articles from ${selectedDatabase === 'all' ? 'multiple databases' : selectedDatabase}`,
+          description: `Found ${resultsArray.length} articles from ${selectedDatabase === 'all' ? 'multiple databases' : selectedDatabase}`,
         });
       }
     } catch (error) {
@@ -178,10 +190,7 @@ function LiveResearchSearch() {
     if (searchResults.length === 0) return;
 
     try {
-      await apiRequest("/api/research/save", {
-        method: "POST",
-        body: { articles: searchResults }
-      });
+      await apiRequest("POST", "/api/research/save", { articles: searchResults });
 
       toast({
         title: "Success",

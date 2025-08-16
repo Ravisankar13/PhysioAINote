@@ -225,13 +225,18 @@ export function setupAuth(app: Express) {
             },
           });
 
+          console.log("Stripe checkout session created:", session.id, "URL:", session.url);
+
           // Don't send the password hash to the client
           const { password, ...userWithoutPassword } = user;
-          res.status(201).json({
+          const responseData = {
             ...userWithoutPassword,
             checkoutUrl: session.url, // Send Stripe checkout URL for immediate redirect
             message: "Registration successful. Redirecting to secure payment setup..."
-          });
+          };
+          
+          console.log("Sending registration response with checkout URL:", session.url);
+          res.status(201).json(responseData);
         } catch (stripeError) {
           console.error("Error creating Stripe checkout session:", stripeError);
           // Still return success but without checkout URL (fallback)

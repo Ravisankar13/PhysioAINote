@@ -122,19 +122,26 @@ const AuthPage = () => {
 
   // Handle registration form submission
   function onRegisterSubmit(data: RegisterFormValues) {
+    console.log("Registration form submitted with data:", data);
     registerMutation.mutate(data, {
       onSuccess: (response) => {
+        console.log("Registration successful, response:", response);
         // If Stripe checkout URL is provided, redirect to it immediately
-        if (response.checkoutUrl) {
-          console.log("Redirecting to Stripe checkout for payment setup...");
+        if (response?.checkoutUrl) {
+          console.log("Redirecting to Stripe checkout URL:", response.checkoutUrl);
           window.location.href = response.checkoutUrl;
-        } else if (response.requiresOnboarding) {
+        } else if (response?.requiresOnboarding) {
+          console.log("Onboarding required, redirecting to registration-incomplete");
           // Fallback: if Stripe failed but user was created, redirect to onboarding page
           setLocation("/registration-incomplete");
         } else {
+          console.log("No checkout URL or onboarding flag, redirecting to home");
           // Default: redirect to home page
           setLocation("/");
         }
+      },
+      onError: (error) => {
+        console.error("Registration error:", error);
       },
     });
   }

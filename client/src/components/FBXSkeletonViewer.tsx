@@ -53,8 +53,8 @@ export default function FBXSkeletonViewer({
       0.1,
       1000
     );
-    camera.position.set(0, 1.2, 1.5); // Even closer camera position
-    camera.lookAt(0, 0.8, 0); // Looking at center of skeleton
+    camera.position.set(0, 1.5, 2.5); // Positioned to view full skeleton
+    camera.lookAt(0, 1, 0); // Looking at center of skeleton (adjusted for rotation)
     cameraRef.current = camera;
 
     // Renderer setup
@@ -70,8 +70,8 @@ export default function FBXSkeletonViewer({
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     controls.minDistance = 0.5;  // Allow very close zoom
-    controls.maxDistance = 3;  // Further limit max zoom out
-    controls.target.set(0, 0.8, 0); // Focus on center of skeleton
+    controls.maxDistance = 5;  // Allow more zoom out to see full skeleton
+    controls.target.set(0, 1, 0); // Focus on center of skeleton (adjusted for rotation)
     controls.update();
     controlsRef.current = controls;
 
@@ -117,11 +117,28 @@ export default function FBXSkeletonViewer({
         console.log('FBX model loaded successfully', fbx);
         modelRef.current = fbx;
         
+        // Fix coordinate system - FBX often uses different coordinate system
+        fbx.rotation.x = -Math.PI / 2; // Rotate 90 degrees to correct Y-up to Z-up
+        
         // Scale and position the model - further increased for better visibility
         fbx.scale.set(0.025, 0.025, 0.025); // Significantly increased scale
-        fbx.position.set(0, 0.2, 0); // Slightly raised to center in view
+        fbx.position.set(0, 0, 0); // Center at origin
         
-        // Enable shadows
+        // Reset all bones to bind pose to fix crossed arms and misaligned joints
+        const resetBoneTransforms = (bone: THREE.Bone) => {
+          // Reset rotations to identity (bind pose)
+          bone.rotation.set(0, 0, 0);
+          bone.quaternion.identity();
+          
+          // Ensure scale is normalized
+          bone.scale.set(1, 1, 1);
+          
+          // Update matrix
+          bone.updateMatrix();
+          bone.updateMatrixWorld(true);
+        };
+        
+        // Enable shadows and fix bones
         fbx.traverse((child: THREE.Object3D) => {
           if (child instanceof THREE.Mesh) {
             child.castShadow = true;
@@ -133,25 +150,52 @@ export default function FBXSkeletonViewer({
             }
           }
           
-          // Store bone references for animation
+          // Store bone references and reset them
           if (child instanceof THREE.Bone) {
             boneMap.current[child.name] = child;
             console.log('Found bone:', child.name);
             
-            // Diagnostic logging for spine bones
+            // Reset bone to bind pose
+            resetBoneTransforms(child);
+            
+            // Apply specific corrections for problematic bones
+            if (child.name.toLowerCase().includes('humerus') || 
+                child.name.toLowerCase().includes('arm')) {
+              // Fix crossed arms - rotate shoulders back to T-pose
+              if (child.name === 'HumerusL' || child.name === 'Humerus_rootL') {
+                child.rotation.z = Math.PI / 2; // Left arm out to side
+                child.rotation.x = 0;
+                child.rotation.y = 0;
+              } else if (child.name === 'HumerusR' || child.name === 'Humerus_rootR') {
+                child.rotation.z = -Math.PI / 2; // Right arm out to side
+                child.rotation.x = 0;
+                child.rotation.y = 0;
+              }
+            }
+            
+            // Fix hip alignment
+            if (child.name.toLowerCase().includes('femur') || 
+                child.name.toLowerCase().includes('hip')) {
+              if (child.name === 'FemurL') {
+                child.rotation.x = 0;
+                child.rotation.y = 0;
+                child.rotation.z = 0.05; // Slight natural angle
+              } else if (child.name === 'FemurR') {
+                child.rotation.x = 0;
+                child.rotation.y = 0;
+                child.rotation.z = -0.05; // Slight natural angle
+              }
+            }
+            
+            // Diagnostic logging for debugging
             if (child.name.toLowerCase().includes('spine') || 
                 child.name.toLowerCase().includes('pelvis') || 
-                child.name.toLowerCase().includes('ribcage')) {
+                child.name.toLowerCase().includes('ribcage') ||
+                child.name.toLowerCase().includes('humerus') ||
+                child.name.toLowerCase().includes('femur')) {
               console.log(`Bone: ${child.name}`);
-              console.log(`  - World Position:`, child.getWorldPosition(new THREE.Vector3()));
-              console.log(`  - Local Position:`, child.position);
-              console.log(`  - Rotation (euler):`, child.rotation);
-              console.log(`  - Scale:`, child.scale);
-              
-              // Check parent bone
-              if (child.parent && child.parent instanceof THREE.Bone) {
-                console.log(`  - Parent: ${child.parent.name}`);
-              }
+              console.log(`  - Position:`, child.position);
+              console.log(`  - Rotation:`, child.rotation);
             }
           }
         });

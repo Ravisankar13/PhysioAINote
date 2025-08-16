@@ -8,8 +8,14 @@ import { storage } from "./storage";
 import { User as SelectUser } from "@shared/schema";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
+import Stripe from "stripe";
 
 const PostgresSessionStore = connectPg(session);
+
+// Initialize Stripe client
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_51RP2StQgGBJQM85ZPrDkbY7AHdR6P5wrPjnA6pduuVnGjWX6kzSTQoQBp13lzq2ICGsKWay6NmVsym7whYJqWqqX009jZOQTgI', {
+  apiVersion: '2023-10-16',
+});
 
 declare global {
   namespace Express {
@@ -138,12 +144,6 @@ export function setupAuth(app: Express) {
         
         // Immediately create Stripe checkout session for trial
         try {
-          // Import Stripe (will be available from routes.ts)
-          const Stripe = require('stripe');
-          const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_51RP2StQgGBJQM85ZPrDkbY7AHdR6P5wrPjnA6pduuVnGjWX6kzSTQoQBp13lzq2ICGsKWay6NmVsym7whYJqWqqX009jZOQTgI', {
-            apiVersion: '2023-10-16',
-          });
-
           // Get or create Stripe customer
           let customerId = user.stripeCustomerId;
           

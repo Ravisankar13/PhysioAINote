@@ -42,7 +42,7 @@ import { comparativeAnalysisService } from "./ai/comparativeAnalysis";
 import { generateAISuggestions, applySuggestionToSoap } from "./services/aiSuggestionsService";
 import { ResearchService } from "./services/researchService";
 
-import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertExerciseSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, exercises, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, competitionParticipants, soapNotes, insertSoapNoteSchema, bodyScans, insertBodyScanSchema, tournamentParticipants, diagnosisDuelTournaments, gameContent, virtualPatients, patternRecognitionScores } from "@shared/schema";
+import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, competitionParticipants, soapNotes, insertSoapNoteSchema, bodyScans, insertBodyScanSchema, tournamentParticipants, diagnosisDuelTournaments, gameContent, virtualPatients, patternRecognitionScores } from "@shared/schema";
 import { ZodError, z } from "zod";
 import { fromZodError } from "zod-validation-error";
 import multer from "multer";
@@ -58,7 +58,7 @@ import { sampleResearchArticles } from "./sampleResearchArticles";
 import { createPaypalOrder, capturePaypalOrder, loadPaypalDefault } from "./paypal";
 import Stripe from "stripe";
 import OpenAI from "openai";
-import { generateExercises, generateFallbackExercises, ExerciseGenerationRequest } from "./exerciseGenerator";
+
 import sessionRoutes from "./routes/sessionRoutes";
 import patientFingerprintRoutes from "./routes/patientFingerprint";
 import { config } from 'dotenv';
@@ -2235,168 +2235,7 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
 
-  // Helper function to add Reformer Pilates exercises
-  const ensureReformerExercisesAdded = async () => {
-    // Get Reformer Pilates exercises by querying the database directly
-    try {
-      // Use the storage interface to search for reformer exercises
-      const searchResults = await storage.getExercisesBySearchTerm("Reformer");
 
-      if (searchResults.length < 5) {
-        console.log("Adding Reformer Pilates exercises to the database...");
-        const { addReformerPilatesExercises } = await import('./routes/addReformerPilatesExercises');
-        await addReformerPilatesExercises();
-      }
-    } catch (error) {
-      console.error("Error checking for Reformer exercises:", error);
-    }
-  };
-
-  app.get("/api/exercises", async (req: Request, res: Response) => {
-    try {
-      // Ensure Reformer Pilates exercises are added
-      await ensureReformerExercisesAdded();
-
-      const bodyPart = req.query.bodyPart as string | undefined;
-      const difficulty = req.query.difficulty as string | undefined;
-      const searchTerm = req.query.search as string | undefined;
-      const getAll = req.query.all === 'true';
-
-      // If search term is provided, use it for filtering exercises
-      if (searchTerm && searchTerm.trim() !== '') {
-        const searchResults = await storage.getExercisesBySearchTerm(searchTerm);
-
-        // Further filter by body part and difficulty if needed
-        let filteredResults = searchResults;
-
-        if (bodyPart && bodyPartEnum.enumValues.includes(bodyPart as any)) {
-          filteredResults = filteredResults.filter(ex => ex.bodyPart === bodyPart);
-        }
-
-        if (difficulty && difficultyEnum.enumValues.includes(difficulty as any)) {
-          filteredResults = filteredResults.filter(ex => ex.difficulty === difficulty);
-        }
-
-        return res.json(filteredResults);
-      }
-
-      // If "all" parameter is true, retrieve all exercises
-      if (getAll) {
-        const allExercises = await storage.getExercises(undefined, undefined, true);
-        return res.json(allExercises);
-      }
-
-      // Use the normal storage method if no search term
-      const exerciseResults = await storage.getExercises(bodyPart, difficulty);
-      res.json(exerciseResults);
-    } catch (error) {
-      if (error instanceof Error) {
-        res.status(500).json({ error: error.message });
-      } else {
-        res.status(500).json({ error: 'An unknown error occurred' });
-      }
-    }
-  });
-
-  app.get("/api/exercises/:id", async (req: Request, res: Response) => {
-    try {
-      const exerciseId = parseInt(req.params.id);
-      if (isNaN(exerciseId)) {
-        return res.status(400).json({ error: 'Invalid exercise ID' });
-      }
-
-      const exercise = await storage.getExercise(exerciseId);
-      if (!exercise) {
-        return res.status(404).json({ error: 'Exercise not found' });
-      }
-
-      res.json(exercise);
-    } catch (error) {
-      if (error instanceof Error) {
-        res.status(500).json({ error: error.message });
-      } else {
-        res.status(500).json({ error: 'An unknown error occurred' });
-      }
-    }
-  });
-
-  // Update exercise images
-  app.post("/api/exercises/update-images", ensureAuthenticated, async (req: Request, res: Response) => {
-    try {
-      const { updateExerciseImages } = await import('./scripts/updateExerciseImages.js');
-      await updateExerciseImages();
-      res.json({ success: true, message: 'Exercise images updated successfully' });
-    } catch (error) {
-      console.error('Error updating exercise images:', error);
-      res.status(500).json({ error: 'Failed to update exercise images' });
-    }
-  });
-
-  app.post("/api/exercises/generate", ensureAuthenticated, async (req: Request, res: Response) => {
-    try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ error: 'User not authenticated' });
-      }
-
-      const { bodyPart, difficulty, count } = req.body;
-
-      if (!bodyPart || !difficulty || !count) {
-        return res.status(400).json({ error: 'Body part, difficulty, and count are required' });
-      }
-
-      const generationRequest: ExerciseGenerationRequest = {
-        bodyPart,
-        difficulty,
-        count: parseInt(count)
-      };
-
-      try {
-        const exercises = await generateExercises(generationRequest);
-        res.json(exercises);
-      } catch (error) {
-        console.error('Error generating exercises with AI:', error);
-
-        // Fall back to predefined exercises if AI generation fails
-        const fallbackExercises = generateFallbackExercises(generationRequest);
-        res.json({ 
-          exercises: fallbackExercises,
-          warning: 'Used fallback exercises due to AI generation failure'
-        });
-      }
-    } catch (error) {
-      if (error instanceof Error) {
-        res.status(500).json({ error: error.message });
-      } else {
-        res.status(500).json({ error: 'An unknown error occurred' });
-      }
-    }
-  });
-
-  app.post("/api/exercises", ensureAuthenticated, async (req: Request, res: Response) => {
-    try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ error: 'User not authenticated' });
-      }
-
-      const data = insertExerciseSchema.parse({
-        ...req.body,
-        createdBy: userId
-      });
-
-      const exercise = await storage.createExercise(data);
-      res.status(201).json(exercise);
-    } catch (error) {
-      if (error instanceof ZodError) {
-        res.status(400).json({ error: fromZodError(error).message });
-      } else if (error instanceof Error) {
-        res.status(500).json({ error: error.message });
-      } else {
-        res.status(500).json({ error: 'An unknown error occurred' });
-      }
-    }
-  });
 
   app.get("/api/manual-therapy", async (req: Request, res: Response) => {
     try {
@@ -13636,6 +13475,330 @@ Respond in JSON format:
         success: false,
         error: error.message || 'Failed to get video information'
       });
+    }
+  });
+
+  // ============================================
+  // Exercise Program Builder API Routes
+  // ============================================
+
+  // Get all public exercise programs and user's private programs
+  app.get("/api/exercise-programs", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const userPrograms = await storage.getUserExercisePrograms(userId);
+      const publicPrograms = await storage.getPublicExercisePrograms();
+      
+      // Combine and deduplicate
+      const allPrograms = [...userPrograms];
+      const userProgramIds = new Set(userPrograms.map(p => p.id));
+      publicPrograms.forEach(p => {
+        if (!userProgramIds.has(p.id)) {
+          allPrograms.push(p);
+        }
+      });
+
+      res.json(allPrograms);
+    } catch (error) {
+      console.error('Error fetching exercise programs:', error);
+      res.status(500).json({ error: 'Failed to fetch exercise programs' });
+    }
+  });
+
+  // Get a specific exercise program with its exercises
+  app.get("/api/exercise-programs/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const programId = parseInt(req.params.id);
+      const program = await storage.getExerciseProgram(programId);
+      
+      if (!program) {
+        return res.status(404).json({ error: 'Program not found' });
+      }
+
+      const exercises = await storage.getProgramExercises(programId);
+      
+      res.json({
+        ...program,
+        exercises
+      });
+    } catch (error) {
+      console.error('Error fetching exercise program:', error);
+      res.status(500).json({ error: 'Failed to fetch exercise program' });
+    }
+  });
+
+  // Create a new exercise program
+  app.post("/api/exercise-programs", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const programData = {
+        ...req.body,
+        createdBy: userId
+      };
+
+      const program = await storage.createExerciseProgram(programData);
+      res.json(program);
+    } catch (error) {
+      console.error('Error creating exercise program:', error);
+      res.status(500).json({ error: 'Failed to create exercise program' });
+    }
+  });
+
+  // Update an exercise program
+  app.put("/api/exercise-programs/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const programId = parseInt(req.params.id);
+      const userId = req.user?.id;
+      
+      // Check if user owns the program
+      const program = await storage.getExerciseProgram(programId);
+      if (!program || program.createdBy !== userId) {
+        return res.status(403).json({ error: 'Not authorized to update this program' });
+      }
+
+      const updatedProgram = await storage.updateExerciseProgram(programId, req.body);
+      res.json(updatedProgram);
+    } catch (error) {
+      console.error('Error updating exercise program:', error);
+      res.status(500).json({ error: 'Failed to update exercise program' });
+    }
+  });
+
+  // Delete an exercise program
+  app.delete("/api/exercise-programs/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const programId = parseInt(req.params.id);
+      const userId = req.user?.id;
+      
+      // Check if user owns the program
+      const program = await storage.getExerciseProgram(programId);
+      if (!program || program.createdBy !== userId) {
+        return res.status(403).json({ error: 'Not authorized to delete this program' });
+      }
+
+      await storage.deleteExerciseProgram(programId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting exercise program:', error);
+      res.status(500).json({ error: 'Failed to delete exercise program' });
+    }
+  });
+
+  // Add an exercise to a program
+  app.post("/api/exercise-programs/:id/exercises", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const programId = parseInt(req.params.id);
+      const userId = req.user?.id;
+      
+      // Check if user owns the program
+      const program = await storage.getExerciseProgram(programId);
+      if (!program || program.createdBy !== userId) {
+        return res.status(403).json({ error: 'Not authorized to modify this program' });
+      }
+
+      const exerciseData = {
+        ...req.body,
+        programId
+      };
+
+      const exercise = await storage.addProgramExercise(exerciseData);
+      res.json(exercise);
+    } catch (error) {
+      console.error('Error adding exercise to program:', error);
+      res.status(500).json({ error: 'Failed to add exercise to program' });
+    }
+  });
+
+  // Update an exercise in a program
+  app.put("/api/program-exercises/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const exerciseId = parseInt(req.params.id);
+      const updatedExercise = await storage.updateProgramExercise(exerciseId, req.body);
+      res.json(updatedExercise);
+    } catch (error) {
+      console.error('Error updating exercise:', error);
+      res.status(500).json({ error: 'Failed to update exercise' });
+    }
+  });
+
+  // Remove an exercise from a program
+  app.delete("/api/program-exercises/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const exerciseId = parseInt(req.params.id);
+      await storage.removeProgramExercise(exerciseId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error removing exercise:', error);
+      res.status(500).json({ error: 'Failed to remove exercise' });
+    }
+  });
+
+  // Reorder exercises in a program
+  app.post("/api/exercise-programs/:id/reorder", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const programId = parseInt(req.params.id);
+      const { exerciseIds } = req.body;
+      
+      await storage.reorderProgramExercises(programId, exerciseIds);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error reordering exercises:', error);
+      res.status(500).json({ error: 'Failed to reorder exercises' });
+    }
+  });
+
+  // Get exercise templates
+  app.get("/api/exercise-templates", async (req: Request, res: Response) => {
+    try {
+      const filters = {
+        bodyPart: req.query.bodyPart as string,
+        category: req.query.category as string,
+        condition: req.query.condition as string
+      };
+
+      const templates = await storage.getExerciseTemplates(filters);
+      res.json(templates);
+    } catch (error) {
+      console.error('Error fetching exercise templates:', error);
+      res.status(500).json({ error: 'Failed to fetch exercise templates' });
+    }
+  });
+
+  // Create an exercise template
+  app.post("/api/exercise-templates", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const templateData = {
+        ...req.body,
+        createdBy: userId
+      };
+
+      const template = await storage.createExerciseTemplate(templateData);
+      res.json(template);
+    } catch (error) {
+      console.error('Error creating exercise template:', error);
+      res.status(500).json({ error: 'Failed to create exercise template' });
+    }
+  });
+
+  // Search exercises from external API (ExerciseDB)
+  app.get("/api/external/exercises/search", async (req: Request, res: Response) => {
+    try {
+      const { muscle, bodyPart, equipment, name } = req.query;
+      
+      // Build query parameters for ExerciseDB API
+      let apiUrl = 'https://exercisedb.p.rapidapi.com/exercises';
+      
+      if (bodyPart) {
+        apiUrl = `https://exercisedb.p.rapidapi.com/exercises/bodyPart/${bodyPart}`;
+      } else if (muscle) {
+        apiUrl = `https://exercisedb.p.rapidapi.com/exercises/target/${muscle}`;
+      } else if (equipment) {
+        apiUrl = `https://exercisedb.p.rapidapi.com/exercises/equipment/${equipment}`;
+      } else if (name) {
+        apiUrl = `https://exercisedb.p.rapidapi.com/exercises/name/${name}`;
+      }
+
+      // Note: ExerciseDB requires RapidAPI key
+      // For now, we'll use mock data
+      const mockExercises = [
+        {
+          id: "0001",
+          name: "3/4 sit-up",
+          target: "abs",
+          bodyPart: "waist",
+          equipment: "body weight",
+          gifUrl: "https://v2.exercisedb.io/image/0001",
+          instructions: [
+            "Lie flat on your back with your knees bent and feet flat on the ground.",
+            "Place your hands behind your head or across your chest.",
+            "Engage your abs and lift your upper body towards your knees.",
+            "Pause for a moment at the top, then slowly lower back down.",
+            "Repeat for the desired number of repetitions."
+          ]
+        },
+        {
+          id: "0002",
+          name: "45° side bend",
+          target: "abs",
+          bodyPart: "waist",
+          equipment: "body weight",
+          gifUrl: "https://v2.exercisedb.io/image/0002",
+          instructions: [
+            "Stand with your feet shoulder-width apart.",
+            "Hold a dumbbell or weight plate with one hand.",
+            "Bend to the side at a 45-degree angle.",
+            "Return to the starting position.",
+            "Repeat on the other side."
+          ]
+        }
+      ];
+
+      res.json(mockExercises);
+    } catch (error) {
+      console.error('Error searching external exercises:', error);
+      res.status(500).json({ error: 'Failed to search exercises' });
+    }
+  });
+
+  // Get body parts list for exercise filtering
+  app.get("/api/external/exercises/bodyparts", async (req: Request, res: Response) => {
+    try {
+      const bodyParts = [
+        "back", "cardio", "chest", "lower arms", "lower legs",
+        "neck", "shoulders", "upper arms", "upper legs", "waist"
+      ];
+      res.json(bodyParts);
+    } catch (error) {
+      console.error('Error fetching body parts:', error);
+      res.status(500).json({ error: 'Failed to fetch body parts' });
+    }
+  });
+
+  // Get equipment list for exercise filtering
+  app.get("/api/external/exercises/equipment", async (req: Request, res: Response) => {
+    try {
+      const equipment = [
+        "assisted", "band", "barbell", "body weight", "bosu ball",
+        "cable", "dumbbell", "elliptical machine", "ez barbell", "hammer",
+        "kettlebell", "leverage machine", "medicine ball", "olympic barbell",
+        "resistance band", "roller", "rope", "skierg machine", "sled machine",
+        "smith machine", "stability ball", "stationary bike", "stepmill machine",
+        "tire", "trap bar", "upper body ergometer", "weighted", "wheel roller"
+      ];
+      res.json(equipment);
+    } catch (error) {
+      console.error('Error fetching equipment list:', error);
+      res.status(500).json({ error: 'Failed to fetch equipment list' });
+    }
+  });
+
+  // Get muscle groups list for exercise filtering
+  app.get("/api/external/exercises/muscles", async (req: Request, res: Response) => {
+    try {
+      const muscles = [
+        "abductors", "abs", "adductors", "biceps", "calves",
+        "cardiovascular system", "delts", "forearms", "glutes",
+        "hamstrings", "lats", "levator scapulae", "pectorals",
+        "quads", "serratus anterior", "spine", "traps", "triceps",
+        "upper back"
+      ];
+      res.json(muscles);
+    } catch (error) {
+      console.error('Error fetching muscle groups:', error);
+      res.status(500).json({ error: 'Failed to fetch muscle groups' });
     }
   });
 

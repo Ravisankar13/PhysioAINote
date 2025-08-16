@@ -20,11 +20,7 @@ import {
   paymentRecords,
   type PaymentRecord,
   type InsertPaymentRecord,
-  exercises,
-  type Exercise,
-  type InsertExercise,
   bodyPartEnum,
-  difficultyEnum,
   patientSessions,
   type PatientSession,
   type InsertPatientSession,
@@ -105,6 +101,21 @@ import {
   continuousSessionNotes,
   type ContinuousSessionNote,
   type InsertContinuousSessionNote,
+  exercisePrograms,
+  type ExerciseProgram,
+  type InsertExerciseProgram,
+  programExercises,
+  type ProgramExercise,
+  type InsertProgramExercise,
+  exerciseTemplates,
+  type ExerciseTemplate,
+  type InsertExerciseTemplate,
+  exerciseAssignments,
+  type ExerciseAssignment,
+  type InsertExerciseAssignment,
+  exerciseProgress,
+  type ExerciseProgress,
+  type InsertExerciseProgress,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, isNull, sql, ilike, not } from "drizzle-orm";
@@ -262,10 +273,7 @@ export interface IStorage {
     accuracy: number
   ): Promise<CaseStudyAttempt>;
 
-  // Exercise Operations
-  getExercise(id: number): Promise<Exercise | undefined>;
-  getExercises(bodyPart?: string, difficulty?: string): Promise<Exercise[]>;
-  createExercise(exercise: InsertExercise): Promise<Exercise>;
+
 
   // Manual Therapy Technique Operations
   getManualTherapyTechnique(
@@ -514,6 +522,41 @@ export interface IStorage {
   getGeneratedDocument(documentId: string): Promise<GeneratedDocument | undefined>;
   getGeneratedDocumentsBySession(sessionId: string, userId?: number): Promise<GeneratedDocument[]>;
   updateGeneratedDocument(documentId: string, updates: Partial<GeneratedDocument>): Promise<GeneratedDocument | undefined>;
+
+  // Exercise Program Operations
+  createExerciseProgram(program: InsertExerciseProgram): Promise<ExerciseProgram>;
+  getExerciseProgram(id: number): Promise<ExerciseProgram | undefined>;
+  getUserExercisePrograms(userId: number): Promise<ExerciseProgram[]>;
+  getPublicExercisePrograms(): Promise<ExerciseProgram[]>;
+  updateExerciseProgram(id: number, data: Partial<InsertExerciseProgram>): Promise<ExerciseProgram>;
+  deleteExerciseProgram(id: number): Promise<void>;
+
+  // Program Exercise Operations
+  addProgramExercise(exercise: InsertProgramExercise): Promise<ProgramExercise>;
+  getProgramExercises(programId: number): Promise<ProgramExercise[]>;
+  updateProgramExercise(id: number, data: Partial<InsertProgramExercise>): Promise<ProgramExercise>;
+  removeProgramExercise(id: number): Promise<void>;
+  reorderProgramExercises(programId: number, exerciseIds: number[]): Promise<void>;
+
+  // Exercise Template Operations
+  createExerciseTemplate(template: InsertExerciseTemplate): Promise<ExerciseTemplate>;
+  getExerciseTemplate(id: number): Promise<ExerciseTemplate | undefined>;
+  getExerciseTemplates(filters?: { bodyPart?: string; category?: string; condition?: string }): Promise<ExerciseTemplate[]>;
+  updateExerciseTemplate(id: number, data: Partial<InsertExerciseTemplate>): Promise<ExerciseTemplate>;
+  incrementTemplatePopularity(id: number): Promise<void>;
+
+  // Exercise Assignment Operations
+  createExerciseAssignment(assignment: InsertExerciseAssignment): Promise<ExerciseAssignment>;
+  getExerciseAssignment(id: number): Promise<ExerciseAssignment | undefined>;
+  getPatientAssignments(patientId: number): Promise<ExerciseAssignment[]>;
+  getPractitionerAssignments(practitionerId: number): Promise<ExerciseAssignment[]>;
+  updateExerciseAssignment(id: number, data: Partial<InsertExerciseAssignment>): Promise<ExerciseAssignment>;
+
+  // Exercise Progress Operations
+  recordExerciseProgress(progress: InsertExerciseProgress): Promise<ExerciseProgress>;
+  getExerciseProgress(assignmentId: number, exerciseId?: number): Promise<ExerciseProgress[]>;
+  getProgressByDate(assignmentId: number, date: string): Promise<ExerciseProgress[]>;
+  updateExerciseProgress(id: number, data: Partial<InsertExerciseProgress>): Promise<ExerciseProgress>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1265,72 +1308,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(paymentRecords.paymentDate));
   }
 
-  // Exercise Methods
-  async getExercise(id: number): Promise<Exercise | undefined> {
-    const result = await db
-      .select()
-      .from(exercises)
-      .where(eq(exercises.id, id));
-    return result[0];
-  }
 
-  async getExercises(
-    bodyPart?: string,
-    difficulty?: string,
-    getAll: boolean = false
-  ): Promise<Exercise[]> {
-    // Start with the base query
-    let query = db.select().from(exercises);
-
-    // Only apply filters if getAll is false
-    if (!getAll) {
-      // If bodyPart is provided and valid, filter by it
-      if (bodyPart && bodyPartEnum.enumValues.includes(bodyPart as any)) {
-        query = query.where(
-          eq(
-            exercises.bodyPart,
-            bodyPart as (typeof bodyPartEnum.enumValues)[number]
-          )
-        );
-      }
-
-      // If difficulty is provided and valid, filter by it
-      if (difficulty && difficultyEnum.enumValues.includes(difficulty as any)) {
-        query = query.where(
-          eq(
-            exercises.difficulty,
-            difficulty as (typeof difficultyEnum.enumValues)[number]
-          )
-        );
-      }
-    }
-
-    // Execute the query with any applied filters
-    return await query.orderBy(exercises.title);
-  }
-
-  async createExercise(exercise: InsertExercise): Promise<Exercise> {
-    const result = await db.insert(exercises).values(exercise).returning();
-    return result[0];
-  }
-
-  async getExercisesBySearchTerm(searchTerm: string): Promise<Exercise[]> {
-    if (!searchTerm || searchTerm.trim() === "") {
-      return [];
-    }
-
-    const query = `%${searchTerm.toLowerCase()}%`;
-
-    return await db
-      .select()
-      .from(exercises)
-      .where(
-        sql`LOWER(${exercises.title}) LIKE ${query} OR 
-            LOWER(${exercises.description}) LIKE ${query} OR
-            LOWER(${exercises.targetMuscles}) LIKE ${query}`
-      )
-      .orderBy(exercises.title);
-  }
 
   // Manual Therapy Technique methods
   async getManualTherapyTechnique(
@@ -3467,6 +3445,210 @@ export class DatabaseStorage implements IStorage {
       console.error("Error finding similar patient fingerprints:", error);
       throw error;
     }
+  }
+
+  // ============================================
+  // Exercise Program Methods
+  // ============================================
+
+  async createExerciseProgram(program: InsertExerciseProgram): Promise<ExerciseProgram> {
+    const result = await db.insert(exercisePrograms).values(program).returning();
+    return result[0];
+  }
+
+  async getExerciseProgram(id: number): Promise<ExerciseProgram | undefined> {
+    const result = await db.select().from(exercisePrograms).where(eq(exercisePrograms.id, id));
+    return result[0];
+  }
+
+  async getUserExercisePrograms(userId: number): Promise<ExerciseProgram[]> {
+    return await db
+      .select()
+      .from(exercisePrograms)
+      .where(eq(exercisePrograms.createdBy, userId))
+      .orderBy(desc(exercisePrograms.createdAt));
+  }
+
+  async getPublicExercisePrograms(): Promise<ExerciseProgram[]> {
+    return await db
+      .select()
+      .from(exercisePrograms)
+      .where(eq(exercisePrograms.isPublic, true))
+      .orderBy(desc(exercisePrograms.createdAt));
+  }
+
+  async updateExerciseProgram(id: number, data: Partial<InsertExerciseProgram>): Promise<ExerciseProgram> {
+    const result = await db
+      .update(exercisePrograms)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(exercisePrograms.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteExerciseProgram(id: number): Promise<void> {
+    await db.delete(exercisePrograms).where(eq(exercisePrograms.id, id));
+  }
+
+  // Program Exercise Methods
+  async addProgramExercise(exercise: InsertProgramExercise): Promise<ProgramExercise> {
+    const result = await db.insert(programExercises).values(exercise).returning();
+    return result[0];
+  }
+
+  async getProgramExercises(programId: number): Promise<ProgramExercise[]> {
+    return await db
+      .select()
+      .from(programExercises)
+      .where(eq(programExercises.programId, programId))
+      .orderBy(programExercises.orderIndex);
+  }
+
+  async updateProgramExercise(id: number, data: Partial<InsertProgramExercise>): Promise<ProgramExercise> {
+    const result = await db
+      .update(programExercises)
+      .set(data)
+      .where(eq(programExercises.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async removeProgramExercise(id: number): Promise<void> {
+    await db.delete(programExercises).where(eq(programExercises.id, id));
+  }
+
+  async reorderProgramExercises(programId: number, exerciseIds: number[]): Promise<void> {
+    // Update order index for each exercise
+    for (let i = 0; i < exerciseIds.length; i++) {
+      await db
+        .update(programExercises)
+        .set({ orderIndex: i })
+        .where(and(
+          eq(programExercises.id, exerciseIds[i]),
+          eq(programExercises.programId, programId)
+        ));
+    }
+  }
+
+  // Exercise Template Methods
+  async createExerciseTemplate(template: InsertExerciseTemplate): Promise<ExerciseTemplate> {
+    const result = await db.insert(exerciseTemplates).values(template).returning();
+    return result[0];
+  }
+
+  async getExerciseTemplate(id: number): Promise<ExerciseTemplate | undefined> {
+    const result = await db.select().from(exerciseTemplates).where(eq(exerciseTemplates.id, id));
+    return result[0];
+  }
+
+  async getExerciseTemplates(filters?: { bodyPart?: string; category?: string; condition?: string }): Promise<ExerciseTemplate[]> {
+    let query = db.select().from(exerciseTemplates).where(eq(exerciseTemplates.isPublic, true));
+    
+    // Apply filters if provided
+    const conditions = [];
+    if (filters?.bodyPart) {
+      conditions.push(eq(exerciseTemplates.bodyPart, filters.bodyPart as any));
+    }
+    if (filters?.category) {
+      conditions.push(eq(exerciseTemplates.category, filters.category));
+    }
+    if (filters?.condition) {
+      conditions.push(eq(exerciseTemplates.condition, filters.condition));
+    }
+    
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions));
+    }
+    
+    return await query.orderBy(desc(exerciseTemplates.popularity));
+  }
+
+  async updateExerciseTemplate(id: number, data: Partial<InsertExerciseTemplate>): Promise<ExerciseTemplate> {
+    const result = await db
+      .update(exerciseTemplates)
+      .set(data)
+      .where(eq(exerciseTemplates.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async incrementTemplatePopularity(id: number): Promise<void> {
+    await db
+      .update(exerciseTemplates)
+      .set({ popularity: sql`${exerciseTemplates.popularity} + 1` })
+      .where(eq(exerciseTemplates.id, id));
+  }
+
+  // Exercise Assignment Methods
+  async createExerciseAssignment(assignment: InsertExerciseAssignment): Promise<ExerciseAssignment> {
+    const result = await db.insert(exerciseAssignments).values(assignment).returning();
+    return result[0];
+  }
+
+  async getExerciseAssignment(id: number): Promise<ExerciseAssignment | undefined> {
+    const result = await db.select().from(exerciseAssignments).where(eq(exerciseAssignments.id, id));
+    return result[0];
+  }
+
+  async getPatientAssignments(patientId: number): Promise<ExerciseAssignment[]> {
+    return await db
+      .select()
+      .from(exerciseAssignments)
+      .where(eq(exerciseAssignments.patientId, patientId))
+      .orderBy(desc(exerciseAssignments.createdAt));
+  }
+
+  async getPractitionerAssignments(practitionerId: number): Promise<ExerciseAssignment[]> {
+    return await db
+      .select()
+      .from(exerciseAssignments)
+      .where(eq(exerciseAssignments.assignedBy, practitionerId))
+      .orderBy(desc(exerciseAssignments.createdAt));
+  }
+
+  async updateExerciseAssignment(id: number, data: Partial<InsertExerciseAssignment>): Promise<ExerciseAssignment> {
+    const result = await db
+      .update(exerciseAssignments)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(exerciseAssignments.id, id))
+      .returning();
+    return result[0];
+  }
+
+  // Exercise Progress Methods
+  async recordExerciseProgress(progress: InsertExerciseProgress): Promise<ExerciseProgress> {
+    const result = await db.insert(exerciseProgress).values(progress).returning();
+    return result[0];
+  }
+
+  async getExerciseProgress(assignmentId: number, exerciseId?: number): Promise<ExerciseProgress[]> {
+    let query = db.select().from(exerciseProgress).where(eq(exerciseProgress.assignmentId, assignmentId));
+    
+    if (exerciseId) {
+      query = query.where(eq(exerciseProgress.exerciseId, exerciseId));
+    }
+    
+    return await query.orderBy(desc(exerciseProgress.date));
+  }
+
+  async getProgressByDate(assignmentId: number, date: string): Promise<ExerciseProgress[]> {
+    return await db
+      .select()
+      .from(exerciseProgress)
+      .where(and(
+        eq(exerciseProgress.assignmentId, assignmentId),
+        eq(exerciseProgress.date, date)
+      ))
+      .orderBy(exerciseProgress.exerciseId);
+  }
+
+  async updateExerciseProgress(id: number, data: Partial<InsertExerciseProgress>): Promise<ExerciseProgress> {
+    const result = await db
+      .update(exerciseProgress)
+      .set(data)
+      .where(eq(exerciseProgress.id, id))
+      .returning();
+    return result[0];
   }
 }
 

@@ -1765,59 +1765,7 @@ export const researchPaperRelations = relations(researchPapers, ({ many }) => ({
   discussions: many(researchDiscussions),
 }));
 
-// Exercise difficulty enum
-export const difficultyEnum = pgEnum("difficulty", [
-  "beginner",
-  "intermediate",
-  "advanced",
-]);
 
-// Exercise Library Schema
-export const exerciseTypeEnum = pgEnum("exercise_type", [
-  "strength", 
-  "mobility", 
-  "motor control", 
-  "functional", 
-  "isometric", 
-  "eccentric", 
-  "neural",
-  "sensorimotor",
-  "power",
-  "endurance",
-  "stretching",
-  "other"
-]);
-
-export const exercises = pgTable("exercises", {
-  id: serial("id").primaryKey(),
-  title: text("title").notNull(),
-  description: text("description").notNull(),
-  bodyPart: bodyPartEnum("body_part").default("general").notNull(),
-  targetMuscles: text("target_muscles").notNull(),
-  difficulty: difficultyEnum("difficulty").default("beginner").notNull(),
-  exerciseType: exerciseTypeEnum("exercise_type").default("other"),
-  instructions: text("instructions").notNull(),
-  equipment: text("equipment").array(),
-  precautions: text("precautions"),
-  repetitions: text("repetitions"),
-  sets: text("sets"),
-  duration: text("duration"),
-  restPeriod: text("rest_period"),
-  imageUrl: text("image_url"),
-  videoUrl: text("video_url"),
-  aiGenerated: boolean("ai_generated").default(true).notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
-
-export const insertExerciseSchema = createInsertSchema(exercises).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export type InsertExercise = z.infer<typeof insertExerciseSchema>;
-export type Exercise = typeof exercises.$inferSelect;
 
 // Generated Documents Schema
 export const generatedDocuments = pgTable("generated_documents", {
@@ -3771,5 +3719,188 @@ export const forumSanitizationLogRelations = relations(forumSanitizationLogs, ({
   forumPost: one(forumPosts, {
     fields: [forumSanitizationLogs.forumPostId],
     references: [forumPosts.id],
+  }),
+}));
+
+// ============================================
+// Exercise Program Builder Tables
+// ============================================
+
+// Exercise programs created by physiotherapists
+export const exercisePrograms = pgTable("exercise_programs", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  createdBy: integer("created_by").references(() => users.id),
+  patientId: integer("patient_id"), // Optional - can be assigned to specific patient
+  templateId: integer("template_id"), // Reference to template if created from one
+  bodyPart: bodyPartEnum("body_part"),
+  difficulty: text("difficulty"), // beginner, intermediate, advanced
+  duration: integer("duration"), // in minutes
+  frequency: text("frequency"), // e.g., "3x per week"
+  goals: json("goals").$type<string[]>(),
+  tags: json("tags").$type<string[]>(),
+  isPublic: boolean("is_public").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertExerciseProgramSchema = createInsertSchema(exercisePrograms).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertExerciseProgram = z.infer<typeof insertExerciseProgramSchema>;
+export type ExerciseProgram = typeof exercisePrograms.$inferSelect;
+
+// Individual exercises within a program (references external API)
+export const programExercises = pgTable("program_exercises", {
+  id: serial("id").primaryKey(),
+  programId: integer("program_id").references(() => exercisePrograms.id).notNull(),
+  externalId: text("external_id").notNull(), // ID from external API (ExerciseDB/Wger)
+  apiSource: text("api_source").notNull(), // "exercisedb" or "wger"
+  name: text("name").notNull(),
+  equipment: text("equipment"),
+  bodyPart: text("body_part"),
+  target: text("target"),
+  gifUrl: text("gif_url"),
+  instructions: json("instructions").$type<string[]>(),
+  sets: integer("sets"),
+  reps: text("reps"), // Can be range like "8-12"
+  duration: text("duration"), // For timed exercises
+  restTime: integer("rest_time"), // in seconds
+  orderIndex: integer("order_index").notNull(), // Order in program
+  notes: text("notes"),
+  progressionNotes: text("progression_notes"),
+});
+
+export const insertProgramExerciseSchema = createInsertSchema(programExercises).omit({
+  id: true,
+});
+export type InsertProgramExercise = z.infer<typeof insertProgramExerciseSchema>;
+export type ProgramExercise = typeof programExercises.$inferSelect;
+
+// Program templates that can be reused
+export const exerciseTemplates = pgTable("exercise_templates", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  category: text("category"), // e.g., "Post-surgery", "Sports injury", "Chronic pain"
+  bodyPart: bodyPartEnum("body_part"),
+  condition: text("condition"), // e.g., "Rotator cuff tear", "ACL reconstruction"
+  difficulty: text("difficulty"),
+  duration: integer("duration"),
+  frequency: text("frequency"),
+  phases: json("phases").$type<{
+    name: string;
+    weeks: number;
+    focus: string;
+    exercises: any[];
+  }[]>(),
+  createdBy: integer("created_by").references(() => users.id),
+  isPublic: boolean("is_public").default(true),
+  popularity: integer("popularity").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertExerciseTemplateSchema = createInsertSchema(exerciseTemplates).omit({
+  id: true,
+  popularity: true,
+  createdAt: true,
+});
+export type InsertExerciseTemplate = z.infer<typeof insertExerciseTemplateSchema>;
+export type ExerciseTemplate = typeof exerciseTemplates.$inferSelect;
+
+// Patient assignments and progress tracking
+export const exerciseAssignments = pgTable("exercise_assignments", {
+  id: serial("id").primaryKey(),
+  programId: integer("program_id").references(() => exercisePrograms.id).notNull(),
+  patientId: integer("patient_id").notNull(), // Reference to patient (could be userId or separate patient table)
+  assignedBy: integer("assigned_by").references(() => users.id),
+  startDate: date("start_date").notNull(),
+  endDate: date("end_date"),
+  status: text("status").default("active"), // active, paused, completed
+  adherenceRate: integer("adherence_rate"), // percentage
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertExerciseAssignmentSchema = createInsertSchema(exerciseAssignments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertExerciseAssignment = z.infer<typeof insertExerciseAssignmentSchema>;
+export type ExerciseAssignment = typeof exerciseAssignments.$inferSelect;
+
+// Progress tracking for individual exercises
+export const exerciseProgress = pgTable("exercise_progress", {
+  id: serial("id").primaryKey(),
+  assignmentId: integer("assignment_id").references(() => exerciseAssignments.id).notNull(),
+  exerciseId: integer("exercise_id").references(() => programExercises.id).notNull(),
+  date: date("date").notNull(),
+  setsCompleted: integer("sets_completed"),
+  repsCompleted: text("reps_completed"),
+  weight: text("weight"), // Can include unit
+  difficulty: integer("difficulty"), // 1-10 scale
+  painLevel: integer("pain_level"), // 0-10 scale
+  notes: text("notes"),
+  videoUrl: text("video_url"), // For form checks
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertExerciseProgressSchema = createInsertSchema(exerciseProgress).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertExerciseProgress = z.infer<typeof insertExerciseProgressSchema>;
+export type ExerciseProgress = typeof exerciseProgress.$inferSelect;
+
+// Relations for exercise program tables
+export const exerciseProgramRelations = relations(exercisePrograms, ({ one, many }) => ({
+  creator: one(users, {
+    fields: [exercisePrograms.createdBy],
+    references: [users.id],
+  }),
+  exercises: many(programExercises),
+  assignments: many(exerciseAssignments),
+}));
+
+export const programExerciseRelations = relations(programExercises, ({ one, many }) => ({
+  program: one(exercisePrograms, {
+    fields: [programExercises.programId],
+    references: [exercisePrograms.id],
+  }),
+  progress: many(exerciseProgress),
+}));
+
+export const exerciseTemplateRelations = relations(exerciseTemplates, ({ one }) => ({
+  creator: one(users, {
+    fields: [exerciseTemplates.createdBy],
+    references: [users.id],
+  }),
+}));
+
+export const exerciseAssignmentRelations = relations(exerciseAssignments, ({ one, many }) => ({
+  program: one(exercisePrograms, {
+    fields: [exerciseAssignments.programId],
+    references: [exercisePrograms.id],
+  }),
+  assignedByUser: one(users, {
+    fields: [exerciseAssignments.assignedBy],
+    references: [users.id],
+  }),
+  progress: many(exerciseProgress),
+}));
+
+export const exerciseProgressRelations = relations(exerciseProgress, ({ one }) => ({
+  assignment: one(exerciseAssignments, {
+    fields: [exerciseProgress.assignmentId],
+    references: [exerciseAssignments.id],
+  }),
+  exercise: one(programExercises, {
+    fields: [exerciseProgress.exerciseId],
+    references: [programExercises.id],
   }),
 }));

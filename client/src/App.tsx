@@ -25,7 +25,7 @@ import Research from "@/pages/Research";
 import ResearchGaps from "@/pages/ResearchGaps";
 import CreateResearchProject from "@/pages/CreateResearchProject";
 import Membership from "@/pages/Membership";
-import ExercisePage from "@/pages/ExercisePage";
+
 import ManualTherapyPage from "@/pages/ManualTherapyPage";
 import TestAudioTranscription from "@/pages/TestAudioTranscription";
 import TestNoteGenerator from "@/pages/TestNoteGenerator";
@@ -54,6 +54,7 @@ import CompetitionDiagnosisPage from "@/pages/CompetitionDiagnosisPage";
 import CompetitionResultsPage from "@/pages/CompetitionResultsPage";
 import GameCompetitions from "@/pages/GameCompetitions";
 import GameCompetitionPage from "@/pages/GameCompetitionPage";
+import ExerciseProgramBuilder from "@/pages/ExerciseProgramBuilder";
 
 import TournamentWaitingRoom from "@/pages/TournamentWaitingRoom";
 import TournamentMatchPage from "@/pages/TournamentMatchPage";
@@ -92,8 +93,11 @@ function Router() {
           <Route path="/notes/:id?">
             <ProtectedRoute component={SessionsPage} />
           </Route>
-          <Route path="/exercises" component={ExercisePage} />
+
           <Route path="/manual-therapy" component={ManualTherapyPage} />
+          <Route path="/exercise-programs">
+            <ProtectedRoute component={ExerciseProgramBuilder} />
+          </Route>
           <Route path="/skeleton-3d-tool" component={Skeleton3DTool} />
           <Route path="/motion-capture" component={MotionCapturePage} />
           <Route path="/static-postural-analysis" component={StaticPosturalAnalysisPage} />

@@ -46,7 +46,6 @@ const Header = () => {
     { to: "/", label: "Home" },
     { to: "/case-studies", label: "AI Case Studies" },
     { to: "/shared-cases", label: "Forum" },
-    { to: "/exercises", label: "Exercise Library" },
     { to: "/manual-therapy", label: "Manual Therapy" },
     { to: "/virtual-patients", label: "Virtual Patients" },
     { to: "/body-scanner", label: "Body Scanner" },
@@ -214,14 +213,7 @@ const Header = () => {
                       </div>
                     </Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem className="flex items-center" asChild>
-                    <Link to="/exercises">
-                      <div className="flex items-center cursor-pointer w-full">
-                        <Bone className="mr-2 h-4 w-4" />
-                        <span>Exercise Library</span>
-                      </div>
-                    </Link>
-                  </DropdownMenuItem>
+
                   <DropdownMenuItem className="flex items-center" asChild>
                     <Link to="/manual-therapy">
                       <div className="flex items-center cursor-pointer w-full">
@@ -231,10 +223,10 @@ const Header = () => {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem className="flex items-center" asChild>
-                    <Link to="/virtual-patients">
+                    <Link to="/exercise-programs">
                       <div className="flex items-center cursor-pointer w-full">
                         <Activity className="mr-2 h-4 w-4" />
-                        <span>Virtual Patients</span>
+                        <span>Exercise Programs</span>
                       </div>
                     </Link>
                   </DropdownMenuItem>
@@ -335,14 +327,7 @@ const Header = () => {
                         </Link>
 
 
-                        <Link to="/exercises">
-                          <span
-                            className="px-2 py-2 text-base block cursor-pointer text-muted-foreground hover:text-foreground"
-                            onClick={() => setOpen(false)}
-                          >
-                            Exercise Library
-                          </span>
-                        </Link>
+
                         <Link to="/manual-therapy">
                           <span
                             className="px-2 py-2 text-base block cursor-pointer text-muted-foreground hover:text-foreground"

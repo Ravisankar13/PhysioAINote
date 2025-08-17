@@ -178,11 +178,16 @@ export default function MixamoSkeleton({
                   bones[bone.name] = bone;
                   console.log('Bone:', bone.name);
                   
-                  // Also map common variations
+                  // Also map common variations - handle both mixamorig: and mixamorig prefixes
                   if (bone.name.includes('mixamorig:')) {
                     const shortName = bone.name.replace('mixamorig:', '');
                     bones[shortName] = bone;
-                    console.log('Mapped short name:', shortName);
+                    console.log('Mapped short name from mixamorig:', shortName);
+                  } else if (bone.name.startsWith('mixamorig')) {
+                    // Handle mixamorig prefix without colon
+                    const shortName = bone.name.replace('mixamorig', '');
+                    bones[shortName] = bone;
+                    console.log('Mapped short name from mixamorig:', shortName);
                   }
                 });
               }
@@ -585,18 +590,18 @@ export default function MixamoSkeleton({
       if (patientData?.anthropometrics?.limbLengths) {
         const limbs = patientData.anthropometrics.limbLengths;
         
-        // Try to find bones with or without mixamorig: prefix
-        const leftArmBone = bones['LeftArm'] || bones['mixamorig:LeftArm'];
-        const rightArmBone = bones['RightArm'] || bones['mixamorig:RightArm'];
-        const leftForeArmBone = bones['LeftForeArm'] || bones['mixamorig:LeftForeArm'];
-        const rightForeArmBone = bones['RightForeArm'] || bones['mixamorig:RightForeArm'];
-        const leftUpLegBone = bones['LeftUpLeg'] || bones['mixamorig:LeftUpLeg'];
-        const rightUpLegBone = bones['RightUpLeg'] || bones['mixamorig:RightUpLeg'];
-        const leftLegBone = bones['LeftLeg'] || bones['mixamorig:LeftLeg'];
-        const rightLegBone = bones['RightLeg'] || bones['mixamorig:RightLeg'];
-        const spineBone = bones['Spine'] || bones['mixamorig:Spine'];
-        const spine1Bone = bones['Spine1'] || bones['mixamorig:Spine1'];
-        const spine2Bone = bones['Spine2'] || bones['mixamorig:Spine2'];
+        // Try to find bones with various naming conventions
+        const leftArmBone = bones['LeftArm'] || bones['mixamorigLeftArm'] || bones['mixamorig:LeftArm'];
+        const rightArmBone = bones['RightArm'] || bones['mixamorigRightArm'] || bones['mixamorig:RightArm'];
+        const leftForeArmBone = bones['LeftForeArm'] || bones['mixamorigLeftForeArm'] || bones['mixamorig:LeftForeArm'];
+        const rightForeArmBone = bones['RightForeArm'] || bones['mixamorigRightForeArm'] || bones['mixamorig:RightForeArm'];
+        const leftUpLegBone = bones['LeftUpLeg'] || bones['mixamorigLeftUpLeg'] || bones['mixamorig:LeftUpLeg'];
+        const rightUpLegBone = bones['RightUpLeg'] || bones['mixamorigRightUpLeg'] || bones['mixamorig:RightUpLeg'];
+        const leftLegBone = bones['LeftLeg'] || bones['mixamorigLeftLeg'] || bones['mixamorig:LeftLeg'];
+        const rightLegBone = bones['RightLeg'] || bones['mixamorigRightLeg'] || bones['mixamorig:RightLeg'];
+        const spineBone = bones['Spine'] || bones['mixamorigSpine'] || bones['mixamorig:Spine'];
+        const spine1Bone = bones['Spine1'] || bones['mixamorigSpine1'] || bones['mixamorig:Spine1'];
+        const spine2Bone = bones['Spine2'] || bones['mixamorigSpine2'] || bones['mixamorig:Spine2'];
         
         // Apply upper arm scaling
         if (leftArmBone && limbs.upperArm) {

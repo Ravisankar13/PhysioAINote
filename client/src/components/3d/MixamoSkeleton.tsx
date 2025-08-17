@@ -139,8 +139,11 @@ export default function MixamoSkeleton({
           const model = urlToLoad.endsWith('.fbx') ? result : result.scene;
           
           // Scale and position model - much larger scale needed
-          model.scale.set(1, 1, 1); // Full size for Mixamo model
+          model.scale.set(0.01, 0.01, 0.01); // Scale down the Mixamo model
           model.position.set(0, 0, 0); // Center at origin
+          
+          // Fix orientation - rotate if model is lying down
+          model.rotation.x = -Math.PI / 2; // Rotate 90 degrees to stand upright
           
           // Enable shadows and fix materials
           model.traverse((child: any) => {
@@ -168,28 +171,32 @@ export default function MixamoSkeleton({
           const bones: { [key: string]: THREE.Bone } = {};
           
           model.traverse((child: any) => {
-            if (child.isSkinnedMesh && child.skeleton) {
-              skeleton = child.skeleton;
-              console.log('Found skeleton with', skeleton.bones.length, 'bones');
-              
-              // Map bones by name
-              if (skeleton) {
-                skeleton.bones.forEach((bone: THREE.Bone) => {
-                  bones[bone.name] = bone;
-                  console.log('Bone:', bone.name);
-                  
-                  // Also map common variations - handle both mixamorig: and mixamorig prefixes
-                  if (bone.name.includes('mixamorig:')) {
-                    const shortName = bone.name.replace('mixamorig:', '');
-                    bones[shortName] = bone;
-                    console.log('Mapped short name from mixamorig:', shortName);
-                  } else if (bone.name.startsWith('mixamorig')) {
-                    // Handle mixamorig prefix without colon
-                    const shortName = bone.name.replace('mixamorig', '');
-                    bones[shortName] = bone;
-                    console.log('Mapped short name from mixamorig:', shortName);
-                  }
-                });
+            console.log('Traversing child:', child.type, child.name);
+            if (child.isSkinnedMesh) {
+              console.log('Found SkinnedMesh:', child.name, 'has skeleton:', !!child.skeleton);
+              if (child.skeleton) {
+                skeleton = child.skeleton;
+                console.log('Found skeleton with', skeleton.bones.length, 'bones');
+                
+                // Map bones by name
+                if (skeleton) {
+                  skeleton.bones.forEach((bone: THREE.Bone) => {
+                    bones[bone.name] = bone;
+                    console.log('Bone:', bone.name);
+                    
+                    // Also map common variations - handle both mixamorig: and mixamorig prefixes
+                    if (bone.name.includes('mixamorig:')) {
+                      const shortName = bone.name.replace('mixamorig:', '');
+                      bones[shortName] = bone;
+                      console.log('Mapped short name from mixamorig:', shortName);
+                    } else if (bone.name.startsWith('mixamorig')) {
+                      // Handle mixamorig prefix without colon
+                      const shortName = bone.name.replace('mixamorig', '');
+                      bones[shortName] = bone;
+                      console.log('Mapped short name from mixamorig:', shortName);
+                    }
+                  });
+                }
               }
             }
           });

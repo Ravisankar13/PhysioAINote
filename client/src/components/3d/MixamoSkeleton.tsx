@@ -69,8 +69,8 @@ export default function MixamoSkeleton({
 
     // Create camera
     const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-    camera.position.set(0, 80, 200); // Position camera at eye level with model
-    camera.lookAt(0, 80, 0); // Look at center height of model
+    camera.position.set(0, 1.5, 5); // Position camera at eye level with model
+    camera.lookAt(0, 1, 0); // Look at center height of model
 
     // Create renderer
     const renderer = new THREE.WebGLRenderer({ 
@@ -483,10 +483,14 @@ export default function MixamoSkeleton({
       if (Object.keys(bones).length === 0 && sceneRef.current.model) {
         sceneRef.current.model.traverse((child: any) => {
           if (child.isSkinnedMesh && child.skeleton) {
+            console.log('Found skeleton in applySliderValues, collecting bones...');
             child.skeleton.bones.forEach((bone: THREE.Bone) => {
               bones[bone.name] = bone;
-              // Handle mixamorig prefix without colon
-              if (bone.name.startsWith('mixamorig')) {
+              // Handle both mixamorig: and mixamorig prefixes
+              if (bone.name.includes('mixamorig:')) {
+                const shortName = bone.name.replace('mixamorig:', '');
+                bones[shortName] = bone;
+              } else if (bone.name.startsWith('mixamorig')) {
                 const shortName = bone.name.replace('mixamorig', '');
                 bones[shortName] = bone;
               }
@@ -494,6 +498,7 @@ export default function MixamoSkeleton({
           }
         });
         sceneRef.current.bones = bones;
+        console.log('Re-collected bones in applySliderValues:', Object.keys(bones));
       }
       
       if (!restrictions) {
@@ -766,8 +771,8 @@ export default function MixamoSkeleton({
         sceneRef.current.model.rotation.y += (sceneRef.current.mouseX - sceneRef.current.model.rotation.y) * 0.05;
         
         // Keep camera at fixed position
-        camera.position.set(0, 80, 200);
-        camera.lookAt(0, 80, 0);
+        camera.position.set(0, 1.5, 5);
+        camera.lookAt(0, 1, 0);
       }
       
       // Apply dynamic slider updates

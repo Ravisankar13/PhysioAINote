@@ -43,7 +43,7 @@ import BodyPartZoom from "./BodyPartZoom";
 import { getPlaceholderImage, placeholderImages } from "./bodyPartImages";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import Enhanced3DSkeleton from "@/components/3d/Enhanced3DSkeleton";
+import MixamoSkeleton from "@/components/3d/MixamoSkeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Link } from "react-router-dom";
 import { Textarea } from "@/components/ui/textarea";
@@ -1364,7 +1364,7 @@ export default function VirtualPatientDetail({
                 </p>
               </div>
               
-              <Enhanced3DSkeleton
+              <MixamoSkeleton
                 patientData={{
                   anthropometrics: {
                     height: parseInt(patient.patient_data?.height) || 170,
@@ -1402,6 +1402,7 @@ export default function VirtualPatientDetail({
                   movementPatterns: patient.movement_patterns,
                 }}
                 className="h-[700px]"
+                showControls={true}
               />
             </div>
           </TabsContent>

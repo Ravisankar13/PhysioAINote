@@ -1268,9 +1268,9 @@ export default function VirtualPatientsManagement() {
                                 extension: kneeExtensionROM.left,
                               },
                               spine: {
-                                flexion: forwardHead[0],
-                                extension: kyphosis[0],
-                                rotation: 0,
+                                flexion: thoracicKyphosis[0],
+                                extension: lumbarLordosis[0],
+                                rotation: scoliosis[0],
                               },
                               neck: {
                                 flexion: forwardHead[0] * 0.5,

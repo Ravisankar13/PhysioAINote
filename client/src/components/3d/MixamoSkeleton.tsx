@@ -69,8 +69,8 @@ export default function MixamoSkeleton({
 
     // Create camera
     const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-    camera.position.set(0, 100, 250); // Position camera to see full model
-    camera.lookAt(0, 70, 0); // Look at center of model torso
+    camera.position.set(0, 80, 200); // Position camera at eye level with model
+    camera.lookAt(0, 80, 0); // Look at center height of model
 
     // Create renderer
     const renderer = new THREE.WebGLRenderer({ 
@@ -505,8 +505,8 @@ export default function MixamoSkeleton({
       console.log('Restrictions:', restrictions);
       
       // Apply shoulder restrictions - try multiple bone name variations
-      const leftArmBone = bones['LeftArm'] || bones['mixamorigLeftArm'] || bones['LeftShoulder'] || bones['LeftUpperArm'] || bones['mixamorig:LeftArm'];
-      const rightArmBone = bones['RightArm'] || bones['mixamorigRightArm'] || bones['RightShoulder'] || bones['RightUpperArm'] || bones['mixamorig:RightArm'];
+      const leftArmBone = bones['mixamorig:LeftArm'] || bones['LeftArm'] || bones['mixamorigLeftArm'] || bones['LeftShoulder'] || bones['LeftUpperArm'];
+      const rightArmBone = bones['mixamorig:RightArm'] || bones['RightArm'] || bones['mixamorigRightArm'] || bones['RightShoulder'] || bones['RightUpperArm'];
       
       if (restrictions.shoulder && leftArmBone) {
         const shoulder = restrictions.shoulder;
@@ -535,8 +535,8 @@ export default function MixamoSkeleton({
       }
       
       // Apply elbow restrictions - try multiple bone name variations
-      const leftForeArmBone = bones['LeftForeArm'] || bones['mixamorigLeftForeArm'] || bones['LeftLowerArm'] || bones['mixamorig:LeftForeArm'];
-      const rightForeArmBone = bones['RightForeArm'] || bones['mixamorigRightForeArm'] || bones['RightLowerArm'] || bones['mixamorig:RightForeArm'];
+      const leftForeArmBone = bones['mixamorig:LeftForeArm'] || bones['LeftForeArm'] || bones['mixamorigLeftForeArm'] || bones['LeftLowerArm'];
+      const rightForeArmBone = bones['mixamorig:RightForeArm'] || bones['RightForeArm'] || bones['mixamorigRightForeArm'] || bones['RightLowerArm'];
       
       if (restrictions.elbow) {
         if (leftForeArmBone && restrictions.elbow.flexion !== undefined) {
@@ -548,8 +548,8 @@ export default function MixamoSkeleton({
       }
       
       // Apply hip restrictions - try multiple bone name variations
-      const leftUpLegBone = bones['LeftUpLeg'] || bones['mixamorigLeftUpLeg'] || bones['LeftThigh'] || bones['LeftUpperLeg'] || bones['mixamorig:LeftUpLeg'];
-      const rightUpLegBone = bones['RightUpLeg'] || bones['mixamorigRightUpLeg'] || bones['RightThigh'] || bones['RightUpperLeg'] || bones['mixamorig:RightUpLeg'];
+      const leftUpLegBone = bones['mixamorig:LeftUpLeg'] || bones['LeftUpLeg'] || bones['mixamorigLeftUpLeg'] || bones['LeftThigh'] || bones['LeftUpperLeg'];
+      const rightUpLegBone = bones['mixamorig:RightUpLeg'] || bones['RightUpLeg'] || bones['mixamorigRightUpLeg'] || bones['RightThigh'] || bones['RightUpperLeg'];
       
       if (restrictions.hip) {
         if (leftUpLegBone && restrictions.hip.flexion !== undefined) {
@@ -561,8 +561,8 @@ export default function MixamoSkeleton({
       }
       
       // Apply knee restrictions - try multiple bone name variations
-      const leftLegBone = bones['LeftLeg'] || bones['mixamorigLeftLeg'] || bones['LeftShin'] || bones['LeftLowerLeg'] || bones['mixamorig:LeftLeg'];
-      const rightLegBone = bones['RightLeg'] || bones['mixamorigRightLeg'] || bones['RightShin'] || bones['RightLowerLeg'] || bones['mixamorig:RightLeg'];
+      const leftLegBone = bones['mixamorig:LeftLeg'] || bones['LeftLeg'] || bones['mixamorigLeftLeg'] || bones['LeftShin'] || bones['LeftLowerLeg'];
+      const rightLegBone = bones['mixamorig:RightLeg'] || bones['RightLeg'] || bones['mixamorigRightLeg'] || bones['RightShin'] || bones['RightLowerLeg'];
       
       if (restrictions.knee) {
         if (leftLegBone && restrictions.knee.flexion !== undefined) {
@@ -574,9 +574,9 @@ export default function MixamoSkeleton({
       }
       
       // Apply spine restrictions - try multiple bone name variations
-      const spineBone = bones['Spine'] || bones['mixamorigSpine'] || bones['mixamorig:Spine'];
-      const spine1Bone = bones['Spine1'] || bones['mixamorigSpine1'] || bones['mixamorig:Spine1'];
-      const spine2Bone = bones['Spine2'] || bones['mixamorigSpine2'] || bones['mixamorig:Spine2'];
+      const spineBone = bones['mixamorig:Spine'] || bones['Spine'] || bones['mixamorigSpine'];
+      const spine1Bone = bones['mixamorig:Spine1'] || bones['Spine1'] || bones['mixamorigSpine1'];
+      const spine2Bone = bones['mixamorig:Spine2'] || bones['Spine2'] || bones['mixamorigSpine2'];
       
       if (restrictions.spine && spineBone) {
         const spine = restrictions.spine;
@@ -591,8 +591,8 @@ export default function MixamoSkeleton({
       }
       
       // Apply neck restrictions - try multiple bone name variations
-      const neckBone = bones['Neck'] || bones['mixamorigNeck'] || bones['mixamorig:Neck'];
-      const headBone = bones['Head'] || bones['mixamorigHead'] || bones['mixamorig:Head'];
+      const neckBone = bones['mixamorig:Neck'] || bones['Neck'] || bones['mixamorigNeck'];
+      const headBone = bones['mixamorig:Head'] || bones['Head'] || bones['mixamorigHead'];
       
       if (restrictions.neck) {
         const neck = restrictions.neck;
@@ -614,18 +614,18 @@ export default function MixamoSkeleton({
         
         console.log('Available bones for limb scaling:', Object.keys(bones));
         
-        // Try to find bones with various naming conventions
-        const leftArmBone = bones['LeftArm'] || bones['mixamorigLeftArm'] || bones['mixamorig:LeftArm'];
-        const rightArmBone = bones['RightArm'] || bones['mixamorigRightArm'] || bones['mixamorig:RightArm'];
-        const leftForeArmBone = bones['LeftForeArm'] || bones['mixamorigLeftForeArm'] || bones['mixamorig:LeftForeArm'];
-        const rightForeArmBone = bones['RightForeArm'] || bones['mixamorigRightForeArm'] || bones['mixamorig:RightForeArm'];
-        const leftUpLegBone = bones['LeftUpLeg'] || bones['mixamorigLeftUpLeg'] || bones['mixamorig:LeftUpLeg'];
-        const rightUpLegBone = bones['RightUpLeg'] || bones['mixamorigRightUpLeg'] || bones['mixamorig:RightUpLeg'];
-        const leftLegBone = bones['LeftLeg'] || bones['mixamorigLeftLeg'] || bones['mixamorig:LeftLeg'];
-        const rightLegBone = bones['RightLeg'] || bones['mixamorigRightLeg'] || bones['mixamorig:RightLeg'];
-        const spineBone = bones['Spine'] || bones['mixamorigSpine'] || bones['mixamorig:Spine'];
-        const spine1Bone = bones['Spine1'] || bones['mixamorigSpine1'] || bones['mixamorig:Spine1'];
-        const spine2Bone = bones['Spine2'] || bones['mixamorigSpine2'] || bones['mixamorig:Spine2'];
+        // Try to find bones with various naming conventions - Mixamo uses mixamorig: prefix
+        const leftArmBone = bones['mixamorig:LeftArm'] || bones['LeftArm'] || bones['mixamorigLeftArm'];
+        const rightArmBone = bones['mixamorig:RightArm'] || bones['RightArm'] || bones['mixamorigRightArm'];
+        const leftForeArmBone = bones['mixamorig:LeftForeArm'] || bones['LeftForeArm'] || bones['mixamorigLeftForeArm'];
+        const rightForeArmBone = bones['mixamorig:RightForeArm'] || bones['RightForeArm'] || bones['mixamorigRightForeArm'];
+        const leftUpLegBone = bones['mixamorig:LeftUpLeg'] || bones['LeftUpLeg'] || bones['mixamorigLeftUpLeg'];
+        const rightUpLegBone = bones['mixamorig:RightUpLeg'] || bones['RightUpLeg'] || bones['mixamorigRightUpLeg'];
+        const leftLegBone = bones['mixamorig:LeftLeg'] || bones['LeftLeg'] || bones['mixamorigLeftLeg'];
+        const rightLegBone = bones['mixamorig:RightLeg'] || bones['RightLeg'] || bones['mixamorigRightLeg'];
+        const spineBone = bones['mixamorig:Spine'] || bones['Spine'] || bones['mixamorigSpine'];
+        const spine1Bone = bones['mixamorig:Spine1'] || bones['Spine1'] || bones['mixamorigSpine1'];
+        const spine2Bone = bones['mixamorig:Spine2'] || bones['Spine2'] || bones['mixamorigSpine2'];
         
         // Apply upper arm scaling
         if (leftArmBone && limbs.upperArm) {
@@ -766,8 +766,8 @@ export default function MixamoSkeleton({
         sceneRef.current.model.rotation.y += (sceneRef.current.mouseX - sceneRef.current.model.rotation.y) * 0.05;
         
         // Keep camera at fixed position
-        camera.position.set(0, 1.5, 5);
-        camera.lookAt(0, 1, 0);
+        camera.position.set(0, 80, 200);
+        camera.lookAt(0, 80, 0);
       }
       
       // Apply dynamic slider updates

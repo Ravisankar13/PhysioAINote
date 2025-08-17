@@ -14,6 +14,8 @@ interface MixamoSkeletonProps {
         thigh: number;
         shin: number;
       };
+      torsoScale?: number;
+      overallScale?: number;
     };
     jointRestrictions?: {
       shoulder?: { flexion?: number; abduction?: number; rotation?: number };
@@ -583,30 +585,81 @@ export default function MixamoSkeleton({
       if (patientData?.anthropometrics?.limbLengths) {
         const limbs = patientData.anthropometrics.limbLengths;
         
-        if (bones['LeftArm'] && limbs.upperArm) {
-          bones['LeftArm'].scale.x = limbs.upperArm / 100;
+        // Try to find bones with or without mixamorig: prefix
+        const leftArmBone = bones['LeftArm'] || bones['mixamorig:LeftArm'];
+        const rightArmBone = bones['RightArm'] || bones['mixamorig:RightArm'];
+        const leftForeArmBone = bones['LeftForeArm'] || bones['mixamorig:LeftForeArm'];
+        const rightForeArmBone = bones['RightForeArm'] || bones['mixamorig:RightForeArm'];
+        const leftUpLegBone = bones['LeftUpLeg'] || bones['mixamorig:LeftUpLeg'];
+        const rightUpLegBone = bones['RightUpLeg'] || bones['mixamorig:RightUpLeg'];
+        const leftLegBone = bones['LeftLeg'] || bones['mixamorig:LeftLeg'];
+        const rightLegBone = bones['RightLeg'] || bones['mixamorig:RightLeg'];
+        const spineBone = bones['Spine'] || bones['mixamorig:Spine'];
+        const spine1Bone = bones['Spine1'] || bones['mixamorig:Spine1'];
+        const spine2Bone = bones['Spine2'] || bones['mixamorig:Spine2'];
+        
+        // Apply upper arm scaling
+        if (leftArmBone && limbs.upperArm) {
+          leftArmBone.scale.x = limbs.upperArm / 30; // Normalize to base value
         }
-        if (bones['RightArm'] && limbs.upperArm) {
-          bones['RightArm'].scale.x = limbs.upperArm / 100;
+        if (rightArmBone && limbs.upperArm) {
+          rightArmBone.scale.x = limbs.upperArm / 30;
         }
-        if (bones['LeftForeArm'] && limbs.forearm) {
-          bones['LeftForeArm'].scale.x = limbs.forearm / 100;
+        
+        // Apply forearm scaling
+        if (leftForeArmBone && limbs.forearm) {
+          leftForeArmBone.scale.x = limbs.forearm / 25; // Normalize to base value
         }
-        if (bones['RightForeArm'] && limbs.forearm) {
-          bones['RightForeArm'].scale.x = limbs.forearm / 100;
+        if (rightForeArmBone && limbs.forearm) {
+          rightForeArmBone.scale.x = limbs.forearm / 25;
         }
-        if (bones['LeftUpLeg'] && limbs.thigh) {
-          bones['LeftUpLeg'].scale.y = limbs.thigh / 100;
+        
+        // Apply thigh scaling
+        if (leftUpLegBone && limbs.thigh) {
+          leftUpLegBone.scale.y = limbs.thigh / 40; // Normalize to base value
         }
-        if (bones['RightUpLeg'] && limbs.thigh) {
-          bones['RightUpLeg'].scale.y = limbs.thigh / 100;
+        if (rightUpLegBone && limbs.thigh) {
+          rightUpLegBone.scale.y = limbs.thigh / 40;
         }
-        if (bones['LeftLeg'] && limbs.shin) {
-          bones['LeftLeg'].scale.y = limbs.shin / 100;
+        
+        // Apply shin scaling
+        if (leftLegBone && limbs.shin) {
+          leftLegBone.scale.y = limbs.shin / 35; // Normalize to base value
         }
-        if (bones['RightLeg'] && limbs.shin) {
-          bones['RightLeg'].scale.y = limbs.shin / 100;
+        if (rightLegBone && limbs.shin) {
+          rightLegBone.scale.y = limbs.shin / 35;
         }
+        
+        // Apply torso scaling if provided
+        if (patientData.anthropometrics.torsoScale !== undefined) {
+          if (spineBone) spineBone.scale.y = patientData.anthropometrics.torsoScale;
+          if (spine1Bone) spine1Bone.scale.y = patientData.anthropometrics.torsoScale;
+          if (spine2Bone) spine2Bone.scale.y = patientData.anthropometrics.torsoScale;
+        }
+        
+        // Apply overall scaling to the entire model
+        if (patientData.anthropometrics.overallScale !== undefined && sceneRef.current.model) {
+          const scale = patientData.anthropometrics.overallScale;
+          sceneRef.current.model.scale.set(scale, scale, scale);
+        }
+        
+        console.log('Applied limb scaling:', {
+          upperArm: limbs.upperArm,
+          forearm: limbs.forearm,
+          thigh: limbs.thigh,
+          shin: limbs.shin,
+          bonesFound: {
+            leftArm: !!leftArmBone,
+            rightArm: !!rightArmBone,
+            leftForeArm: !!leftForeArmBone,
+            rightForeArm: !!rightForeArmBone,
+            leftUpLeg: !!leftUpLegBone,
+            rightUpLeg: !!rightUpLegBone,
+            leftLeg: !!leftLegBone,
+            rightLeg: !!rightLegBone,
+            spine: !!spineBone
+          }
+        });
       }
       
       // Update skeleton

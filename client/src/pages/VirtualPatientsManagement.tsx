@@ -1259,6 +1259,8 @@ export default function VirtualPatientsManagement() {
                                 thigh: thighScale[0] * 40,
                                 shin: shinScale[0] * 35,
                               },
+                              torsoScale: torsoScale[0],
+                              overallScale: overallScale[0],
                             },
                             jointRestrictions: {
                               shoulder: {

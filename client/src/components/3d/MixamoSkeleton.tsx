@@ -168,21 +168,26 @@ export default function MixamoSkeleton({
           model.traverse((child: any) => {
             if (child.isSkinnedMesh && child.skeleton) {
               skeleton = child.skeleton;
+              console.log('Found skeleton with', skeleton.bones.length, 'bones');
               
               // Map bones by name
               if (skeleton) {
                 skeleton.bones.forEach((bone: THREE.Bone) => {
                   bones[bone.name] = bone;
+                  console.log('Bone:', bone.name);
                   
                   // Also map common variations
                   if (bone.name.includes('mixamorig:')) {
                     const shortName = bone.name.replace('mixamorig:', '');
                     bones[shortName] = bone;
+                    console.log('Mapped short name:', shortName);
                   }
                 });
               }
             }
           });
+          
+          console.log('All bone names:', Object.keys(bones));
           
           // Setup animation mixer if model has animations
           let mixer: THREE.AnimationMixer | undefined;
@@ -462,86 +467,115 @@ export default function MixamoSkeleton({
       const bones = sceneRef.current.bones;
       const restrictions = patientData?.jointRestrictions;
       
-      if (!restrictions) return;
+      if (!restrictions) {
+        console.log('No restrictions to apply');
+        return;
+      }
       
-      // Apply shoulder restrictions
-      if (restrictions.shoulder && bones['LeftArm']) {
+      console.log('Applying slider values with bones:', Object.keys(bones));
+      console.log('Restrictions:', restrictions);
+      
+      // Apply shoulder restrictions - try multiple bone name variations
+      const leftArmBone = bones['LeftArm'] || bones['LeftShoulder'] || bones['LeftUpperArm'] || bones['mixamorig:LeftArm'];
+      const rightArmBone = bones['RightArm'] || bones['RightShoulder'] || bones['RightUpperArm'] || bones['mixamorig:RightArm'];
+      
+      if (restrictions.shoulder && leftArmBone) {
         const shoulder = restrictions.shoulder;
         if (shoulder.flexion !== undefined) {
-          bones['LeftArm'].rotation.x = THREE.MathUtils.degToRad(shoulder.flexion * 0.9);
+          leftArmBone.rotation.x = THREE.MathUtils.degToRad(shoulder.flexion * 0.9);
         }
         if (shoulder.abduction !== undefined) {
-          bones['LeftArm'].rotation.z = THREE.MathUtils.degToRad(shoulder.abduction * 0.9);
+          leftArmBone.rotation.z = THREE.MathUtils.degToRad(shoulder.abduction * 0.9);
         }
         if (shoulder.rotation !== undefined) {
-          bones['LeftArm'].rotation.y = THREE.MathUtils.degToRad(shoulder.rotation * 0.9);
+          leftArmBone.rotation.y = THREE.MathUtils.degToRad(shoulder.rotation * 0.9);
         }
       }
       
-      if (restrictions.shoulder && bones['RightArm']) {
+      if (restrictions.shoulder && rightArmBone) {
         const shoulder = restrictions.shoulder;
         if (shoulder.flexion !== undefined) {
-          bones['RightArm'].rotation.x = THREE.MathUtils.degToRad(shoulder.flexion * 0.9);
+          rightArmBone.rotation.x = THREE.MathUtils.degToRad(shoulder.flexion * 0.9);
         }
         if (shoulder.abduction !== undefined) {
-          bones['RightArm'].rotation.z = THREE.MathUtils.degToRad(-shoulder.abduction * 0.9);
+          rightArmBone.rotation.z = THREE.MathUtils.degToRad(-shoulder.abduction * 0.9);
         }
         if (shoulder.rotation !== undefined) {
-          bones['RightArm'].rotation.y = THREE.MathUtils.degToRad(-shoulder.rotation * 0.9);
+          rightArmBone.rotation.y = THREE.MathUtils.degToRad(-shoulder.rotation * 0.9);
         }
       }
       
-      // Apply elbow restrictions
+      // Apply elbow restrictions - try multiple bone name variations
+      const leftForeArmBone = bones['LeftForeArm'] || bones['LeftLowerArm'] || bones['mixamorig:LeftForeArm'];
+      const rightForeArmBone = bones['RightForeArm'] || bones['RightLowerArm'] || bones['mixamorig:RightForeArm'];
+      
       if (restrictions.elbow) {
-        if (bones['LeftForeArm'] && restrictions.elbow.flexion !== undefined) {
-          bones['LeftForeArm'].rotation.x = THREE.MathUtils.degToRad(-restrictions.elbow.flexion);
+        if (leftForeArmBone && restrictions.elbow.flexion !== undefined) {
+          leftForeArmBone.rotation.x = THREE.MathUtils.degToRad(-restrictions.elbow.flexion);
         }
-        if (bones['RightForeArm'] && restrictions.elbow.flexion !== undefined) {
-          bones['RightForeArm'].rotation.x = THREE.MathUtils.degToRad(-restrictions.elbow.flexion);
+        if (rightForeArmBone && restrictions.elbow.flexion !== undefined) {
+          rightForeArmBone.rotation.x = THREE.MathUtils.degToRad(-restrictions.elbow.flexion);
         }
       }
       
-      // Apply hip restrictions
+      // Apply hip restrictions - try multiple bone name variations
+      const leftUpLegBone = bones['LeftUpLeg'] || bones['LeftThigh'] || bones['LeftUpperLeg'] || bones['mixamorig:LeftUpLeg'];
+      const rightUpLegBone = bones['RightUpLeg'] || bones['RightThigh'] || bones['RightUpperLeg'] || bones['mixamorig:RightUpLeg'];
+      
       if (restrictions.hip) {
-        if (bones['LeftUpLeg'] && restrictions.hip.flexion !== undefined) {
-          bones['LeftUpLeg'].rotation.x = THREE.MathUtils.degToRad(-restrictions.hip.flexion * 0.9);
+        if (leftUpLegBone && restrictions.hip.flexion !== undefined) {
+          leftUpLegBone.rotation.x = THREE.MathUtils.degToRad(-restrictions.hip.flexion * 0.9);
         }
-        if (bones['RightUpLeg'] && restrictions.hip.flexion !== undefined) {
-          bones['RightUpLeg'].rotation.x = THREE.MathUtils.degToRad(-restrictions.hip.flexion * 0.9);
+        if (rightUpLegBone && restrictions.hip.flexion !== undefined) {
+          rightUpLegBone.rotation.x = THREE.MathUtils.degToRad(-restrictions.hip.flexion * 0.9);
         }
       }
       
-      // Apply knee restrictions
+      // Apply knee restrictions - try multiple bone name variations
+      const leftLegBone = bones['LeftLeg'] || bones['LeftShin'] || bones['LeftLowerLeg'] || bones['mixamorig:LeftLeg'];
+      const rightLegBone = bones['RightLeg'] || bones['RightShin'] || bones['RightLowerLeg'] || bones['mixamorig:RightLeg'];
+      
       if (restrictions.knee) {
-        if (bones['LeftLeg'] && restrictions.knee.flexion !== undefined) {
-          bones['LeftLeg'].rotation.x = THREE.MathUtils.degToRad(restrictions.knee.flexion);
+        if (leftLegBone && restrictions.knee.flexion !== undefined) {
+          leftLegBone.rotation.x = THREE.MathUtils.degToRad(restrictions.knee.flexion);
         }
-        if (bones['RightLeg'] && restrictions.knee.flexion !== undefined) {
-          bones['RightLeg'].rotation.x = THREE.MathUtils.degToRad(restrictions.knee.flexion);
+        if (rightLegBone && restrictions.knee.flexion !== undefined) {
+          rightLegBone.rotation.x = THREE.MathUtils.degToRad(restrictions.knee.flexion);
         }
       }
       
-      // Apply spine restrictions
-      if (restrictions.spine && bones['Spine']) {
+      // Apply spine restrictions - try multiple bone name variations
+      const spineBone = bones['Spine'] || bones['mixamorig:Spine'];
+      const spine1Bone = bones['Spine1'] || bones['mixamorig:Spine1'];
+      const spine2Bone = bones['Spine2'] || bones['mixamorig:Spine2'];
+      
+      if (restrictions.spine && spineBone) {
         const spine = restrictions.spine;
         if (spine.flexion !== undefined) {
-          bones['Spine'].rotation.x = THREE.MathUtils.degToRad(spine.flexion * 0.3);
-          if (bones['Spine1']) bones['Spine1'].rotation.x = THREE.MathUtils.degToRad(spine.flexion * 0.3);
-          if (bones['Spine2']) bones['Spine2'].rotation.x = THREE.MathUtils.degToRad(spine.flexion * 0.3);
+          spineBone.rotation.x = THREE.MathUtils.degToRad(spine.flexion * 0.3);
+          if (spine1Bone) spine1Bone.rotation.x = THREE.MathUtils.degToRad(spine.flexion * 0.3);
+          if (spine2Bone) spine2Bone.rotation.x = THREE.MathUtils.degToRad(spine.flexion * 0.3);
         }
         if (spine.rotation !== undefined) {
-          bones['Spine'].rotation.y = THREE.MathUtils.degToRad(spine.rotation * 0.5);
+          spineBone.rotation.y = THREE.MathUtils.degToRad(spine.rotation * 0.5);
         }
       }
       
-      // Apply neck restrictions
-      if (restrictions.neck && bones['Neck']) {
+      // Apply neck restrictions - try multiple bone name variations
+      const neckBone = bones['Neck'] || bones['mixamorig:Neck'];
+      const headBone = bones['Head'] || bones['mixamorig:Head'];
+      
+      if (restrictions.neck) {
         const neck = restrictions.neck;
-        if (neck.flexion !== undefined) {
-          bones['Neck'].rotation.x = THREE.MathUtils.degToRad(neck.flexion * 0.7);
-        }
-        if (neck.rotation !== undefined) {
-          bones['Neck'].rotation.y = THREE.MathUtils.degToRad(neck.rotation * 0.7);
+        const targetBone = neckBone || headBone; // Use head if neck not found
+        
+        if (targetBone) {
+          if (neck.flexion !== undefined) {
+            targetBone.rotation.x = THREE.MathUtils.degToRad(neck.flexion * 0.7);
+          }
+          if (neck.rotation !== undefined) {
+            targetBone.rotation.y = THREE.MathUtils.degToRad(neck.rotation * 0.7);
+          }
         }
       }
       

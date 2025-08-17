@@ -97,6 +97,16 @@ export default function VirtualPatientsManagement() {
   const [kneeExtensionROM, setKneeExtensionROM] = useState<{ left: number; right: number }>({ left: 0, right: 0 });
   const [ankleDorsiflexionROM, setAnkleDorsiflexionROM] = useState<{ left: number; right: number }>({ left: 20, right: 20 });
   
+  // New ROM states for sliders
+  const [shoulderFlexion, setShoulderFlexion] = useState<number[]>([180]);
+  const [shoulderAbduction, setShoulderAbduction] = useState<number[]>([180]);
+  const [shoulderRotation, setShoulderRotation] = useState<number[]>([90]);
+  const [elbowFlexion, setElbowFlexion] = useState<number[]>([145]);
+  const [spineFlexion, setSpineFlexion] = useState<number[]>([80]);
+  const [spineRotation, setSpineRotation] = useState<number[]>([45]);
+  const [neckFlexion, setNeckFlexion] = useState<number[]>([50]);
+  const [neckRotation, setNeckRotation] = useState<number[]>([80]);
+  
   // Gait Pattern states
   const [antalgicGait, setAntalgicGait] = useState<'none' | 'mild' | 'moderate' | 'severe'>('none');
   const [stepLength, setStepLength] = useState<{ left: number; right: number }>({ left: 65, right: 65 });
@@ -716,7 +726,9 @@ export default function VirtualPatientsManagement() {
     ankleDorsiflexionROM, antalgicGait, stepLength, cadence, gaitVelocity,
     painRegions, flexionPain, extensionPain, weightBearingPain,
     bodyMass, groundReactionForce, jointMoments, muscleForces,
-    centerOfPressure, loadDistribution
+    centerOfPressure, loadDistribution,
+    shoulderFlexion, shoulderAbduction, shoulderRotation, elbowFlexion,
+    spineFlexion, spineRotation, neckFlexion, neckRotation
   ]);
 
   // Handle create new configuration
@@ -1250,12 +1262,12 @@ export default function VirtualPatientsManagement() {
                             },
                             jointRestrictions: {
                               shoulder: {
-                                flexion: 180 - (scapularWinging[0] * 2),
-                                abduction: 180 - (ghSubluxation[0] * 2),
-                                rotation: 0,
+                                flexion: shoulderFlexion[0],
+                                abduction: shoulderAbduction[0],
+                                rotation: shoulderRotation[0],
                               },
                               elbow: {
-                                flexion: 145,
+                                flexion: elbowFlexion[0],
                                 extension: 0,
                               },
                               hip: {
@@ -1268,14 +1280,14 @@ export default function VirtualPatientsManagement() {
                                 extension: kneeExtensionROM.left,
                               },
                               spine: {
-                                flexion: thoracicKyphosis[0],
+                                flexion: spineFlexion[0],
                                 extension: lumbarLordosis[0],
-                                rotation: scoliosis[0],
+                                rotation: spineRotation[0],
                               },
                               neck: {
-                                flexion: forwardHead[0] * 0.5,
+                                flexion: neckFlexion[0],
                                 extension: 0,
-                                rotation: 0,
+                                rotation: neckRotation[0],
                               },
                             },
                             painAreas: painRegions.map(r => r.bodyPart),
@@ -2864,6 +2876,144 @@ export default function VirtualPatientsManagement() {
                         <TabsContent value="rom" className="space-y-4 mt-4">
                           <div>
                             <h3 className="font-medium mb-3">Range of Motion Limitations</h3>
+                            
+                            {/* Shoulder ROM - Added sliders */}
+                            <div className="mb-4">
+                              <h4 className="text-sm font-medium mb-2">Shoulder</h4>
+                              <div className="space-y-3">
+                                <div>
+                                  <div className="flex justify-between mb-1">
+                                    <Label className="text-xs">Flexion</Label>
+                                    <span className="text-xs text-gray-600">{shoulderFlexion[0]}°</span>
+                                  </div>
+                                  <Slider
+                                    value={shoulderFlexion}
+                                    onValueChange={setShoulderFlexion}
+                                    min={0}
+                                    max={180}
+                                    step={5}
+                                  />
+                                  <p className="text-xs text-gray-500">Normal: 180°</p>
+                                </div>
+                                <div>
+                                  <div className="flex justify-between mb-1">
+                                    <Label className="text-xs">Abduction</Label>
+                                    <span className="text-xs text-gray-600">{shoulderAbduction[0]}°</span>
+                                  </div>
+                                  <Slider
+                                    value={shoulderAbduction}
+                                    onValueChange={setShoulderAbduction}
+                                    min={0}
+                                    max={180}
+                                    step={5}
+                                  />
+                                  <p className="text-xs text-gray-500">Normal: 180°</p>
+                                </div>
+                                <div>
+                                  <div className="flex justify-between mb-1">
+                                    <Label className="text-xs">External Rotation</Label>
+                                    <span className="text-xs text-gray-600">{shoulderRotation[0]}°</span>
+                                  </div>
+                                  <Slider
+                                    value={shoulderRotation}
+                                    onValueChange={setShoulderRotation}
+                                    min={-90}
+                                    max={90}
+                                    step={5}
+                                  />
+                                  <p className="text-xs text-gray-500">Normal: 90°</p>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Elbow ROM - Added sliders */}
+                            <div className="mb-4">
+                              <h4 className="text-sm font-medium mb-2">Elbow</h4>
+                              <div>
+                                <div className="flex justify-between mb-1">
+                                  <Label className="text-xs">Flexion</Label>
+                                  <span className="text-xs text-gray-600">{elbowFlexion[0]}°</span>
+                                </div>
+                                <Slider
+                                  value={elbowFlexion}
+                                  onValueChange={setElbowFlexion}
+                                  min={0}
+                                  max={150}
+                                  step={5}
+                                />
+                                <p className="text-xs text-gray-500">Normal: 145°</p>
+                              </div>
+                            </div>
+                            
+                            {/* Spine ROM - Added sliders */}
+                            <div className="mb-4">
+                              <h4 className="text-sm font-medium mb-2">Spine</h4>
+                              <div className="space-y-3">
+                                <div>
+                                  <div className="flex justify-between mb-1">
+                                    <Label className="text-xs">Flexion</Label>
+                                    <span className="text-xs text-gray-600">{spineFlexion[0]}°</span>
+                                  </div>
+                                  <Slider
+                                    value={spineFlexion}
+                                    onValueChange={setSpineFlexion}
+                                    min={0}
+                                    max={120}
+                                    step={5}
+                                  />
+                                  <p className="text-xs text-gray-500">Normal: 80°</p>
+                                </div>
+                                <div>
+                                  <div className="flex justify-between mb-1">
+                                    <Label className="text-xs">Rotation</Label>
+                                    <span className="text-xs text-gray-600">{spineRotation[0]}°</span>
+                                  </div>
+                                  <Slider
+                                    value={spineRotation}
+                                    onValueChange={setSpineRotation}
+                                    min={0}
+                                    max={90}
+                                    step={5}
+                                  />
+                                  <p className="text-xs text-gray-500">Normal: 45°</p>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Neck ROM - Added sliders */}
+                            <div className="mb-4">
+                              <h4 className="text-sm font-medium mb-2">Neck</h4>
+                              <div className="space-y-3">
+                                <div>
+                                  <div className="flex justify-between mb-1">
+                                    <Label className="text-xs">Flexion</Label>
+                                    <span className="text-xs text-gray-600">{neckFlexion[0]}°</span>
+                                  </div>
+                                  <Slider
+                                    value={neckFlexion}
+                                    onValueChange={setNeckFlexion}
+                                    min={0}
+                                    max={80}
+                                    step={5}
+                                  />
+                                  <p className="text-xs text-gray-500">Normal: 50°</p>
+                                </div>
+                                <div>
+                                  <div className="flex justify-between mb-1">
+                                    <Label className="text-xs">Rotation</Label>
+                                    <span className="text-xs text-gray-600">{neckRotation[0]}°</span>
+                                  </div>
+                                  <Slider
+                                    value={neckRotation}
+                                    onValueChange={setNeckRotation}
+                                    min={0}
+                                    max={90}
+                                    step={5}
+                                  />
+                                  <p className="text-xs text-gray-500">Normal: 80°</p>
+                                </div>
+                              </div>
+                            </div>
                             
                             {/* Hip ROM */}
                             <div className="mb-4">

@@ -16,7 +16,7 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
-import Simple3DSkeleton from "@/components/3d/Simple3DSkeleton";
+import MixamoSkeleton from "@/components/3d/MixamoSkeleton";
 import { MovementCapture } from "@/components/MovementCapture";
 import type { SoapVirtualPatient, VirtualPatientConfig, InsertVirtualPatientConfig } from "@shared/schema";
 import { queryClient } from "@/lib/queryClient";
@@ -1236,7 +1236,7 @@ export default function VirtualPatientsManagement() {
                           ? { height: 'calc(100vh - 160px)' }
                           : { minHeight: '700px', height: 'calc(100vh - 400px)', maxHeight: '800px' }
                         }>
-                        <Simple3DSkeleton
+                        <MixamoSkeleton
                           patientData={{
                             anthropometrics: {
                               height: height[0],
@@ -1251,9 +1251,8 @@ export default function VirtualPatientsManagement() {
                             jointRestrictions: {
                               shoulder: {
                                 flexion: 180 - (scapularWinging[0] * 2),
-                                extension: 60,
                                 abduction: 180 - (ghSubluxation[0] * 2),
-                                adduction: 30,
+                                rotation: 0,
                               },
                               elbow: {
                                 flexion: 145,
@@ -1261,13 +1260,22 @@ export default function VirtualPatientsManagement() {
                               },
                               hip: {
                                 flexion: hipFlexionROM.left,
-                                extension: hipExtensionROM.left,
                                 abduction: 45,
-                                adduction: 30,
+                                rotation: 0,
                               },
                               knee: {
                                 flexion: kneeFlexionROM.left,
                                 extension: kneeExtensionROM.left,
+                              },
+                              spine: {
+                                flexion: forwardHead[0],
+                                extension: kyphosis[0],
+                                rotation: 0,
+                              },
+                              neck: {
+                                flexion: forwardHead[0] * 0.5,
+                                extension: 0,
+                                rotation: 0,
                               },
                             },
                             painAreas: painRegions.map(r => r.bodyPart),
@@ -1275,6 +1283,7 @@ export default function VirtualPatientsManagement() {
                           }}
                           className="h-full"
                           showControls={true}
+                          modelUrl={selectedPatient?.modelUrl || undefined}
                         />
                       </div>
                       

@@ -16,7 +16,7 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
-import WorkingMixamoSkeleton from "@/components/3d/WorkingMixamoSkeleton";
+import StableMixamoSkeleton from "@/components/3d/StableMixamoSkeleton";
 import { MovementCapture } from "@/components/MovementCapture";
 import type { SoapVirtualPatient, VirtualPatientConfig, InsertVirtualPatientConfig } from "@shared/schema";
 import { queryClient } from "@/lib/queryClient";
@@ -1236,7 +1236,7 @@ export default function VirtualPatientsManagement() {
                           ? { height: 'calc(100vh - 160px)' }
                           : { minHeight: '700px', height: 'calc(100vh - 400px)', maxHeight: '800px' }
                         }>
-                        <WorkingMixamoSkeleton
+                        <StableMixamoSkeleton
                           patientData={{
                             anthropometrics: {
                               height: height[0],

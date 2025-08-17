@@ -16,7 +16,7 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
-import FBXSkeletonViewer from "@/components/FBXSkeletonViewer";
+import MixamoSkeleton from "@/components/3d/MixamoSkeleton";
 import { MovementCapture } from "@/components/MovementCapture";
 import type { SoapVirtualPatient, VirtualPatientConfig, InsertVirtualPatientConfig } from "@shared/schema";
 import { queryClient } from "@/lib/queryClient";
@@ -1236,7 +1236,43 @@ export default function VirtualPatientsManagement() {
                           ? { height: 'calc(100vh - 160px)' }
                           : { minHeight: '700px', height: 'calc(100vh - 400px)', maxHeight: '800px' }
                         }>
-                        <FBXSkeletonViewer
+                        <MixamoSkeleton
+                          patientData={{
+                            anthropometrics: {
+                              height: height[0],
+                              weight: weight[0],
+                              limbLengths: {
+                                upperArm: upperArmScale[0] * 30,
+                                forearm: forearmScale[0] * 25,
+                                thigh: thighScale[0] * 40,
+                                shin: shinScale[0] * 35,
+                              },
+                            },
+                            jointRestrictions: {
+                              shoulder: {
+                                flexion: 180 - (scapularWinging[0] * 2),
+                                extension: 60,
+                                abduction: 180 - (ghSubluxation[0] * 2),
+                                adduction: 30,
+                              },
+                              elbow: {
+                                flexion: 145,
+                                extension: 0,
+                              },
+                              hip: {
+                                flexion: hipFlexionROM.left,
+                                extension: hipExtensionROM.left,
+                                abduction: 45,
+                                adduction: 30,
+                              },
+                              knee: {
+                                flexion: kneeFlexionROM.left,
+                                extension: kneeExtensionROM.left,
+                              },
+                            },
+                            painAreas: painRegions.map(r => r.bodyPart),
+                            movementPatterns: [],
+                          }}
                           modelConfig={{
                             limbScales: {
                               upperArm: upperArmScale[0],
@@ -1264,12 +1300,8 @@ export default function VirtualPatientsManagement() {
                               tibialTorsion: tibialTorsion[0]
                             }
                           }}
-                          selectedTest={selectedTest === "none" ? undefined : selectedTest}
-                          selectedExercise={selectedExercise === "none" ? undefined : selectedExercise}
-                          animationSpeed={animationSpeed[0]}
-                          repetitions={repetitions[0]}
-                          selectedSide={selectedSide}
-                          isFullscreen={isFullscreen}
+                          className="h-full"
+                          showControls={true}
                         />
                       </div>
                       

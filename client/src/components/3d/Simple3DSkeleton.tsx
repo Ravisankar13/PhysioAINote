@@ -59,7 +59,7 @@ interface SimpleSkeleton3DProps {
   className?: string;
 }
 
-// Simple skeleton bone component
+// Simple skeleton bone component with proper alignment
 function Bone({ 
   start, 
   end, 
@@ -77,8 +77,19 @@ function Bone({
   const length = direction.length();
   const center = new THREE.Vector3().addVectors(startVec, endVec).multiplyScalar(0.5);
   
+  // Calculate rotation to align cylinder with the bone direction
+  const orientation = new THREE.Matrix4();
+  orientation.lookAt(startVec, endVec, new THREE.Vector3(0, 1, 0));
+  orientation.multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2));
+  
+  const quaternion = new THREE.Quaternion();
+  quaternion.setFromRotationMatrix(orientation);
+  
   return (
-    <mesh position={center.toArray()}>
+    <mesh 
+      position={center.toArray()}
+      quaternion={quaternion}
+    >
       <cylinderGeometry args={[thickness, thickness, length, 8]} />
       <meshStandardMaterial color={color} />
     </mesh>
@@ -143,24 +154,41 @@ function SkeletonModel({
     shin: anthropometrics?.limbLengths.shin || 35,
   };
 
-  // Define joint positions (scaled)
+  // Define joint positions (scaled) - anatomically correct proportions
   const joints = {
-    head: [0, 8 * heightScale, 0] as [number, number, number],
-    neck: [0, 7 * heightScale, 0] as [number, number, number],
-    leftShoulder: [-1.5 * heightScale, 6.5 * heightScale, 0] as [number, number, number],
-    rightShoulder: [1.5 * heightScale, 6.5 * heightScale, 0] as [number, number, number],
-    leftElbow: [-1.5 * heightScale, 4.5 * heightScale, 0] as [number, number, number],
-    rightElbow: [1.5 * heightScale, 4.5 * heightScale, 0] as [number, number, number],
-    leftWrist: [-1.5 * heightScale, 2.5 * heightScale, 0] as [number, number, number],
-    rightWrist: [1.5 * heightScale, 2.5 * heightScale, 0] as [number, number, number],
-    spine: [0, 5 * heightScale, 0] as [number, number, number],
-    pelvis: [0, 3 * heightScale, 0] as [number, number, number],
-    leftHip: [-1 * heightScale, 3 * heightScale, 0] as [number, number, number],
-    rightHip: [1 * heightScale, 3 * heightScale, 0] as [number, number, number],
-    leftKnee: [-1 * heightScale, 1 * heightScale, 0] as [number, number, number],
-    rightKnee: [1 * heightScale, 1 * heightScale, 0] as [number, number, number],
-    leftAnkle: [-1 * heightScale, -1 * heightScale, 0] as [number, number, number],
-    rightAnkle: [1 * heightScale, -1 * heightScale, 0] as [number, number, number],
+    // Head and neck
+    head: [0, 8.5 * heightScale, 0] as [number, number, number],
+    neck: [0, 7.5 * heightScale, 0] as [number, number, number],
+    
+    // Upper body - shoulders aligned with clavicles
+    leftShoulder: [-1.8 * heightScale, 6.8 * heightScale, 0] as [number, number, number],
+    rightShoulder: [1.8 * heightScale, 6.8 * heightScale, 0] as [number, number, number],
+    
+    // Arms - natural hanging position
+    leftElbow: [-2.2 * heightScale, 4.5 * heightScale, 0.2] as [number, number, number],
+    rightElbow: [2.2 * heightScale, 4.5 * heightScale, 0.2] as [number, number, number],
+    leftWrist: [-2.3 * heightScale, 2.5 * heightScale, 0.3] as [number, number, number],
+    rightWrist: [2.3 * heightScale, 2.5 * heightScale, 0.3] as [number, number, number],
+    
+    // Spine and core
+    upperSpine: [0, 6 * heightScale, 0] as [number, number, number],
+    midSpine: [0, 4.5 * heightScale, 0] as [number, number, number],
+    lowerSpine: [0, 3.5 * heightScale, 0] as [number, number, number],
+    pelvis: [0, 2.8 * heightScale, 0] as [number, number, number],
+    
+    // Hips - anatomically correct width
+    leftHip: [-0.9 * heightScale, 2.6 * heightScale, 0] as [number, number, number],
+    rightHip: [0.9 * heightScale, 2.6 * heightScale, 0] as [number, number, number],
+    
+    // Legs - natural stance
+    leftKnee: [-0.95 * heightScale, 0.5 * heightScale, 0.1] as [number, number, number],
+    rightKnee: [0.95 * heightScale, 0.5 * heightScale, 0.1] as [number, number, number],
+    leftAnkle: [-1 * heightScale, -1.8 * heightScale, 0] as [number, number, number],
+    rightAnkle: [1 * heightScale, -1.8 * heightScale, 0] as [number, number, number],
+    
+    // Feet
+    leftFoot: [-1 * heightScale, -2.2 * heightScale, 0.3] as [number, number, number],
+    rightFoot: [1 * heightScale, -2.2 * heightScale, 0.3] as [number, number, number],
   };
 
   // Color coding for pain areas
@@ -195,39 +223,100 @@ function SkeletonModel({
         <meshStandardMaterial color={getBoneColor('head')} />
       </mesh>
 
-      {/* Spine */}
-      <Bone start={joints.neck} end={joints.spine} color={getBoneColor('spine')} />
-      <Bone start={joints.spine} end={joints.pelvis} color={getBoneColor('spine')} />
+      {/* Spine - multi-segment for better anatomical accuracy */}
+      <Bone start={joints.neck} end={joints.upperSpine} color={getBoneColor('spine')} thickness={0.15} />
+      <Bone start={joints.upperSpine} end={joints.midSpine} color={getBoneColor('spine')} thickness={0.18} />
+      <Bone start={joints.midSpine} end={joints.lowerSpine} color={getBoneColor('spine')} thickness={0.2} />
+      <Bone start={joints.lowerSpine} end={joints.pelvis} color={getBoneColor('spine')} thickness={0.22} />
 
-      {/* Arms */}
-      <Bone start={joints.leftShoulder} end={joints.leftElbow} color={getBoneColor('arm')} />
-      <Bone start={joints.leftElbow} end={joints.leftWrist} color={getBoneColor('arm')} />
-      <Bone start={joints.rightShoulder} end={joints.rightElbow} color={getBoneColor('arm')} />
-      <Bone start={joints.rightElbow} end={joints.rightWrist} color={getBoneColor('arm')} />
+      {/* Shoulder connections - clavicles */}
+      <Bone start={joints.upperSpine} end={joints.leftShoulder} color={getBoneColor('clavicle')} thickness={0.08} />
+      <Bone start={joints.upperSpine} end={joints.rightShoulder} color={getBoneColor('clavicle')} thickness={0.08} />
+      
+      {/* Ribcage - simplified representation */}
+      {[0, 0.3, 0.6, 0.9].map((offset, index) => {
+        const ribY = joints.upperSpine[1] - offset * heightScale;
+        const ribWidth = (1.2 - index * 0.1) * heightScale;
+        return (
+          <group key={`rib-${index}`}>
+            <Bone 
+              start={[0, ribY, 0]} 
+              end={[-ribWidth, ribY - 0.2 * heightScale, 0.3 * heightScale]} 
+              color={getBoneColor('rib')} 
+              thickness={0.05} 
+            />
+            <Bone 
+              start={[0, ribY, 0]} 
+              end={[ribWidth, ribY - 0.2 * heightScale, 0.3 * heightScale]} 
+              color={getBoneColor('rib')} 
+              thickness={0.05} 
+            />
+          </group>
+        );
+      })}
 
-      {/* Legs */}
-      <Bone start={joints.leftHip} end={joints.leftKnee} color={getBoneColor('leg')} />
-      <Bone start={joints.leftKnee} end={joints.leftAnkle} color={getBoneColor('leg')} />
-      <Bone start={joints.rightHip} end={joints.rightKnee} color={getBoneColor('leg')} />
-      <Bone start={joints.rightKnee} end={joints.rightAnkle} color={getBoneColor('leg')} />
+      {/* Arms - upper arm (humerus) */}
+      <Bone start={joints.leftShoulder} end={joints.leftElbow} color={getBoneColor('arm')} thickness={0.12} />
+      <Bone start={joints.rightShoulder} end={joints.rightElbow} color={getBoneColor('arm')} thickness={0.12} />
+      
+      {/* Arms - forearm (radius/ulna) */}
+      <Bone start={joints.leftElbow} end={joints.leftWrist} color={getBoneColor('arm')} thickness={0.1} />
+      <Bone start={joints.rightElbow} end={joints.rightWrist} color={getBoneColor('arm')} thickness={0.1} />
 
-      {/* Shoulder connections */}
-      <Bone start={joints.neck} end={joints.leftShoulder} color={getBoneColor('shoulder')} />
-      <Bone start={joints.neck} end={joints.rightShoulder} color={getBoneColor('shoulder')} />
+      {/* Pelvis structure */}
+      <Bone start={joints.pelvis} end={joints.leftHip} color={getBoneColor('pelvis')} thickness={0.15} />
+      <Bone start={joints.pelvis} end={joints.rightHip} color={getBoneColor('pelvis')} thickness={0.15} />
+      <Bone start={joints.leftHip} end={joints.rightHip} color={getBoneColor('pelvis')} thickness={0.12} />
 
-      {/* Hip connections */}
-      <Bone start={joints.pelvis} end={joints.leftHip} color={getBoneColor('hip')} />
-      <Bone start={joints.pelvis} end={joints.rightHip} color={getBoneColor('hip')} />
+      {/* Legs - femur (thigh bone) */}
+      <Bone start={joints.leftHip} end={joints.leftKnee} color={getBoneColor('leg')} thickness={0.14} />
+      <Bone start={joints.rightHip} end={joints.rightKnee} color={getBoneColor('leg')} thickness={0.14} />
+      
+      {/* Legs - tibia/fibula (shin bones) */}
+      <Bone start={joints.leftKnee} end={joints.leftAnkle} color={getBoneColor('leg')} thickness={0.12} />
+      <Bone start={joints.rightKnee} end={joints.rightAnkle} color={getBoneColor('leg')} thickness={0.12} />
+      
+      {/* Feet */}
+      <Bone start={joints.leftAnkle} end={joints.leftFoot} color={getBoneColor('foot')} thickness={0.08} />
+      <Bone start={joints.rightAnkle} end={joints.rightFoot} color={getBoneColor('foot')} thickness={0.08} />
 
-      {/* Joints */}
+      {/* Joints - all major joints for anatomical accuracy */}
+      {/* Head and neck */}
+      <Joint position={joints.neck} color={getJointColor('neck')} size={0.12} />
+      
+      {/* Spine joints */}
+      <Joint position={joints.upperSpine} color={getJointColor('upperSpine')} size={0.14} />
+      <Joint position={joints.midSpine} color={getJointColor('midSpine')} size={0.16} />
+      <Joint position={joints.lowerSpine} color={getJointColor('lowerSpine')} size={0.18} />
+      <Joint position={joints.pelvis} color={getJointColor('pelvis')} size={0.2} />
+      
+      {/* Shoulder joints */}
       <Joint position={joints.leftShoulder} color={getJointColor('leftShoulder')} label={showJointLimits ? 'L Shoulder' : undefined} />
       <Joint position={joints.rightShoulder} color={getJointColor('rightShoulder')} label={showJointLimits ? 'R Shoulder' : undefined} />
+      
+      {/* Elbow joints */}
       <Joint position={joints.leftElbow} color={getJointColor('leftElbow')} label={showJointLimits ? 'L Elbow' : undefined} />
       <Joint position={joints.rightElbow} color={getJointColor('rightElbow')} label={showJointLimits ? 'R Elbow' : undefined} />
+      
+      {/* Wrist joints */}
+      <Joint position={joints.leftWrist} color={getJointColor('leftWrist')} size={0.1} label={showJointLimits ? 'L Wrist' : undefined} />
+      <Joint position={joints.rightWrist} color={getJointColor('rightWrist')} size={0.1} label={showJointLimits ? 'R Wrist' : undefined} />
+      
+      {/* Hip joints */}
       <Joint position={joints.leftHip} color={getJointColor('leftHip')} label={showJointLimits ? 'L Hip' : undefined} />
       <Joint position={joints.rightHip} color={getJointColor('rightHip')} label={showJointLimits ? 'R Hip' : undefined} />
+      
+      {/* Knee joints */}
       <Joint position={joints.leftKnee} color={getJointColor('leftKnee')} label={showJointLimits ? 'L Knee' : undefined} />
       <Joint position={joints.rightKnee} color={getJointColor('rightKnee')} label={showJointLimits ? 'R Knee' : undefined} />
+      
+      {/* Ankle joints */}
+      <Joint position={joints.leftAnkle} color={getJointColor('leftAnkle')} size={0.12} label={showJointLimits ? 'L Ankle' : undefined} />
+      <Joint position={joints.rightAnkle} color={getJointColor('rightAnkle')} size={0.12} label={showJointLimits ? 'R Ankle' : undefined} />
+      
+      {/* Foot joints */}
+      <Joint position={joints.leftFoot} color={getJointColor('leftFoot')} size={0.1} />
+      <Joint position={joints.rightFoot} color={getJointColor('rightFoot')} size={0.1} />
 
       {/* Joint range indicators (when showing limits) */}
       {showJointLimits && jointRestrictions && (

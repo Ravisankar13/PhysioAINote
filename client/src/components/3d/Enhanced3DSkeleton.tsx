@@ -1,5 +1,5 @@
 import React from 'react';
-import FallbackSkeletonViewer from './FallbackSkeletonViewer';
+import Simple3DSkeleton from './Simple3DSkeleton';
 
 // Patient data interfaces
 interface PatientAnthropometrics {
@@ -47,5 +47,6 @@ interface Enhanced3DSkeletonProps {
 }
 
 export default function Enhanced3DSkeleton({ patientData, className }: Enhanced3DSkeletonProps) {
-  return <FallbackSkeletonViewer patientData={patientData} className={className} />;
+  // Use the improved Simple3DSkeleton component with anatomically correct structure
+  return <Simple3DSkeleton patientData={patientData} className={className} />;
 }

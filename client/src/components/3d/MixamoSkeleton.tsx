@@ -63,12 +63,12 @@ export default function MixamoSkeleton({
     // Create scene
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x1a1a1a);
-    scene.fog = new THREE.Fog(0x1a1a1a, 500, 1000); // Adjusted fog for larger scale
+    scene.fog = new THREE.Fog(0x1a1a1a, 10, 50); // Fog for actual model scale
 
     // Create camera
     const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-    camera.position.set(0, 100, 200); // Camera positioned for full-size model
-    camera.lookAt(0, 80, 0); // Look at chest height
+    camera.position.set(0, 1.5, 5); // Camera positioned for actual model size
+    camera.lookAt(0, 1, 0); // Look at center of model
 
     // Create renderer
     const renderer = new THREE.WebGLRenderer({ 
@@ -88,24 +88,24 @@ export default function MixamoSkeleton({
     scene.add(ambientLight);
 
     const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-    directionalLight.position.set(100, 200, 100);
+    directionalLight.position.set(5, 10, 5);
     directionalLight.castShadow = true;
     directionalLight.shadow.camera.near = 0.1;
-    directionalLight.shadow.camera.far = 500;
-    directionalLight.shadow.camera.left = -200;
-    directionalLight.shadow.camera.right = 200;
-    directionalLight.shadow.camera.top = 200;
-    directionalLight.shadow.camera.bottom = -200;
+    directionalLight.shadow.camera.far = 50;
+    directionalLight.shadow.camera.left = -10;
+    directionalLight.shadow.camera.right = 10;
+    directionalLight.shadow.camera.top = 10;
+    directionalLight.shadow.camera.bottom = -10;
     directionalLight.shadow.mapSize.width = 2048;
     directionalLight.shadow.mapSize.height = 2048;
     scene.add(directionalLight);
 
     const fillLight = new THREE.DirectionalLight(0x8888ff, 0.3);
-    fillLight.position.set(-100, 100, -100);
+    fillLight.position.set(-5, 5, -5);
     scene.add(fillLight);
 
-    // Grid helper - larger for full-size model
-    const gridHelper = new THREE.GridHelper(400, 20, 0x444444, 0x222222);
+    // Grid helper - sized for actual model
+    const gridHelper = new THREE.GridHelper(10, 10, 0x444444, 0x222222);
     gridHelper.receiveShadow = true;
     scene.add(gridHelper);
 
@@ -650,8 +650,8 @@ export default function MixamoSkeleton({
         sceneRef.current.model.rotation.y += (sceneRef.current.mouseX - sceneRef.current.model.rotation.y) * 0.05;
         
         // Keep camera at fixed position
-        camera.position.set(0, 100, 200);
-        camera.lookAt(0, 80, 0);
+        camera.position.set(0, 1.5, 5);
+        camera.lookAt(0, 1, 0);
       }
       
       // Apply dynamic slider updates

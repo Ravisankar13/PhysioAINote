@@ -1,4 +1,4 @@
-import React, { Suspense, useState, useRef, useEffect } from 'react';
+import React, { Suspense, useState, useRef, useEffect, useMemo } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Grid, Environment } from '@react-three/drei';
 import * as THREE from 'three';
@@ -12,6 +12,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Activity, AlertTriangle, Info, Download, Upload } from 'lucide-react';
 import Simple3DSkeleton from './Simple3DSkeleton';
+import { createMixamoModel } from '@/utils/generateMixamoModel';
 
 interface PatientAnthropometrics {
   height: number;
@@ -74,28 +75,50 @@ function MixamoScene({
   const [bones, setBones] = useState<Map<string, THREE.Bone>>(new Map());
 
   useEffect(() => {
-    if (modelData && modelData.scene) {
-      // Extract and store bones
-      const bonesMap = modelData.bones || new Map();
+    if (modelData) {
+      let bonesMap = new Map<string, THREE.Bone>();
+      
+      // Handle different model structures
+      if (modelData.bones) {
+        // Generated model has bones map directly
+        bonesMap = modelData.bones;
+      } else if (modelData.scene) {
+        // Loaded model - extract bones from scene
+        modelData.scene.traverse((child: any) => {
+          if (child.isSkinnedMesh && child.skeleton) {
+            child.skeleton.bones.forEach((bone: THREE.Bone) => {
+              if (bone.name) {
+                const mappedName = mapMixamoBoneName(bone.name);
+                if (mappedName) {
+                  bonesMap.set(mappedName, bone);
+                }
+              }
+            });
+          }
+        });
+      }
+      
       setBones(bonesMap);
       
       if (onBonesReady) {
         onBonesReady(bonesMap);
       }
 
-      // Apply initial setup
-      modelData.scene.traverse((child: THREE.Object3D) => {
-        if ((child as THREE.Mesh).isMesh) {
-          const mesh = child as THREE.Mesh;
-          mesh.castShadow = true;
-          mesh.receiveShadow = true;
-          
-          // Store original materials
-          if (!mesh.userData.originalMaterial) {
-            mesh.userData.originalMaterial = mesh.material;
+      // Apply initial setup to meshes
+      if (modelData.scene) {
+        modelData.scene.traverse((child: THREE.Object3D) => {
+          if ((child as THREE.Mesh).isMesh) {
+            const mesh = child as THREE.Mesh;
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            
+            // Store original materials
+            if (!mesh.userData.originalMaterial) {
+              mesh.userData.originalMaterial = mesh.material;
+            }
           }
-        }
-      });
+        });
+      }
     }
   }, [modelData, onBonesReady]);
 
@@ -199,27 +222,41 @@ export default function MixamoSkeleton({
   showControls = true
 }: MixamoSkeletonProps) {
   const [useFallback, setUseFallback] = useState(false);
+  const [useGenerated, setUseGenerated] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [bones, setBones] = useState<Map<string, THREE.Bone>>(new Map());
 
-  // Try to load Mixamo model
+  // Try to load Mixamo model from file first
   const { loading, model, error } = useMixamoLoader({
     modelPath: modelPath || '/models/mixamo/base-skeleton.glb',
     onProgress: setLoadingProgress,
     onError: (err) => {
-      console.error('Failed to load Mixamo model:', err);
-      setUseFallback(true);
+      console.log('No Mixamo file found, using generated model');
+      setUseGenerated(true);
     }
   });
 
-  // If Mixamo model fails or is not available, use fallback
-  if (useFallback || error) {
+  // Generate programmatic Mixamo model if file not found
+  const generatedModel = useMemo(() => {
+    if (useGenerated && !model) {
+      const generated = createMixamoModel();
+      console.log('Created programmatic Mixamo model');
+      return generated;
+    }
+    return null;
+  }, [useGenerated, model]);
+
+  // Use whichever model is available
+  const activeModel = model || generatedModel;
+
+  // If no model at all, fall back to simple skeleton
+  if (!activeModel && !loading) {
     return (
       <div className={className}>
         <Alert className="mb-4">
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>
-            Using simplified skeleton model. Mixamo model not available.
+            Using simplified skeleton model as fallback.
           </AlertDescription>
         </Alert>
         <Simple3DSkeleton patientData={patientData} className={className} />
@@ -271,6 +308,9 @@ export default function MixamoSkeleton({
               Mixamo 3D Patient Model
             </div>
             <div className="flex gap-2">
+              {useGenerated && (
+                <Badge variant="secondary">Generated</Badge>
+              )}
               {patientData?.painAreas && patientData.painAreas.length > 0 && (
                 <Badge variant="destructive">
                   {patientData.painAreas.length} Pain Areas
@@ -309,7 +349,7 @@ export default function MixamoSkeleton({
                 
                 {/* Mixamo Model */}
                 <MixamoScene 
-                  modelData={model} 
+                  modelData={activeModel} 
                   painAreas={patientData?.painAreas || []}
                   onBonesReady={setBones}
                 />
@@ -322,9 +362,13 @@ export default function MixamoSkeleton({
             <div className="flex items-start gap-2">
               <Info className="h-4 w-4 text-blue-500 mt-0.5" />
               <div className="space-y-1">
-                <p className="text-xs font-medium">Professional Rigged Model</p>
+                <p className="text-xs font-medium">
+                  {useGenerated ? 'Generated Mixamo-Compatible Model' : 'Professional Rigged Model'}
+                </p>
                 <p className="text-xs text-muted-foreground">
-                  This model uses Mixamo's industry-standard rigging for accurate anatomical representation.
+                  {useGenerated 
+                    ? 'Using programmatically generated model with Mixamo bone structure. Upload a real Mixamo model for best quality.'
+                    : 'This model uses Mixamo\'s industry-standard rigging for accurate anatomical representation.'}
                   Adjust patient-specific parameters using the controls below.
                 </p>
               </div>
@@ -334,12 +378,12 @@ export default function MixamoSkeleton({
       </Card>
 
       {/* Controls */}
-      {showControls && model && (
+      {showControls && activeModel && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Animation Controller */}
           <AnimationController
-            mixer={model.mixer}
-            animations={model.animations}
+            mixer={activeModel.mixer}
+            animations={activeModel.animations}
             onAnimationChange={(name) => console.log('Animation changed:', name)}
           />
 

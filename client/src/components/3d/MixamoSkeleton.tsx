@@ -60,6 +60,34 @@ interface MixamoSkeletonProps {
   showControls?: boolean;
 }
 
+// Helper function to map Mixamo bone names to standard names
+function mapMixamoBoneName(mixamoName: string): string | null {
+  const boneMap: { [key: string]: string } = {
+    'mixamorigHips': 'hips',
+    'mixamorigSpine': 'spine',
+    'mixamorigSpine1': 'spine1',
+    'mixamorigSpine2': 'spine2',
+    'mixamorigNeck': 'neck',
+    'mixamorigHead': 'head',
+    'mixamorigLeftShoulder': 'leftShoulder',
+    'mixamorigLeftArm': 'leftUpperArm',
+    'mixamorigLeftForeArm': 'leftForearm',
+    'mixamorigLeftHand': 'leftHand',
+    'mixamorigRightShoulder': 'rightShoulder',
+    'mixamorigRightArm': 'rightUpperArm',
+    'mixamorigRightForeArm': 'rightForearm',
+    'mixamorigRightHand': 'rightHand',
+    'mixamorigLeftUpLeg': 'leftThigh',
+    'mixamorigLeftLeg': 'leftShin',
+    'mixamorigLeftFoot': 'leftFoot',
+    'mixamorigRightUpLeg': 'rightThigh',
+    'mixamorigRightLeg': 'rightShin',
+    'mixamorigRightFoot': 'rightFoot',
+  };
+  
+  return boneMap[mixamoName] || mixamoName;
+}
+
 // 3D Scene Component
 function MixamoScene({ 
   modelData, 
@@ -157,9 +185,7 @@ function MixamoScene({
             new THREE.MeshBasicMaterial({ 
               color: 0xff0000, 
               transparent: true, 
-              opacity: 0.6,
-              emissive: 0xff0000,
-              emissiveIntensity: 0.5
+              opacity: 0.6
             })
           );
           sphere.name = `pain_indicator_${boneName}`;

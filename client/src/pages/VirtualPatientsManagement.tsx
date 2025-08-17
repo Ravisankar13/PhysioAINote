@@ -1273,33 +1273,6 @@ export default function VirtualPatientsManagement() {
                             painAreas: painRegions.map(r => r.bodyPart),
                             movementPatterns: [],
                           }}
-                          modelConfig={{
-                            limbScales: {
-                              upperArm: upperArmScale[0],
-                              forearm: forearmScale[0],
-                              thigh: thighScale[0],
-                              shin: shinScale[0],
-                              torso: torsoScale[0],
-                              overall: overallScale[0]
-                            },
-                            shoulderPathology: {
-                              scapularWinging: scapularWinging[0],
-                              acSeparation: acSeparation[0],
-                              ghSubluxation: ghSubluxation[0]
-                            },
-                            spinalPathology: {
-                              scoliosis: scoliosis[0],
-                              kyphosis: thoracicKyphosis[0],
-                              lordosis: lumbarLordosis[0]
-                            },
-                            lowerLimbPathology: {
-                              kneeVarusValgus: kneeVarusValgus[0],
-                              genuVarum: genuVarum[0],
-                              genuValgum: genuValgum[0],
-                              patellaHeight: patellaHeight[0],
-                              tibialTorsion: tibialTorsion[0]
-                            }
-                          }}
                           className="h-full"
                           showControls={true}
                         />

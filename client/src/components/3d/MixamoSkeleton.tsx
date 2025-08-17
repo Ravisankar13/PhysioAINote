@@ -617,14 +617,7 @@ export default function MixamoSkeleton({
       
       const handleWheel = (event: WheelEvent) => {
         event.preventDefault();
-        if (!sceneRef.current) return;
-        
-        const delta = event.deltaY * 0.001;
-        const distance = camera.position.length();
-        const newDistance = Math.max(1, Math.min(10, distance + delta));
-        
-        camera.position.normalize().multiplyScalar(newDistance);
-        camera.lookAt(0, 1, 0);
+        // Zoom disabled to prevent camera from moving
       };
       
       renderer.domElement.addEventListener('mousedown', handleMouseDown);
@@ -652,16 +645,13 @@ export default function MixamoSkeleton({
         sceneRef.current.mixer.update(delta);
       }
       
-      // Smooth camera rotation
+      // Smooth model rotation (not camera)
       if (showControls && sceneRef.current.model) {
         sceneRef.current.model.rotation.y += (sceneRef.current.mouseX - sceneRef.current.model.rotation.y) * 0.05;
         
-        // Orbit camera around model
-        const radius = camera.position.length();
-        camera.position.x = Math.sin(sceneRef.current.model.rotation.y) * radius;
-        camera.position.z = Math.cos(sceneRef.current.model.rotation.y) * radius;
-        camera.position.y = 1.5 + Math.sin(sceneRef.current.mouseY) * 2;
-        camera.lookAt(0, 1, 0);
+        // Keep camera at fixed position
+        camera.position.set(0, 100, 200);
+        camera.lookAt(0, 80, 0);
       }
       
       // Apply dynamic slider updates

@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 interface StableMixamoSkeletonProps {
   patientData?: {
@@ -297,13 +297,40 @@ export default function StableMixamoSkeleton({
     // Controls
     let controls: OrbitControls | undefined;
     if (showControls) {
-      controls = new OrbitControls(camera, renderer.domElement);
-      controls.enableDamping = true;
-      controls.dampingFactor = 0.05;
-      controls.minDistance = 2;
-      controls.maxDistance = 10;
-      controls.target.set(0, 1, 0);
-      controls.update();
+      try {
+        controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.minDistance = 2;
+        controls.maxDistance = 10;
+        controls.target.set(0, 1, 0);
+        controls.update();
+      } catch (error) {
+        console.warn('OrbitControls initialization failed, using fallback mouse controls');
+        controls = undefined;
+        
+        // Simple fallback mouse controls
+        let mouseX = 0;
+        let mouseY = 0;
+        let targetRotationX = 0;
+        let targetRotationY = 0;
+        
+        const handleMouseMove = (event: MouseEvent) => {
+          mouseX = (event.clientX / window.innerWidth) * 2 - 1;
+          mouseY = -(event.clientY / window.innerHeight) * 2 + 1;
+          targetRotationY = mouseX * Math.PI;
+          targetRotationX = mouseY * Math.PI * 0.5;
+        };
+        
+        const handleWheel = (event: WheelEvent) => {
+          event.preventDefault();
+          const delta = event.deltaY * 0.01;
+          camera.position.z = Math.max(2, Math.min(10, camera.position.z + delta));
+        };
+        
+        renderer.domElement.addEventListener('mousemove', handleMouseMove);
+        renderer.domElement.addEventListener('wheel', handleWheel);
+      }
     }
     
     // Store references

@@ -523,26 +523,26 @@ export default function MixamoSkeleton({
       if (restrictions.shoulder && leftArmBone) {
         const shoulder = restrictions.shoulder;
         if (shoulder.flexion !== undefined) {
-          leftArmBone.rotation.x = THREE.MathUtils.degToRad(shoulder.flexion * 0.9);
+          leftArmBone.rotation.x = THREE.MathUtils.degToRad(shoulder.flexion * 0.5);
         }
         if (shoulder.abduction !== undefined) {
-          leftArmBone.rotation.z = THREE.MathUtils.degToRad(shoulder.abduction * 0.9);
+          leftArmBone.rotation.z = THREE.MathUtils.degToRad(shoulder.abduction * 0.5);
         }
         if (shoulder.rotation !== undefined) {
-          leftArmBone.rotation.y = THREE.MathUtils.degToRad(shoulder.rotation * 0.9);
+          leftArmBone.rotation.y = THREE.MathUtils.degToRad(shoulder.rotation * 0.3);
         }
       }
       
       if (restrictions.shoulder && rightArmBone) {
         const shoulder = restrictions.shoulder;
         if (shoulder.flexion !== undefined) {
-          rightArmBone.rotation.x = THREE.MathUtils.degToRad(shoulder.flexion * 0.9);
+          rightArmBone.rotation.x = THREE.MathUtils.degToRad(shoulder.flexion * 0.5);
         }
         if (shoulder.abduction !== undefined) {
-          rightArmBone.rotation.z = THREE.MathUtils.degToRad(-shoulder.abduction * 0.9);
+          rightArmBone.rotation.z = THREE.MathUtils.degToRad(-shoulder.abduction * 0.5);
         }
         if (shoulder.rotation !== undefined) {
-          rightArmBone.rotation.y = THREE.MathUtils.degToRad(-shoulder.rotation * 0.9);
+          rightArmBone.rotation.y = THREE.MathUtils.degToRad(-shoulder.rotation * 0.3);
         }
       }
       
@@ -552,10 +552,10 @@ export default function MixamoSkeleton({
       
       if (restrictions.elbow) {
         if (leftForeArmBone && restrictions.elbow.flexion !== undefined) {
-          leftForeArmBone.rotation.x = THREE.MathUtils.degToRad(-restrictions.elbow.flexion);
+          leftForeArmBone.rotation.x = THREE.MathUtils.degToRad(-restrictions.elbow.flexion * 0.5);
         }
         if (rightForeArmBone && restrictions.elbow.flexion !== undefined) {
-          rightForeArmBone.rotation.x = THREE.MathUtils.degToRad(-restrictions.elbow.flexion);
+          rightForeArmBone.rotation.x = THREE.MathUtils.degToRad(-restrictions.elbow.flexion * 0.5);
         }
       }
       
@@ -565,10 +565,10 @@ export default function MixamoSkeleton({
       
       if (restrictions.hip) {
         if (leftUpLegBone && restrictions.hip.flexion !== undefined) {
-          leftUpLegBone.rotation.x = THREE.MathUtils.degToRad(-restrictions.hip.flexion * 0.9);
+          leftUpLegBone.rotation.x = THREE.MathUtils.degToRad(-restrictions.hip.flexion * 0.5);
         }
         if (rightUpLegBone && restrictions.hip.flexion !== undefined) {
-          rightUpLegBone.rotation.x = THREE.MathUtils.degToRad(-restrictions.hip.flexion * 0.9);
+          rightUpLegBone.rotation.x = THREE.MathUtils.degToRad(-restrictions.hip.flexion * 0.5);
         }
       }
       
@@ -578,10 +578,10 @@ export default function MixamoSkeleton({
       
       if (restrictions.knee) {
         if (leftLegBone && restrictions.knee.flexion !== undefined) {
-          leftLegBone.rotation.x = THREE.MathUtils.degToRad(restrictions.knee.flexion);
+          leftLegBone.rotation.x = THREE.MathUtils.degToRad(restrictions.knee.flexion * 0.5);
         }
         if (rightLegBone && restrictions.knee.flexion !== undefined) {
-          rightLegBone.rotation.x = THREE.MathUtils.degToRad(restrictions.knee.flexion);
+          rightLegBone.rotation.x = THREE.MathUtils.degToRad(restrictions.knee.flexion * 0.5);
         }
       }
       
@@ -620,88 +620,8 @@ export default function MixamoSkeleton({
         }
       }
       
-      // Apply limb scaling based on anthropometrics
-      if (patientData?.anthropometrics?.limbLengths) {
-        const limbs = patientData.anthropometrics.limbLengths;
-        
-        console.log('Available bones for limb scaling:', Object.keys(bones));
-        
-        // Try to find bones with various naming conventions - Mixamo uses mixamorig: prefix
-        const leftArmBone = bones['mixamorig:LeftArm'] || bones['LeftArm'] || bones['mixamorigLeftArm'];
-        const rightArmBone = bones['mixamorig:RightArm'] || bones['RightArm'] || bones['mixamorigRightArm'];
-        const leftForeArmBone = bones['mixamorig:LeftForeArm'] || bones['LeftForeArm'] || bones['mixamorigLeftForeArm'];
-        const rightForeArmBone = bones['mixamorig:RightForeArm'] || bones['RightForeArm'] || bones['mixamorigRightForeArm'];
-        const leftUpLegBone = bones['mixamorig:LeftUpLeg'] || bones['LeftUpLeg'] || bones['mixamorigLeftUpLeg'];
-        const rightUpLegBone = bones['mixamorig:RightUpLeg'] || bones['RightUpLeg'] || bones['mixamorigRightUpLeg'];
-        const leftLegBone = bones['mixamorig:LeftLeg'] || bones['LeftLeg'] || bones['mixamorigLeftLeg'];
-        const rightLegBone = bones['mixamorig:RightLeg'] || bones['RightLeg'] || bones['mixamorigRightLeg'];
-        const spineBone = bones['mixamorig:Spine'] || bones['Spine'] || bones['mixamorigSpine'];
-        const spine1Bone = bones['mixamorig:Spine1'] || bones['Spine1'] || bones['mixamorigSpine1'];
-        const spine2Bone = bones['mixamorig:Spine2'] || bones['Spine2'] || bones['mixamorigSpine2'];
-        
-        // Apply upper arm scaling
-        if (leftArmBone && limbs.upperArm) {
-          leftArmBone.scale.x = limbs.upperArm / 30; // Normalize to base value
-        }
-        if (rightArmBone && limbs.upperArm) {
-          rightArmBone.scale.x = limbs.upperArm / 30;
-        }
-        
-        // Apply forearm scaling
-        if (leftForeArmBone && limbs.forearm) {
-          leftForeArmBone.scale.x = limbs.forearm / 25; // Normalize to base value
-        }
-        if (rightForeArmBone && limbs.forearm) {
-          rightForeArmBone.scale.x = limbs.forearm / 25;
-        }
-        
-        // Apply thigh scaling
-        if (leftUpLegBone && limbs.thigh) {
-          leftUpLegBone.scale.y = limbs.thigh / 40; // Normalize to base value
-        }
-        if (rightUpLegBone && limbs.thigh) {
-          rightUpLegBone.scale.y = limbs.thigh / 40;
-        }
-        
-        // Apply shin scaling
-        if (leftLegBone && limbs.shin) {
-          leftLegBone.scale.y = limbs.shin / 35; // Normalize to base value
-        }
-        if (rightLegBone && limbs.shin) {
-          rightLegBone.scale.y = limbs.shin / 35;
-        }
-        
-        // Apply torso scaling if provided
-        if (patientData.anthropometrics.torsoScale !== undefined) {
-          if (spineBone) spineBone.scale.y = patientData.anthropometrics.torsoScale;
-          if (spine1Bone) spine1Bone.scale.y = patientData.anthropometrics.torsoScale;
-          if (spine2Bone) spine2Bone.scale.y = patientData.anthropometrics.torsoScale;
-        }
-        
-        // Apply overall scaling to the entire model
-        if (patientData.anthropometrics.overallScale !== undefined && sceneRef.current.model) {
-          const scale = patientData.anthropometrics.overallScale;
-          sceneRef.current.model.scale.set(scale, scale, scale);
-        }
-        
-        console.log('Applied limb scaling:', {
-          upperArm: limbs.upperArm,
-          forearm: limbs.forearm,
-          thigh: limbs.thigh,
-          shin: limbs.shin,
-          bonesFound: {
-            leftArm: !!leftArmBone,
-            rightArm: !!rightArmBone,
-            leftForeArm: !!leftForeArmBone,
-            rightForeArm: !!rightForeArmBone,
-            leftUpLeg: !!leftUpLegBone,
-            rightUpLeg: !!rightUpLegBone,
-            leftLeg: !!leftLegBone,
-            rightLeg: !!rightLegBone,
-            spine: !!spineBone
-          }
-        });
-      }
+      // Skip limb scaling for Mixamo models - it distorts the skeleton
+      // The Mixamo model already has proper proportions
       
       // Update skeleton
       if (sceneRef.current.skeleton) {

@@ -121,16 +121,19 @@ export default function MixamoSkeleton({
     };
 
     // Default to Mixamo FBX if no model URL provided
-    const urlToLoad = modelUrl || '/models/mixamo-skeleton.fbx';
+    const urlToLoad = modelUrl || 'models/mixamo-skeleton.fbx';
     
     // Create or load model
     if (urlToLoad && (urlToLoad.endsWith('.glb') || urlToLoad.endsWith('.gltf') || urlToLoad.endsWith('.fbx'))) {
       // Load external Mixamo model
       const loader = urlToLoad.endsWith('.fbx') ? new FBXLoader() : new GLTFLoader();
       
+      console.log('Loading model from:', urlToLoad);
+      
       loader.load(
         urlToLoad,
         (result: any) => {
+          console.log('Model loaded successfully:', result);
           const model = urlToLoad.endsWith('.fbx') ? result : result.scene;
           
           // Scale and position model
@@ -199,7 +202,8 @@ export default function MixamoSkeleton({
         },
         (error) => {
           console.error('Error loading model:', error);
-          setError('Failed to load model. Using fallback skeleton.');
+          console.error('Error details:', error.message || error);
+          setError(`Failed to load model: ${error.message || 'Unknown error'}`);
           createFallbackSkeleton();
         }
       );

@@ -120,15 +120,18 @@ export default function MixamoSkeleton({
       bones: {}
     };
 
+    // Default to Mixamo FBX if no model URL provided
+    const urlToLoad = modelUrl || '/models/mixamo-skeleton.fbx';
+    
     // Create or load model
-    if (modelUrl && (modelUrl.endsWith('.glb') || modelUrl.endsWith('.gltf') || modelUrl.endsWith('.fbx'))) {
+    if (urlToLoad && (urlToLoad.endsWith('.glb') || urlToLoad.endsWith('.gltf') || urlToLoad.endsWith('.fbx'))) {
       // Load external Mixamo model
-      const loader = modelUrl.endsWith('.fbx') ? new FBXLoader() : new GLTFLoader();
+      const loader = urlToLoad.endsWith('.fbx') ? new FBXLoader() : new GLTFLoader();
       
       loader.load(
-        modelUrl,
+        urlToLoad,
         (result: any) => {
-          const model = modelUrl.endsWith('.fbx') ? result : result.scene;
+          const model = urlToLoad.endsWith('.fbx') ? result : result.scene;
           
           // Scale and position model
           model.scale.set(0.01, 0.01, 0.01); // Mixamo models are usually large

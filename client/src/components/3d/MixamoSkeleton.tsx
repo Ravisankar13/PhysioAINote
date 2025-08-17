@@ -67,8 +67,8 @@ export default function MixamoSkeleton({
 
     // Create camera
     const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-    camera.position.set(0, 1.5, 3);
-    camera.lookAt(0, 1, 0);
+    camera.position.set(0, 1, 5); // Move camera back more
+    camera.lookAt(0, 0, 0); // Look at origin
 
     // Create renderer
     const renderer = new THREE.WebGLRenderer({ 
@@ -136,17 +136,27 @@ export default function MixamoSkeleton({
           console.log('Model loaded successfully:', result);
           const model = urlToLoad.endsWith('.fbx') ? result : result.scene;
           
-          // Scale and position model
-          model.scale.set(0.01, 0.01, 0.01); // Mixamo models are usually large
-          model.position.set(0, 0, 0);
+          // Scale and position model - adjust scale for visibility
+          model.scale.set(0.02, 0.02, 0.02); // Increased scale for better visibility
+          model.position.set(0, -1, 0); // Position at ground level
           
-          // Enable shadows
+          // Enable shadows and fix materials
           model.traverse((child: any) => {
             if (child.isMesh) {
               child.castShadow = true;
               child.receiveShadow = true;
+              child.frustumCulled = false; // Ensure mesh is always rendered
+              
               if (child.material) {
+                // Ensure material is visible
                 child.material.side = THREE.DoubleSide;
+                child.material.transparent = false;
+                child.material.opacity = 1;
+                
+                // Add some color if material is too dark
+                if (child.material.color) {
+                  child.material.color.setHex(0x888888);
+                }
               }
             }
           });
@@ -187,6 +197,8 @@ export default function MixamoSkeleton({
           }
           
           scene.add(model);
+          console.log('Model added to scene. Position:', model.position, 'Scale:', model.scale);
+          console.log('Model bounds:', new THREE.Box3().setFromObject(model));
           
           if (sceneRef.current) {
             sceneRef.current.model = model;

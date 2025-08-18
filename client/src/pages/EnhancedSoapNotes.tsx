@@ -155,6 +155,13 @@ export default function EnhancedSoapNotesPage() {
     progressionTrend?: string;
   } | null>(null);
   const audioFeatureExtractorRef = useRef<AudioFeatureExtractor | null>(null);
+  
+  // Temporary SOAP Notes state (24-hour storage)
+  const [temporaryNoteId, setTemporaryNoteId] = useState<number | null>(null);
+  const [temporaryNotes, setTemporaryNotes] = useState<any[]>([]);
+  const [isAutoSaving, setIsAutoSaving] = useState(false);
+  const [lastAutoSave, setLastAutoSave] = useState<Date | null>(null);
+  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   
   // Refs
@@ -172,6 +179,18 @@ export default function EnhancedSoapNotesPage() {
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Temporary SOAP Notes queries
+  const { data: temporaryNotesData = [], refetch: refetchTemporaryNotes } = useQuery({
+    queryKey: ['/api/temporary-soap-notes'],
+    refetchInterval: 30000, // Refresh every 30 seconds to check for expired notes
+  });
+
+  // Get specific temporary note by ID
+  const { data: currentTemporaryNote } = useQuery({
+    queryKey: ['/api/temporary-soap-notes', temporaryNoteId],
+    enabled: !!temporaryNoteId,
+  });
 
   // Continuous recording queries and mutations
   const { data: activeContinuousSession, refetch: refetchActiveSession } = useQuery<any>({
@@ -272,6 +291,168 @@ export default function EnhancedSoapNotesPage() {
       });
     },
   });
+
+  // Temporary SOAP Notes mutations
+  const createTemporaryNoteMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const response = await fetch('/api/temporary-soap-notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) throw new Error('Failed to create temporary note');
+      return response.json();
+    },
+    onSuccess: (data) => {
+      setTemporaryNoteId(data.id);
+      queryClient.invalidateQueries({ queryKey: ['/api/temporary-soap-notes'] });
+      toast({
+        title: "Temporary Note Created",
+        description: "Your note will be automatically deleted after 24 hours",
+      });
+    },
+  });
+
+  const updateTemporaryNoteMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      const response = await fetch(`/api/temporary-soap-notes/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) throw new Error('Failed to update temporary note');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/temporary-soap-notes'] });
+      setIsAutoSaving(false);
+      setLastAutoSave(new Date());
+    },
+  });
+
+  const deleteTemporaryNoteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const response = await fetch(`/api/temporary-soap-notes/${id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error('Failed to delete temporary note');
+      return response.json();
+    },
+    onSuccess: () => {
+      setTemporaryNoteId(null);
+      queryClient.invalidateQueries({ queryKey: ['/api/temporary-soap-notes'] });
+      toast({
+        title: "Note Deleted",
+        description: "Temporary note has been deleted",
+      });
+    },
+  });
+
+  // Auto-save functionality for temporary notes
+  useEffect(() => {
+    if (temporaryNoteId && !isContinuousMode) {
+      // Clear any existing timer
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+
+      // Set up new auto-save timer (every 30 seconds)
+      autoSaveTimerRef.current = setTimeout(() => {
+        autoSaveTemporaryNote();
+      }, 30000);
+
+      return () => {
+        if (autoSaveTimerRef.current) {
+          clearTimeout(autoSaveTimerRef.current);
+        }
+      };
+    }
+  }, [soapSections, temporaryNoteId, isContinuousMode]);
+
+  const autoSaveTemporaryNote = async () => {
+    if (!temporaryNoteId) return;
+    
+    setIsAutoSaving(true);
+    try {
+      await updateTemporaryNoteMutation.mutateAsync({
+        id: temporaryNoteId,
+        data: {
+          patientName: newPatientName || `Patient ${currentPatientNumber}`,
+          subjective: soapSections.subjective,
+          objective: soapSections.objective,
+          assessment: soapSections.assessment,
+          plan: soapSections.plan,
+          transcript: realTimeTranscript,
+          recordingMode: isContinuousMode ? 'continuous' : 'standard',
+        },
+      });
+    } catch (error) {
+      console.error('Auto-save failed:', error);
+    }
+  };
+
+  // Create new temporary note when starting recording
+  const createTemporaryNote = async () => {
+    if (isContinuousMode) return; // Don't create temporary notes in continuous mode
+    
+    const data = {
+      patientName: newPatientName || `Patient ${currentPatientNumber}`,
+      subjective: '',
+      objective: '',
+      assessment: '',
+      plan: '',
+      transcript: '',
+      recordingMode: 'standard',
+    };
+    
+    const result = await createTemporaryNoteMutation.mutateAsync(data);
+    return result.id;
+  };
+
+  // Navigate between temporary notes
+  const navigateToNextNote = () => {
+    const sortedNotes = [...temporaryNotesData].sort((a, b) => 
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+    
+    const currentIndex = sortedNotes.findIndex(note => note.id === temporaryNoteId);
+    if (currentIndex > 0) {
+      const nextNote = sortedNotes[currentIndex - 1];
+      loadTemporaryNote(nextNote);
+    }
+  };
+
+  const navigateToPreviousNote = () => {
+    const sortedNotes = [...temporaryNotesData].sort((a, b) => 
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+    
+    const currentIndex = sortedNotes.findIndex(note => note.id === temporaryNoteId);
+    if (currentIndex !== -1 && currentIndex < sortedNotes.length - 1) {
+      const prevNote = sortedNotes[currentIndex + 1];
+      loadTemporaryNote(prevNote);
+    }
+  };
+
+  const loadTemporaryNote = (note: any) => {
+    setTemporaryNoteId(note.id);
+    setSoapSections({
+      subjective: note.subjective || '',
+      objective: note.objective || '',
+      assessment: note.assessment || '',
+      plan: note.plan || '',
+    });
+    setRealTimeTranscript(note.transcript || '');
+    setNewPatientName(note.patientName || '');
+    
+    toast({
+      title: "Note Loaded",
+      description: `Loaded ${note.patientName || 'Untitled Note'}`,
+    });
+  };
 
   // Helper function to capture complete page state
   const capturePageState = () => {
@@ -1993,6 +2174,12 @@ Generated by PhysioGPT Enhanced SOAP Notes
       setGeneratedDocuments(new Set());
       lastDocumentCheck.current = '';
       
+      // Create temporary note if in standard mode
+      if (!isContinuousMode) {
+        const noteId = await createTemporaryNote();
+        setTemporaryNoteId(noteId);
+      }
+      
       // Get microphone access with optimized settings for long recordings
       const mediaStream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
@@ -2508,6 +2695,135 @@ Generated by PhysioGPT Enhanced SOAP Notes
                         {patientInfo.progressionTrend && 
                           ` • Trend: ${patientInfo.progressionTrend}`}
                       </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Temporary SOAP Notes Section (24-hour storage) */}
+            {!isContinuousMode && temporaryNotesData.length > 0 && (
+              <Card className="border-orange-200 bg-gradient-to-br from-orange-50 to-amber-50">
+                <CardHeader>
+                  <CardTitle className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-5 h-5 text-orange-600" />
+                      <span>Temporary Notes (24-hour storage)</span>
+                    </div>
+                    {temporaryNoteId && (
+                      <Badge variant="outline" className="text-orange-600">
+                        {isAutoSaving ? (
+                          <>
+                            <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                            Auto-saving...
+                          </>
+                        ) : lastAutoSave ? (
+                          <>
+                            <CheckCircle className="w-3 h-3 mr-1" />
+                            Saved {lastAutoSave.toLocaleTimeString()}
+                          </>
+                        ) : (
+                          "Not saved"
+                        )}
+                      </Badge>
+                    )}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {/* Note Navigation */}
+                    <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-orange-200">
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={navigateToPreviousNote}
+                          disabled={!temporaryNoteId || temporaryNotesData.findIndex(n => n.id === temporaryNoteId) === temporaryNotesData.length - 1}
+                        >
+                          ← Previous
+                        </Button>
+                        <span className="text-sm text-gray-600">
+                          Note {temporaryNotesData.findIndex(n => n.id === temporaryNoteId) + 1} of {temporaryNotesData.length}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={navigateToNextNote}
+                          disabled={!temporaryNoteId || temporaryNotesData.findIndex(n => n.id === temporaryNoteId) === 0}
+                        >
+                          Next →
+                        </Button>
+                      </div>
+                      {temporaryNoteId && (
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => deleteTemporaryNoteMutation.mutate(temporaryNoteId)}
+                        >
+                          <X className="w-4 h-4 mr-1" />
+                          Delete Note
+                        </Button>
+                      )}
+                    </div>
+                    
+                    {/* Temporary Notes List */}
+                    <div className="max-h-48 overflow-y-auto space-y-2">
+                      {temporaryNotesData.map((note: any) => {
+                        const isSelected = note.id === temporaryNoteId;
+                        const expiresAt = new Date(note.expiresAt);
+                        const hoursLeft = Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / (1000 * 60 * 60)));
+                        
+                        return (
+                          <div
+                            key={note.id}
+                            className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                              isSelected 
+                                ? 'bg-orange-100 border-orange-400' 
+                                : 'bg-white border-orange-200 hover:bg-orange-50'
+                            }`}
+                            onClick={() => !isSelected && loadTemporaryNote(note)}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1">
+                                <div className="font-medium text-sm">
+                                  {note.patientName || 'Untitled Note'}
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  Created: {new Date(note.createdAt).toLocaleString()}
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <Badge 
+                                  variant={hoursLeft < 6 ? "destructive" : "secondary"}
+                                  className="text-xs"
+                                >
+                                  {hoursLeft}h left
+                                </Badge>
+                                {note.recordingMode === 'continuous' && (
+                                  <Badge variant="outline" className="text-xs ml-1">
+                                    Continuous
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                            {isSelected && note.subjective && (
+                              <div className="mt-2 text-xs text-gray-600 truncate">
+                                {note.subjective.substring(0, 100)}...
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    
+                    <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
+                      <div className="flex items-start gap-2">
+                        <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5" />
+                        <div className="text-xs text-amber-800">
+                          <p className="font-medium mb-1">Temporary Storage Notice</p>
+                          <p>These notes are automatically deleted after 24 hours for privacy. Save important information elsewhere before expiry.</p>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </CardContent>

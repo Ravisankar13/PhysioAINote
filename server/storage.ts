@@ -73,6 +73,9 @@ import {
   type InsertCaseSimilarity,
   soapPatterns,
   type SoapPattern,
+  temporarySoapNotes,
+  type TemporarySoapNote,
+  type InsertTemporarySoapNote,
   type InsertSoapPattern,
   comparativeAnalyses,
   type ComparativeAnalysis,
@@ -575,6 +578,16 @@ export interface IStorage {
   getExerciseProgress(assignmentId: number, exerciseId?: number): Promise<ExerciseProgress[]>;
   getProgressByDate(assignmentId: number, date: string): Promise<ExerciseProgress[]>;
   updateExerciseProgress(id: number, data: Partial<InsertExerciseProgress>): Promise<ExerciseProgress>;
+
+  // Temporary SOAP Notes Operations (24-hour expiry)
+  createTemporarySoapNote(note: InsertTemporarySoapNote): Promise<TemporarySoapNote>;
+  getTemporarySoapNote(id: number): Promise<TemporarySoapNote | undefined>;
+  getTemporarySoapNoteBySession(sessionId: string, userId: number): Promise<TemporarySoapNote[]>;
+  getUserTemporarySoapNotes(userId: number): Promise<TemporarySoapNote[]>;
+  updateTemporarySoapNote(id: number, data: Partial<InsertTemporarySoapNote>): Promise<TemporarySoapNote>;
+  deleteExpiredTemporarySoapNotes(): Promise<void>;
+  navigateTemporarySoapNote(currentId: number, direction: 'previous' | 'next'): Promise<TemporarySoapNote | undefined>;
+  getLatestTemporarySoapNote(userId: number, sessionId: string): Promise<TemporarySoapNote | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -3716,6 +3729,181 @@ export class DatabaseStorage implements IStorage {
       .where(eq(exerciseProgress.id, id))
       .returning();
     return result[0];
+  }
+
+  // Temporary SOAP Notes Methods (24-hour expiry)
+  async createTemporarySoapNote(note: InsertTemporarySoapNote): Promise<TemporarySoapNote> {
+    try {
+      // Set expiry to 24 hours from now
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + 24);
+
+      const result = await db
+        .insert(temporarySoapNotes)
+        .values({
+          ...note,
+          expiresAt,
+        })
+        .returning();
+
+      return result[0];
+    } catch (error) {
+      console.error("Error creating temporary SOAP note:", error);
+      throw error;
+    }
+  }
+
+  async getTemporarySoapNote(id: number): Promise<TemporarySoapNote | undefined> {
+    try {
+      const result = await db
+        .select()
+        .from(temporarySoapNotes)
+        .where(and(
+          eq(temporarySoapNotes.id, id),
+          sql`${temporarySoapNotes.expiresAt} > NOW()`
+        ))
+        .limit(1);
+
+      // Update last accessed time if found
+      if (result[0]) {
+        await db
+          .update(temporarySoapNotes)
+          .set({ lastAccessedAt: new Date() })
+          .where(eq(temporarySoapNotes.id, id));
+      }
+
+      return result[0];
+    } catch (error) {
+      console.error("Error fetching temporary SOAP note:", error);
+      throw error;
+    }
+  }
+
+  async getTemporarySoapNoteBySession(sessionId: string, userId: number): Promise<TemporarySoapNote[]> {
+    try {
+      const result = await db
+        .select()
+        .from(temporarySoapNotes)
+        .where(and(
+          eq(temporarySoapNotes.sessionId, sessionId),
+          eq(temporarySoapNotes.userId, userId),
+          sql`${temporarySoapNotes.expiresAt} > NOW()`
+        ))
+        .orderBy(temporarySoapNotes.noteOrder);
+
+      return result;
+    } catch (error) {
+      console.error("Error fetching temporary SOAP notes by session:", error);
+      throw error;
+    }
+  }
+
+  async getUserTemporarySoapNotes(userId: number): Promise<TemporarySoapNote[]> {
+    try {
+      const result = await db
+        .select()
+        .from(temporarySoapNotes)
+        .where(and(
+          eq(temporarySoapNotes.userId, userId),
+          sql`${temporarySoapNotes.expiresAt} > NOW()`
+        ))
+        .orderBy(desc(temporarySoapNotes.createdAt));
+
+      return result;
+    } catch (error) {
+      console.error("Error fetching user temporary SOAP notes:", error);
+      throw error;
+    }
+  }
+
+  async updateTemporarySoapNote(id: number, data: Partial<InsertTemporarySoapNote>): Promise<TemporarySoapNote> {
+    try {
+      const result = await db
+        .update(temporarySoapNotes)
+        .set({
+          ...data,
+          updatedAt: new Date(),
+          lastAccessedAt: new Date(),
+        })
+        .where(and(
+          eq(temporarySoapNotes.id, id),
+          sql`${temporarySoapNotes.expiresAt} > NOW()`
+        ))
+        .returning();
+
+      if (!result[0]) {
+        throw new Error("Temporary SOAP note not found or expired");
+      }
+
+      return result[0];
+    } catch (error) {
+      console.error("Error updating temporary SOAP note:", error);
+      throw error;
+    }
+  }
+
+  async deleteExpiredTemporarySoapNotes(): Promise<void> {
+    try {
+      await db
+        .delete(temporarySoapNotes)
+        .where(sql`${temporarySoapNotes.expiresAt} <= NOW()`);
+    } catch (error) {
+      console.error("Error deleting expired temporary SOAP notes:", error);
+      throw error;
+    }
+  }
+
+  async navigateTemporarySoapNote(currentId: number, direction: 'previous' | 'next'): Promise<TemporarySoapNote | undefined> {
+    try {
+      // Get the current note to find its session and order
+      const currentNote = await this.getTemporarySoapNote(currentId);
+      if (!currentNote) return undefined;
+
+      // Get the next or previous note in the same session
+      const operator = direction === 'next' ? '>' : '<';
+      const orderDirection = direction === 'next' ? 'asc' : 'desc';
+
+      const result = await db
+        .select()
+        .from(temporarySoapNotes)
+        .where(and(
+          eq(temporarySoapNotes.sessionId, currentNote.sessionId),
+          eq(temporarySoapNotes.userId, currentNote.userId),
+          sql`${temporarySoapNotes.noteOrder} ${sql.raw(operator)} ${currentNote.noteOrder}`,
+          sql`${temporarySoapNotes.expiresAt} > NOW()`
+        ))
+        .orderBy(
+          direction === 'next' 
+            ? temporarySoapNotes.noteOrder 
+            : desc(temporarySoapNotes.noteOrder)
+        )
+        .limit(1);
+
+      return result[0];
+    } catch (error) {
+      console.error(`Error navigating to ${direction} temporary SOAP note:`, error);
+      throw error;
+    }
+  }
+
+  async getLatestTemporarySoapNote(userId: number, sessionId: string): Promise<TemporarySoapNote | undefined> {
+    try {
+      const result = await db
+        .select()
+        .from(temporarySoapNotes)
+        .where(and(
+          eq(temporarySoapNotes.userId, userId),
+          eq(temporarySoapNotes.sessionId, sessionId),
+          sql`${temporarySoapNotes.expiresAt} > NOW()`
+        ))
+        .orderBy(desc(temporarySoapNotes.noteOrder))
+        .limit(1);
+
+      return result[0];
+    } catch (error) {
+      console.error("Error fetching latest temporary SOAP note:", error);
+      throw error;
+    }
   }
 }
 

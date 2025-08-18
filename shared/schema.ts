@@ -473,6 +473,81 @@ export const insertContinuousSessionNoteSchema = createInsertSchema(continuousSe
 export type InsertContinuousSessionNote = z.infer<typeof insertContinuousSessionNoteSchema>;
 export type ContinuousSessionNote = typeof continuousSessionNotes.$inferSelect;
 
+// Temporary SOAP Notes with 24-hour expiry
+export const temporarySoapNotes = pgTable("temporary_soap_notes", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  sessionId: text("session_id").notNull(), // Unique session identifier
+  
+  // Recording mode
+  recordingMode: text("recording_mode").notNull().default("standard"), // 'standard' or 'continuous'
+  
+  // SOAP Content
+  subjective: text("subjective"),
+  objective: text("objective"),
+  assessment: text("assessment"),
+  plan: text("plan"),
+  
+  // Patient Information
+  patientName: text("patient_name"),
+  patientId: text("patient_id"),
+  dateOfBirth: text("date_of_birth"),
+  chiefComplaint: text("chief_complaint"),
+  
+  // Transcription Data
+  transcriptionText: text("transcription_text"),
+  audioUrl: text("audio_url"),
+  recordingDuration: integer("recording_duration"), // in seconds
+  
+  // AI Generated Content
+  aiSuggestions: json("ai_suggestions").$type<{
+    subjective?: string[];
+    objective?: string[];
+    assessment?: string[];
+    plan?: string[];
+    questions?: string[];
+    treatments?: string[];
+    diagnoses?: string[];
+  }>(),
+  
+  // Additional Data
+  additionalData: json("additional_data").$type<{
+    bodyPart?: string;
+    painScale?: number;
+    functionalLimitations?: string[];
+    redFlags?: string[];
+    yellowFlags?: string[];
+    specialTests?: string[];
+    outcomeScores?: Record<string, number>;
+    exercisePrescription?: any[];
+    documentGeneration?: any;
+    virtualPatientConfig?: any;
+  }>(),
+  
+  // Timestamps
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  expiresAt: timestamp("expires_at").notNull(), // 24 hours from creation
+  lastAccessedAt: timestamp("last_accessed_at").defaultNow().notNull(),
+  
+  // Navigation
+  previousNoteId: integer("previous_note_id"),
+  nextNoteId: integer("next_note_id"),
+  noteOrder: integer("note_order").notNull().default(1), // Order within session
+});
+
+export const insertTemporarySoapNoteSchema = createInsertSchema(temporarySoapNotes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  lastAccessedAt: true,
+});
+
+export type InsertTemporarySoapNote = z.infer<typeof insertTemporarySoapNoteSchema>;
+export type TemporarySoapNote = typeof temporarySoapNotes.$inferSelect;
+
 // Pathology Templates for common pain patterns
 export const pathologyTemplates = pgTable("pathology_templates", {
   id: serial("id").primaryKey(),

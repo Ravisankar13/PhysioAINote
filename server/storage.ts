@@ -586,6 +586,7 @@ export interface IStorage {
   getUserTemporarySoapNotes(userId: number): Promise<TemporarySoapNote[]>;
   updateTemporarySoapNote(id: number, data: Partial<InsertTemporarySoapNote>): Promise<TemporarySoapNote>;
   deleteExpiredTemporarySoapNotes(): Promise<void>;
+  deleteTemporarySoapNote(id: number): Promise<void>;
   navigateTemporarySoapNote(currentId: number, direction: 'previous' | 'next'): Promise<TemporarySoapNote | undefined>;
   getLatestTemporarySoapNote(userId: number, sessionId: string): Promise<TemporarySoapNote | undefined>;
 }
@@ -3849,6 +3850,17 @@ export class DatabaseStorage implements IStorage {
         .where(sql`${temporarySoapNotes.expiresAt} <= NOW()`);
     } catch (error) {
       console.error("Error deleting expired temporary SOAP notes:", error);
+      throw error;
+    }
+  }
+
+  async deleteTemporarySoapNote(id: number): Promise<void> {
+    try {
+      await db
+        .delete(temporarySoapNotes)
+        .where(eq(temporarySoapNotes.id, id));
+    } catch (error) {
+      console.error("Error deleting temporary SOAP note:", error);
       throw error;
     }
   }

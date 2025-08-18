@@ -3453,6 +3453,142 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
   
+  // Temporary SOAP Notes Routes
+  
+  // Get all temporary SOAP notes for authenticated user
+  app.get("/api/temporary-soap-notes", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      // Clean up expired notes first
+      await storage.deleteExpiredTemporarySoapNotes();
+      
+      // Get user's temporary notes
+      const notes = await storage.getUserTemporarySoapNotes(userId);
+      res.json(notes);
+    } catch (error) {
+      console.error("Error fetching temporary SOAP notes:", error);
+      res.status(500).json({ error: 'Failed to fetch temporary SOAP notes' });
+    }
+  });
+
+  // Create a new temporary SOAP note
+  app.post("/api/temporary-soap-notes", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const noteData = {
+        ...req.body,
+        userId,
+        createdAt: new Date(),
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours from now
+      };
+
+      const note = await storage.createTemporarySoapNote(noteData);
+      console.log('Created temporary SOAP note:', note.id);
+      res.json(note);
+    } catch (error) {
+      console.error("Error creating temporary SOAP note:", error);
+      res.status(500).json({ error: 'Failed to create temporary SOAP note' });
+    }
+  });
+
+  // Update a temporary SOAP note
+  app.put("/api/temporary-soap-notes/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const noteId = parseInt(req.params.id);
+      if (isNaN(noteId)) {
+        return res.status(400).json({ error: 'Invalid note ID' });
+      }
+
+      // Verify the note belongs to the user
+      const existingNote = await storage.getTemporarySoapNote(noteId);
+      if (!existingNote || existingNote.userId !== userId) {
+        return res.status(404).json({ error: 'Note not found' });
+      }
+
+      const updatedNote = await storage.updateTemporarySoapNote(noteId, req.body);
+      res.json(updatedNote);
+    } catch (error) {
+      console.error("Error updating temporary SOAP note:", error);
+      res.status(500).json({ error: 'Failed to update temporary SOAP note' });
+    }
+  });
+
+  // Delete a temporary SOAP note
+  app.delete("/api/temporary-soap-notes/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const noteId = parseInt(req.params.id);
+      if (isNaN(noteId)) {
+        return res.status(400).json({ error: 'Invalid note ID' });
+      }
+
+      // Verify the note belongs to the user
+      const existingNote = await storage.getTemporarySoapNote(noteId);
+      if (!existingNote || existingNote.userId !== userId) {
+        return res.status(404).json({ error: 'Note not found' });
+      }
+
+      await storage.deleteTemporarySoapNote(noteId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting temporary SOAP note:", error);
+      res.status(500).json({ error: 'Failed to delete temporary SOAP note' });
+    }
+  });
+
+  // Navigate between temporary SOAP notes
+  app.get("/api/temporary-soap-notes/:id/navigate/:direction", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const noteId = parseInt(req.params.id);
+      const direction = req.params.direction as 'previous' | 'next';
+      
+      if (isNaN(noteId)) {
+        return res.status(400).json({ error: 'Invalid note ID' });
+      }
+
+      if (direction !== 'previous' && direction !== 'next') {
+        return res.status(400).json({ error: 'Invalid direction' });
+      }
+
+      const note = await storage.navigateTemporarySoapNote(noteId, direction);
+      if (!note) {
+        return res.status(404).json({ error: 'No note found in that direction' });
+      }
+
+      // Verify the note belongs to the user
+      if (note.userId !== userId) {
+        return res.status(404).json({ error: 'No note found in that direction' });
+      }
+
+      res.json(note);
+    } catch (error) {
+      console.error("Error navigating temporary SOAP notes:", error);
+      res.status(500).json({ error: 'Failed to navigate temporary SOAP notes' });
+    }
+  });
+  
   // Virtual Patient Config Routes
   
   // Get all virtual patient configs for user

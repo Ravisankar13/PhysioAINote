@@ -979,7 +979,22 @@ export default function VirtualPatientsManagement() {
             </div>
             <div className="flex gap-2">
               <Button 
-                onClick={() => setIsCreatingNew(true)}
+                onClick={() => {
+                  // Generate next patient number based on existing patients
+                  const patientNumbers = configsArray
+                    .map((c: VirtualPatientConfig) => {
+                      const match = c.patient_name.match(/^Patient (\d+)$/);
+                      return match ? parseInt(match[1]) : 0;
+                    })
+                    .filter((n: number) => n > 0);
+                  
+                  const nextNumber = patientNumbers.length > 0 
+                    ? Math.max(...patientNumbers) + 1 
+                    : 1;
+                  
+                  setEditingName(`Patient ${nextNumber}`);
+                  setIsCreatingNew(true);
+                }}
                 className="bg-blue-600 hover:bg-blue-700 text-white"
               >
                 <UserPlus className="h-4 w-4 mr-2" />
@@ -1063,7 +1078,24 @@ export default function VirtualPatientsManagement() {
                         onClick={() => {
                           setSelectedPatient(patient);
                           setIsCreatingNew(true);
-                          setEditingName(patient.title || `Patient from SOAP ${patient.id}`);
+                          
+                          // Generate next patient number if no title exists
+                          if (!patient.title) {
+                            const patientNumbers = configsArray
+                              .map((c: VirtualPatientConfig) => {
+                                const match = c.patient_name.match(/^Patient (\d+)$/);
+                                return match ? parseInt(match[1]) : 0;
+                              })
+                              .filter((n: number) => n > 0);
+                            
+                            const nextNumber = patientNumbers.length > 0 
+                              ? Math.max(...patientNumbers) + 1 
+                              : 1;
+                            
+                            setEditingName(`Patient ${nextNumber}`);
+                          } else {
+                            setEditingName(patient.title);
+                          }
                         }}
                       >
                         <p className="font-medium">{patient.title || `SOAP Patient ${patient.id}`}</p>

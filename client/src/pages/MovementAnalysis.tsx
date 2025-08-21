@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { Pose, POSE_CONNECTIONS } from '@mediapipe/pose';
 import { Camera } from '@mediapipe/camera_utils';
 import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils';
+import { MEDIAPIPE_CONFIG, checkMediaPipeSupport, requestCameraPermission } from '@/config/mediapipe';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -309,6 +310,7 @@ export default function MovementAnalysis() {
     complaint: ''
   });
   const [cameraStatus, setCameraStatus] = useState<'initializing' | 'ready' | 'error' | 'permission-needed' | 'not-started'>('not-started');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showJointAngles, setShowJointAngles] = useState(true);
   const [showAngleControls, setShowAngleControls] = useState(false);
   const [visibleJoints, setVisibleJoints] = useState<{ [key: string]: boolean }>({
@@ -349,69 +351,47 @@ export default function MovementAnalysis() {
     const initializeCamera = async () => {
       try {
         console.log('Starting camera initialization...');
-        console.log('Secure context:', window.isSecureContext);
-        console.log('Location protocol:', window.location.protocol);
         
-        // Check if we're in a secure context
-        if (!window.isSecureContext) {
-          console.error('Camera access requires HTTPS or localhost');
+        // Check MediaPipe support
+        const support = checkMediaPipeSupport();
+        if (!support.supported) {
+          console.error('MediaPipe not supported:', support.error);
           setCameraStatus('error');
+          setErrorMessage(support.error || 'Your browser doesn\'t support pose detection.');
           toast({
-            title: "Camera Access Denied",
-            description: "This feature requires a secure connection (HTTPS). Please ensure you're accessing the site via HTTPS.",
+            title: "Compatibility Error",
+            description: support.error,
             variant: "destructive",
           });
           return;
         }
 
-        // Check for camera permissions
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          console.error('getUserMedia is not supported');
-          setCameraStatus('error');
-          toast({
-            title: "Camera Not Supported",
-            description: "Your browser doesn't support camera access. Please use a modern browser.",
-            variant: "destructive",
-          });
-          return;
-        }
-
-        // Request camera permission first
+        // Request camera permission with better error handling
         setCameraStatus('permission-needed');
         console.log('Requesting camera permission...');
         try {
-          const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-          console.log('Camera permission granted, stream obtained');
-          // Stop the test stream as we'll use MediaPipe's camera
-          stream.getTracks().forEach(track => track.stop());
+          await requestCameraPermission();
+          console.log('Camera permission granted');
           setCameraStatus('initializing');
-        } catch (permissionError) {
-          console.error('Camera permission denied:', permissionError);
+        } catch (permissionError: any) {
+          console.error('Camera permission error:', permissionError);
           setCameraStatus('error');
+          setErrorMessage(permissionError.message);
           toast({
-            title: "Camera Permission Denied",
-            description: "Please allow camera access in your browser settings and refresh the page.",
+            title: "Camera Permission Error",
+            description: permissionError.message,
             variant: "destructive",
+            duration: 6000,
           });
           return;
         }
 
         console.log('Initializing MediaPipe Pose...');
         const pose = new Pose({
-          locateFile: (file) => {
-            console.log('Loading MediaPipe file:', file);
-            return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
-          }
+          locateFile: MEDIAPIPE_CONFIG.pose.locateFile
         });
 
-        pose.setOptions({
-          modelComplexity: 2,
-          smoothLandmarks: true,
-          enableSegmentation: false,
-          minDetectionConfidence: 0.5,
-          minTrackingConfidence: 0.5
-        });
-
+        pose.setOptions(MEDIAPIPE_CONFIG.pose.options);
         pose.onResults(onPoseResults);
         poseRef.current = pose;
         console.log('MediaPipe Pose initialized');
@@ -425,29 +405,59 @@ export default function MovementAnalysis() {
         const camera = new Camera(videoRef.current, {
           onFrame: async () => {
             if (poseRef.current && !isPaused && videoRef.current) {
-              await poseRef.current.send({ image: videoRef.current });
+              try {
+                await poseRef.current.send({ image: videoRef.current });
+              } catch (err) {
+                console.error('Pose processing error:', err);
+              }
             }
           },
-          width: 1920,
-          height: 1080,
-          facingMode: 'user'
+          width: MEDIAPIPE_CONFIG.camera.width,
+          height: MEDIAPIPE_CONFIG.camera.height,
+          facingMode: MEDIAPIPE_CONFIG.camera.facingMode
         });
 
         cameraRef.current = camera;
         
-        // Start camera with error handling
-        await camera.start().then(() => {
+        // Start camera with error handling and timeout
+        const startPromise = camera.start();
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Camera start timeout')), MEDIAPIPE_CONFIG.timeouts.cameraStart)
+        );
+        
+        try {
+          await Promise.race([startPromise, timeoutPromise]);
           setCameraStatus('ready');
           console.log('Camera started successfully');
-        }).catch((error: any) => {
+          
+          // Show success message only in production
+          if (window.location.hostname !== 'localhost') {
+            toast({
+              title: "Camera Ready",
+              description: "Movement analysis is ready to begin",
+              duration: 3000,
+            });
+          }
+        } catch (error: any) {
           console.error('Camera start error:', error);
           setCameraStatus('error');
+          
+          let errorMessage = 'Failed to start camera. ';
+          if (error.message?.includes('timeout')) {
+            errorMessage += 'Camera took too long to initialize. Please refresh the page.';
+          } else if (error.message?.includes('permission')) {
+            errorMessage += 'Camera permission denied. Please allow camera access in your browser settings.';
+          } else {
+            errorMessage += 'Please check camera permissions and ensure no other application is using the camera.';
+          }
+          
           toast({
             title: "Camera Error",
-            description: "Failed to start camera. Please check camera permissions and try again.",
+            description: errorMessage,
             variant: "destructive",
+            duration: 6000,
           });
-        });
+        }
 
       } catch (error) {
         console.error('Camera initialization error:', error);

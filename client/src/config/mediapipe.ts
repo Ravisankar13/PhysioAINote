@@ -1,0 +1,110 @@
+/**
+ * MediaPipe configuration for production deployment
+ * This ensures consistent loading of MediaPipe resources across environments
+ */
+
+// Use a specific version to ensure consistency across deployments
+export const MEDIAPIPE_VERSION = '0.5.1675469404';
+
+// MediaPipe CDN configuration
+export const MEDIAPIPE_CONFIG = {
+  pose: {
+    // Use specific version for reliability
+    locateFile: (file: string) => {
+      const baseUrl = `https://cdn.jsdelivr.net/npm/@mediapipe/pose@${MEDIAPIPE_VERSION}`;
+      console.log(`[MediaPipe] Loading: ${file} from ${baseUrl}`);
+      return `${baseUrl}/${file}`;
+    },
+    
+    // Pose detection settings optimized for web deployment
+    options: {
+      modelComplexity: 1 as 0 | 1 | 2, // Reduced from 2 for better performance in production
+      smoothLandmarks: true,
+      enableSegmentation: false,
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5,
+      selfieMode: true // Mirror the video for better UX
+    }
+  },
+  
+  // Camera settings optimized for web
+  camera: {
+    width: 1280,
+    height: 720,
+    facingMode: 'user' as 'user' | 'environment'
+  },
+  
+  // Timeout settings for production
+  timeouts: {
+    modelLoad: 30000, // 30 seconds for model loading
+    cameraStart: 15000, // 15 seconds for camera start
+    permission: 10000 // 10 seconds for permission request
+  }
+};
+
+// Helper function to check if environment supports MediaPipe
+export function checkMediaPipeSupport(): { supported: boolean; error?: string } {
+  // Check for secure context (HTTPS or localhost)
+  if (!window.isSecureContext) {
+    return {
+      supported: false,
+      error: 'MediaPipe requires a secure context (HTTPS). Please ensure you\'re accessing the site via HTTPS.'
+    };
+  }
+  
+  // Check for WebGL support
+  const canvas = document.createElement('canvas');
+  const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+  if (!gl) {
+    return {
+      supported: false,
+      error: 'Your browser doesn\'t support WebGL, which is required for pose detection.'
+    };
+  }
+  
+  // Check for getUserMedia support
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    return {
+      supported: false,
+      error: 'Your browser doesn\'t support camera access. Please use a modern browser.'
+    };
+  }
+  
+  // Check for WebAssembly support
+  if (typeof WebAssembly === 'undefined') {
+    return {
+      supported: false,
+      error: 'Your browser doesn\'t support WebAssembly, which is required for pose detection.'
+    };
+  }
+  
+  return { supported: true };
+}
+
+// Helper function to request camera permission with better error handling
+export async function requestCameraPermission(): Promise<void> {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ 
+      video: {
+        width: { ideal: MEDIAPIPE_CONFIG.camera.width },
+        height: { ideal: MEDIAPIPE_CONFIG.camera.height },
+        facingMode: MEDIAPIPE_CONFIG.camera.facingMode
+      }
+    });
+    
+    // Stop the stream as we only need to check permission
+    stream.getTracks().forEach(track => track.stop());
+  } catch (error: any) {
+    if (error.name === 'NotAllowedError') {
+      throw new Error('Camera permission denied. Please allow camera access in your browser settings and refresh the page.');
+    } else if (error.name === 'NotFoundError') {
+      throw new Error('No camera found. Please connect a camera and refresh the page.');
+    } else if (error.name === 'NotReadableError') {
+      throw new Error('Camera is already in use by another application. Please close other apps using the camera.');
+    } else if (error.name === 'OverconstrainedError') {
+      throw new Error('Camera doesn\'t support the requested resolution. Trying with default settings.');
+    } else {
+      throw new Error(`Camera error: ${error.message || 'Unknown error occurred'}`);
+    }
+  }
+}

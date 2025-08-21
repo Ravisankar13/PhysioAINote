@@ -59,6 +59,7 @@ import GameCompetitions from "@/pages/GameCompetitions";
 import GameCompetitionPage from "@/pages/GameCompetitionPage";
 import ExerciseProgramBuilder from "@/pages/ExerciseProgramBuilder";
 import MovementAnalysis from "@/pages/MovementAnalysis";
+import CameraTest from "@/pages/CameraTest";
 
 import TournamentWaitingRoom from "@/pages/TournamentWaitingRoom";
 import TournamentMatchPage from "@/pages/TournamentMatchPage";
@@ -208,6 +209,7 @@ function Router() {
           <Route path="/test-audio-transcription" component={TestAudioTranscription} />
           <Route path="/test-note-generator" component={TestNoteGenerator} />
           <Route path="/test-case-studies" component={TestCaseStudiesPage} />
+          <Route path="/camera-test" component={CameraTest} />
           <Route component={NotFound} />
         </Switch>
       </main>

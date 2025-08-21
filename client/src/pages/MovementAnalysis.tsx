@@ -218,6 +218,10 @@ export default function MovementAnalysis() {
 
     const initializeCamera = async () => {
       try {
+        console.log('Starting camera initialization...');
+        console.log('Secure context:', window.isSecureContext);
+        console.log('Location protocol:', window.location.protocol);
+        
         // Check if we're in a secure context
         if (!window.isSecureContext) {
           console.error('Camera access requires HTTPS or localhost');
@@ -244,8 +248,12 @@ export default function MovementAnalysis() {
 
         // Request camera permission first
         setCameraStatus('permission-needed');
+        console.log('Requesting camera permission...');
         try {
-          await navigator.mediaDevices.getUserMedia({ video: true });
+          const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+          console.log('Camera permission granted, stream obtained');
+          // Stop the test stream as we'll use MediaPipe's camera
+          stream.getTracks().forEach(track => track.stop());
           setCameraStatus('initializing');
         } catch (permissionError) {
           console.error('Camera permission denied:', permissionError);
@@ -258,8 +266,10 @@ export default function MovementAnalysis() {
           return;
         }
 
+        console.log('Initializing MediaPipe Pose...');
         const pose = new Pose({
           locateFile: (file) => {
+            console.log('Loading MediaPipe file:', file);
             return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
           }
         });
@@ -274,11 +284,18 @@ export default function MovementAnalysis() {
 
         pose.onResults(onPoseResults);
         poseRef.current = pose;
+        console.log('MediaPipe Pose initialized');
+
+        if (!videoRef.current) {
+          console.error('Video element not found');
+          setCameraStatus('error');
+          return;
+        }
 
         const camera = new Camera(videoRef.current, {
           onFrame: async () => {
-            if (poseRef.current && !isPaused) {
-              await poseRef.current.send({ image: videoRef.current! });
+            if (poseRef.current && !isPaused && videoRef.current) {
+              await poseRef.current.send({ image: videoRef.current });
             }
           },
           width: 1920,
@@ -352,6 +369,7 @@ export default function MovementAnalysis() {
 
       // Analyze movement based on selected test
       let detectedImpairments: string[] = [];
+      let metrics: MovementMetrics | null = null;
       
       if (selectedTest.id === 'running') {
         // Running-specific analysis
@@ -362,11 +380,11 @@ export default function MovementAnalysis() {
         detectedImpairments = detectRunningImpairments(runMetrics);
         
         // Still calculate general metrics for visualization
-        const metrics = analyzeMovementQuality(results.poseLandmarks);
+        metrics = analyzeMovementQuality(results.poseLandmarks);
         setCurrentMetrics(metrics);
       } else {
         // General movement analysis
-        const metrics = analyzeMovementQuality(results.poseLandmarks);
+        metrics = analyzeMovementQuality(results.poseLandmarks);
         setCurrentMetrics(metrics);
         
         // Check for knee valgus
@@ -395,7 +413,7 @@ export default function MovementAnalysis() {
       setImpairments(detectedImpairments);
 
       // Record data if recording
-      if (isRecording && !isPaused) {
+      if (isRecording && !isPaused && metrics) {
         const timestamp = Date.now() - (sessionStartTime || Date.now());
         setRecordedData(prev => [...prev, {
           timestamp,
@@ -557,7 +575,7 @@ export default function MovementAnalysis() {
       duration: elapsedTime,
       overallQuality: currentMetrics?.quality || 'fair',
       measurements: recordedData,
-      impairments: [...new Set(recordedData.flatMap(d => d.impairments))]
+      impairments: Array.from(new Set(recordedData.flatMap(d => d.impairments)))
     };
 
     await saveSessionMutation.mutateAsync(sessionData);
@@ -587,7 +605,7 @@ export default function MovementAnalysis() {
       summary: {
         averageSymmetry: avgSymmetry.toFixed(1),
         averageStability: avgStability.toFixed(1),
-        impairments: [...new Set(recordedData.flatMap(d => d.impairments))],
+        impairments: Array.from(new Set(recordedData.flatMap(d => d.impairments))),
         recommendations: selectedTest.id === 'running' 
           ? generateRunningRecommendations(impairments)
           : generateRecommendations(impairments),

@@ -225,6 +225,12 @@ export default function MovementAnalysis() {
   const cameraRef = useRef<Camera | null>(null);
   const animationFrameRef = useRef<number>();
   const recordingIntervalRef = useRef<NodeJS.Timeout>();
+  const visibleJointsRef = useRef(visibleJoints);
+  
+  // Update ref when visibleJoints state changes
+  useEffect(() => {
+    visibleJointsRef.current = visibleJoints;
+  }, [visibleJoints]);
 
   // Initialize MediaPipe Pose
   useEffect(() => {
@@ -461,7 +467,7 @@ export default function MovementAnalysis() {
         metrics.jointAngles.forEach((angle: JointAngle) => {
           const landmarkIndex = jointToLandmark[angle.joint];
           // Only show angle if this joint is selected to be visible
-          if (landmarkIndex !== undefined && results.poseLandmarks[landmarkIndex] && visibleJoints[angle.joint]) {
+          if (landmarkIndex !== undefined && results.poseLandmarks[landmarkIndex] && visibleJointsRef.current[angle.joint]) {
             const landmark = results.poseLandmarks[landmarkIndex];
             const x = landmark.x * canvas.width;
             const y = landmark.y * canvas.height;
@@ -559,7 +565,7 @@ export default function MovementAnalysis() {
     }
 
     ctx.restore();
-  }, [isRecording, isPaused, sessionStartTime, selectedTest, showJointAngles, visibleJoints]);
+  }, [isRecording, isPaused, sessionStartTime, selectedTest, showJointAngles]);
 
   // Toggle fullscreen mode
   const toggleFullscreen = () => {

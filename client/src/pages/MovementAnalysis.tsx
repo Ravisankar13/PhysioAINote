@@ -203,6 +203,19 @@ export default function MovementAnalysis() {
   });
   const [cameraStatus, setCameraStatus] = useState<'initializing' | 'ready' | 'error' | 'permission-needed'>('initializing');
   const [showJointAngles, setShowJointAngles] = useState(true);
+  const [showAngleControls, setShowAngleControls] = useState(false);
+  const [visibleJoints, setVisibleJoints] = useState<{ [key: string]: boolean }>({
+    'left_shoulder': true,
+    'right_shoulder': true,
+    'left_elbow': true,
+    'right_elbow': true,
+    'left_hip': true,
+    'right_hip': true,
+    'left_knee': true,
+    'right_knee': true,
+    'left_ankle': true,
+    'right_ankle': true
+  });
   
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -447,7 +460,8 @@ export default function MovementAnalysis() {
 
         metrics.jointAngles.forEach((angle: JointAngle) => {
           const landmarkIndex = jointToLandmark[angle.joint];
-          if (landmarkIndex !== undefined && results.poseLandmarks[landmarkIndex]) {
+          // Only show angle if this joint is selected to be visible
+          if (landmarkIndex !== undefined && results.poseLandmarks[landmarkIndex] && visibleJoints[angle.joint]) {
             const landmark = results.poseLandmarks[landmarkIndex];
             const x = landmark.x * canvas.width;
             const y = landmark.y * canvas.height;
@@ -545,7 +559,7 @@ export default function MovementAnalysis() {
     }
 
     ctx.restore();
-  }, [isRecording, isPaused, sessionStartTime, selectedTest, showJointAngles]);
+  }, [isRecording, isPaused, sessionStartTime, selectedTest, showJointAngles, visibleJoints]);
 
   // Toggle fullscreen mode
   const toggleFullscreen = () => {
@@ -882,27 +896,193 @@ export default function MovementAnalysis() {
                 </div>
                 
                 {/* Control Buttons - Top Right */}
-                <div className="absolute top-4 right-4 flex gap-2">
-                  {/* Joint Angles Toggle */}
-                  <Button
-                    onClick={() => setShowJointAngles(!showJointAngles)}
-                    className={`${showJointAngles ? 'bg-green-600/70 hover:bg-green-600/90' : 'bg-black/50 hover:bg-black/70'} text-white`}
-                    size="sm"
-                    title={showJointAngles ? "Hide Joint Angles" : "Show Joint Angles"}
-                  >
-                    <Info className="h-4 w-4 mr-1" />
-                    {showJointAngles ? 'Angles ON' : 'Angles OFF'}
-                  </Button>
+                <div className="absolute top-4 right-4 flex flex-col items-end gap-2">
+                  <div className="flex gap-2">
+                    {/* Joint Angles Toggle */}
+                    <Button
+                      onClick={() => setShowJointAngles(!showJointAngles)}
+                      className={`${showJointAngles ? 'bg-green-600/70 hover:bg-green-600/90' : 'bg-black/50 hover:bg-black/70'} text-white`}
+                      size="sm"
+                      title={showJointAngles ? "Hide Joint Angles" : "Show Joint Angles"}
+                    >
+                      <Info className="h-4 w-4 mr-1" />
+                      {showJointAngles ? 'Angles ON' : 'Angles OFF'}
+                    </Button>
+                    
+                    {/* Joint Selection Toggle */}
+                    {showJointAngles && (
+                      <Button
+                        onClick={() => setShowAngleControls(!showAngleControls)}
+                        className="bg-black/50 hover:bg-black/70 text-white"
+                        size="sm"
+                        title="Select which joints to display"
+                      >
+                        <Settings className="h-4 w-4 mr-1" />
+                        Select Joints
+                      </Button>
+                    )}
+                    
+                    {/* Fullscreen Toggle Button */}
+                    <Button
+                      onClick={toggleFullscreen}
+                      className="bg-black/50 hover:bg-black/70 text-white"
+                      size="sm"
+                      title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+                    >
+                      {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                    </Button>
+                  </div>
                   
-                  {/* Fullscreen Toggle Button */}
-                  <Button
-                    onClick={toggleFullscreen}
-                    className="bg-black/50 hover:bg-black/70 text-white"
-                    size="sm"
-                    title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
-                  >
-                    {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-                  </Button>
+                  {/* Joint Selection Panel */}
+                  {showJointAngles && showAngleControls && (
+                    <div className="bg-black/80 backdrop-blur-sm text-white p-4 rounded-lg max-w-sm">
+                      <div className="space-y-3">
+                        <div className="text-sm font-semibold mb-2">Select Joints to Display</div>
+                        
+                        {/* Quick Presets */}
+                        <div className="flex flex-wrap gap-2 pb-2 border-b border-gray-600">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs bg-white/10 border-white/20 text-white hover:bg-white/20"
+                            onClick={() => {
+                              setVisibleJoints({
+                                'left_shoulder': true, 'right_shoulder': true,
+                                'left_elbow': true, 'right_elbow': true,
+                                'left_hip': false, 'right_hip': false,
+                                'left_knee': false, 'right_knee': false,
+                                'left_ankle': false, 'right_ankle': false
+                              });
+                            }}
+                          >
+                            Upper Body
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs bg-white/10 border-white/20 text-white hover:bg-white/20"
+                            onClick={() => {
+                              setVisibleJoints({
+                                'left_shoulder': false, 'right_shoulder': false,
+                                'left_elbow': false, 'right_elbow': false,
+                                'left_hip': true, 'right_hip': true,
+                                'left_knee': true, 'right_knee': true,
+                                'left_ankle': true, 'right_ankle': true
+                              });
+                            }}
+                          >
+                            Lower Body
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs bg-white/10 border-white/20 text-white hover:bg-white/20"
+                            onClick={() => {
+                              setVisibleJoints({
+                                'left_shoulder': true, 'right_shoulder': false,
+                                'left_elbow': true, 'right_elbow': false,
+                                'left_hip': true, 'right_hip': false,
+                                'left_knee': true, 'right_knee': false,
+                                'left_ankle': true, 'right_ankle': false
+                              });
+                            }}
+                          >
+                            Left Side
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs bg-white/10 border-white/20 text-white hover:bg-white/20"
+                            onClick={() => {
+                              setVisibleJoints({
+                                'left_shoulder': false, 'right_shoulder': true,
+                                'left_elbow': false, 'right_elbow': true,
+                                'left_hip': false, 'right_hip': true,
+                                'left_knee': false, 'right_knee': true,
+                                'left_ankle': false, 'right_ankle': true
+                              });
+                            }}
+                          >
+                            Right Side
+                          </Button>
+                        </div>
+                        
+                        {/* Individual Joint Checkboxes */}
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div className="space-y-1">
+                            <div className="font-semibold text-gray-300">Left Side</div>
+                            {['shoulder', 'elbow', 'hip', 'knee', 'ankle'].map(joint => (
+                              <label key={`left_${joint}`} className="flex items-center gap-2 cursor-pointer hover:bg-white/10 p-1 rounded">
+                                <input
+                                  type="checkbox"
+                                  checked={visibleJoints[`left_${joint}`]}
+                                  onChange={(e) => setVisibleJoints(prev => ({
+                                    ...prev,
+                                    [`left_${joint}`]: e.target.checked
+                                  }))}
+                                  className="w-3 h-3"
+                                />
+                                <span className="capitalize">{joint}</span>
+                              </label>
+                            ))}
+                          </div>
+                          <div className="space-y-1">
+                            <div className="font-semibold text-gray-300">Right Side</div>
+                            {['shoulder', 'elbow', 'hip', 'knee', 'ankle'].map(joint => (
+                              <label key={`right_${joint}`} className="flex items-center gap-2 cursor-pointer hover:bg-white/10 p-1 rounded">
+                                <input
+                                  type="checkbox"
+                                  checked={visibleJoints[`right_${joint}`]}
+                                  onChange={(e) => setVisibleJoints(prev => ({
+                                    ...prev,
+                                    [`right_${joint}`]: e.target.checked
+                                  }))}
+                                  className="w-3 h-3"
+                                />
+                                <span className="capitalize">{joint}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                        
+                        {/* Select/Clear All */}
+                        <div className="flex gap-2 pt-2 border-t border-gray-600">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="flex-1 text-xs bg-white/10 border-white/20 text-white hover:bg-white/20"
+                            onClick={() => {
+                              setVisibleJoints({
+                                'left_shoulder': true, 'right_shoulder': true,
+                                'left_elbow': true, 'right_elbow': true,
+                                'left_hip': true, 'right_hip': true,
+                                'left_knee': true, 'right_knee': true,
+                                'left_ankle': true, 'right_ankle': true
+                              });
+                            }}
+                          >
+                            Select All
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="flex-1 text-xs bg-white/10 border-white/20 text-white hover:bg-white/20"
+                            onClick={() => {
+                              setVisibleJoints({
+                                'left_shoulder': false, 'right_shoulder': false,
+                                'left_elbow': false, 'right_elbow': false,
+                                'left_hip': false, 'right_hip': false,
+                                'left_knee': false, 'right_knee': false,
+                                'left_ankle': false, 'right_ankle': false
+                              });
+                            }}
+                          >
+                            Clear All
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 
                 {/* Recording Status in Fullscreen */}

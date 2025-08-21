@@ -90,6 +90,25 @@ interface AssessmentTest {
 
 const ASSESSMENT_TESTS: AssessmentTest[] = [
   {
+    id: 'general',
+    name: 'General Movement',
+    description: 'Basic movement quality assessment',
+    duration: 60,
+    instructions: [
+      'Perform various movements naturally',
+      'Include reaching, bending, rotating',
+      'Move at comfortable pace',
+      'Continue for full duration'
+    ],
+    keyPoints: [
+      'Movement quality',
+      'Range of motion',
+      'Symmetry assessment',
+      'Balance control',
+      'Coordination patterns'
+    ]
+  },
+  {
     id: 'walking-gait',
     name: 'Walking Gait Analysis',
     description: 'Comprehensive walking pattern assessment',
@@ -267,7 +286,7 @@ export default function MovementAnalysis() {
   // State management
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
-  const [selectedTest, setSelectedTest] = useState<AssessmentTest>(ASSESSMENT_TESTS[0]);
+  const [selectedTest, setSelectedTest] = useState<AssessmentTest | null>(null);
   const [currentMetrics, setCurrentMetrics] = useState<MovementMetrics | null>(null);
   const [runningMetrics, setRunningMetrics] = useState<RunningMetrics | null>(null);
   const [recordedData, setRecordedData] = useState<any[]>([]);
@@ -282,7 +301,7 @@ export default function MovementAnalysis() {
     gender: '',
     complaint: ''
   });
-  const [cameraStatus, setCameraStatus] = useState<'initializing' | 'ready' | 'error' | 'permission-needed'>('initializing');
+  const [cameraStatus, setCameraStatus] = useState<'initializing' | 'ready' | 'error' | 'permission-needed' | 'not-started'>('not-started');
   const [showJointAngles, setShowJointAngles] = useState(true);
   const [showAngleControls, setShowAngleControls] = useState(false);
   const [visibleJoints, setVisibleJoints] = useState<{ [key: string]: boolean }>({
@@ -299,6 +318,7 @@ export default function MovementAnalysis() {
   });
   const [specializedTestResult, setSpecializedTestResult] = useState<MovementTestResult | null>(null);
   const [specializedMetrics, setSpecializedMetrics] = useState<any>(null);
+  const [showTestSelection, setShowTestSelection] = useState(true);
   
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -315,9 +335,9 @@ export default function MovementAnalysis() {
     visibleJointsRef.current = visibleJoints;
   }, [visibleJoints]);
 
-  // Initialize MediaPipe Pose
+  // Initialize MediaPipe Pose - only when a test is selected
   useEffect(() => {
-    if (!videoRef.current || !canvasRef.current) return;
+    if (!videoRef.current || !canvasRef.current || !selectedTest) return;
 
     const initializeCamera = async () => {
       try {
@@ -442,7 +462,7 @@ export default function MovementAnalysis() {
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [isPaused]);
+  }, [isPaused, selectedTest]);
 
   // Process pose detection results
   const onPoseResults = useCallback((results: any) => {
@@ -477,7 +497,7 @@ export default function MovementAnalysis() {
       let testResult: MovementTestResult | null = null;
       
       // Run specialized analysis based on selected test
-      switch (selectedTest.id) {
+      switch (selectedTest?.id) {
         case 'walking-gait':
           specializedMetrics = analyzeWalkingGait(results.poseLandmarks);
           detectedImpairments = specializedMetrics.deviations || [];
@@ -811,6 +831,8 @@ export default function MovementAnalysis() {
 
   // Start recording
   const startRecording = () => {
+    if (!selectedTest) return;
+    
     setIsRecording(true);
     setIsPaused(false);
     setSessionStartTime(Date.now());
@@ -818,14 +840,14 @@ export default function MovementAnalysis() {
     setRecordedData([]);
     
     // Reset running analysis if starting a running test
-    if (selectedTest.id === 'running') {
+    if (selectedTest?.id === 'running-gait') {
       resetRunningAnalysis();
       setRunningMetrics(null);
     }
     
     toast({
       title: "Recording Started",
-      description: `Performing ${selectedTest.name}`,
+      description: `Performing ${selectedTest?.name || 'test'}`,
     });
   };
 
@@ -890,7 +912,7 @@ export default function MovementAnalysis() {
       patientAge: parseInt(patientInfo.age) || null,
       patientGender: patientInfo.gender || null,
       chiefComplaint: patientInfo.complaint || null,
-      assessmentType: selectedTest.id,
+      assessmentType: selectedTest?.id || 'general',
       duration: elapsedTime,
       overallQuality: currentMetrics?.quality || 'fair',
       measurements: recordedData,
@@ -925,11 +947,11 @@ export default function MovementAnalysis() {
         averageSymmetry: avgSymmetry.toFixed(1),
         averageStability: avgStability.toFixed(1),
         impairments: Array.from(new Set(recordedData.flatMap(d => d.impairments))),
-        recommendations: selectedTest.id === 'running' 
+        recommendations: selectedTest?.id === 'running-gait' 
           ? generateRunningRecommendations(impairments)
           : generateRecommendations(impairments),
         // Add running-specific metrics if applicable
-        ...(selectedTest.id === 'running' && runningMetrics ? {
+        ...(selectedTest?.id === 'running-gait' && runningMetrics ? {
           runningMetrics: {
             cadence: runningMetrics.cadence,
             footStrike: runningMetrics.footStrike,
@@ -982,6 +1004,120 @@ export default function MovementAnalysis() {
     return recommendations;
   };
 
+  // Handler for test selection
+  const handleTestSelection = (test: AssessmentTest) => {
+    setSelectedTest(test);
+    setShowTestSelection(false);
+    setCameraStatus('initializing');
+    toast({
+      title: "Test Selected",
+      description: `Initializing camera for ${test.name}...`,
+    });
+  };
+
+  // Handler to go back to test selection
+  const handleBackToTestSelection = () => {
+    setSelectedTest(null);
+    setShowTestSelection(true);
+    setCameraStatus('not-started');
+    if (cameraRef.current) {
+      cameraRef.current.stop();
+    }
+    // Reset all test data
+    setIsRecording(false);
+    setIsPaused(false);
+    setElapsedTime(0);
+    setRecordedData([]);
+    setCurrentMetrics(null);
+    setRunningMetrics(null);
+    setSpecializedTestResult(null);
+    setSpecializedMetrics(null);
+  };
+
+  // Test Selection Screen
+  if (showTestSelection && !selectedTest) {
+    return (
+      <div className="h-screen flex flex-col bg-gray-50">
+        {/* Header */}
+        <div className="bg-white border-b px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <Activity className="h-6 w-6 text-blue-600" />
+              <h1 className="text-2xl font-bold">Movement Analysis & Biomechanics</h1>
+            </div>
+          </div>
+        </div>
+
+        {/* Test Selection Cards */}
+        <div className="flex-1 overflow-auto p-6">
+          <div className="max-w-7xl mx-auto">
+            <div className="text-center mb-8">
+              <h2 className="text-3xl font-bold mb-3">Select Assessment Test</h2>
+              <p className="text-gray-600">Choose a clinical assessment to analyze movement patterns and identify impairments</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {ASSESSMENT_TESTS.map((test) => (
+                <Card 
+                  key={test.id} 
+                  className="cursor-pointer hover:shadow-lg transition-shadow duration-200 hover:border-blue-500"
+                  onClick={() => handleTestSelection(test)}
+                >
+                  <CardHeader className="pb-4">
+                    <div className="flex items-center justify-between mb-2">
+                      {/* Icon based on test type */}
+                      {test.id.includes('gait') && <Activity className="h-8 w-8 text-blue-600" />}
+                      {test.id.includes('squat') && <TrendingDown className="h-8 w-8 text-green-600" />}
+                      {test.id.includes('step') && <TrendingUp className="h-8 w-8 text-purple-600" />}
+                      {test.id.includes('shoulder') && <RefreshCw className="h-8 w-8 text-orange-600" />}
+                      {test.id === 'lunge' && <Activity className="h-8 w-8 text-indigo-600" />}
+                      {test.id === 'balance' && <User className="h-8 w-8 text-pink-600" />}
+                      {test.id === 'general' && <Activity className="h-8 w-8 text-gray-600" />}
+                      <Badge variant="outline">{test.duration}s</Badge>
+                    </div>
+                    <CardTitle className="text-lg">{test.name}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-gray-600 mb-4">{test.description}</p>
+                    
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-xs font-semibold text-gray-700 mb-1">Key Metrics:</p>
+                        <div className="flex flex-wrap gap-1">
+                          {test.keyPoints.slice(0, 3).map((point, idx) => (
+                            <Badge key={idx} variant="secondary" className="text-xs">
+                              {point.split('(')[0].trim()}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+
+                      <Button className="w-full" size="sm">
+                        <Play className="h-4 w-4 mr-2" />
+                        Start Test
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            <div className="mt-8 p-6 bg-blue-50 rounded-lg">
+              <h3 className="font-semibold text-blue-900 mb-2">How it works:</h3>
+              <ol className="list-decimal list-inside space-y-2 text-sm text-blue-800">
+                <li>Select a test from the options above</li>
+                <li>Allow camera access when prompted</li>
+                <li>Position yourself so your full body is visible</li>
+                <li>Follow the test instructions and movement patterns</li>
+                <li>Review your results and clinical recommendations</li>
+              </ol>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div ref={containerRef} className="h-screen flex flex-col bg-gray-50">
       {/* Header - Hide in fullscreen */}
@@ -993,6 +1129,14 @@ export default function MovementAnalysis() {
               <h1 className="text-2xl font-bold">Movement Analysis & Biomechanics</h1>
             </div>
             <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleBackToTestSelection}
+              >
+                <Activity className="h-4 w-4 mr-2" />
+                Change Test
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
@@ -1308,32 +1452,19 @@ export default function MovementAnalysis() {
               <CardContent>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Select
-                      value={selectedTest.id}
-                      onValueChange={(value) => {
-                        const test = ASSESSMENT_TESTS.find(t => t.id === value);
-                        if (test) setSelectedTest(test);
-                      }}
-                      disabled={isRecording}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {ASSESSMENT_TESTS.map(test => (
-                          <SelectItem key={test.id} value={test.id}>
-                            {test.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Current Test:</p>
+                      <Badge variant="outline" className="text-sm">
+                        {selectedTest?.name || 'No test selected'}
+                      </Badge>
+                    </div>
                   </div>
                   <div className="text-sm text-gray-600">
                     <p className="font-medium mb-1">Instructions:</p>
                     <ul className="list-disc list-inside space-y-1">
-                      {selectedTest.instructions.map((instruction, i) => (
+                      {selectedTest?.instructions.map((instruction, i) => (
                         <li key={i} className="text-xs">{instruction}</li>
-                      ))}
+                      )) || <li className="text-xs">Select a test to begin</li>}
                     </ul>
                   </div>
                 </div>
@@ -1360,7 +1491,7 @@ export default function MovementAnalysis() {
                   </CardHeader>
                   <CardContent>
                     <ScrollArea className="h-[400px]">
-                      {selectedTest.id === 'running' && runningMetrics ? (
+                      {selectedTest?.id === 'running-gait' && runningMetrics ? (
                         <div className="space-y-4">
                           {/* Cadence */}
                           <div>
@@ -1559,7 +1690,7 @@ export default function MovementAnalysis() {
                           {/* Test Name and Score */}
                           <div className="bg-gray-50 p-4 rounded-lg">
                             <div className="flex items-center justify-between mb-2">
-                              <h3 className="font-semibold">{selectedTest.name}</h3>
+                              <h3 className="font-semibold">{selectedTest?.name || 'Test'}</h3>
                               <Badge variant={
                                 specializedTestResult.score >= 80 ? 'default' :
                                 specializedTestResult.score >= 60 ? 'secondary' : 'destructive'
@@ -1583,7 +1714,7 @@ export default function MovementAnalysis() {
                             <div>
                               <h4 className="text-sm font-medium mb-3">Test Metrics</h4>
                               <div className="space-y-2 text-xs">
-                                {selectedTest.id === 'walking-gait' && 'stepLengthAsymmetry' in specializedMetrics && (
+                                {selectedTest?.id === 'walking-gait' && 'stepLengthAsymmetry' in specializedMetrics && (
                                   <>
                                     <div className="flex justify-between">
                                       <span>Step Length Asymmetry</span>
@@ -1603,7 +1734,7 @@ export default function MovementAnalysis() {
                                     </div>
                                   </>
                                 )}
-                                {selectedTest.id === 'single-leg-squat' && 'kneeValgusAngle' in specializedMetrics && (
+                                {selectedTest?.id === 'single-leg-squat' && 'kneeValgusAngle' in specializedMetrics && (
                                   <>
                                     <div className="flex justify-between">
                                       <span>Knee Valgus Angle</span>
@@ -1621,7 +1752,7 @@ export default function MovementAnalysis() {
                                     </div>
                                   </>
                                 )}
-                                {selectedTest.id === 'shoulder-flexion' && 'maxFlexionROM' in specializedMetrics && (
+                                {selectedTest?.id === 'shoulder-flexion' && 'maxFlexionROM' in specializedMetrics && (
                                   <>
                                     <div className="flex justify-between">
                                       <span>Max Flexion ROM</span>
@@ -1641,7 +1772,7 @@ export default function MovementAnalysis() {
                                     </div>
                                   </>
                                 )}
-                                {selectedTest.id === 'running-gait' && specializedMetrics && 'cadenceOptimal' in specializedMetrics && (
+                                {selectedTest?.id === 'running-gait' && specializedMetrics && 'cadenceOptimal' in specializedMetrics && (
                                   <>
                                     <div className="flex justify-between">
                                       <span>Cadence Optimal</span>
@@ -1684,7 +1815,7 @@ export default function MovementAnalysis() {
                           <div>
                             <h4 className="text-sm font-medium mb-3">Assessment Focus</h4>
                             <div className="space-y-1">
-                              {selectedTest.keyPoints.map((point, i) => (
+                              {selectedTest?.keyPoints?.map((point, i) => (
                                 <div key={i} className="flex items-start gap-2">
                                   <div className="w-1 h-1 bg-gray-400 rounded-full mt-1.5 flex-shrink-0" />
                                   <p className="text-xs text-gray-600">{point}</p>
@@ -1728,7 +1859,7 @@ export default function MovementAnalysis() {
                           <div>
                             <h4 className="text-sm font-medium mb-3">Recommendations</h4>
                             <div className="space-y-2">
-                              {(selectedTest.id === 'running' 
+                              {(selectedTest?.id === 'running-gait' 
                                 ? generateRunningRecommendations(impairments)
                                 : generateRecommendations(impairments)
                               ).map((rec, i) => (

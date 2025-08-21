@@ -426,18 +426,23 @@ export default function MovementAnalysis() {
 
       // Draw joint angles directly on joints (if enabled)
       if (showJointAngles && metrics && results.poseLandmarks) {
+        // Debug log to check if we have metrics
+        if (metrics.jointAngles.length > 0) {
+          console.log('Joint angles available:', metrics.jointAngles.map(a => `${a.joint}: ${a.angle.toFixed(0)}°`));
+        }
+        
         // Map joint names to landmark indices for MediaPipe
         const jointToLandmark: { [key: string]: number } = {
-          'Left Shoulder': 11,
-          'Right Shoulder': 12,
-          'Left Elbow': 13,
-          'Right Elbow': 14,
-          'Left Hip': 23,
-          'Right Hip': 24,
-          'Left Knee': 25,
-          'Right Knee': 26,
-          'Left Ankle': 27,
-          'Right Ankle': 28
+          'left_shoulder': 11,
+          'right_shoulder': 12,
+          'left_elbow': 13,
+          'right_elbow': 14,
+          'left_hip': 23,
+          'right_hip': 24,
+          'left_knee': 25,
+          'right_knee': 26,
+          'left_ankle': 27,
+          'right_ankle': 28
         };
 
         // Configure text styling
@@ -447,13 +452,14 @@ export default function MovementAnalysis() {
 
         metrics.jointAngles.forEach((angle: JointAngle) => {
           const landmarkIndex = jointToLandmark[angle.joint];
+          console.log(`Checking joint ${angle.joint}, landmark index: ${landmarkIndex}`);
           if (landmarkIndex !== undefined && results.poseLandmarks[landmarkIndex]) {
             const landmark = results.poseLandmarks[landmarkIndex];
             const x = landmark.x * canvas.width;
             const y = landmark.y * canvas.height;
 
             // Offset position to avoid overlapping with joint
-            const offsetX = angle.joint.includes('Left') ? -30 : 30;
+            const offsetX = angle.joint.includes('left') ? -30 : 30;
             const offsetY = -20;
             const displayX = x + offsetX;
             const displayY = y + offsetY;

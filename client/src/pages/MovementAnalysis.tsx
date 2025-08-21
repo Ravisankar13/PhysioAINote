@@ -202,6 +202,7 @@ export default function MovementAnalysis() {
     complaint: ''
   });
   const [cameraStatus, setCameraStatus] = useState<'initializing' | 'ready' | 'error' | 'permission-needed'>('initializing');
+  const [showJointAngles, setShowJointAngles] = useState(true);
   
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -423,26 +424,97 @@ export default function MovementAnalysis() {
         }]);
       }
 
-      // Draw joint angles on canvas
-      if (metrics) {
-        ctx.fillStyle = 'white';
-        ctx.font = '14px Arial';
-        ctx.strokeStyle = 'black';
-        ctx.lineWidth = 3;
+      // Draw joint angles directly on joints (if enabled)
+      if (showJointAngles && metrics && results.poseLandmarks) {
+        // Map joint names to landmark indices for MediaPipe
+        const jointToLandmark: { [key: string]: number } = {
+          'Left Shoulder': 11,
+          'Right Shoulder': 12,
+          'Left Elbow': 13,
+          'Right Elbow': 14,
+          'Left Hip': 23,
+          'Right Hip': 24,
+          'Left Knee': 25,
+          'Right Knee': 26,
+          'Left Ankle': 27,
+          'Right Ankle': 28
+        };
 
-        metrics.jointAngles.forEach((angle: JointAngle, index: number) => {
+        // Configure text styling
+        ctx.font = 'bold 12px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        metrics.jointAngles.forEach((angle: JointAngle) => {
+          const landmarkIndex = jointToLandmark[angle.joint];
+          if (landmarkIndex !== undefined && results.poseLandmarks[landmarkIndex]) {
+            const landmark = results.poseLandmarks[landmarkIndex];
+            const x = landmark.x * canvas.width;
+            const y = landmark.y * canvas.height;
+
+            // Offset position to avoid overlapping with joint
+            const offsetX = angle.joint.includes('Left') ? -30 : 30;
+            const offsetY = -20;
+            const displayX = x + offsetX;
+            const displayY = y + offsetY;
+
+            // Background box for better readability
+            const text = `${angle.angle.toFixed(0)}°`;
+            const textWidth = ctx.measureText(text).width;
+            const padding = 4;
+            
+            // Choose color based on whether angle is normal
+            if (angle.isWithinNormal) {
+              ctx.fillStyle = 'rgba(34, 197, 94, 0.9)'; // Green background
+            } else {
+              ctx.fillStyle = 'rgba(239, 68, 68, 0.9)'; // Red background
+            }
+            
+            // Draw background rectangle
+            ctx.fillRect(
+              displayX - textWidth/2 - padding, 
+              displayY - 8, 
+              textWidth + padding*2, 
+              16
+            );
+            
+            // Draw text
+            ctx.fillStyle = 'white';
+            ctx.fillText(text, displayX, displayY);
+            
+            // Draw line from joint to label if far away
+            if (Math.abs(offsetX) > 20 || Math.abs(offsetY) > 20) {
+              ctx.strokeStyle = angle.isWithinNormal ? 'rgba(34, 197, 94, 0.5)' : 'rgba(239, 68, 68, 0.5)';
+              ctx.lineWidth = 1;
+              ctx.beginPath();
+              ctx.moveTo(x, y);
+              ctx.lineTo(displayX, displayY + 8);
+              ctx.stroke();
+            }
+          }
+        });
+
+        // Also display angles in corner for reference (smaller, less intrusive)
+        ctx.font = '11px Arial';
+        ctx.textAlign = 'left';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+        ctx.lineWidth = 3;
+        
+        let yOffset = 30;
+        metrics.jointAngles.forEach((angle: JointAngle) => {
           if (!angle.isWithinNormal) {
-            const y = 30 + index * 20;
             const text = `${angle.joint}: ${angle.angle.toFixed(1)}°`;
-            ctx.strokeText(text, 10, y);
-            ctx.fillText(text, 10, y);
+            ctx.strokeText(text, 10, yOffset);
+            ctx.fillText(text, 10, yOffset);
+            yOffset += 15;
           }
         });
       }
     }
 
     ctx.restore();
-  }, [isRecording, isPaused, sessionStartTime, selectedTest]);
+  }, [isRecording, isPaused, sessionStartTime, selectedTest, showJointAngles]);
 
   // Toggle fullscreen mode
   const toggleFullscreen = () => {
@@ -778,15 +850,29 @@ export default function MovementAnalysis() {
                   )}
                 </div>
                 
-                {/* Fullscreen Toggle Button */}
-                <Button
-                  onClick={toggleFullscreen}
-                  className="absolute top-4 right-4 bg-black/50 hover:bg-black/70 text-white"
-                  size="sm"
-                  title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
-                >
-                  {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-                </Button>
+                {/* Control Buttons - Top Right */}
+                <div className="absolute top-4 right-4 flex gap-2">
+                  {/* Joint Angles Toggle */}
+                  <Button
+                    onClick={() => setShowJointAngles(!showJointAngles)}
+                    className={`${showJointAngles ? 'bg-green-600/70 hover:bg-green-600/90' : 'bg-black/50 hover:bg-black/70'} text-white`}
+                    size="sm"
+                    title={showJointAngles ? "Hide Joint Angles" : "Show Joint Angles"}
+                  >
+                    <Info className="h-4 w-4 mr-1" />
+                    {showJointAngles ? 'Angles ON' : 'Angles OFF'}
+                  </Button>
+                  
+                  {/* Fullscreen Toggle Button */}
+                  <Button
+                    onClick={toggleFullscreen}
+                    className="bg-black/50 hover:bg-black/70 text-white"
+                    size="sm"
+                    title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+                  >
+                    {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                  </Button>
+                </div>
                 
                 {/* Recording Status in Fullscreen */}
                 {isFullscreen && isRecording && (

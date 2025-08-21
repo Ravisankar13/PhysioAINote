@@ -78,6 +78,13 @@ import {
   type SquatAnalysisMetrics,
   type ShoulderFlexionMetrics
 } from '@/utils/specializedMovementAnalysis';
+import { 
+  getTestConfig,
+  getRelevantJoints,
+  getCameraInstructions,
+  isAngleNormal,
+  getAngleSeverity
+} from '@/utils/testSpecificConfigs';
 
 interface AssessmentTest {
   id: string;
@@ -489,6 +496,113 @@ export default function MovementAnalysis() {
         lineWidth: 1,
         radius: 3
       });
+      
+      // Draw test-specific visual guides
+      const config = getTestConfig(selectedTest?.id || '');
+      if (config && config.visualGuides) {
+        // Draw knee tracking line for squat tests
+        if (config.visualGuides.kneeTrackingLine) {
+          const leftKnee = results.poseLandmarks[25];
+          const leftAnkle = results.poseLandmarks[27];
+          const rightKnee = results.poseLandmarks[26];
+          const rightAnkle = results.poseLandmarks[28];
+          
+          ctx.strokeStyle = 'rgba(255, 255, 0, 0.5)';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([5, 5]);
+          
+          // Left leg tracking line
+          if (leftKnee && leftAnkle) {
+            ctx.beginPath();
+            ctx.moveTo(leftKnee.x * canvas.width, leftKnee.y * canvas.height);
+            ctx.lineTo(leftAnkle.x * canvas.width, leftAnkle.y * canvas.height);
+            ctx.stroke();
+          }
+          
+          // Right leg tracking line
+          if (rightKnee && rightAnkle) {
+            ctx.beginPath();
+            ctx.moveTo(rightKnee.x * canvas.width, rightKnee.y * canvas.height);
+            ctx.lineTo(rightAnkle.x * canvas.width, rightAnkle.y * canvas.height);
+            ctx.stroke();
+          }
+          
+          ctx.setLineDash([]);
+        }
+        
+        // Draw ROM arcs for shoulder flexion
+        if (config.visualGuides.romArcs && selectedTest?.id === 'shoulder-flexion') {
+          const leftShoulder = results.poseLandmarks[11];
+          const rightShoulder = results.poseLandmarks[12];
+          
+          ctx.strokeStyle = 'rgba(100, 200, 255, 0.3)';
+          ctx.lineWidth = 3;
+          
+          // Draw ROM arc for left shoulder
+          if (leftShoulder) {
+            const x = leftShoulder.x * canvas.width;
+            const y = leftShoulder.y * canvas.height;
+            const radius = 80;
+            
+            ctx.beginPath();
+            ctx.arc(x, y, radius, Math.PI, 0, false);
+            ctx.stroke();
+            
+            // Draw normal range indicator
+            ctx.strokeStyle = 'rgba(0, 255, 0, 0.5)';
+            ctx.beginPath();
+            ctx.arc(x, y, radius, Math.PI * 1.11, Math.PI * 0.11, false); // 160-180 degrees
+            ctx.stroke();
+          }
+          
+          // Draw ROM arc for right shoulder
+          if (rightShoulder) {
+            const x = rightShoulder.x * canvas.width;
+            const y = rightShoulder.y * canvas.height;
+            const radius = 80;
+            
+            ctx.strokeStyle = 'rgba(100, 200, 255, 0.3)';
+            ctx.beginPath();
+            ctx.arc(x, y, radius, Math.PI, 0, false);
+            ctx.stroke();
+            
+            // Draw normal range indicator
+            ctx.strokeStyle = 'rgba(0, 255, 0, 0.5)';
+            ctx.beginPath();
+            ctx.arc(x, y, radius, Math.PI * 1.11, Math.PI * 0.11, false);
+            ctx.stroke();
+          }
+        }
+        
+        // Draw pelvic stability indicator
+        if (config.visualGuides.pelvicStabilityIndicator) {
+          const leftHip = results.poseLandmarks[23];
+          const rightHip = results.poseLandmarks[24];
+          
+          if (leftHip && rightHip) {
+            const leftY = leftHip.y * canvas.height;
+            const rightY = rightHip.y * canvas.height;
+            const difference = Math.abs(leftY - rightY);
+            
+            // Draw horizontal line between hips
+            ctx.strokeStyle = difference < 10 ? 'rgba(0, 255, 0, 0.7)' : 'rgba(255, 0, 0, 0.7)';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(leftHip.x * canvas.width, leftY);
+            ctx.lineTo(rightHip.x * canvas.width, rightY);
+            ctx.stroke();
+            
+            // Draw level indicator
+            if (difference > 10) {
+              ctx.fillStyle = 'rgba(255, 0, 0, 0.9)';
+              ctx.font = 'bold 12px Arial';
+              const midX = (leftHip.x + rightHip.x) / 2 * canvas.width;
+              const midY = (leftY + rightY) / 2;
+              ctx.fillText(`Drop: ${difference.toFixed(0)}px`, midX - 30, midY - 10);
+            }
+          }
+        }
+      }
 
       // Analyze movement based on selected test
       let detectedImpairments: string[] = [];
@@ -1009,10 +1123,25 @@ export default function MovementAnalysis() {
     setSelectedTest(test);
     setShowTestSelection(false);
     setCameraStatus('initializing');
-    toast({
-      title: "Test Selected",
-      description: `Initializing camera for ${test.name}...`,
-    });
+    
+    // Get test-specific configuration
+    const config = getTestConfig(test.id);
+    if (config) {
+      // Update visible joints based on test configuration
+      setVisibleJoints(config.relevantJoints);
+      
+      // Show camera instructions
+      toast({
+        title: "Camera Setup Instructions",
+        description: getCameraInstructions(test.id),
+        duration: 6000,
+      });
+    } else {
+      toast({
+        title: "Test Selected",
+        description: `Initializing camera for ${test.name}...`,
+      });
+    }
   };
 
   // Handler to go back to test selection

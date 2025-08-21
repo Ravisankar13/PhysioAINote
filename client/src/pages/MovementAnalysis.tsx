@@ -1583,50 +1583,50 @@ export default function MovementAnalysis() {
                             <div>
                               <h4 className="text-sm font-medium mb-3">Test Metrics</h4>
                               <div className="space-y-2 text-xs">
-                                {selectedTest.id === 'walking-gait' && (
+                                {selectedTest.id === 'walking-gait' && 'stepLengthAsymmetry' in specializedMetrics && (
                                   <>
                                     <div className="flex justify-between">
                                       <span>Step Length Asymmetry</span>
                                       <span className={specializedMetrics.stepLengthAsymmetry < 10 ? 'text-green-600' : 'text-orange-600'}>
-                                        {specializedMetrics.stepLengthAsymmetry.toFixed(1)}%
+                                        {specializedMetrics.stepLengthAsymmetry?.toFixed(1) || '0'}%
                                       </span>
                                     </div>
                                     <div className="flex justify-between">
                                       <span>Stance Time</span>
-                                      <span>{specializedMetrics.stanceTime.left.toFixed(0)}ms / {specializedMetrics.stanceTime.right.toFixed(0)}ms</span>
+                                      <span>{specializedMetrics.stanceTime?.left?.toFixed(0) || '0'}ms / {specializedMetrics.stanceTime?.right?.toFixed(0) || '0'}ms</span>
                                     </div>
                                     <div className="flex justify-between">
                                       <span>Hip Drop</span>
-                                      <span className={Math.max(specializedMetrics.hipDrop.left, specializedMetrics.hipDrop.right) < 5 ? 'text-green-600' : 'text-orange-600'}>
-                                        L: {specializedMetrics.hipDrop.left.toFixed(1)}° / R: {specializedMetrics.hipDrop.right.toFixed(1)}°
+                                      <span className={Math.max(specializedMetrics.hipDrop?.left || 0, specializedMetrics.hipDrop?.right || 0) < 5 ? 'text-green-600' : 'text-orange-600'}>
+                                        L: {specializedMetrics.hipDrop?.left?.toFixed(1) || '0'}° / R: {specializedMetrics.hipDrop?.right?.toFixed(1) || '0'}°
                                       </span>
                                     </div>
                                   </>
                                 )}
-                                {selectedTest.id === 'single-leg-squat' && (
+                                {selectedTest.id === 'single-leg-squat' && 'kneeValgusAngle' in specializedMetrics && (
                                   <>
                                     <div className="flex justify-between">
                                       <span>Knee Valgus Angle</span>
-                                      <span className={Math.max(Math.abs(specializedMetrics.kneeValgusAngle.left), Math.abs(specializedMetrics.kneeValgusAngle.right)) < 10 ? 'text-green-600' : 'text-red-600'}>
-                                        L: {specializedMetrics.kneeValgusAngle.left.toFixed(1)}° / R: {specializedMetrics.kneeValgusAngle.right.toFixed(1)}°
+                                      <span className={Math.max(Math.abs(specializedMetrics.kneeValgusAngle?.left || 0), Math.abs(specializedMetrics.kneeValgusAngle?.right || 0)) < 10 ? 'text-green-600' : 'text-red-600'}>
+                                        L: {specializedMetrics.kneeValgusAngle?.left?.toFixed(1) || '0'}° / R: {specializedMetrics.kneeValgusAngle?.right?.toFixed(1) || '0'}°
                                       </span>
                                     </div>
                                     <div className="flex justify-between">
                                       <span>Trunk Lateral Flexion</span>
-                                      <span>{specializedMetrics.trunkLateralFlexion.toFixed(1)}°</span>
+                                      <span>{specializedMetrics.trunkLateralFlexion?.toFixed(1) || '0'}°</span>
                                     </div>
                                     <div className="flex justify-between">
                                       <span>Balance Score</span>
-                                      <span>{specializedMetrics.balanceScore.toFixed(0)}%</span>
+                                      <span>{specializedMetrics.balanceScore?.toFixed(0) || '0'}%</span>
                                     </div>
                                   </>
                                 )}
-                                {selectedTest.id === 'shoulder-flexion' && (
+                                {selectedTest.id === 'shoulder-flexion' && 'maxFlexionROM' in specializedMetrics && (
                                   <>
                                     <div className="flex justify-between">
                                       <span>Max Flexion ROM</span>
-                                      <span className={Math.min(specializedMetrics.maxFlexionROM.left, specializedMetrics.maxFlexionROM.right) > 160 ? 'text-green-600' : 'text-orange-600'}>
-                                        L: {specializedMetrics.maxFlexionROM.left.toFixed(0)}° / R: {specializedMetrics.maxFlexionROM.right.toFixed(0)}°
+                                      <span className={Math.min(specializedMetrics.maxFlexionROM?.left || 0, specializedMetrics.maxFlexionROM?.right || 0) > 160 ? 'text-green-600' : 'text-orange-600'}>
+                                        L: {specializedMetrics.maxFlexionROM?.left?.toFixed(0) || '0'}° / R: {specializedMetrics.maxFlexionROM?.right?.toFixed(0) || '0'}°
                                       </span>
                                     </div>
                                     <div className="flex justify-between">
@@ -1637,11 +1637,11 @@ export default function MovementAnalysis() {
                                     </div>
                                     <div className="flex justify-between">
                                       <span>Movement Quality</span>
-                                      <span>{specializedMetrics.movementQuality}%</span>
+                                      <span>{specializedMetrics.movementQuality || '0'}%</span>
                                     </div>
                                   </>
                                 )}
-                                {selectedTest.id === 'running-gait' && specializedMetrics && (
+                                {selectedTest.id === 'running-gait' && specializedMetrics && 'cadenceOptimal' in specializedMetrics && (
                                   <>
                                     <div className="flex justify-between">
                                       <span>Cadence Optimal</span>
@@ -1657,7 +1657,7 @@ export default function MovementAnalysis() {
                                     </div>
                                     <div className="flex justify-between">
                                       <span>Hip Drop</span>
-                                      <span>{specializedMetrics.hipDropMagnitude.toFixed(1)}cm</span>
+                                      <span>{specializedMetrics.hipDropMagnitude?.toFixed(1) || '0'}cm</span>
                                     </div>
                                   </>
                                 )}

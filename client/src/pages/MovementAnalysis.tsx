@@ -61,6 +61,23 @@ import type {
   MovementImpairment,
   InsertMovementSession 
 } from '@shared/movementAnalysisSchema';
+import { 
+  analyzeWalkingGait, 
+  analyzeRunningGait, 
+  analyzeStepUp, 
+  analyzeStepDown,
+  analyzeSingleLegSquat,
+  analyzeDoubleSquat,
+  analyzeShoulderFlexion,
+  generateRecommendations,
+  calculateRiskScore,
+  type MovementTestResult,
+  type GaitMetrics,
+  type RunningGaitMetrics,
+  type StepAnalysisMetrics,
+  type SquatAnalysisMetrics,
+  type ShoulderFlexionMetrics
+} from '@/utils/specializedMovementAnalysis';
 
 interface AssessmentTest {
   id: string;
@@ -73,111 +90,175 @@ interface AssessmentTest {
 
 const ASSESSMENT_TESTS: AssessmentTest[] = [
   {
-    id: 'squat',
-    name: 'Squat Assessment',
-    description: 'Analyze squat mechanics and identify movement impairments',
-    duration: 30,
+    id: 'walking-gait',
+    name: 'Walking Gait Analysis',
+    description: 'Comprehensive walking pattern assessment',
+    duration: 60,
     instructions: [
-      'Stand with feet shoulder-width apart',
-      'Squat down as low as comfortable',
-      'Return to standing position',
-      'Repeat 5 times'
+      'Walk naturally back and forth',
+      'Maintain normal walking pace',
+      'Look straight ahead',
+      'Continue for full duration'
     ],
     keyPoints: [
-      'Knee alignment',
-      'Hip hinge pattern',
-      'Trunk position',
-      'Ankle mobility'
+      'Stance/swing phase ratio (60/40)',
+      'Step length symmetry',
+      'Pelvic stability (Trendelenburg)',
+      'Trunk lean assessment',
+      'Arm swing coordination'
     ]
   },
   {
-    id: 'running',
-    name: 'Running Analysis',
-    description: 'Comprehensive running mechanics assessment',
-    duration: 60,
+    id: 'running-gait',
+    name: 'Running Gait Analysis',
+    description: 'Running biomechanics and injury risk assessment',
+    duration: 90,
     instructions: [
       'Run at comfortable pace (treadmill or in place)',
       'Maintain consistent speed',
       'Natural arm swing',
-      'Continue for full assessment duration'
+      'Continue for full assessment'
     ],
     keyPoints: [
-      'Cadence & stride length',
+      'Cadence (170-180 spm optimal)',
       'Foot strike pattern',
-      'Vertical oscillation',
-      'Hip & knee mechanics'
+      'Vertical oscillation (<10cm)',
+      'Knee valgus assessment',
+      'Overstride detection'
     ]
   },
   {
-    id: 'single_leg_stance',
-    name: 'Single Leg Stance',
-    description: 'Assess balance and hip stability',
+    id: 'step-up',
+    name: 'Step Up Test',
+    description: 'Assess quadriceps strength and hip control',
+    duration: 45,
+    instructions: [
+      'Step up onto box/step (knee height)',
+      'Lead with right leg for 5 reps',
+      'Switch to left leg for 5 reps',
+      'Control movement up and down'
+    ],
+    keyPoints: [
+      'Knee alignment over toe',
+      'Pelvic drop/stability',
+      'Trunk compensation',
+      'Movement strategy (hip vs knee)'
+    ]
+  },
+  {
+    id: 'step-down',
+    name: 'Step Down Test',
+    description: 'Eccentric control and patellofemoral assessment',
+    duration: 45,
+    instructions: [
+      'Stand on box/step',
+      'Slowly lower one leg to tap floor',
+      'Return to start position',
+      'Perform 5 reps each leg'
+    ],
+    keyPoints: [
+      'Eccentric control quality',
+      'Knee valgus/varus',
+      'Trendelenburg sign',
+      'Speed of descent'
+    ]
+  },
+  {
+    id: 'single-leg-squat',
+    name: 'Single Leg Squat',
+    description: 'Unilateral strength and neuromuscular control',
     duration: 30,
     instructions: [
       'Stand on one leg',
-      'Hold for 10 seconds',
-      'Switch to other leg',
-      'Maintain balance without support'
+      'Squat to 60-90° knee flexion',
+      'Hold for 2 seconds',
+      'Return to standing',
+      'Perform 5 reps each leg'
     ],
     keyPoints: [
-      'Pelvic stability',
-      'Trunk control',
-      'Hip drop (Trendelenburg)',
-      'Balance strategy'
+      'Depth achieved',
+      'Knee valgus angle',
+      'Pelvic control',
+      'Balance maintenance',
+      'Trunk alignment'
+    ]
+  },
+  {
+    id: 'double-leg-squat',
+    name: 'Double Leg Squat',
+    description: 'Bilateral squat pattern and mobility assessment',
+    duration: 30,
+    instructions: [
+      'Stand feet shoulder-width apart',
+      'Squat as deep as comfortable',
+      'Hold for 2 seconds',
+      'Return to standing',
+      'Repeat 5 times'
+    ],
+    keyPoints: [
+      'Depth (full/parallel/partial)',
+      'Knee tracking',
+      'Spine neutrality',
+      'Weight distribution',
+      'Heel contact'
+    ]
+  },
+  {
+    id: 'shoulder-flexion',
+    name: 'Shoulder Flexion (Scapular)',
+    description: 'Shoulder mobility and scapular dyskinesis detection',
+    duration: 30,
+    instructions: [
+      'Raise both arms overhead slowly',
+      'Reach maximum comfortable height',
+      'Lower arms slowly',
+      'Repeat 5 times',
+      'Palms facing forward'
+    ],
+    keyPoints: [
+      'Scapulohumeral rhythm (2:1)',
+      'Scapular winging detection',
+      'Early elevation sign',
+      'Painful arc (60-120°)',
+      'Left/right asymmetry'
     ]
   },
   {
     id: 'lunge',
     name: 'Lunge Assessment',
-    description: 'Evaluate lower extremity control and stability',
-    duration: 30,
+    description: 'Dynamic lower limb control and stability',
+    duration: 45,
     instructions: [
       'Step forward into lunge position',
-      'Lower back knee toward ground',
-      'Return to standing',
-      'Alternate legs'
+      'Lower back knee toward floor',
+      'Push back to start',
+      'Alternate legs for 10 reps'
     ],
     keyPoints: [
-      'Knee tracking',
-      'Hip stability',
-      'Trunk alignment',
-      'Dynamic balance'
+      'Knee over toe alignment',
+      'Trunk stability',
+      'Dynamic valgus',
+      'Depth consistency',
+      'Balance control'
     ]
   },
   {
-    id: 'shoulder_flexion',
-    name: 'Shoulder Flexion Test',
-    description: 'Assess shoulder mobility and scapular control',
-    duration: 20,
-    instructions: [
-      'Stand with arms at sides',
-      'Raise arms overhead',
-      'Lower back down',
-      'Repeat 5 times'
-    ],
-    keyPoints: [
-      'Range of motion',
-      'Scapular rhythm',
-      'Compensation patterns',
-      'Symmetry'
-    ]
-  },
-  {
-    id: 'gait',
-    name: 'Gait Analysis',
-    description: 'Analyze walking pattern and identify deviations',
+    id: 'balance',
+    name: 'Single Leg Balance',
+    description: 'Static balance and proprioception',
     duration: 60,
     instructions: [
-      'Walk naturally',
-      'Maintain normal pace',
-      'Walk back and forth',
-      'Continue for assessment duration'
+      'Stand on one leg for 30 seconds',
+      'Keep hands on hips if possible',
+      'Switch legs and repeat',
+      'Note compensation patterns'
     ],
     keyPoints: [
-      'Step length',
-      'Cadence',
-      'Arm swing',
-      'Trunk stability'
+      'Time maintained',
+      'Sway velocity',
+      'Ankle strategy',
+      'Hip strategy',
+      'Arm compensation'
     ]
   }
 ];
@@ -216,6 +297,8 @@ export default function MovementAnalysis() {
     'left_ankle': true,
     'right_ankle': true
   });
+  const [specializedTestResult, setSpecializedTestResult] = useState<MovementTestResult | null>(null);
+  const [specializedMetrics, setSpecializedMetrics] = useState<any>(null);
   
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -390,23 +473,129 @@ export default function MovementAnalysis() {
       // Analyze movement based on selected test
       let detectedImpairments: string[] = [];
       let metrics: MovementMetrics | null = null;
+      let specializedMetrics: any = null;
+      let testResult: MovementTestResult | null = null;
       
-      if (selectedTest.id === 'running') {
-        // Running-specific analysis
-        const runMetrics = analyzeRunningMechanics(results.poseLandmarks);
-        setRunningMetrics(runMetrics);
-        
-        // Detect running impairments
-        detectedImpairments = detectRunningImpairments(runMetrics);
-        
-        // Still calculate general metrics for visualization
+      // Run specialized analysis based on selected test
+      switch (selectedTest.id) {
+        case 'walking-gait':
+          specializedMetrics = analyzeWalkingGait(results.poseLandmarks);
+          detectedImpairments = specializedMetrics.deviations || [];
+          testResult = {
+            testType: 'walking_gait',
+            timestamp: Date.now(),
+            metrics: specializedMetrics,
+            score: 100 - (detectedImpairments.length * 10),
+            risk: detectedImpairments.length > 3 ? 'high' : detectedImpairments.length > 1 ? 'moderate' : 'low',
+            recommendations: []
+          };
+          if (detectedImpairments.length > 0) {
+            testResult.recommendations.push('Consider gait retraining exercises');
+            testResult.recommendations.push('Focus on hip stabilization');
+          }
+          break;
+          
+        case 'running-gait':
+          specializedMetrics = analyzeRunningGait(results.poseLandmarks);
+          detectedImpairments = [];
+          if (specializedMetrics.excessiveKneeValgus) detectedImpairments.push('Excessive knee valgus');
+          if (specializedMetrics.overstride) detectedImpairments.push('Overstriding detected');
+          if (!specializedMetrics.cadenceOptimal) detectedImpairments.push('Suboptimal cadence');
+          if (specializedMetrics.crossoverGait) detectedImpairments.push('Crossover gait pattern');
+          testResult = {
+            testType: 'running_gait',
+            timestamp: Date.now(),
+            metrics: specializedMetrics,
+            score: 100 - (detectedImpairments.length * 15),
+            risk: detectedImpairments.length > 2 ? 'high' : detectedImpairments.length > 0 ? 'moderate' : 'low',
+            recommendations: []
+          };
+          if (specializedMetrics.overstride) {
+            testResult.recommendations.push('Increase cadence to reduce overstriding');
+          }
+          if (specializedMetrics.excessiveKneeValgus) {
+            testResult.recommendations.push('Strengthen hip abductors and external rotators');
+          }
+          setRunningMetrics(analyzeRunningMechanics(results.poseLandmarks));
+          break;
+          
+        case 'step-up':
+          specializedMetrics = analyzeStepUp(results.poseLandmarks);
+          detectedImpairments = specializedMetrics.compensations || [];
+          break;
+          
+        case 'step-down':
+          specializedMetrics = analyzeStepDown(results.poseLandmarks);
+          detectedImpairments = specializedMetrics.compensations || [];
+          break;
+          
+        case 'single-leg-squat':
+          specializedMetrics = analyzeSingleLegSquat(results.poseLandmarks);
+          if (specializedMetrics.qualityScore < 60) {
+            detectedImpairments.push('Poor movement quality');
+          }
+          if (Math.abs(specializedMetrics.kneeValgusAngle.left) > 10 || 
+              Math.abs(specializedMetrics.kneeValgusAngle.right) > 10) {
+            detectedImpairments.push('Excessive knee valgus');
+          }
+          testResult = {
+            testType: 'single_leg_squat',
+            timestamp: Date.now(),
+            metrics: specializedMetrics,
+            score: specializedMetrics.qualityScore,
+            risk: specializedMetrics.qualityScore < 50 ? 'high' : specializedMetrics.qualityScore < 75 ? 'moderate' : 'low',
+            recommendations: []
+          };
+          if (detectedImpairments.includes('Excessive knee valgus')) {
+            testResult.recommendations.push('Focus on glute strengthening');
+            testResult.recommendations.push('Practice single-leg balance exercises');
+          }
+          break;
+          
+        case 'double-leg-squat':
+          specializedMetrics = analyzeDoubleSquat(results.poseLandmarks);
+          if (specializedMetrics.qualityScore < 60) {
+            detectedImpairments.push('Poor squat quality');
+          }
+          if (!specializedMetrics.spineNeutral) {
+            detectedImpairments.push('Loss of spine neutrality');
+          }
+          break;
+          
+        case 'shoulder-flexion':
+          specializedMetrics = analyzeShoulderFlexion(results.poseLandmarks);
+          detectedImpairments = specializedMetrics.compensations || [];
+          testResult = {
+            testType: 'shoulder_flexion',
+            timestamp: Date.now(),
+            metrics: specializedMetrics,
+            score: 100 - (detectedImpairments.length * 20),
+            risk: detectedImpairments.length > 2 ? 'moderate' : 'low',
+            recommendations: []
+          };
+          if (specializedMetrics.hasScapularDyskinesis) {
+            testResult.recommendations.push('Focus on scapular stabilization exercises');
+          }
+          if (detectedImpairments.includes('Early elevation')) {
+            testResult.recommendations.push('Improve thoracic mobility');
+          }
+          break;
+          
+        default:
+          // Fall back to general analysis for other tests
+          metrics = analyzeMovementQuality(results.poseLandmarks);
+          setCurrentMetrics(metrics);
+          break;
+      }
+      
+      // Always calculate general metrics for display
+      if (!metrics) {
         metrics = analyzeMovementQuality(results.poseLandmarks);
         setCurrentMetrics(metrics);
-      } else {
-        // General movement analysis
-        metrics = analyzeMovementQuality(results.poseLandmarks);
-        setCurrentMetrics(metrics);
-        
+      }
+      
+      // Add general impairment detection if no specialized analysis was done
+      if (!specializedMetrics) {
         // Check for knee valgus
         const leftKneeValgus = detectKneeValgus(results.poseLandmarks, 'left');
         const rightKneeValgus = detectKneeValgus(results.poseLandmarks, 'right');
@@ -430,7 +619,14 @@ export default function MovementAnalysis() {
         }
       }
 
+      // Update state
       setImpairments(detectedImpairments);
+      if (specializedMetrics) {
+        setSpecializedMetrics(specializedMetrics);
+      }
+      if (testResult) {
+        setSpecializedTestResult(testResult);
+      }
 
       // Record data if recording
       if (isRecording && !isPaused && metrics) {
@@ -1150,8 +1346,9 @@ export default function MovementAnalysis() {
         {!isFullscreen && (
           <div className="w-1/4 flex flex-col gap-4">
             <Tabs defaultValue="metrics" className="flex-1">
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="metrics">Metrics</TabsTrigger>
+                <TabsTrigger value="test-results">Test Results</TabsTrigger>
                 <TabsTrigger value="impairments">Impairments</TabsTrigger>
                 <TabsTrigger value="report">Report</TabsTrigger>
               </TabsList>
@@ -1343,6 +1540,164 @@ export default function MovementAnalysis() {
                           <Activity className="h-12 w-12 mx-auto mb-3 opacity-50" />
                           <p>No movement detected</p>
                           <p className="text-xs mt-1">Position yourself in front of the camera</p>
+                        </div>
+                      )}
+                    </ScrollArea>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="test-results" className="mt-4">
+                <Card className="h-full">
+                  <CardHeader>
+                    <CardTitle className="text-lg">Specialized Test Results</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ScrollArea className="h-[400px]">
+                      {specializedTestResult ? (
+                        <div className="space-y-4">
+                          {/* Test Name and Score */}
+                          <div className="bg-gray-50 p-4 rounded-lg">
+                            <div className="flex items-center justify-between mb-2">
+                              <h3 className="font-semibold">{selectedTest.name}</h3>
+                              <Badge variant={
+                                specializedTestResult.score >= 80 ? 'default' :
+                                specializedTestResult.score >= 60 ? 'secondary' : 'destructive'
+                              }>
+                                Score: {specializedTestResult.score.toFixed(0)}%
+                              </Badge>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm">Risk Level:</span>
+                              <Badge variant={
+                                specializedTestResult.risk === 'low' ? 'outline' :
+                                specializedTestResult.risk === 'moderate' ? 'secondary' : 'destructive'
+                              }>
+                                {specializedTestResult.risk.toUpperCase()}
+                              </Badge>
+                            </div>
+                          </div>
+
+                          {/* Test-Specific Metrics */}
+                          {specializedMetrics && (
+                            <div>
+                              <h4 className="text-sm font-medium mb-3">Test Metrics</h4>
+                              <div className="space-y-2 text-xs">
+                                {selectedTest.id === 'walking-gait' && (
+                                  <>
+                                    <div className="flex justify-between">
+                                      <span>Step Length Asymmetry</span>
+                                      <span className={specializedMetrics.stepLengthAsymmetry < 10 ? 'text-green-600' : 'text-orange-600'}>
+                                        {specializedMetrics.stepLengthAsymmetry.toFixed(1)}%
+                                      </span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span>Stance Time</span>
+                                      <span>{specializedMetrics.stanceTime.left.toFixed(0)}ms / {specializedMetrics.stanceTime.right.toFixed(0)}ms</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span>Hip Drop</span>
+                                      <span className={Math.max(specializedMetrics.hipDrop.left, specializedMetrics.hipDrop.right) < 5 ? 'text-green-600' : 'text-orange-600'}>
+                                        L: {specializedMetrics.hipDrop.left.toFixed(1)}° / R: {specializedMetrics.hipDrop.right.toFixed(1)}°
+                                      </span>
+                                    </div>
+                                  </>
+                                )}
+                                {selectedTest.id === 'single-leg-squat' && (
+                                  <>
+                                    <div className="flex justify-between">
+                                      <span>Knee Valgus Angle</span>
+                                      <span className={Math.max(Math.abs(specializedMetrics.kneeValgusAngle.left), Math.abs(specializedMetrics.kneeValgusAngle.right)) < 10 ? 'text-green-600' : 'text-red-600'}>
+                                        L: {specializedMetrics.kneeValgusAngle.left.toFixed(1)}° / R: {specializedMetrics.kneeValgusAngle.right.toFixed(1)}°
+                                      </span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span>Trunk Lateral Flexion</span>
+                                      <span>{specializedMetrics.trunkLateralFlexion.toFixed(1)}°</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span>Balance Score</span>
+                                      <span>{specializedMetrics.balanceScore.toFixed(0)}%</span>
+                                    </div>
+                                  </>
+                                )}
+                                {selectedTest.id === 'shoulder-flexion' && (
+                                  <>
+                                    <div className="flex justify-between">
+                                      <span>Max Flexion ROM</span>
+                                      <span className={Math.min(specializedMetrics.maxFlexionROM.left, specializedMetrics.maxFlexionROM.right) > 160 ? 'text-green-600' : 'text-orange-600'}>
+                                        L: {specializedMetrics.maxFlexionROM.left.toFixed(0)}° / R: {specializedMetrics.maxFlexionROM.right.toFixed(0)}°
+                                      </span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span>Scapular Dyskinesis</span>
+                                      <span className={specializedMetrics.hasScapularDyskinesis ? 'text-red-600' : 'text-green-600'}>
+                                        {specializedMetrics.hasScapularDyskinesis ? 'Present' : 'Absent'}
+                                      </span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span>Movement Quality</span>
+                                      <span>{specializedMetrics.movementQuality}%</span>
+                                    </div>
+                                  </>
+                                )}
+                                {selectedTest.id === 'running-gait' && specializedMetrics && (
+                                  <>
+                                    <div className="flex justify-between">
+                                      <span>Cadence Optimal</span>
+                                      <span className={specializedMetrics.cadenceOptimal ? 'text-green-600' : 'text-orange-600'}>
+                                        {specializedMetrics.cadenceOptimal ? 'Yes' : 'No'}
+                                      </span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span>Overstriding</span>
+                                      <span className={!specializedMetrics.overstride ? 'text-green-600' : 'text-red-600'}>
+                                        {specializedMetrics.overstride ? 'Present' : 'Absent'}
+                                      </span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span>Hip Drop</span>
+                                      <span>{specializedMetrics.hipDropMagnitude.toFixed(1)}cm</span>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Recommendations */}
+                          {specializedTestResult.recommendations && specializedTestResult.recommendations.length > 0 && (
+                            <div>
+                              <h4 className="text-sm font-medium mb-3">Clinical Recommendations</h4>
+                              <div className="space-y-2">
+                                {specializedTestResult.recommendations.map((rec, i) => (
+                                  <div key={i} className="flex items-start gap-2">
+                                    <CheckCircle className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                                    <p className="text-xs text-gray-700">{rec}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Key Points */}
+                          <div>
+                            <h4 className="text-sm font-medium mb-3">Assessment Focus</h4>
+                            <div className="space-y-1">
+                              {selectedTest.keyPoints.map((point, i) => (
+                                <div key={i} className="flex items-start gap-2">
+                                  <div className="w-1 h-1 bg-gray-400 rounded-full mt-1.5 flex-shrink-0" />
+                                  <p className="text-xs text-gray-600">{point}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-center text-gray-500 py-8">
+                          <Activity className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                          <p>No specialized test results yet</p>
+                          <p className="text-xs mt-1">Perform the selected assessment to see detailed results</p>
                         </div>
                       )}
                     </ScrollArea>

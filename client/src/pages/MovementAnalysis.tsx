@@ -426,11 +426,6 @@ export default function MovementAnalysis() {
 
       // Draw joint angles directly on joints (if enabled)
       if (showJointAngles && metrics && results.poseLandmarks) {
-        // Debug log to check if we have metrics
-        if (metrics.jointAngles.length > 0) {
-          console.log('Joint angles available:', metrics.jointAngles.map(a => `${a.joint}: ${a.angle.toFixed(0)}°`));
-        }
-        
         // Map joint names to landmark indices for MediaPipe
         const jointToLandmark: { [key: string]: number } = {
           'left_shoulder': 11,
@@ -445,58 +440,88 @@ export default function MovementAnalysis() {
           'right_ankle': 28
         };
 
-        // Configure text styling
-        ctx.font = 'bold 12px Arial';
+        // Configure text styling for larger display
+        ctx.font = 'bold 18px Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
 
         metrics.jointAngles.forEach((angle: JointAngle) => {
           const landmarkIndex = jointToLandmark[angle.joint];
-          console.log(`Checking joint ${angle.joint}, landmark index: ${landmarkIndex}`);
           if (landmarkIndex !== undefined && results.poseLandmarks[landmarkIndex]) {
             const landmark = results.poseLandmarks[landmarkIndex];
             const x = landmark.x * canvas.width;
             const y = landmark.y * canvas.height;
 
-            // Offset position to avoid overlapping with joint
-            const offsetX = angle.joint.includes('left') ? -30 : 30;
-            const offsetY = -20;
+            // Increased offset for larger circles
+            const offsetX = angle.joint.includes('left') ? -55 : 55;
+            const offsetY = -35;
             const displayX = x + offsetX;
             const displayY = y + offsetY;
 
-            // Background box for better readability
+            // Prepare text and circle dimensions
             const text = `${angle.angle.toFixed(0)}°`;
-            const textWidth = ctx.measureText(text).width;
-            const padding = 4;
+            const circleRadius = 28; // Large circle radius
             
-            // Choose color based on whether angle is normal
+            // Draw outer white border circle for contrast
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(displayX, displayY, circleRadius + 3, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Draw shadow/glow effect
+            ctx.shadowColor = angle.isWithinNormal ? 'rgba(34, 197, 94, 0.5)' : 'rgba(239, 68, 68, 0.5)';
+            ctx.shadowBlur = 10;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 2;
+            
+            // Draw main colored circle
             if (angle.isWithinNormal) {
-              ctx.fillStyle = 'rgba(34, 197, 94, 0.9)'; // Green background
+              // Green gradient for normal angles
+              const gradient = ctx.createRadialGradient(displayX, displayY, 0, displayX, displayY, circleRadius);
+              gradient.addColorStop(0, 'rgba(74, 222, 128, 1)');
+              gradient.addColorStop(1, 'rgba(34, 197, 94, 1)');
+              ctx.fillStyle = gradient;
             } else {
-              ctx.fillStyle = 'rgba(239, 68, 68, 0.9)'; // Red background
+              // Red gradient for concerning angles
+              const gradient = ctx.createRadialGradient(displayX, displayY, 0, displayX, displayY, circleRadius);
+              gradient.addColorStop(0, 'rgba(248, 113, 113, 1)');
+              gradient.addColorStop(1, 'rgba(239, 68, 68, 1)');
+              ctx.fillStyle = gradient;
             }
             
-            // Draw background rectangle
-            ctx.fillRect(
-              displayX - textWidth/2 - padding, 
-              displayY - 8, 
-              textWidth + padding*2, 
-              16
-            );
+            ctx.beginPath();
+            ctx.arc(displayX, displayY, circleRadius, 0, Math.PI * 2);
+            ctx.fill();
             
-            // Draw text
+            // Reset shadow for text
+            ctx.shadowBlur = 0;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
+            
+            // Draw angle text in white with black outline for maximum contrast
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+            ctx.lineWidth = 3;
+            ctx.strokeText(text, displayX, displayY);
             ctx.fillStyle = 'white';
             ctx.fillText(text, displayX, displayY);
             
-            // Draw line from joint to label if far away
-            if (Math.abs(offsetX) > 20 || Math.abs(offsetY) > 20) {
-              ctx.strokeStyle = angle.isWithinNormal ? 'rgba(34, 197, 94, 0.5)' : 'rgba(239, 68, 68, 0.5)';
-              ctx.lineWidth = 1;
-              ctx.beginPath();
-              ctx.moveTo(x, y);
-              ctx.lineTo(displayX, displayY + 8);
-              ctx.stroke();
-            }
+            // Draw connecting line from joint to circle
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 3]); // Dashed line
+            ctx.beginPath();
+            
+            // Calculate line endpoints (from edge of joint dot to edge of circle)
+            const angle_rad = Math.atan2(displayY - y, displayX - x);
+            const lineStartX = x + Math.cos(angle_rad) * 5; // 5px from joint center
+            const lineEndX = displayX - Math.cos(angle_rad) * (circleRadius + 3);
+            const lineStartY = y + Math.sin(angle_rad) * 5;
+            const lineEndY = displayY - Math.sin(angle_rad) * (circleRadius + 3);
+            
+            ctx.moveTo(lineStartX, lineStartY);
+            ctx.lineTo(lineEndX, lineEndY);
+            ctx.stroke();
+            ctx.setLineDash([]); // Reset dash pattern
           }
         });
 

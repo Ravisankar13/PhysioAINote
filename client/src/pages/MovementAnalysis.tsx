@@ -3,6 +3,7 @@ import { Pose, POSE_CONNECTIONS } from '@mediapipe/pose';
 import { Camera } from '@mediapipe/camera_utils';
 import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils';
 import { MEDIAPIPE_CONFIG, checkMediaPipeSupport, requestCameraPermission } from '@/config/mediapipe';
+import { loadMediaPipeLibraries } from '@/utils/mediapipeLoader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -350,12 +351,31 @@ export default function MovementAnalysis() {
 
     const initializeCamera = async () => {
       try {
-        console.log('Starting camera initialization...');
+        console.log('[MovementAnalysis] Starting camera initialization...');
+        console.log('[MovementAnalysis] Browser:', navigator.userAgent);
+        console.log('[MovementAnalysis] Protocol:', window.location.protocol);
+        console.log('[MovementAnalysis] Hostname:', window.location.hostname);
+        
+        // Ensure MediaPipe libraries are loaded
+        const librariesLoaded = await loadMediaPipeLibraries();
+        if (!librariesLoaded) {
+          console.error('[MovementAnalysis] Failed to load MediaPipe libraries');
+          setCameraStatus('error');
+          setErrorMessage('Failed to load pose detection libraries. Please refresh the page.');
+          toast({
+            title: "Loading Error",
+            description: "Failed to load pose detection libraries. Please refresh the page.",
+            variant: "destructive",
+          });
+          return;
+        }
         
         // Check MediaPipe support
         const support = checkMediaPipeSupport();
+        console.log('[MovementAnalysis] MediaPipe support check:', support);
+        
         if (!support.supported) {
-          console.error('MediaPipe not supported:', support.error);
+          console.error('[MovementAnalysis] MediaPipe not supported:', support.error);
           setCameraStatus('error');
           setErrorMessage(support.error || 'Your browser doesn\'t support pose detection.');
           toast({
@@ -368,13 +388,14 @@ export default function MovementAnalysis() {
 
         // Request camera permission with better error handling
         setCameraStatus('permission-needed');
-        console.log('Requesting camera permission...');
+        console.log('[MovementAnalysis] Requesting camera permission...');
+        
         try {
           await requestCameraPermission();
-          console.log('Camera permission granted');
+          console.log('[MovementAnalysis] Camera permission granted');
           setCameraStatus('initializing');
         } catch (permissionError: any) {
-          console.error('Camera permission error:', permissionError);
+          console.error('[MovementAnalysis] Camera permission error:', permissionError);
           setCameraStatus('error');
           setErrorMessage(permissionError.message);
           toast({
@@ -386,49 +407,67 @@ export default function MovementAnalysis() {
           return;
         }
 
-        console.log('Initializing MediaPipe Pose...');
-        const pose = new Pose({
-          locateFile: MEDIAPIPE_CONFIG.pose.locateFile
-        });
+        console.log('[MovementAnalysis] Initializing MediaPipe Pose...');
+        
+        // Try to load MediaPipe with error handling
+        try {
+          const pose = new Pose({
+            locateFile: MEDIAPIPE_CONFIG.pose.locateFile
+          });
 
-        pose.setOptions(MEDIAPIPE_CONFIG.pose.options);
-        pose.onResults(onPoseResults);
-        poseRef.current = pose;
-        console.log('MediaPipe Pose initialized');
-
-        if (!videoRef.current) {
-          console.error('Video element not found');
+          pose.setOptions(MEDIAPIPE_CONFIG.pose.options);
+          pose.onResults(onPoseResults);
+          poseRef.current = pose;
+          console.log('[MovementAnalysis] MediaPipe Pose initialized successfully');
+        } catch (poseError: any) {
+          console.error('[MovementAnalysis] Failed to initialize Pose:', poseError);
           setCameraStatus('error');
+          setErrorMessage('Failed to load pose detection. Please refresh the page.');
+          toast({
+            title: "Pose Detection Error",
+            description: "Failed to load pose detection library. Please refresh and try again.",
+            variant: "destructive",
+          });
           return;
         }
 
-        const camera = new Camera(videoRef.current, {
-          onFrame: async () => {
-            if (poseRef.current && !isPaused && videoRef.current) {
-              try {
-                await poseRef.current.send({ image: videoRef.current });
-              } catch (err) {
-                console.error('Pose processing error:', err);
-              }
-            }
-          },
-          width: MEDIAPIPE_CONFIG.camera.width,
-          height: MEDIAPIPE_CONFIG.camera.height,
-          facingMode: MEDIAPIPE_CONFIG.camera.facingMode
-        });
+        if (!videoRef.current) {
+          console.error('[MovementAnalysis] Video element not found');
+          setCameraStatus('error');
+          setErrorMessage('Video element not initialized');
+          return;
+        }
 
-        cameraRef.current = camera;
-        
-        // Start camera with error handling and timeout
-        const startPromise = camera.start();
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Camera start timeout')), MEDIAPIPE_CONFIG.timeouts.cameraStart)
-        );
+        console.log('[MovementAnalysis] Creating Camera instance...');
         
         try {
+          const camera = new Camera(videoRef.current, {
+            onFrame: async () => {
+              if (poseRef.current && !isPaused && videoRef.current) {
+                try {
+                  await poseRef.current.send({ image: videoRef.current });
+                } catch (err) {
+                  console.error('[MovementAnalysis] Pose processing error:', err);
+                }
+              }
+            },
+            width: MEDIAPIPE_CONFIG.camera.width,
+            height: MEDIAPIPE_CONFIG.camera.height,
+            facingMode: MEDIAPIPE_CONFIG.camera.facingMode
+          });
+
+          cameraRef.current = camera;
+          console.log('[MovementAnalysis] Camera instance created, starting...');
+          
+          // Start camera with error handling and timeout
+          const startPromise = camera.start();
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Camera start timeout')), MEDIAPIPE_CONFIG.timeouts.cameraStart)
+          );
+          
           await Promise.race([startPromise, timeoutPromise]);
           setCameraStatus('ready');
-          console.log('Camera started successfully');
+          console.log('[MovementAnalysis] Camera started successfully');
           
           // Show success message only in production
           if (window.location.hostname !== 'localhost') {
@@ -438,38 +477,52 @@ export default function MovementAnalysis() {
               duration: 3000,
             });
           }
-        } catch (error: any) {
-          console.error('Camera start error:', error);
+        } catch (cameraCreateError: any) {
+          console.error('[MovementAnalysis] Failed to create/start camera:', cameraCreateError);
           setCameraStatus('error');
           
-          let errorMessage = 'Failed to start camera. ';
-          if (error.message?.includes('timeout')) {
-            errorMessage += 'Camera took too long to initialize. Please refresh the page.';
-          } else if (error.message?.includes('permission')) {
-            errorMessage += 'Camera permission denied. Please allow camera access in your browser settings.';
+          let errorMsg = 'Failed to initialize camera. ';
+          if (cameraCreateError.message?.includes('timeout')) {
+            errorMsg += 'Camera took too long to initialize. Please refresh the page.';
+          } else if (cameraCreateError.message?.includes('permission')) {
+            errorMsg += 'Camera permission denied. Please allow camera access in your browser settings.';
+          } else if (cameraCreateError.message?.includes('NotFound')) {
+            errorMsg += 'No camera device found. Please connect a camera.';
+          } else if (cameraCreateError.message?.includes('NotAllowed')) {
+            errorMsg += 'Camera access blocked. Please check browser permissions.';
           } else {
-            errorMessage += 'Please check camera permissions and ensure no other application is using the camera.';
+            errorMsg += `Error: ${cameraCreateError.message || 'Unknown error'}. Please refresh and try again.`;
           }
           
+          setErrorMessage(errorMsg);
           toast({
             title: "Camera Error",
-            description: errorMessage,
+            description: errorMsg,
             variant: "destructive",
             duration: 6000,
           });
         }
 
-      } catch (error) {
-        console.error('Camera initialization error:', error);
+      } catch (error: any) {
+        console.error('[MovementAnalysis] Overall initialization error:', error);
+        setCameraStatus('error');
+        setErrorMessage(`Initialization failed: ${error.message || 'Unknown error'}`);
         toast({
           title: "Initialization Error",
-          description: "Failed to initialize movement analysis. Please refresh and try again.",
+          description: `Failed to initialize movement analysis: ${error.message || 'Unknown error'}. Please refresh and try again.`,
           variant: "destructive",
         });
       }
     };
 
-    initializeCamera();
+    // Add a small delay to ensure DOM is ready
+    const initTimer = setTimeout(() => {
+      initializeCamera();
+    }, 100);
+
+    return () => {
+      clearTimeout(initTimer);
+    };
 
     return () => {
       if (cameraRef.current) {
@@ -1345,6 +1398,11 @@ export default function MovementAnalysis() {
                           <XCircle className="h-4 w-4 text-red-500" />
                           <span>Camera access failed</span>
                         </div>
+                        {errorMessage && (
+                          <div className="text-sm text-yellow-400 font-medium">
+                            {errorMessage}
+                          </div>
+                        )}
                         <div className="text-sm text-gray-300">
                           <p>Troubleshooting tips:</p>
                           <ul className="list-disc list-inside mt-1">
@@ -1352,6 +1410,7 @@ export default function MovementAnalysis() {
                             <li>Allow camera permissions in browser settings</li>
                             <li>Check if camera is being used by another app</li>
                             <li>Try refreshing the page</li>
+                            <li>Try a different browser (Chrome/Edge recommended)</li>
                           </ul>
                         </div>
                       </div>

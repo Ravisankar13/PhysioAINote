@@ -1,9 +1,13 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Pose, POSE_CONNECTIONS } from '@mediapipe/pose';
-import { Camera } from '@mediapipe/camera_utils';
-import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils';
 import { MEDIAPIPE_CONFIG, checkMediaPipeSupport, requestCameraPermission } from '@/config/mediapipe';
 import { loadMediaPipeLibraries } from '@/utils/mediapipeLoader';
+
+// MediaPipe types (will be loaded dynamically)
+type Pose = any;
+type Camera = any;
+type POSE_CONNECTIONS = any;
+declare const drawConnectors: any;
+declare const drawLandmarks: any;
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -411,7 +415,16 @@ export default function MovementAnalysis() {
         
         // Try to load MediaPipe with error handling
         try {
-          const pose = new Pose({
+          // Get constructors from window (loaded by MediaPipeLoader)
+          const PoseConstructor = window.Pose;
+          
+          if (!PoseConstructor) {
+            throw new Error('Pose constructor not available - MediaPipe libraries may not be loaded');
+          }
+          
+          console.log('[MovementAnalysis] Using Pose constructor:', PoseConstructor);
+          
+          const pose = new PoseConstructor({
             locateFile: MEDIAPIPE_CONFIG.pose.locateFile
           });
 
@@ -441,7 +454,16 @@ export default function MovementAnalysis() {
         console.log('[MovementAnalysis] Creating Camera instance...');
         
         try {
-          const camera = new Camera(videoRef.current, {
+          // Get Camera constructor from window (loaded by MediaPipeLoader)
+          const CameraConstructor = window.Camera;
+          
+          if (!CameraConstructor) {
+            throw new Error('Camera constructor not available - MediaPipe libraries may not be loaded');
+          }
+          
+          console.log('[MovementAnalysis] Using Camera constructor:', CameraConstructor);
+          
+          const camera = new CameraConstructor(videoRef.current, {
             onFrame: async () => {
               if (poseRef.current && !isPaused && videoRef.current) {
                 try {
@@ -550,15 +572,20 @@ export default function MovementAnalysis() {
 
     // Draw pose landmarks and connections
     if (results.poseLandmarks) {
-      drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS, {
-        color: '#00FF00',
-        lineWidth: 2
-      });
-      drawLandmarks(ctx, results.poseLandmarks, {
-        color: '#FF0000',
-        lineWidth: 1,
-        radius: 3
-      });
+      // Use drawing functions from window (loaded by MediaPipeLoader)
+      if (window.drawConnectors && window.POSE_CONNECTIONS) {
+        window.drawConnectors(ctx, results.poseLandmarks, window.POSE_CONNECTIONS, {
+          color: '#00FF00',
+          lineWidth: 2
+        });
+      }
+      if (window.drawLandmarks) {
+        window.drawLandmarks(ctx, results.poseLandmarks, {
+          color: '#FF0000',
+          lineWidth: 1,
+          radius: 3
+        });
+      }
       
       // Draw test-specific visual guides
       const config = getTestConfig(selectedTest?.id || '');

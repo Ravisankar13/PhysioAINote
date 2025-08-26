@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { MEDIAPIPE_CONFIG, checkMediaPipeSupport, requestCameraPermission } from '@/config/mediapipe';
 import { loadMediaPipeLibraries } from '@/utils/mediapipeLoader';
+import { FrameworkAnalysisPanel } from '@/components/movement/FrameworkAnalysisPanel';
 
 // MediaPipe types (will be loaded dynamically)
 type Pose = any;
@@ -333,6 +334,7 @@ export default function MovementAnalysis() {
   const [specializedTestResult, setSpecializedTestResult] = useState<MovementTestResult | null>(null);
   const [specializedMetrics, setSpecializedMetrics] = useState<any>(null);
   const [showTestSelection, setShowTestSelection] = useState(true);
+  const [currentPoseLandmarks, setCurrentPoseLandmarks] = useState<any>(null);
   
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -572,6 +574,9 @@ export default function MovementAnalysis() {
 
     // Draw pose landmarks and connections
     if (results.poseLandmarks) {
+      // Store current landmarks for framework analysis
+      setCurrentPoseLandmarks(results.poseLandmarks);
+      
       // Use drawing functions from window (loaded by MediaPipeLoader)
       if (window.drawConnectors && window.POSE_CONNECTIONS) {
         window.drawConnectors(ctx, results.poseLandmarks, window.POSE_CONNECTIONS, {
@@ -1702,10 +1707,11 @@ export default function MovementAnalysis() {
         {!isFullscreen && (
           <div className="w-1/4 flex flex-col gap-4">
             <Tabs defaultValue="metrics" className="flex-1">
-              <TabsList className="grid w-full grid-cols-4">
+              <TabsList className="grid w-full grid-cols-5">
                 <TabsTrigger value="metrics">Metrics</TabsTrigger>
-                <TabsTrigger value="test-results">Test Results</TabsTrigger>
-                <TabsTrigger value="impairments">Impairments</TabsTrigger>
+                <TabsTrigger value="framework">Framework</TabsTrigger>
+                <TabsTrigger value="test-results">Results</TabsTrigger>
+                <TabsTrigger value="impairments">Issues</TabsTrigger>
                 <TabsTrigger value="report">Report</TabsTrigger>
               </TabsList>
 
@@ -1901,6 +1907,14 @@ export default function MovementAnalysis() {
                     </ScrollArea>
                   </CardContent>
                 </Card>
+              </TabsContent>
+
+              <TabsContent value="framework" className="mt-4">
+                <FrameworkAnalysisPanel 
+                  landmarks={currentPoseLandmarks}
+                  isAnalyzing={isRecording && !isPaused}
+                  selectedTest={selectedTest}
+                />
               </TabsContent>
 
               <TabsContent value="test-results" className="mt-4">

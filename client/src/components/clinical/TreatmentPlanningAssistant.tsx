@@ -89,11 +89,111 @@ interface TreatmentPlanningAssistantProps {
   };
 }
 
-// Sample exercise database
+// Comprehensive exercise database with proper exercises for various conditions
 const exerciseDatabase: Exercise[] = [
-  // Strengthening
+  // Shoulder/Rotator Cuff Exercises
   {
-    id: 'ex1',
+    id: 'shoulder1',
+    name: 'Pendulum Exercises (Codman)',
+    category: 'mobility',
+    sets: 3,
+    reps: '10-15 each direction',
+    intensity: 'Gentle passive movement',
+    equipment: [],
+    precautions: 'Support trunk, let arm hang freely'
+  },
+  {
+    id: 'shoulder2',
+    name: 'Isometric External Rotation',
+    category: 'strengthening',
+    sets: 3,
+    hold: 5,
+    reps: '10-15',
+    intensity: 'Sub-maximal (30-50% effort)',
+    progression: 'Increase hold time, then resistance',
+    equipment: []
+  },
+  {
+    id: 'shoulder3',
+    name: 'Scapular Wall Slides',
+    category: 'strengthening',
+    sets: 3,
+    reps: '10-15',
+    intensity: 'Body weight',
+    progression: 'Add resistance band',
+    equipment: ['Wall']
+  },
+  {
+    id: 'shoulder4',
+    name: 'External Rotation with Band',
+    category: 'strengthening',
+    sets: 3,
+    reps: '12-15',
+    intensity: 'Light resistance',
+    progression: 'Increase resistance, add elevation',
+    equipment: ['Resistance band']
+  },
+  {
+    id: 'shoulder5',
+    name: 'Internal Rotation with Band',
+    category: 'strengthening',
+    sets: 3,
+    reps: '12-15',
+    intensity: 'Light resistance',
+    progression: 'Increase resistance',
+    equipment: ['Resistance band']
+  },
+  {
+    id: 'shoulder6',
+    name: 'Prone T\'s (Lower Trapezius)',
+    category: 'strengthening',
+    sets: 3,
+    reps: '10-12',
+    intensity: 'Body weight to light weights',
+    progression: 'Add 1-2 lb weights',
+    equipment: ['Light dumbbells (optional)']
+  },
+  {
+    id: 'shoulder7',
+    name: 'Prone Y\'s (Lower Trapezius)',
+    category: 'strengthening',
+    sets: 3,
+    reps: '10-12',
+    intensity: 'Body weight to light weights',
+    equipment: ['Light dumbbells (optional)']
+  },
+  {
+    id: 'shoulder8',
+    name: 'Sleeper Stretch',
+    category: 'stretching',
+    sets: 3,
+    hold: 30,
+    intensity: 'Gentle stretch',
+    equipment: [],
+    precautions: 'Avoid excessive pressure'
+  },
+  {
+    id: 'shoulder9',
+    name: 'Cross-Body Stretch',
+    category: 'stretching',
+    sets: 3,
+    hold: 30,
+    intensity: 'Gentle to moderate',
+    equipment: []
+  },
+  {
+    id: 'shoulder10',
+    name: 'Serratus Anterior Punch',
+    category: 'strengthening',
+    sets: 3,
+    reps: '12-15',
+    intensity: 'Light resistance',
+    equipment: ['Resistance band']
+  },
+  
+  // Knee/Lower Extremity Exercises
+  {
+    id: 'knee1',
     name: 'Quadriceps Sets',
     category: 'strengthening',
     sets: 3,
@@ -103,7 +203,7 @@ const exerciseDatabase: Exercise[] = [
     equipment: []
   },
   {
-    id: 'ex2',
+    id: 'knee2',
     name: 'Straight Leg Raises',
     category: 'strengthening',
     sets: 3,
@@ -113,26 +213,68 @@ const exerciseDatabase: Exercise[] = [
     equipment: ['Ankle weights (optional)']
   },
   {
-    id: 'ex3',
+    id: 'knee3',
+    name: 'Mini Squats',
+    category: 'functional',
+    sets: 3,
+    reps: '10-15',
+    intensity: 'Body weight',
+    progression: 'Increase depth, add resistance',
+    equipment: []
+  },
+  {
+    id: 'knee4',
+    name: 'Step-Ups',
+    category: 'functional',
+    sets: 3,
+    reps: '10-12 each leg',
+    intensity: 'Body weight',
+    progression: 'Increase step height',
+    equipment: ['Step or stairs']
+  },
+  {
+    id: 'knee5',
+    name: 'Terminal Knee Extension',
+    category: 'strengthening',
+    sets: 3,
+    reps: '15-20',
+    intensity: 'Resistance band',
+    equipment: ['Resistance band']
+  },
+  
+  // Hip Exercises
+  {
+    id: 'hip1',
+    name: 'Clamshells',
+    category: 'strengthening',
+    sets: 3,
+    reps: '15-20',
+    intensity: 'Body weight to band',
+    progression: 'Add resistance band',
+    equipment: ['Resistance band (optional)']
+  },
+  {
+    id: 'hip2',
+    name: 'Hip Abduction Side-Lying',
+    category: 'strengthening',
+    sets: 3,
+    reps: '12-15',
+    intensity: 'Body weight',
+    progression: 'Add ankle weights',
+    equipment: ['Ankle weights (optional)']
+  },
+  {
+    id: 'hip3',
     name: 'Glute Bridges',
     category: 'strengthening',
     sets: 3,
     reps: '12-15',
-    intensity: 'Body weight to resistance band',
+    intensity: 'Body weight',
+    progression: 'Single leg, add band',
     equipment: ['Resistance band (optional)']
   },
-  // Stretching
   {
-    id: 'ex4',
-    name: 'Hamstring Stretch',
-    category: 'stretching',
-    sets: 3,
-    hold: 30,
-    intensity: 'Gentle stretch',
-    equipment: ['Towel or strap']
-  },
-  {
-    id: 'ex5',
+    id: 'hip4',
     name: 'Hip Flexor Stretch',
     category: 'stretching',
     sets: 3,
@@ -140,9 +282,39 @@ const exerciseDatabase: Exercise[] = [
     intensity: 'Moderate stretch',
     equipment: []
   },
-  // Mobility
+  
+  // Core/Back Exercises
   {
-    id: 'ex6',
+    id: 'core1',
+    name: 'Transverse Abdominis Activation',
+    category: 'strengthening',
+    sets: 3,
+    reps: '10-15',
+    hold: 5,
+    intensity: 'Gentle activation',
+    equipment: []
+  },
+  {
+    id: 'core2',
+    name: 'Bird Dog',
+    category: 'strengthening',
+    sets: 3,
+    reps: '10 each side',
+    hold: 5,
+    intensity: 'Body weight',
+    equipment: ['Yoga mat']
+  },
+  {
+    id: 'core3',
+    name: 'Dead Bug',
+    category: 'strengthening',
+    sets: 3,
+    reps: '10 each side',
+    intensity: 'Body weight',
+    equipment: ['Yoga mat']
+  },
+  {
+    id: 'core4',
     name: 'Cat-Cow Mobility',
     category: 'mobility',
     sets: 3,
@@ -150,24 +322,91 @@ const exerciseDatabase: Exercise[] = [
     intensity: 'Controlled movement',
     equipment: ['Yoga mat']
   },
-  // Neuromuscular
   {
-    id: 'ex7',
-    name: 'Single Leg Balance',
+    id: 'core5',
+    name: 'Prone Press-Ups (McKenzie)',
+    category: 'mobility',
+    sets: 3,
+    reps: '10-15',
+    intensity: 'Body weight',
+    equipment: []
+  },
+  
+  // Ankle/Foot Exercises
+  {
+    id: 'ankle1',
+    name: 'Ankle Pumps',
+    category: 'mobility',
+    sets: 3,
+    reps: '20-30',
+    intensity: 'Active movement',
+    equipment: []
+  },
+  {
+    id: 'ankle2',
+    name: 'Calf Raises',
+    category: 'strengthening',
+    sets: 3,
+    reps: '15-20',
+    intensity: 'Body weight',
+    progression: 'Single leg, add weight',
+    equipment: []
+  },
+  {
+    id: 'ankle3',
+    name: 'Towel Calf Stretch',
+    category: 'stretching',
+    sets: 3,
+    hold: 30,
+    intensity: 'Moderate stretch',
+    equipment: ['Towel']
+  },
+  
+  // Balance/Proprioception
+  {
+    id: 'balance1',
+    name: 'Single Leg Stance',
     category: 'neuromuscular',
     sets: 3,
     hold: 30,
     progression: 'Eyes closed, unstable surface',
     equipment: ['Balance pad (optional)']
   },
-  // Cardio
   {
-    id: 'ex8',
+    id: 'balance2',
+    name: 'Tandem Walking',
+    category: 'neuromuscular',
+    sets: 3,
+    reps: '10 steps',
+    intensity: 'Controlled',
+    equipment: []
+  },
+  
+  // Cardiovascular
+  {
+    id: 'cardio1',
+    name: 'Walking Program',
+    category: 'cardio',
+    duration: 20,
+    intensity: 'Light to moderate',
+    progression: 'Increase duration/speed',
+    equipment: []
+  },
+  {
+    id: 'cardio2',
     name: 'Stationary Cycling',
     category: 'cardio',
     duration: 20,
     intensity: 'Moderate (60-70% HR max)',
     equipment: ['Stationary bike']
+  },
+  {
+    id: 'cardio3',
+    name: 'Aqua Therapy/Pool Walking',
+    category: 'cardio',
+    duration: 30,
+    intensity: 'Light to moderate',
+    equipment: ['Pool access']
   }
 ];
 
@@ -265,8 +504,119 @@ export default function TreatmentPlanningAssistant({
       description: "Generating evidence-based treatment plan...",
     });
     
-    // Simulate AI generation
+    // Simulate AI generation - intelligently select exercises based on diagnosis
     setTimeout(() => {
+      const diagnosisLower = diagnosis.toLowerCase();
+      let selectedExercises: { phase1: Exercise[], phase2: Exercise[], phase3: Exercise[] } = {
+        phase1: [],
+        phase2: [],
+        phase3: []
+      };
+      
+      // Select exercises based on diagnosis keywords
+      if (diagnosisLower.includes('rotator') || diagnosisLower.includes('shoulder') || diagnosisLower.includes('impingement')) {
+        // Shoulder/Rotator Cuff protocol
+        selectedExercises.phase1 = [
+          exerciseDatabase.find(e => e.id === 'shoulder1')!, // Pendulum
+          exerciseDatabase.find(e => e.id === 'shoulder2')!, // Isometric ER
+          exerciseDatabase.find(e => e.id === 'shoulder8')!, // Sleeper stretch
+        ].filter(Boolean);
+        
+        selectedExercises.phase2 = [
+          exerciseDatabase.find(e => e.id === 'shoulder3')!, // Scapular wall slides
+          exerciseDatabase.find(e => e.id === 'shoulder4')!, // ER with band
+          exerciseDatabase.find(e => e.id === 'shoulder5')!, // IR with band
+          exerciseDatabase.find(e => e.id === 'shoulder9')!, // Cross-body stretch
+        ].filter(Boolean);
+        
+        selectedExercises.phase3 = [
+          exerciseDatabase.find(e => e.id === 'shoulder6')!, // Prone T's
+          exerciseDatabase.find(e => e.id === 'shoulder7')!, // Prone Y's
+          exerciseDatabase.find(e => e.id === 'shoulder10')!, // Serratus punch
+          exerciseDatabase.find(e => e.id === 'shoulder4')!, // ER with band (progressive)
+        ].filter(Boolean);
+        
+      } else if (diagnosisLower.includes('knee') || diagnosisLower.includes('acl') || diagnosisLower.includes('patello')) {
+        // Knee protocol
+        selectedExercises.phase1 = [
+          exerciseDatabase.find(e => e.id === 'knee1')!, // Quad sets
+          exerciseDatabase.find(e => e.id === 'knee2')!, // SLR
+          exerciseDatabase.find(e => e.id === 'ankle1')!, // Ankle pumps
+        ].filter(Boolean);
+        
+        selectedExercises.phase2 = [
+          exerciseDatabase.find(e => e.id === 'knee3')!, // Mini squats
+          exerciseDatabase.find(e => e.id === 'knee5')!, // Terminal knee extension
+          exerciseDatabase.find(e => e.id === 'hip1')!, // Clamshells
+          exerciseDatabase.find(e => e.id === 'balance1')!, // Single leg stance
+        ].filter(Boolean);
+        
+        selectedExercises.phase3 = [
+          exerciseDatabase.find(e => e.id === 'knee4')!, // Step-ups
+          exerciseDatabase.find(e => e.id === 'hip3')!, // Glute bridges
+          exerciseDatabase.find(e => e.id === 'balance2')!, // Tandem walking
+          exerciseDatabase.find(e => e.id === 'cardio1')!, // Walking program
+        ].filter(Boolean);
+        
+      } else if (diagnosisLower.includes('back') || diagnosisLower.includes('lumbar') || diagnosisLower.includes('disc')) {
+        // Back/Core protocol
+        selectedExercises.phase1 = [
+          exerciseDatabase.find(e => e.id === 'core1')!, // TA activation
+          exerciseDatabase.find(e => e.id === 'core4')!, // Cat-cow
+          exerciseDatabase.find(e => e.id === 'core5')!, // Prone press-ups
+        ].filter(Boolean);
+        
+        selectedExercises.phase2 = [
+          exerciseDatabase.find(e => e.id === 'core2')!, // Bird dog
+          exerciseDatabase.find(e => e.id === 'core3')!, // Dead bug
+          exerciseDatabase.find(e => e.id === 'hip3')!, // Glute bridges
+          exerciseDatabase.find(e => e.id === 'hip4')!, // Hip flexor stretch
+        ].filter(Boolean);
+        
+        selectedExercises.phase3 = [
+          exerciseDatabase.find(e => e.id === 'knee3')!, // Mini squats
+          exerciseDatabase.find(e => e.id === 'balance1')!, // Single leg stance
+          exerciseDatabase.find(e => e.id === 'cardio1')!, // Walking program
+          exerciseDatabase.find(e => e.id === 'core2')!, // Bird dog (progressive)
+        ].filter(Boolean);
+        
+      } else if (diagnosisLower.includes('ankle') || diagnosisLower.includes('achilles') || diagnosisLower.includes('plantar')) {
+        // Ankle/Foot protocol
+        selectedExercises.phase1 = [
+          exerciseDatabase.find(e => e.id === 'ankle1')!, // Ankle pumps
+          exerciseDatabase.find(e => e.id === 'ankle3')!, // Towel calf stretch
+        ].filter(Boolean);
+        
+        selectedExercises.phase2 = [
+          exerciseDatabase.find(e => e.id === 'ankle2')!, // Calf raises
+          exerciseDatabase.find(e => e.id === 'balance1')!, // Single leg stance
+        ].filter(Boolean);
+        
+        selectedExercises.phase3 = [
+          exerciseDatabase.find(e => e.id === 'balance2')!, // Tandem walking
+          exerciseDatabase.find(e => e.id === 'cardio1')!, // Walking program
+          exerciseDatabase.find(e => e.id === 'ankle2')!, // Single leg calf raises
+        ].filter(Boolean);
+        
+      } else {
+        // General protocol for unspecified conditions
+        selectedExercises.phase1 = [
+          exerciseDatabase.find(e => e.id === 'core1')!,
+          exerciseDatabase.find(e => e.id === 'ankle1')!,
+        ].filter(Boolean);
+        
+        selectedExercises.phase2 = [
+          exerciseDatabase.find(e => e.id === 'core2')!,
+          exerciseDatabase.find(e => e.id === 'hip3')!,
+          exerciseDatabase.find(e => e.id === 'balance1')!,
+        ].filter(Boolean);
+        
+        selectedExercises.phase3 = [
+          exerciseDatabase.find(e => e.id === 'cardio1')!,
+          exerciseDatabase.find(e => e.id === 'balance2')!,
+        ].filter(Boolean);
+      }
+      
       const aiGeneratedPhases: TreatmentPhase[] = [
         {
           id: 'ai-phase1',
@@ -276,52 +626,60 @@ export default function TreatmentPlanningAssistant({
             'Reduce pain to 4/10',
             'Protect healing tissues',
             'Maintain available ROM',
-            'Patient education'
+            'Patient education on condition'
           ],
-          exercises: [exerciseDatabase[0], exerciseDatabase[3]],
+          exercises: selectedExercises.phase1,
           manualTherapy: ['Gentle mobilizations Grade I-II', 'Soft tissue techniques'],
-          modalities: ['Ice', 'TENS as needed'],
-          precautions: ['Avoid provocative positions', 'Weight bearing as tolerated'],
-          progressionCriteria: ['Pain <4/10', 'Minimal swelling', 'Good quad control']
+          modalities: ['Ice for pain/inflammation', 'TENS as needed'],
+          precautions: ['Avoid provocative positions', 'Respect pain response'],
+          progressionCriteria: ['Pain <4/10', 'Minimal inflammation', 'Good exercise tolerance']
         },
         {
           id: 'ai-phase2',
           name: 'Mobility & Early Strengthening',
           duration: '2-4 weeks',
           goals: [
-            'Restore full ROM',
-            'Begin strengthening',
-            'Normalize gait pattern',
-            'Improve proprioception'
+            'Restore functional ROM',
+            'Begin progressive strengthening',
+            'Improve movement quality',
+            'Enhance proprioception'
           ],
-          exercises: [exerciseDatabase[1], exerciseDatabase[2], exerciseDatabase[5], exerciseDatabase[6]],
-          manualTherapy: ['Joint mobilizations Grade III-IV', 'Muscle energy techniques'],
-          modalities: ['Heat before exercise'],
-          precautions: ['Progress as tolerated'],
-          progressionCriteria: ['Full ROM', 'Good strength', 'Single leg stance 30 sec']
+          exercises: selectedExercises.phase2,
+          manualTherapy: ['Joint mobilizations Grade III-IV', 'Muscle energy techniques', 'Neural mobilization as needed'],
+          modalities: ['Heat before exercise', 'Ice after as needed'],
+          precautions: ['Progress gradually', 'Monitor for flare-ups'],
+          progressionCriteria: ['Near full ROM', 'Good strength gains', 'Improved function']
         },
         {
           id: 'ai-phase3',
-          name: 'Advanced Strengthening & Function',
+          name: 'Advanced Strengthening & Return to Function',
           duration: '4-8 weeks',
           goals: [
             'Return to full function',
-            'Sport-specific training',
-            'Injury prevention',
-            'Independent with program'
+            'Sport/work-specific training',
+            'Injury prevention education',
+            'Independent with maintenance program'
           ],
-          exercises: [exerciseDatabase[2], exerciseDatabase[6], exerciseDatabase[7]],
+          exercises: selectedExercises.phase3,
           manualTherapy: ['As needed for restrictions'],
-          modalities: [],
-          precautions: ['Monitor for overload'],
-          progressionCriteria: ['Meet discharge goals', 'Pass functional tests']
+          modalities: ['As needed'],
+          precautions: ['Avoid overtraining', 'Gradual return to activity'],
+          progressionCriteria: ['Meet functional goals', 'Pass return-to-activity tests', 'Confident with self-management']
         }
       ];
       
       setPhases(aiGeneratedPhases);
+      
+      // Also add appropriate exercises to home program
+      const homeExercises = [
+        ...selectedExercises.phase1.slice(0, 2),
+        ...selectedExercises.phase2.slice(0, 2)
+      ];
+      setHomeProgram(homeExercises);
+      
       toast({
         title: "Plan Generated",
-        description: "AI has created an evidence-based treatment plan",
+        description: `Evidence-based treatment plan created for ${diagnosis}`,
       });
     }, 2000);
   };

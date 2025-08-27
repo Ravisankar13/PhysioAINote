@@ -42,6 +42,7 @@ import EvidenceBasedProtocols from "@/components/clinical/EvidenceBasedProtocols
 import EvidenceDisplay from "@/components/clinical/EvidenceDisplay";
 import VirtualPatientSidebar from "@/components/virtualPatient/VirtualPatientSidebar";
 import FormattedResponse from "@/components/clinical/FormattedResponse";
+import SOAPBuilderPanel from "@/components/clinical/SOAPBuilderPanel";
 
 // Error Boundary Component
 class ErrorBoundary extends Component<{children: React.ReactNode}, {hasError: boolean}> {
@@ -139,6 +140,8 @@ export default function PhysioGPT() {
   const [virtualPatientCollapsed, setVirtualPatientCollapsed] = useState(false);
   const [evidenceData, setEvidenceData] = useState<Map<number, PhysioGptResponse>>(new Map());
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [showSOAPBuilder, setShowSOAPBuilder] = useState(false);
+  const [soapBuilderCollapsed, setSOAPBuilderCollapsed] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
@@ -581,11 +584,22 @@ Please provide:
                 <p className="text-xs opacity-90">Evidence-based clinical support</p>
               </div>
             </div>
-            {patientContext && (
-              <Badge className="bg-white/20 text-white border-white/30">
-                Patient: {patientContext.patientName}
-              </Badge>
-            )}
+            <div className="flex items-center gap-2">
+              {patientContext && (
+                <Badge className="bg-white/20 text-white border-white/30">
+                  Patient: {patientContext.patientName}
+                </Badge>
+              )}
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setShowSOAPBuilder(!showSOAPBuilder)}
+                className="bg-white/20 hover:bg-white/30 text-white border-white/30"
+              >
+                <FileText className="h-4 w-4 mr-1" />
+                SOAP Builder
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -814,6 +828,16 @@ Please provide:
           onSelectPatient={handleVirtualPatientSelect}
           collapsed={virtualPatientCollapsed}
           onToggleCollapse={() => setVirtualPatientCollapsed(!virtualPatientCollapsed)}
+        />
+      )}
+      
+      {/* SOAP Builder Panel */}
+      {showSOAPBuilder && (
+        <SOAPBuilderPanel
+          messages={messages}
+          conversationId={selectedConversationId}
+          isCollapsed={soapBuilderCollapsed}
+          onToggleCollapse={() => setSOAPBuilderCollapsed(!soapBuilderCollapsed)}
         />
       )}
 

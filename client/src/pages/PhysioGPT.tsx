@@ -838,6 +838,17 @@ Please provide:
           conversationId={selectedConversationId}
           isCollapsed={soapBuilderCollapsed}
           onToggleCollapse={() => setSOAPBuilderCollapsed(!soapBuilderCollapsed)}
+          onAnalyze={(content, analysisType) => {
+            // Close the SOAP builder after sending analysis
+            setMessage(content);
+            handleSendMessage(content);
+            
+            // Optionally show a toast for the analysis type
+            toast({
+              title: "SOAP Analysis Started",
+              description: `Running ${analysisType || 'comprehensive'} analysis...`,
+            });
+          }}
         />
       )}
 

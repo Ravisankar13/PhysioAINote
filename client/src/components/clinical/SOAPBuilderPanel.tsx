@@ -24,7 +24,13 @@ import {
   Eye,
   Target,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Sparkles,
+  Search,
+  Shield,
+  Lightbulb,
+  Activity,
+  MessageSquare
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PhysioGptMessage } from "@shared/schema";
@@ -42,6 +48,7 @@ interface SOAPBuilderPanelProps {
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
   className?: string;
+  onAnalyze?: (content: string, analysisType?: string) => void;
 }
 
 export default function SOAPBuilderPanel({ 
@@ -49,7 +56,8 @@ export default function SOAPBuilderPanel({
   conversationId,
   isCollapsed = false,
   onToggleCollapse,
-  className 
+  className,
+  onAnalyze 
 }: SOAPBuilderPanelProps) {
   const { toast } = useToast();
   const [soapSections, setSoapSections] = useState<SOAPSection>({
@@ -320,6 +328,149 @@ export default function SOAPBuilderPanel({
     URL.revokeObjectURL(url);
   };
 
+  // Direct Analysis Functions
+  const handleAnalyzeSOAP = () => {
+    const soapNote = generateSOAPNote();
+    const prompt = `Please analyze this SOAP note and provide:
+- Differential diagnoses based on findings
+- Missing assessment components
+- Evidence-based treatment recommendations
+- Red flags to consider
+- Clinical reasoning validation
+
+${soapNote}`;
+    
+    if (onAnalyze) {
+      onAnalyze(prompt, 'comprehensive');
+    }
+  };
+
+  // Contextual Analysis Functions
+  const handleRedFlagAnalysis = () => {
+    const soapNote = generateSOAPNote();
+    const prompt = `Analyze this SOAP note specifically for RED FLAGS and safety concerns:
+
+${soapNote}
+
+Please identify:
+- Any immediate safety concerns
+- Red flags that require urgent attention
+- Contraindications to treatment
+- When to refer for emergency care`;
+    
+    if (onAnalyze) {
+      onAnalyze(prompt, 'redflags');
+    }
+  };
+
+  const handleDiagnosisAnalysis = () => {
+    const prompt = `Based on these findings, provide differential diagnoses:
+
+SUBJECTIVE:
+${soapSections.subjective.join('\n')}
+
+OBJECTIVE:
+${soapSections.objective.join('\n')}
+
+Please provide:
+- Ranked differential diagnoses with likelihood percentages
+- Clinical reasoning for each diagnosis
+- Key differentiating factors
+- Additional tests needed to confirm`;
+    
+    if (onAnalyze) {
+      onAnalyze(prompt, 'diagnosis');
+    }
+  };
+
+  const handleTreatmentPlanAnalysis = () => {
+    const prompt = `Generate an evidence-based treatment plan for:
+
+ASSESSMENT:
+${soapSections.assessment.join('\n')}
+
+Please provide:
+- Phase-based treatment progression
+- Specific exercise prescriptions with parameters
+- Manual therapy recommendations
+- Expected outcomes and timeframes
+- Home exercise program`;
+    
+    if (onAnalyze) {
+      onAnalyze(prompt, 'treatment');
+    }
+  };
+
+  const handleGapAnalysis = () => {
+    const soapNote = generateSOAPNote();
+    const prompt = `Identify what's missing from this SOAP note:
+
+${soapNote}
+
+Please identify:
+- Missing subjective questions
+- Required objective tests not performed
+- Assessment components needed
+- Plan elements to include
+- Documentation requirements`;
+    
+    if (onAnalyze) {
+      onAnalyze(prompt, 'gaps');
+    }
+  };
+
+  // Smart Prompting based on SOAP content
+  const getSmartPrompts = () => {
+    const prompts = [];
+    
+    if (soapSections.subjective.length > 0 && soapSections.objective.length === 0) {
+      prompts.push({
+        text: "What objective tests should I perform for these symptoms?",
+        action: () => {
+          const prompt = `Based on these subjective findings, what objective tests should I perform?
+
+SUBJECTIVE:
+${soapSections.subjective.join('\n')}
+
+Please recommend specific tests with rationale.`;
+          if (onAnalyze) onAnalyze(prompt, 'smart-objective');
+        }
+      });
+    }
+    
+    if (soapSections.objective.length > 0 && soapSections.assessment.length === 0) {
+      prompts.push({
+        text: "Help me interpret these objective findings",
+        action: () => {
+          const prompt = `Help interpret these objective findings:
+
+OBJECTIVE:
+${soapSections.objective.join('\n')}
+
+What do these findings suggest?`;
+          if (onAnalyze) onAnalyze(prompt, 'smart-assessment');
+        }
+      });
+    }
+    
+    if (soapSections.assessment.length > 0 && soapSections.plan.length === 0) {
+      prompts.push({
+        text: "Generate treatment plan for this diagnosis",
+        action: () => {
+          const prompt = `Create a treatment plan for:
+
+ASSESSMENT:
+${soapSections.assessment.join('\n')}
+
+Include evidence-based interventions.`;
+          if (onAnalyze) onAnalyze(prompt, 'smart-plan');
+        }
+      });
+    }
+    
+    return prompts;
+  };
+
   if (isCollapsed) {
     return (
       <div className={cn("w-12 bg-background border-l", className)}>
@@ -403,6 +554,7 @@ export default function SOAPBuilderPanel({
         <Tabs defaultValue="builder" className="h-full">
           <TabsList className="w-full rounded-none">
             <TabsTrigger value="builder" className="flex-1">Builder</TabsTrigger>
+            <TabsTrigger value="analysis" className="flex-1">Analysis</TabsTrigger>
             <TabsTrigger value="preview" className="flex-1">Preview</TabsTrigger>
             <TabsTrigger value="tags" className="flex-1">Tags</TabsTrigger>
           </TabsList>
@@ -465,6 +617,169 @@ export default function SOAPBuilderPanel({
                   onRemove={(index) => handleRemoveFromSection('plan', index)}
                   onContentChange={(value) => setEditedContent({ ...editedContent, plan: value })}
                 />
+              </div>
+            </ScrollArea>
+          </TabsContent>
+          
+          <TabsContent value="analysis" className="h-[calc(100%-40px)] p-4">
+            <ScrollArea className="h-full">
+              <div className="space-y-4">
+                {/* Direct Analysis Button */}
+                <div className="border rounded-lg p-4 bg-gradient-to-r from-teal-50 to-blue-50">
+                  <h3 className="font-semibold mb-3 flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-teal-600" />
+                    Comprehensive Analysis
+                  </h3>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Get a complete analysis of your SOAP note including differential diagnoses, treatment recommendations, and clinical reasoning validation.
+                  </p>
+                  <Button 
+                    onClick={handleAnalyzeSOAP}
+                    className="w-full bg-gradient-to-r from-teal-500 to-blue-500 hover:from-teal-600 hover:to-blue-600"
+                  >
+                    <Brain className="h-4 w-4 mr-2" />
+                    Analyze Complete SOAP Note
+                  </Button>
+                </div>
+
+                {/* Contextual Analysis Options */}
+                <div className="border rounded-lg p-4">
+                  <h3 className="font-semibold mb-3 flex items-center gap-2">
+                    <Search className="h-4 w-4" />
+                    Specific Analysis Tools
+                  </h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button 
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRedFlagAnalysis}
+                      className="justify-start"
+                    >
+                      <Shield className="h-3 w-3 mr-1 text-red-500" />
+                      Red Flags
+                    </Button>
+                    <Button 
+                      variant="outline"
+                      size="sm"
+                      onClick={handleDiagnosisAnalysis}
+                      className="justify-start"
+                    >
+                      <Activity className="h-3 w-3 mr-1 text-blue-500" />
+                      Diagnoses
+                    </Button>
+                    <Button 
+                      variant="outline"
+                      size="sm"
+                      onClick={handleTreatmentPlanAnalysis}
+                      className="justify-start"
+                    >
+                      <Target className="h-3 w-3 mr-1 text-green-500" />
+                      Treatment
+                    </Button>
+                    <Button 
+                      variant="outline"
+                      size="sm"
+                      onClick={handleGapAnalysis}
+                      className="justify-start"
+                    >
+                      <AlertCircle className="h-3 w-3 mr-1 text-orange-500" />
+                      Find Gaps
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Smart Prompts */}
+                {getSmartPrompts().length > 0 && (
+                  <div className="border rounded-lg p-4 bg-blue-50">
+                    <h3 className="font-semibold mb-3 flex items-center gap-2">
+                      <Lightbulb className="h-4 w-4 text-yellow-500" />
+                      Smart Suggestions
+                    </h3>
+                    <p className="text-xs text-muted-foreground mb-3">
+                      Based on your current SOAP content
+                    </p>
+                    <div className="space-y-2">
+                      {getSmartPrompts().map((prompt, index) => (
+                        <Button
+                          key={index}
+                          variant="secondary"
+                          size="sm"
+                          className="w-full justify-start text-left"
+                          onClick={prompt.action}
+                        >
+                          <MessageSquare className="h-3 w-3 mr-2 flex-shrink-0" />
+                          <span className="text-xs">{prompt.text}</span>
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Section-Specific Analysis */}
+                <div className="border rounded-lg p-4">
+                  <h3 className="font-semibold mb-3">Quick Analysis by Section</h3>
+                  <div className="space-y-2">
+                    {soapSections.subjective.length > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full justify-start"
+                        onClick={() => {
+                          const prompt = `What additional subjective questions should I ask based on: ${soapSections.subjective.join(' ')}`;
+                          if (onAnalyze) onAnalyze(prompt, 'subjective-questions');
+                        }}
+                      >
+                        <MessageSquare className="h-3 w-3 mr-2" />
+                        Suggest subjective questions
+                      </Button>
+                    )}
+                    
+                    {soapSections.objective.length > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full justify-start"
+                        onClick={() => {
+                          const prompt = `What do these objective findings indicate: ${soapSections.objective.join(' ')}`;
+                          if (onAnalyze) onAnalyze(prompt, 'objective-interpretation');
+                        }}
+                      >
+                        <Eye className="h-3 w-3 mr-2" />
+                        Interpret objective findings
+                      </Button>
+                    )}
+                    
+                    {soapSections.assessment.length > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full justify-start"
+                        onClick={() => {
+                          const prompt = `Validate this clinical assessment: ${soapSections.assessment.join(' ')}`;
+                          if (onAnalyze) onAnalyze(prompt, 'assessment-validation');
+                        }}
+                      >
+                        <Brain className="h-3 w-3 mr-2" />
+                        Validate assessment
+                      </Button>
+                    )}
+                    
+                    {soapSections.plan.length > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full justify-start"
+                        onClick={() => {
+                          const prompt = `Is this treatment plan evidence-based: ${soapSections.plan.join(' ')}`;
+                          if (onAnalyze) onAnalyze(prompt, 'plan-evidence');
+                        }}
+                      >
+                        <FileText className="h-3 w-3 mr-2" />
+                        Check evidence for plan
+                      </Button>
+                    )}
+                  </div>
+                </div>
               </div>
             </ScrollArea>
           </TabsContent>

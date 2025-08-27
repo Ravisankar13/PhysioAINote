@@ -30,7 +30,8 @@ import {
   Stethoscope,
   AlertTriangle,
   Menu,
-  X
+  X,
+  Target
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -43,6 +44,8 @@ import EvidenceDisplay from "@/components/clinical/EvidenceDisplay";
 import VirtualPatientSidebar from "@/components/virtualPatient/VirtualPatientSidebar";
 import FormattedResponse from "@/components/clinical/FormattedResponse";
 import SOAPBuilderPanel from "@/components/clinical/SOAPBuilderPanel";
+import ClinicalReferenceLibrary from "@/components/clinical/ClinicalReferenceLibrary";
+import TreatmentPlanningAssistant from "@/components/clinical/TreatmentPlanningAssistant";
 
 // Error Boundary Component
 class ErrorBoundary extends Component<{children: React.ReactNode}, {hasError: boolean}> {
@@ -142,6 +145,8 @@ export default function PhysioGPT() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showSOAPBuilder, setShowSOAPBuilder] = useState(false);
   const [soapBuilderCollapsed, setSOAPBuilderCollapsed] = useState(false);
+  const [showReferenceLibrary, setShowReferenceLibrary] = useState(false);
+  const [showTreatmentPlanning, setShowTreatmentPlanning] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
@@ -599,6 +604,24 @@ Please provide:
                 <FileText className="h-4 w-4 mr-1" />
                 SOAP Builder
               </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setShowReferenceLibrary(!showReferenceLibrary)}
+                className="bg-white/20 hover:bg-white/30 text-white border-white/30"
+              >
+                <BookOpen className="h-4 w-4 mr-1" />
+                References
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setShowTreatmentPlanning(!showTreatmentPlanning)}
+                className="bg-white/20 hover:bg-white/30 text-white border-white/30"
+              >
+                <Activity className="h-4 w-4 mr-1" />
+                Treatment Plan
+              </Button>
             </div>
           </div>
         </div>
@@ -850,6 +873,63 @@ Please provide:
             });
           }}
         />
+      )}
+
+      {/* Clinical Reference Library Panel */}
+      {showReferenceLibrary && (
+        <div className="fixed right-4 top-20 w-96 h-[calc(100vh-6rem)] z-40 animate-slideIn">
+          <ClinicalReferenceLibrary
+            onCiteReference={(reference) => {
+              const citation = `According to ${reference.source} (${reference.year}): "${reference.title}" - ${reference.description}`;
+              setMessage(message + '\n\n' + citation);
+              toast({
+                title: "Reference Added",
+                description: "Citation has been added to your message",
+              });
+            }}
+            onOpenReference={(reference) => {
+              if (reference.url) {
+                window.open(reference.url, '_blank');
+              } else {
+                toast({
+                  title: "Reference Details",
+                  description: reference.title,
+                });
+              }
+            }}
+          />
+        </div>
+      )}
+
+      {/* Treatment Planning Assistant Panel */}
+      {showTreatmentPlanning && (
+        <div className="fixed left-4 top-20 w-96 h-[calc(100vh-6rem)] z-40 animate-slideIn">
+          <TreatmentPlanningAssistant
+            patientInfo={{
+              diagnosis: patientContext?.bodyPart,
+              goals: [],
+              limitations: []
+            }}
+            onGeneratePlan={(plan) => {
+              const planSummary = `Treatment Plan for ${plan.diagnosis}:\n\n` +
+                `Duration: ${plan.duration}\n` +
+                `Frequency: ${plan.frequency}\n\n` +
+                `Phases:\n${plan.phases.map((phase, idx) => 
+                  `${idx + 1}. ${phase.name} (${phase.duration})`
+                ).join('\n')}\n\n` +
+                `Please provide evidence-based recommendations for this treatment plan.`;
+              
+              setMessage(planSummary);
+              handleSendMessage(planSummary);
+            }}
+            onExportPlan={(plan) => {
+              toast({
+                title: "Plan Exported",
+                description: `Treatment plan for ${plan.diagnosis} has been downloaded`,
+              });
+            }}
+          />
+        </div>
       )}
 
 

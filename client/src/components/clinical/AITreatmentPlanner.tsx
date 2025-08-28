@@ -123,10 +123,12 @@ export function AITreatmentPlanner() {
 
       // Get questions from API
       const response = await apiRequest('POST', '/api/treatment-planner/start', { diagnosis });
+      console.log('API Response:', response);
       
-      if (response.questions && response.questions.length > 0) {
+      if (response.success && response.questions && response.questions.length > 0) {
         // Store questions for sequential asking
         const questions = response.questions;
+        console.log('Questions received:', questions);
         localStorage.setItem('treatment-questions', JSON.stringify(questions));
         
         // Ask first question
@@ -138,14 +140,23 @@ export function AITreatmentPlanner() {
           timestamp: new Date(),
           questionCategory: firstQuestion.category
         };
+        console.log('Adding question message:', questionMessage);
         setChatMessages(prev => [...prev, questionMessage]);
         setCurrentQuestionIndex(1);
         setAssessmentProgress(10);
+      } else {
+        console.log('No questions in response, using defaults');
+        // Fall back to default questions
+        setTimeout(() => {
+          askNextQuestion();
+        }, 500);
       }
     } catch (error) {
       console.error('Error starting assessment:', error);
-      // Fall back to default questions
-      askNextQuestion();
+      // Fall back to default questions on error
+      setTimeout(() => {
+        askNextQuestion();
+      }, 500);
     } finally {
       setIsLoading(false);
     }

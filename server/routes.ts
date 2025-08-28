@@ -5597,6 +5597,100 @@ Respond with only a number between 1-100 representing the relevance score.`;
     }
   });
 
+  // AI Treatment Planner Routes
+  app.post("/api/treatment-planner/start", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { diagnosis } = req.body;
+      
+      if (!diagnosis) {
+        return res.status(400).json({ error: "Diagnosis is required" });
+      }
+
+      const { AITreatmentPlannerService } = await import('./aiTreatmentPlannerService');
+      const service = new AITreatmentPlannerService();
+      
+      const questions = await service.generateInitialQuestions(diagnosis);
+      
+      res.json({
+        success: true,
+        questions,
+        message: `Starting assessment for ${diagnosis}`
+      });
+    } catch (error) {
+      console.error("Error starting treatment plan assessment:", error);
+      res.status(500).json({ error: "Failed to start assessment" });
+    }
+  });
+
+  app.post("/api/treatment-planner/answer", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { 
+        diagnosis, 
+        answer, 
+        questionContext,
+        chatHistory,
+        currentPlan,
+        patientProfile 
+      } = req.body;
+
+      const { AITreatmentPlannerService } = await import('./aiTreatmentPlannerService');
+      const service = new AITreatmentPlannerService();
+      
+      // Extract patient information from answer
+      const profileUpdate = await service.analyzeAnswerForProfile(answer, questionContext);
+      
+      // Update treatment plan based on new information
+      const planUpdate = await service.updateTreatmentPlan(
+        diagnosis,
+        currentPlan,
+        { ...patientProfile, ...profileUpdate },
+        answer,
+        questionContext
+      );
+      
+      // Check if we need a follow-up question
+      const followUpQuestion = await service.generateFollowUpQuestion(
+        diagnosis,
+        chatHistory,
+        answer
+      );
+      
+      res.json({
+        success: true,
+        profileUpdate,
+        planUpdate,
+        followUpQuestion
+      });
+    } catch (error) {
+      console.error("Error processing treatment plan answer:", error);
+      res.status(500).json({ error: "Failed to process answer" });
+    }
+  });
+
+  app.post("/api/treatment-planner/complete", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { diagnosis, patientProfile } = req.body;
+
+      const { AITreatmentPlannerService } = await import('./aiTreatmentPlannerService');
+      const { exerciseDatabase } = await import('@/data/exerciseDatabase');
+      const service = new AITreatmentPlannerService();
+      
+      const completePlan = await service.generateCompleteTreatmentPlan(
+        diagnosis,
+        patientProfile,
+        exerciseDatabase
+      );
+      
+      res.json({
+        success: true,
+        plan: completePlan
+      });
+    } catch (error) {
+      console.error("Error generating complete treatment plan:", error);
+      res.status(500).json({ error: "Failed to generate complete plan" });
+    }
+  });
+
   // Medical Illustration Generation Route
   app.post("/api/generate-medical-illustration", async (req: Request, res: Response) => {
     try {

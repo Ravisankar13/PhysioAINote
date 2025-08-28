@@ -45,7 +45,7 @@ import VirtualPatientSidebar from "@/components/virtualPatient/VirtualPatientSid
 import FormattedResponse from "@/components/clinical/FormattedResponse";
 import SOAPBuilderPanel from "@/components/clinical/SOAPBuilderPanel";
 import ClinicalReferenceLibrary from "@/components/clinical/ClinicalReferenceLibrary";
-import TreatmentPlanningAssistant from "@/components/clinical/TreatmentPlanningAssistant";
+import { AITreatmentPlanner } from "@/components/clinical/AITreatmentPlanner";
 
 // Error Boundary Component
 class ErrorBoundary extends Component<{children: React.ReactNode}, {hasError: boolean}> {
@@ -903,32 +903,8 @@ Please provide:
 
       {/* Treatment Planning Assistant Panel */}
       {showTreatmentPlanning && (
-        <div className="fixed left-4 top-20 w-96 h-[calc(100vh-6rem)] z-40 animate-slideIn">
-          <TreatmentPlanningAssistant
-            patientInfo={{
-              diagnosis: patientContext?.bodyPart,
-              goals: [],
-              limitations: []
-            }}
-            onGeneratePlan={(plan) => {
-              const planSummary = `Treatment Plan for ${plan.diagnosis}:\n\n` +
-                `Duration: ${plan.duration}\n` +
-                `Frequency: ${plan.frequency}\n\n` +
-                `Phases:\n${plan.phases.map((phase, idx) => 
-                  `${idx + 1}. ${phase.name} (${phase.duration})`
-                ).join('\n')}\n\n` +
-                `Please provide evidence-based recommendations for this treatment plan.`;
-              
-              setMessage(planSummary);
-              handleSendMessage(planSummary);
-            }}
-            onExportPlan={(plan) => {
-              toast({
-                title: "Plan Exported",
-                description: `Treatment plan for ${plan.diagnosis} has been downloaded`,
-              });
-            }}
-          />
+        <div className="fixed left-4 top-20 right-4 bottom-4 z-40 animate-slideIn">
+          <AITreatmentPlanner />
         </div>
       )}
 

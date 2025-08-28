@@ -526,11 +526,11 @@ export function AITreatmentPlanner() {
   };
 
   return (
-    <div className="h-full flex gap-4">
+    <div className="h-full flex gap-4 overflow-hidden">
       {/* Left Panel - AI Chat Assessment */}
-      <div className="w-2/5 flex flex-col">
-        <Card className="flex-1 flex flex-col">
-          <CardHeader className="pb-3">
+      <div className="w-2/5 flex flex-col h-full">
+        <Card className="flex-1 flex flex-col overflow-hidden">
+          <CardHeader className="pb-3 flex-shrink-0">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Brain className="h-5 w-5 text-primary" />
@@ -557,7 +557,7 @@ export function AITreatmentPlanner() {
             )}
           </CardHeader>
           
-          <CardContent className="flex-1 flex flex-col p-0">
+          <CardContent className="flex-1 flex flex-col p-0 overflow-hidden">
             {!isAssessmentStarted ? (
               <div className="flex-1 flex flex-col justify-center items-center p-6">
                 <Sparkles className="h-12 w-12 text-primary mb-4" />
@@ -585,7 +585,7 @@ export function AITreatmentPlanner() {
               </div>
             ) : (
               <>
-                <ScrollArea className="flex-1 p-4">
+                <div className="flex-1 overflow-y-auto p-4">
                   <div className="space-y-3">
                     {chatMessages.map((message) => (
                       <div
@@ -620,9 +620,9 @@ export function AITreatmentPlanner() {
                     )}
                     <div ref={chatEndRef} />
                   </div>
-                </ScrollArea>
+                </div>
                 
-                <div className="p-4 border-t">
+                <div className="p-4 border-t flex-shrink-0">
                   <div className="flex gap-2">
                     <Input
                       value={currentInput}
@@ -646,9 +646,9 @@ export function AITreatmentPlanner() {
       </div>
 
       {/* Right Panel - Dynamic Treatment Plan */}
-      <div className="flex-1 flex flex-col">
-        <Card className="flex-1 flex flex-col">
-          <CardHeader className="pb-3">
+      <div className="flex-1 flex flex-col h-full">
+        <Card className="flex-1 flex flex-col overflow-hidden">
+          <CardHeader className="pb-3 flex-shrink-0">
             <div className="flex items-center justify-between">
               <CardTitle>Dynamic Treatment Plan</CardTitle>
               {treatmentPlan && (
@@ -688,7 +688,7 @@ export function AITreatmentPlanner() {
                   <TabsTrigger value="reasoning">Clinical Reasoning</TabsTrigger>
                 </TabsList>
                 
-                <ScrollArea className="flex-1">
+                <div className="flex-1 overflow-y-auto">
                   <TabsContent value="overview" className="p-4 space-y-4">
                     <div>
                       <h3 className="font-semibold mb-2">Diagnosis</h3>
@@ -873,7 +873,7 @@ export function AITreatmentPlanner() {
                       </p>
                     </div>
                   </TabsContent>
-                </ScrollArea>
+                </div>
               </Tabs>
             )}
           </CardContent>

@@ -459,40 +459,124 @@ export function AITreatmentPlanner() {
   const updatePlanBasedOnAnswer = (answer: string) => {
     if (!treatmentPlan) return;
 
-    // Parse answer and update patient profile
-    const updatedProfile = { ...patientProfile };
+    const lowerAnswer = answer.toLowerCase();
+    const updatedPlan = { ...treatmentPlan };
     
-    // Simple parsing logic (in real implementation, AI would handle this)
-    if (answer.match(/\d+/)) {
-      const age = parseInt(answer.match(/\d+/)![0]);
-      if (age < 100 && age > 0) {
-        updatedProfile.age = age;
+    // Deep copy phases to ensure updates are reflected
+    updatedPlan.phases = updatedPlan.phases.map(phase => ({
+      ...phase,
+      exercises: [...phase.exercises],
+      precautions: [...phase.precautions],
+      educationPoints: [...phase.educationPoints],
+      goals: [...phase.goals]
+    }));
+    
+    updatedPlan.patientProfile = { ...patientProfile };
+    updatedPlan.lastUpdated = new Date();
+
+    // Age-based modifications
+    if (patientProfile.age) {
+      if (patientProfile.age > 65) {
+        updatedPlan.phases[0].duration = '0-4 weeks';
+        if (!updatedPlan.phases[0].precautions.includes('Consider age-related factors')) {
+          updatedPlan.phases[0].precautions.push('Consider age-related factors');
+          updatedPlan.phases[0].precautions.push('Monitor for slower healing times');
+        }
+      } else if (patientProfile.age < 25) {
+        updatedPlan.phases[0].duration = '0-2 weeks';
+        if (!updatedPlan.phases[1].goals.includes('Early return to sport')) {
+          updatedPlan.phases[1].goals.push('Early return to sport');
+        }
       }
     }
-    
-    if (answer.toLowerCase().includes('male') || answer.toLowerCase().includes('female')) {
-      updatedProfile.gender = answer.toLowerCase().includes('male') ? 'male' : 'female';
+
+    // Duration-based modifications (chronic vs acute)
+    if (lowerAnswer.includes('month') || lowerAnswer.includes('chronic') || lowerAnswer.includes('year')) {
+      updatedPlan.clinicalReasoning = 'Chronic presentation requiring emphasis on central sensitization education, graded exposure, and addressing compensatory patterns.';
+      if (!updatedPlan.phases[0].educationPoints.includes('Pain neuroscience education')) {
+        updatedPlan.phases[0].educationPoints.push('Pain neuroscience education');
+        updatedPlan.phases[0].educationPoints.push('Central sensitization concepts');
+      }
+      updatedPlan.phases[0].duration = '0-4 weeks';
+    } else if (lowerAnswer.includes('day') || lowerAnswer.includes('week') || lowerAnswer.includes('acute')) {
+      updatedPlan.clinicalReasoning = 'Acute presentation - focus on inflammation control, protection, and early mobilization within pain limits.';
+      if (!updatedPlan.phases[0].precautions.includes('RICE protocol')) {
+        updatedPlan.phases[0].precautions.push('RICE protocol');
+        updatedPlan.phases[0].precautions.push('Avoid aggravating activities');
+      }
     }
 
-    setPatientProfile(updatedProfile);
-
-    // Update treatment plan based on new information
-    const updatedPlan = { ...treatmentPlan };
-    updatedPlan.patientProfile = updatedProfile;
-    updatedPlan.lastUpdated = new Date();
-    
-    // Adjust plan based on specific factors
-    if (updatedProfile.age && updatedProfile.age > 65) {
-      updatedPlan.phases[0].duration = '0-3 weeks'; // Longer initial phase for elderly
-      updatedPlan.phases[0].precautions.push('Consider age-related factors');
+    // Pain severity modifications
+    if (patientProfile.painSeverity !== undefined) {
+      if (patientProfile.painSeverity >= 7) {
+        updatedPlan.redFlags = ['High pain levels - consider medical review if no improvement'];
+        updatedPlan.phases[0].exercises = updatedPlan.phases[0].exercises.filter(ex => 
+          ex.toLowerCase().includes('gentle') || ex.toLowerCase().includes('isometric')
+        );
+        if (!updatedPlan.phases[0].precautions.includes('Start very gently')) {
+          updatedPlan.phases[0].precautions.push('Start very gently');
+          updatedPlan.phases[0].precautions.push('Pain should not exceed 3/10 during exercises');
+        }
+      } else if (patientProfile.painSeverity <= 3) {
+        if (!updatedPlan.phases[1].goals.includes('Progress to functional activities')) {
+          updatedPlan.phases[1].goals.push('Progress to functional activities');
+        }
+      }
     }
 
-    if (answer.toLowerCase().includes('chronic') || answer.toLowerCase().includes('months')) {
-      updatedPlan.clinicalReasoning += '\nChronic presentation requires emphasis on central sensitization education and graded exposure.';
-      updatedPlan.phases[0].educationPoints.push('Pain neuroscience education');
+    // Sport/activity specific modifications
+    if (lowerAnswer.includes('basketball') || lowerAnswer.includes('volleyball') || lowerAnswer.includes('jumping')) {
+      if (!updatedPlan.phases[2].exercises.some(ex => ex.includes('plyometric'))) {
+        updatedPlan.phases[2].exercises.push('Plyometric progression');
+        updatedPlan.phases[2].exercises.push('Jump landing training');
+      }
+      updatedPlan.phases[2].goals.push('Return to jumping sports');
     }
 
-    setTreatmentPlan(updatedPlan);
+    if (lowerAnswer.includes('running') || lowerAnswer.includes('runner')) {
+      if (!updatedPlan.phases[2].exercises.some(ex => ex.includes('running'))) {
+        updatedPlan.phases[2].exercises.push('Running progression program');
+        updatedPlan.phases[2].goals.push('Return to running protocol');
+      }
+    }
+
+    // Work-related modifications
+    if (lowerAnswer.includes('desk') || lowerAnswer.includes('computer') || lowerAnswer.includes('office')) {
+      if (!updatedPlan.phases[0].educationPoints.includes('Ergonomic setup')) {
+        updatedPlan.phases[0].educationPoints.push('Ergonomic workstation setup');
+        updatedPlan.phases[0].educationPoints.push('Regular movement breaks');
+      }
+    } else if (lowerAnswer.includes('manual') || lowerAnswer.includes('lifting') || lowerAnswer.includes('heavy')) {
+      if (!updatedPlan.phases[1].exercises.some(ex => ex.includes('lifting'))) {
+        updatedPlan.phases[1].exercises.push('Safe lifting mechanics');
+        updatedPlan.phases[2].exercises.push('Work-specific strengthening');
+      }
+    }
+
+    // Previous treatment modifications
+    if (lowerAnswer.includes('injection') || lowerAnswer.includes('cortisone')) {
+      updatedPlan.clinicalReasoning += '\nPost-injection care: gradual loading progression important.';
+      if (!updatedPlan.phases[0].precautions.includes('Post-injection precautions')) {
+        updatedPlan.phases[0].precautions.push('Post-injection precautions');
+      }
+    }
+
+    if (lowerAnswer.includes('surgery') || lowerAnswer.includes('operation')) {
+      updatedPlan.clinicalReasoning += '\nPost-surgical rehabilitation: follow surgeon protocols.';
+      updatedPlan.redFlags.push('Monitor for surgical complications');
+    }
+
+    // Goals-based modifications
+    if (lowerAnswer.includes('return to sport') || lowerAnswer.includes('competition')) {
+      updatedPlan.phases[2].duration = '6-12 weeks';
+      if (!updatedPlan.phases[2].goals.includes('Sport-specific training')) {
+        updatedPlan.phases[2].goals.push('Sport-specific training');
+        updatedPlan.phases[2].goals.push('Competitive readiness');
+      }
+    }
+
+    // Force re-render by creating new object reference
+    setTreatmentPlan({ ...updatedPlan });
   };
 
   const resetAssessment = () => {

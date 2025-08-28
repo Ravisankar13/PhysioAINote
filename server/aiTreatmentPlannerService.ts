@@ -63,7 +63,6 @@ export class AITreatmentPlannerService {
           }
         ],
         response_format: { type: "json_object" },
-        temperature: 0.7,
         max_completion_tokens: 1000
       });
 
@@ -113,7 +112,6 @@ export class AITreatmentPlannerService {
           }
         ],
         response_format: { type: "json_object" },
-        temperature: 0.7,
         max_completion_tokens: 300
       });
 
@@ -182,7 +180,6 @@ export class AITreatmentPlannerService {
           }
         ],
         response_format: { type: "json_object" },
-        temperature: 0.7,
         max_completion_tokens: 1500
       });
 
@@ -259,7 +256,6 @@ export class AITreatmentPlannerService {
           }
         ],
         response_format: { type: "json_object" },
-        temperature: 0.7,
         max_completion_tokens: 2000
       });
 
@@ -400,7 +396,6 @@ export class AITreatmentPlannerService {
           }
         ],
         response_format: { type: "json_object" },
-        temperature: 0.3,
         max_completion_tokens: 500
       });
 

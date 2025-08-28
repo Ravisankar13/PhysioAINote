@@ -307,8 +307,12 @@ export function AITreatmentPlanner() {
   ];
 
   const askNextQuestion = () => {
-    if (currentQuestionIndex < questionBank.length) {
-      const question = questionBank[currentQuestionIndex];
+    // Try to get stored questions from API first
+    const storedQuestions = localStorage.getItem('treatment-questions');
+    const questions = storedQuestions ? JSON.parse(storedQuestions) : questionBank;
+    
+    if (currentQuestionIndex < questions.length) {
+      const question = questions[currentQuestionIndex];
       const aiMessage: ChatMessage = {
         id: Date.now().toString(),
         type: 'ai',
@@ -318,19 +322,49 @@ export function AITreatmentPlanner() {
       };
       setChatMessages(prev => [...prev, aiMessage]);
       setCurrentQuestionIndex(prev => prev + 1);
-      setAssessmentProgress((currentQuestionIndex + 1) / questionBank.length * 100);
+      setAssessmentProgress((currentQuestionIndex + 1) / questions.length * 100);
     } else {
-      // Assessment complete
-      const completionMessage: ChatMessage = {
-        id: Date.now().toString(),
-        type: 'ai',
-        content: "Thank you! I've gathered all the information needed. Your personalized treatment plan is complete and ready for review. You can continue to refine it by asking specific questions or making adjustments.",
-        timestamp: new Date(),
-        questionCategory: 'Completion'
-      };
-      setChatMessages(prev => [...prev, completionMessage]);
-      setAssessmentProgress(100);
+      // Assessment complete - generate final plan
+      generateFinalPlan();
     }
+  };
+
+  const generateFinalPlan = async () => {
+    setIsLoading(true);
+    try {
+      const response = await apiRequest('POST', '/api/treatment-planner/complete', {
+        diagnosis,
+        patientProfile
+      });
+
+      if (response.plan) {
+        // Update with complete plan from AI
+        const completePlan = response.plan;
+        if (completePlan.phases && treatmentPlan) {
+          setTreatmentPlan({
+            ...treatmentPlan,
+            phases: completePlan.phases,
+            outcomeMeasures: completePlan.outcomeMeasures || treatmentPlan.outcomeMeasures,
+            redFlags: completePlan.redFlags || treatmentPlan.redFlags,
+            clinicalReasoning: completePlan.clinicalReasoning || treatmentPlan.clinicalReasoning
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error generating final plan:', error);
+    }
+
+    // Assessment complete message
+    const completionMessage: ChatMessage = {
+      id: Date.now().toString(),
+      type: 'ai',
+      content: "Thank you! I've gathered all the information needed. Your personalized treatment plan is complete and ready for review. You can continue to refine it by asking specific questions or making adjustments.",
+      timestamp: new Date(),
+      questionCategory: 'Completion'
+    };
+    setChatMessages(prev => [...prev, completionMessage]);
+    setAssessmentProgress(100);
+    setIsLoading(false);
   };
 
   const handleSendMessage = async () => {

@@ -64,7 +64,7 @@ export class AITreatmentPlannerService {
         ],
         response_format: { type: "json_object" },
         temperature: 0.7,
-        max_tokens: 1000
+        max_completion_tokens: 1000
       });
 
       const result = JSON.parse(response.choices[0].message.content || '{}');
@@ -114,7 +114,7 @@ export class AITreatmentPlannerService {
         ],
         response_format: { type: "json_object" },
         temperature: 0.7,
-        max_tokens: 300
+        max_completion_tokens: 300
       });
 
       const result = JSON.parse(response.choices[0].message.content || '{}');
@@ -183,7 +183,7 @@ export class AITreatmentPlannerService {
         ],
         response_format: { type: "json_object" },
         temperature: 0.7,
-        max_tokens: 1500
+        max_completion_tokens: 1500
       });
 
       const result = JSON.parse(response.choices[0].message.content || '{}');
@@ -260,7 +260,7 @@ export class AITreatmentPlannerService {
         ],
         response_format: { type: "json_object" },
         temperature: 0.7,
-        max_tokens: 2000
+        max_completion_tokens: 2000
       });
 
       const result = JSON.parse(response.choices[0].message.content || '{}');
@@ -401,7 +401,7 @@ export class AITreatmentPlannerService {
         ],
         response_format: { type: "json_object" },
         temperature: 0.3,
-        max_tokens: 500
+        max_completion_tokens: 500
       });
 
       const result = JSON.parse(response.choices[0].message.content || '{}');

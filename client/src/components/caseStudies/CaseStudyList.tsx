@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, Brain, Plus, Search, BookOpen, Activity } from "lucide-react";
 import { bodyPartEnum } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 
 interface CaseStudyListProps {
   onSelectCase: (caseId: number) => void;
@@ -39,6 +40,7 @@ const complexityOptions = [
 
 export default function CaseStudyList({ onSelectCase, onCreateCase }: CaseStudyListProps) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
   const [bodyPart, setBodyPart] = useState<string>("all");
   const [complexity, setComplexity] = useState<string>("all");
@@ -110,10 +112,12 @@ export default function CaseStudyList({ onSelectCase, onCreateCase }: CaseStudyL
       <CardHeader className="pb-3">
         <div className="flex justify-between items-center">
           <CardTitle className="text-2xl">AI-Generated Case Studies</CardTitle>
-          <Button onClick={onCreateCase}>
-            <Plus className="h-4 w-4 mr-2" />
-            New Case Study
-          </Button>
+          {user && (
+            <Button onClick={onCreateCase}>
+              <Plus className="h-4 w-4 mr-2" />
+              New Case Study
+            </Button>
+          )}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mt-4">
@@ -165,14 +169,16 @@ export default function CaseStudyList({ onSelectCase, onCreateCase }: CaseStudyL
             <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-lg font-medium mb-2">No case studies found</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              {searchTerm || bodyPart || complexity ? 
+              {searchTerm || bodyPart !== "all" || complexity !== "all" ? 
                 "Try adjusting your filters or search term" : 
-                "Create your first case study to get started"}
+                user ? "Create your first case study to get started" : "Browse existing case studies or sign in to create new ones"}
             </p>
-            <Button onClick={onCreateCase}>
-              <Plus className="h-4 w-4 mr-2" />
-              Create Case Study
-            </Button>
+            {user && (
+              <Button onClick={onCreateCase}>
+                <Plus className="h-4 w-4 mr-2" />
+                Create Case Study
+              </Button>
+            )}
           </div>
         ) : (
           <>

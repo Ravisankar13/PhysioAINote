@@ -5441,11 +5441,15 @@ Respond with only a number between 1-100 representing the relevance score.`;
     }
   });
 
-  app.get("/api/case-studies/:id/attempts", ensureAuthenticated, async (req: Request, res: Response) => {
+  app.get("/api/case-studies/:id/attempts", async (req: Request, res: Response) => {
     try {
       const caseId = parseInt(req.params.id);
+      // For non-authenticated users, return empty array
+      if (!req.user) {
+        return res.json([]);
+      }
+      
       const userId = req.user.id;
-
       const attempts = await storage.getUserAttemptsForCase(userId, caseId);
 
       res.json(attempts);
@@ -5455,21 +5459,23 @@ Respond with only a number between 1-100 representing the relevance score.`;
     }
   });
 
-  app.post("/api/case-studies/:id/attempt", ensureAuthenticated, async (req: Request, res: Response) => {
+  app.post("/api/case-studies/:id/attempt", async (req: Request, res: Response) => {
     try {
       const caseId = parseInt(req.params.id);
-      const userId = req.user.id;
-
+      
       // Get the case study
       const caseStudy = await storage.getAICaseStudy(caseId);
       if (!caseStudy) {
         return res.status(404).json({ error: "Case study not found" });
       }
 
-      // Create the attempt record
+      // For non-authenticated users, create a guest attempt (no userId)
+      const userId = req.user ? req.user.id : null;
+
+      // Create the attempt record (handle guest mode)
       const attemptData = {
         caseStudyId: caseId,
-        userId,
+        userId: userId || 0, // Use 0 for guest users
         userDiagnosis: req.body.userDiagnosis,
         userReasoning: req.body.userReasoning,
         assessmentTests: req.body.assessmentTests,

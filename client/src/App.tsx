@@ -128,9 +128,7 @@ function Router() {
           </Route>
           <Route path="/shared-cases/:id" component={SharedCaseDetailPage} />
           <Route path="/shared-cases" component={SharedCasesPage} />
-          <Route path="/case-studies">
-            <ProtectedRoute component={CaseStudyPage} />
-          </Route>
+          <Route path="/case-studies" component={CaseStudyPage} />
           <Route path="/competitions">
             <ProtectedRoute component={CompetitionPage} />
           </Route>

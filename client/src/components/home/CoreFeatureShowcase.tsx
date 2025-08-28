@@ -101,6 +101,25 @@ const CoreFeatureShowcase = () => {
       bgGradient: "from-amber-600 to-orange-700"
     },
     {
+      id: "case-studies",
+      icon: <Activity className="h-6 w-6" />,
+      title: "AI Case Studies",
+      subtitle: "Practice Diagnostic Skills",
+      description: "Challenge yourself with 150+ AI-generated physiotherapy cases across all body parts. Practice pattern recognition and receive instant feedback on your diagnostic and treatment approaches.",
+      keyFeatures: [
+        "150+ comprehensive cases",
+        "All body parts covered",
+        "Instant AI feedback",
+        "No registration required"
+      ],
+      primaryAction: {
+        text: "Practice Cases",
+        href: "/case-studies",
+        icon: <Activity className="h-4 w-4" />
+      },
+      bgGradient: "from-indigo-600 to-blue-700"
+    },
+    {
       id: "competitions",
       icon: <Trophy className="h-6 w-6" />,
       title: "Clinical Competitions",

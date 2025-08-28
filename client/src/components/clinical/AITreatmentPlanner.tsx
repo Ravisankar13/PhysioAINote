@@ -163,7 +163,31 @@ export function AITreatmentPlanner() {
   };
 
   const generateInitialPlan = (condition: string) => {
-    // Create a basic plan that will be refined with each answer
+    const conditionLower = condition.toLowerCase();
+    
+    // Generate condition-specific clinical reasoning and red flags
+    let clinicalReasoning = '';
+    let redFlags: string[] = [];
+    let homeProgram: string[] = [];
+    
+    if (conditionLower.includes('patella') || conditionLower.includes('patellar')) {
+      clinicalReasoning = 'Patellar tendinopathy management: Progressive tendon loading is essential. Eccentric strengthening on decline board shown to be most effective. Address biomechanical factors including hip strength, ankle mobility, and jumping/landing mechanics. Monitor tendon response 24 hours post-exercise.';
+      redFlags = ['Sudden complete rupture', 'Significant swelling', 'Unable to weight bear', 'Fever or signs of infection'];
+      homeProgram = ['Daily eccentric exercises', 'Ice after activity', 'Patellar tendon strap during sport', 'Foam rolling daily'];
+    } else if (conditionLower.includes('rotator') || conditionLower.includes('shoulder')) {
+      clinicalReasoning = 'Rotator cuff rehabilitation: Focus on scapular stability first, then progressive rotator cuff strengthening. Address thoracic mobility and cervical spine. Restore scapulohumeral rhythm. Night pain indicates inflammatory component requiring modification.';
+      redFlags = ['Complete tear signs', 'Significant weakness (drop arm)', 'Neurological symptoms', 'Frozen shoulder development'];
+      homeProgram = ['Pendulum exercises 3x daily', 'Ice for inflammation', 'Sleep positioning advice', 'Postural corrections hourly'];
+    } else if (conditionLower.includes('back') || conditionLower.includes('lumbar')) {
+      clinicalReasoning = 'Low back pain management: Biopsychosocial approach essential. Encourage active recovery and avoid bed rest. Address fear-avoidance beliefs. Core stability and movement patterns crucial. Consider centralization phenomenon for exercise selection.';
+      redFlags = ['Cauda equina symptoms', 'Progressive neurological deficit', 'Unexplained weight loss', 'Night pain unrelieved by position'];
+      homeProgram = ['Walking program - start 10 minutes 2x daily', 'Hourly movement breaks', 'Core activation exercises', 'Heat/ice as preferred'];
+    } else {
+      clinicalReasoning = `Evidence-based treatment for ${condition}: Progressive loading principles, addressing contributing factors, and preventing recurrence through comprehensive rehabilitation.`;
+      redFlags = ['Worsening symptoms despite treatment', 'Signs of serious pathology', 'Neurological changes'];
+      homeProgram = ['Daily prescribed exercises', 'Activity modification as needed', 'Self-management strategies'];
+    }
+    
     const initialPlan: TreatmentPlan = {
       diagnosis: condition,
       patientProfile: {},
@@ -173,79 +197,229 @@ export function AITreatmentPlanner() {
           name: 'Acute/Initial Phase',
           duration: '0-2 weeks',
           goals: [
-            'Reduce pain and inflammation',
-            'Protect healing tissues',
-            'Maintain range of motion'
+            'Reduce pain from current level to <4/10',
+            'Control inflammation and swelling',
+            'Protect healing tissues from further damage',
+            'Maintain available range of motion',
+            'Begin appropriate loading'
           ],
           exercises: selectExercisesForCondition(condition, 'initial'),
-          precautions: ['Avoid painful activities', 'Monitor for red flags'],
-          progressionCriteria: ['Pain reduction by 30%', 'Improved function'],
-          educationPoints: ['Pain management strategies', 'Activity modification']
+          precautions: [
+            'Avoid provocative activities',
+            'Monitor 24-hour symptom response',
+            'Pain during exercise should not exceed 3/10',
+            'Stop if sharp pain occurs',
+            'Watch for red flag symptoms'
+          ],
+          progressionCriteria: [
+            'Pain reduced by at least 30%',
+            'Able to perform ADLs with minimal pain',
+            'No adverse reaction to initial exercises',
+            'Inflammation controlled'
+          ],
+          educationPoints: [
+            'Explanation of condition and healing timeframes',
+            'Pain vs harm concepts',
+            'Activity modification strategies',
+            'Importance of adherence to program',
+            'When to seek further help'
+          ]
         },
         {
           id: '2',
           name: 'Recovery/Strengthening Phase',
           duration: '2-6 weeks',
           goals: [
-            'Progressive strengthening',
-            'Improve flexibility',
-            'Restore normal movement patterns'
+            'Progressive strengthening to 70% of unaffected side',
+            'Restore full range of motion',
+            'Correct movement patterns and biomechanics',
+            'Address contributing factors',
+            'Build tissue tolerance'
           ],
           exercises: selectExercisesForCondition(condition, 'strengthening'),
-          precautions: ['Progress gradually', 'Monitor symptoms'],
-          progressionCriteria: ['Full ROM achieved', 'Strength 70% of unaffected side'],
-          educationPoints: ['Proper exercise technique', 'Load management']
+          precautions: [
+            'Follow 10% progression rule',
+            'Ensure proper form before increasing load',
+            'Monitor for compensatory patterns',
+            'Avoid excessive fatigue',
+            'Respect tissue healing times'
+          ],
+          progressionCriteria: [
+            'Full ROM without significant pain',
+            'Strength testing shows >70% compared to other side',
+            'Good movement quality demonstrated',
+            'Able to perform work/sport specific movements',
+            'Minimal pain with loading'
+          ],
+          educationPoints: [
+            'Progressive overload principles',
+            'Proper exercise technique and breathing',
+            'Recovery and nutrition for healing',
+            'Load management strategies',
+            'Recognizing good vs bad pain'
+          ]
         },
         {
           id: '3',
           name: 'Return to Function Phase',
           duration: '6-12 weeks',
           goals: [
-            'Full functional restoration',
-            'Return to activities',
-            'Prevention strategies'
+            'Full return to sport/work activities',
+            'Strength equal to unaffected side',
+            'Implement injury prevention strategies',
+            'Optimize performance',
+            'Establish maintenance program'
           ],
           exercises: selectExercisesForCondition(condition, 'functional'),
-          precautions: ['Gradual return to sport/work'],
-          progressionCriteria: ['Full strength', 'Symptom-free with activities'],
-          educationPoints: ['Long-term management', 'Prevention strategies']
+          precautions: [
+            'Gradual return to sport protocol',
+            'Monitor for symptom recurrence',
+            'Maintain conditioning during return',
+            'Address psychological readiness',
+            'Avoid too much too soon'
+          ],
+          progressionCriteria: [
+            'Pass functional testing battery',
+            'Symptom-free with all activities',
+            'Confident with all movements',
+            'Meet sport/work specific demands',
+            'No kinesiophobia'
+          ],
+          educationPoints: [
+            'Long-term management strategies',
+            'Warning signs of re-injury',
+            'Maintenance exercise program',
+            'Periodic reassessment needs',
+            'Lifestyle factors for prevention'
+          ]
         }
       ],
-      homeProgram: [],
-      redFlags: [],
+      homeProgram,
+      redFlags,
       outcomeMeasures: generateOutcomeMeasures(condition),
-      clinicalReasoning: `Initial treatment plan for ${condition} following evidence-based guidelines.`,
+      clinicalReasoning,
       lastUpdated: new Date()
     };
 
     setTreatmentPlan(initialPlan);
   };
 
-  const selectExercisesForCondition = (condition: string, phase: string): any[] => {
-    // AI would select appropriate exercises from the database
-    // For now, we'll do basic matching
-    const keywords = condition.toLowerCase().split(' ');
-    let relevantExercises = exerciseDatabase.filter(exercise => {
-      const exerciseText = `${exercise.name} ${exercise.category} ${exercise.bodyPart}`.toLowerCase();
-      return keywords.some(keyword => exerciseText.includes(keyword));
-    });
-
-    // Select exercises based on phase
-    if (phase === 'initial') {
-      relevantExercises = relevantExercises.filter(e => 
-        e.category === 'mobility' || e.category === 'stretching'
-      ).slice(0, 5);
-    } else if (phase === 'strengthening') {
-      relevantExercises = relevantExercises.filter(e => 
-        e.category === 'strengthening' || e.category === 'stabilization'
-      ).slice(0, 6);
-    } else {
-      relevantExercises = relevantExercises.filter(e => 
-        e.category === 'functional' || e.category === 'plyometric'
-      ).slice(0, 5);
+  const selectExercisesForCondition = (condition: string, phase: string): string[] => {
+    const conditionLower = condition.toLowerCase();
+    
+    // Patella tendinitis specific exercises
+    if (conditionLower.includes('patella') || conditionLower.includes('patellar')) {
+      if (phase === 'initial') {
+        return [
+          'Isometric quad sets - 3x10 holds of 5 seconds',
+          'Straight leg raises - 3x10 each direction',
+          'Gentle knee flexion stretches - 3x30 seconds',
+          'Calf stretches - 3x30 seconds each leg',
+          'Foam rolling ITB and quads - 2x60 seconds'
+        ];
+      } else if (phase === 'strengthening') {
+        return [
+          'Wall sits - 3x30-60 seconds',
+          'Single leg squats on decline board - 3x12',
+          'Step downs with control - 3x10 each leg',
+          'Hamstring curls - 3x12',
+          'Bulgarian split squats - 3x10 each leg',
+          'Calf raises - 3x15'
+        ];
+      } else {
+        return [
+          'Jump squats - 3x8',
+          'Box jumps with soft landing - 3x6',
+          'Single leg hops - 3x10 each leg',
+          'Running drills - 10 minutes',
+          'Sport-specific movements'
+        ];
+      }
     }
-
-    return relevantExercises;
+    
+    // Rotator cuff exercises
+    if (conditionLower.includes('rotator') || conditionLower.includes('shoulder')) {
+      if (phase === 'initial') {
+        return [
+          'Pendulum exercises - 3x1 minute',
+          'Passive external rotation with stick - 3x10',
+          'Scapular retraction - 3x10 holds',
+          'Isometric external rotation - 3x10 holds',
+          'Cross-body stretches - 3x30 seconds'
+        ];
+      } else if (phase === 'strengthening') {
+        return [
+          'External rotation with band - 3x12',
+          'Internal rotation with band - 3x12',
+          'Scaption raises - 3x10',
+          'Prone T, Y, I exercises - 3x10 each',
+          'Wall push-ups - 3x12',
+          'Serratus punches - 3x15'
+        ];
+      } else {
+        return [
+          'Overhead press progression',
+          'Medicine ball throws - 3x10',
+          'Plyometric push-ups - 3x8',
+          'Sport-specific drills',
+          'Full kinetic chain exercises'
+        ];
+      }
+    }
+    
+    // Low back exercises
+    if (conditionLower.includes('back') || conditionLower.includes('lumbar')) {
+      if (phase === 'initial') {
+        return [
+          'Cat-cow stretches - 3x10',
+          'Knee to chest stretches - 3x30 seconds each',
+          'Pelvic tilts - 3x10',
+          'Deep breathing exercises - 3x10',
+          'Walking - 10-20 minutes daily'
+        ];
+      } else if (phase === 'strengthening') {
+        return [
+          'Dead bugs - 3x10 each side',
+          'Bird dogs - 3x10 each side',
+          'Plank progression - 3x30-60 seconds',
+          'Glute bridges - 3x12',
+          'Side plank - 3x20-30 seconds each',
+          'McGill Big 3 exercises'
+        ];
+      } else {
+        return [
+          'Deadlift progression',
+          'Squats with proper form',
+          'Loaded carries - 3x30 meters',
+          'Rotational exercises',
+          'Functional movement patterns'
+        ];
+      }
+    }
+    
+    // Default exercises for other conditions
+    if (phase === 'initial') {
+      return [
+        'Range of motion exercises - 3x10',
+        'Gentle stretching - 3x30 seconds',
+        'Isometric holds - 3x10x5 seconds',
+        'Pain-free movement - as tolerated'
+      ];
+    } else if (phase === 'strengthening') {
+      return [
+        'Progressive resistance exercises - 3x12',
+        'Stabilization exercises - 3x10',
+        'Proprioception training - 3x1 minute',
+        'Endurance exercises - 3x15'
+      ];
+    } else {
+      return [
+        'Functional movements - 3x10',
+        'Sport/work specific drills',
+        'Plyometric exercises - 3x8',
+        'Complex movement patterns'
+      ];
+    }
   };
 
   const generateOutcomeMeasures = (condition: string): string[] => {

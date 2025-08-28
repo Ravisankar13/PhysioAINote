@@ -12,68 +12,87 @@ export async function loadMediaPipeLibraries() {
     return true;
   }
 
-  try {
-    // Try to dynamically import MediaPipe if not already loaded
-    if (!window.Pose) {
-      console.log('[MediaPipeLoader] Loading Pose library...');
-      const poseModule = await import('@mediapipe/pose');
-      window.Pose = poseModule.Pose;
-      window.POSE_CONNECTIONS = poseModule.POSE_CONNECTIONS;
-      console.log('[MediaPipeLoader] Pose library loaded');
-    }
-
-    if (!window.Camera) {
-      console.log('[MediaPipeLoader] Loading Camera utils...');
-      const cameraModule = await import('@mediapipe/camera_utils');
-      window.Camera = cameraModule.Camera;
-      console.log('[MediaPipeLoader] Camera utils loaded');
-    }
-
-    if (!window.drawConnectors) {
-      console.log('[MediaPipeLoader] Loading Drawing utils...');
-      const drawingModule = await import('@mediapipe/drawing_utils');
-      window.drawConnectors = drawingModule.drawConnectors;
-      window.drawLandmarks = drawingModule.drawLandmarks;
-      console.log('[MediaPipeLoader] Drawing utils loaded');
-    }
-
-    console.log('[MediaPipeLoader] All MediaPipe libraries loaded successfully');
-    return true;
-  } catch (error) {
-    console.error('[MediaPipeLoader] Failed to load MediaPipe libraries:', error);
-    
-    // Try loading from CDN as fallback
-    console.log('[MediaPipeLoader] Attempting CDN fallback...');
-    return await loadFromCDN();
-  }
+  // Load directly from CDN as primary method
+  console.log('[MediaPipeLoader] Loading MediaPipe from CDN...');
+  return await loadFromCDN();
 }
 
 async function loadFromCDN(): Promise<boolean> {
   try {
-    // Load Pose from CDN
-    await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.js');
+    // Check if scripts are already loaded
+    const scripts = document.querySelectorAll('script[src*="mediapipe"]');
+    if (scripts.length > 0) {
+      console.log('[MediaPipeLoader] MediaPipe scripts already in DOM');
+    }
     
-    // Load Camera Utils from CDN
-    await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1640029074/camera_utils.js');
+    // Load Drawing Utils first (dependency for Pose)
+    if (!window.drawConnectors) {
+      console.log('[MediaPipeLoader] Loading Drawing Utils from CDN...');
+      await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1620248257/drawing_utils.js');
+      console.log('[MediaPipeLoader] Drawing Utils loaded');
+    }
     
-    // Load Drawing Utils from CDN
-    await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1620248257/drawing_utils.js');
+    // Load Camera Utils
+    if (!window.Camera) {
+      console.log('[MediaPipeLoader] Loading Camera Utils from CDN...');
+      await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1640029074/camera_utils.js');
+      console.log('[MediaPipeLoader] Camera Utils loaded');
+    }
     
-    console.log('[MediaPipeLoader] CDN fallback successful');
-    return true;
+    // Load Pose last (depends on drawing utils)
+    if (!window.Pose) {
+      console.log('[MediaPipeLoader] Loading Pose from CDN...');
+      await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.js');
+      console.log('[MediaPipeLoader] Pose loaded');
+    }
+    
+    // Wait a moment for scripts to initialize
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Verify everything loaded
+    if (window.Pose && window.Camera && window.drawConnectors) {
+      console.log('[MediaPipeLoader] All MediaPipe libraries loaded successfully from CDN');
+      return true;
+    } else {
+      console.error('[MediaPipeLoader] Some MediaPipe libraries failed to load:', {
+        Pose: !!window.Pose,
+        Camera: !!window.Camera,
+        drawConnectors: !!window.drawConnectors
+      });
+      return false;
+    }
   } catch (error) {
-    console.error('[MediaPipeLoader] CDN fallback failed:', error);
+    console.error('[MediaPipeLoader] CDN loading failed:', error);
     return false;
   }
 }
 
 function loadScript(src: string): Promise<void> {
   return new Promise((resolve, reject) => {
+    // Check if script already exists
+    const existingScript = document.querySelector(`script[src="${src}"]`);
+    if (existingScript) {
+      console.log(`[MediaPipeLoader] Script already exists: ${src}`);
+      resolve();
+      return;
+    }
+    
     const script = document.createElement('script');
     script.src = src;
-    script.async = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
+    script.type = 'text/javascript';
+    script.async = false; // Load scripts in order
+    script.crossOrigin = 'anonymous';
+    
+    script.onload = () => {
+      console.log(`[MediaPipeLoader] Script loaded successfully: ${src}`);
+      resolve();
+    };
+    
+    script.onerror = (error) => {
+      console.error(`[MediaPipeLoader] Failed to load script: ${src}`, error);
+      reject(new Error(`Failed to load script: ${src}`));
+    };
+    
     document.head.appendChild(script);
   });
 }

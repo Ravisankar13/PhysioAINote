@@ -391,77 +391,69 @@ export function AITreatmentPlanner() {
     setChatMessages(prev => [...prev, userMessage]);
     const userAnswer = currentInput;
     setCurrentInput('');
-    setIsLoading(true);
-
-    try {
-      // Get the current question context
-      const lastAIMessage = chatMessages.filter(m => m.type === 'ai').pop();
-      const questionContext = lastAIMessage?.content || '';
-
-      // Send answer to API for processing
-      const response = await apiRequest('POST', '/api/treatment-planner/answer', {
-        diagnosis,
-        answer: userAnswer,
-        questionContext,
-        chatHistory: chatMessages,
-        currentPlan: treatmentPlan,
-        patientProfile
-      });
-
-      // Update patient profile
-      if (response.profileUpdate) {
-        setPatientProfile(prev => ({ ...prev, ...response.profileUpdate }));
+    // Process locally for speed - no API calls
+    const lastAIMessage = chatMessages.filter(m => m.type === 'ai').pop();
+    const questionContext = lastAIMessage?.content || '';
+    
+    // Update patient profile based on answer
+    const updatedProfile = { ...patientProfile };
+    const lowerAnswer = userAnswer.toLowerCase();
+    const lowerContext = questionContext.toLowerCase();
+    
+    // Extract information from answer
+    if (lowerContext.includes('age') || lowerContext.includes('gender')) {
+      const ageMatch = userAnswer.match(/(\d+)\s*(?:year|yr)?/i);
+      if (ageMatch) {
+        updatedProfile.age = parseInt(ageMatch[1]);
       }
-
-      // Update treatment plan
-      if (response.planUpdate && treatmentPlan) {
-        const updatedPlan = { ...treatmentPlan };
-        
-        if (response.planUpdate.phases) {
-          updatedPlan.phases = response.planUpdate.phases;
-        }
-        if (response.planUpdate.precautions) {
-          updatedPlan.phases.forEach((phase: TreatmentPhase) => {
-            phase.precautions = [...phase.precautions, ...response.planUpdate.precautions];
-          });
-        }
-        if (response.planUpdate.educationPoints) {
-          updatedPlan.phases.forEach((phase: TreatmentPhase) => {
-            phase.educationPoints = [...phase.educationPoints, ...response.planUpdate.educationPoints];
-          });
-        }
-        if (response.planUpdate.clinicalReasoning) {
-          updatedPlan.clinicalReasoning += '\n' + response.planUpdate.clinicalReasoning;
-        }
-        if (response.planUpdate.redFlags) {
-          updatedPlan.redFlags = [...updatedPlan.redFlags, ...response.planUpdate.redFlags];
-        }
-        
-        updatedPlan.lastUpdated = new Date();
-        setTreatmentPlan(updatedPlan);
+      if (lowerAnswer.includes('male')) {
+        updatedProfile.gender = 'male';
+      } else if (lowerAnswer.includes('female')) {
+        updatedProfile.gender = 'female';
       }
-
-      // Handle follow-up question or continue with next question
-      if (response.followUpQuestion) {
-        const followUp: ChatMessage = {
-          id: Date.now().toString(),
-          type: 'ai',
-          content: response.followUpQuestion.question,
-          timestamp: new Date(),
-          questionCategory: response.followUpQuestion.category
-        };
-        setChatMessages(prev => [...prev, followUp]);
-      } else {
-        askNextQuestion();
-      }
-    } catch (error) {
-      console.error('Error processing answer:', error);
-      // Fallback to local processing
-      updatePlanBasedOnAnswer(userAnswer);
-      askNextQuestion();
-    } finally {
-      setIsLoading(false);
     }
+    
+    if (lowerContext.includes('knee') || lowerContext.includes('which')) {
+      if (lowerAnswer.includes('right')) updatedProfile.affectedSide = 'right';
+      if (lowerAnswer.includes('left')) updatedProfile.affectedSide = 'left';
+      if (lowerAnswer.includes('both')) updatedProfile.affectedSide = 'bilateral';
+    }
+    
+    if (lowerContext.includes('how long') || lowerContext.includes('duration')) {
+      updatedProfile.symptomDuration = userAnswer;
+    }
+    
+    if (lowerContext.includes('rate') || lowerContext.includes('0-10') || lowerContext.includes('pain')) {
+      const severityMatch = userAnswer.match(/(\d+)/);
+      if (severityMatch) {
+        updatedProfile.painSeverity = parseInt(severityMatch[1]);
+      }
+    }
+    
+    if (lowerContext.includes('sport') || lowerContext.includes('activity') || lowerContext.includes('occupation')) {
+      updatedProfile.occupation = userAnswer;
+    }
+    
+    if (lowerContext.includes('goal')) {
+      updatedProfile.goals = userAnswer;
+    }
+    
+    setPatientProfile(updatedProfile);
+    
+    // Update treatment plan immediately
+    if (treatmentPlan) {
+      updatePlanBasedOnAnswer(userAnswer);
+    }
+    
+    // Update progress
+    setAssessmentProgress(prev => Math.min(prev + 12.5, 100));
+    
+    // Show typing indicator briefly, then ask next question after 5 seconds
+    setIsLoading(true);
+    setTimeout(() => {
+      setIsLoading(false);
+      askNextQuestion();
+    }, 5000);
   };
 
   const updatePlanBasedOnAnswer = (answer: string) => {

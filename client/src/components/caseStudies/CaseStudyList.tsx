@@ -86,8 +86,7 @@ export default function CaseStudyList({ onSelectCase, onCreateCase }: CaseStudyL
   const filteredCases = searchTerm 
     ? caseStudiesData.filter((c: any) => 
         c.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        c.patientDescription?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        c.correctDiagnosis?.toLowerCase().includes(searchTerm.toLowerCase())
+        c.patientDescription?.toLowerCase().includes(searchTerm.toLowerCase())
       )
     : caseStudiesData;
 
@@ -201,8 +200,6 @@ export default function CaseStudyList({ onSelectCase, onCreateCase }: CaseStudyL
                   </p>
                   
                   <div className="flex items-center mt-3 text-sm text-muted-foreground">
-                    <Brain className="h-4 w-4 mr-1" />
-                    <span className="mr-4">Diagnosis: {caseStudy.correctDiagnosis}</span>
                     <Activity className="h-4 w-4 mr-1" />
                     <span>Created: {new Date(caseStudy.createdAt).toLocaleDateString()}</span>
                   </div>

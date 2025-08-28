@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,25 +37,18 @@ import {
   BarChart3,
   Zap,
   Repeat,
-  FileText
+  FileText,
+  Search
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-
-interface Exercise {
-  id: string;
-  name: string;
-  category: 'strengthening' | 'stretching' | 'mobility' | 'neuromuscular' | 'cardio' | 'functional';
-  sets?: number;
-  reps?: string;
-  hold?: number;
-  duration?: number;
-  frequency?: string;
-  intensity?: string;
-  progression?: string;
-  precautions?: string;
-  equipment?: string[];
-  videoUrl?: string;
-}
+import { 
+  exerciseDatabase as fullExerciseDatabase, 
+  getExercisesForCondition,
+  searchExercises,
+  getExercisesByCategory,
+  TOTAL_EXERCISES,
+  type Exercise
+} from '@/data/exerciseDatabase';
 
 interface TreatmentPhase {
   id: string;
@@ -89,1247 +82,8 @@ interface TreatmentPlanningAssistantProps {
   };
 }
 
-// Comprehensive exercise database with proper exercises for various conditions
-const exerciseDatabase: Exercise[] = [
-  // Shoulder/Rotator Cuff Exercises
-  {
-    id: 'shoulder1',
-    name: 'Pendulum Exercises (Codman)',
-    category: 'mobility',
-    sets: 3,
-    reps: '10-15 each direction',
-    intensity: 'Gentle passive movement',
-    equipment: [],
-    precautions: 'Support trunk, let arm hang freely'
-  },
-  {
-    id: 'shoulder2',
-    name: 'Isometric External Rotation',
-    category: 'strengthening',
-    sets: 3,
-    hold: 5,
-    reps: '10-15',
-    intensity: 'Sub-maximal (30-50% effort)',
-    progression: 'Increase hold time, then resistance',
-    equipment: []
-  },
-  {
-    id: 'shoulder3',
-    name: 'Scapular Wall Slides',
-    category: 'strengthening',
-    sets: 3,
-    reps: '10-15',
-    intensity: 'Body weight',
-    progression: 'Add resistance band',
-    equipment: ['Wall']
-  },
-  {
-    id: 'shoulder4',
-    name: 'External Rotation with Band',
-    category: 'strengthening',
-    sets: 3,
-    reps: '12-15',
-    intensity: 'Light resistance',
-    progression: 'Increase resistance, add elevation',
-    equipment: ['Resistance band']
-  },
-  {
-    id: 'shoulder5',
-    name: 'Internal Rotation with Band',
-    category: 'strengthening',
-    sets: 3,
-    reps: '12-15',
-    intensity: 'Light resistance',
-    progression: 'Increase resistance',
-    equipment: ['Resistance band']
-  },
-  {
-    id: 'shoulder6',
-    name: 'Prone T\'s (Lower Trapezius)',
-    category: 'strengthening',
-    sets: 3,
-    reps: '10-12',
-    intensity: 'Body weight to light weights',
-    progression: 'Add 1-2 lb weights',
-    equipment: ['Light dumbbells (optional)']
-  },
-  {
-    id: 'shoulder7',
-    name: 'Prone Y\'s (Lower Trapezius)',
-    category: 'strengthening',
-    sets: 3,
-    reps: '10-12',
-    intensity: 'Body weight to light weights',
-    equipment: ['Light dumbbells (optional)']
-  },
-  {
-    id: 'shoulder8',
-    name: 'Sleeper Stretch',
-    category: 'stretching',
-    sets: 3,
-    hold: 30,
-    intensity: 'Gentle stretch',
-    equipment: [],
-    precautions: 'Avoid excessive pressure'
-  },
-  {
-    id: 'shoulder9',
-    name: 'Cross-Body Stretch',
-    category: 'stretching',
-    sets: 3,
-    hold: 30,
-    intensity: 'Gentle to moderate',
-    equipment: []
-  },
-  {
-    id: 'shoulder10',
-    name: 'Serratus Anterior Punch',
-    category: 'strengthening',
-    sets: 3,
-    reps: '12-15',
-    intensity: 'Light resistance',
-    equipment: ['Resistance band']
-  },
-  
-  // Knee/Lower Extremity Exercises
-  {
-    id: 'knee1',
-    name: 'Quadriceps Sets',
-    category: 'strengthening',
-    sets: 3,
-    reps: '10-15',
-    hold: 5,
-    intensity: 'Maximal contraction',
-    equipment: []
-  },
-  {
-    id: 'knee2',
-    name: 'Straight Leg Raises',
-    category: 'strengthening',
-    sets: 3,
-    reps: '10-15',
-    intensity: 'Body weight',
-    progression: 'Add ankle weights',
-    equipment: ['Ankle weights (optional)']
-  },
-  {
-    id: 'knee3',
-    name: 'Mini Squats',
-    category: 'functional',
-    sets: 3,
-    reps: '10-15',
-    intensity: 'Body weight',
-    progression: 'Increase depth, add resistance',
-    equipment: []
-  },
-  {
-    id: 'knee4',
-    name: 'Step-Ups',
-    category: 'functional',
-    sets: 3,
-    reps: '10-12 each leg',
-    intensity: 'Body weight',
-    progression: 'Increase step height',
-    equipment: ['Step or stairs']
-  },
-  {
-    id: 'knee5',
-    name: 'Terminal Knee Extension',
-    category: 'strengthening',
-    sets: 3,
-    reps: '15-20',
-    intensity: 'Resistance band',
-    equipment: ['Resistance band']
-  },
-  
-  // Hip Exercises
-  {
-    id: 'hip1',
-    name: 'Clamshells',
-    category: 'strengthening',
-    sets: 3,
-    reps: '15-20',
-    intensity: 'Body weight to band',
-    progression: 'Add resistance band',
-    equipment: ['Resistance band (optional)']
-  },
-  {
-    id: 'hip2',
-    name: 'Hip Abduction Side-Lying',
-    category: 'strengthening',
-    sets: 3,
-    reps: '12-15',
-    intensity: 'Body weight',
-    progression: 'Add ankle weights',
-    equipment: ['Ankle weights (optional)']
-  },
-  {
-    id: 'hip3',
-    name: 'Glute Bridges',
-    category: 'strengthening',
-    sets: 3,
-    reps: '12-15',
-    intensity: 'Body weight',
-    progression: 'Single leg, add band',
-    equipment: ['Resistance band (optional)']
-  },
-  {
-    id: 'hip4',
-    name: 'Hip Flexor Stretch',
-    category: 'stretching',
-    sets: 3,
-    hold: 30,
-    intensity: 'Moderate stretch',
-    equipment: []
-  },
-  
-  // Core/Back Exercises
-  {
-    id: 'core1',
-    name: 'Transverse Abdominis Activation',
-    category: 'strengthening',
-    sets: 3,
-    reps: '10-15',
-    hold: 5,
-    intensity: 'Gentle activation',
-    equipment: []
-  },
-  {
-    id: 'core2',
-    name: 'Bird Dog',
-    category: 'strengthening',
-    sets: 3,
-    reps: '10 each side',
-    hold: 5,
-    intensity: 'Body weight',
-    equipment: ['Yoga mat']
-  },
-  {
-    id: 'core3',
-    name: 'Dead Bug',
-    category: 'strengthening',
-    sets: 3,
-    reps: '10 each side',
-    intensity: 'Body weight',
-    equipment: ['Yoga mat']
-  },
-  {
-    id: 'core4',
-    name: 'Cat-Cow Mobility',
-    category: 'mobility',
-    sets: 3,
-    reps: '10-12',
-    intensity: 'Controlled movement',
-    equipment: ['Yoga mat']
-  },
-  {
-    id: 'core5',
-    name: 'Prone Press-Ups (McKenzie)',
-    category: 'mobility',
-    sets: 3,
-    reps: '10-15',
-    intensity: 'Body weight',
-    equipment: []
-  },
-  
-  // Ankle/Foot Exercises
-  {
-    id: 'ankle1',
-    name: 'Ankle Pumps',
-    category: 'mobility',
-    sets: 3,
-    reps: '20-30',
-    intensity: 'Active movement',
-    equipment: []
-  },
-  {
-    id: 'ankle2',
-    name: 'Calf Raises',
-    category: 'strengthening',
-    sets: 3,
-    reps: '15-20',
-    intensity: 'Body weight',
-    progression: 'Single leg, add weight',
-    equipment: []
-  },
-  {
-    id: 'ankle3',
-    name: 'Towel Calf Stretch',
-    category: 'stretching',
-    sets: 3,
-    hold: 30,
-    intensity: 'Moderate stretch',
-    equipment: ['Towel']
-  },
-  
-  // Balance/Proprioception
-  {
-    id: 'balance1',
-    name: 'Single Leg Stance',
-    category: 'neuromuscular',
-    sets: 3,
-    hold: 30,
-    progression: 'Eyes closed, unstable surface',
-    equipment: ['Balance pad (optional)']
-  },
-  {
-    id: 'balance2',
-    name: 'Tandem Walking',
-    category: 'neuromuscular',
-    sets: 3,
-    reps: '10 steps',
-    intensity: 'Controlled',
-    equipment: []
-  },
-  
-  // Cardiovascular
-  {
-    id: 'cardio1',
-    name: 'Walking Program',
-    category: 'cardio',
-    duration: 20,
-    intensity: 'Light to moderate',
-    progression: 'Increase duration/speed',
-    equipment: []
-  },
-  {
-    id: 'cardio2',
-    name: 'Stationary Cycling',
-    category: 'cardio',
-    duration: 20,
-    intensity: 'Moderate (60-70% HR max)',
-    equipment: ['Stationary bike']
-  },
-  {
-    id: 'cardio3',
-    name: 'Aqua Therapy/Pool Walking',
-    category: 'cardio',
-    duration: 30,
-    intensity: 'Light to moderate',
-    equipment: ['Pool access']
-  },
-
-  // Additional Shoulder Exercises
-  {
-    id: 'shoulder11',
-    name: 'Wall Angels',
-    category: 'mobility',
-    sets: 3,
-    reps: '15-20',
-    intensity: 'Body weight',
-    equipment: ['Wall']
-  },
-  {
-    id: 'shoulder12',
-    name: 'Shoulder Flexion with Wand',
-    category: 'mobility',
-    sets: 3,
-    reps: '10-15',
-    intensity: 'Assisted',
-    equipment: ['Wand or stick']
-  },
-  {
-    id: 'shoulder13',
-    name: 'Horizontal Abduction',
-    category: 'strengthening',
-    sets: 3,
-    reps: '12-15',
-    intensity: 'Light resistance',
-    equipment: ['Resistance band']
-  },
-  {
-    id: 'shoulder14',
-    name: 'Shoulder Shrugs',
-    category: 'strengthening',
-    sets: 3,
-    reps: '15-20',
-    intensity: 'Body weight to light weights',
-    equipment: ['Dumbbells (optional)']
-  },
-  {
-    id: 'shoulder15',
-    name: 'Bear Crawl Position Hold',
-    category: 'strengthening',
-    sets: 3,
-    hold: 30,
-    intensity: 'Body weight',
-    equipment: []
-  },
-  {
-    id: 'shoulder16',
-    name: 'Reverse Fly',
-    category: 'strengthening',
-    sets: 3,
-    reps: '12-15',
-    intensity: 'Light weights',
-    equipment: ['Dumbbells']
-  },
-  {
-    id: 'shoulder17',
-    name: 'High Row with Band',
-    category: 'strengthening',
-    sets: 3,
-    reps: '12-15',
-    intensity: 'Moderate resistance',
-    equipment: ['Resistance band']
-  },
-  {
-    id: 'shoulder18',
-    name: 'Low Row with Band',
-    category: 'strengthening',
-    sets: 3,
-    reps: '12-15',
-    intensity: 'Moderate resistance',
-    equipment: ['Resistance band']
-  },
-  {
-    id: 'shoulder19',
-    name: 'Doorway Pec Stretch',
-    category: 'stretching',
-    sets: 3,
-    hold: 30,
-    intensity: 'Gentle stretch',
-    equipment: ['Doorway']
-  },
-  {
-    id: 'shoulder20',
-    name: 'Upper Trap Stretch',
-    category: 'stretching',
-    sets: 3,
-    hold: 30,
-    intensity: 'Gentle stretch',
-    equipment: []
-  },
-
-  // Elbow/Wrist Exercises
-  {
-    id: 'elbow1',
-    name: 'Wrist Flexor Stretch',
-    category: 'stretching',
-    sets: 3,
-    hold: 30,
-    intensity: 'Gentle stretch',
-    equipment: []
-  },
-  {
-    id: 'elbow2',
-    name: 'Wrist Extensor Stretch',
-    category: 'stretching',
-    sets: 3,
-    hold: 30,
-    intensity: 'Gentle stretch',
-    equipment: []
-  },
-  {
-    id: 'elbow3',
-    name: 'Wrist Curls',
-    category: 'strengthening',
-    sets: 3,
-    reps: '15-20',
-    intensity: 'Light weight',
-    equipment: ['Light dumbbell']
-  },
-  {
-    id: 'elbow4',
-    name: 'Reverse Wrist Curls',
-    category: 'strengthening',
-    sets: 3,
-    reps: '15-20',
-    intensity: 'Light weight',
-    equipment: ['Light dumbbell']
-  },
-  {
-    id: 'elbow5',
-    name: 'Pronation/Supination',
-    category: 'strengthening',
-    sets: 3,
-    reps: '15-20',
-    intensity: 'Light weight',
-    equipment: ['Hammer or dumbbell']
-  },
-  {
-    id: 'elbow6',
-    name: 'Eccentric Wrist Extension',
-    category: 'strengthening',
-    sets: 3,
-    reps: '10-12',
-    intensity: 'Slow controlled',
-    equipment: ['Light dumbbell']
-  },
-  {
-    id: 'elbow7',
-    name: 'Grip Strengthening',
-    category: 'strengthening',
-    sets: 3,
-    reps: '15-20',
-    intensity: 'Progressive',
-    equipment: ['Therapy putty or ball']
-  },
-  {
-    id: 'elbow8',
-    name: 'Tennis Ball Squeeze',
-    category: 'strengthening',
-    sets: 3,
-    hold: 5,
-    reps: '15-20',
-    equipment: ['Tennis ball']
-  },
-  {
-    id: 'elbow9',
-    name: 'Finger Extension with Band',
-    category: 'strengthening',
-    sets: 3,
-    reps: '15-20',
-    intensity: 'Light resistance',
-    equipment: ['Rubber band']
-  },
-  {
-    id: 'elbow10',
-    name: 'Bicep Curls',
-    category: 'strengthening',
-    sets: 3,
-    reps: '12-15',
-    intensity: 'Moderate weight',
-    equipment: ['Dumbbells']
-  },
-
-  // Neck Exercises
-  {
-    id: 'neck1',
-    name: 'Chin Tucks',
-    category: 'strengthening',
-    sets: 3,
-    hold: 5,
-    reps: '10-15',
-    intensity: 'Gentle',
-    equipment: []
-  },
-  {
-    id: 'neck2',
-    name: 'Neck Isometrics',
-    category: 'strengthening',
-    sets: 3,
-    hold: 5,
-    reps: '10 each direction',
-    intensity: 'Submaximal',
-    equipment: []
-  },
-  {
-    id: 'neck3',
-    name: 'Upper Cervical Nod',
-    category: 'strengthening',
-    sets: 3,
-    hold: 5,
-    reps: '10-15',
-    intensity: 'Gentle',
-    equipment: []
-  },
-  {
-    id: 'neck4',
-    name: 'Neck Rotation Stretch',
-    category: 'stretching',
-    sets: 3,
-    hold: 30,
-    intensity: 'Gentle',
-    equipment: []
-  },
-  {
-    id: 'neck5',
-    name: 'Levator Scapulae Stretch',
-    category: 'stretching',
-    sets: 3,
-    hold: 30,
-    intensity: 'Gentle',
-    equipment: []
-  },
-  {
-    id: 'neck6',
-    name: 'Scalene Stretch',
-    category: 'stretching',
-    sets: 3,
-    hold: 30,
-    intensity: 'Gentle',
-    equipment: []
-  },
-  {
-    id: 'neck7',
-    name: 'SNAGs (Sustained Natural Apophyseal Glides)',
-    category: 'mobility',
-    sets: 3,
-    reps: '10',
-    intensity: 'Gentle',
-    equipment: ['Towel']
-  },
-  {
-    id: 'neck8',
-    name: 'Deep Neck Flexor Strengthening',
-    category: 'strengthening',
-    sets: 3,
-    hold: 10,
-    reps: '10',
-    intensity: 'Progressive',
-    equipment: []
-  },
-
-  // Additional Knee Exercises
-  {
-    id: 'knee6',
-    name: 'Wall Sits',
-    category: 'strengthening',
-    sets: 3,
-    hold: 30,
-    intensity: 'Body weight',
-    progression: 'Increase hold time',
-    equipment: ['Wall']
-  },
-  {
-    id: 'knee7',
-    name: 'Hamstring Curls',
-    category: 'strengthening',
-    sets: 3,
-    reps: '12-15',
-    intensity: 'Resistance band or machine',
-    equipment: ['Resistance band']
-  },
-  {
-    id: 'knee8',
-    name: 'Leg Press',
-    category: 'strengthening',
-    sets: 3,
-    reps: '12-15',
-    intensity: 'Progressive loading',
-    equipment: ['Leg press machine']
-  },
-  {
-    id: 'knee9',
-    name: 'Single Leg Squat',
-    category: 'functional',
-    sets: 3,
-    reps: '8-10',
-    intensity: 'Body weight',
-    progression: 'Increase depth',
-    equipment: []
-  },
-  {
-    id: 'knee10',
-    name: 'Lateral Step-Downs',
-    category: 'functional',
-    sets: 3,
-    reps: '10-12',
-    intensity: 'Body weight',
-    equipment: ['Step']
-  },
-  {
-    id: 'knee11',
-    name: 'Bulgarian Split Squats',
-    category: 'strengthening',
-    sets: 3,
-    reps: '10-12',
-    intensity: 'Body weight to weighted',
-    equipment: ['Bench', 'Dumbbells (optional)']
-  },
-  {
-    id: 'knee12',
-    name: 'Nordic Hamstring Exercise',
-    category: 'strengthening',
-    sets: 3,
-    reps: '6-8',
-    intensity: 'Eccentric focus',
-    equipment: ['Partner or anchor']
-  },
-  {
-    id: 'knee13',
-    name: 'Box Jumps',
-    category: 'functional',
-    sets: 3,
-    reps: '8-10',
-    intensity: 'Progressive height',
-    equipment: ['Box or platform']
-  },
-  {
-    id: 'knee14',
-    name: 'Lunges',
-    category: 'functional',
-    sets: 3,
-    reps: '10-12 each leg',
-    intensity: 'Body weight to weighted',
-    equipment: ['Dumbbells (optional)']
-  },
-  {
-    id: 'knee15',
-    name: 'Reverse Lunges',
-    category: 'functional',
-    sets: 3,
-    reps: '10-12 each leg',
-    intensity: 'Body weight to weighted',
-    equipment: ['Dumbbells (optional)']
-  },
-
-  // Additional Hip Exercises
-  {
-    id: 'hip5',
-    name: 'Fire Hydrants',
-    category: 'strengthening',
-    sets: 3,
-    reps: '15-20',
-    intensity: 'Body weight',
-    equipment: []
-  },
-  {
-    id: 'hip6',
-    name: 'Monster Walks',
-    category: 'strengthening',
-    sets: 3,
-    reps: '15 steps each direction',
-    intensity: 'Resistance band',
-    equipment: ['Resistance band']
-  },
-  {
-    id: 'hip7',
-    name: 'Hip Hiking',
-    category: 'strengthening',
-    sets: 3,
-    reps: '15-20',
-    intensity: 'Body weight',
-    equipment: ['Step']
-  },
-  {
-    id: 'hip8',
-    name: 'Pigeon Pose',
-    category: 'stretching',
-    sets: 3,
-    hold: 60,
-    intensity: 'Deep stretch',
-    equipment: ['Yoga mat']
-  },
-  {
-    id: 'hip9',
-    name: '90/90 Hip Stretch',
-    category: 'stretching',
-    sets: 3,
-    hold: 30,
-    intensity: 'Moderate stretch',
-    equipment: []
-  },
-  {
-    id: 'hip10',
-    name: 'Hip Circles',
-    category: 'mobility',
-    sets: 3,
-    reps: '10 each direction',
-    intensity: 'Controlled movement',
-    equipment: []
-  },
-  {
-    id: 'hip11',
-    name: 'Single Leg Deadlift',
-    category: 'functional',
-    sets: 3,
-    reps: '10-12',
-    intensity: 'Body weight to weighted',
-    equipment: ['Dumbbell (optional)']
-  },
-  {
-    id: 'hip12',
-    name: 'Lateral Lunges',
-    category: 'functional',
-    sets: 3,
-    reps: '10-12 each side',
-    intensity: 'Body weight',
-    equipment: []
-  },
-  {
-    id: 'hip13',
-    name: 'Hip Thrusts',
-    category: 'strengthening',
-    sets: 3,
-    reps: '12-15',
-    intensity: 'Progressive loading',
-    equipment: ['Bench', 'Barbell (optional)']
-  },
-  {
-    id: 'hip14',
-    name: 'Curtsy Lunges',
-    category: 'functional',
-    sets: 3,
-    reps: '10-12 each side',
-    intensity: 'Body weight',
-    equipment: []
-  },
-
-  // Additional Core/Back Exercises
-  {
-    id: 'core6',
-    name: 'Plank',
-    category: 'strengthening',
-    sets: 3,
-    hold: 30,
-    intensity: 'Body weight',
-    progression: 'Increase hold time',
-    equipment: []
-  },
-  {
-    id: 'core7',
-    name: 'Side Plank',
-    category: 'strengthening',
-    sets: 3,
-    hold: 30,
-    intensity: 'Body weight',
-    equipment: []
-  },
-  {
-    id: 'core8',
-    name: 'Pallof Press',
-    category: 'strengthening',
-    sets: 3,
-    reps: '12-15',
-    intensity: 'Resistance band',
-    equipment: ['Resistance band or cable']
-  },
-  {
-    id: 'core9',
-    name: 'Russian Twists',
-    category: 'strengthening',
-    sets: 3,
-    reps: '20-30',
-    intensity: 'Body weight to weighted',
-    equipment: ['Medicine ball (optional)']
-  },
-  {
-    id: 'core10',
-    name: 'Supermans',
-    category: 'strengthening',
-    sets: 3,
-    reps: '12-15',
-    hold: 2,
-    intensity: 'Body weight',
-    equipment: []
-  },
-  {
-    id: 'core11',
-    name: 'McGill Curl-Up',
-    category: 'strengthening',
-    sets: 3,
-    hold: 10,
-    reps: '8-10',
-    intensity: 'Body weight',
-    equipment: []
-  },
-  {
-    id: 'core12',
-    name: 'Quadruped Opposite Arm/Leg',
-    category: 'strengthening',
-    sets: 3,
-    hold: 5,
-    reps: '10 each side',
-    intensity: 'Body weight',
-    equipment: []
-  },
-  {
-    id: 'core13',
-    name: 'Seated Good Mornings',
-    category: 'strengthening',
-    sets: 3,
-    reps: '12-15',
-    intensity: 'Body weight to weighted',
-    equipment: ['Barbell (optional)']
-  },
-  {
-    id: 'core14',
-    name: 'Prone Cobra',
-    category: 'strengthening',
-    sets: 3,
-    hold: 15,
-    reps: '10',
-    intensity: 'Body weight',
-    equipment: []
-  },
-  {
-    id: 'core15',
-    name: 'Child\'s Pose',
-    category: 'stretching',
-    sets: 3,
-    hold: 60,
-    intensity: 'Gentle stretch',
-    equipment: []
-  },
-
-  // Additional Ankle/Foot Exercises
-  {
-    id: 'ankle4',
-    name: 'Heel Walks',
-    category: 'strengthening',
-    sets: 3,
-    reps: '20 steps',
-    intensity: 'Body weight',
-    equipment: []
-  },
-  {
-    id: 'ankle5',
-    name: 'Toe Walks',
-    category: 'strengthening',
-    sets: 3,
-    reps: '20 steps',
-    intensity: 'Body weight',
-    equipment: []
-  },
-  {
-    id: 'ankle6',
-    name: 'Ankle Circles',
-    category: 'mobility',
-    sets: 3,
-    reps: '10 each direction',
-    intensity: 'Active movement',
-    equipment: []
-  },
-  {
-    id: 'ankle7',
-    name: 'Towel Scrunches',
-    category: 'strengthening',
-    sets: 3,
-    reps: '15-20',
-    intensity: 'Active',
-    equipment: ['Towel']
-  },
-  {
-    id: 'ankle8',
-    name: 'Marble Pickups',
-    category: 'strengthening',
-    sets: 3,
-    reps: '20',
-    intensity: 'Fine motor control',
-    equipment: ['Marbles', 'Container']
-  },
-  {
-    id: 'ankle9',
-    name: 'Ankle Eversion with Band',
-    category: 'strengthening',
-    sets: 3,
-    reps: '15-20',
-    intensity: 'Resistance band',
-    equipment: ['Resistance band']
-  },
-  {
-    id: 'ankle10',
-    name: 'Ankle Inversion with Band',
-    category: 'strengthening',
-    sets: 3,
-    reps: '15-20',
-    intensity: 'Resistance band',
-    equipment: ['Resistance band']
-  },
-  {
-    id: 'ankle11',
-    name: 'Single Leg Heel Raises',
-    category: 'strengthening',
-    sets: 3,
-    reps: '12-15',
-    intensity: 'Body weight',
-    progression: 'Add weight',
-    equipment: []
-  },
-  {
-    id: 'ankle12',
-    name: 'Eccentric Heel Drops',
-    category: 'strengthening',
-    sets: 3,
-    reps: '12-15',
-    intensity: 'Slow controlled',
-    equipment: ['Step']
-  },
-  {
-    id: 'ankle13',
-    name: 'Soleus Stretch',
-    category: 'stretching',
-    sets: 3,
-    hold: 30,
-    intensity: 'Moderate stretch',
-    equipment: ['Wall']
-  },
-
-  // Balance and Proprioception
-  {
-    id: 'balance3',
-    name: 'BOSU Ball Squats',
-    category: 'neuromuscular',
-    sets: 3,
-    reps: '12-15',
-    intensity: 'Unstable surface',
-    equipment: ['BOSU ball']
-  },
-  {
-    id: 'balance4',
-    name: 'Single Leg Romanian Deadlift',
-    category: 'neuromuscular',
-    sets: 3,
-    reps: '10-12',
-    intensity: 'Body weight to weighted',
-    equipment: ['Dumbbell (optional)']
-  },
-  {
-    id: 'balance5',
-    name: 'Star Excursion',
-    category: 'neuromuscular',
-    sets: 3,
-    reps: '8 reaches',
-    intensity: 'Controlled reach',
-    equipment: []
-  },
-  {
-    id: 'balance6',
-    name: 'Wobble Board Balance',
-    category: 'neuromuscular',
-    sets: 3,
-    hold: 30,
-    intensity: 'Progressive difficulty',
-    equipment: ['Wobble board']
-  },
-  {
-    id: 'balance7',
-    name: 'Foam Pad Marching',
-    category: 'neuromuscular',
-    sets: 3,
-    reps: '20 steps',
-    intensity: 'Controlled',
-    equipment: ['Foam pad']
-  },
-  {
-    id: 'balance8',
-    name: 'Clock Reaches',
-    category: 'neuromuscular',
-    sets: 3,
-    reps: '12 positions',
-    intensity: 'Controlled reach',
-    equipment: []
-  },
-  {
-    id: 'balance9',
-    name: 'Lateral Hops',
-    category: 'neuromuscular',
-    sets: 3,
-    reps: '10-15 each side',
-    intensity: 'Progressive speed',
-    equipment: []
-  },
-  {
-    id: 'balance10',
-    name: 'Figure-8 Walking',
-    category: 'neuromuscular',
-    sets: 3,
-    reps: '5 patterns',
-    intensity: 'Controlled',
-    equipment: ['Cones']
-  },
-
-  // Sport-Specific/Functional
-  {
-    id: 'sport1',
-    name: 'Agility Ladder Drills',
-    category: 'functional',
-    sets: 3,
-    reps: '30 seconds',
-    intensity: 'High speed',
-    equipment: ['Agility ladder']
-  },
-  {
-    id: 'sport2',
-    name: 'Medicine Ball Slams',
-    category: 'functional',
-    sets: 3,
-    reps: '10-12',
-    intensity: 'Explosive',
-    equipment: ['Medicine ball']
-  },
-  {
-    id: 'sport3',
-    name: 'Burpees',
-    category: 'functional',
-    sets: 3,
-    reps: '10-15',
-    intensity: 'High intensity',
-    equipment: []
-  },
-  {
-    id: 'sport4',
-    name: 'Mountain Climbers',
-    category: 'functional',
-    sets: 3,
-    reps: '20-30',
-    intensity: 'Moderate to high',
-    equipment: []
-  },
-  {
-    id: 'sport5',
-    name: 'Plyometric Push-Ups',
-    category: 'functional',
-    sets: 3,
-    reps: '8-10',
-    intensity: 'Explosive',
-    equipment: []
-  },
-  {
-    id: 'sport6',
-    name: 'Skater Hops',
-    category: 'functional',
-    sets: 3,
-    reps: '10-15 each side',
-    intensity: 'Dynamic',
-    equipment: []
-  },
-  {
-    id: 'sport7',
-    name: 'Shuttle Runs',
-    category: 'functional',
-    sets: 5,
-    reps: '20 yards',
-    intensity: 'Sprint speed',
-    equipment: ['Cones']
-  },
-  {
-    id: 'sport8',
-    name: 'Kettlebell Swings',
-    category: 'functional',
-    sets: 3,
-    reps: '15-20',
-    intensity: 'Explosive hip drive',
-    equipment: ['Kettlebell']
-  },
-  {
-    id: 'sport9',
-    name: 'Battle Ropes',
-    category: 'functional',
-    sets: 3,
-    duration: 30,
-    intensity: 'High intensity',
-    equipment: ['Battle ropes']
-  },
-  {
-    id: 'sport10',
-    name: 'Farmer\'s Walk',
-    category: 'functional',
-    sets: 3,
-    reps: '40 yards',
-    intensity: 'Heavy load',
-    equipment: ['Dumbbells or kettlebells']
-  },
-
-  // Additional Cardio Options
-  {
-    id: 'cardio4',
-    name: 'Elliptical Training',
-    category: 'cardio',
-    duration: 20,
-    intensity: 'Moderate',
-    equipment: ['Elliptical machine']
-  },
-  {
-    id: 'cardio5',
-    name: 'Rowing Machine',
-    category: 'cardio',
-    duration: 15,
-    intensity: 'Moderate to high',
-    equipment: ['Rowing machine']
-  },
-  {
-    id: 'cardio6',
-    name: 'Stair Climbing',
-    category: 'cardio',
-    duration: 15,
-    intensity: 'Moderate',
-    equipment: ['Stairs or stair climber']
-  },
-  {
-    id: 'cardio7',
-    name: 'Interval Training',
-    category: 'cardio',
-    sets: 8,
-    duration: 30,
-    intensity: 'High/Low alternating',
-    equipment: []
-  },
-  {
-    id: 'cardio8',
-    name: 'Swimming',
-    category: 'cardio',
-    duration: 30,
-    intensity: 'Low impact',
-    equipment: ['Pool']
-  },
-
-  // Specialized Therapeutic Exercises
-  {
-    id: 'special1',
-    name: 'Diaphragmatic Breathing',
-    category: 'mobility',
-    sets: 3,
-    reps: '10 breaths',
-    intensity: 'Relaxed',
-    equipment: []
-  },
-  {
-    id: 'special2',
-    name: 'Foam Rolling - IT Band',
-    category: 'mobility',
-    sets: 3,
-    duration: 60,
-    intensity: 'Moderate pressure',
-    equipment: ['Foam roller']
-  },
-  {
-    id: 'special3',
-    name: 'Foam Rolling - Quadriceps',
-    category: 'mobility',
-    sets: 3,
-    duration: 60,
-    intensity: 'Moderate pressure',
-    equipment: ['Foam roller']
-  },
-  {
-    id: 'special4',
-    name: 'Foam Rolling - Calves',
-    category: 'mobility',
-    sets: 3,
-    duration: 60,
-    intensity: 'Moderate pressure',
-    equipment: ['Foam roller']
-  },
-  {
-    id: 'special5',
-    name: 'Neural Glides - Median Nerve',
-    category: 'mobility',
-    sets: 3,
-    reps: '10-15',
-    intensity: 'Gentle',
-    equipment: []
-  },
-  {
-    id: 'special6',
-    name: 'Neural Glides - Sciatic',
-    category: 'mobility',
-    sets: 3,
-    reps: '10-15',
-    intensity: 'Gentle',
-    equipment: []
-  },
-  {
-    id: 'special7',
-    name: 'Trigger Point Release',
-    category: 'mobility',
-    sets: 3,
-    hold: 30,
-    intensity: 'Moderate pressure',
-    equipment: ['Tennis ball or trigger point tool']
-  },
-  {
-    id: 'special8',
-    name: 'Joint Mobilization with Movement',
-    category: 'mobility',
-    sets: 3,
-    reps: '10',
-    intensity: 'Therapist guided',
-    equipment: ['Belt or strap']
-  }
-];
+// Use the imported comprehensive exercise database (1000+ exercises)
+const exerciseDatabase = fullExerciseDatabase;
 
 export default function TreatmentPlanningAssistant({ 
   onGeneratePlan,
@@ -1360,6 +114,31 @@ export default function TreatmentPlanningAssistant({
     'Return to full activities',
     'Independent with home program'
   ]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedBodyPart, setSelectedBodyPart] = useState<string>('all');
+
+  // Use memoized filtered exercises
+  const filteredExercises = useMemo(() => {
+    let filtered = exerciseDatabase;
+
+    // Apply search filter
+    if (searchTerm) {
+      filtered = searchExercises(searchTerm);
+    }
+
+    // Apply category filter
+    if (selectedCategory !== 'all') {
+      filtered = filtered.filter(ex => ex.category === selectedCategory);
+    }
+
+    // Apply body part filter
+    if (selectedBodyPart !== 'all') {
+      filtered = filtered.filter(ex => ex.bodyPart === selectedBodyPart);
+    }
+
+    return filtered;
+  }, [searchTerm, selectedCategory, selectedBodyPart]);
 
   const addPhase = () => {
     const newPhase: TreatmentPhase = {
@@ -1933,16 +712,85 @@ export default function TreatmentPlanningAssistant({
           <TabsContent value="exercises" className="h-[calc(100%-40px)] p-4">
             <ScrollArea className="h-full">
               <div className="space-y-3">
-                <div className="text-center mb-4 p-3 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg">
-                  <p className="text-lg font-semibold text-gray-800">
-                    {exerciseDatabase.length} Evidence-Based Exercises Available
-                  </p>
-                  <p className="text-sm text-gray-600 mt-1">
-                    Covering all major body regions and treatment categories
-                  </p>
+                {/* Exercise Counter and Search Controls */}
+                <div className="sticky top-0 z-10 bg-white pb-3 space-y-3">
+                  <div className="text-center p-3 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg">
+                    <p className="text-lg font-semibold text-gray-800">
+                      {TOTAL_EXERCISES}+ Evidence-Based Exercises Available
+                    </p>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Comprehensive database covering all body regions and treatment categories
+                    </p>
+                  </div>
+                  
+                  {/* Search and Filter Controls */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                    <div className="relative">
+                      <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search exercises..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-8"
+                      />
+                    </div>
+                    
+                    <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Categories</SelectItem>
+                        <SelectItem value="strengthening">Strengthening</SelectItem>
+                        <SelectItem value="stretching">Stretching</SelectItem>
+                        <SelectItem value="mobility">Mobility</SelectItem>
+                        <SelectItem value="neuromuscular">Neuromuscular</SelectItem>
+                        <SelectItem value="functional">Functional</SelectItem>
+                        <SelectItem value="cardio">Cardio</SelectItem>
+                        <SelectItem value="plyometric">Plyometric</SelectItem>
+                        <SelectItem value="stabilization">Stabilization</SelectItem>
+                        <SelectItem value="manual">Manual</SelectItem>
+                        <SelectItem value="breathing">Breathing</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    
+                    <Select value={selectedBodyPart} onValueChange={setSelectedBodyPart}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Body Part" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Body Parts</SelectItem>
+                        <SelectItem value="shoulder">Shoulder</SelectItem>
+                        <SelectItem value="knee">Knee</SelectItem>
+                        <SelectItem value="hip">Hip</SelectItem>
+                        <SelectItem value="ankle">Ankle</SelectItem>
+                        <SelectItem value="foot">Foot</SelectItem>
+                        <SelectItem value="back">Back</SelectItem>
+                        <SelectItem value="core">Core</SelectItem>
+                        <SelectItem value="neck">Neck</SelectItem>
+                        <SelectItem value="elbow">Elbow</SelectItem>
+                        <SelectItem value="wrist">Wrist</SelectItem>
+                        <SelectItem value="balance">Balance</SelectItem>
+                        <SelectItem value="full body">Full Body</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="text-sm text-muted-foreground">
+                    Showing {filteredExercises.length} of {TOTAL_EXERCISES} exercises
+                  </div>
                 </div>
-                {exerciseDatabase.map((exercise) => (
-                  <Card key={exercise.id}>
+
+                {/* Exercise List */}
+                {filteredExercises.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Search className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">No exercises found</p>
+                    <p className="text-xs mt-1">Try adjusting your search or filters</p>
+                  </div>
+                ) : (
+                  filteredExercises.map((exercise) => (
+                    <Card key={exercise.id}>
                     <CardContent className="p-3">
                       <div className="flex items-start justify-between mb-2">
                         <div>
@@ -1990,7 +838,8 @@ export default function TreatmentPlanningAssistant({
                       </div>
                     </CardContent>
                   </Card>
-                ))}
+                  ))
+                )}
               </div>
             </ScrollArea>
           </TabsContent>

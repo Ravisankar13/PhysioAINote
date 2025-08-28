@@ -5606,10 +5606,8 @@ Respond with only a number between 1-100 representing the relevance score.`;
         return res.status(400).json({ error: "Diagnosis is required" });
       }
 
-      const { AITreatmentPlannerService } = await import('./aiTreatmentPlannerService');
-      const service = new AITreatmentPlannerService();
-      
-      const questions = await service.generateInitialQuestions(diagnosis);
+      // Return condition-specific questions immediately without API call
+      const questions = getConditionSpecificQuestions(diagnosis);
       
       res.json({
         success: true,
@@ -5621,6 +5619,121 @@ Respond with only a number between 1-100 representing the relevance score.`;
       res.status(500).json({ error: "Failed to start assessment" });
     }
   });
+
+  // Helper function for fast, condition-specific questions
+  function getConditionSpecificQuestions(diagnosis: string) {
+    const diagnosisLower = diagnosis.toLowerCase();
+    
+    // Patella tendinitis/tendinopathy specific questions
+    if (diagnosisLower.includes('patella') || diagnosisLower.includes('patellar') || diagnosisLower.includes('jumper')) {
+      return [
+        { category: 'Demographics', question: 'What is your age and gender? (e.g., "25 year old male")', type: 'text' },
+        { category: 'Symptoms', question: 'Which knee is affected and for how long? (e.g., "Right knee, 3 months")', type: 'text' },
+        { category: 'Pain Location', question: 'Where exactly is the pain - directly below the kneecap, above it, or at the tendon? Rate pain 0-10.', type: 'text' },
+        { category: 'Sport/Activity', question: 'What sports do you play? Any jumping sports like basketball, volleyball? How many times per week?', type: 'text' },
+        { category: 'Aggravating', question: 'What makes it worse - jumping, squatting, stairs, sitting? List all activities.', type: 'text' },
+        { category: 'Training Changes', question: 'Have you recently increased training intensity, frequency, or changed surfaces/shoes?', type: 'text' },
+        { category: 'Previous Treatment', question: 'What have you tried - rest, ice, straps, exercises, injections? What helped?', type: 'text' },
+        { category: 'Goals', question: 'What\'s your main goal - return to sport, pain-free daily activities, or both? Any timeline?', type: 'text' }
+      ];
+    }
+    
+    // Rotator cuff/shoulder specific questions
+    if (diagnosisLower.includes('rotator') || diagnosisLower.includes('shoulder') || diagnosisLower.includes('supraspinatus')) {
+      return [
+        { category: 'Demographics', question: 'What is your age and gender? (e.g., "45 year old female")', type: 'text' },
+        { category: 'Symptoms', question: 'Which shoulder? How long have you had symptoms? Was onset sudden or gradual?', type: 'text' },
+        { category: 'Pain Pattern', question: 'Where is pain - front, side, or deep? Does it radiate down arm? Night pain when lying on it?', type: 'text' },
+        { category: 'Weakness', question: 'Any weakness lifting arm forward, to side, or rotating? Can you reach behind your back?', type: 'text' },
+        { category: 'Mechanism', question: 'Any specific injury/fall or repetitive overhead activities? What\'s your occupation?', type: 'text' },
+        { category: 'Painful Arc', question: 'Is there a specific range where it catches or hurts most (60-120 degrees)?', type: 'text' },
+        { category: 'Previous Treatment', question: 'Have you tried physio, injections, or exercises? Any imaging done (ultrasound/MRI)?', type: 'text' },
+        { category: 'Goals', question: 'What activities do you need to return to - overhead work, sports, or daily tasks?', type: 'text' }
+      ];
+    }
+    
+    // Low back pain specific questions
+    if (diagnosisLower.includes('back') || diagnosisLower.includes('lumbar') || diagnosisLower.includes('disc')) {
+      return [
+        { category: 'Demographics', question: 'What is your age and gender? (e.g., "35 year old male")', type: 'text' },
+        { category: 'Symptoms', question: 'How long have you had back pain? Is it constant or comes and goes?', type: 'text' },
+        { category: 'Radiation', question: 'Does pain/pins and needles go into buttock or leg? How far down? Any leg weakness?', type: 'text' },
+        { category: 'Aggravating', question: 'What makes it worse - bending forward, backward, sitting, standing, walking?', type: 'text' },
+        { category: 'Relieving', question: 'What helps - lying down, walking, specific positions? Does it ease with movement?', type: 'text' },
+        { category: 'Red Flags', question: 'Any bladder/bowel changes, numbness in groin, severe leg weakness, or unexplained weight loss?', type: 'text' },
+        { category: 'Previous Episodes', question: 'First episode or recurring? What triggered it? What helped before?', type: 'text' },
+        { category: 'Work/Goals', question: 'What\'s your job - desk work, manual labor? What activities do you need to return to?', type: 'text' }
+      ];
+    }
+    
+    // Ankle sprain specific questions  
+    if (diagnosisLower.includes('ankle')) {
+      return [
+        { category: 'Demographics', question: 'What is your age and gender? (e.g., "20 year old female")', type: 'text' },
+        { category: 'Injury Details', question: 'When did injury occur? How - rolled inward/outward, landed awkwardly? Which ankle?', type: 'text' },
+        { category: 'Severity', question: 'Could you walk immediately after? Any swelling/bruising? Where exactly?', type: 'text' },
+        { category: 'Instability', question: 'Does ankle feel unstable or give way? Any clicking or locking sensations?', type: 'text' },
+        { category: 'Previous Sprains', question: 'First time or recurrent? How many previous sprains on this ankle?', type: 'text' },
+        { category: 'Current Function', question: 'Can you walk, hop, or run? Pain level with weight bearing (0-10)?', type: 'text' },
+        { category: 'Treatment', question: 'What have you done - RICE, taping, bracing, exercises? Still using crutches?', type: 'text' },
+        { category: 'Sport/Goals', question: 'What sport/activity do you need to return to? Any upcoming events/timeline?', type: 'text' }
+      ];
+    }
+
+    // Tennis elbow specific questions
+    if (diagnosisLower.includes('tennis') || diagnosisLower.includes('lateral epicondyl')) {
+      return [
+        { category: 'Demographics', question: 'What is your age and gender? (e.g., "40 year old male")', type: 'text' },
+        { category: 'Symptoms', question: 'Which elbow? How long have symptoms lasted? Gradual or sudden onset?', type: 'text' },
+        { category: 'Pain Location', question: 'Pain on outside of elbow? Does it radiate down forearm? Pain with gripping?', type: 'text' },
+        { category: 'Activities', question: 'Do you play tennis/racquet sports? Work involves repetitive gripping or computer use?', type: 'text' },
+        { category: 'Aggravating', question: 'What triggers pain - gripping, lifting coffee cup, turning doorknobs, typing?', type: 'text' },
+        { category: 'Severity', question: 'Morning stiffness? Weakness in grip? Rate worst pain 0-10.', type: 'text' },
+        { category: 'Previous Treatment', question: 'Tried braces, exercises, injections, or rest? What helped or made it worse?', type: 'text' },
+        { category: 'Goals', question: 'Need to return to sport, work tasks, or pain-free daily activities?', type: 'text' }
+      ];
+    }
+
+    // Plantar fasciitis specific questions
+    if (diagnosisLower.includes('plantar') || diagnosisLower.includes('heel')) {
+      return [
+        { category: 'Demographics', question: 'What is your age and gender? (e.g., "50 year old female")', type: 'text' },
+        { category: 'Symptoms', question: 'Which foot? How long? Pain worse with first steps in morning?', type: 'text' },
+        { category: 'Pain Pattern', question: 'Pain location - heel, arch, or both? Sharp or aching? Better/worse with activity?', type: 'text' },
+        { category: 'Activity Level', question: 'Runner or regular walker? Recent increase in activity? Hours standing per day?', type: 'text' },
+        { category: 'Footwear', question: 'What shoes do you wear most? Any orthotics? Walk barefoot often?', type: 'text' },
+        { category: 'Biomechanics', question: 'High or flat arches? Any calf tightness? Previous foot/ankle injuries?', type: 'text' },
+        { category: 'Previous Treatment', question: 'Tried stretching, rolling, orthotics, injections? What helped?', type: 'text' },
+        { category: 'Goals', question: 'Want to return to running/walking? Need pain relief for work? Timeline?', type: 'text' }
+      ];
+    }
+
+    // ACL injury specific questions
+    if (diagnosisLower.includes('acl') || diagnosisLower.includes('anterior cruciate')) {
+      return [
+        { category: 'Demographics', question: 'What is your age and gender? (e.g., "22 year old female")', type: 'text' },
+        { category: 'Injury Details', question: 'When did injury occur? Mechanism - cutting, landing, contact? Heard a pop?', type: 'text' },
+        { category: 'Current Status', question: 'Surgery done or planned? If yes, when? Using brace or crutches?', type: 'text' },
+        { category: 'Symptoms', question: 'Current swelling? Knee giving way? Range of motion limitations?', type: 'text' },
+        { category: 'Rehabilitation Stage', question: 'What exercises can you do now? Full weight bearing? Can you squat?', type: 'text' },
+        { category: 'Sport', question: 'What sport caused injury? Level of competition? Want to return to same level?', type: 'text' },
+        { category: 'Previous Rehab', question: 'Currently doing physio? What stage of rehab? Any setbacks?', type: 'text' },
+        { category: 'Goals', question: 'Return to sport timeline? Specific movements needed for your sport?', type: 'text' }
+      ];
+    }
+
+    // Default questions for other conditions
+    return [
+      { category: 'Demographics', question: 'What is your age and gender?', type: 'text' },
+      { category: 'Symptoms', question: `How long have you had ${diagnosis}? Describe your main symptoms.`, type: 'text' },
+      { category: 'Severity', question: 'Rate your pain/discomfort from 0-10. Is it constant or intermittent?', type: 'text' },
+      { category: 'Function', question: 'What activities are limited or painful? Work or sport-related?', type: 'text' },
+      { category: 'Aggravating', question: 'What makes your symptoms worse?', type: 'text' },
+      { category: 'Relieving', question: 'What helps relieve your symptoms?', type: 'text' },
+      { category: 'Previous Treatment', question: 'What treatments have you tried? What worked or didn\'t work?', type: 'text' },
+      { category: 'Goals', question: 'What are your main treatment goals? Any specific timeline?', type: 'text' }
+    ];
+  }
 
   app.post("/api/treatment-planner/answer", ensureAuthenticated, async (req: Request, res: Response) => {
     try {

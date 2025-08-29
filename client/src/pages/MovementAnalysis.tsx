@@ -2363,25 +2363,119 @@ export default function MovementAnalysis() {
 
                           <Separator />
 
-                          {/* Joint Angles */}
+                          {/* Functional Problems */}
                           <div>
-                            <h4 className="text-sm font-medium mb-3">Joint Angles</h4>
-                            <div className="space-y-2">
-                              {currentMetrics.jointAngles.map((angle, i) => (
-                                <div key={i} className="flex items-center justify-between text-xs">
-                                  <span className="capitalize">{angle.joint.replace('_', ' ')}</span>
-                                  <div className="flex items-center gap-2">
-                                    <span className={angle.isWithinNormal ? 'text-green-600' : 'text-red-600'}>
-                                      {angle.angle.toFixed(1)}°
-                                    </span>
-                                    {angle.isWithinNormal ? (
-                                      <CheckCircle className="h-3 w-3 text-green-600" />
-                                    ) : (
-                                      <XCircle className="h-3 w-3 text-red-600" />
-                                    )}
+                            <h4 className="text-sm font-medium mb-3">Functional Issues Detected</h4>
+                            <div className="space-y-3">
+                              {/* Movement Compensations */}
+                              {currentMetrics.jointAngles.filter(angle => !angle.isWithinNormal).length > 0 && (
+                                <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-lg">
+                                  <div className="flex items-start gap-2">
+                                    <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5" />
+                                    <div className="flex-1">
+                                      <p className="text-xs font-medium text-red-900 dark:text-red-100">Movement Compensations</p>
+                                      <div className="mt-1 space-y-1">
+                                        {currentMetrics.jointAngles.filter(angle => !angle.isWithinNormal).map((angle, i) => {
+                                          const joint = angle.joint.replace('_', ' ');
+                                          let issue = '';
+                                          
+                                          // Generate functional interpretation based on joint and angle
+                                          if (angle.joint.includes('knee')) {
+                                            if (Math.abs(angle.angle - 180) > 20 && angle.angle < 160) {
+                                              issue = 'Excessive knee flexion - possible quad weakness';
+                                            } else if (angle.angle > 185) {
+                                              issue = 'Knee hyperextension - poor motor control';
+                                            }
+                                          } else if (angle.joint.includes('hip')) {
+                                            if (angle.angle < 70) {
+                                              issue = 'Limited hip flexion - mobility restriction';
+                                            } else if (angle.angle > 120) {
+                                              issue = 'Excessive hip flexion - compensation pattern';
+                                            }
+                                          } else if (angle.joint.includes('shoulder')) {
+                                            if (angle.angle < 150) {
+                                              issue = 'Restricted shoulder flexion - check scapular mobility';
+                                            }
+                                          } else if (angle.joint.includes('ankle')) {
+                                            if (angle.angle < 80) {
+                                              issue = 'Limited ankle dorsiflexion - calf tightness';
+                                            }
+                                          }
+                                          
+                                          if (issue) {
+                                            return (
+                                              <p key={i} className="text-xs text-red-700 dark:text-red-300">
+                                                • {issue}
+                                              </p>
+                                            );
+                                          }
+                                          return null;
+                                        })}
+                                      </div>
+                                    </div>
                                   </div>
                                 </div>
-                              ))}
+                              )}
+                              
+                              {/* Movement Quality Assessment */}
+                              <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
+                                <div className="flex items-start gap-2">
+                                  <Info className="h-4 w-4 text-blue-600 mt-0.5" />
+                                  <div className="flex-1">
+                                    <p className="text-xs font-medium text-blue-900 dark:text-blue-100">Movement Quality</p>
+                                    <div className="mt-2 space-y-1">
+                                      <div className="flex justify-between text-xs">
+                                        <span>Overall Quality:</span>
+                                        <Badge variant={currentMetrics.quality > 7 ? 'default' : currentMetrics.quality > 4 ? 'secondary' : 'destructive'} className="text-xs">
+                                          {currentMetrics.quality > 7 ? 'Good' : currentMetrics.quality > 4 ? 'Fair' : 'Poor'} ({currentMetrics.quality}/10)
+                                        </Badge>
+                                      </div>
+                                      {currentMetrics.symmetry < 80 && (
+                                        <p className="text-xs text-blue-700 dark:text-blue-300">
+                                          • Asymmetry detected ({(100 - currentMetrics.symmetry).toFixed(0)}% difference) - assess for injury
+                                        </p>
+                                      )}
+                                      {currentMetrics.stability < 70 && (
+                                        <p className="text-xs text-blue-700 dark:text-blue-300">
+                                          • Poor stability - balance training recommended
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              {/* Clinical Recommendations */}
+                              <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg">
+                                <div className="flex items-start gap-2">
+                                  <Sparkles className="h-4 w-4 text-green-600 mt-0.5" />
+                                  <div className="flex-1">
+                                    <p className="text-xs font-medium text-green-900 dark:text-green-100">Recommended Interventions</p>
+                                    <div className="mt-1 space-y-1">
+                                      {currentMetrics.symmetry < 80 && (
+                                        <p className="text-xs text-green-700 dark:text-green-300">
+                                          • Focus on unilateral exercises to address asymmetry
+                                        </p>
+                                      )}
+                                      {currentMetrics.stability < 70 && (
+                                        <p className="text-xs text-green-700 dark:text-green-300">
+                                          • Incorporate proprioceptive training
+                                        </p>
+                                      )}
+                                      {currentMetrics.jointAngles.some(a => a.joint.includes('knee') && !a.isWithinNormal) && (
+                                        <p className="text-xs text-green-700 dark:text-green-300">
+                                          • Strengthen quadriceps and hip abductors
+                                        </p>
+                                      )}
+                                      {currentMetrics.jointAngles.some(a => a.joint.includes('hip') && !a.isWithinNormal) && (
+                                        <p className="text-xs text-green-700 dark:text-green-300">
+                                          • Improve hip mobility and core stability
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -2566,31 +2660,128 @@ export default function MovementAnalysis() {
               <TabsContent value="impairments" className="mt-4">
                 <Card className="h-full">
                   <CardHeader>
-                    <CardTitle className="text-lg">Detected Impairments</CardTitle>
+                    <CardTitle className="text-lg">Functional Problems & Clinical Issues</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <ScrollArea className="h-[400px]">
-                      {impairments.length > 0 ? (
-                        <div className="space-y-3">
-                          {impairments.map((impairment, i) => (
-                            <Alert key={i} className="border-orange-200 bg-orange-50">
-                              <AlertTriangle className="h-4 w-4 text-orange-600" />
-                              <AlertDescription className="text-sm">
-                                {impairment}
-                              </AlertDescription>
-                            </Alert>
-                          ))}
+                      {(impairments.length > 0 || currentMetrics || biomechanicalMetrics) ? (
+                        <div className="space-y-4">
+                          {/* Primary Movement Problems */}
+                          {biomechanicalMetrics && (
+                            <div>
+                              <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                                <AlertTriangle className="h-4 w-4 text-red-500" />
+                                Primary Movement Dysfunctions
+                              </h4>
+                              <div className="space-y-2">
+                                {biomechanicalMetrics.kneeValgus.severity !== 'normal' && (
+                                  <Alert className="border-red-200 bg-red-50">
+                                    <AlertCircle className="h-4 w-4 text-red-600" />
+                                    <AlertDescription className="text-sm">
+                                      <strong>Dynamic Knee Valgus ({biomechanicalMetrics.kneeValgus.severity})</strong>
+                                      <p className="text-xs mt-1">High ACL injury risk. Strengthen hip abductors and external rotators.</p>
+                                    </AlertDescription>
+                                  </Alert>
+                                )}
+                                {biomechanicalMetrics.hipDrop.side !== 'none' && (
+                                  <Alert className="border-orange-200 bg-orange-50">
+                                    <AlertTriangle className="h-4 w-4 text-orange-600" />
+                                    <AlertDescription className="text-sm">
+                                      <strong>Trendelenburg Sign ({biomechanicalMetrics.hipDrop.side} side)</strong>
+                                      <p className="text-xs mt-1">Hip abductor weakness. Focus on gluteus medius strengthening.</p>
+                                    </AlertDescription>
+                                  </Alert>
+                                )}
+                                {biomechanicalMetrics.forwardLean > 45 && (
+                                  <Alert className="border-yellow-200 bg-yellow-50">
+                                    <AlertCircle className="h-4 w-4 text-yellow-600" />
+                                    <AlertDescription className="text-sm">
+                                      <strong>Excessive Forward Trunk Lean</strong>
+                                      <p className="text-xs mt-1">Limited ankle dorsiflexion or weak posterior chain. Assess ankle mobility.</p>
+                                    </AlertDescription>
+                                  </Alert>
+                                )}
+                              </div>
+                            </div>
+                          )}
                           
-                          <Separator className="my-4" />
+                          {/* Functional Limitations */}
+                          {currentMetrics && (
+                            <div>
+                              <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                                <Info className="h-4 w-4 text-blue-500" />
+                                Functional Limitations
+                              </h4>
+                              <div className="space-y-2">
+                                {currentMetrics.symmetry < 80 && (
+                                  <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                                    <p className="text-sm font-medium text-blue-900">Movement Asymmetry</p>
+                                    <p className="text-xs text-blue-700 mt-1">
+                                      {(100 - currentMetrics.symmetry).toFixed(0)}% difference between sides - risk of compensation injury
+                                    </p>
+                                    <p className="text-xs text-blue-600 mt-1">
+                                      → Perform unilateral exercises, assess for previous injury
+                                    </p>
+                                  </div>
+                                )}
+                                {currentMetrics.stability < 70 && (
+                                  <div className="p-3 bg-purple-50 rounded-lg border border-purple-200">
+                                    <p className="text-sm font-medium text-purple-900">Balance Deficit</p>
+                                    <p className="text-xs text-purple-700 mt-1">
+                                      Poor postural control - increased fall risk
+                                    </p>
+                                    <p className="text-xs text-purple-600 mt-1">
+                                      → Add proprioceptive training, single-leg exercises
+                                    </p>
+                                  </div>
+                                )}
+                                {currentMetrics.quality < 5 && (
+                                  <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                    <p className="text-sm font-medium text-gray-900">Poor Movement Quality</p>
+                                    <p className="text-xs text-gray-700 mt-1">
+                                      Inefficient movement patterns detected
+                                    </p>
+                                    <p className="text-xs text-gray-600 mt-1">
+                                      → Focus on movement re-education and motor control
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
                           
+                          {/* Clinical Red Flags */}
+                          {impairments.length > 0 && (
+                            <div>
+                              <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                                <XCircle className="h-4 w-4 text-red-500" />
+                                Clinical Red Flags
+                              </h4>
+                              <div className="space-y-2">
+                                {impairments.map((impairment, i) => (
+                                  <Alert key={i} className="border-red-200 bg-red-50">
+                                    <AlertTriangle className="h-4 w-4 text-red-600" />
+                                    <AlertDescription className="text-sm">
+                                      {impairment}
+                                    </AlertDescription>
+                                  </Alert>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Treatment Recommendations */}
                           <div>
-                            <h4 className="text-sm font-medium mb-3">Recommendations</h4>
+                            <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                              <Sparkles className="h-4 w-4 text-green-500" />
+                              Treatment Recommendations
+                            </h4>
                             <div className="space-y-2">
                               {(selectedTest?.id === 'running-gait' 
                                 ? generateRunningRecommendations(impairments)
                                 : generateRecommendations(impairments)
                               ).map((rec, i) => (
-                                <div key={i} className="flex items-start gap-2">
+                                <div key={i} className="flex items-start gap-2 p-2 bg-green-50 rounded-lg">
                                   <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
                                   <p className="text-xs text-gray-700">{rec}</p>
                                 </div>

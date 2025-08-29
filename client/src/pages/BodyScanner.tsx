@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { webXRService } from '@/services/webXRService';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -93,6 +94,17 @@ export default function BodyScanner() {
   const [isRecording, setIsRecording] = useState(false);
   const [capturedFrames, setCapturedFrames] = useState<string[]>([]);
   const [mediapipeLoaded, setMediapipeLoaded] = useState(false);
+  const [xrSupported, setXrSupported] = useState(false);
+  const [xrActive, setXrActive] = useState(false);
+  const [anatomyLayers, setAnatomyLayers] = useState({
+    bones: true,
+    ligaments: false,
+    menisci: false,
+    tendons: false,
+    cartilage: false,
+    vessels: false
+  });
+  const [clinicalTests, setClinicalTests] = useState<any[]>([]);
   
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -299,7 +311,7 @@ export default function BodyScanner() {
     ctx.globalAlpha = 1;
   };
   
-  // Load MediaPipe libraries on mount
+  // Load MediaPipe libraries and check WebXR on mount
   useEffect(() => {
     const loadLibraries = async () => {
       const loaded = await loadMediaPipeLibraries();
@@ -313,6 +325,14 @@ export default function BodyScanner() {
       }
     };
     loadLibraries();
+    
+    // Check WebXR support
+    webXRService.checkXRSupport().then(support => {
+      setXrSupported(support.supported && (support.immersiveAR || support.inline));
+      if (support.supported) {
+        console.log('[BodyScanner] WebXR supported:', support);
+      }
+    });
   }, []);
   
   // Initialize camera and pose detection
@@ -955,6 +975,102 @@ export default function BodyScanner() {
                   Tap on the video to mark regions
                 </p>
               )}
+            </CardContent>
+          </Card>
+          
+          {/* Phase 3: WebXR 3D Anatomy */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Layers className="h-4 w-4" />
+                3D Anatomy Overlay
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {xrSupported ? (
+                  <>
+                    <Button
+                      className="w-full"
+                      variant={xrActive ? "destructive" : "default"}
+                      onClick={async () => {
+                        if (xrActive) {
+                          await webXRService.endXRSession();
+                          setXrActive(false);
+                        } else if (canvasRef.current) {
+                          const started = await webXRService.startXRSession(canvasRef.current);
+                          setXrActive(started);
+                          if (!started) {
+                            toast({
+                              title: "AR Not Available",
+                              description: "Using standard visualization mode",
+                            });
+                          }
+                        }
+                      }}
+                    >
+                      {xrActive ? "Exit AR Mode" : "Start AR Mode"}
+                    </Button>
+                    
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-muted-foreground">Anatomy Layers:</p>
+                      {Object.entries(anatomyLayers).map(([layer, visible]) => (
+                        <div key={layer} className="flex items-center justify-between">
+                          <label className="text-sm capitalize">{layer}</label>
+                          <Button
+                            size="sm"
+                            variant={visible ? "default" : "outline"}
+                            onClick={() => {
+                              setAnatomyLayers(prev => ({
+                                ...prev,
+                                [layer]: !prev[layer as keyof typeof prev]
+                              }));
+                              webXRService.toggleLayer(layer);
+                            }}
+                          >
+                            {visible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    WebXR not supported in this browser
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+          
+          {/* Phase 4: Clinical Features */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Activity className="h-4 w-4" />
+                Clinical Tests Guide
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {trackedRegions.length > 0 ? (
+                  <div className="space-y-3">
+                    <p className="text-xs font-medium text-muted-foreground">Suggested Tests:</p>
+                    {['McMurray Test', 'Lachman Test', 'Valgus Stress Test'].map(test => (
+                      <div key={test} className="p-2 bg-muted rounded text-sm">
+                        <p className="font-medium">{test}</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Educational visualization only
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    Mark regions to see suggested clinical tests
+                  </p>
+                )}
+              </div>
             </CardContent>
           </Card>
           

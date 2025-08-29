@@ -1,5 +1,5 @@
 import { db } from '../db';
-import { bodyScanResults } from '@shared/schema';
+import { bodyScans } from '@shared/schema';
 import { eq } from 'drizzle-orm';
 
 // Placeholder for SAM 2 integration
@@ -219,7 +219,7 @@ export async function saveScanResults(
     scanData.depthAnalysis
   );
   
-  const [result] = await db.insert(bodyScanResults).values({
+  const [result] = await db.insert(bodyScans).values({
     userId,
     bodyPart: scanData.bodyPart,
     scanType: 'educational_visualization',
@@ -243,7 +243,7 @@ export async function saveScanResults(
 export async function getUserScans(userId: number) {
   return await db
     .select()
-    .from(bodyScanResults)
-    .where(eq(bodyScanResults.userId, userId))
-    .orderBy(bodyScanResults.createdAt);
+    .from(bodyScans)
+    .where(eq(bodyScans.userId, userId))
+    .orderBy(bodyScans.createdAt);
 }

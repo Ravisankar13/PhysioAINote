@@ -110,11 +110,15 @@ export class PhysioGptService {
     const exerciseImages: any[] = [];
     let enhancedResponse = response;
     
-    // Pattern to find exercise names in the response
+    console.log("=== Enhancing Exercise Program ===");
+    console.log("Response to analyze:", response);
+    
+    // More comprehensive patterns to find exercise names
     const exercisePatterns = [
       /(?:exercise|perform|do|try)\s*[:]\s*([^\.]+)/gi,
-      /\d+\.\s*([^:]+)(?:\s*[-–—]\s*)/gi,
-      /(?:•|[-*])\s*([^:]+)(?:\s*[-–—]\s*)/gi
+      /\d+\.\s*\*?\*?([^:*]+)\*?\*?(?:\s*[-–—:])/gi,
+      /(?:•|[-*])\s*\*?\*?([^:*]+)\*?\*?(?:\s*[-–—:])/gi,
+      /\*?\*?([A-Za-z\s]+(?:stretch|exercise|raise|tilt|bridge|dog|cat|cow|wall sit|clamshell|plank))\*?\*?/gi
     ];
     
     const foundExercises = new Set<string>();
@@ -125,31 +129,66 @@ export class PhysioGptService {
         const exerciseName = match[1].trim().toLowerCase();
         // Clean up the exercise name
         const cleanName = exerciseName
-          .replace(/\b\d+\s*(sets?|reps?|seconds?|minutes?)\b/gi, '')
-          .replace(/\b(the|a|an)\b/gi, '')
+          .replace(/\b\d+\s*(sets?|reps?|seconds?|minutes?|times?|x)\b/gi, '')
+          .replace(/\b(the|a|an|perform|do|try)\b/gi, '')
+          .replace(/[:\-–—]/g, '')
           .trim();
         
         if (cleanName.length > 2 && cleanName.length < 50) {
           foundExercises.add(cleanName);
+          console.log("Found exercise:", cleanName);
         }
       }
     }
     
+    // Also look for common exercise keywords that might be in our database
+    const commonExercises = [
+      'cat-cow', 'bird dog', 'pelvic tilt', 'bridge', 'hip bridge',
+      'wall sit', 'clamshell', 'straight leg raise', 'chin tuck'
+    ];
+    
+    for (const exercise of commonExercises) {
+      if (response.toLowerCase().includes(exercise)) {
+        foundExercises.add(exercise);
+        console.log("Found common exercise:", exercise);
+      }
+    }
+    
+    console.log("Total exercises found:", foundExercises.size);
+    
     // Search for matching exercise images in database
     for (const exerciseName of foundExercises) {
       try {
-        // Try exact match first
-        let exerciseImage = await storage.getExerciseImageByName(exerciseName);
+        console.log(`Searching for exercise: ${exerciseName}`);
         
-        // If no exact match, try searching
+        // Try multiple search strategies
+        let exerciseImage = null;
+        
+        // Strategy 1: Exact match
+        exerciseImage = await storage.getExerciseImageByName(exerciseName);
+        
+        // Strategy 2: Search with variations
         if (!exerciseImage) {
-          const searchResults = await storage.searchExerciseImages(exerciseName);
-          if (searchResults.length > 0) {
-            exerciseImage = searchResults[0];
+          const variations = [
+            exerciseName,
+            exerciseName.replace(/-/g, ' '),
+            exerciseName.replace(/ /g, '-'),
+            exerciseName + ' stretch',
+            exerciseName + ' exercise'
+          ];
+          
+          for (const variation of variations) {
+            const searchResults = await storage.searchExerciseImages(variation);
+            if (searchResults.length > 0) {
+              exerciseImage = searchResults[0];
+              console.log(`Found match with variation: ${variation}`);
+              break;
+            }
           }
         }
         
         if (exerciseImage) {
+          console.log(`Adding exercise image: ${exerciseImage.exerciseName}`);
           exerciseImages.push({
             exerciseName: exerciseImage.exerciseName,
             primaryImageUrl: exerciseImage.primaryImageUrl,
@@ -157,11 +196,16 @@ export class PhysioGptService {
             tips: exerciseImage.tips,
             category: exerciseImage.category
           });
+        } else {
+          console.log(`No image found for: ${exerciseName}`);
         }
       } catch (error) {
         console.error(`Error fetching exercise image for ${exerciseName}:`, error);
       }
     }
+    
+    console.log(`Total exercise images found: ${exerciseImages.length}`);
+    console.log("=== Enhancement Complete ===");
     
     return { enhancedResponse, exerciseImages };
   }

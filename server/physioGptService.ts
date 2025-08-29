@@ -44,6 +44,13 @@ export interface PhysioGptResponse {
   researchPapers?: ResearchPaper[];
   evidenceGrade?: 'A' | 'B' | 'C' | 'D';
   confidenceLevel?: 'High' | 'Moderate' | 'Low' | 'Very Low';
+  exerciseImages?: Array<{
+    exerciseName: string;
+    primaryImageUrl: string;
+    instructions?: string[];
+    tips?: string[];
+    category?: string;
+  }>;
 }
 
 function getExpertFrameworkGuidance(framework: string): string {
@@ -99,6 +106,66 @@ function getExpertFrameworkGuidance(framework: string): string {
 }
 
 export class PhysioGptService {
+  private async enhanceExerciseProgram(response: string): Promise<{ enhancedResponse: string; exerciseImages: any[] }> {
+    const exerciseImages: any[] = [];
+    let enhancedResponse = response;
+    
+    // Pattern to find exercise names in the response
+    const exercisePatterns = [
+      /(?:exercise|perform|do|try)\s*[:]\s*([^\.]+)/gi,
+      /\d+\.\s*([^:]+)(?:\s*[-–—]\s*)/gi,
+      /(?:•|[-*])\s*([^:]+)(?:\s*[-–—]\s*)/gi
+    ];
+    
+    const foundExercises = new Set<string>();
+    
+    for (const pattern of exercisePatterns) {
+      const matches = response.matchAll(pattern);
+      for (const match of matches) {
+        const exerciseName = match[1].trim().toLowerCase();
+        // Clean up the exercise name
+        const cleanName = exerciseName
+          .replace(/\b\d+\s*(sets?|reps?|seconds?|minutes?)\b/gi, '')
+          .replace(/\b(the|a|an)\b/gi, '')
+          .trim();
+        
+        if (cleanName.length > 2 && cleanName.length < 50) {
+          foundExercises.add(cleanName);
+        }
+      }
+    }
+    
+    // Search for matching exercise images in database
+    for (const exerciseName of foundExercises) {
+      try {
+        // Try exact match first
+        let exerciseImage = await storage.getExerciseImageByName(exerciseName);
+        
+        // If no exact match, try searching
+        if (!exerciseImage) {
+          const searchResults = await storage.searchExerciseImages(exerciseName);
+          if (searchResults.length > 0) {
+            exerciseImage = searchResults[0];
+          }
+        }
+        
+        if (exerciseImage) {
+          exerciseImages.push({
+            exerciseName: exerciseImage.exerciseName,
+            primaryImageUrl: exerciseImage.primaryImageUrl,
+            instructions: exerciseImage.instructions,
+            tips: exerciseImage.tips,
+            category: exerciseImage.category
+          });
+        }
+      } catch (error) {
+        console.error(`Error fetching exercise image for ${exerciseName}:`, error);
+      }
+    }
+    
+    return { enhancedResponse, exerciseImages };
+  }
+
   private buildSystemPrompt(evidenceSummary?: EvidenceSummary, virtualPatient?: PhysioGptRequest['virtualPatient']): string {
     let evidenceContext = "";
     
@@ -387,9 +454,25 @@ Keep responses concise, practical, and directly applicable to clinical practice.
         content: aiResponse
       });
       
+      // Check if response contains exercise recommendations and enhance with images
+      let exerciseImages: any[] = [];
+      const lowerResponse = aiResponse.toLowerCase();
+      if (lowerResponse.includes('exercise') || lowerResponse.includes('stretch') || 
+          lowerResponse.includes('strengthen') || lowerResponse.includes('mobility') ||
+          lowerResponse.includes('program') || lowerResponse.includes('perform')) {
+        try {
+          const enhancement = await this.enhanceExerciseProgram(aiResponse);
+          exerciseImages = enhancement.exerciseImages;
+          console.log(`Found ${exerciseImages.length} exercise images to include`);
+        } catch (error) {
+          console.error("Error enhancing exercise program:", error);
+        }
+      }
+      
       console.log("=== PhysioGPT Processing Complete ===");
       console.log("Final aiResponse:", aiResponse);
       console.log("Final conversationId:", conversationId);
+      console.log("Exercise images found:", exerciseImages.length);
       
       const result: PhysioGptResponse = {
         response: aiResponse,
@@ -398,7 +481,8 @@ Keep responses concise, practical, and directly applicable to clinical practice.
         evidenceSummary,
         researchPapers,
         evidenceGrade: evidenceSummary?.evidenceGrade,
-        confidenceLevel: evidenceSummary?.confidenceLevel
+        confidenceLevel: evidenceSummary?.confidenceLevel,
+        exerciseImages: exerciseImages.length > 0 ? exerciseImages : undefined
       };
       
       console.log("Returning result:", JSON.stringify(result));

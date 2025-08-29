@@ -116,6 +116,13 @@ interface PhysioGptResponse {
   researchPapers?: ResearchPaper[];
   evidenceGrade?: 'A' | 'B' | 'C' | 'D';
   confidenceLevel?: 'High' | 'Moderate' | 'Low' | 'Very Low';
+  exerciseImages?: Array<{
+    exerciseName: string;
+    primaryImageUrl: string;
+    instructions?: string[];
+    tips?: string[];
+    category?: string;
+  }>;
 }
 
 export default function PhysioGPT() {
@@ -324,7 +331,7 @@ Please provide assessment recommendations following ${patient.expertFramework} a
       return result;
     },
     onSuccess: (data: PhysioGptResponse) => {
-      if (data.evidenceSummary || data.researchPapers || data.evidenceGrade) {
+      if (data.evidenceSummary || data.researchPapers || data.evidenceGrade || data.exerciseImages) {
         setEvidenceData(prev => new Map(prev.set(data.conversationId, data)));
       }
       
@@ -706,19 +713,94 @@ Please provide:
                       }`}
                     >
                       {msg.role === 'assistant' ? (
-                        <FormattedResponse 
-                          content={msg.content}
-                          evidenceGrade={
-                            evidenceData.has(selectedConversationId!) && index === messages.length - 1
-                              ? evidenceData.get(selectedConversationId!)?.evidenceGrade
-                              : undefined
-                          }
-                          confidenceLevel={
-                            evidenceData.has(selectedConversationId!) && index === messages.length - 1
-                              ? evidenceData.get(selectedConversationId!)?.confidenceLevel
-                              : undefined
-                          }
-                        />
+                        <>
+                          <FormattedResponse 
+                            content={msg.content}
+                            evidenceGrade={
+                              evidenceData.has(selectedConversationId!) && index === messages.length - 1
+                                ? evidenceData.get(selectedConversationId!)?.evidenceGrade
+                                : undefined
+                            }
+                            confidenceLevel={
+                              evidenceData.has(selectedConversationId!) && index === messages.length - 1
+                                ? evidenceData.get(selectedConversationId!)?.confidenceLevel
+                                : undefined
+                            }
+                          />
+                          {/* Display exercise images if available */}
+                          {evidenceData.has(selectedConversationId!) && index === messages.length - 1 && 
+                           evidenceData.get(selectedConversationId!)?.exerciseImages && 
+                           evidenceData.get(selectedConversationId!)!.exerciseImages!.length > 0 && (
+                            <div className="mt-6 space-y-4">
+                              <div className="flex items-center gap-2 mb-4">
+                                <Target className="h-5 w-5 text-teal-600" />
+                                <h3 className="text-lg font-semibold text-gray-800">Exercise Demonstrations</h3>
+                              </div>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {evidenceData.get(selectedConversationId!)!.exerciseImages!.map((exercise, idx) => (
+                                  <Card key={idx} className="overflow-hidden hover:shadow-lg transition-shadow">
+                                    <div className="aspect-video relative bg-gradient-to-br from-gray-50 to-gray-100">
+                                      <img 
+                                        src={exercise.primaryImageUrl} 
+                                        alt={exercise.exerciseName}
+                                        className="w-full h-full object-contain p-2"
+                                        onError={(e) => {
+                                          const target = e.target as HTMLImageElement;
+                                          target.style.display = 'none';
+                                          const parent = target.parentElement;
+                                          if (parent) {
+                                            parent.innerHTML = `
+                                              <div class="flex flex-col items-center justify-center h-full text-gray-400">
+                                                <svg class="h-12 w-12 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                </svg>
+                                                <span class="text-sm">Image unavailable</span>
+                                              </div>
+                                            `;
+                                          }
+                                        }}
+                                      />
+                                    </div>
+                                    <CardContent className="p-4">
+                                      <h4 className="font-semibold text-gray-800 mb-2">{exercise.exerciseName}</h4>
+                                      {exercise.category && (
+                                        <Badge variant="secondary" className="mb-2">
+                                          {exercise.category}
+                                        </Badge>
+                                      )}
+                                      {exercise.instructions && exercise.instructions.length > 0 && (
+                                        <div className="mt-3">
+                                          <p className="text-sm font-medium text-gray-600 mb-1">Instructions:</p>
+                                          <ul className="text-sm text-gray-600 space-y-1">
+                                            {exercise.instructions.map((instruction, i) => (
+                                              <li key={i} className="flex items-start">
+                                                <span className="text-teal-500 mr-2">•</span>
+                                                <span>{instruction}</span>
+                                              </li>
+                                            ))}
+                                          </ul>
+                                        </div>
+                                      )}
+                                      {exercise.tips && exercise.tips.length > 0 && (
+                                        <div className="mt-3">
+                                          <p className="text-sm font-medium text-gray-600 mb-1">Tips:</p>
+                                          <ul className="text-sm text-gray-500 space-y-1">
+                                            {exercise.tips.map((tip, i) => (
+                                              <li key={i} className="flex items-start">
+                                                <Lightbulb className="h-3 w-3 text-amber-500 mr-2 mt-0.5 flex-shrink-0" />
+                                                <span>{tip}</span>
+                                              </li>
+                                            ))}
+                                          </ul>
+                                        </div>
+                                      )}
+                                    </CardContent>
+                                  </Card>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </>
                       ) : (
                         <p className="text-white">
                           {msg.content}

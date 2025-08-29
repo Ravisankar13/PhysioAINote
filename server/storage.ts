@@ -119,6 +119,9 @@ import {
   exerciseProgress,
   type ExerciseProgress,
   type InsertExerciseProgress,
+  exerciseImages,
+  type ExerciseImage,
+  type InsertExerciseImage,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, isNull, sql, ilike, not } from "drizzle-orm";
@@ -578,6 +581,16 @@ export interface IStorage {
   getExerciseProgress(assignmentId: number, exerciseId?: number): Promise<ExerciseProgress[]>;
   getProgressByDate(assignmentId: number, date: string): Promise<ExerciseProgress[]>;
   updateExerciseProgress(id: number, data: Partial<InsertExerciseProgress>): Promise<ExerciseProgress>;
+
+  // Exercise Image Operations
+  createExerciseImage(image: InsertExerciseImage): Promise<ExerciseImage>;
+  getExerciseImage(id: number): Promise<ExerciseImage | undefined>;
+  getExerciseImageByName(exerciseName: string): Promise<ExerciseImage | undefined>;
+  getExerciseImagesByBodyPart(bodyPart: string): Promise<ExerciseImage[]>;
+  getExerciseImagesByCategory(category: string): Promise<ExerciseImage[]>;
+  searchExerciseImages(searchTerm: string): Promise<ExerciseImage[]>;
+  bulkCreateExerciseImages(images: InsertExerciseImage[]): Promise<ExerciseImage[]>;
+  updateExerciseImage(id: number, data: Partial<InsertExerciseImage>): Promise<ExerciseImage>;
 
   // Temporary SOAP Notes Operations (24-hour expiry)
   createTemporarySoapNote(note: InsertTemporarySoapNote): Promise<TemporarySoapNote>;
@@ -3728,6 +3741,83 @@ export class DatabaseStorage implements IStorage {
       .update(exerciseProgress)
       .set(data)
       .where(eq(exerciseProgress.id, id))
+      .returning();
+    return result[0];
+  }
+
+  // Exercise Image Methods
+  async createExerciseImage(image: InsertExerciseImage): Promise<ExerciseImage> {
+    const result = await db.insert(exerciseImages).values(image).returning();
+    return result[0];
+  }
+
+  async getExerciseImage(id: number): Promise<ExerciseImage | undefined> {
+    const result = await db
+      .select()
+      .from(exerciseImages)
+      .where(eq(exerciseImages.id, id))
+      .limit(1);
+    return result[0];
+  }
+
+  async getExerciseImageByName(exerciseName: string): Promise<ExerciseImage | undefined> {
+    const result = await db
+      .select()
+      .from(exerciseImages)
+      .where(eq(exerciseImages.exerciseName, exerciseName))
+      .limit(1);
+    return result[0];
+  }
+
+  async getExerciseImagesByBodyPart(bodyPart: string): Promise<ExerciseImage[]> {
+    return await db
+      .select()
+      .from(exerciseImages)
+      .where(and(
+        eq(exerciseImages.bodyPart as any, bodyPart),
+        eq(exerciseImages.isActive, true)
+      ))
+      .orderBy(exerciseImages.exerciseName);
+  }
+
+  async getExerciseImagesByCategory(category: string): Promise<ExerciseImage[]> {
+    return await db
+      .select()
+      .from(exerciseImages)
+      .where(and(
+        eq(exerciseImages.category, category),
+        eq(exerciseImages.isActive, true)
+      ))
+      .orderBy(exerciseImages.exerciseName);
+  }
+
+  async searchExerciseImages(searchTerm: string): Promise<ExerciseImage[]> {
+    const searchPattern = `%${searchTerm.toLowerCase()}%`;
+    return await db
+      .select()
+      .from(exerciseImages)
+      .where(and(
+        or(
+          ilike(exerciseImages.exerciseName, searchPattern),
+          sql`${exerciseImages.alternativeNames}::text ILIKE ${searchPattern}`,
+          sql`${exerciseImages.tags}::text ILIKE ${searchPattern}`,
+          ilike(exerciseImages.equipment || '', searchPattern)
+        ),
+        eq(exerciseImages.isActive, true)
+      ))
+      .orderBy(exerciseImages.exerciseName);
+  }
+
+  async bulkCreateExerciseImages(images: InsertExerciseImage[]): Promise<ExerciseImage[]> {
+    const result = await db.insert(exerciseImages).values(images).returning();
+    return result;
+  }
+
+  async updateExerciseImage(id: number, data: Partial<InsertExerciseImage>): Promise<ExerciseImage> {
+    const result = await db
+      .update(exerciseImages)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(exerciseImages.id, id))
       .returning();
     return result[0];
   }

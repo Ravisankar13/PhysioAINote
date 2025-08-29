@@ -3936,6 +3936,40 @@ export const insertExerciseProgressSchema = createInsertSchema(exerciseProgress)
 export type InsertExerciseProgress = z.infer<typeof insertExerciseProgressSchema>;
 export type ExerciseProgress = typeof exerciseProgress.$inferSelect;
 
+// Exercise Images Library for PhysioGPT
+export const exerciseImages = pgTable("exercise_images", {
+  id: serial("id").primaryKey(),
+  exerciseName: text("exercise_name").notNull().unique(), // Standardized exercise name
+  category: text("category").notNull(), // e.g., "stretching", "strengthening", "mobility"
+  bodyPart: bodyPartEnum("body_part").notNull(),
+  primaryImageUrl: text("primary_image_url").notNull(), // Main exercise image
+  startPositionUrl: text("start_position_url"), // Starting position image
+  endPositionUrl: text("end_position_url"), // End position image
+  sideViewUrl: text("side_view_url"), // Side view image
+  commonMistakesUrl: text("common_mistakes_url"), // Common mistakes image
+  videoUrl: text("video_url"), // Exercise demonstration video
+  thumbnailUrl: text("thumbnail_url"), // Small thumbnail for lists
+  instructions: json("instructions").$type<string[]>(), // Step-by-step instructions
+  tips: json("tips").$type<string[]>(), // Exercise tips
+  contraindications: json("contraindications").$type<string[]>(), // When not to do
+  musclesWorked: json("muscles_worked").$type<string[]>(), // Primary and secondary muscles
+  equipment: text("equipment"), // Required equipment
+  difficulty: text("difficulty"), // beginner, intermediate, advanced
+  alternativeNames: json("alternative_names").$type<string[]>(), // Alternative exercise names
+  tags: json("tags").$type<string[]>(), // Searchable tags
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertExerciseImageSchema = createInsertSchema(exerciseImages).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertExerciseImage = z.infer<typeof insertExerciseImageSchema>;
+export type ExerciseImage = typeof exerciseImages.$inferSelect;
+
 // Relations for exercise program tables
 export const exerciseProgramRelations = relations(exercisePrograms, ({ one, many }) => ({
   creator: one(users, {

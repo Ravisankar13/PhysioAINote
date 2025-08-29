@@ -1680,7 +1680,7 @@ export default function MovementAnalysis() {
       {/* Main Content */}
       <div className={`flex-1 flex ${isFullscreen ? 'p-0' : 'p-4'} gap-4 overflow-hidden ${isFullscreen ? 'bg-black' : ''}`}>
         {/* Left Panel - Video Feed */}
-        <div className={`${isFullscreen ? 'flex-1' : 'w-3/4'} flex flex-col gap-4`}>
+        <div className={`${isFullscreen ? 'flex-1' : selectedTest?.id === 'step-down' ? 'w-2/3' : 'w-3/4'} flex flex-col gap-4`}>
           <Card className={`flex-1 overflow-hidden ${isFullscreen ? 'border-0 rounded-none bg-black' : ''}`}>
             {!isFullscreen && (
               <CardHeader className="pb-4">
@@ -1697,8 +1697,8 @@ export default function MovementAnalysis() {
                 </div>
               </CardHeader>
             )}
-            <CardContent className={`p-0 relative ${isFullscreen ? 'h-full' : ''}`}>
-              <div className={`relative ${isFullscreen ? 'h-full w-full' : 'aspect-video'} bg-black`}>
+            <CardContent className={`p-0 relative ${isFullscreen ? 'h-full' : 'h-[500px]'}`}>
+              <div className={`relative ${isFullscreen ? 'h-full w-full' : 'h-full'} bg-gray-900 rounded-lg overflow-hidden`}>
                 <video
                   ref={videoRef}
                   className="absolute inset-0 w-full h-full object-cover hidden"
@@ -1710,7 +1710,7 @@ export default function MovementAnalysis() {
                 />
                 <canvas
                   ref={canvasRef}
-                  className={`absolute inset-0 w-full h-full ${isFullscreen ? 'object-contain' : ''}`}
+                  className={`absolute inset-0 w-full h-full ${isFullscreen ? 'object-contain' : 'object-cover'}`}
                   width={1920}
                   height={1080}
                 />
@@ -2037,7 +2037,7 @@ export default function MovementAnalysis() {
 
         {/* Right Panel - Live Metric Cards for Step Down Test */}
         {!isFullscreen && selectedTest?.id === 'step-down' && (
-          <div className="w-1/4 flex flex-col gap-3">
+          <div className="w-1/3 flex flex-col gap-3 overflow-y-auto">
             <h3 className="text-lg font-semibold">Live Analysis</h3>
             
             {/* Q-Angle Card */}

@@ -1680,8 +1680,8 @@ export default function MovementAnalysis() {
       {/* Main Content */}
       <div className={`flex-1 flex ${isFullscreen ? 'p-0' : 'p-4'} gap-4 overflow-hidden ${isFullscreen ? 'bg-black' : ''}`}>
         {/* Left Panel - Video Feed */}
-        <div className={`${isFullscreen ? 'flex-1' : selectedTest?.id === 'step-down' ? 'w-2/3' : 'w-3/4'} flex flex-col gap-2 h-full`}>
-          <Card className={`flex-1 overflow-hidden ${isFullscreen ? 'border-0 rounded-none bg-black' : ''} ${selectedTest?.id === 'step-down' ? 'h-[90%]' : ''}`}>
+        <div className={`${isFullscreen ? 'flex-1' : 'w-2/3'} flex flex-col gap-2 h-full`}>
+          <Card className={`flex-1 overflow-hidden ${isFullscreen ? 'border-0 rounded-none bg-black' : 'h-[90%]'}`}>
             {!isFullscreen && (
               <CardHeader className="pb-4">
                 <div className="flex items-center justify-between">
@@ -2005,8 +2005,8 @@ export default function MovementAnalysis() {
             </CardContent>
           </Card>
 
-          {/* Assessment Selection - Compact for Step Down, Normal for others */}
-          {!isFullscreen && selectedTest?.id === 'step-down' ? (
+          {/* Assessment Selection - Compact for all tests */}
+          {!isFullscreen && selectedTest && (
             <Card className="h-[10%]">
               <CardContent className="p-3 flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -2019,40 +2019,17 @@ export default function MovementAnalysis() {
                 </div>
               </CardContent>
             </Card>
-          ) : !isFullscreen ? (
-            <Card>
-              <CardHeader className="pb-4">
-                <CardTitle className="text-lg">Assessment Test</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium">Current Test:</p>
-                      <Badge variant="outline" className="text-sm">
-                        {selectedTest?.name || 'No test selected'}
-                      </Badge>
-                    </div>
-                  </div>
-                  <div className="text-sm text-gray-600">
-                    <p className="font-medium mb-1">Instructions:</p>
-                    <ul className="list-disc list-inside space-y-1">
-                      {selectedTest?.instructions.map((instruction, i) => (
-                        <li key={i} className="text-xs">{instruction}</li>
-                      )) || <li className="text-xs">Select a test to begin</li>}
-                    </ul>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ) : null}
+          )}
         </div>
 
-        {/* Right Panel - Live Metric Cards for Step Down Test */}
-        {!isFullscreen && selectedTest?.id === 'step-down' && (
+        {/* Right Panel - Live Metric Cards for All Tests */}
+        {!isFullscreen && selectedTest && (
           <div className="w-1/3 flex flex-col gap-3 overflow-y-auto">
             <h3 className="text-lg font-semibold">Live Analysis</h3>
             
+            {/* Step Down Test Cards */}
+            {selectedTest?.id === 'step-down' && (
+              <>
             {/* Q-Angle Card */}
             <Card className={`transition-all duration-300 ${
               currentMetrics && currentMetrics.jointAngles.find(a => a.joint === 'left_knee' || a.joint === 'right_knee') 
@@ -2252,861 +2229,653 @@ export default function MovementAnalysis() {
                 </p>
               </CardContent>
             </Card>
-          </div>
-        )}
+              </>
+            )}
 
-        {/* Original Right Panel for other tests */}
-        {!isFullscreen && selectedTest?.id !== 'step-down' && (
-          <div className="w-1/4 flex flex-col gap-4">
-            <Tabs defaultValue="biomechanics" className="flex-1">
-              <TabsList className="grid w-full grid-cols-6">
-                <TabsTrigger value="biomechanics">Biomech</TabsTrigger>
-                <TabsTrigger value="metrics">Metrics</TabsTrigger>
-                <TabsTrigger value="framework">Framework</TabsTrigger>
-                <TabsTrigger value="test-results">Results</TabsTrigger>
-                <TabsTrigger value="impairments">Issues</TabsTrigger>
-                <TabsTrigger value="report">Report</TabsTrigger>
-              </TabsList>
-
-              {/* Biomechanical Analysis Tab */}
-              <TabsContent value="biomechanics" className="mt-4">
-                <Card className="h-full">
-                  <CardHeader>
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <Activity className="h-5 w-5" />
-                      Biomechanical Analysis
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <ScrollArea className="h-[500px]">
-                      {biomechanicalMetrics ? (
-                        <div className="space-y-4">
-                          {/* Knee Valgus Detection */}
-                          <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-900">
-                            <div className="flex items-center justify-between mb-3">
-                              <h3 className="font-semibold text-sm">Knee Valgus Detection</h3>
-                              <Badge variant={
-                                biomechanicalMetrics.kneeValgus.severity === 'normal' ? 'default' :
-                                biomechanicalMetrics.kneeValgus.severity === 'mild' ? 'secondary' :
-                                biomechanicalMetrics.kneeValgus.severity === 'moderate' ? 'outline' : 'secondary'
-                              } className={
-                                biomechanicalMetrics.kneeValgus.severity === 'severe' ? 'bg-purple-100 text-purple-800 border-purple-200' : ''
-                              }>
-                                {biomechanicalMetrics.kneeValgus.severity.toUpperCase()}
-                              </Badge>
-                            </div>
-                            
-                            {/* Angle Display */}
-                            <div className="grid grid-cols-2 gap-2 mb-3">
-                              <div className="bg-white dark:bg-gray-800 p-2 rounded">
-                                <div className="text-xs text-gray-500">Left Knee</div>
-                                <div className="text-lg font-bold">
-                                  {biomechanicalMetrics.kneeValgus.left.toFixed(1)}°
-                                </div>
-                              </div>
-                              <div className="bg-white dark:bg-gray-800 p-2 rounded">
-                                <div className="text-xs text-gray-500">Right Knee</div>
-                                <div className="text-lg font-bold">
-                                  {biomechanicalMetrics.kneeValgus.right.toFixed(1)}°
-                                </div>
-                              </div>
-                            </div>
-                            
-                            {/* Contributing Factors */}
-                            {biomechanicalMetrics.kneeValgus.contributingFactors.length > 0 && (
-                              <div className="space-y-1">
-                                <p className="text-xs font-medium text-gray-600">Contributing Factors:</p>
-                                {biomechanicalMetrics.kneeValgus.contributingFactors.map((factor, i) => (
-                                  <div key={i} className="flex items-center gap-2">
-                                    <AlertCircle className="h-3 w-3 text-blue-500" />
-                                    <span className="text-xs">{factor}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Hip Drop Analysis */}
-                          <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-900">
-                            <div className="flex items-center justify-between mb-2">
-                              <h3 className="font-semibold text-sm">Pelvic Stability</h3>
-                              <Badge variant={biomechanicalMetrics.hipDrop.side !== 'none' ? 'outline' : 'default'}>
-                                {biomechanicalMetrics.hipDrop.side === 'none' ? 'STABLE' : `DROP: ${biomechanicalMetrics.hipDrop.side.toUpperCase()}`}
-                              </Badge>
-                            </div>
-                            {biomechanicalMetrics.hipDrop.angle > 5 && (
-                              <p className="text-xs text-gray-600">
-                                Hip drop angle: {biomechanicalMetrics.hipDrop.angle.toFixed(1)}°
-                              </p>
-                            )}
-                          </div>
-
-                          {/* Movement Quality Score */}
-                          <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-900">
-                            <div className="flex items-center justify-between mb-2">
-                              <h3 className="font-semibold text-sm">Movement Quality</h3>
-                              <span className="text-lg font-bold">
-                                {biomechanicalMetrics.movementQuality.score}/100
-                              </span>
-                            </div>
-                            <Progress value={biomechanicalMetrics.movementQuality.score} className="mb-2" />
-                            {biomechanicalMetrics.movementQuality.issues.length > 0 && (
-                              <div className="space-y-1">
-                                {biomechanicalMetrics.movementQuality.issues.map((issue, i) => (
-                                  <p key={i} className="text-xs text-gray-600">• {issue}</p>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Treatment Plan */}
-                          {treatmentPlan && biomechanicalMetrics.kneeValgus.severity !== 'normal' && (
-                            <div className="p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20">
-                              <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
-                                <Sparkles className="h-4 w-4 text-blue-500" />
-                                AI Treatment Plan
-                              </h3>
-                              
-                              <div className="space-y-3">
-                                <div>
-                                  <p className="text-xs font-medium text-gray-600">Primary Focus:</p>
-                                  <p className="text-sm font-semibold">{treatmentPlan.primaryFocus}</p>
-                                </div>
-                                
-                                <div>
-                                  <p className="text-xs font-medium text-gray-600">Duration:</p>
-                                  <p className="text-sm">{treatmentPlan.estimatedDuration}</p>
-                                </div>
-                                
-                                <div>
-                                  <p className="text-xs font-medium text-gray-600 mb-2">Recommended Exercises:</p>
-                                  <div className="space-y-2">
-                                    {treatmentPlan.exercises.slice(0, 3).map((exercise, i) => (
-                                      <div key={i} className="bg-white dark:bg-gray-800 p-2 rounded">
-                                        <p className="text-sm font-medium">{exercise.name}</p>
-                                        <p className="text-xs text-gray-500">
-                                          {exercise.sets} sets × {exercise.reps} • {exercise.frequency}
-                                        </p>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                                
-                                <Button 
-                                  className="w-full" 
-                                  size="sm"
-                                  onClick={() => {
-                                    // Generate full treatment report
-                                    toast({
-                                      title: "Treatment Plan Generated",
-                                      description: "Full exercise program with videos has been created",
-                                    });
-                                  }}
-                                >
-                                  <FileText className="h-4 w-4 mr-2" />
-                                  View Full Treatment Plan
-                                </Button>
-                              </div>
-                            </div>
-                          )}
-
-
-                        </div>
-                      ) : (
-                        <div className="text-center py-8 text-gray-500">
-                          <Activity className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                          <p>Start recording to see biomechanical analysis</p>
-                        </div>
-                      )}
-                    </ScrollArea>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              <TabsContent value="metrics" className="mt-4">
-                <Card className="h-full">
-                  <CardHeader>
-                    <CardTitle className="text-lg">Real-Time Metrics</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <ScrollArea className="h-[400px]">
-                      {selectedTest?.id === 'running-gait' && runningMetrics ? (
-                        <div className="space-y-4">
-                          {/* Cadence */}
-                          <div>
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-sm font-medium">Cadence</span>
-                              <Badge variant={
-                                runningMetrics.cadence >= 170 && runningMetrics.cadence <= 180 ? 'default' :
-                                runningMetrics.cadence >= 160 && runningMetrics.cadence <= 190 ? 'secondary' : 'destructive'
-                              }>
-                                {runningMetrics.cadence} SPM
-                              </Badge>
-                            </div>
-                          </div>
-
-                          {/* Foot Strike */}
-                          <div>
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-sm font-medium">Foot Strike</span>
-                              <Badge variant={
-                                runningMetrics.footStrike === 'midfoot' ? 'default' :
-                                runningMetrics.footStrike === 'forefoot' ? 'secondary' : 'outline'
-                              }>
-                                {runningMetrics.footStrike.toUpperCase()}
-                              </Badge>
-                            </div>
-                          </div>
-
-                          <Separator />
-
-                          {/* Vertical Oscillation */}
-                          <div>
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-sm font-medium">Vertical Oscillation</span>
-                              <span className="text-sm">{runningMetrics.verticalOscillation.toFixed(1)}cm</span>
-                            </div>
-                            <Progress 
-                              value={Math.min(100, (10 - runningMetrics.verticalOscillation) * 10)} 
-                              className="h-2" 
-                            />
-                          </div>
-
-                          {/* Arm Swing Symmetry */}
-                          <div>
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-sm font-medium">Arm Swing Symmetry</span>
-                              <span className="text-sm">{runningMetrics.armSwingSymmetry.toFixed(0)}%</span>
-                            </div>
-                            <Progress value={runningMetrics.armSwingSymmetry} className="h-2" />
-                          </div>
-
-                          {/* Ground Contact Time */}
-                          <div>
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-sm font-medium">Ground Contact Time</span>
-                              <span className="text-sm">{runningMetrics.groundContactTime}ms</span>
-                            </div>
-                          </div>
-
-                          <Separator />
-
-                          {/* Running Mechanics */}
-                          <div>
-                            <h4 className="text-sm font-medium mb-3">Running Mechanics</h4>
-                            <div className="space-y-2">
-                              <div className="flex items-center justify-between text-xs">
-                                <span>Stride Length</span>
-                                <span>{runningMetrics.strideLength.toFixed(2)}x leg</span>
-                              </div>
-                              <div className="flex items-center justify-between text-xs">
-                                <span>Trunk Lean</span>
-                                <span className={Math.abs(runningMetrics.trunkLean) < 10 ? 'text-green-600' : 'text-orange-600'}>
-                                  {runningMetrics.trunkLean > 0 ? '+' : ''}{runningMetrics.trunkLean.toFixed(1)}°
-                                </span>
-                              </div>
-                              <div className="flex items-center justify-between text-xs">
-                                <span>Knee Flexion</span>
-                                <span>{runningMetrics.kneeFlexion}°</span>
-                              </div>
-                              <div className="flex items-center justify-between text-xs">
-                                <span>Hip Extension</span>
-                                <span>{runningMetrics.hipExtension}°</span>
-                              </div>
-                              <div className="flex items-center justify-between text-xs">
-                                <span>Pelvic Drop</span>
-                                <span className={runningMetrics.pelvicDrop < 5 ? 'text-green-600' : 'text-orange-600'}>
-                                  {runningMetrics.pelvicDrop.toFixed(1)}cm
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Issues */}
-                          <div>
-                            <h4 className="text-sm font-medium mb-2">Issues Detected</h4>
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-2 text-xs">
-                                {runningMetrics.overstriding ? (
-                                  <XCircle className="h-3 w-3 text-red-600" />
-                                ) : (
-                                  <CheckCircle className="h-3 w-3 text-green-600" />
-                                )}
-                                <span>Overstriding {runningMetrics.overstriding ? 'Detected' : 'Not Detected'}</span>
-                              </div>
-                              <div className="flex items-center gap-2 text-xs">
-                                {runningMetrics.crossoverGait ? (
-                                  <XCircle className="h-3 w-3 text-red-600" />
-                                ) : (
-                                  <CheckCircle className="h-3 w-3 text-green-600" />
-                                )}
-                                <span>Crossover Gait {runningMetrics.crossoverGait ? 'Present' : 'Normal'}</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ) : currentMetrics ? (
-                        <div className="space-y-4">
-                          {/* Movement Quality */}
-                          <div>
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-sm font-medium">Movement Quality</span>
-                              <Badge variant={
-                                currentMetrics.quality === 'excellent' ? 'default' :
-                                currentMetrics.quality === 'good' ? 'secondary' :
-                                currentMetrics.quality === 'fair' ? 'outline' : 'destructive'
-                              }>
-                                {currentMetrics.quality.toUpperCase()}
-                              </Badge>
-                            </div>
-                          </div>
-
-                          <Separator />
-
-                          {/* Symmetry */}
-                          <div>
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-sm font-medium">Symmetry</span>
-                              <span className="text-sm">{currentMetrics.symmetry.toFixed(1)}%</span>
-                            </div>
-                            <Progress value={currentMetrics.symmetry} className="h-2" />
-                          </div>
-
-                          {/* Stability */}
-                          <div>
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-sm font-medium">Stability</span>
-                              <span className="text-sm">{currentMetrics.stability.toFixed(1)}%</span>
-                            </div>
-                            <Progress value={currentMetrics.stability} className="h-2" />
-                          </div>
-
-                          <Separator />
-
-                          {/* Functional Problems */}
-                          <div>
-                            <h4 className="text-sm font-medium mb-3">Functional Issues Detected</h4>
-                            <div className="space-y-3">
-                              {/* Movement Compensations */}
-                              {currentMetrics.jointAngles.filter(angle => !angle.isWithinNormal).length > 0 && (
-                                <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-lg">
-                                  <div className="flex items-start gap-2">
-                                    <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5" />
-                                    <div className="flex-1">
-                                      <p className="text-xs font-medium text-red-900 dark:text-red-100">Movement Compensations</p>
-                                      <div className="mt-1 space-y-1">
-                                        {currentMetrics.jointAngles.filter(angle => !angle.isWithinNormal).map((angle, i) => {
-                                          const joint = angle.joint.replace('_', ' ');
-                                          let issue = '';
-                                          
-                                          // Generate functional interpretation based on joint and angle
-                                          if (angle.joint.includes('knee')) {
-                                            if (Math.abs(angle.angle - 180) > 20 && angle.angle < 160) {
-                                              issue = 'Excessive knee flexion - possible quad weakness';
-                                            } else if (angle.angle > 185) {
-                                              issue = 'Knee hyperextension - poor motor control';
-                                            }
-                                          } else if (angle.joint.includes('hip')) {
-                                            if (angle.angle < 70) {
-                                              issue = 'Limited hip flexion - mobility restriction';
-                                            } else if (angle.angle > 120) {
-                                              issue = 'Excessive hip flexion - compensation pattern';
-                                            }
-                                          } else if (angle.joint.includes('shoulder')) {
-                                            if (angle.angle < 150) {
-                                              issue = 'Restricted shoulder flexion - check scapular mobility';
-                                            }
-                                          } else if (angle.joint.includes('ankle')) {
-                                            if (angle.angle < 80) {
-                                              issue = 'Limited ankle dorsiflexion - calf tightness';
-                                            }
-                                          }
-                                          
-                                          if (issue) {
-                                            return (
-                                              <p key={i} className="text-xs text-red-700 dark:text-red-300">
-                                                • {issue}
-                                              </p>
-                                            );
-                                          }
-                                          return null;
-                                        })}
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-                              
-                              {/* Movement Quality Assessment */}
-                              <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
-                                <div className="flex items-start gap-2">
-                                  <Info className="h-4 w-4 text-blue-600 mt-0.5" />
-                                  <div className="flex-1">
-                                    <p className="text-xs font-medium text-blue-900 dark:text-blue-100">Movement Quality</p>
-                                    <div className="mt-2 space-y-1">
-                                      <div className="flex justify-between text-xs">
-                                        <span>Overall Quality:</span>
-                                        <Badge variant={currentMetrics.quality > 7 ? 'default' : currentMetrics.quality > 4 ? 'secondary' : 'destructive'} className="text-xs">
-                                          {currentMetrics.quality > 7 ? 'Good' : currentMetrics.quality > 4 ? 'Fair' : 'Poor'} ({currentMetrics.quality}/10)
-                                        </Badge>
-                                      </div>
-                                      {currentMetrics.symmetry < 80 && (
-                                        <p className="text-xs text-blue-700 dark:text-blue-300">
-                                          • Asymmetry detected ({(100 - currentMetrics.symmetry).toFixed(0)}% difference) - assess for injury
-                                        </p>
-                                      )}
-                                      {currentMetrics.stability < 70 && (
-                                        <p className="text-xs text-blue-700 dark:text-blue-300">
-                                          • Poor stability - balance training recommended
-                                        </p>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                              
-                              {/* Clinical Recommendations */}
-                              <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg">
-                                <div className="flex items-start gap-2">
-                                  <Sparkles className="h-4 w-4 text-green-600 mt-0.5" />
-                                  <div className="flex-1">
-                                    <p className="text-xs font-medium text-green-900 dark:text-green-100">Recommended Interventions</p>
-                                    <div className="mt-1 space-y-1">
-                                      {currentMetrics.symmetry < 80 && (
-                                        <p className="text-xs text-green-700 dark:text-green-300">
-                                          • Focus on unilateral exercises to address asymmetry
-                                        </p>
-                                      )}
-                                      {currentMetrics.stability < 70 && (
-                                        <p className="text-xs text-green-700 dark:text-green-300">
-                                          • Incorporate proprioceptive training
-                                        </p>
-                                      )}
-                                      {currentMetrics.jointAngles.some(a => a.joint.includes('knee') && !a.isWithinNormal) && (
-                                        <p className="text-xs text-green-700 dark:text-green-300">
-                                          • Strengthen quadriceps and hip abductors
-                                        </p>
-                                      )}
-                                      {currentMetrics.jointAngles.some(a => a.joint.includes('hip') && !a.isWithinNormal) && (
-                                        <p className="text-xs text-green-700 dark:text-green-300">
-                                          • Improve hip mobility and core stability
-                                        </p>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="text-center text-gray-500 py-8">
-                          <Activity className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                          <p>No movement detected</p>
-                          <p className="text-xs mt-1">Position yourself in front of the camera</p>
-                        </div>
-                      )}
-                    </ScrollArea>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              <TabsContent value="framework" className="mt-4">
-                <FrameworkAnalysisPanel 
-                  landmarks={currentPoseLandmarks}
-                  isAnalyzing={isRecording && !isPaused}
-                  selectedTest={selectedTest}
-                />
-              </TabsContent>
-
-              <TabsContent value="test-results" className="mt-4">
-                <Card className="h-full">
-                  <CardHeader>
-                    <CardTitle className="text-lg">Specialized Test Results</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <ScrollArea className="h-[400px]">
-                      {specializedTestResult ? (
-                        <div className="space-y-4">
-                          {/* Test Name and Score */}
-                          <div className="bg-gray-50 p-4 rounded-lg">
-                            <div className="flex items-center justify-between mb-2">
-                              <h3 className="font-semibold">{selectedTest?.name || 'Test'}</h3>
-                              <Badge variant={
-                                specializedTestResult.score >= 80 ? 'default' :
-                                specializedTestResult.score >= 60 ? 'secondary' : 'destructive'
-                              }>
-                                Score: {specializedTestResult.score.toFixed(0)}%
-                              </Badge>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm">Risk Level:</span>
-                              <Badge variant={
-                                specializedTestResult.risk === 'low' ? 'outline' :
-                                specializedTestResult.risk === 'moderate' ? 'secondary' : 'destructive'
-                              }>
-                                {specializedTestResult.risk.toUpperCase()}
-                              </Badge>
-                            </div>
-                          </div>
-
-                          {/* Test-Specific Metrics */}
-                          {specializedMetrics && (
-                            <div>
-                              <h4 className="text-sm font-medium mb-3">Test Metrics</h4>
-                              <div className="space-y-2 text-xs">
-                                {selectedTest?.id === 'walking-gait' && 'stepLengthAsymmetry' in specializedMetrics && (
-                                  <>
-                                    <div className="flex justify-between">
-                                      <span>Step Length Asymmetry</span>
-                                      <span className={specializedMetrics.stepLengthAsymmetry < 10 ? 'text-green-600' : 'text-orange-600'}>
-                                        {specializedMetrics.stepLengthAsymmetry?.toFixed(1) || '0'}%
-                                      </span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <span>Stance Time</span>
-                                      <span>{specializedMetrics.stanceTime?.left?.toFixed(0) || '0'}ms / {specializedMetrics.stanceTime?.right?.toFixed(0) || '0'}ms</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <span>Hip Drop</span>
-                                      <span className={Math.max(specializedMetrics.hipDrop?.left || 0, specializedMetrics.hipDrop?.right || 0) < 5 ? 'text-green-600' : 'text-orange-600'}>
-                                        L: {specializedMetrics.hipDrop?.left?.toFixed(1) || '0'}° / R: {specializedMetrics.hipDrop?.right?.toFixed(1) || '0'}°
-                                      </span>
-                                    </div>
-                                  </>
-                                )}
-                                {selectedTest?.id === 'single-leg-squat' && 'kneeValgusAngle' in specializedMetrics && (
-                                  <>
-                                    <div className="flex justify-between">
-                                      <span>Knee Valgus Angle</span>
-                                      <span className={Math.max(Math.abs(specializedMetrics.kneeValgusAngle?.left || 0), Math.abs(specializedMetrics.kneeValgusAngle?.right || 0)) < 10 ? 'text-green-600' : 'text-red-600'}>
-                                        L: {specializedMetrics.kneeValgusAngle?.left?.toFixed(1) || '0'}° / R: {specializedMetrics.kneeValgusAngle?.right?.toFixed(1) || '0'}°
-                                      </span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <span>Trunk Lateral Flexion</span>
-                                      <span>{specializedMetrics.trunkLateralFlexion?.toFixed(1) || '0'}°</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <span>Balance Score</span>
-                                      <span>{specializedMetrics.balanceScore?.toFixed(0) || '0'}%</span>
-                                    </div>
-                                  </>
-                                )}
-                                {selectedTest?.id === 'shoulder-flexion' && 'maxFlexionROM' in specializedMetrics && (
-                                  <>
-                                    <div className="flex justify-between">
-                                      <span>Max Flexion ROM</span>
-                                      <span className={Math.min(specializedMetrics.maxFlexionROM?.left || 0, specializedMetrics.maxFlexionROM?.right || 0) > 160 ? 'text-green-600' : 'text-orange-600'}>
-                                        L: {specializedMetrics.maxFlexionROM?.left?.toFixed(0) || '0'}° / R: {specializedMetrics.maxFlexionROM?.right?.toFixed(0) || '0'}°
-                                      </span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <span>Scapular Dyskinesis</span>
-                                      <span className={specializedMetrics.hasScapularDyskinesis ? 'text-red-600' : 'text-green-600'}>
-                                        {specializedMetrics.hasScapularDyskinesis ? 'Present' : 'Absent'}
-                                      </span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <span>Movement Quality</span>
-                                      <span>{specializedMetrics.movementQuality || '0'}%</span>
-                                    </div>
-                                  </>
-                                )}
-                                {selectedTest?.id === 'running-gait' && specializedMetrics && 'cadenceOptimal' in specializedMetrics && (
-                                  <>
-                                    <div className="flex justify-between">
-                                      <span>Cadence Optimal</span>
-                                      <span className={specializedMetrics.cadenceOptimal ? 'text-green-600' : 'text-orange-600'}>
-                                        {specializedMetrics.cadenceOptimal ? 'Yes' : 'No'}
-                                      </span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <span>Overstriding</span>
-                                      <span className={!specializedMetrics.overstride ? 'text-green-600' : 'text-red-600'}>
-                                        {specializedMetrics.overstride ? 'Present' : 'Absent'}
-                                      </span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <span>Hip Drop</span>
-                                      <span>{specializedMetrics.hipDropMagnitude?.toFixed(1) || '0'}cm</span>
-                                    </div>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Recommendations */}
-                          {specializedTestResult.recommendations && specializedTestResult.recommendations.length > 0 && (
-                            <div>
-                              <h4 className="text-sm font-medium mb-3">Clinical Recommendations</h4>
-                              <div className="space-y-2">
-                                {specializedTestResult.recommendations.map((rec, i) => (
-                                  <div key={i} className="flex items-start gap-2">
-                                    <CheckCircle className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
-                                    <p className="text-xs text-gray-700">{rec}</p>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Key Points */}
-                          <div>
-                            <h4 className="text-sm font-medium mb-3">Assessment Focus</h4>
-                            <div className="space-y-1">
-                              {selectedTest?.keyPoints?.map((point, i) => (
-                                <div key={i} className="flex items-start gap-2">
-                                  <div className="w-1 h-1 bg-gray-400 rounded-full mt-1.5 flex-shrink-0" />
-                                  <p className="text-xs text-gray-600">{point}</p>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="text-center text-gray-500 py-8">
-                          <Activity className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                          <p>No specialized test results yet</p>
-                          <p className="text-xs mt-1">Perform the selected assessment to see detailed results</p>
-                        </div>
-                      )}
-                    </ScrollArea>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              <TabsContent value="impairments" className="mt-4">
-                <Card className="h-full">
-                  <CardHeader>
-                    <CardTitle className="text-lg">Functional Problems & Clinical Issues</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <ScrollArea className="h-[400px]">
-                      {(impairments.length > 0 || currentMetrics || biomechanicalMetrics) ? (
-                        <div className="space-y-4">
-                          {/* Primary Movement Problems */}
-                          {biomechanicalMetrics && (
-                            <div>
-                              <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
-                                <AlertTriangle className="h-4 w-4 text-red-500" />
-                                Primary Movement Dysfunctions
-                              </h4>
-                              <div className="space-y-2">
-                                {biomechanicalMetrics.kneeValgus.severity !== 'normal' && (
-                                  <Alert className="border-red-200 bg-red-50">
-                                    <AlertCircle className="h-4 w-4 text-red-600" />
-                                    <AlertDescription className="text-sm">
-                                      <strong>Dynamic Knee Valgus ({biomechanicalMetrics.kneeValgus.severity})</strong>
-                                      <p className="text-xs mt-1">High ACL injury risk. Strengthen hip abductors and external rotators.</p>
-                                    </AlertDescription>
-                                  </Alert>
-                                )}
-                                {biomechanicalMetrics.hipDrop.side !== 'none' && (
-                                  <Alert className="border-orange-200 bg-orange-50">
-                                    <AlertTriangle className="h-4 w-4 text-orange-600" />
-                                    <AlertDescription className="text-sm">
-                                      <strong>Trendelenburg Sign ({biomechanicalMetrics.hipDrop.side} side)</strong>
-                                      <p className="text-xs mt-1">Hip abductor weakness. Focus on gluteus medius strengthening.</p>
-                                    </AlertDescription>
-                                  </Alert>
-                                )}
-                                {biomechanicalMetrics.forwardLean > 45 && (
-                                  <Alert className="border-yellow-200 bg-yellow-50">
-                                    <AlertCircle className="h-4 w-4 text-yellow-600" />
-                                    <AlertDescription className="text-sm">
-                                      <strong>Excessive Forward Trunk Lean</strong>
-                                      <p className="text-xs mt-1">Limited ankle dorsiflexion or weak posterior chain. Assess ankle mobility.</p>
-                                    </AlertDescription>
-                                  </Alert>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                          
-                          {/* Functional Limitations */}
-                          {currentMetrics && (
-                            <div>
-                              <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
-                                <Info className="h-4 w-4 text-blue-500" />
-                                Functional Limitations
-                              </h4>
-                              <div className="space-y-2">
-                                {currentMetrics.symmetry < 80 && (
-                                  <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-                                    <p className="text-sm font-medium text-blue-900">Movement Asymmetry</p>
-                                    <p className="text-xs text-blue-700 mt-1">
-                                      {(100 - currentMetrics.symmetry).toFixed(0)}% difference between sides - risk of compensation injury
-                                    </p>
-                                    <p className="text-xs text-blue-600 mt-1">
-                                      → Perform unilateral exercises, assess for previous injury
-                                    </p>
-                                  </div>
-                                )}
-                                {currentMetrics.stability < 70 && (
-                                  <div className="p-3 bg-purple-50 rounded-lg border border-purple-200">
-                                    <p className="text-sm font-medium text-purple-900">Balance Deficit</p>
-                                    <p className="text-xs text-purple-700 mt-1">
-                                      Poor postural control - increased fall risk
-                                    </p>
-                                    <p className="text-xs text-purple-600 mt-1">
-                                      → Add proprioceptive training, single-leg exercises
-                                    </p>
-                                  </div>
-                                )}
-                                {currentMetrics.quality < 5 && (
-                                  <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                                    <p className="text-sm font-medium text-gray-900">Poor Movement Quality</p>
-                                    <p className="text-xs text-gray-700 mt-1">
-                                      Inefficient movement patterns detected
-                                    </p>
-                                    <p className="text-xs text-gray-600 mt-1">
-                                      → Focus on movement re-education and motor control
-                                    </p>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                          
-                          {/* Clinical Red Flags */}
-                          {impairments.length > 0 && (
-                            <div>
-                              <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
-                                <XCircle className="h-4 w-4 text-red-500" />
-                                Clinical Red Flags
-                              </h4>
-                              <div className="space-y-2">
-                                {impairments.map((impairment, i) => (
-                                  <Alert key={i} className="border-red-200 bg-red-50">
-                                    <AlertTriangle className="h-4 w-4 text-red-600" />
-                                    <AlertDescription className="text-sm">
-                                      {impairment}
-                                    </AlertDescription>
-                                  </Alert>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                          
-                          {/* Treatment Recommendations */}
-                          <div>
-                            <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
-                              <Sparkles className="h-4 w-4 text-green-500" />
-                              Treatment Recommendations
-                            </h4>
-                            <div className="space-y-2">
-                              {(selectedTest?.id === 'running-gait' 
-                                ? generateRunningRecommendations(impairments)
-                                : generateRecommendations(impairments)
-                              ).map((rec, i) => (
-                                <div key={i} className="flex items-start gap-2 p-2 bg-green-50 rounded-lg">
-                                  <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
-                                  <p className="text-xs text-gray-700">{rec}</p>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="text-center text-gray-500 py-8">
-                          <CheckCircle className="h-12 w-12 mx-auto mb-3 text-green-500 opacity-50" />
-                          <p>No impairments detected</p>
-                          <p className="text-xs mt-1">Movement patterns within normal limits</p>
-                        </div>
-                      )}
-                    </ScrollArea>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              <TabsContent value="report" className="mt-4">
-                <Card className="h-full">
-                  <CardHeader>
-                    <CardTitle className="text-lg">Session Report</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      {/* Patient Information */}
-                      <div>
-                        <label className="text-sm font-medium">Patient Name</label>
-                        <input
-                          type="text"
-                          className="w-full mt-1 px-3 py-2 border rounded-md text-sm"
-                          placeholder="Enter patient name"
-                          value={patientInfo.name}
-                          onChange={(e) => setPatientInfo({...patientInfo, name: e.target.value})}
-                        />
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="text-sm font-medium">Age</label>
-                          <input
-                            type="number"
-                            className="w-full mt-1 px-3 py-2 border rounded-md text-sm"
-                            placeholder="Age"
-                            value={patientInfo.age}
-                            onChange={(e) => setPatientInfo({...patientInfo, age: e.target.value})}
-                          />
-                        </div>
-                        <div>
-                          <label className="text-sm font-medium">Gender</label>
-                          <Select
-                            value={patientInfo.gender}
-                            onValueChange={(value) => setPatientInfo({...patientInfo, gender: value})}
-                          >
-                            <SelectTrigger className="mt-1">
-                              <SelectValue placeholder="Select" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="male">Male</SelectItem>
-                              <SelectItem value="female">Female</SelectItem>
-                              <SelectItem value="other">Other</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                      
-                      <div>
-                        <label className="text-sm font-medium">Chief Complaint</label>
-                        <textarea
-                          className="w-full mt-1 px-3 py-2 border rounded-md text-sm"
-                          rows={3}
-                          placeholder="Describe the main complaint"
-                          value={patientInfo.complaint}
-                          onChange={(e) => setPatientInfo({...patientInfo, complaint: e.target.value})}
-                        />
-                      </div>
-                      
-                      <Separator />
-                      
-                      {/* Action Buttons */}
-                      <div className="space-y-2">
-                        <Button 
-                          onClick={saveSession} 
-                          className="w-full"
-                          disabled={recordedData.length === 0 || !patientInfo.name}
-                        >
-                          <Save className="h-4 w-4 mr-2" />
-                          Save Session
-                        </Button>
-                        <Button 
-                          onClick={generateReport} 
-                          variant="outline" 
-                          className="w-full"
-                          disabled={recordedData.length === 0}
-                        >
-                          <Download className="h-4 w-4 mr-2" />
-                          Generate Report
-                        </Button>
-                      </div>
+            {/* Single Leg Squat Cards */}
+            {selectedTest?.id === 'single-leg-squat' && (
+              <>
+                {/* Pelvic Control Card */}
+                <Card className={`transition-all duration-300 ${
+                  biomechanicalMetrics?.hipDrop?.side !== 'none' ? 'border-red-400 border-2 animate-pulse' : ''
+                }`}>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-semibold">PELVIC CONTROL</span>
+                      <Badge variant={biomechanicalMetrics?.hipDrop?.side === 'none' ? 'default' : 'destructive'}>
+                        {biomechanicalMetrics?.hipDrop?.side === 'none' ? '✓ STABLE' : '✗ DROPPED'}
+                      </Badge>
                     </div>
+                    <div className="text-center text-2xl font-bold mb-1">
+                      {biomechanicalMetrics?.hipDrop?.angle ? biomechanicalMetrics.hipDrop.angle.toFixed(1) : '0.0'}°
+                    </div>
+                    <p className="text-xs text-gray-600">
+                      {biomechanicalMetrics?.hipDrop?.side !== 'none' ? 'Glute med weakness' : 'Good control'}
+                    </p>
                   </CardContent>
                 </Card>
-              </TabsContent>
-            </Tabs>
+
+                {/* Knee Alignment Card */}
+                <Card className={`transition-all duration-300 ${
+                  biomechanicalMetrics?.kneeValgus?.severity !== 'normal' ? 'border-orange-400 border-2' : ''
+                }`}>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-semibold">KNEE ALIGNMENT</span>
+                      <Badge variant={
+                        biomechanicalMetrics?.kneeValgus?.severity === 'normal' ? 'default' : 
+                        biomechanicalMetrics?.kneeValgus?.severity === 'mild' ? 'secondary' : 'destructive'
+                      }>
+                        {biomechanicalMetrics?.kneeValgus?.detected ? '✗ VALGUS' : '✓ ALIGNED'}
+                      </Badge>
+                    </div>
+                    <Progress 
+                      value={biomechanicalMetrics?.kneeValgus ? Math.max(0, 100 - (Math.max(biomechanicalMetrics.kneeValgus.left || 0, biomechanicalMetrics.kneeValgus.right || 0) * 2)) : 100} 
+                      className="h-2 mb-2" 
+                    />
+                    <p className="text-xs text-gray-600">
+                      {biomechanicalMetrics?.kneeValgus?.detected ? 'ACL risk increased' : 'Safe pattern'}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Balance Stability Card */}
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-semibold">BALANCE STABILITY</span>
+                      <Badge variant="default">TRACKING</Badge>
+                    </div>
+                    <div className="text-center text-2xl font-bold mb-1">
+                      {currentMetrics?.balance?.stability ? (currentMetrics.balance.stability * 100).toFixed(0) : '0'}%
+                    </div>
+                    <p className="text-xs text-gray-600">Center of mass deviation</p>
+                  </CardContent>
+                </Card>
+
+                {/* Hip Strength Card */}
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-semibold">HIP STRENGTH</span>
+                      <Badge variant={biomechanicalMetrics?.hipDrop?.side === 'none' ? 'default' : 'secondary'}>
+                        {biomechanicalMetrics?.hipDrop?.side === 'none' ? '✓ ADEQUATE' : '⚠ DEFICIT'}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-gray-600">
+                      {biomechanicalMetrics?.hipDrop?.side !== 'none' ? 'Strengthen glute med' : 'Maintain strength'}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Overall Assessment */}
+                <Card className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20">
+                  <CardContent className="p-4">
+                    <h4 className="text-sm font-semibold mb-2">Overall Stability</h4>
+                    <p className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Primary Focus: {
+                        biomechanicalMetrics?.hipDrop?.side !== 'none' ? 'Hip strengthening' :
+                        biomechanicalMetrics?.kneeValgus?.detected ? 'Knee control' : 'Good form'
+                      }
+                    </p>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+
+            {/* Overhead Squat Cards */}
+            {selectedTest?.id === 'overhead-squat' && (
+              <>
+                {/* Shoulder Mobility Card */}
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-semibold">SHOULDER MOBILITY</span>
+                      <Badge variant={currentMetrics?.shoulderFlexion > 160 ? 'default' : 'secondary'}>
+                        {currentMetrics?.shoulderFlexion > 160 ? '✓ FULL' : '⚠ LIMITED'}
+                      </Badge>
+                    </div>
+                    <div className="text-center text-2xl font-bold mb-1">
+                      {currentMetrics?.shoulderFlexion?.toFixed(0) || '0'}°
+                    </div>
+                    <p className="text-xs text-gray-600">
+                      {currentMetrics?.shoulderFlexion < 160 ? 'Arms falling forward' : 'Good overhead position'}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Hip Mobility Card */}
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-semibold">HIP MOBILITY</span>
+                      <Badge variant={currentMetrics?.squatDepth > 90 ? 'default' : 'secondary'}>
+                        {currentMetrics?.squatDepth > 90 ? '✓ FULL' : '⚠ LIMITED'}
+                      </Badge>
+                    </div>
+                    <div className="text-center text-2xl font-bold mb-1">
+                      {currentMetrics?.squatDepth?.toFixed(0) || '0'}°
+                    </div>
+                    <p className="text-xs text-gray-600">
+                      {currentMetrics?.squatDepth < 90 ? 'Improve hip flexibility' : 'Good depth achieved'}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Knee Tracking Card */}
+                <Card className={`transition-all duration-300 ${
+                  biomechanicalMetrics?.kneeValgus?.detected ? 'border-yellow-400 border-2' : ''
+                }`}>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-semibold">KNEE TRACKING</span>
+                      <Badge variant={biomechanicalMetrics?.kneeValgus?.detected ? 'secondary' : 'default'}>
+                        {biomechanicalMetrics?.kneeValgus?.detected ? '⚠ VALGUS' : '✓ ALIGNED'}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-gray-600">
+                      {biomechanicalMetrics?.kneeValgus?.detected ? 'Knees caving inward' : 'Good knee position'}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Ankle Flexibility Card */}
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-semibold">ANKLE FLEXIBILITY</span>
+                      <Badge variant={currentMetrics?.heelLift ? 'secondary' : 'default'}>
+                        {currentMetrics?.heelLift ? '⚠ HEELS UP' : '✓ HEELS DOWN'}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-gray-600">
+                      {currentMetrics?.heelLift ? 'Limited dorsiflexion' : 'Good ankle mobility'}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Overall Pattern Card */}
+                <Card className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20">
+                  <CardContent className="p-4">
+                    <h4 className="text-sm font-semibold mb-2">Movement Quality</h4>
+                    <p className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Key Limitation: {
+                        currentMetrics?.shoulderFlexion < 160 ? 'Shoulder mobility' :
+                        currentMetrics?.squatDepth < 90 ? 'Hip mobility' :
+                        currentMetrics?.heelLift ? 'Ankle flexibility' : 'Good pattern'
+                      }
+                    </p>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+
+            {/* Gait Analysis Cards */}
+            {selectedTest?.id === 'gait-analysis' && (
+              <>
+                {/* Cadence Card */}
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-semibold">CADENCE</span>
+                      <Badge variant="default">TRACKING</Badge>
+                    </div>
+                    <div className="text-center text-2xl font-bold mb-1">
+                      {currentMetrics?.gait?.cadence?.toFixed(0) || '0'}
+                      <span className="text-sm font-normal"> steps/min</span>
+                    </div>
+                    <p className="text-xs text-gray-600">
+                      {currentMetrics?.gait?.cadence > 170 ? 'Fast pace' : 
+                       currentMetrics?.gait?.cadence > 150 ? 'Normal pace' : 'Slow pace'}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Stride Symmetry Card */}
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-semibold">STRIDE SYMMETRY</span>
+                      <Badge variant={currentMetrics?.gait?.symmetry > 0.9 ? 'default' : 'secondary'}>
+                        {currentMetrics?.gait?.symmetry > 0.9 ? '✓ SYMMETRIC' : '⚠ ASYMMETRIC'}
+                      </Badge>
+                    </div>
+                    <Progress 
+                      value={(currentMetrics?.gait?.symmetry || 0) * 100} 
+                      className="h-2 mb-2" 
+                    />
+                    <p className="text-xs text-gray-600">
+                      L/R ratio: {(currentMetrics?.gait?.symmetry || 0).toFixed(2)}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Arm Swing Card */}
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-semibold">ARM SWING</span>
+                      <Badge variant="default">ANALYZING</Badge>
+                    </div>
+                    <p className="text-xs text-gray-600">
+                      {currentMetrics?.armSwing?.symmetric ? 'Coordinated pattern' : 'Check coordination'}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Trunk Rotation Card */}
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-semibold">TRUNK ROTATION</span>
+                      <Badge variant={biomechanicalMetrics?.forwardLean < 5 ? 'default' : 'secondary'}>
+                        {biomechanicalMetrics?.forwardLean < 5 ? '✓ NORMAL' : '⚠ EXCESSIVE'}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-gray-600">
+                      {biomechanicalMetrics?.forwardLean > 5 ? 'Reduced efficiency' : 'Good mechanics'}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Overall Efficiency Card */}
+                <Card className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20">
+                  <CardContent className="p-4">
+                    <h4 className="text-sm font-semibold mb-2">Gait Efficiency</h4>
+                    <p className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Primary Issue: {
+                        currentMetrics?.gait?.symmetry < 0.9 ? 'Asymmetry detected' :
+                        biomechanicalMetrics?.forwardLean > 5 ? 'Excessive trunk motion' : 'Normal pattern'
+                      }
+                    </p>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+
+            {/* Lunge Assessment Cards */}
+            {selectedTest?.id === 'lunge-assessment' && (
+              <>
+                {/* Hip Control Card */}
+                <Card className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20">
+                  <CardContent className="p-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <h4 className="text-sm font-semibold">Hip Control</h4>
+                      <Badge variant={currentMetrics?.lungeMetrics?.hipDrop < 5 ? 'default' : 'secondary'}>
+                        {currentMetrics?.lungeMetrics?.hipDrop < 5 ? '✓ STABLE' : '⚠ DROPPING'}
+                      </Badge>
+                    </div>
+                    <div className="text-2xl font-bold">{currentMetrics?.lungeMetrics?.hipDrop?.toFixed(1) || 0}°</div>
+                    <p className="text-xs text-gray-600">
+                      {currentMetrics?.lungeMetrics?.hipDrop > 5 ? 'Weak hip stabilizers' : 'Good lateral control'}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Knee Tracking Card */}
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <h4 className="text-sm font-semibold">Knee Alignment</h4>
+                      <Badge variant={currentMetrics?.lungeMetrics?.kneeValgus < 10 ? 'default' : 'secondary'}>
+                        {currentMetrics?.lungeMetrics?.kneeValgus < 10 ? '✓ ALIGNED' : '⚠ VALGUS'}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-gray-600">
+                      {currentMetrics?.lungeMetrics?.kneeValgus > 10 ? 'Inward collapse detected' : 'Proper tracking'}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Forward Lean Card */}
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <h4 className="text-sm font-semibold">Trunk Position</h4>
+                      <Badge variant={currentMetrics?.lungeMetrics?.trunkLean < 15 ? 'default' : 'secondary'}>
+                        {currentMetrics?.lungeMetrics?.trunkLean < 15 ? '✓ UPRIGHT' : '⚠ FORWARD'}
+                      </Badge>
+                    </div>
+                    <div className="text-2xl font-bold">{currentMetrics?.lungeMetrics?.trunkLean?.toFixed(0) || 0}°</div>
+                    <p className="text-xs text-gray-600">
+                      {currentMetrics?.lungeMetrics?.trunkLean > 15 ? 'Excessive forward lean' : 'Good posture'}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Depth Quality Card */}
+                <Card>
+                  <CardContent className="p-4">
+                    <h4 className="text-sm font-semibold mb-2">Lunge Depth</h4>
+                    <Progress value={Math.min(100, (currentMetrics?.lungeMetrics?.depth || 0) * 100 / 90)} className="h-2 mb-2" />
+                    <p className="text-xs text-gray-600">
+                      {currentMetrics?.lungeMetrics?.depth > 80 ? 'Good depth' : 'Increase range'}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Overall Performance Card */}
+                <Card className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20">
+                  <CardContent className="p-4">
+                    <h4 className="text-sm font-semibold mb-2">Lunge Quality</h4>
+                    <p className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Primary Issue: {
+                        currentMetrics?.lungeMetrics?.hipDrop > 5 ? 'Hip weakness' :
+                        currentMetrics?.lungeMetrics?.kneeValgus > 10 ? 'Knee control' :
+                        currentMetrics?.lungeMetrics?.trunkLean > 15 ? 'Forward lean' : 'Good form'
+                      }
+                    </p>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+
+            {/* Standing Balance Cards */}
+            {selectedTest?.id === 'standing-balance' && (
+              <>
+                {/* Sway Velocity Card */}
+                <Card className="bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20">
+                  <CardContent className="p-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <h4 className="text-sm font-semibold">Postural Sway</h4>
+                      <Badge variant={currentMetrics?.balance?.swayVelocity < 2 ? 'default' : 'secondary'}>
+                        {currentMetrics?.balance?.swayVelocity < 2 ? '✓ STABLE' : '⚠ UNSTABLE'}
+                      </Badge>
+                    </div>
+                    <div className="text-2xl font-bold">{currentMetrics?.balance?.swayVelocity?.toFixed(1) || 0} cm/s</div>
+                    <p className="text-xs text-gray-600">
+                      {currentMetrics?.balance?.swayVelocity > 2 ? 'Increased fall risk' : 'Good stability'}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Center of Mass Card */}
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <h4 className="text-sm font-semibold">COM Deviation</h4>
+                      <Badge variant={currentMetrics?.balance?.comDeviation < 5 ? 'default' : 'secondary'}>
+                        {currentMetrics?.balance?.comDeviation < 5 ? '✓ CENTERED' : '⚠ SHIFTED'}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-gray-600">
+                      {currentMetrics?.balance?.comDeviation > 5 ? 'Weight shift detected' : 'Well centered'}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Time to Stabilization Card */}
+                <Card>
+                  <CardContent className="p-4">
+                    <h4 className="text-sm font-semibold mb-2">Stabilization Time</h4>
+                    <div className="text-2xl font-bold">{currentMetrics?.balance?.timeToStabilize?.toFixed(1) || 0}s</div>
+                    <p className="text-xs text-gray-600">
+                      {currentMetrics?.balance?.timeToStabilize > 3 ? 'Slow recovery' : 'Quick stabilization'}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Balance Strategy Card */}
+                <Card>
+                  <CardContent className="p-4">
+                    <h4 className="text-sm font-semibold mb-2">Balance Strategy</h4>
+                    <p className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      {currentMetrics?.balance?.strategy || 'Ankle strategy'}
+                    </p>
+                    <p className="text-xs text-gray-600 mt-1">
+                      {currentMetrics?.balance?.strategy === 'Hip strategy' ? 'Compensatory pattern' : 'Normal response'}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Overall Balance Card */}
+                <Card className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20">
+                  <CardContent className="p-4">
+                    <h4 className="text-sm font-semibold mb-2">Balance Control</h4>
+                    <p className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Primary Issue: {
+                        currentMetrics?.balance?.swayVelocity > 2 ? 'Excessive sway' :
+                        currentMetrics?.balance?.comDeviation > 5 ? 'COM shift' :
+                        currentMetrics?.balance?.timeToStabilize > 3 ? 'Slow recovery' : 'Good balance'
+                      }
+                    </p>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+
+            {/* Drop Jump Cards */}
+            {selectedTest?.id === 'drop-jump' && (
+              <>
+                {/* Landing Impact Card */}
+                <Card className="bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20">
+                  <CardContent className="p-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <h4 className="text-sm font-semibold">Landing Force</h4>
+                      <Badge variant={currentMetrics?.dropJump?.landingForce < 3 ? 'default' : 'destructive'}>
+                        {currentMetrics?.dropJump?.landingForce < 3 ? '✓ SOFT' : '⚠ HARD'}
+                      </Badge>
+                    </div>
+                    <div className="text-2xl font-bold">{currentMetrics?.dropJump?.landingForce?.toFixed(1) || 0}x BW</div>
+                    <p className="text-xs text-gray-600">
+                      {currentMetrics?.dropJump?.landingForce > 3 ? 'High injury risk' : 'Good absorption'}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Knee Flexion Card */}
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <h4 className="text-sm font-semibold">Knee Flexion</h4>
+                      <Badge variant={currentMetrics?.dropJump?.kneeFlexion > 60 ? 'default' : 'secondary'}>
+                        {currentMetrics?.dropJump?.kneeFlexion > 60 ? '✓ GOOD' : '⚠ STIFF'}
+                      </Badge>
+                    </div>
+                    <div className="text-2xl font-bold">{currentMetrics?.dropJump?.kneeFlexion?.toFixed(0) || 0}°</div>
+                    <p className="text-xs text-gray-600">
+                      {currentMetrics?.dropJump?.kneeFlexion < 60 ? 'Poor shock absorption' : 'Good cushioning'}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Valgus Control Card */}
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <h4 className="text-sm font-semibold">Knee Control</h4>
+                      <Badge variant={currentMetrics?.dropJump?.valgusAngle < 10 ? 'default' : 'secondary'}>
+                        {currentMetrics?.dropJump?.valgusAngle < 10 ? '✓ STABLE' : '⚠ VALGUS'}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-gray-600">
+                      {currentMetrics?.dropJump?.valgusAngle > 10 ? 'ACL injury risk' : 'Safe landing pattern'}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Reactive Strength Card */}
+                <Card>
+                  <CardContent className="p-4">
+                    <h4 className="text-sm font-semibold mb-2">Reactive Strength</h4>
+                    <div className="text-2xl font-bold">{currentMetrics?.dropJump?.rsi?.toFixed(2) || 0}</div>
+                    <p className="text-xs text-gray-600">
+                      {currentMetrics?.dropJump?.rsi > 1.5 ? 'Excellent power' : 'Build strength'}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Overall Performance Card */}
+                <Card className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20">
+                  <CardContent className="p-4">
+                    <h4 className="text-sm font-semibold mb-2">Jump Quality</h4>
+                    <p className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Primary Issue: {
+                        currentMetrics?.dropJump?.landingForce > 3 ? 'Hard landing' :
+                        currentMetrics?.dropJump?.valgusAngle > 10 ? 'Knee collapse' :
+                        currentMetrics?.dropJump?.kneeFlexion < 60 ? 'Stiff landing' : 'Good technique'
+                      }
+                    </p>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+
+            {/* Shoulder Screen Cards */}
+            {selectedTest?.id === 'shoulder-screen' && (
+              <>
+                {/* Flexion ROM Card */}
+                <Card className="bg-gradient-to-r from-teal-50 to-cyan-50 dark:from-teal-900/20 dark:to-cyan-900/20">
+                  <CardContent className="p-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <h4 className="text-sm font-semibold">Shoulder Flexion</h4>
+                      <Badge variant={currentMetrics?.shoulder?.flexion > 170 ? 'default' : 'secondary'}>
+                        {currentMetrics?.shoulder?.flexion > 170 ? '✓ FULL' : '⚠ LIMITED'}
+                      </Badge>
+                    </div>
+                    <div className="text-2xl font-bold">{currentMetrics?.shoulder?.flexion?.toFixed(0) || 0}°</div>
+                    <p className="text-xs text-gray-600">
+                      {currentMetrics?.shoulder?.flexion < 170 ? 'Restricted overhead' : 'Full range'}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Scapular Control Card */}
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <h4 className="text-sm font-semibold">Scapular Control</h4>
+                      <Badge variant={currentMetrics?.shoulder?.scapularWinging ? 'secondary' : 'default'}>
+                        {currentMetrics?.shoulder?.scapularWinging ? '⚠ WINGING' : '✓ STABLE'}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-gray-600">
+                      {currentMetrics?.shoulder?.scapularWinging ? 'Weak serratus anterior' : 'Good stability'}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Painful Arc Card */}
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <h4 className="text-sm font-semibold">Painful Arc</h4>
+                      <Badge variant={currentMetrics?.shoulder?.painfulArc ? 'destructive' : 'default'}>
+                        {currentMetrics?.shoulder?.painfulArc ? '⚠ PRESENT' : '✓ CLEAR'}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-gray-600">
+                      {currentMetrics?.shoulder?.painfulArc ? 'Impingement likely' : 'Smooth movement'}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Symmetry Card */}
+                <Card>
+                  <CardContent className="p-4">
+                    <h4 className="text-sm font-semibold mb-2">Side Comparison</h4>
+                    <Progress value={currentMetrics?.shoulder?.symmetry || 0} className="h-2 mb-2" />
+                    <p className="text-xs text-gray-600">
+                      {currentMetrics?.shoulder?.symmetry < 90 ? 'Asymmetry detected' : 'Good symmetry'}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Overall Shoulder Card */}
+                <Card className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20">
+                  <CardContent className="p-4">
+                    <h4 className="text-sm font-semibold mb-2">Shoulder Function</h4>
+                    <p className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Primary Issue: {
+                        currentMetrics?.shoulder?.painfulArc ? 'Pain present' :
+                        currentMetrics?.shoulder?.flexion < 170 ? 'Limited ROM' :
+                        currentMetrics?.shoulder?.scapularWinging ? 'Poor control' : 'Good function'
+                      }
+                    </p>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+
+            {/* Core Stability Cards */}
+            {selectedTest?.id === 'core-stability' && (
+              <>
+                {/* Plank Hold Time Card */}
+                <Card className="bg-gradient-to-r from-amber-50 to-yellow-50 dark:from-amber-900/20 dark:to-yellow-900/20">
+                  <CardContent className="p-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <h4 className="text-sm font-semibold">Plank Hold</h4>
+                      <Badge variant={currentMetrics?.core?.plankTime > 60 ? 'default' : 'secondary'}>
+                        {currentMetrics?.core?.plankTime > 60 ? '✓ STRONG' : '⚠ WEAK'}
+                      </Badge>
+                    </div>
+                    <div className="text-2xl font-bold">{currentMetrics?.core?.plankTime?.toFixed(0) || 0}s</div>
+                    <p className="text-xs text-gray-600">
+                      {currentMetrics?.core?.plankTime < 60 ? 'Build endurance' : 'Good stamina'}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Pelvic Control Card */}
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <h4 className="text-sm font-semibold">Pelvic Tilt</h4>
+                      <Badge variant={Math.abs(currentMetrics?.core?.pelvicTilt || 0) < 10 ? 'default' : 'secondary'}>
+                        {Math.abs(currentMetrics?.core?.pelvicTilt || 0) < 10 ? '✓ NEUTRAL' : '⚠ TILTED'}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-gray-600">
+                      {Math.abs(currentMetrics?.core?.pelvicTilt || 0) > 10 ? 
+                        (currentMetrics?.core?.pelvicTilt > 0 ? 'Anterior tilt' : 'Posterior tilt') : 
+                        'Good alignment'}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Rotation Control Card */}
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <h4 className="text-sm font-semibold">Rotation Control</h4>
+                      <Badge variant={currentMetrics?.core?.rotationControl ? 'default' : 'secondary'}>
+                        {currentMetrics?.core?.rotationControl ? '✓ STABLE' : '⚠ UNSTABLE'}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-gray-600">
+                      {!currentMetrics?.core?.rotationControl ? 'Work on anti-rotation' : 'Good control'}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Breathing Pattern Card */}
+                <Card>
+                  <CardContent className="p-4">
+                    <h4 className="text-sm font-semibold mb-2">Breathing Pattern</h4>
+                    <p className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      {currentMetrics?.core?.breathingPattern || 'Diaphragmatic'}
+                    </p>
+                    <p className="text-xs text-gray-600 mt-1">
+                      {currentMetrics?.core?.breathingPattern === 'Chest' ? 'Poor pattern' : 'Efficient breathing'}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Overall Core Card */}
+                <Card className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20">
+                  <CardContent className="p-4">
+                    <h4 className="text-sm font-semibold mb-2">Core Stability</h4>
+                    <p className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Primary Issue: {
+                        currentMetrics?.core?.plankTime < 60 ? 'Poor endurance' :
+                        Math.abs(currentMetrics?.core?.pelvicTilt || 0) > 10 ? 'Pelvic tilt' :
+                        !currentMetrics?.core?.rotationControl ? 'Rotation weakness' : 'Good stability'
+                      }
+                    </p>
+                  </CardContent>
+                </Card>
+              </>
+            )}
           </div>
         )}
       </div>

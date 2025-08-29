@@ -12253,6 +12253,138 @@ Respond in JSON format:
   });
 
   // ============================================================================
+  // PHASE 2 BODY SCANNER - SAM 2 & MiDaS Integration
+  // ============================================================================
+
+  // Segment region using SAM 2
+  app.post("/api/body-scanner/segment", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { imageData, clickPoint, frameIndex } = req.body;
+      
+      if (!imageData || !clickPoint) {
+        return res.status(400).json({ error: 'Image data and click point are required' });
+      }
+      
+      const { segmentRegion } = await import('./services/bodyScannerService');
+      const segmentation = await segmentRegion(imageData, clickPoint, frameIndex);
+      
+      res.json({
+        success: true,
+        segmentation,
+        message: 'Region segmented successfully'
+      });
+    } catch (error) {
+      console.error('Error segmenting region:', error);
+      res.status(500).json({ error: 'Failed to segment region' });
+    }
+  });
+  
+  // Estimate depth using MiDaS
+  app.post("/api/body-scanner/depth", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { imageData } = req.body;
+      
+      if (!imageData) {
+        return res.status(400).json({ error: 'Image data is required' });
+      }
+      
+      const { estimateDepth } = await import('./services/bodyScannerService');
+      const depthAnalysis = await estimateDepth(imageData);
+      
+      res.json({
+        success: true,
+        depthAnalysis,
+        message: 'Depth estimated successfully'
+      });
+    } catch (error) {
+      console.error('Error estimating depth:', error);
+      res.status(500).json({ error: 'Failed to estimate depth' });
+    }
+  });
+  
+  // Compare knee volumes
+  app.post("/api/body-scanner/compare-volumes", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { leftKneeData, rightKneeData } = req.body;
+      
+      if (!leftKneeData || !rightKneeData) {
+        return res.status(400).json({ error: 'Both knee data sets are required' });
+      }
+      
+      const { estimateVolume, compareKneeVolumes } = await import('./services/bodyScannerService');
+      
+      // Calculate volumes for each knee
+      const leftVolume = estimateVolume(leftKneeData.depthMap, leftKneeData.segmentationMask);
+      const rightVolume = estimateVolume(rightKneeData.depthMap, rightKneeData.segmentationMask);
+      
+      // Compare volumes
+      const comparison = compareKneeVolumes(leftVolume, rightVolume);
+      
+      res.json({
+        success: true,
+        leftVolume,
+        rightVolume,
+        comparison,
+        message: 'Volumes compared successfully'
+      });
+    } catch (error) {
+      console.error('Error comparing volumes:', error);
+      res.status(500).json({ error: 'Failed to compare volumes' });
+    }
+  });
+  
+  // Generate educational insights
+  app.post("/api/body-scanner/insights", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { regions, kneeMetrics, depthAnalysis } = req.body;
+      
+      const { generateEducationalInsights } = await import('./services/bodyScannerService');
+      const insights = generateEducationalInsights(regions, kneeMetrics, depthAnalysis);
+      
+      res.json({
+        success: true,
+        insights,
+        message: 'Educational insights generated successfully'
+      });
+    } catch (error) {
+      console.error('Error generating insights:', error);
+      res.status(500).json({ error: 'Failed to generate insights' });
+    }
+  });
+  
+  // Save scan session
+  app.post("/api/body-scanner/save-session", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+      
+      const { bodyPart, view, regions, metrics, depthAnalysis, frames } = req.body;
+      
+      const { saveScanResults } = await import('./services/bodyScannerService');
+      const result = await saveScanResults(userId, {
+        bodyPart: bodyPart || 'knee',
+        view: view || 'frontal',
+        regions: regions || [],
+        metrics: metrics || {},
+        depthAnalysis: depthAnalysis || {},
+        frames: frames || []
+      });
+      
+      res.json({
+        success: true,
+        scanId: result.id,
+        message: 'Scan session saved successfully',
+        result
+      });
+    } catch (error) {
+      console.error('Error saving scan session:', error);
+      res.status(500).json({ error: 'Failed to save scan session' });
+    }
+  });
+
+  // ============================================================================
   // REAL-TIME AI ASSISTANCE API ROUTES
   // ============================================================================
 

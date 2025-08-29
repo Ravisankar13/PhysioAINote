@@ -2010,7 +2010,9 @@ export default function MovementAnalysis() {
                               <Badge variant={
                                 biomechanicalMetrics.kneeValgus.severity === 'normal' ? 'default' :
                                 biomechanicalMetrics.kneeValgus.severity === 'mild' ? 'secondary' :
-                                biomechanicalMetrics.kneeValgus.severity === 'moderate' ? 'outline' : 'destructive'
+                                biomechanicalMetrics.kneeValgus.severity === 'moderate' ? 'outline' : 'secondary'
+                              } className={
+                                biomechanicalMetrics.kneeValgus.severity === 'severe' ? 'bg-purple-100 text-purple-800 border-purple-200' : ''
                               }>
                                 {biomechanicalMetrics.kneeValgus.severity.toUpperCase()}
                               </Badge>
@@ -2038,7 +2040,7 @@ export default function MovementAnalysis() {
                                 <p className="text-xs font-medium text-gray-600">Contributing Factors:</p>
                                 {biomechanicalMetrics.kneeValgus.contributingFactors.map((factor, i) => (
                                   <div key={i} className="flex items-center gap-2">
-                                    <AlertCircle className="h-3 w-3 text-yellow-500" />
+                                    <AlertCircle className="h-3 w-3 text-blue-500" />
                                     <span className="text-xs">{factor}</span>
                                   </div>
                                 ))}
@@ -2158,9 +2160,9 @@ export default function MovementAnalysis() {
                                       <div
                                         key={i}
                                         className={`flex-1 rounded-t transition-all hover:opacity-80 ${
-                                          value > 15 ? 'bg-gradient-to-t from-red-500 to-red-400' :
-                                          value > 10 ? 'bg-gradient-to-t from-yellow-500 to-yellow-400' :
-                                          value > 5 ? 'bg-gradient-to-t from-blue-500 to-blue-400' : 
+                                          value > 15 ? 'bg-gradient-to-t from-purple-500 to-purple-400' :
+                                          value > 10 ? 'bg-gradient-to-t from-blue-500 to-blue-400' :
+                                          value > 5 ? 'bg-gradient-to-t from-teal-500 to-teal-400' : 
                                           'bg-gradient-to-t from-green-500 to-green-400'
                                         }`}
                                         style={{ 
@@ -2175,15 +2177,15 @@ export default function MovementAnalysis() {
                                     <div className="flex gap-3">
                                       <span className="flex items-center gap-1">
                                         <div className="w-2 h-2 bg-gradient-to-br from-green-500 to-green-400 rounded"></div>
-                                        &lt;5°
+                                        Normal
                                       </span>
                                       <span className="flex items-center gap-1">
-                                        <div className="w-2 h-2 bg-gradient-to-br from-yellow-500 to-yellow-400 rounded"></div>
-                                        10-15°
+                                        <div className="w-2 h-2 bg-gradient-to-br from-blue-500 to-blue-400 rounded"></div>
+                                        Mild
                                       </span>
                                       <span className="flex items-center gap-1">
-                                        <div className="w-2 h-2 bg-gradient-to-br from-red-500 to-red-400 rounded"></div>
-                                        &gt;15°
+                                        <div className="w-2 h-2 bg-gradient-to-br from-purple-500 to-purple-400 rounded"></div>
+                                        Moderate
                                       </span>
                                     </div>
                                   </div>

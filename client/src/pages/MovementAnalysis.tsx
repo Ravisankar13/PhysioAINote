@@ -318,6 +318,8 @@ export default function MovementAnalysis() {
   const [elapsedTime, setElapsedTime] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [selectedCamera, setSelectedCamera] = useState<'user' | 'environment'>('user');
+  const [isSwitchingCamera, setIsSwitchingCamera] = useState(false);
   const [patientInfo, setPatientInfo] = useState({
     name: '',
     age: '',
@@ -373,7 +375,49 @@ export default function MovementAnalysis() {
     visibleJointsRef.current = visibleJoints;
   }, [visibleJoints]);
 
-  // Initialize MediaPipe Pose - only when a test is selected
+  // Function to switch cameras
+  const switchCamera = async () => {
+    if (isSwitchingCamera || !selectedTest) return;
+    
+    setIsSwitchingCamera(true);
+    
+    try {
+      // Stop current camera
+      if (cameraRef.current) {
+        cameraRef.current.stop();
+        cameraRef.current = null;
+      }
+      
+      // Stop current pose detection
+      if (poseRef.current) {
+        poseRef.current.close();
+        poseRef.current = null;
+      }
+      
+      // Toggle camera
+      const newCamera = selectedCamera === 'user' ? 'environment' : 'user';
+      setSelectedCamera(newCamera);
+      
+      toast({
+        title: "Camera Switching",
+        description: `Switching to ${newCamera === 'user' ? 'front' : 'back'} camera...`,
+        duration: 2000,
+      });
+      
+      // Camera will be reinitialized by useEffect
+    } catch (error) {
+      console.error('[MovementAnalysis] Error switching camera:', error);
+      toast({
+        title: "Camera Switch Failed",
+        description: "Could not switch camera. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSwitchingCamera(false);
+    }
+  };
+
+  // Initialize MediaPipe Pose - only when a test is selected or camera changes
   useEffect(() => {
     if (!videoRef.current || !canvasRef.current || !selectedTest) return;
 
@@ -499,7 +543,7 @@ export default function MovementAnalysis() {
             },
             width: MEDIAPIPE_CONFIG.camera.width,
             height: MEDIAPIPE_CONFIG.camera.height,
-            facingMode: MEDIAPIPE_CONFIG.camera.facingMode
+            facingMode: selectedCamera
           });
 
           cameraRef.current = camera;
@@ -578,7 +622,7 @@ export default function MovementAnalysis() {
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [isPaused, selectedTest]);
+  }, [isPaused, selectedTest, selectedCamera]);
 
   // Process pose detection results
   const onPoseResults = useCallback((results: any) => {
@@ -1748,6 +1792,20 @@ export default function MovementAnalysis() {
                 {/* Control Buttons - Top Right */}
                 <div className="absolute top-4 right-4 flex flex-col items-end gap-2">
                   <div className="flex gap-2">
+                    {/* Camera Switch Button - Only show on mobile devices */}
+                    {(isIOS() || /Android/i.test(navigator.userAgent)) && (
+                      <Button
+                        onClick={switchCamera}
+                        disabled={isSwitchingCamera || cameraStatus !== 'ready'}
+                        className="bg-blue-600/70 hover:bg-blue-600/90 text-white"
+                        size="sm"
+                        title={`Switch to ${selectedCamera === 'user' ? 'back' : 'front'} camera`}
+                      >
+                        <CameraIcon className="h-4 w-4 mr-1" />
+                        {selectedCamera === 'user' ? 'Front' : 'Back'}
+                      </Button>
+                    )}
+                    
                     {/* Joint Angles Toggle */}
                     <Button
                       onClick={() => setShowJointAngles(!showJointAngles)}

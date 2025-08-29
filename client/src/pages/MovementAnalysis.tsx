@@ -2035,8 +2035,215 @@ export default function MovementAnalysis() {
           )}
         </div>
 
-        {/* Right Panel - Metrics and Analysis */}
-        {!isFullscreen && (
+        {/* Right Panel - Live Metric Cards for Step Down Test */}
+        {!isFullscreen && selectedTest?.id === 'step-down' && (
+          <div className="w-1/4 flex flex-col gap-3">
+            <h3 className="text-lg font-semibold">Live Analysis</h3>
+            
+            {/* Q-Angle Card */}
+            <Card className={`transition-all duration-300 ${
+              currentMetrics && currentMetrics.jointAngles.find(a => a.joint === 'left_knee' || a.joint === 'right_knee') 
+                ? 'border-2 animate-pulse' : ''
+            }`}>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-semibold">Q-ANGLE</span>
+                  {currentMetrics && (() => {
+                    const kneeAngle = currentMetrics.jointAngles.find(a => a.joint === 'left_knee' || a.joint === 'right_knee');
+                    const qAngle = kneeAngle ? Math.abs(180 - kneeAngle.angle) : 0;
+                    const isNormal = qAngle < 20;
+                    return (
+                      <Badge variant={isNormal ? 'default' : qAngle < 25 ? 'secondary' : 'destructive'}>
+                        {isNormal ? '✓' : qAngle < 25 ? '⚠' : '✗'} {qAngle.toFixed(0)}°
+                      </Badge>
+                    );
+                  })()}
+                </div>
+                <Progress 
+                  value={currentMetrics ? Math.min(100, (20 / Math.abs(180 - (currentMetrics.jointAngles.find(a => a.joint === 'left_knee')?.angle || 180))) * 100) : 0} 
+                  className="h-2 mb-2" 
+                />
+                <p className="text-xs text-gray-600">
+                  {currentMetrics && Math.abs(180 - (currentMetrics.jointAngles.find(a => a.joint === 'left_knee')?.angle || 180)) > 20 
+                    ? 'High patellofemoral stress' 
+                    : 'Within normal range'}
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Patellar Tracking Card */}
+            <Card className={`transition-all duration-300 ${
+              biomechanicalMetrics?.kneeValgus.severity !== 'normal' ? 'border-orange-400 border-2' : ''
+            }`}>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-semibold">PATELLAR TRACKING</span>
+                  {biomechanicalMetrics && (
+                    <Badge variant={
+                      biomechanicalMetrics.kneeValgus.severity === 'normal' ? 'default' : 
+                      biomechanicalMetrics.kneeValgus.severity === 'mild' ? 'secondary' : 'destructive'
+                    }>
+                      {biomechanicalMetrics.kneeValgus.severity === 'normal' ? '✓ CENTRAL' : 
+                       biomechanicalMetrics.kneeValgus.severity === 'mild' ? '⚠ LATERAL' : '✗ DEVIATED'}
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex justify-between text-xs mb-2">
+                  <span>L: {biomechanicalMetrics?.kneeValgus.left.toFixed(0) || 0}°</span>
+                  <span>R: {biomechanicalMetrics?.kneeValgus.right.toFixed(0) || 0}°</span>
+                </div>
+                <p className="text-xs text-gray-600">
+                  {biomechanicalMetrics?.kneeValgus.severity !== 'normal' 
+                    ? 'VMO strengthening needed' 
+                    : 'Good neuromuscular control'}
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Trendelenburg Card */}
+            <Card className={`transition-all duration-300 ${
+              biomechanicalMetrics?.hipDrop.side !== 'none' ? 'border-red-400 border-2 animate-pulse' : ''
+            }`}>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-semibold">TRENDELENBURG</span>
+                  {biomechanicalMetrics && (
+                    <Badge variant={biomechanicalMetrics.hipDrop.side === 'none' ? 'default' : 'destructive'}>
+                      {biomechanicalMetrics.hipDrop.side === 'none' ? '✓ NEGATIVE' : `✗ POSITIVE ${biomechanicalMetrics.hipDrop.side.toUpperCase()}`}
+                    </Badge>
+                  )}
+                </div>
+                <div className="text-center text-2xl font-bold mb-1">
+                  {biomechanicalMetrics?.hipDrop.angle.toFixed(1) || '0.0'}°
+                </div>
+                <p className="text-xs text-gray-600">
+                  {biomechanicalMetrics?.hipDrop.side !== 'none' 
+                    ? `${biomechanicalMetrics.hipDrop.side} hip abductor weakness` 
+                    : 'Good hip stability'}
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Knee Valgus Control Card */}
+            <Card className={`transition-all duration-300 ${
+              biomechanicalMetrics?.kneeValgus.severity !== 'normal' ? 'border-yellow-400 border-2' : ''
+            }`}>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-semibold">KNEE VALGUS</span>
+                  {biomechanicalMetrics && (
+                    <Badge variant={
+                      biomechanicalMetrics.kneeValgus.severity === 'normal' ? 'default' : 
+                      biomechanicalMetrics.kneeValgus.severity === 'mild' ? 'secondary' : 'destructive'
+                    }>
+                      {biomechanicalMetrics.kneeValgus.detected ? '✗ DETECTED' : '✓ ABSENT'}
+                    </Badge>
+                  )}
+                </div>
+                <Progress 
+                  value={biomechanicalMetrics ? Math.max(0, 100 - (Math.max(biomechanicalMetrics.kneeValgus.left, biomechanicalMetrics.kneeValgus.right) * 2)) : 100} 
+                  className="h-2 mb-2" 
+                />
+                <p className="text-xs text-gray-600">
+                  {biomechanicalMetrics?.kneeValgus.detected 
+                    ? 'Poor frontal plane control' 
+                    : 'Good knee alignment'}
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Trunk Control Card */}
+            <Card className={`transition-all duration-300 ${
+              biomechanicalMetrics?.forwardLean > 10 ? 'border-blue-400 border-2' : ''
+            }`}>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-semibold">TRUNK CONTROL</span>
+                  {biomechanicalMetrics && (
+                    <Badge variant={biomechanicalMetrics.forwardLean < 10 ? 'default' : biomechanicalMetrics.forwardLean < 20 ? 'secondary' : 'destructive'}>
+                      {biomechanicalMetrics.forwardLean < 10 ? '✓ STABLE' : biomechanicalMetrics.forwardLean < 20 ? '⚠ MILD LEAN' : '✗ EXCESSIVE'}
+                    </Badge>
+                  )}
+                </div>
+                <div className="text-center text-2xl font-bold mb-1">
+                  {biomechanicalMetrics?.forwardLean.toFixed(0) || '0'}°
+                </div>
+                <p className="text-xs text-gray-600">
+                  {biomechanicalMetrics?.forwardLean > 10 
+                    ? 'Compensation for weakness' 
+                    : 'Good postural control'}
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Ankle Mobility Card */}
+            <Card className={`transition-all duration-300 ${
+              currentMetrics && currentMetrics.jointAngles.find(a => a.joint === 'left_ankle' || a.joint === 'right_ankle')?.angle < 85 
+                ? 'border-purple-400 border-2' : ''
+            }`}>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-semibold">ANKLE MOBILITY</span>
+                  {currentMetrics && (() => {
+                    const ankleAngle = currentMetrics.jointAngles.find(a => a.joint === 'left_ankle' || a.joint === 'right_ankle');
+                    const dorsiflexion = ankleAngle ? 90 - ankleAngle.angle : 0;
+                    return (
+                      <Badge variant={dorsiflexion > 10 ? 'default' : dorsiflexion > 5 ? 'secondary' : 'destructive'}>
+                        {dorsiflexion > 10 ? '✓ GOOD' : dorsiflexion > 5 ? '⚠ LIMITED' : '✗ RESTRICTED'}
+                      </Badge>
+                    );
+                  })()}
+                </div>
+                <div className="text-center text-2xl font-bold mb-1">
+                  {(() => {
+                    const ankleAngle = currentMetrics?.jointAngles.find(a => a.joint === 'left_ankle' || a.joint === 'right_ankle');
+                    return ankleAngle ? Math.abs(90 - ankleAngle.angle).toFixed(0) : '0';
+                  })()}° DF
+                </div>
+                <p className="text-xs text-gray-600">
+                  {currentMetrics && currentMetrics.jointAngles.find(a => a.joint === 'left_ankle')?.angle < 85 
+                    ? 'Mobility work needed' 
+                    : 'Adequate range'}
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Overall Assessment */}
+            <Card className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20">
+              <CardContent className="p-4">
+                <h4 className="text-sm font-semibold mb-2">Overall Risk Assessment</h4>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs">Injury Risk:</span>
+                  <Badge variant={
+                    biomechanicalMetrics && (biomechanicalMetrics.kneeValgus.severity === 'severe' || biomechanicalMetrics.hipDrop.side !== 'none') 
+                      ? 'destructive' 
+                      : biomechanicalMetrics?.kneeValgus.severity === 'moderate' 
+                        ? 'secondary' 
+                        : 'default'
+                  }>
+                    {biomechanicalMetrics && (biomechanicalMetrics.kneeValgus.severity === 'severe' || biomechanicalMetrics.hipDrop.side !== 'none') 
+                      ? 'HIGH' 
+                      : biomechanicalMetrics?.kneeValgus.severity === 'moderate' 
+                        ? 'MODERATE' 
+                        : 'LOW'}
+                  </Badge>
+                </div>
+                <p className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                  Primary Focus: {
+                    biomechanicalMetrics?.hipDrop.side !== 'none' 
+                      ? 'Hip abductor strengthening' 
+                      : biomechanicalMetrics?.kneeValgus.detected 
+                        ? 'VMO & glute strengthening' 
+                        : 'Maintain current program'
+                  }
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Original Right Panel for other tests */}
+        {!isFullscreen && selectedTest?.id !== 'step-down' && (
           <div className="w-1/4 flex flex-col gap-4">
             <Tabs defaultValue="biomechanics" className="flex-1">
               <TabsList className="grid w-full grid-cols-6">

@@ -105,6 +105,9 @@ export default function BodyScanner() {
     vessels: false
   });
   const [clinicalTests, setClinicalTests] = useState<any[]>([]);
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
+  const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]);
+  const [selectedCameraId, setSelectedCameraId] = useState<string>('');
   
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -311,7 +314,7 @@ export default function BodyScanner() {
     ctx.globalAlpha = 1;
   };
   
-  // Load MediaPipe libraries and check WebXR on mount
+  // Load MediaPipe libraries, check WebXR, and enumerate cameras on mount
   useEffect(() => {
     const loadLibraries = async () => {
       const loaded = await loadMediaPipeLibraries();
@@ -333,6 +336,19 @@ export default function BodyScanner() {
         console.log('[BodyScanner] WebXR supported:', support);
       }
     });
+    
+    // Enumerate available cameras
+    const enumerateCameras = async () => {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const cameras = devices.filter(device => device.kind === 'videoinput');
+        setAvailableCameras(cameras);
+        console.log('[BodyScanner] Available cameras:', cameras);
+      } catch (error) {
+        console.error('[BodyScanner] Failed to enumerate cameras:', error);
+      }
+    };
+    enumerateCameras();
   }, []);
   
   // Initialize camera and pose detection
@@ -365,26 +381,38 @@ export default function BodyScanner() {
         pose.onResults(onPoseResults);
         poseRef.current = pose;
         
-        // Initialize Camera
+        // Initialize Camera with selected facing mode or specific device
         if (videoRef.current) {
-          const camera = new window.Camera(videoRef.current, {
+          const cameraConfig: any = {
             onFrame: async () => {
               if (poseRef.current && !isPaused && videoRef.current) {
                 await poseRef.current.send({ image: videoRef.current });
               }
             },
             width: 1280,
-            height: 720,
-            facingMode: 'environment'
-          });
+            height: 720
+          };
+          
+          // Use specific device ID if selected, otherwise use facing mode
+          if (selectedCameraId) {
+            cameraConfig.deviceId = selectedCameraId;
+          } else {
+            cameraConfig.facingMode = facingMode;
+          }
+          
+          const camera = new window.Camera(videoRef.current, cameraConfig);
           
           cameraRef.current = camera;
           await camera.start();
           setCameraStatus('ready');
           
+          const cameraDesc = selectedCameraId 
+            ? availableCameras.find(c => c.deviceId === selectedCameraId)?.label || 'Selected camera'
+            : `${facingMode === 'user' ? 'Front' : 'Back'} camera`;
+          
           toast({
             title: "Camera Ready",
-            description: "Real-time knee tracking is active",
+            description: `Using ${cameraDesc} for tracking`,
             duration: 3000,
           });
         }
@@ -412,7 +440,7 @@ export default function BodyScanner() {
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [isTracking, mediapipeLoaded, isPaused, onPoseResults]);
+  }, [isTracking, mediapipeLoaded, isPaused, onPoseResults, facingMode, selectedCameraId, availableCameras]);
   
   // Handle region selection with SAM 2 integration
   const handleCanvasClick = async (event: React.MouseEvent<HTMLCanvasElement>) => {
@@ -778,8 +806,8 @@ export default function BodyScanner() {
               </div>
               
               {/* Control Buttons */}
-              <div className="flex justify-between items-center mt-4">
-                <div className="flex gap-2">
+              <div className="flex justify-between items-center mt-4 flex-wrap gap-2">
+                <div className="flex gap-2 flex-wrap">
                   <Button
                     variant={isTracking ? 'destructive' : 'default'}
                     onClick={() => setIsTracking(!isTracking)}
@@ -804,6 +832,49 @@ export default function BodyScanner() {
                     <CameraIcon className="h-4 w-4 mr-2" />
                     Capture
                   </Button>
+                  
+                  {/* Camera Selector for Mobile Devices */}
+                  {availableCameras.length > 0 && (
+                    <select 
+                      className="px-3 py-1.5 border rounded-md text-sm bg-background"
+                      value={selectedCameraId || facingMode}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        if (value === 'user' || value === 'environment') {
+                          setFacingMode(value as 'user' | 'environment');
+                          setSelectedCameraId('');
+                        } else {
+                          setSelectedCameraId(value);
+                          // Find and set the appropriate facing mode
+                          const camera = availableCameras.find(c => c.deviceId === value);
+                          if (camera?.label.toLowerCase().includes('front')) {
+                            setFacingMode('user');
+                          } else if (camera?.label.toLowerCase().includes('back')) {
+                            setFacingMode('environment');
+                          }
+                        }
+                        toast({
+                          title: "Camera Selected",
+                          description: "Will apply when tracking restarts",
+                          duration: 1500,
+                        });
+                      }}
+                    >
+                      <optgroup label="Standard">
+                        <option value="user">Front Camera</option>
+                        <option value="environment">Back Camera</option>
+                      </optgroup>
+                      {availableCameras.length > 1 && (
+                        <optgroup label="Available Cameras">
+                          {availableCameras.map((camera, idx) => (
+                            <option key={camera.deviceId} value={camera.deviceId}>
+                              {camera.label || `Camera ${idx + 1}`}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                    </select>
+                  )}
                 </div>
                 
                 <div className="flex gap-2">
@@ -840,6 +911,22 @@ export default function BodyScanner() {
                   >
                     <Layers className="h-4 w-4 mr-1" />
                     Depth
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const newMode = facingMode === 'user' ? 'environment' : 'user';
+                      setFacingMode(newMode);
+                      toast({
+                        title: "Camera Switched",
+                        description: `Will use ${newMode === 'user' ? 'front' : 'back'} camera on next start`,
+                        duration: 2000,
+                      });
+                    }}
+                  >
+                    <RotateCw className="h-4 w-4 mr-1" />
+                    {facingMode === 'user' ? 'Front' : 'Back'}
                   </Button>
                 </div>
               </div>

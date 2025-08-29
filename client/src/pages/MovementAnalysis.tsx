@@ -2130,25 +2130,65 @@ export default function MovementAnalysis() {
                             </div>
                           )}
 
-                          {/* Valgus Trend Chart */}
-                          {kneeValgusHistory.length > 5 && (
-                            <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-900">
-                              <h3 className="font-semibold text-sm mb-2">Knee Valgus Trend</h3>
-                              <div className="h-20 flex items-end gap-1">
-                                {kneeValgusHistory.slice(-20).map((value, i) => (
-                                  <div
-                                    key={i}
-                                    className={`flex-1 ${
-                                      value > 15 ? 'bg-red-500' :
-                                      value > 10 ? 'bg-yellow-500' :
-                                      value > 5 ? 'bg-blue-500' : 'bg-green-500'
-                                    }`}
-                                    style={{ height: `${(value / 30) * 100}%` }}
-                                    title={`${value.toFixed(1)}°`}
-                                  />
-                                ))}
-                              </div>
-                              <p className="text-xs text-gray-500 mt-1">Last 20 measurements</p>
+                          {/* Valgus Trend Chart - Only show when we have actual measurements */}
+                          {kneeValgusHistory.length > 0 && (
+                            <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+                              <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                                <TrendingUp className="h-4 w-4 text-blue-500" />
+                                Knee Valgus Trend
+                              </h3>
+                              {kneeValgusHistory.length < 5 ? (
+                                <div className="text-center py-4 text-gray-500">
+                                  <p className="text-xs">Collecting data... ({kneeValgusHistory.length}/5 samples)</p>
+                                  <div className="mt-2 flex justify-center gap-1">
+                                    {[...Array(5)].map((_, i) => (
+                                      <div 
+                                        key={i} 
+                                        className={`w-2 h-2 rounded-full ${
+                                          i < kneeValgusHistory.length ? 'bg-blue-500' : 'bg-gray-300'
+                                        }`}
+                                      />
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : (
+                                <>
+                                  <div className="h-20 flex items-end gap-0.5 bg-white dark:bg-gray-900 p-2 rounded">
+                                    {kneeValgusHistory.slice(-20).map((value, i) => (
+                                      <div
+                                        key={i}
+                                        className={`flex-1 rounded-t transition-all hover:opacity-80 ${
+                                          value > 15 ? 'bg-gradient-to-t from-red-500 to-red-400' :
+                                          value > 10 ? 'bg-gradient-to-t from-yellow-500 to-yellow-400' :
+                                          value > 5 ? 'bg-gradient-to-t from-blue-500 to-blue-400' : 
+                                          'bg-gradient-to-t from-green-500 to-green-400'
+                                        }`}
+                                        style={{ 
+                                          height: `${Math.max(Math.min((value / 25) * 100, 100), 4)}%`,
+                                        }}
+                                        title={`${value.toFixed(1)}° valgus`}
+                                      />
+                                    ))}
+                                  </div>
+                                  <div className="flex justify-between items-center text-xs text-gray-600 dark:text-gray-400 mt-2">
+                                    <span className="font-medium">Recent measurements</span>
+                                    <div className="flex gap-3">
+                                      <span className="flex items-center gap-1">
+                                        <div className="w-2 h-2 bg-gradient-to-br from-green-500 to-green-400 rounded"></div>
+                                        &lt;5°
+                                      </span>
+                                      <span className="flex items-center gap-1">
+                                        <div className="w-2 h-2 bg-gradient-to-br from-yellow-500 to-yellow-400 rounded"></div>
+                                        10-15°
+                                      </span>
+                                      <span className="flex items-center gap-1">
+                                        <div className="w-2 h-2 bg-gradient-to-br from-red-500 to-red-400 rounded"></div>
+                                        &gt;15°
+                                      </span>
+                                    </div>
+                                  </div>
+                                </>
+                              )}
                             </div>
                           )}
                         </div>

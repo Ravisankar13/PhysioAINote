@@ -2089,8 +2089,8 @@ export default function MovementAnalysis() {
                   )}
                 </div>
                 <div className="flex justify-between text-xs mb-2">
-                  <span>L: {biomechanicalMetrics?.kneeValgus?.left?.toFixed(0) || 0}°</span>
-                  <span>R: {biomechanicalMetrics?.kneeValgus?.right?.toFixed(0) || 0}°</span>
+                  <span>L: {biomechanicalMetrics?.kneeValgus?.left ? biomechanicalMetrics.kneeValgus.left.toFixed(0) : 0}°</span>
+                  <span>R: {biomechanicalMetrics?.kneeValgus?.right ? biomechanicalMetrics.kneeValgus.right.toFixed(0) : 0}°</span>
                 </div>
                 <p className="text-xs text-gray-600">
                   {biomechanicalMetrics?.kneeValgus?.severity !== 'normal' 
@@ -2114,7 +2114,7 @@ export default function MovementAnalysis() {
                   )}
                 </div>
                 <div className="text-center text-2xl font-bold mb-1">
-                  {biomechanicalMetrics?.hipDrop?.angle?.toFixed(1) || '0.0'}°
+                  {biomechanicalMetrics?.hipDrop?.angle ? biomechanicalMetrics.hipDrop.angle.toFixed(1) : '0.0'}°
                 </div>
                 <p className="text-xs text-gray-600">
                   {biomechanicalMetrics?.hipDrop?.side && biomechanicalMetrics.hipDrop.side !== 'none' 
@@ -2166,7 +2166,7 @@ export default function MovementAnalysis() {
                   )}
                 </div>
                 <div className="text-center text-2xl font-bold mb-1">
-                  {biomechanicalMetrics?.forwardLean.toFixed(0) || '0'}°
+                  {biomechanicalMetrics?.forwardLean ? biomechanicalMetrics.forwardLean.toFixed(0) : '0'}°
                 </div>
                 <p className="text-xs text-gray-600">
                   {biomechanicalMetrics?.forwardLean > 10 

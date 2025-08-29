@@ -296,6 +296,12 @@ const ASSESSMENT_TESTS: AssessmentTest[] = [
   }
 ];
 
+// iOS detection helper
+const isIOS = () => {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+};
+
 export default function MovementAnalysis() {
   // State management
   const [isRecording, setIsRecording] = useState(false);
@@ -999,40 +1005,143 @@ export default function MovementAnalysis() {
     ctx.restore();
   }, [isRecording, isPaused, sessionStartTime, selectedTest, showJointAngles]);
 
-  // Toggle fullscreen mode
+  // Toggle fullscreen mode with iOS compatibility
   const toggleFullscreen = () => {
-    if (!document.fullscreenElement && containerRef.current) {
-      containerRef.current.requestFullscreen().then(() => {
-        setIsFullscreen(true);
-      }).catch((err) => {
-        console.error('Failed to enter fullscreen:', err);
-        // Fallback to just UI fullscreen
-        setIsFullscreen(!isFullscreen);
-      });
-    } else if (document.fullscreenElement) {
-      document.exitFullscreen().then(() => {
-        setIsFullscreen(false);
-      }).catch((err) => {
-        console.error('Failed to exit fullscreen:', err);
-        setIsFullscreen(!isFullscreen);
-      });
-    } else {
-      // Fallback for when browser fullscreen isn't available
+    // For iOS devices, always use the fallback method
+    if (isIOS()) {
       setIsFullscreen(!isFullscreen);
+      handleIOSFullscreen(!isFullscreen);
+      return;
+    }
+    
+    // Check if native fullscreen API is supported for non-iOS devices
+    const fullscreenEnabled = document.fullscreenEnabled || 
+                             (document as any).webkitFullscreenEnabled ||
+                             (document as any).mozFullScreenEnabled ||
+                             (document as any).msFullscreenEnabled;
+
+    if (fullscreenEnabled && !isFullscreen && containerRef.current) {
+      // Try native fullscreen API first (for desktop and Android)
+      const elem = containerRef.current as any;
+      const requestFullscreen = elem.requestFullscreen || 
+                               elem.webkitRequestFullscreen || 
+                               elem.mozRequestFullScreen || 
+                               elem.msRequestFullscreen;
+      
+      if (requestFullscreen) {
+        requestFullscreen.call(elem).then(() => {
+          setIsFullscreen(true);
+        }).catch((err: any) => {
+          console.log('Fullscreen API not available, using iOS fallback');
+          // iOS fallback - just maximize UI
+          setIsFullscreen(true);
+          handleIOSFullscreen(true);
+        });
+      } else {
+        // No fullscreen API available (iOS)
+        setIsFullscreen(true);
+        handleIOSFullscreen(true);
+      }
+    } else if (isFullscreen) {
+      // Exit fullscreen
+      const exitFullscreen = (document as any).exitFullscreen || 
+                            (document as any).webkitExitFullscreen || 
+                            (document as any).mozCancelFullScreen || 
+                            (document as any).msExitFullscreen;
+      
+      if (exitFullscreen && document.fullscreenElement) {
+        exitFullscreen.call(document).then(() => {
+          setIsFullscreen(false);
+        }).catch(() => {
+          setIsFullscreen(false);
+          handleIOSFullscreen(false);
+        });
+      } else {
+        // iOS or no native fullscreen
+        setIsFullscreen(false);
+        handleIOSFullscreen(false);
+      }
     }
   };
 
-  // Listen for fullscreen changes
+  // iOS-specific fullscreen handling
+  const handleIOSFullscreen = (enterFullscreen: boolean) => {
+    if (enterFullscreen) {
+      // Hide Safari UI elements as much as possible
+      window.scrollTo(0, 1);
+      
+      // Add meta tags for better iOS experience
+      let viewport = document.querySelector('meta[name=viewport]');
+      if (viewport) {
+        viewport.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover');
+      }
+      
+      // Prevent scrolling
+      document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed';
+      document.body.style.width = '100%';
+      document.body.style.height = '100%';
+      
+      // Lock orientation if possible (works on some devices)
+      if ('orientation' in screen && 'lock' in (screen.orientation as any)) {
+        (screen.orientation as any).lock('landscape').catch(() => {
+          console.log('Orientation lock not supported');
+        });
+      }
+    } else {
+      // Restore normal viewport
+      let viewport = document.querySelector('meta[name=viewport]');
+      if (viewport) {
+        viewport.setAttribute('content', 'width=device-width, initial-scale=1');
+      }
+      
+      // Restore scrolling
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.width = '';
+      document.body.style.height = '';
+      
+      // Unlock orientation
+      if ('orientation' in screen && 'unlock' in (screen.orientation as any)) {
+        (screen.orientation as any).unlock();
+      }
+    }
+  };
+
+  // Listen for fullscreen changes and cleanup
   useEffect(() => {
     const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
+      const isNativeFullscreen = !!(document.fullscreenElement || 
+                                   (document as any).webkitFullscreenElement ||
+                                   (document as any).mozFullScreenElement ||
+                                   (document as any).msFullscreenElement);
+      
+      if (!isNativeFullscreen && isFullscreen) {
+        // Native fullscreen exited, but we're still in iOS fullscreen mode
+        // Keep the state as is for iOS
+      } else {
+        setIsFullscreen(isNativeFullscreen);
+      }
     };
 
     document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+    
+    // Cleanup on unmount
     return () => {
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+      
+      // Ensure iOS styles are cleaned up
+      if (isFullscreen) {
+        handleIOSFullscreen(false);
+      }
     };
-  }, []);
+  }, [isFullscreen]);
 
   // Timer for recording duration
   useEffect(() => {
@@ -1180,13 +1289,13 @@ export default function MovementAnalysis() {
     const findings = [];
     
     if (currentMetrics) {
-      if (currentMetrics.overallScore < 0.7) {
+      if (currentMetrics.quality === 'poor' || currentMetrics.quality === 'fair') {
         findings.push("Below average movement quality detected");
       }
-      if (currentMetrics.asymmetryScore > 0.3) {
+      if (currentMetrics.symmetry < 70) {
         findings.push("Significant asymmetry observed");
       }
-      if (currentMetrics.stabilityScore < 0.6) {
+      if (currentMetrics.stability < 60) {
         findings.push("Balance and stability concerns noted");
       }
     }
@@ -1520,16 +1629,19 @@ export default function MovementAnalysis() {
               </CardHeader>
             )}
             <CardContent className={`p-0 relative ${isFullscreen ? 'h-full' : ''}`}>
-              <div className={`relative ${isFullscreen ? 'h-full' : 'aspect-video'} bg-black`}>
+              <div className={`relative ${isFullscreen ? 'h-full w-full' : 'aspect-video'} bg-black`}>
                 <video
                   ref={videoRef}
                   className="absolute inset-0 w-full h-full object-cover hidden"
                   autoPlay
                   playsInline
+                  muted
+                  webkit-playsinline="true"
+                  x-webkit-airplay="allow"
                 />
                 <canvas
                   ref={canvasRef}
-                  className="absolute inset-0 w-full h-full"
+                  className={`absolute inset-0 w-full h-full ${isFullscreen ? 'object-contain' : ''}`}
                   width={1920}
                   height={1080}
                 />

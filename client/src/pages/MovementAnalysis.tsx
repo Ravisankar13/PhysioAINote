@@ -2073,12 +2073,12 @@ export default function MovementAnalysis() {
 
             {/* Patellar Tracking Card */}
             <Card className={`transition-all duration-300 ${
-              biomechanicalMetrics?.kneeValgus.severity !== 'normal' ? 'border-orange-400 border-2' : ''
+              biomechanicalMetrics?.kneeValgus?.severity !== 'normal' ? 'border-orange-400 border-2' : ''
             }`}>
               <CardContent className="p-4">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-semibold">PATELLAR TRACKING</span>
-                  {biomechanicalMetrics && (
+                  {biomechanicalMetrics?.kneeValgus && (
                     <Badge variant={
                       biomechanicalMetrics.kneeValgus.severity === 'normal' ? 'default' : 
                       biomechanicalMetrics.kneeValgus.severity === 'mild' ? 'secondary' : 'destructive'
@@ -2089,11 +2089,11 @@ export default function MovementAnalysis() {
                   )}
                 </div>
                 <div className="flex justify-between text-xs mb-2">
-                  <span>L: {biomechanicalMetrics?.kneeValgus.left.toFixed(0) || 0}°</span>
-                  <span>R: {biomechanicalMetrics?.kneeValgus.right.toFixed(0) || 0}°</span>
+                  <span>L: {biomechanicalMetrics?.kneeValgus?.left?.toFixed(0) || 0}°</span>
+                  <span>R: {biomechanicalMetrics?.kneeValgus?.right?.toFixed(0) || 0}°</span>
                 </div>
                 <p className="text-xs text-gray-600">
-                  {biomechanicalMetrics?.kneeValgus.severity !== 'normal' 
+                  {biomechanicalMetrics?.kneeValgus?.severity !== 'normal' 
                     ? 'VMO strengthening needed' 
                     : 'Good neuromuscular control'}
                 </p>
@@ -2102,22 +2102,22 @@ export default function MovementAnalysis() {
 
             {/* Trendelenburg Card */}
             <Card className={`transition-all duration-300 ${
-              biomechanicalMetrics?.hipDrop.side !== 'none' ? 'border-red-400 border-2 animate-pulse' : ''
+              biomechanicalMetrics?.hipDrop?.side !== 'none' ? 'border-red-400 border-2 animate-pulse' : ''
             }`}>
               <CardContent className="p-4">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-semibold">TRENDELENBURG</span>
-                  {biomechanicalMetrics && (
+                  {biomechanicalMetrics?.hipDrop && (
                     <Badge variant={biomechanicalMetrics.hipDrop.side === 'none' ? 'default' : 'destructive'}>
                       {biomechanicalMetrics.hipDrop.side === 'none' ? '✓ NEGATIVE' : `✗ POSITIVE ${biomechanicalMetrics.hipDrop.side.toUpperCase()}`}
                     </Badge>
                   )}
                 </div>
                 <div className="text-center text-2xl font-bold mb-1">
-                  {biomechanicalMetrics?.hipDrop.angle.toFixed(1) || '0.0'}°
+                  {biomechanicalMetrics?.hipDrop?.angle?.toFixed(1) || '0.0'}°
                 </div>
                 <p className="text-xs text-gray-600">
-                  {biomechanicalMetrics?.hipDrop.side !== 'none' 
+                  {biomechanicalMetrics?.hipDrop?.side && biomechanicalMetrics.hipDrop.side !== 'none' 
                     ? `${biomechanicalMetrics.hipDrop.side} hip abductor weakness` 
                     : 'Good hip stability'}
                 </p>
@@ -2126,12 +2126,12 @@ export default function MovementAnalysis() {
 
             {/* Knee Valgus Control Card */}
             <Card className={`transition-all duration-300 ${
-              biomechanicalMetrics?.kneeValgus.severity !== 'normal' ? 'border-yellow-400 border-2' : ''
+              biomechanicalMetrics?.kneeValgus?.severity !== 'normal' ? 'border-yellow-400 border-2' : ''
             }`}>
               <CardContent className="p-4">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-semibold">KNEE VALGUS</span>
-                  {biomechanicalMetrics && (
+                  {biomechanicalMetrics?.kneeValgus && (
                     <Badge variant={
                       biomechanicalMetrics.kneeValgus.severity === 'normal' ? 'default' : 
                       biomechanicalMetrics.kneeValgus.severity === 'mild' ? 'secondary' : 'destructive'
@@ -2141,11 +2141,11 @@ export default function MovementAnalysis() {
                   )}
                 </div>
                 <Progress 
-                  value={biomechanicalMetrics ? Math.max(0, 100 - (Math.max(biomechanicalMetrics.kneeValgus.left, biomechanicalMetrics.kneeValgus.right) * 2)) : 100} 
+                  value={biomechanicalMetrics?.kneeValgus ? Math.max(0, 100 - (Math.max(biomechanicalMetrics.kneeValgus.left, biomechanicalMetrics.kneeValgus.right) * 2)) : 100} 
                   className="h-2 mb-2" 
                 />
                 <p className="text-xs text-gray-600">
-                  {biomechanicalMetrics?.kneeValgus.detected 
+                  {biomechanicalMetrics?.kneeValgus?.detected 
                     ? 'Poor frontal plane control' 
                     : 'Good knee alignment'}
                 </p>
@@ -2215,24 +2215,24 @@ export default function MovementAnalysis() {
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs">Injury Risk:</span>
                   <Badge variant={
-                    biomechanicalMetrics && (biomechanicalMetrics.kneeValgus.severity === 'severe' || biomechanicalMetrics.hipDrop.side !== 'none') 
+                    biomechanicalMetrics && (biomechanicalMetrics.kneeValgus?.severity === 'severe' || biomechanicalMetrics.hipDrop?.side !== 'none') 
                       ? 'destructive' 
-                      : biomechanicalMetrics?.kneeValgus.severity === 'moderate' 
+                      : biomechanicalMetrics?.kneeValgus?.severity === 'moderate' 
                         ? 'secondary' 
                         : 'default'
                   }>
-                    {biomechanicalMetrics && (biomechanicalMetrics.kneeValgus.severity === 'severe' || biomechanicalMetrics.hipDrop.side !== 'none') 
+                    {biomechanicalMetrics && (biomechanicalMetrics.kneeValgus?.severity === 'severe' || biomechanicalMetrics.hipDrop?.side !== 'none') 
                       ? 'HIGH' 
-                      : biomechanicalMetrics?.kneeValgus.severity === 'moderate' 
+                      : biomechanicalMetrics?.kneeValgus?.severity === 'moderate' 
                         ? 'MODERATE' 
                         : 'LOW'}
                   </Badge>
                 </div>
                 <p className="text-xs font-medium text-gray-700 dark:text-gray-300">
                   Primary Focus: {
-                    biomechanicalMetrics?.hipDrop.side !== 'none' 
+                    biomechanicalMetrics?.hipDrop?.side && biomechanicalMetrics.hipDrop.side !== 'none' 
                       ? 'Hip abductor strengthening' 
-                      : biomechanicalMetrics?.kneeValgus.detected 
+                      : biomechanicalMetrics?.kneeValgus?.detected 
                         ? 'VMO & glute strengthening' 
                         : 'Maintain current program'
                   }

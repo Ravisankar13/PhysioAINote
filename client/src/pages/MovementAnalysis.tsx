@@ -336,6 +336,11 @@ export default function MovementAnalysis() {
   const [showTestSelection, setShowTestSelection] = useState(true);
   const [currentPoseLandmarks, setCurrentPoseLandmarks] = useState<any>(null);
   
+  // Video recording state
+  const [isVideoRecording, setIsVideoRecording] = useState(false);
+  const [videoRecordingStatus, setVideoRecordingStatus] = useState<'idle' | 'recording' | 'stopping' | 'completed'>('idle');
+  const [recordedVideoBlob, setRecordedVideoBlob] = useState<Blob | null>(null);
+  
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -345,6 +350,8 @@ export default function MovementAnalysis() {
   const animationFrameRef = useRef<number>();
   const recordingIntervalRef = useRef<NodeJS.Timeout>();
   const visibleJointsRef = useRef(visibleJoints);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
   
   // Update ref when visibleJoints state changes
   useEffect(() => {
@@ -1038,7 +1045,169 @@ export default function MovementAnalysis() {
     }
   }, [isRecording, isPaused]);
 
-  // Start recording
+  // Video recording functions
+  const startVideoRecording = async () => {
+    if (!canvasRef.current) return;
+
+    try {
+      // Get the canvas stream that includes pose overlay
+      const canvasStream = canvasRef.current.captureStream(30); // 30 FPS
+      
+      // Set up MediaRecorder
+      const options = {
+        mimeType: 'video/webm;codecs=vp9',
+        videoBitsPerSecond: 2000000 // 2 Mbps for good quality
+      };
+      
+      // Fallback to VP8 if VP9 not supported
+      if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+        options.mimeType = 'video/webm;codecs=vp8';
+      }
+      
+      // Final fallback
+      if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+        options.mimeType = 'video/webm';
+      }
+
+      const mediaRecorder = new MediaRecorder(canvasStream, options);
+      mediaRecorderRef.current = mediaRecorder;
+      recordedChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          recordedChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
+        setRecordedVideoBlob(blob);
+        setVideoRecordingStatus('completed');
+        
+        // Auto-download the video
+        downloadVideo(blob);
+      };
+
+      mediaRecorder.start(100); // Record in 100ms chunks
+      setIsVideoRecording(true);
+      setVideoRecordingStatus('recording');
+      
+      toast({
+        title: "Video Recording Started",
+        description: "Recording movement analysis with pose overlay",
+      });
+    } catch (error) {
+      console.error('Error starting video recording:', error);
+      toast({
+        title: "Recording Error",
+        description: "Failed to start video recording",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const stopVideoRecording = () => {
+    if (mediaRecorderRef.current && videoRecordingStatus === 'recording') {
+      setVideoRecordingStatus('stopping');
+      mediaRecorderRef.current.stop();
+      setIsVideoRecording(false);
+      
+      toast({
+        title: "Video Recording Stopped",
+        description: "Processing and downloading video...",
+      });
+    }
+  };
+
+  const downloadVideo = (blob: Blob) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T');
+    const filename = `movement-analysis-${timestamp[0]}-${timestamp[1].split('.')[0]}.webm`;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    toast({
+      title: "Video Downloaded",
+      description: `Saved as ${filename}`,
+    });
+  };
+
+  const generateReport = () => {
+    if (!selectedTest || recordedData.length === 0) return;
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T');
+    const reportData = {
+      testName: selectedTest.name,
+      testType: selectedTest.id,
+      patientInfo: patientInfo.name ? patientInfo : null,
+      duration: elapsedTime,
+      timestamp: new Date().toISOString(),
+      metrics: currentMetrics,
+      runningMetrics: runningMetrics,
+      specializedMetrics: specializedMetrics,
+      impairments: impairments,
+      recordedDataSummary: {
+        totalFrames: recordedData.length,
+        avgConfidence: recordedData.reduce((acc, frame) => acc + (frame.confidence || 0), 0) / recordedData.length,
+        keyFindings: extractKeyFindings()
+      }
+    };
+
+    // Convert to JSON and download
+    const jsonBlob = new Blob([JSON.stringify(reportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(jsonBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    const filename = `movement-analysis-report-${timestamp[0]}-${timestamp[1].split('.')[0]}.json`;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    toast({
+      title: "Analysis Report Downloaded",
+      description: `Report saved as ${filename}`,
+    });
+  };
+
+  const extractKeyFindings = () => {
+    const findings = [];
+    
+    if (currentMetrics) {
+      if (currentMetrics.overallScore < 0.7) {
+        findings.push("Below average movement quality detected");
+      }
+      if (currentMetrics.asymmetryScore > 0.3) {
+        findings.push("Significant asymmetry observed");
+      }
+      if (currentMetrics.stabilityScore < 0.6) {
+        findings.push("Balance and stability concerns noted");
+      }
+    }
+
+    if (runningMetrics) {
+      if (runningMetrics.cadence < 160 || runningMetrics.cadence > 180) {
+        findings.push(`Cadence outside optimal range: ${runningMetrics.cadence} steps/min`);
+      }
+      if (runningMetrics.verticalOscillation > 10) {
+        findings.push(`High vertical oscillation: ${runningMetrics.verticalOscillation}cm`);
+      }
+    }
+
+    if (impairments.length > 0) {
+      findings.push(`Identified impairments: ${impairments.join(', ')}`);
+    }
+
+    return findings.length > 0 ? findings : ["No significant abnormalities detected"];
+  };
+
+  // Start recording (both data and video)
   const startRecording = () => {
     if (!selectedTest) return;
     
@@ -1047,6 +1216,9 @@ export default function MovementAnalysis() {
     setSessionStartTime(Date.now());
     setElapsedTime(0);
     setRecordedData([]);
+    
+    // Start video recording
+    startVideoRecording();
     
     // Reset running analysis if starting a running test
     if (selectedTest?.id === 'running-gait') {
@@ -1060,19 +1232,27 @@ export default function MovementAnalysis() {
     });
   };
 
-  // Stop recording
+  // Stop recording (both data and video)
   const stopRecording = async () => {
     setIsRecording(false);
     setIsPaused(false);
     
+    // Stop video recording
+    stopVideoRecording();
+    
+    // Don't save to database - user wants local files only
+    // if (recordedData.length > 0) {
+    //   await saveSession();
+    // }
+    
+    // Generate and download analysis report
     if (recordedData.length > 0) {
-      // Save session data
-      await saveSession();
+      generateReport();
     }
     
     toast({
       title: "Recording Stopped",
-      description: "Movement analysis complete",
+      description: "Video and analysis report will be downloaded",
     });
   };
 
@@ -1131,62 +1311,7 @@ export default function MovementAnalysis() {
     await saveSessionMutation.mutateAsync(sessionData);
   };
 
-  // Generate report
-  const generateReport = () => {
-    if (recordedData.length === 0) {
-      toast({
-        title: "No Data",
-        description: "Please record a movement assessment first",
-        variant: "destructive",
-      });
-      return;
-    }
 
-    // Calculate summary statistics
-    const allAngles = recordedData.flatMap(d => d.metrics?.jointAngles || []);
-    const avgSymmetry = recordedData.reduce((sum, d) => sum + (d.metrics?.symmetry || 0), 0) / recordedData.length;
-    const avgStability = recordedData.reduce((sum, d) => sum + (d.metrics?.stability || 0), 0) / recordedData.length;
-
-    // Create report content
-    const report = {
-      patient: patientInfo,
-      test: selectedTest,
-      duration: elapsedTime,
-      summary: {
-        averageSymmetry: avgSymmetry.toFixed(1),
-        averageStability: avgStability.toFixed(1),
-        impairments: Array.from(new Set(recordedData.flatMap(d => d.impairments))),
-        recommendations: selectedTest?.id === 'running-gait' 
-          ? generateRunningRecommendations(impairments)
-          : generateRecommendations(impairments),
-        // Add running-specific metrics if applicable
-        ...(selectedTest?.id === 'running-gait' && runningMetrics ? {
-          runningMetrics: {
-            cadence: runningMetrics.cadence,
-            footStrike: runningMetrics.footStrike,
-            verticalOscillation: runningMetrics.verticalOscillation,
-            strideLength: runningMetrics.strideLength,
-            groundContactTime: runningMetrics.groundContactTime,
-            overstriding: runningMetrics.overstriding,
-            crossoverGait: runningMetrics.crossoverGait
-          }
-        } : {})
-      }
-    };
-
-    // Download report as JSON (can be enhanced to PDF)
-    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `movement-analysis-${Date.now()}.json`;
-    a.click();
-    
-    toast({
-      title: "Report Generated",
-      description: "Movement analysis report has been downloaded",
-    });
-  };
 
   // Generate recommendations based on impairments
   const generateRecommendations = (impairments: string[]): string[] => {
@@ -1451,24 +1576,36 @@ export default function MovementAnalysis() {
                 )}
                 
                 {/* Overlay Controls */}
-                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2">
-                  {!isRecording ? (
-                    <Button onClick={startRecording} className="bg-green-600 hover:bg-green-700">
-                      <Play className="h-4 w-4 mr-2" />
-                      Start Recording
-                    </Button>
-                  ) : (
-                    <>
-                      <Button onClick={togglePause} variant="secondary">
-                        {isPaused ? <Play className="h-4 w-4 mr-2" /> : <Pause className="h-4 w-4 mr-2" />}
-                        {isPaused ? 'Resume' : 'Pause'}
-                      </Button>
-                      <Button onClick={stopRecording} variant="destructive">
-                        <StopCircle className="h-4 w-4 mr-2" />
-                        Stop
-                      </Button>
-                    </>
+                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex flex-col items-center gap-2">
+                  {/* Video Recording Status */}
+                  {isVideoRecording && (
+                    <div className="bg-red-600/90 text-white px-3 py-1 rounded-full flex items-center gap-2 text-sm font-medium">
+                      <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+                      {videoRecordingStatus === 'recording' && 'Recording Video'}
+                      {videoRecordingStatus === 'stopping' && 'Processing Video...'}
+                    </div>
                   )}
+                  
+                  {/* Recording Controls */}
+                  <div className="flex gap-2">
+                    {!isRecording ? (
+                      <Button onClick={startRecording} className="bg-green-600 hover:bg-green-700">
+                        <Play className="h-4 w-4 mr-2" />
+                        Start Recording
+                      </Button>
+                    ) : (
+                      <>
+                        <Button onClick={togglePause} variant="secondary">
+                          {isPaused ? <Play className="h-4 w-4 mr-2" /> : <Pause className="h-4 w-4 mr-2" />}
+                          {isPaused ? 'Resume' : 'Pause'}
+                        </Button>
+                        <Button onClick={stopRecording} variant="destructive">
+                          <StopCircle className="h-4 w-4 mr-2" />
+                          Stop
+                        </Button>
+                      </>
+                    )}
+                  </div>
                 </div>
                 
                 {/* Control Buttons - Top Right */}

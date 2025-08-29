@@ -370,6 +370,217 @@ export default function MovementAnalysis() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
   
+  // Helper functions for calculating metrics
+  const calculateAngle = (a: any, b: any, c: any) => {
+    const radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
+    let angle = Math.abs(radians * 180 / Math.PI);
+    if (angle > 180) angle = 360 - angle;
+    return angle;
+  };
+
+  const calculateLungeDepth = (landmarks: any[]) => {
+    const leftHip = landmarks[23];
+    const leftKnee = landmarks[25];
+    const rightHip = landmarks[24];
+    const rightKnee = landmarks[26];
+    
+    const leftDepth = Math.abs(leftHip.y - leftKnee.y) * 180;
+    const rightDepth = Math.abs(rightHip.y - rightKnee.y) * 180;
+    
+    return Math.max(leftDepth, rightDepth);
+  };
+
+  const calculateSwayVelocity = (landmarks: any[]) => {
+    const nose = landmarks[0];
+    const leftHip = landmarks[23];
+    const rightHip = landmarks[24];
+    
+    const centerX = (leftHip.x + rightHip.x) / 2;
+    const deviation = Math.abs(nose.x - centerX) * 10;
+    
+    return Math.min(deviation, 5);
+  };
+
+  const calculateCOMDeviation = (landmarks: any[]) => {
+    const leftHip = landmarks[23];
+    const rightHip = landmarks[24];
+    const leftAnkle = landmarks[27];
+    const rightAnkle = landmarks[28];
+    
+    const hipCenter = (leftHip.x + rightHip.x) / 2;
+    const ankleCenter = (leftAnkle.x + rightAnkle.x) / 2;
+    
+    return Math.abs(hipCenter - ankleCenter) * 100;
+  };
+
+  const detectBalanceStrategy = (landmarks: any[]) => {
+    const leftHip = landmarks[23];
+    const rightHip = landmarks[24];
+    const leftAnkle = landmarks[27];
+    const rightAnkle = landmarks[28];
+    
+    const hipMovement = Math.abs(leftHip.x - rightHip.x);
+    const ankleMovement = Math.abs(leftAnkle.x - rightAnkle.x);
+    
+    if (hipMovement > ankleMovement * 2) {
+      return 'Hip strategy';
+    }
+    return 'Ankle strategy';
+  };
+
+  const calculateLandingForce = (landmarks: any[]) => {
+    const leftKnee = landmarks[25];
+    const rightKnee = landmarks[26];
+    const leftAnkle = landmarks[27];
+    const rightAnkle = landmarks[28];
+    
+    const kneeFlexion = (leftKnee.y + rightKnee.y) / 2;
+    const anklePosition = (leftAnkle.y + rightAnkle.y) / 2;
+    
+    const absorption = Math.abs(kneeFlexion - anklePosition);
+    const force = absorption < 0.1 ? 4.5 : absorption < 0.2 ? 3.0 : 2.0;
+    
+    return force;
+  };
+
+  const calculateKneeFlexion = (landmarks: any[]) => {
+    const leftHip = landmarks[23];
+    const leftKnee = landmarks[25];
+    const leftAnkle = landmarks[27];
+    const rightHip = landmarks[24];
+    const rightKnee = landmarks[26];
+    const rightAnkle = landmarks[28];
+    
+    const leftAngle = calculateAngle(leftHip, leftKnee, leftAnkle);
+    const rightAngle = calculateAngle(rightHip, rightKnee, rightAnkle);
+    
+    return 180 - Math.min(leftAngle, rightAngle);
+  };
+
+  const calculateReactiveStrengthIndex = (landmarks: any[]) => {
+    const leftHip = landmarks[23];
+    const rightHip = landmarks[24];
+    
+    const hipHeight = (leftHip.y + rightHip.y) / 2;
+    const jumpHeight = Math.max(0.5 - hipHeight, 0) * 100;
+    const contactTime = 0.3; // Estimated
+    
+    return jumpHeight / contactTime / 10;
+  };
+
+  const calculateShoulderFlexion = (landmarks: any[]) => {
+    const leftShoulder = landmarks[11];
+    const leftElbow = landmarks[13];
+    const leftWrist = landmarks[15];
+    const rightShoulder = landmarks[12];
+    const rightElbow = landmarks[14];
+    const rightWrist = landmarks[16];
+    const leftHip = landmarks[23];
+    const rightHip = landmarks[24];
+    
+    const leftAngle = calculateAngle(leftHip, leftShoulder, leftWrist);
+    const rightAngle = calculateAngle(rightHip, rightShoulder, rightWrist);
+    
+    return Math.max(leftAngle, rightAngle);
+  };
+
+  const detectScapularWinging = (landmarks: any[]) => {
+    const leftShoulder = landmarks[11];
+    const rightShoulder = landmarks[12];
+    
+    const shoulderDistance = Math.abs(leftShoulder.z - rightShoulder.z);
+    return shoulderDistance > 0.05;
+  };
+
+  const calculateShoulderSymmetry = (landmarks: any[]) => {
+    const leftShoulder = landmarks[11];
+    const leftWrist = landmarks[15];
+    const rightShoulder = landmarks[12];
+    const rightWrist = landmarks[16];
+    
+    const leftHeight = Math.abs(leftShoulder.y - leftWrist.y);
+    const rightHeight = Math.abs(rightShoulder.y - rightWrist.y);
+    
+    const symmetry = (Math.min(leftHeight, rightHeight) / Math.max(leftHeight, rightHeight)) * 100;
+    return Math.min(symmetry, 100);
+  };
+
+  const calculatePelvicTilt = (landmarks: any[]) => {
+    const leftHip = landmarks[23];
+    const rightHip = landmarks[24];
+    const leftShoulder = landmarks[11];
+    const rightShoulder = landmarks[12];
+    
+    const hipAngle = Math.atan2(rightHip.y - leftHip.y, rightHip.x - leftHip.x) * 180 / Math.PI;
+    const shoulderAngle = Math.atan2(rightShoulder.y - leftShoulder.y, rightShoulder.x - leftShoulder.x) * 180 / Math.PI;
+    
+    return hipAngle - shoulderAngle;
+  };
+
+  const detectRotationControl = (landmarks: any[]) => {
+    const leftShoulder = landmarks[11];
+    const rightShoulder = landmarks[12];
+    const leftHip = landmarks[23];
+    const rightHip = landmarks[24];
+    
+    const shoulderRotation = Math.abs(leftShoulder.x - rightShoulder.x);
+    const hipRotation = Math.abs(leftHip.x - rightHip.x);
+    
+    return Math.abs(shoulderRotation - hipRotation) < 0.1;
+  };
+
+  const calculateTrunkLean = (landmarks: any[]) => {
+    const leftShoulder = landmarks[11];
+    const rightShoulder = landmarks[12];
+    const leftHip = landmarks[23];
+    const rightHip = landmarks[24];
+    
+    const shoulderCenter = {
+      x: (leftShoulder.x + rightShoulder.x) / 2,
+      y: (leftShoulder.y + rightShoulder.y) / 2
+    };
+    
+    const hipCenter = {
+      x: (leftHip.x + rightHip.x) / 2,
+      y: (leftHip.y + rightHip.y) / 2
+    };
+    
+    const angle = Math.atan2(shoulderCenter.x - hipCenter.x, hipCenter.y - shoulderCenter.y) * 180 / Math.PI;
+    return angle;
+  };
+
+  const detectKneeValgus = (landmarks: any[], side: 'left' | 'right') => {
+    const hip = side === 'left' ? landmarks[23] : landmarks[24];
+    const knee = side === 'left' ? landmarks[25] : landmarks[26];
+    const ankle = side === 'left' ? landmarks[27] : landmarks[28];
+    
+    const hipToKnee = { x: knee.x - hip.x, y: knee.y - hip.y };
+    const kneeToAnkle = { x: ankle.x - knee.x, y: ankle.y - knee.y };
+    
+    const dotProduct = hipToKnee.x * kneeToAnkle.x + hipToKnee.y * kneeToAnkle.y;
+    const mag1 = Math.sqrt(hipToKnee.x ** 2 + hipToKnee.y ** 2);
+    const mag2 = Math.sqrt(kneeToAnkle.x ** 2 + kneeToAnkle.y ** 2);
+    
+    const cosAngle = dotProduct / (mag1 * mag2);
+    const angleRadians = Math.acos(Math.max(-1, Math.min(1, cosAngle)));
+    const angleDegrees = (angleRadians * 180) / Math.PI;
+    
+    const valgusAngle = 180 - angleDegrees;
+    
+    return {
+      present: valgusAngle > 10,
+      severity: valgusAngle > 20 ? 'severe' : valgusAngle > 15 ? 'moderate' : valgusAngle > 10 ? 'mild' : null,
+      angle: valgusAngle
+    };
+  };
+
+  const detectTrendelenburg = (landmarks: any[]) => {
+    const leftHip = landmarks[23];
+    const rightHip = landmarks[24];
+    const hipDifference = Math.abs(leftHip.y - rightHip.y);
+    return hipDifference > 0.05;
+  };
+  
   // Update ref when visibleJoints state changes
   useEffect(() => {
     visibleJointsRef.current = visibleJoints;
@@ -890,6 +1101,69 @@ export default function MovementAnalysis() {
           if (detectedImpairments.includes('Early elevation')) {
             testResult.recommendations.push('Improve thoracic mobility');
           }
+          break;
+
+        case 'lunge-assessment':
+          // Create lunge metrics for live cards
+          metrics = analyzeMovementQuality(results.poseLandmarks);
+          const lungeMetrics = {
+            hipDrop: Math.abs(results.poseLandmarks[23].y - results.poseLandmarks[24].y) * 100,
+            kneeValgus: detectKneeValgus(results.poseLandmarks, 'left').present ? 15 : 5,
+            trunkLean: Math.abs(calculateTrunkLean(results.poseLandmarks)),
+            depth: calculateLungeDepth(results.poseLandmarks)
+          };
+          setCurrentMetrics({ ...metrics, lungeMetrics });
+          break;
+
+        case 'standing-balance':
+          // Create balance metrics for live cards
+          metrics = analyzeMovementQuality(results.poseLandmarks);
+          const balanceMetrics = {
+            swayVelocity: calculateSwayVelocity(results.poseLandmarks),
+            comDeviation: calculateCOMDeviation(results.poseLandmarks),
+            timeToStabilize: elapsedTime < 3 ? elapsedTime : 2.5,
+            strategy: detectBalanceStrategy(results.poseLandmarks)
+          };
+          setCurrentMetrics({ ...metrics, balance: balanceMetrics });
+          break;
+
+        case 'drop-jump':
+          // Create drop jump metrics for live cards
+          metrics = analyzeMovementQuality(results.poseLandmarks);
+          const dropJumpMetrics = {
+            landingForce: calculateLandingForce(results.poseLandmarks),
+            kneeFlexion: calculateKneeFlexion(results.poseLandmarks),
+            valgusAngle: Math.max(
+              Math.abs(detectKneeValgus(results.poseLandmarks, 'left').angle || 0),
+              Math.abs(detectKneeValgus(results.poseLandmarks, 'right').angle || 0)
+            ),
+            rsi: calculateReactiveStrengthIndex(results.poseLandmarks)
+          };
+          setCurrentMetrics({ ...metrics, dropJump: dropJumpMetrics });
+          break;
+
+        case 'shoulder-screen':
+          // Create shoulder metrics for live cards
+          metrics = analyzeMovementQuality(results.poseLandmarks);
+          const shoulderMetrics = {
+            flexion: calculateShoulderFlexion(results.poseLandmarks),
+            scapularWinging: detectScapularWinging(results.poseLandmarks),
+            painfulArc: false, // Would need user input
+            symmetry: calculateShoulderSymmetry(results.poseLandmarks)
+          };
+          setCurrentMetrics({ ...metrics, shoulder: shoulderMetrics });
+          break;
+
+        case 'core-stability':
+          // Create core metrics for live cards
+          metrics = analyzeMovementQuality(results.poseLandmarks);
+          const coreMetrics = {
+            plankTime: isRecording ? elapsedTime : 0,
+            pelvicTilt: calculatePelvicTilt(results.poseLandmarks),
+            rotationControl: detectRotationControl(results.poseLandmarks),
+            breathingPattern: 'Diaphragmatic' // Would need more analysis
+          };
+          setCurrentMetrics({ ...metrics, core: coreMetrics });
           break;
           
         default:

@@ -22,6 +22,10 @@ export interface BiomechanicalMetrics {
     score: number; // 0-100
     issues: string[];
   };
+  forwardLean?: {
+    angle: number;
+    severity: 'normal' | 'mild' | 'moderate' | 'severe';
+  };
 }
 
 export interface TreatmentPlan {

@@ -22,6 +22,54 @@ export interface MovementMetrics {
   stability: number;
   symmetry: number;
   quality: 'excellent' | 'good' | 'fair' | 'poor';
+  
+  // Test-specific metrics
+  lungeMetrics?: {
+    depth: number;
+    kneeAngle: number;
+    stability: number;
+    symmetry: number;
+  };
+  
+  balance?: {
+    swayVelocity: number;
+    comDeviation: number;
+    strategy: string;
+    timeInBalance: number;
+  };
+  
+  dropJump?: {
+    landingForce: number;
+    kneeFlexion: number;
+    valgusAngle: number;
+    reactiveStrengthIndex: number;
+  };
+  
+  shoulder?: {
+    flexionAngle: number;
+    scapularWinging: boolean;
+    symmetry: number;
+    compensationPattern: string;
+  };
+  
+  core?: {
+    pelvicTilt: number;
+    rotationControl: boolean;
+    trunkLean: number;
+    stability: number;
+  };
+  
+  gait?: {
+    cadence: number;
+    stepLength: number;
+    strideTime: number;
+    gaitCycle: 'stance' | 'swing';
+  };
+  
+  squatDepth?: number;
+  heelLift?: boolean;
+  shoulderFlexion?: number;
+  armSwing?: string;
 }
 
 // Landmark indices for MediaPipe Pose
@@ -308,7 +356,7 @@ export function detectKneeValgus(
   const angle = calculateAngle(hip, knee, ankle);
   const frontalDeviation = Math.abs(knee.x - ((hip.x + ankle.x) / 2));
   
-  let severity = null;
+  let severity: 'mild' | 'moderate' | 'severe' | null = null;
   let present = false;
   
   if (frontalDeviation > 0.02) { // Threshold in normalized coordinates

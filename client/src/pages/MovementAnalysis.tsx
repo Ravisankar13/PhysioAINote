@@ -1680,8 +1680,8 @@ export default function MovementAnalysis() {
       {/* Main Content */}
       <div className={`flex-1 flex ${isFullscreen ? 'p-0' : 'p-4'} gap-4 overflow-hidden ${isFullscreen ? 'bg-black' : ''}`}>
         {/* Left Panel - Video Feed */}
-        <div className={`${isFullscreen ? 'flex-1' : selectedTest?.id === 'step-down' ? 'w-2/3' : 'w-3/4'} flex flex-col gap-4`}>
-          <Card className={`flex-1 overflow-hidden ${isFullscreen ? 'border-0 rounded-none bg-black' : ''}`}>
+        <div className={`${isFullscreen ? 'flex-1' : selectedTest?.id === 'step-down' ? 'w-2/3' : 'w-3/4'} flex flex-col gap-2 h-full`}>
+          <Card className={`flex-1 overflow-hidden ${isFullscreen ? 'border-0 rounded-none bg-black' : ''} ${selectedTest?.id === 'step-down' ? 'h-[90%]' : ''}`}>
             {!isFullscreen && (
               <CardHeader className="pb-4">
                 <div className="flex items-center justify-between">
@@ -1697,8 +1697,8 @@ export default function MovementAnalysis() {
                 </div>
               </CardHeader>
             )}
-            <CardContent className={`p-0 relative ${isFullscreen ? 'h-full' : 'h-[500px]'}`}>
-              <div className={`relative ${isFullscreen ? 'h-full w-full' : 'h-full'} bg-gray-900 rounded-lg overflow-hidden`}>
+            <CardContent className={`p-0 relative ${isFullscreen ? 'h-full' : 'h-full'}`}>
+              <div className={`relative h-full w-full bg-gray-900 rounded-lg overflow-hidden`}>
                 <video
                   ref={videoRef}
                   className="absolute inset-0 w-full h-full object-cover hidden"
@@ -2005,8 +2005,21 @@ export default function MovementAnalysis() {
             </CardContent>
           </Card>
 
-          {/* Assessment Selection */}
-          {!isFullscreen && (
+          {/* Assessment Selection - Compact for Step Down, Normal for others */}
+          {!isFullscreen && selectedTest?.id === 'step-down' ? (
+            <Card className="h-[10%]">
+              <CardContent className="p-3 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Badge variant="outline" className="text-sm">
+                    {selectedTest.name}
+                  </Badge>
+                  <span className="text-xs text-gray-600">
+                    {selectedTest.instructions.join(' • ')}
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+          ) : !isFullscreen ? (
             <Card>
               <CardHeader className="pb-4">
                 <CardTitle className="text-lg">Assessment Test</CardTitle>
@@ -2032,7 +2045,7 @@ export default function MovementAnalysis() {
                 </div>
               </CardContent>
             </Card>
-          )}
+          ) : null}
         </div>
 
         {/* Right Panel - Live Metric Cards for Step Down Test */}

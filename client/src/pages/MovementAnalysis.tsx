@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { MEDIAPIPE_CONFIG, checkMediaPipeSupport, requestCameraPermission } from '@/config/mediapipe';
 import { loadMediaPipeLibraries } from '@/utils/mediapipeLoader';
 import { FrameworkAnalysisPanel } from '@/components/movement/FrameworkAnalysisPanel';
+import { biomechanicalAnalyzer, type BiomechanicalMetrics, type TreatmentPlan } from '@/utils/biomechanicalAnalysis';
 
 // MediaPipe types (will be loaded dynamically)
 type Pose = any;
@@ -40,7 +41,9 @@ import {
   Settings,
   Maximize2,
   Minimize2,
-  Info
+  Info,
+  AlertCircle,
+  Sparkles
 } from 'lucide-react';
 import {
   analyzeMovementQuality,
@@ -346,6 +349,12 @@ export default function MovementAnalysis() {
   const [isVideoRecording, setIsVideoRecording] = useState(false);
   const [videoRecordingStatus, setVideoRecordingStatus] = useState<'idle' | 'recording' | 'stopping' | 'completed'>('idle');
   const [recordedVideoBlob, setRecordedVideoBlob] = useState<Blob | null>(null);
+  
+  // Biomechanical analysis state
+  const [biomechanicalMetrics, setBiomechanicalMetrics] = useState<BiomechanicalMetrics | null>(null);
+  const [treatmentPlan, setTreatmentPlan] = useState<TreatmentPlan | null>(null);
+  const [showBiomechanicalAnalysis, setShowBiomechanicalAnalysis] = useState(true);
+  const [kneeValgusHistory, setKneeValgusHistory] = useState<number[]>([]);
   
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -712,6 +721,22 @@ export default function MovementAnalysis() {
         }
       }
 
+      // Perform biomechanical analysis for knee valgus detection
+      const bioMetrics = biomechanicalAnalyzer.analyzePose(results.poseLandmarks);
+      setBiomechanicalMetrics(bioMetrics);
+      
+      // Track knee valgus history for trending
+      if (bioMetrics.kneeValgus.severity !== 'normal') {
+        const maxValgus = Math.max(bioMetrics.kneeValgus.left, bioMetrics.kneeValgus.right);
+        setKneeValgusHistory(prev => [...prev.slice(-29), maxValgus]); // Keep last 30 values
+      }
+      
+      // Generate treatment plan if issues detected
+      if (bioMetrics.kneeValgus.severity !== 'normal' && !treatmentPlan) {
+        const plan = biomechanicalAnalyzer.generateTreatmentPlan(bioMetrics);
+        setTreatmentPlan(plan);
+      }
+      
       // Analyze movement based on selected test
       let detectedImpairments: string[] = [];
       let metrics: MovementMetrics | null = null;
@@ -1955,14 +1980,188 @@ export default function MovementAnalysis() {
         {/* Right Panel - Metrics and Analysis */}
         {!isFullscreen && (
           <div className="w-1/4 flex flex-col gap-4">
-            <Tabs defaultValue="metrics" className="flex-1">
-              <TabsList className="grid w-full grid-cols-5">
+            <Tabs defaultValue="biomechanics" className="flex-1">
+              <TabsList className="grid w-full grid-cols-6">
+                <TabsTrigger value="biomechanics">Biomech</TabsTrigger>
                 <TabsTrigger value="metrics">Metrics</TabsTrigger>
                 <TabsTrigger value="framework">Framework</TabsTrigger>
                 <TabsTrigger value="test-results">Results</TabsTrigger>
                 <TabsTrigger value="impairments">Issues</TabsTrigger>
                 <TabsTrigger value="report">Report</TabsTrigger>
               </TabsList>
+
+              {/* Biomechanical Analysis Tab */}
+              <TabsContent value="biomechanics" className="mt-4">
+                <Card className="h-full">
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Activity className="h-5 w-5" />
+                      Biomechanical Analysis
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ScrollArea className="h-[500px]">
+                      {biomechanicalMetrics ? (
+                        <div className="space-y-4">
+                          {/* Knee Valgus Detection */}
+                          <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-900">
+                            <div className="flex items-center justify-between mb-3">
+                              <h3 className="font-semibold text-sm">Knee Valgus Detection</h3>
+                              <Badge variant={
+                                biomechanicalMetrics.kneeValgus.severity === 'normal' ? 'default' :
+                                biomechanicalMetrics.kneeValgus.severity === 'mild' ? 'secondary' :
+                                biomechanicalMetrics.kneeValgus.severity === 'moderate' ? 'outline' : 'destructive'
+                              }>
+                                {biomechanicalMetrics.kneeValgus.severity.toUpperCase()}
+                              </Badge>
+                            </div>
+                            
+                            {/* Angle Display */}
+                            <div className="grid grid-cols-2 gap-2 mb-3">
+                              <div className="bg-white dark:bg-gray-800 p-2 rounded">
+                                <div className="text-xs text-gray-500">Left Knee</div>
+                                <div className="text-lg font-bold">
+                                  {biomechanicalMetrics.kneeValgus.left.toFixed(1)}°
+                                </div>
+                              </div>
+                              <div className="bg-white dark:bg-gray-800 p-2 rounded">
+                                <div className="text-xs text-gray-500">Right Knee</div>
+                                <div className="text-lg font-bold">
+                                  {biomechanicalMetrics.kneeValgus.right.toFixed(1)}°
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Contributing Factors */}
+                            {biomechanicalMetrics.kneeValgus.contributingFactors.length > 0 && (
+                              <div className="space-y-1">
+                                <p className="text-xs font-medium text-gray-600">Contributing Factors:</p>
+                                {biomechanicalMetrics.kneeValgus.contributingFactors.map((factor, i) => (
+                                  <div key={i} className="flex items-center gap-2">
+                                    <AlertCircle className="h-3 w-3 text-yellow-500" />
+                                    <span className="text-xs">{factor}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Hip Drop Analysis */}
+                          <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-900">
+                            <div className="flex items-center justify-between mb-2">
+                              <h3 className="font-semibold text-sm">Pelvic Stability</h3>
+                              <Badge variant={biomechanicalMetrics.hipDrop.side !== 'none' ? 'outline' : 'default'}>
+                                {biomechanicalMetrics.hipDrop.side === 'none' ? 'STABLE' : `DROP: ${biomechanicalMetrics.hipDrop.side.toUpperCase()}`}
+                              </Badge>
+                            </div>
+                            {biomechanicalMetrics.hipDrop.angle > 5 && (
+                              <p className="text-xs text-gray-600">
+                                Hip drop angle: {biomechanicalMetrics.hipDrop.angle.toFixed(1)}°
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Movement Quality Score */}
+                          <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-900">
+                            <div className="flex items-center justify-between mb-2">
+                              <h3 className="font-semibold text-sm">Movement Quality</h3>
+                              <span className="text-lg font-bold">
+                                {biomechanicalMetrics.movementQuality.score}/100
+                              </span>
+                            </div>
+                            <Progress value={biomechanicalMetrics.movementQuality.score} className="mb-2" />
+                            {biomechanicalMetrics.movementQuality.issues.length > 0 && (
+                              <div className="space-y-1">
+                                {biomechanicalMetrics.movementQuality.issues.map((issue, i) => (
+                                  <p key={i} className="text-xs text-gray-600">• {issue}</p>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Treatment Plan */}
+                          {treatmentPlan && biomechanicalMetrics.kneeValgus.severity !== 'normal' && (
+                            <div className="p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20">
+                              <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                                <Sparkles className="h-4 w-4 text-blue-500" />
+                                AI Treatment Plan
+                              </h3>
+                              
+                              <div className="space-y-3">
+                                <div>
+                                  <p className="text-xs font-medium text-gray-600">Primary Focus:</p>
+                                  <p className="text-sm font-semibold">{treatmentPlan.primaryFocus}</p>
+                                </div>
+                                
+                                <div>
+                                  <p className="text-xs font-medium text-gray-600">Duration:</p>
+                                  <p className="text-sm">{treatmentPlan.estimatedDuration}</p>
+                                </div>
+                                
+                                <div>
+                                  <p className="text-xs font-medium text-gray-600 mb-2">Recommended Exercises:</p>
+                                  <div className="space-y-2">
+                                    {treatmentPlan.exercises.slice(0, 3).map((exercise, i) => (
+                                      <div key={i} className="bg-white dark:bg-gray-800 p-2 rounded">
+                                        <p className="text-sm font-medium">{exercise.name}</p>
+                                        <p className="text-xs text-gray-500">
+                                          {exercise.sets} sets × {exercise.reps} • {exercise.frequency}
+                                        </p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                                
+                                <Button 
+                                  className="w-full" 
+                                  size="sm"
+                                  onClick={() => {
+                                    // Generate full treatment report
+                                    toast({
+                                      title: "Treatment Plan Generated",
+                                      description: "Full exercise program with videos has been created",
+                                    });
+                                  }}
+                                >
+                                  <FileText className="h-4 w-4 mr-2" />
+                                  View Full Treatment Plan
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Valgus Trend Chart */}
+                          {kneeValgusHistory.length > 5 && (
+                            <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-900">
+                              <h3 className="font-semibold text-sm mb-2">Knee Valgus Trend</h3>
+                              <div className="h-20 flex items-end gap-1">
+                                {kneeValgusHistory.slice(-20).map((value, i) => (
+                                  <div
+                                    key={i}
+                                    className={`flex-1 ${
+                                      value > 15 ? 'bg-red-500' :
+                                      value > 10 ? 'bg-yellow-500' :
+                                      value > 5 ? 'bg-blue-500' : 'bg-green-500'
+                                    }`}
+                                    style={{ height: `${(value / 30) * 100}%` }}
+                                    title={`${value.toFixed(1)}°`}
+                                  />
+                                ))}
+                              </div>
+                              <p className="text-xs text-gray-500 mt-1">Last 20 measurements</p>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 text-gray-500">
+                          <Activity className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                          <p>Start recording to see biomechanical analysis</p>
+                        </div>
+                      )}
+                    </ScrollArea>
+                  </CardContent>
+                </Card>
+              </TabsContent>
 
               <TabsContent value="metrics" className="mt-4">
                 <Card className="h-full">

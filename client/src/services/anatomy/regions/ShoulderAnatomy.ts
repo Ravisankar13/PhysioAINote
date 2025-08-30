@@ -154,6 +154,11 @@ export class ShoulderAnatomy extends AnatomyRenderer {
     this.renderSpine(ctx, landmarks, width, height);
     this.renderRibcage(ctx, landmarks, width, height);
     
+    // Render additional major bones
+    this.renderUpperLimbs(ctx, landmarks, width, height);
+    this.renderLowerLimbs(ctx, landmarks, width, height);
+    this.renderHandsAndFeet(ctx, landmarks, width, height);
+    
     // Then render the regular anatomy structures
     super.render(context);
   }
@@ -1471,5 +1476,429 @@ export class ShoulderAnatomy extends AnatomyRenderer {
     ctx.stroke();
     
     ctx.restore();
+  }
+
+  private renderUpperLimbs(ctx: CanvasRenderingContext2D, landmarks: any, width: number, height: number) {
+    // Render arms: humerus, radius, ulna
+    const sides: Array<'left' | 'right'> = ['left', 'right'];
+    
+    for (const side of sides) {
+      const shoulderLandmark = side === 'left' ? POSE_LANDMARKS.LEFT_SHOULDER : POSE_LANDMARKS.RIGHT_SHOULDER;
+      const elbowLandmark = side === 'left' ? POSE_LANDMARKS.LEFT_ELBOW : POSE_LANDMARKS.RIGHT_ELBOW;
+      const wristLandmark = side === 'left' ? POSE_LANDMARKS.LEFT_WRIST : POSE_LANDMARKS.RIGHT_WRIST;
+      
+      const shoulder = getLandmarkPosition(landmarks, shoulderLandmark, width, height);
+      const elbow = getLandmarkPosition(landmarks, elbowLandmark, width, height);
+      const wrist = getLandmarkPosition(landmarks, wristLandmark, width, height);
+      
+      if (!shoulder || !elbow || !wrist) continue;
+      
+      ctx.save();
+      ctx.fillStyle = '#E8D4B0';
+      ctx.strokeStyle = '#D4C4A0';
+      ctx.lineWidth = 2;
+      
+      // Humerus (upper arm bone)
+      const humerusWidth = getDistance(shoulder, elbow) * 0.08;
+      ctx.beginPath();
+      
+      // Humeral head (ball joint at shoulder)
+      ctx.arc(shoulder.x, shoulder.y, humerusWidth * 1.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      
+      // Humerus shaft
+      ctx.beginPath();
+      ctx.moveTo(shoulder.x - humerusWidth / 2, shoulder.y);
+      ctx.lineTo(elbow.x - humerusWidth / 2, elbow.y - humerusWidth);
+      ctx.lineTo(elbow.x + humerusWidth / 2, elbow.y - humerusWidth);
+      ctx.lineTo(shoulder.x + humerusWidth / 2, shoulder.y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      
+      // Elbow joint (distal humerus)
+      ctx.beginPath();
+      ctx.fillStyle = '#D4C4A0';
+      
+      // Lateral epicondyle
+      ctx.arc(elbow.x - humerusWidth, elbow.y, humerusWidth * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Medial epicondyle
+      ctx.arc(elbow.x + humerusWidth, elbow.y, humerusWidth * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Olecranon fossa (elbow joint)
+      ctx.beginPath();
+      ctx.fillStyle = '#C4B4A0';
+      ctx.arc(elbow.x, elbow.y, humerusWidth * 0.6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      
+      // Radius and Ulna (forearm bones)
+      const forearmWidth = humerusWidth * 0.7;
+      
+      // Ulna (medial bone, thicker at elbow)
+      ctx.beginPath();
+      ctx.fillStyle = '#E8D4B0';
+      ctx.strokeStyle = '#D4C4A0';
+      
+      // Olecranon process (pointy part of elbow)
+      ctx.moveTo(elbow.x - forearmWidth * 0.8, elbow.y);
+      ctx.lineTo(elbow.x - forearmWidth * 0.8, elbow.y + humerusWidth * 0.5);
+      ctx.lineTo(elbow.x - forearmWidth * 0.3, elbow.y + humerusWidth * 0.3);
+      ctx.lineTo(elbow.x - forearmWidth * 0.3, elbow.y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      
+      // Ulna shaft
+      ctx.beginPath();
+      ctx.moveTo(elbow.x - forearmWidth * 0.5, elbow.y);
+      ctx.lineTo(wrist.x - forearmWidth * 0.3, wrist.y);
+      ctx.lineTo(wrist.x, wrist.y);
+      ctx.lineTo(elbow.x - forearmWidth * 0.2, elbow.y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      
+      // Radius (lateral bone, rotates around ulna)
+      ctx.beginPath();
+      ctx.moveTo(elbow.x + forearmWidth * 0.2, elbow.y);
+      ctx.lineTo(wrist.x, wrist.y);
+      ctx.lineTo(wrist.x + forearmWidth * 0.3, wrist.y);
+      ctx.lineTo(elbow.x + forearmWidth * 0.5, elbow.y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      
+      // Radial head (at elbow)
+      ctx.beginPath();
+      ctx.arc(elbow.x + forearmWidth * 0.35, elbow.y, forearmWidth * 0.3, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Wrist joint (carpal bones simplified)
+      ctx.beginPath();
+      ctx.fillStyle = '#D4C4A0';
+      ctx.roundRect(
+        wrist.x - forearmWidth,
+        wrist.y - forearmWidth * 0.3,
+        forearmWidth * 2,
+        forearmWidth * 0.6,
+        2
+      );
+      ctx.fill();
+      ctx.stroke();
+      
+      ctx.restore();
+    }
+  }
+
+  private renderLowerLimbs(ctx: CanvasRenderingContext2D, landmarks: any, width: number, height: number) {
+    // Render legs: femur, patella, tibia, fibula
+    const sides: Array<'left' | 'right'> = ['left', 'right'];
+    
+    for (const side of sides) {
+      const hipLandmark = side === 'left' ? POSE_LANDMARKS.LEFT_HIP : POSE_LANDMARKS.RIGHT_HIP;
+      const kneeLandmark = side === 'left' ? POSE_LANDMARKS.LEFT_KNEE : POSE_LANDMARKS.RIGHT_KNEE;
+      const ankleLandmark = side === 'left' ? POSE_LANDMARKS.LEFT_ANKLE : POSE_LANDMARKS.RIGHT_ANKLE;
+      
+      const hip = getLandmarkPosition(landmarks, hipLandmark, width, height);
+      const knee = getLandmarkPosition(landmarks, kneeLandmark, width, height);
+      const ankle = getLandmarkPosition(landmarks, ankleLandmark, width, height);
+      
+      if (!hip || !knee || !ankle) continue;
+      
+      ctx.save();
+      ctx.fillStyle = '#E8D4B0';
+      ctx.strokeStyle = '#D4C4A0';
+      ctx.lineWidth = 2;
+      
+      // Femur (thighbone - longest bone in body)
+      const femurWidth = getDistance(hip, knee) * 0.1;
+      
+      // Femoral neck and greater trochanter
+      ctx.beginPath();
+      ctx.moveTo(hip.x, hip.y);
+      ctx.lineTo(hip.x + (side === 'left' ? -femurWidth : femurWidth), hip.y + femurWidth * 0.5);
+      ctx.lineTo(hip.x + (side === 'left' ? -femurWidth * 0.7 : femurWidth * 0.7), hip.y + femurWidth);
+      ctx.lineTo(hip.x, hip.y + femurWidth * 0.7);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      
+      // Femur shaft
+      ctx.beginPath();
+      const femurTopX = hip.x + (side === 'left' ? -femurWidth * 0.5 : femurWidth * 0.5);
+      ctx.moveTo(femurTopX - femurWidth / 2, hip.y + femurWidth);
+      ctx.lineTo(knee.x - femurWidth / 2, knee.y - femurWidth);
+      ctx.lineTo(knee.x + femurWidth / 2, knee.y - femurWidth);
+      ctx.lineTo(femurTopX + femurWidth / 2, hip.y + femurWidth);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      
+      // Distal femur (knee joint)
+      ctx.beginPath();
+      ctx.fillStyle = '#D4C4A0';
+      
+      // Medial condyle
+      ctx.arc(knee.x - femurWidth * 0.5, knee.y, femurWidth * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Lateral condyle
+      ctx.arc(knee.x + femurWidth * 0.5, knee.y, femurWidth * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Patella (kneecap)
+      ctx.beginPath();
+      ctx.fillStyle = '#F0E4D0';
+      ctx.strokeStyle = '#E0D4C0';
+      ctx.arc(knee.x, knee.y - femurWidth * 0.2, femurWidth * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      
+      // Tibia and Fibula (lower leg bones)
+      const tibiaWidth = femurWidth * 0.8;
+      
+      // Tibia (shin bone - larger, medial)
+      ctx.beginPath();
+      ctx.fillStyle = '#E8D4B0';
+      ctx.strokeStyle = '#D4C4A0';
+      
+      // Tibial plateau (top of tibia)
+      ctx.roundRect(
+        knee.x - tibiaWidth * 0.7,
+        knee.y + femurWidth * 0.3,
+        tibiaWidth * 1.4,
+        tibiaWidth * 0.3,
+        2
+      );
+      ctx.fill();
+      ctx.stroke();
+      
+      // Tibia shaft
+      ctx.beginPath();
+      ctx.moveTo(knee.x - tibiaWidth * 0.5, knee.y + femurWidth * 0.6);
+      ctx.lineTo(ankle.x - tibiaWidth * 0.4, ankle.y - tibiaWidth * 0.5);
+      ctx.lineTo(ankle.x + tibiaWidth * 0.2, ankle.y - tibiaWidth * 0.5);
+      ctx.lineTo(knee.x + tibiaWidth * 0.3, knee.y + femurWidth * 0.6);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      
+      // Fibula (thin lateral bone)
+      ctx.beginPath();
+      ctx.strokeStyle = '#D4C4A0';
+      ctx.lineWidth = 3;
+      
+      // Fibular head
+      ctx.beginPath();
+      ctx.arc(knee.x + tibiaWidth * 0.7, knee.y + femurWidth * 0.5, tibiaWidth * 0.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      
+      // Fibula shaft
+      ctx.beginPath();
+      ctx.moveTo(knee.x + tibiaWidth * 0.7, knee.y + femurWidth * 0.7);
+      ctx.lineTo(ankle.x + tibiaWidth * 0.4, ankle.y - tibiaWidth * 0.5);
+      ctx.lineWidth = 4;
+      ctx.stroke();
+      
+      // Ankle joint (tarsals simplified)
+      ctx.beginPath();
+      ctx.fillStyle = '#D4C4A0';
+      ctx.strokeStyle = '#C4B4A0';
+      ctx.lineWidth = 2;
+      
+      // Medial malleolus (inner ankle bone)
+      ctx.arc(ankle.x - tibiaWidth * 0.3, ankle.y, tibiaWidth * 0.3, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Lateral malleolus (outer ankle bone)
+      ctx.arc(ankle.x + tibiaWidth * 0.3, ankle.y, tibiaWidth * 0.25, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Talus (ankle bone)
+      ctx.beginPath();
+      ctx.fillStyle = '#E8D4B0';
+      ctx.roundRect(
+        ankle.x - tibiaWidth * 0.4,
+        ankle.y - tibiaWidth * 0.2,
+        tibiaWidth * 0.8,
+        tibiaWidth * 0.4,
+        3
+      );
+      ctx.fill();
+      ctx.stroke();
+      
+      ctx.restore();
+    }
+  }
+
+  private renderHandsAndFeet(ctx: CanvasRenderingContext2D, landmarks: any, width: number, height: number) {
+    // Render simplified hand and foot bones
+    const sides: Array<'left' | 'right'> = ['left', 'right'];
+    
+    for (const side of sides) {
+      // Hand bones
+      const wristLandmark = side === 'left' ? POSE_LANDMARKS.LEFT_WRIST : POSE_LANDMARKS.RIGHT_WRIST;
+      const pinkieLandmark = side === 'left' ? POSE_LANDMARKS.LEFT_PINKY : POSE_LANDMARKS.RIGHT_PINKY;
+      const indexLandmark = side === 'left' ? POSE_LANDMARKS.LEFT_INDEX : POSE_LANDMARKS.RIGHT_INDEX;
+      const thumbLandmark = side === 'left' ? POSE_LANDMARKS.LEFT_THUMB : POSE_LANDMARKS.RIGHT_THUMB;
+      
+      const wrist = getLandmarkPosition(landmarks, wristLandmark, width, height);
+      const pinkie = getLandmarkPosition(landmarks, pinkieLandmark, width, height);
+      const index = getLandmarkPosition(landmarks, indexLandmark, width, height);
+      const thumb = getLandmarkPosition(landmarks, thumbLandmark, width, height);
+      
+      if (wrist && (pinkie || index || thumb)) {
+        ctx.save();
+        ctx.fillStyle = '#E8D4B0';
+        ctx.strokeStyle = '#D4C4A0';
+        ctx.lineWidth = 1;
+        
+        // Carpal bones (8 small bones in wrist)
+        const carpalsWidth = 15;
+        ctx.beginPath();
+        ctx.fillStyle = '#D4C4A0';
+        ctx.roundRect(
+          wrist.x - carpalsWidth,
+          wrist.y - carpalsWidth * 0.5,
+          carpalsWidth * 2,
+          carpalsWidth,
+          3
+        );
+        ctx.fill();
+        ctx.stroke();
+        
+        // Metacarpals (5 bones in palm)
+        if (pinkie || index) {
+          const handEnd = pinkie || index;
+          const handLength = getDistance(wrist, handEnd);
+          
+          for (let i = 0; i < 5; i++) {
+            ctx.beginPath();
+            ctx.strokeStyle = '#D4C4A0';
+            ctx.lineWidth = 2;
+            
+            const startX = wrist.x - carpalsWidth * 0.8 + (i * carpalsWidth * 0.4);
+            const endX = wrist.x - carpalsWidth * 0.8 + (i * carpalsWidth * 0.4);
+            const endY = wrist.y + handLength * 0.5;
+            
+            ctx.moveTo(startX, wrist.y + carpalsWidth * 0.5);
+            ctx.lineTo(endX, endY);
+            ctx.stroke();
+            
+            // Metacarpal heads (knuckles)
+            ctx.beginPath();
+            ctx.fillStyle = '#D4C4A0';
+            ctx.arc(endX, endY, 3, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+        
+        // Phalanges (finger bones - simplified)
+        if (thumb) {
+          // Thumb metacarpal and phalanges
+          ctx.beginPath();
+          ctx.strokeStyle = '#D4C4A0';
+          ctx.lineWidth = 2;
+          ctx.moveTo(wrist.x, wrist.y);
+          ctx.lineTo(thumb.x, thumb.y);
+          ctx.stroke();
+          
+          // Thumb joints
+          ctx.beginPath();
+          ctx.fillStyle = '#D4C4A0';
+          ctx.arc(thumb.x, thumb.y, 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        
+        ctx.restore();
+      }
+      
+      // Foot bones
+      const ankleLandmark = side === 'left' ? POSE_LANDMARKS.LEFT_ANKLE : POSE_LANDMARKS.RIGHT_ANKLE;
+      const heelLandmark = side === 'left' ? POSE_LANDMARKS.LEFT_HEEL : POSE_LANDMARKS.RIGHT_HEEL;
+      const footIndexLandmark = side === 'left' ? POSE_LANDMARKS.LEFT_FOOT_INDEX : POSE_LANDMARKS.RIGHT_FOOT_INDEX;
+      
+      const ankle = getLandmarkPosition(landmarks, ankleLandmark, width, height);
+      const heel = getLandmarkPosition(landmarks, heelLandmark, width, height);
+      const footIndex = getLandmarkPosition(landmarks, footIndexLandmark, width, height);
+      
+      if (ankle && (heel || footIndex)) {
+        ctx.save();
+        ctx.fillStyle = '#E8D4B0';
+        ctx.strokeStyle = '#D4C4A0';
+        ctx.lineWidth = 2;
+        
+        // Calcaneus (heel bone)
+        if (heel) {
+          ctx.beginPath();
+          ctx.fillStyle = '#E8D4B0';
+          ctx.ellipse(heel.x, heel.y, 12, 8, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        }
+        
+        // Tarsal bones (7 bones in midfoot)
+        const tarsalWidth = 20;
+        ctx.beginPath();
+        ctx.fillStyle = '#D4C4A0';
+        ctx.roundRect(
+          ankle.x - tarsalWidth * 0.5,
+          ankle.y,
+          tarsalWidth,
+          tarsalWidth * 0.8,
+          3
+        );
+        ctx.fill();
+        ctx.stroke();
+        
+        // Metatarsals (5 long bones in foot)
+        if (footIndex) {
+          const footLength = getDistance(ankle, footIndex);
+          
+          for (let i = 0; i < 5; i++) {
+            ctx.beginPath();
+            ctx.strokeStyle = '#D4C4A0';
+            ctx.lineWidth = 2;
+            
+            const startX = ankle.x - tarsalWidth * 0.4 + (i * tarsalWidth * 0.2);
+            const endX = ankle.x - tarsalWidth * 0.4 + (i * tarsalWidth * 0.2);
+            const endY = ankle.y + footLength * 0.7;
+            
+            ctx.moveTo(startX, ankle.y + tarsalWidth * 0.8);
+            ctx.lineTo(endX, endY);
+            ctx.stroke();
+            
+            // Metatarsal heads
+            ctx.beginPath();
+            ctx.fillStyle = '#D4C4A0';
+            ctx.arc(endX, endY, 3, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          
+          // Phalanges (toe bones - simplified)
+          for (let i = 0; i < 5; i++) {
+            ctx.beginPath();
+            ctx.strokeStyle = '#C4B4A0';
+            ctx.lineWidth = 1.5;
+            
+            const toeStartX = ankle.x - tarsalWidth * 0.4 + (i * tarsalWidth * 0.2);
+            const toeStartY = ankle.y + footLength * 0.7;
+            const toeEndY = ankle.y + footLength * 0.9;
+            
+            ctx.moveTo(toeStartX, toeStartY);
+            ctx.lineTo(toeStartX, toeEndY);
+            ctx.stroke();
+          }
+        }
+        
+        ctx.restore();
+      }
+    }
   }
 }

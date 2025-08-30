@@ -44,6 +44,12 @@ import {
 } from '@/services/biomechanics/BodyPartAnalysis';
 import { DetailedSpineRenderer, RibcageRenderer, PelvisRenderer, BoneMeasurements } from '@/services/anatomy/DetailedBoneStructures';
 import { ShoulderComplexRenderer } from '@/services/anatomy/shoulder/ShoulderComplex';
+import { 
+  EnhancedRibcageRenderer, 
+  EnhancedPelvisRenderer, 
+  EnhancedKneeRenderer, 
+  EnhancedElbowRenderer 
+} from '@/services/anatomy/EnhancedAnatomicalStructures';
 
 // Pose landmark indices
 const POSE_LANDMARKS = {
@@ -384,6 +390,51 @@ export default function BodyScanner() {
         if (landmarks[12]) { // Right shoulder landmark exists
           shoulderRenderer.render(ctx, landmarks, width, height, 'right');
         }
+      }
+      
+      // Render enhanced anatomical structures
+      // Enhanced Ribcage with costovertebral joints and detailed anatomy
+      const enhancedRibcageRenderer = new EnhancedRibcageRenderer();
+      const enhancedRibcageData = enhancedRibcageRenderer.generateEnhancedRibcage(landmarks, width, height);
+      enhancedRibcageRenderer.renderEnhancedRibcage(ctx, enhancedRibcageData);
+      
+      // Enhanced Pelvis with ASIS, PSIS, and clinical measurements
+      const enhancedPelvisRenderer = new EnhancedPelvisRenderer();
+      const enhancedPelvisData = enhancedPelvisRenderer.generateEnhancedPelvis(landmarks, width, height);
+      enhancedPelvisRenderer.renderEnhancedPelvis(ctx, enhancedPelvisData);
+      
+      // Enhanced Knee joints (both sides)
+      const enhancedKneeRenderer = new EnhancedKneeRenderer();
+      if (landmarks[25]) { // Left knee
+        const leftKnee = enhancedKneeRenderer.generateEnhancedKnee(landmarks, width, height, 'left');
+        enhancedKneeRenderer.renderEnhancedKnee(ctx, leftKnee, 'left', {
+          x: landmarks[25].x * width,
+          y: landmarks[25].y * height
+        });
+      }
+      if (landmarks[26]) { // Right knee
+        const rightKnee = enhancedKneeRenderer.generateEnhancedKnee(landmarks, width, height, 'right');
+        enhancedKneeRenderer.renderEnhancedKnee(ctx, rightKnee, 'right', {
+          x: landmarks[26].x * width,
+          y: landmarks[26].y * height
+        });
+      }
+      
+      // Enhanced Elbow joints (both sides)
+      const enhancedElbowRenderer = new EnhancedElbowRenderer();
+      if (landmarks[13]) { // Left elbow
+        const leftElbow = enhancedElbowRenderer.generateEnhancedElbow(landmarks, width, height, 'left');
+        enhancedElbowRenderer.renderEnhancedElbow(ctx, leftElbow, 'left', {
+          x: landmarks[13].x * width,
+          y: landmarks[13].y * height
+        });
+      }
+      if (landmarks[14]) { // Right elbow
+        const rightElbow = enhancedElbowRenderer.generateEnhancedElbow(landmarks, width, height, 'right');
+        enhancedElbowRenderer.renderEnhancedElbow(ctx, rightElbow, 'right', {
+          x: landmarks[14].x * width,
+          y: landmarks[14].y * height
+        });
       }
     }
     

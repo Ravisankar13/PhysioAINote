@@ -305,9 +305,9 @@ export class ShoulderAnatomy extends AnatomyRenderer {
     const shoulderWidth = getDistance(shoulder, oppositeShoulder);
     const torsoHeight = hip ? getDistance(shoulder, hip) : shoulderWidth * 1.5;
     
-    // Anatomically correct scapula dimensions and position
-    const scapulaWidth = shoulderWidth * 0.35;
-    const scapulaHeight = torsoHeight * 0.4;
+    // Anatomically correct scapula dimensions and position (reduced size)
+    const scapulaWidth = shoulderWidth * 0.25;  // Reduced from 0.35
+    const scapulaHeight = torsoHeight * 0.25;   // Reduced from 0.4
     
     // Position scapula on the posterior thorax (T2-T7)
     // The acromion process should align with the shoulder point
@@ -316,7 +316,7 @@ export class ShoulderAnatomy extends AnatomyRenderer {
     
     // Calculate spine position (medial border should be about 3 inches from spine)
     const spineX = (shoulder.x + oppositeShoulder.x) / 2;
-    const medialOffset = shoulderWidth * 0.15; // Distance from spine to medial border
+    const medialOffset = shoulderWidth * 0.12; // Distance from spine to medial border (adjusted for smaller size)
     
     // Superior angle (top point of scapula)
     const superiorAngle = {
@@ -363,7 +363,7 @@ export class ShoulderAnatomy extends AnatomyRenderer {
     // Draw spine of scapula (ridge across posterior surface)
     ctx.beginPath();
     ctx.strokeStyle = '#C4B4A0';
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 2;  // Reduced from 3
     
     const spineStart = interpolatePoint(superiorAngle, inferiorAngle, 0.3);
     if (spineStart) {
@@ -375,13 +375,13 @@ export class ShoulderAnatomy extends AnatomyRenderer {
     // Draw acromion process
     ctx.beginPath();
     ctx.fillStyle = '#DCC8A8';
-    ctx.arc(acromionX, acromionY, scapulaWidth * 0.08, 0, Math.PI * 2);
+    ctx.arc(acromionX, acromionY, scapulaWidth * 0.06, 0, Math.PI * 2);  // Reduced from 0.08
     ctx.fill();
     
     // Draw glenoid cavity (shoulder socket)
     ctx.beginPath();
     ctx.fillStyle = '#C0A080';
-    ctx.arc(lateralAngle.x, lateralAngle.y, scapulaWidth * 0.06, 0, Math.PI * 2);
+    ctx.arc(lateralAngle.x, lateralAngle.y, scapulaWidth * 0.05, 0, Math.PI * 2);  // Reduced from 0.06
     ctx.fill();
     
     ctx.restore();

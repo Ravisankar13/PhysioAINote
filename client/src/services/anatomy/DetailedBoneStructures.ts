@@ -29,6 +29,11 @@ export class DetailedSpineRenderer {
     sacral: ['S1-S5'],
     coccygeal: ['Co1-Co4']
   };
+  
+  // Smoothing variables for spine movement
+  private previousFlexion: number = 0;
+  private previousLateralFlexion: number = 0;
+  private smoothingFactor: number = 0.3; // Lower = smoother, higher = more responsive
 
   /**
    * Generate detailed vertebrae with anatomical processes that follow actual spine movement
@@ -46,8 +51,6 @@ export class DetailedSpineRenderer {
     const rightEar = landmarks[8];
     const leftShoulder = landmarks[11];
     const rightShoulder = landmarks[12];
-    const leftElbow = landmarks[13];
-    const rightElbow = landmarks[14];
     const leftHip = landmarks[23];
     const rightHip = landmarks[24];
     
@@ -62,7 +65,7 @@ export class DetailedSpineRenderer {
       y: (leftHip.y + rightHip.y) / 2
     };
     
-    // Calculate head position and tilt
+    // Calculate head position
     const headCenter = {
       x: nose ? nose.x : shoulderMidpoint.x,
       y: nose ? nose.y + 0.08 : shoulderMidpoint.y - 0.15
@@ -77,27 +80,36 @@ export class DetailedSpineRenderer {
       rightHip.y - leftHip.y,
       rightHip.x - leftHip.x
     );
-    const lateralFlexion = shoulderTilt - hipTilt;
+    const rawLateralFlexion = shoulderTilt - hipTilt;
     
-    // Calculate forward/backward flexion
-    const spineAngle = Math.atan2(
-      hipMidpoint.y - shoulderMidpoint.y,
-      hipMidpoint.x - shoulderMidpoint.x
-    );
+    // Calculate forward/backward flexion based on trunk angle
+    // This is more reliable than using elbow position
+    const trunkVector = {
+      x: shoulderMidpoint.x - hipMidpoint.x,
+      y: shoulderMidpoint.y - hipMidpoint.y
+    };
     
-    // Calculate thoracic cage position (using elbows as reference)
+    // Calculate angle from vertical (0 = upright, positive = forward lean)
+    const verticalAngle = Math.atan2(trunkVector.x, -trunkVector.y);
+    
+    // Limit flexion to reasonable range (-0.3 to 0.3 radians)
+    const rawFlexionAmount = Math.max(-0.3, Math.min(0.3, verticalAngle)) * 0.2;
+    
+    // Apply exponential smoothing to prevent sudden changes
+    const flexionAmount = this.previousFlexion + 
+      (rawFlexionAmount - this.previousFlexion) * this.smoothingFactor;
+    const lateralFlexion = this.previousLateralFlexion + 
+      (rawLateralFlexion - this.previousLateralFlexion) * this.smoothingFactor;
+    
+    // Update previous values for next frame
+    this.previousFlexion = flexionAmount;
+    this.previousLateralFlexion = lateralFlexion;
+    
+    // Calculate thoracic midpoint
     const thoracicMidpoint = {
       x: (shoulderMidpoint.x + hipMidpoint.x) / 2,
       y: (shoulderMidpoint.y + hipMidpoint.y) / 2
     };
-    
-    // If elbows are forward, spine is likely flexed
-    const elbowMidpoint = leftElbow && rightElbow ? {
-      x: (leftElbow.x + rightElbow.x) / 2,
-      y: (leftElbow.y + rightElbow.y) / 2
-    } : shoulderMidpoint;
-    
-    const flexionAmount = (elbowMidpoint.x - shoulderMidpoint.x) * 0.5;
     
     // Total spine length calculation
     const totalSpineLength = Math.sqrt(
@@ -107,16 +119,16 @@ export class DetailedSpineRenderer {
     
     // Calculate vertebrae positions with smooth transitions
     const totalVertebrae = 24; // C1-C7, T1-T12, L1-L5
-    const vertebralSpacing = totalSpineLength / totalVertebrae;
     
-    // Generate spine curve using bezier interpolation
+    // Generate spine curve using bezier interpolation with limited curvature
+    // Control points are positioned to create natural spinal curves
     const controlPoint1 = {
-      x: shoulderMidpoint.x + flexionAmount,
+      x: shoulderMidpoint.x + flexionAmount * 0.5, // Reduced influence
       y: shoulderMidpoint.y - 0.05
     };
     
     const controlPoint2 = {
-      x: thoracicMidpoint.x + flexionAmount * 1.5,
+      x: thoracicMidpoint.x + flexionAmount * 0.7, // Reduced from 1.5x
       y: thoracicMidpoint.y
     };
     
@@ -133,7 +145,7 @@ export class DetailedSpineRenderer {
         t
       );
       
-      // Apply lateral flexion
+      // Apply lateral flexion with natural distribution
       const lateralOffset = Math.sin(t * Math.PI) * lateralFlexion * 0.1;
       position.x += lateralOffset;
       

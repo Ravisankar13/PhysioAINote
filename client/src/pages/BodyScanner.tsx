@@ -271,22 +271,7 @@ export default function BodyScanner() {
       const metrics = calculateKneeMetrics(results.poseLandmarks);
       setKneeMetrics(metrics);
       
-      // Draw connections
-      if (window.drawConnectors && window.POSE_CONNECTIONS) {
-        window.drawConnectors(ctx, results.poseLandmarks, window.POSE_CONNECTIONS, {
-          color: '#00FF00',
-          lineWidth: 2
-        });
-      }
-      
-      // Draw landmarks
-      if (window.drawLandmarks) {
-        window.drawLandmarks(ctx, results.poseLandmarks, {
-          color: '#FF0000',
-          lineWidth: 1,
-          radius: 4
-        });
-      }
+      // Removed basic pose visualization - using anatomical overlay instead
       
       // Perform body part analysis for selected region
       const analysis = analyzeBodyPart(selectedBodyPart, results.poseLandmarks);

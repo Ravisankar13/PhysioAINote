@@ -57,8 +57,13 @@ export class DetailedSpineRenderer {
     };
 
     // Generate cervical vertebrae (C1-C7)
-    const neckTop = { x: shoulderMidpoint.x, y: shoulderMidpoint.y - 0.15 };
-    const cervicalHeight = (shoulderMidpoint.y - neckTop.y) / 7;
+    // Use nose landmark (0) to determine head position for proper neck alignment
+    const nose = landmarks[0];
+    const neckTop = { 
+      x: shoulderMidpoint.x, 
+      y: nose ? nose.y + 0.08 : shoulderMidpoint.y - 0.15 // Start below nose/chin area
+    };
+    const cervicalHeight = Math.abs(shoulderMidpoint.y - neckTop.y) / 7;
     
     for (let i = 0; i < 7; i++) {
       const level = `C${i + 1}`;

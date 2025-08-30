@@ -299,41 +299,502 @@ export default function BodyScanner() {
     ctx.restore();
   }, [visibleLayers, trackedRegions]);
   
-  // Draw anatomy overlay
+  // Draw anatomy overlay with realistic structures
   const drawAnatomyOverlay = (ctx: CanvasRenderingContext2D, landmarks: any[], width: number, height: number) => {
+    // Get all necessary landmarks
+    const leftHip = landmarks[POSE_LANDMARKS.LEFT_HIP];
+    const rightHip = landmarks[POSE_LANDMARKS.RIGHT_HIP];
     const leftKnee = landmarks[POSE_LANDMARKS.LEFT_KNEE];
     const rightKnee = landmarks[POSE_LANDMARKS.RIGHT_KNEE];
+    const leftAnkle = landmarks[POSE_LANDMARKS.LEFT_ANKLE];
+    const rightAnkle = landmarks[POSE_LANDMARKS.RIGHT_ANKLE];
+    const leftShoulder = landmarks[POSE_LANDMARKS.LEFT_SHOULDER];
+    const rightShoulder = landmarks[POSE_LANDMARKS.RIGHT_SHOULDER];
+    const leftElbow = landmarks[POSE_LANDMARKS.LEFT_ELBOW];
+    const rightElbow = landmarks[POSE_LANDMARKS.RIGHT_ELBOW];
+    const leftWrist = landmarks[POSE_LANDMARKS.LEFT_WRIST];
+    const rightWrist = landmarks[POSE_LANDMARKS.RIGHT_WRIST];
     
-    // Simple anatomy visualization (placeholder for 3D models)
     visibleLayers.forEach(layerId => {
       const layer = ANATOMY_LAYERS.find(l => l.id === layerId);
       if (!layer) return;
       
-      ctx.globalAlpha = 0.6;
-      ctx.fillStyle = layer.color;
-      
-      // Draw simplified knee anatomy around landmarks
-      const kneeSize = 40;
-      
-      // Left knee
-      ctx.beginPath();
-      ctx.arc(leftKnee.x * width, leftKnee.y * height, kneeSize, 0, 2 * Math.PI);
-      ctx.fill();
-      
-      // Right knee
-      ctx.beginPath();
-      ctx.arc(rightKnee.x * width, rightKnee.y * height, kneeSize, 0, 2 * Math.PI);
-      ctx.fill();
-      
-      // Add layer-specific details
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = '#ffffff';
-      ctx.font = '12px Arial';
-      ctx.fillText(layer.label, leftKnee.x * width - 20, leftKnee.y * height - kneeSize - 5);
-      ctx.fillText(layer.label, rightKnee.x * width - 20, rightKnee.y * height - kneeSize - 5);
+      switch(layerId) {
+        case 'bones':
+          drawBones(ctx, landmarks, width, height);
+          break;
+        case 'muscles':
+          drawMuscles(ctx, landmarks, width, height);
+          break;
+        case 'ligaments':
+          drawLigaments(ctx, landmarks, width, height);
+          break;
+        case 'menisci':
+          drawMenisci(ctx, landmarks, width, height);
+          break;
+        case 'tendons':
+          drawTendons(ctx, landmarks, width, height);
+          break;
+      }
     });
+  };
+  
+  // Draw bone structures
+  const drawBones = (ctx: CanvasRenderingContext2D, landmarks: any[], width: number, height: number) => {
+    ctx.save();
     
-    ctx.globalAlpha = 1;
+    // Bone styling
+    ctx.strokeStyle = '#e8e8e8';
+    ctx.fillStyle = '#f5f5f5';
+    ctx.lineWidth = 8;
+    ctx.lineCap = 'round';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+    ctx.shadowBlur = 5;
+    ctx.globalAlpha = 0.85;
+    
+    // Helper function to draw a bone between two points
+    const drawBone = (start: any, end: any, thickness: number = 8) => {
+      const startX = start.x * width;
+      const startY = start.y * height;
+      const endX = end.x * width;
+      const endY = end.y * height;
+      
+      // Draw bone shaft (tapered cylinder effect)
+      ctx.beginPath();
+      ctx.moveTo(startX, startY);
+      ctx.lineTo(endX, endY);
+      ctx.lineWidth = thickness;
+      ctx.stroke();
+      
+      // Draw joint ends (rounded for realism)
+      ctx.beginPath();
+      ctx.arc(startX, startY, thickness/2 + 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      
+      ctx.beginPath();
+      ctx.arc(endX, endY, thickness/2 + 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    };
+    
+    // Draw femur (thigh bone) - thicker as it's the largest bone
+    const leftHip = landmarks[POSE_LANDMARKS.LEFT_HIP];
+    const rightHip = landmarks[POSE_LANDMARKS.RIGHT_HIP];
+    const leftKnee = landmarks[POSE_LANDMARKS.LEFT_KNEE];
+    const rightKnee = landmarks[POSE_LANDMARKS.RIGHT_KNEE];
+    const leftAnkle = landmarks[POSE_LANDMARKS.LEFT_ANKLE];
+    const rightAnkle = landmarks[POSE_LANDMARKS.RIGHT_ANKLE];
+    
+    if (leftHip && leftKnee) {
+      drawBone(leftHip, leftKnee, 12); // Femur is thicker
+      
+      // Add femur label
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 11px Arial';
+      ctx.fillText('Femur', leftHip.x * width + 15, leftHip.y * height + (leftKnee.y - leftHip.y) * height / 2);
+    }
+    
+    if (rightHip && rightKnee) {
+      drawBone(rightHip, rightKnee, 12);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 11px Arial';
+      ctx.fillText('Femur', rightHip.x * width - 35, rightHip.y * height + (rightKnee.y - rightHip.y) * height / 2);
+    }
+    
+    // Draw patella (kneecap)
+    ctx.fillStyle = '#f0f0f0';
+    if (leftKnee) {
+      ctx.beginPath();
+      const patellaX = leftKnee.x * width;
+      const patellaY = leftKnee.y * height;
+      ctx.ellipse(patellaX, patellaY - 5, 15, 18, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 10px Arial';
+      ctx.fillText('Patella', patellaX + 18, patellaY);
+    }
+    
+    if (rightKnee) {
+      ctx.fillStyle = '#f0f0f0';
+      ctx.beginPath();
+      const patellaX = rightKnee.x * width;
+      const patellaY = rightKnee.y * height;
+      ctx.ellipse(patellaX, patellaY - 5, 15, 18, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 10px Arial';
+      ctx.fillText('Patella', patellaX - 45, patellaY);
+    }
+    
+    // Draw tibia (shin bone)
+    ctx.strokeStyle = '#e8e8e8';
+    ctx.fillStyle = '#f5f5f5';
+    if (leftKnee && leftAnkle) {
+      drawBone(leftKnee, leftAnkle, 10);
+      
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 11px Arial';
+      ctx.fillText('Tibia', leftKnee.x * width + 15, leftKnee.y * height + (leftAnkle.y - leftKnee.y) * height / 2);
+    }
+    
+    if (rightKnee && rightAnkle) {
+      drawBone(rightKnee, rightAnkle, 10);
+      
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 11px Arial';
+      ctx.fillText('Tibia', rightKnee.x * width - 35, rightKnee.y * height + (rightAnkle.y - rightKnee.y) * height / 2);
+    }
+    
+    // Draw fibula (smaller bone parallel to tibia)
+    ctx.strokeStyle = '#d0d0d0';
+    ctx.lineWidth = 5;
+    if (leftKnee && leftAnkle) {
+      const fibulaOffset = 15;
+      ctx.beginPath();
+      ctx.moveTo(leftKnee.x * width + fibulaOffset, leftKnee.y * height);
+      ctx.lineTo(leftAnkle.x * width + fibulaOffset, leftAnkle.y * height);
+      ctx.stroke();
+      
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '10px Arial';
+      ctx.fillText('Fibula', leftKnee.x * width + fibulaOffset + 5, leftKnee.y * height + (leftAnkle.y - leftKnee.y) * height / 2 + 15);
+    }
+    
+    if (rightKnee && rightAnkle) {
+      const fibulaOffset = -15;
+      ctx.beginPath();
+      ctx.moveTo(rightKnee.x * width + fibulaOffset, rightKnee.y * height);
+      ctx.lineTo(rightAnkle.x * width + fibulaOffset, rightAnkle.y * height);
+      ctx.stroke();
+      
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '10px Arial';
+      ctx.fillText('Fibula', rightKnee.x * width + fibulaOffset - 35, rightKnee.y * height + (rightAnkle.y - rightKnee.y) * height / 2 + 15);
+    }
+    
+    ctx.restore();
+  };
+  
+  // Draw muscle structures
+  const drawMuscles = (ctx: CanvasRenderingContext2D, landmarks: any[], width: number, height: number) => {
+    ctx.save();
+    ctx.globalAlpha = 0.6;
+    
+    const leftHip = landmarks[POSE_LANDMARKS.LEFT_HIP];
+    const rightHip = landmarks[POSE_LANDMARKS.RIGHT_HIP];
+    const leftKnee = landmarks[POSE_LANDMARKS.LEFT_KNEE];
+    const rightKnee = landmarks[POSE_LANDMARKS.RIGHT_KNEE];
+    const leftAnkle = landmarks[POSE_LANDMARKS.LEFT_ANKLE];
+    const rightAnkle = landmarks[POSE_LANDMARKS.RIGHT_ANKLE];
+    
+    // Draw quadriceps (front of thigh)
+    ctx.fillStyle = '#ff6b6b';
+    if (leftHip && leftKnee) {
+      const startX = leftHip.x * width;
+      const startY = leftHip.y * height;
+      const endX = leftKnee.x * width;
+      const endY = leftKnee.y * height;
+      
+      // Draw muscle belly shape
+      ctx.beginPath();
+      ctx.moveTo(startX - 10, startY);
+      ctx.quadraticCurveTo(startX - 25, (startY + endY) / 2, endX - 8, endY);
+      ctx.lineTo(endX + 8, endY);
+      ctx.quadraticCurveTo(startX + 25, (startY + endY) / 2, startX + 10, startY);
+      ctx.closePath();
+      ctx.fill();
+      
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 11px Arial';
+      ctx.fillText('Quadriceps', startX - 50, (startY + endY) / 2);
+    }
+    
+    if (rightHip && rightKnee) {
+      ctx.fillStyle = '#ff6b6b';
+      const startX = rightHip.x * width;
+      const startY = rightHip.y * height;
+      const endX = rightKnee.x * width;
+      const endY = rightKnee.y * height;
+      
+      ctx.beginPath();
+      ctx.moveTo(startX - 10, startY);
+      ctx.quadraticCurveTo(startX - 25, (startY + endY) / 2, endX - 8, endY);
+      ctx.lineTo(endX + 8, endY);
+      ctx.quadraticCurveTo(startX + 25, (startY + endY) / 2, startX + 10, startY);
+      ctx.closePath();
+      ctx.fill();
+      
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 11px Arial';
+      ctx.fillText('Quadriceps', startX + 15, (startY + endY) / 2);
+    }
+    
+    // Draw gastrocnemius (calf muscle)
+    ctx.fillStyle = '#ffa500';
+    if (leftKnee && leftAnkle) {
+      const startX = leftKnee.x * width;
+      const startY = leftKnee.y * height + 10;
+      const endX = leftAnkle.x * width;
+      const endY = leftAnkle.y * height;
+      
+      ctx.beginPath();
+      ctx.moveTo(startX - 5, startY);
+      ctx.quadraticCurveTo(startX - 20, startY + (endY - startY) * 0.3, endX - 5, endY);
+      ctx.lineTo(endX + 5, endY);
+      ctx.quadraticCurveTo(startX + 20, startY + (endY - startY) * 0.3, startX + 5, startY);
+      ctx.closePath();
+      ctx.fill();
+      
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 11px Arial';
+      ctx.fillText('Gastrocnemius', startX - 55, startY + (endY - startY) * 0.4);
+    }
+    
+    if (rightKnee && rightAnkle) {
+      ctx.fillStyle = '#ffa500';
+      const startX = rightKnee.x * width;
+      const startY = rightKnee.y * height + 10;
+      const endX = rightAnkle.x * width;
+      const endY = rightAnkle.y * height;
+      
+      ctx.beginPath();
+      ctx.moveTo(startX - 5, startY);
+      ctx.quadraticCurveTo(startX - 20, startY + (endY - startY) * 0.3, endX - 5, endY);
+      ctx.lineTo(endX + 5, endY);
+      ctx.quadraticCurveTo(startX + 20, startY + (endY - startY) * 0.3, startX + 5, startY);
+      ctx.closePath();
+      ctx.fill();
+      
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 11px Arial';
+      ctx.fillText('Gastrocnemius', startX + 10, startY + (endY - startY) * 0.4);
+    }
+    
+    ctx.restore();
+  };
+  
+  // Draw ligament structures
+  const drawLigaments = (ctx: CanvasRenderingContext2D, landmarks: any[], width: number, height: number) => {
+    ctx.save();
+    ctx.globalAlpha = 0.7;
+    
+    const leftKnee = landmarks[POSE_LANDMARKS.LEFT_KNEE];
+    const rightKnee = landmarks[POSE_LANDMARKS.RIGHT_KNEE];
+    
+    // Draw ACL, PCL, MCL, LCL around knee joint
+    ctx.strokeStyle = '#ff1744';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([5, 3]);
+    
+    if (leftKnee) {
+      const kneeX = leftKnee.x * width;
+      const kneeY = leftKnee.y * height;
+      
+      // ACL (Anterior Cruciate Ligament)
+      ctx.beginPath();
+      ctx.moveTo(kneeX - 10, kneeY - 10);
+      ctx.lineTo(kneeX + 10, kneeY + 10);
+      ctx.stroke();
+      
+      // PCL (Posterior Cruciate Ligament)
+      ctx.beginPath();
+      ctx.moveTo(kneeX + 10, kneeY - 10);
+      ctx.lineTo(kneeX - 10, kneeY + 10);
+      ctx.stroke();
+      
+      // MCL (Medial Collateral Ligament)
+      ctx.beginPath();
+      ctx.moveTo(kneeX - 15, kneeY - 15);
+      ctx.lineTo(kneeX - 15, kneeY + 15);
+      ctx.stroke();
+      
+      // LCL (Lateral Collateral Ligament)
+      ctx.beginPath();
+      ctx.moveTo(kneeX + 15, kneeY - 15);
+      ctx.lineTo(kneeX + 15, kneeY + 15);
+      ctx.stroke();
+      
+      // Labels
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '10px Arial';
+      ctx.fillText('ACL/PCL', kneeX - 50, kneeY - 20);
+      ctx.fillText('MCL', kneeX - 35, kneeY);
+      ctx.fillText('LCL', kneeX + 20, kneeY);
+    }
+    
+    if (rightKnee) {
+      const kneeX = rightKnee.x * width;
+      const kneeY = rightKnee.y * height;
+      
+      // ACL
+      ctx.beginPath();
+      ctx.moveTo(kneeX - 10, kneeY - 10);
+      ctx.lineTo(kneeX + 10, kneeY + 10);
+      ctx.stroke();
+      
+      // PCL
+      ctx.beginPath();
+      ctx.moveTo(kneeX + 10, kneeY - 10);
+      ctx.lineTo(kneeX - 10, kneeY + 10);
+      ctx.stroke();
+      
+      // MCL
+      ctx.beginPath();
+      ctx.moveTo(kneeX + 15, kneeY - 15);
+      ctx.lineTo(kneeX + 15, kneeY + 15);
+      ctx.stroke();
+      
+      // LCL
+      ctx.beginPath();
+      ctx.moveTo(kneeX - 15, kneeY - 15);
+      ctx.lineTo(kneeX - 15, kneeY + 15);
+      ctx.stroke();
+      
+      // Labels
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '10px Arial';
+      ctx.fillText('ACL/PCL', kneeX + 5, kneeY - 20);
+      ctx.fillText('LCL', kneeX - 40, kneeY);
+      ctx.fillText('MCL', kneeX + 20, kneeY);
+    }
+    
+    ctx.restore();
+  };
+  
+  // Draw menisci structures
+  const drawMenisci = (ctx: CanvasRenderingContext2D, landmarks: any[], width: number, height: number) => {
+    ctx.save();
+    ctx.globalAlpha = 0.7;
+    
+    const leftKnee = landmarks[POSE_LANDMARKS.LEFT_KNEE];
+    const rightKnee = landmarks[POSE_LANDMARKS.RIGHT_KNEE];
+    
+    ctx.fillStyle = '#4ecdc4';
+    
+    if (leftKnee) {
+      const kneeX = leftKnee.x * width;
+      const kneeY = leftKnee.y * height;
+      
+      // Draw C-shaped menisci
+      ctx.beginPath();
+      ctx.arc(kneeX - 8, kneeY, 12, Math.PI * 0.5, Math.PI * 1.5);
+      ctx.arc(kneeX - 8, kneeY, 8, Math.PI * 1.5, Math.PI * 0.5, true);
+      ctx.closePath();
+      ctx.fill();
+      
+      ctx.beginPath();
+      ctx.arc(kneeX + 8, kneeY, 12, Math.PI * 1.5, Math.PI * 0.5);
+      ctx.arc(kneeX + 8, kneeY, 8, Math.PI * 0.5, Math.PI * 1.5, true);
+      ctx.closePath();
+      ctx.fill();
+      
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '10px Arial';
+      ctx.fillText('Menisci', kneeX - 25, kneeY + 25);
+    }
+    
+    if (rightKnee) {
+      ctx.fillStyle = '#4ecdc4';
+      const kneeX = rightKnee.x * width;
+      const kneeY = rightKnee.y * height;
+      
+      ctx.beginPath();
+      ctx.arc(kneeX - 8, kneeY, 12, Math.PI * 0.5, Math.PI * 1.5);
+      ctx.arc(kneeX - 8, kneeY, 8, Math.PI * 1.5, Math.PI * 0.5, true);
+      ctx.closePath();
+      ctx.fill();
+      
+      ctx.beginPath();
+      ctx.arc(kneeX + 8, kneeY, 12, Math.PI * 1.5, Math.PI * 0.5);
+      ctx.arc(kneeX + 8, kneeY, 8, Math.PI * 0.5, Math.PI * 1.5, true);
+      ctx.closePath();
+      ctx.fill();
+      
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '10px Arial';
+      ctx.fillText('Menisci', kneeX - 25, kneeY + 25);
+    }
+    
+    ctx.restore();
+  };
+  
+  // Draw tendon structures
+  const drawTendons = (ctx: CanvasRenderingContext2D, landmarks: any[], width: number, height: number) => {
+    ctx.save();
+    ctx.globalAlpha = 0.6;
+    
+    const leftKnee = landmarks[POSE_LANDMARKS.LEFT_KNEE];
+    const rightKnee = landmarks[POSE_LANDMARKS.RIGHT_KNEE];
+    const leftAnkle = landmarks[POSE_LANDMARKS.LEFT_ANKLE];
+    const rightAnkle = landmarks[POSE_LANDMARKS.RIGHT_ANKLE];
+    
+    ctx.strokeStyle = '#45b7d1';
+    ctx.lineWidth = 4;
+    
+    // Draw patellar tendon
+    if (leftKnee) {
+      const kneeX = leftKnee.x * width;
+      const kneeY = leftKnee.y * height;
+      
+      ctx.beginPath();
+      ctx.moveTo(kneeX, kneeY - 18);
+      ctx.lineTo(kneeX, kneeY + 20);
+      ctx.stroke();
+      
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '10px Arial';
+      ctx.fillText('Patellar Tendon', kneeX - 55, kneeY + 35);
+    }
+    
+    if (rightKnee) {
+      const kneeX = rightKnee.x * width;
+      const kneeY = rightKnee.y * height;
+      
+      ctx.beginPath();
+      ctx.moveTo(kneeX, kneeY - 18);
+      ctx.lineTo(kneeX, kneeY + 20);
+      ctx.stroke();
+      
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '10px Arial';
+      ctx.fillText('Patellar Tendon', kneeX + 5, kneeY + 35);
+    }
+    
+    // Draw Achilles tendon
+    if (leftAnkle) {
+      const ankleX = leftAnkle.x * width;
+      const ankleY = leftAnkle.y * height;
+      
+      ctx.beginPath();
+      ctx.moveTo(ankleX, ankleY - 30);
+      ctx.lineTo(ankleX, ankleY + 5);
+      ctx.stroke();
+      
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '10px Arial';
+      ctx.fillText('Achilles', ankleX - 45, ankleY + 15);
+    }
+    
+    if (rightAnkle) {
+      const ankleX = rightAnkle.x * width;
+      const ankleY = rightAnkle.y * height;
+      
+      ctx.beginPath();
+      ctx.moveTo(ankleX, ankleY - 30);
+      ctx.lineTo(ankleX, ankleY + 5);
+      ctx.stroke();
+      
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '10px Arial';
+      ctx.fillText('Achilles', ankleX + 5, ankleY + 15);
+    }
+    
+    ctx.restore();
   };
   
   // Draw tracked region

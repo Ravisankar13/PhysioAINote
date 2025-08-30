@@ -36,6 +36,12 @@ import {
 } from 'lucide-react';
 import { loadMediaPipeLibraries } from '@/utils/mediapipeLoader';
 import { AnatomyManager } from '@/services/anatomy/AnatomyManager';
+import { 
+  BODY_REGIONS, 
+  analyzeBodyPart,
+  type BodyPartAnalysis,
+  type BodyRegionId
+} from '@/services/biomechanics/BodyPartAnalysis';
 
 // Pose landmark indices
 const POSE_LANDMARKS = {
@@ -119,6 +125,18 @@ export default function BodyScanner() {
   const [leftPanelOpen, setLeftPanelOpen] = useState(false);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
   const [controlsTimeout, setControlsTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [selectedBodyPart, setSelectedBodyPart] = useState<BodyRegionId>('shoulder');
+  const [bodyPartAnalyses, setBodyPartAnalyses] = useState<Record<BodyRegionId, BodyPartAnalysis | null>>({
+    cervical: null,
+    thoracic: null,
+    lumbar: null,
+    shoulder: null,
+    elbow: null,
+    wrist: null,
+    hip: null,
+    knee: null,
+    ankle: null
+  });
   
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -258,6 +276,13 @@ export default function BodyScanner() {
         });
       }
       
+      // Perform body part analysis for selected region
+      const analysis = analyzeBodyPart(selectedBodyPart, results.poseLandmarks);
+      setBodyPartAnalyses(prev => ({
+        ...prev,
+        [selectedBodyPart]: analysis
+      }));
+      
       // Draw knee tracking lines
       const leftKnee = results.poseLandmarks[POSE_LANDMARKS.LEFT_KNEE];
       const rightKnee = results.poseLandmarks[POSE_LANDMARKS.RIGHT_KNEE];
@@ -299,7 +324,7 @@ export default function BodyScanner() {
     }
     
     ctx.restore();
-  }, [visibleLayers, trackedRegions]);
+  }, [visibleLayers, trackedRegions, selectedBodyPart]);
   
   // Draw anatomy overlay with realistic structures
   const drawAnatomyOverlay = (ctx: CanvasRenderingContext2D, landmarks: any[], width: number, height: number) => {
@@ -1566,6 +1591,93 @@ export default function BodyScanner() {
               </div>
             )}
             
+            {/* Fullscreen Body Part Analysis Tabs */}
+            <div 
+              className={`absolute bottom-20 left-4 right-4 max-w-4xl mx-auto bg-black/90 backdrop-blur-md rounded-lg transition-all duration-300 ${
+                showControls ? 'translate-y-0 opacity-100' : 'translate-y-[calc(100%+5rem)] opacity-0'
+              }`}
+              style={{ maxHeight: '40vh', overflowY: 'auto' }}
+            >
+              <div className="p-4">
+                <Tabs value={selectedBodyPart} onValueChange={(value) => setSelectedBodyPart(value as BodyRegionId)}>
+                  <TabsList className="grid grid-cols-9 mb-4 bg-black/50">
+                    {BODY_REGIONS.map(region => (
+                      <TabsTrigger 
+                        key={region.id} 
+                        value={region.id}
+                        className="text-xs text-white data-[state=active]:bg-white/20"
+                      >
+                        <span className="mr-1">{region.icon}</span>
+                        <span className="hidden sm:inline">{region.label}</span>
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+                  
+                  {BODY_REGIONS.map(region => {
+                    const analysis = bodyPartAnalyses[region.id];
+                    
+                    return (
+                      <TabsContent key={region.id} value={region.id} className="text-white">
+                        {analysis ? (
+                          <div className="space-y-3">
+                            {/* Compact Score Display */}
+                            <div className="flex items-center justify-between p-3 bg-white/10 rounded-lg">
+                              <span className="text-sm font-medium">Overall Score</span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-2xl font-bold">{analysis.overallScore.toFixed(0)}%</span>
+                                <Badge 
+                                  variant={
+                                    analysis.overallScore >= 80 ? 'default' :
+                                    analysis.overallScore >= 60 ? 'secondary' : 'destructive'
+                                  }
+                                  className="text-xs"
+                                >
+                                  {analysis.overallScore >= 80 ? 'Good' :
+                                   analysis.overallScore >= 60 ? 'Fair' : 'Needs Attention'}
+                                </Badge>
+                              </div>
+                            </div>
+                            
+                            {/* Compact Measurements */}
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                              {analysis.measurements.slice(0, 6).map((measurement, idx) => (
+                                <div key={idx} className="p-2 bg-white/10 rounded">
+                                  <div className="text-xs opacity-70">{measurement.name}</div>
+                                  <div className="flex items-baseline gap-1">
+                                    <span className="text-lg font-bold">{measurement.value.toFixed(1)}</span>
+                                    <span className="text-xs opacity-70">{measurement.unit}</span>
+                                  </div>
+                                  <div className="h-1 bg-white/20 rounded-full mt-1">
+                                    <div 
+                                      className={`h-full rounded-full ${
+                                        measurement.interpretation === 'normal' ? 'bg-green-500' :
+                                        measurement.interpretation === 'below' ? 'bg-yellow-500' : 'bg-red-500'
+                                      }`}
+                                      style={{
+                                        width: `${Math.min(100, Math.max(0, 
+                                          ((measurement.value - measurement.normalRange.min) / 
+                                           (measurement.normalRange.max - measurement.normalRange.min)) * 100
+                                        ))}%`
+                                      }}
+                                    />
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-center py-4 text-white/70">
+                            <Activity className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                            <p className="text-sm">Start tracking to see analysis</p>
+                          </div>
+                        )}
+                      </TabsContent>
+                    );
+                  })}
+                </Tabs>
+              </div>
+            </div>
+            
             {/* Fullscreen Bottom Control Bar */}
             <div 
               className={`absolute bottom-0 left-0 right-0 bg-black/80 backdrop-blur-sm transition-all duration-300 ${
@@ -1810,6 +1922,150 @@ export default function BodyScanner() {
                   <strong>Tip:</strong> Tap on areas of concern to mark regions for tracking.
                 </AlertDescription>
               </Alert>
+            </CardContent>
+          </Card>
+          
+          {/* Body Part Analysis Tabs - Below Video */}
+          <Card className="mt-4">
+            <CardHeader>
+              <CardTitle>Body Part Analysis</CardTitle>
+              <CardDescription>
+                Real-time biomechanical measurements for each body region
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Tabs value={selectedBodyPart} onValueChange={(value) => setSelectedBodyPart(value as BodyRegionId)}>
+                <TabsList className="grid grid-cols-9 mb-4">
+                  {BODY_REGIONS.map(region => (
+                    <TabsTrigger 
+                      key={region.id} 
+                      value={region.id}
+                      className="text-xs"
+                    >
+                      <span className="mr-1">{region.icon}</span>
+                      {region.label}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+                
+                {BODY_REGIONS.map(region => {
+                  const analysis = bodyPartAnalyses[region.id];
+                  
+                  return (
+                    <TabsContent key={region.id} value={region.id} className="space-y-4">
+                      {analysis ? (
+                        <>
+                          {/* Overall Score */}
+                          <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+                            <div>
+                              <h4 className="font-semibold">Overall Score</h4>
+                              <p className="text-sm text-muted-foreground">
+                                Based on {analysis.measurements.length} measurements
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-3xl font-bold">
+                                {analysis.overallScore.toFixed(0)}%
+                              </div>
+                              <Badge 
+                                variant={
+                                  analysis.overallScore >= 80 ? 'default' :
+                                  analysis.overallScore >= 60 ? 'secondary' : 'destructive'
+                                }
+                              >
+                                {analysis.overallScore >= 80 ? 'Good' :
+                                 analysis.overallScore >= 60 ? 'Fair' : 'Needs Attention'}
+                              </Badge>
+                            </div>
+                          </div>
+                          
+                          {/* Measurements Grid */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {analysis.measurements.map((measurement, idx) => (
+                              <div key={idx} className="p-3 border rounded-lg">
+                                <div className="flex items-start justify-between mb-2">
+                                  <h5 className="font-medium text-sm">{measurement.name}</h5>
+                                  <Badge 
+                                    variant={
+                                      measurement.interpretation === 'normal' ? 'outline' :
+                                      measurement.interpretation === 'below' ? 'secondary' : 'destructive'
+                                    }
+                                    className="text-xs"
+                                  >
+                                    {measurement.interpretation}
+                                  </Badge>
+                                </div>
+                                
+                                <div className="flex items-baseline gap-2 mb-2">
+                                  <span className="text-2xl font-bold">
+                                    {measurement.value.toFixed(1)}
+                                  </span>
+                                  <span className="text-sm text-muted-foreground">
+                                    {measurement.unit}
+                                  </span>
+                                </div>
+                                
+                                <div className="text-xs text-muted-foreground mb-1">
+                                  Normal: {measurement.normalRange.min}-{measurement.normalRange.max} {measurement.unit}
+                                </div>
+                                
+                                {/* Visual indicator bar */}
+                                <div className="h-2 bg-muted rounded-full overflow-hidden">
+                                  <div 
+                                    className={`h-full transition-all ${
+                                      measurement.interpretation === 'normal' ? 'bg-green-500' :
+                                      measurement.interpretation === 'below' ? 'bg-yellow-500' : 'bg-red-500'
+                                    }`}
+                                    style={{
+                                      width: `${Math.min(100, Math.max(0, 
+                                        ((measurement.value - measurement.normalRange.min) / 
+                                         (measurement.normalRange.max - measurement.normalRange.min)) * 100
+                                      ))}%`
+                                    }}
+                                  />
+                                </div>
+                                
+                                {measurement.clinicalSignificance && (
+                                  <p className="text-xs text-muted-foreground mt-2">
+                                    <Info className="inline h-3 w-3 mr-1" />
+                                    {measurement.clinicalSignificance}
+                                  </p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                          
+                          {/* Recommendations */}
+                          {analysis.recommendations.length > 0 && (
+                            <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
+                              <h4 className="font-semibold mb-2 flex items-center gap-2">
+                                <Sparkles className="h-4 w-4" />
+                                Clinical Recommendations
+                              </h4>
+                              <ul className="space-y-1 text-sm">
+                                {analysis.recommendations.map((rec, idx) => (
+                                  <li key={idx} className="flex items-start gap-2">
+                                    <CheckCircle className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                                    <span>{rec}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div className="text-center py-8 text-muted-foreground">
+                          <Activity className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                          <p>Start tracking to see {region.label} analysis</p>
+                          <p className="text-sm mt-2">
+                            Position yourself in view and begin tracking
+                          </p>
+                        </div>
+                      )}
+                    </TabsContent>
+                  );
+                })}
+              </Tabs>
             </CardContent>
           </Card>
         </div>

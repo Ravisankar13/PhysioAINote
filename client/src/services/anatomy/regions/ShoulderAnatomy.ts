@@ -305,9 +305,9 @@ export class ShoulderAnatomy extends AnatomyRenderer {
     const shoulderWidth = getDistance(shoulder, oppositeShoulder);
     const torsoHeight = hip ? getDistance(shoulder, hip) : shoulderWidth * 1.5;
     
-    // Anatomically correct scapula dimensions and position (reduced size)
-    const scapulaWidth = shoulderWidth * 0.25;  // Reduced from 0.35
-    const scapulaHeight = torsoHeight * 0.25;   // Reduced from 0.4
+    // Anatomically correct scapula dimensions and position
+    const scapulaWidth = shoulderWidth * 0.25;  // Keep width smaller
+    const scapulaHeight = torsoHeight * 0.4;    // Restore original height
     
     // Position scapula on the posterior thorax (T2-T7)
     // The acromion process should align with the shoulder point
@@ -316,7 +316,7 @@ export class ShoulderAnatomy extends AnatomyRenderer {
     
     // Calculate spine position (medial border should be about 3 inches from spine)
     const spineX = (shoulder.x + oppositeShoulder.x) / 2;
-    const medialOffset = shoulderWidth * 0.12; // Distance from spine to medial border (adjusted for smaller size)
+    const medialOffset = shoulderWidth * 0.18; // Increased distance from spine to prevent overlap
     
     // Superior angle (top point of scapula)
     const superiorAngle = {

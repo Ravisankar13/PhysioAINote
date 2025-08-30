@@ -30,6 +30,10 @@ export class DetailedSpineRenderer {
     coccygeal: ['Co1-Co4']
   };
 
+  // Smoothing variables for stable spine movement
+  private previousSpinePositions: Array<{x: number, y: number}> = [];
+  private smoothingFactor: number = 0.2; // Low value for very smooth movement
+
 
   /**
    * Generate detailed vertebrae with anatomical processes that follow actual spine movement
@@ -68,17 +72,73 @@ export class DetailedSpineRenderer {
       y: shoulderMidpoint.y - 0.15 // Fixed distance above shoulders
     };
     
-    // Calculate vertebrae positions - simple straight spine
+    // Calculate lateral flexion with limits to prevent extreme curves
+    const shoulderTilt = Math.atan2(
+      rightShoulder.y - leftShoulder.y,
+      rightShoulder.x - leftShoulder.x
+    );
+    const hipTilt = Math.atan2(
+      rightHip.y - leftHip.y,
+      rightHip.x - leftHip.x
+    );
+    // Limit lateral flexion to prevent extreme C-shapes
+    const rawLateralFlexion = Math.max(-0.3, Math.min(0.3, shoulderTilt - hipTilt));
+    
+    // Calculate vertebrae positions with controlled movement
     const totalVertebrae = 24; // C1-C7, T1-T12, L1-L5
+    
+    // Initialize smoothing array if needed
+    if (this.previousSpinePositions.length !== totalVertebrae) {
+      this.previousSpinePositions = [];
+      for (let i = 0; i < totalVertebrae; i++) {
+        const t = i / (totalVertebrae - 1);
+        this.previousSpinePositions.push({
+          x: headCenter.x + (hipMidpoint.x - headCenter.x) * t,
+          y: headCenter.y + (hipMidpoint.y - headCenter.y) * t
+        });
+      }
+    }
     
     // Generate each vertebra along the spine
     for (let i = 0; i < totalVertebrae; i++) {
       const t = i / (totalVertebrae - 1);
       
-      // Simple linear interpolation from head to hips - NO curves or offsets
+      // Base position: linear interpolation from head to hips
+      const baseX = headCenter.x + (hipMidpoint.x - headCenter.x) * t;
+      const baseY = headCenter.y + (hipMidpoint.y - headCenter.y) * t;
+      
+      // Add subtle lateral movement based on body tilt
+      const lateralOffset = Math.sin(t * Math.PI) * rawLateralFlexion * 0.05; // Very subtle
+      
+      // Add tiny natural curves for realism
+      let curveOffset = 0;
+      if (i < 7) {
+        // Cervical: tiny forward curve
+        curveOffset = Math.sin((i / 7) * Math.PI) * 0.005;
+      } else if (i < 19) {
+        // Thoracic: tiny backward curve
+        curveOffset = -Math.sin(((i - 7) / 12) * Math.PI) * 0.008;
+      } else {
+        // Lumbar: tiny forward curve
+        curveOffset = Math.sin(((i - 19) / 5) * Math.PI) * 0.006;
+      }
+      
+      // Target position with all offsets
+      const targetX = baseX + lateralOffset + curveOffset;
+      const targetY = baseY;
+      
+      // Apply smoothing to prevent jerky movement
+      const smoothedX = this.previousSpinePositions[i].x + 
+        (targetX - this.previousSpinePositions[i].x) * this.smoothingFactor;
+      const smoothedY = this.previousSpinePositions[i].y + 
+        (targetY - this.previousSpinePositions[i].y) * this.smoothingFactor;
+      
+      // Update previous position for next frame
+      this.previousSpinePositions[i] = { x: smoothedX, y: smoothedY };
+      
       const position = {
-        x: headCenter.x + (hipMidpoint.x - headCenter.x) * t,
-        y: headCenter.y + (hipMidpoint.y - headCenter.y) * t
+        x: smoothedX,
+        y: smoothedY
       };
       
       // Determine vertebra type and label
@@ -107,9 +167,9 @@ export class DetailedSpineRenderer {
         vertebraHeight = height * 0.028;
       }
       
-      // No rotation or flexion - keep spine completely stable
-      const vertebraRotation = 0;
-      const vertebraFlexion = 0;
+      // Calculate subtle rotation based on lateral flexion
+      const vertebraRotation = rawLateralFlexion * Math.sin(t * Math.PI) * 0.2; // Subtle rotation
+      const vertebraFlexion = 0; // No forward/backward flexion to prevent C-shapes
       
       vertebrae.push(this.createVertebra(
         level,

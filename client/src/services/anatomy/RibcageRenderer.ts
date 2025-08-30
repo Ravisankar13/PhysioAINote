@@ -323,49 +323,151 @@ export class RibcageRenderer {
     ctx.arc(sternum.sternalAngle.x, sternum.sternalAngle.y, 4, 0, Math.PI * 2);
     ctx.fill();
     
-    // Draw ribs
+    // Draw ribs as 3D bone structures
     ribs.forEach(rib => {
-      // Set style based on rib type
+      // Calculate rib thickness based on type and number
+      let ribThickness: number;
       if (rib.type === 'true') {
-        ctx.strokeStyle = 'rgba(240, 240, 240, 1)';
-        ctx.lineWidth = 3;
+        ribThickness = 6 - (rib.number - 1) * 0.2; // Thicker at top
       } else if (rib.type === 'false') {
-        ctx.strokeStyle = 'rgba(220, 220, 220, 0.9)';
-        ctx.lineWidth = 2.5;
+        ribThickness = 4;
       } else {
-        ctx.strokeStyle = 'rgba(200, 200, 200, 0.8)';
-        ctx.lineWidth = 2;
+        ribThickness = 3;
       }
       
-      // Draw rib curve
+      // Draw rib as 3D bone with gradient
+      ctx.save();
+      
+      // Create gradient for 3D effect
+      const gradient = ctx.createLinearGradient(
+        rib.curvePoints[0].x, 
+        rib.curvePoints[0].y - ribThickness,
+        rib.curvePoints[0].x, 
+        rib.curvePoints[0].y + ribThickness
+      );
+      
+      if (rib.type === 'true') {
+        gradient.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+        gradient.addColorStop(0.3, 'rgba(245, 245, 245, 1)');
+        gradient.addColorStop(0.5, 'rgba(240, 240, 240, 1)');
+        gradient.addColorStop(0.7, 'rgba(230, 230, 230, 1)');
+        gradient.addColorStop(1, 'rgba(210, 210, 210, 0.9)');
+      } else if (rib.type === 'false') {
+        gradient.addColorStop(0, 'rgba(245, 245, 245, 0.9)');
+        gradient.addColorStop(0.5, 'rgba(230, 230, 230, 0.95)');
+        gradient.addColorStop(1, 'rgba(200, 200, 200, 0.85)');
+      } else {
+        gradient.addColorStop(0, 'rgba(240, 240, 240, 0.85)');
+        gradient.addColorStop(0.5, 'rgba(220, 220, 220, 0.9)');
+        gradient.addColorStop(1, 'rgba(190, 190, 190, 0.8)');
+      }
+      
+      // Draw rib body as filled shape with thickness
+      ctx.fillStyle = gradient;
+      ctx.strokeStyle = 'rgba(180, 180, 180, 0.8)';
+      ctx.lineWidth = 1;
+      
+      // Create rib bone shape with proper thickness
+      ctx.beginPath();
+      
+      // Top edge of rib
+      rib.curvePoints.forEach((point, index) => {
+        const thickness = ribThickness * (1 - index / rib.curvePoints.length * 0.3); // Taper toward end
+        if (index === 0) {
+          ctx.moveTo(point.x, point.y - thickness / 2);
+        } else {
+          ctx.lineTo(point.x, point.y - thickness / 2);
+        }
+      });
+      
+      // Bottom edge of rib (reverse order)
+      for (let i = rib.curvePoints.length - 1; i >= 0; i--) {
+        const point = rib.curvePoints[i];
+        const thickness = ribThickness * (1 - i / rib.curvePoints.length * 0.3);
+        ctx.lineTo(point.x, point.y + thickness / 2);
+      }
+      
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      
+      // Add highlight for 3D effect
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+      ctx.lineWidth = 1;
       ctx.beginPath();
       rib.curvePoints.forEach((point, index) => {
+        const thickness = ribThickness * (1 - index / rib.curvePoints.length * 0.3);
         if (index === 0) {
-          ctx.moveTo(point.x, point.y);
+          ctx.moveTo(point.x, point.y - thickness / 2);
         } else {
-          ctx.lineTo(point.x, point.y);
+          ctx.lineTo(point.x, point.y - thickness / 2);
         }
       });
       ctx.stroke();
       
-      // Draw costal cartilage for true and false ribs
+      // Add shadow for depth
+      ctx.strokeStyle = 'rgba(100, 100, 100, 0.3)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      rib.curvePoints.forEach((point, index) => {
+        const thickness = ribThickness * (1 - index / rib.curvePoints.length * 0.3);
+        if (index === 0) {
+          ctx.moveTo(point.x, point.y + thickness / 2);
+        } else {
+          ctx.lineTo(point.x, point.y + thickness / 2);
+        }
+      });
+      ctx.stroke();
+      
+      ctx.restore();
+      
+      // Draw costal cartilage for true and false ribs as 3D structures
       if (rib.sternalAttachment) {
-        ctx.strokeStyle = 'rgba(180, 180, 200, 0.7)';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([5, 3]);
-        ctx.beginPath();
         const lastPoint = rib.curvePoints[rib.curvePoints.length - 1];
-        ctx.moveTo(lastPoint.x, lastPoint.y);
-        ctx.lineTo(rib.sternalAttachment.x, rib.sternalAttachment.y);
+        const cartilageThickness = 3;
+        
+        // Create gradient for cartilage (bluish-white)
+        const cartilageGradient = ctx.createLinearGradient(
+          lastPoint.x, lastPoint.y - cartilageThickness,
+          lastPoint.x, lastPoint.y + cartilageThickness
+        );
+        cartilageGradient.addColorStop(0, 'rgba(220, 230, 245, 0.9)');
+        cartilageGradient.addColorStop(0.5, 'rgba(200, 210, 230, 0.95)');
+        cartilageGradient.addColorStop(1, 'rgba(180, 190, 210, 0.85)');
+        
+        // Draw cartilage as a tapered 3D connection
+        ctx.fillStyle = cartilageGradient;
+        ctx.strokeStyle = 'rgba(160, 170, 190, 0.6)';
+        ctx.lineWidth = 0.5;
+        
+        ctx.beginPath();
+        // Top edge
+        ctx.moveTo(lastPoint.x, lastPoint.y - cartilageThickness);
+        ctx.lineTo(rib.sternalAttachment.x, rib.sternalAttachment.y - cartilageThickness * 0.5);
+        // Bottom edge
+        ctx.lineTo(rib.sternalAttachment.x, rib.sternalAttachment.y + cartilageThickness * 0.5);
+        ctx.lineTo(lastPoint.x, lastPoint.y + cartilageThickness);
+        ctx.closePath();
+        ctx.fill();
         ctx.stroke();
-        ctx.setLineDash([]);
       }
       
-      // Draw vertebral attachment point
-      ctx.fillStyle = 'rgba(255, 100, 100, 0.5)';
+      // Draw vertebral attachment point as a 3D joint
+      const jointGradient = ctx.createRadialGradient(
+        rib.vertebralAttachment.x, rib.vertebralAttachment.y, 0,
+        rib.vertebralAttachment.x, rib.vertebralAttachment.y, 5
+      );
+      jointGradient.addColorStop(0, 'rgba(255, 245, 240, 0.9)');
+      jointGradient.addColorStop(0.5, 'rgba(240, 220, 210, 0.8)');
+      jointGradient.addColorStop(1, 'rgba(220, 180, 160, 0.6)');
+      
+      ctx.fillStyle = jointGradient;
+      ctx.strokeStyle = 'rgba(200, 150, 130, 0.7)';
+      ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.arc(rib.vertebralAttachment.x, rib.vertebralAttachment.y, 3, 0, Math.PI * 2);
+      ctx.arc(rib.vertebralAttachment.x, rib.vertebralAttachment.y, 4, 0, Math.PI * 2);
       ctx.fill();
+      ctx.stroke();
     });
     
     // Draw labels if enabled

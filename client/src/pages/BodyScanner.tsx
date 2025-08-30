@@ -345,7 +345,7 @@ export default function BodyScanner() {
     
     // Render detailed bone structures if bones layer is visible
     if (visibleLayers.includes('bones')) {
-      // Render detailed spine with individual vertebrae
+      // Render detailed spine with individual vertebrae (keeping only this for spine measurements)
       const spineRenderer = spineRendererRef.current;
       if (spineRenderer) {
         const vertebrae = spineRenderer.generateDetailedVertebrae(landmarks, width, height);
@@ -364,21 +364,17 @@ export default function BodyScanner() {
         ctx.fillText(`Lumbar Lordosis: ${lumbarLordosis.toFixed(1)}°`, 10, height - 30);
       }
       
-      // Render ribcage
-      const ribcageRenderer = ribcageRendererRef.current;
-      if (ribcageRenderer) {
-        const ribs = ribcageRenderer.generateRibcage(landmarks, width, height);
-        ribcageRenderer.renderRibcage(ctx, ribs);
-      }
+      // Enhanced Ribcage with costovertebral joints and detailed anatomy
+      const enhancedRibcageRenderer = new EnhancedRibcageRenderer();
+      const enhancedRibcageData = enhancedRibcageRenderer.generateEnhancedRibcage(landmarks, width, height);
+      enhancedRibcageRenderer.renderEnhancedRibcage(ctx, enhancedRibcageData);
       
-      // Render pelvis
-      const pelvisRenderer = pelvisRendererRef.current;
-      if (pelvisRenderer) {
-        const pelvis = pelvisRenderer.generatePelvis(landmarks, width, height);
-        pelvisRenderer.renderPelvis(ctx, pelvis);
-      }
+      // Enhanced Pelvis with ASIS, PSIS, and clinical measurements
+      const enhancedPelvisRenderer = new EnhancedPelvisRenderer();
+      const enhancedPelvisData = enhancedPelvisRenderer.generateEnhancedPelvis(landmarks, width, height);
+      enhancedPelvisRenderer.renderEnhancedPelvis(ctx, enhancedPelvisData);
       
-      // Render shoulder complex (both sides)
+      // Render shoulder complex (keeping this as it has unique features)
       const shoulderRenderer = shoulderRendererRef.current;
       if (shoulderRenderer) {
         // Render left shoulder
@@ -391,17 +387,6 @@ export default function BodyScanner() {
           shoulderRenderer.render(ctx, landmarks, width, height, 'right');
         }
       }
-      
-      // Render enhanced anatomical structures
-      // Enhanced Ribcage with costovertebral joints and detailed anatomy
-      const enhancedRibcageRenderer = new EnhancedRibcageRenderer();
-      const enhancedRibcageData = enhancedRibcageRenderer.generateEnhancedRibcage(landmarks, width, height);
-      enhancedRibcageRenderer.renderEnhancedRibcage(ctx, enhancedRibcageData);
-      
-      // Enhanced Pelvis with ASIS, PSIS, and clinical measurements
-      const enhancedPelvisRenderer = new EnhancedPelvisRenderer();
-      const enhancedPelvisData = enhancedPelvisRenderer.generateEnhancedPelvis(landmarks, width, height);
-      enhancedPelvisRenderer.renderEnhancedPelvis(ctx, enhancedPelvisData);
       
       // Enhanced Knee joints (both sides)
       const enhancedKneeRenderer = new EnhancedKneeRenderer();
@@ -436,34 +421,19 @@ export default function BodyScanner() {
           y: landmarks[14].y * height
         });
       }
-    }
-    
-    // First render the new modular anatomy (shoulder and other regions)
-    const anatomyManager = anatomyManagerRef.current;
-    if (anatomyManager) {
-      // Update layer visibility based on current state
-      anatomyManager.setLayerVisibility('bones', visibleLayers.includes('bones'));
-      anatomyManager.setLayerVisibility('muscles', visibleLayers.includes('muscles'));
-      anatomyManager.setLayerVisibility('ligaments', visibleLayers.includes('ligaments'));
       
-      // Render using the anatomy manager
-      anatomyManager.render({
-        ctx,
-        landmarks,
-        width,
-        height
-      });
+      // Draw the main bones (femur, tibia, humerus, etc.)
+      drawBones(ctx, landmarks, width, height);
     }
     
-    // Then render the existing knee anatomy (will be migrated to modular system later)
+    // Render other layers (muscles, ligaments, etc.)
     visibleLayers.forEach(layerId => {
+      if (layerId === 'bones') return; // Already handled above
+      
       const layer = ANATOMY_LAYERS.find(l => l.id === layerId);
       if (!layer) return;
       
       switch(layerId) {
-        case 'bones':
-          drawBones(ctx, landmarks, width, height);
-          break;
         case 'muscles':
           drawMuscles(ctx, landmarks, width, height);
           break;

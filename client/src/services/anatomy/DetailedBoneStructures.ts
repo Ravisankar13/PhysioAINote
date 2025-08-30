@@ -29,10 +29,7 @@ export class DetailedSpineRenderer {
     sacral: ['S1-S5'],
     coccygeal: ['Co1-Co4']
   };
-  
-  // Smoothing variables for spine movement
-  private previousLateralFlexion: number = 0;
-  private smoothingFactor: number = 0.3; // Lower = smoother, higher = more responsive
+
 
   /**
    * Generate detailed vertebrae with anatomical processes that follow actual spine movement
@@ -71,58 +68,18 @@ export class DetailedSpineRenderer {
       y: shoulderMidpoint.y - 0.15 // Fixed distance above shoulders
     };
     
-    // Calculate lateral flexion (side bending)
-    const shoulderTilt = Math.atan2(
-      rightShoulder.y - leftShoulder.y,
-      rightShoulder.x - leftShoulder.x
-    );
-    const hipTilt = Math.atan2(
-      rightHip.y - leftHip.y,
-      rightHip.x - leftHip.x
-    );
-    const rawLateralFlexion = shoulderTilt - hipTilt;
-    
-    // Apply smoothing to lateral flexion
-    const lateralFlexion = this.previousLateralFlexion + 
-      (rawLateralFlexion - this.previousLateralFlexion) * this.smoothingFactor;
-    this.previousLateralFlexion = lateralFlexion;
-    
-    // Calculate vertebrae positions with natural spinal curves
+    // Calculate vertebrae positions - simple straight spine
     const totalVertebrae = 24; // C1-C7, T1-T12, L1-L5
     
     // Generate each vertebra along the spine
     for (let i = 0; i < totalVertebrae; i++) {
       const t = i / (totalVertebrae - 1);
       
-      // Base position: linear interpolation from head to hips
-      const baseX = headCenter.x + (hipMidpoint.x - headCenter.x) * t;
-      const baseY = headCenter.y + (hipMidpoint.y - headCenter.y) * t;
-      
-      // Add subtle natural curves
-      // Cervical: slight forward curve (lordosis)
-      // Thoracic: slight backward curve (kyphosis)
-      // Lumbar: slight forward curve (lordosis)
-      let curveOffset = 0;
-      if (i < 7) {
-        // Cervical curve
-        curveOffset = Math.sin((i / 7) * Math.PI) * 0.01;
-      } else if (i < 19) {
-        // Thoracic curve
-        curveOffset = -Math.sin(((i - 7) / 12) * Math.PI) * 0.02;
-      } else {
-        // Lumbar curve
-        curveOffset = Math.sin(((i - 19) / 5) * Math.PI) * 0.015;
-      }
-      
-      // Apply natural curves only (no flexion to avoid C-shape distortion)
+      // Simple linear interpolation from head to hips - NO curves or offsets
       const position = {
-        x: baseX + curveOffset,
-        y: baseY
+        x: headCenter.x + (hipMidpoint.x - headCenter.x) * t,
+        y: headCenter.y + (hipMidpoint.y - headCenter.y) * t
       };
-      
-      // Apply lateral flexion
-      const lateralOffset = Math.sin(t * Math.PI) * lateralFlexion * 0.1;
-      position.x += lateralOffset;
       
       // Determine vertebra type and label
       let level: string;
@@ -150,9 +107,9 @@ export class DetailedSpineRenderer {
         vertebraHeight = height * 0.028;
       }
       
-      // Calculate rotation for this vertebra based on position in spine
-      const vertebraRotation = lateralFlexion * Math.sin(t * Math.PI);
-      const vertebraFlexion = 0; // Removed flexion to prevent C-shape distortion
+      // No rotation or flexion - keep spine completely stable
+      const vertebraRotation = 0;
+      const vertebraFlexion = 0;
       
       vertebrae.push(this.createVertebra(
         level,

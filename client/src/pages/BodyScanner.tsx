@@ -42,6 +42,7 @@ import {
   type BodyPartAnalysis,
   type BodyRegionId
 } from '@/services/biomechanics/BodyPartAnalysis';
+import { DetailedSpineRenderer, RibcageRenderer, PelvisRenderer, BoneMeasurements } from '@/services/anatomy/DetailedBoneStructures';
 
 // Pose landmark indices
 const POSE_LANDMARKS = {
@@ -147,6 +148,9 @@ export default function BodyScanner() {
   const cameraRef = useRef<Camera | null>(null);
   const animationFrameRef = useRef<number>();
   const fullscreenContainerRef = useRef<HTMLDivElement>(null);
+  const spineRendererRef = useRef<DetailedSpineRenderer>(new DetailedSpineRenderer());
+  const ribcageRendererRef = useRef<RibcageRenderer>(new RibcageRenderer());
+  const pelvisRendererRef = useRef<PelvisRenderer>(new PelvisRenderer());
   
   // Fullscreen handling
   const toggleFullscreen = async () => {
@@ -331,6 +335,42 @@ export default function BodyScanner() {
     // Clear the overlay canvas first
     ctx.clearRect(0, 0, width, height);
     
+    // Render detailed bone structures if bones layer is visible
+    if (visibleLayers.includes('bones')) {
+      // Render detailed spine with individual vertebrae
+      const spineRenderer = spineRendererRef.current;
+      if (spineRenderer) {
+        const vertebrae = spineRenderer.generateDetailedVertebrae(landmarks, width, height);
+        spineRenderer.renderVertebrae(ctx, vertebrae, true);
+        
+        // Calculate and display clinical measurements
+        const cobbAngle = BoneMeasurements.calculateCobbAngle(vertebrae);
+        const thoracicKyphosis = BoneMeasurements.calculateSpinalCurvature(vertebrae, 'thoracic');
+        const lumbarLordosis = BoneMeasurements.calculateSpinalCurvature(vertebrae, 'lumbar');
+        
+        // Display measurements
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.font = 'bold 12px Arial';
+        ctx.fillText(`Cobb Angle: ${cobbAngle.toFixed(1)}°`, 10, height - 60);
+        ctx.fillText(`Thoracic Kyphosis: ${thoracicKyphosis.toFixed(1)}°`, 10, height - 45);
+        ctx.fillText(`Lumbar Lordosis: ${lumbarLordosis.toFixed(1)}°`, 10, height - 30);
+      }
+      
+      // Render ribcage
+      const ribcageRenderer = ribcageRendererRef.current;
+      if (ribcageRenderer) {
+        const ribs = ribcageRenderer.generateRibcage(landmarks, width, height);
+        ribcageRenderer.renderRibcage(ctx, ribs);
+      }
+      
+      // Render pelvis
+      const pelvisRenderer = pelvisRendererRef.current;
+      if (pelvisRenderer) {
+        const pelvis = pelvisRenderer.generatePelvis(landmarks, width, height);
+        pelvisRenderer.renderPelvis(ctx, pelvis);
+      }
+    }
+    
     // First render the new modular anatomy (shoulder and other regions)
     const anatomyManager = anatomyManagerRef.current;
     if (anatomyManager) {
@@ -373,7 +413,7 @@ export default function BodyScanner() {
     });
   };
   
-  // Draw bone structures
+  // Draw bone structures with enhanced anatomical detail
   const drawBones = (ctx: CanvasRenderingContext2D, landmarks: any[], width: number, height: number) => {
     ctx.save();
     
@@ -386,30 +426,125 @@ export default function BodyScanner() {
     ctx.shadowBlur = 5;
     ctx.globalAlpha = 0.85;
     
-    // Helper function to draw a bone between two points
-    const drawBone = (start: any, end: any, thickness: number = 8) => {
+    // Helper function to draw anatomically accurate bone with features
+    const drawDetailedBone = (start: any, end: any, boneName: string, thickness: number = 8) => {
       const startX = start.x * width;
       const startY = start.y * height;
       const endX = end.x * width;
       const endY = end.y * height;
       
-      // Draw bone shaft (tapered cylinder effect)
-      ctx.beginPath();
-      ctx.moveTo(startX, startY);
-      ctx.lineTo(endX, endY);
-      ctx.lineWidth = thickness;
-      ctx.stroke();
+      // Calculate bone angle and length
+      const angle = Math.atan2(endY - startY, endX - startX);
+      const length = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2));
       
-      // Draw joint ends (rounded for realism)
-      ctx.beginPath();
-      ctx.arc(startX, startY, thickness/2 + 2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
+      ctx.save();
+      ctx.translate(startX, startY);
+      ctx.rotate(angle);
       
-      ctx.beginPath();
-      ctx.arc(endX, endY, thickness/2 + 2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
+      // Draw bone shaft with anatomical features
+      if (boneName.includes('Femur')) {
+        // Femur: Add greater trochanter and condyles
+        // Proximal end (hip joint)
+        ctx.beginPath();
+        ctx.arc(0, 0, thickness * 1.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        
+        // Greater trochanter
+        ctx.beginPath();
+        ctx.ellipse(thickness, -thickness * 0.5, thickness * 0.8, thickness * 0.6, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        
+        // Shaft with slight curve
+        const gradient = ctx.createLinearGradient(0, 0, length, 0);
+        gradient.addColorStop(0, '#f5f5f5');
+        gradient.addColorStop(0.5, '#e8e8e8');
+        gradient.addColorStop(1, '#f5f5f5');
+        ctx.fillStyle = gradient;
+        
+        ctx.beginPath();
+        ctx.moveTo(0, -thickness/2);
+        ctx.quadraticCurveTo(length/2, -thickness/2 - 2, length, -thickness * 0.8);
+        ctx.lineTo(length, thickness * 0.8);
+        ctx.quadraticCurveTo(length/2, thickness/2 + 2, 0, thickness/2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        
+        // Distal condyles
+        ctx.beginPath();
+        ctx.ellipse(length - thickness, 0, thickness * 1.2, thickness * 1.4, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        
+      } else if (boneName.includes('Tibia')) {
+        // Tibia: Add tibial plateau and malleolus
+        // Proximal tibial plateau
+        ctx.beginPath();
+        ctx.rect(-thickness * 0.8, -thickness * 0.8, thickness * 1.6, thickness * 1.6);
+        ctx.fill();
+        ctx.stroke();
+        
+        // Shaft
+        ctx.beginPath();
+        ctx.moveTo(0, -thickness/2);
+        ctx.lineTo(length, -thickness * 0.4);
+        ctx.lineTo(length, thickness * 0.4);
+        ctx.lineTo(0, thickness/2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        
+        // Medial malleolus
+        ctx.beginPath();
+        ctx.ellipse(length, thickness * 0.3, thickness * 0.5, thickness * 0.7, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        
+      } else if (boneName.includes('Humerus')) {
+        // Humerus: Add head and epicondyles
+        // Humeral head
+        ctx.beginPath();
+        ctx.arc(0, 0, thickness * 1.3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        
+        // Shaft
+        ctx.fillRect(0, -thickness/2, length, thickness);
+        ctx.strokeRect(0, -thickness/2, length, thickness);
+        
+        // Epicondyles
+        ctx.beginPath();
+        ctx.ellipse(length, -thickness * 0.6, thickness * 0.6, thickness * 0.4, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.ellipse(length, thickness * 0.6, thickness * 0.6, thickness * 0.4, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        
+      } else {
+        // Default bone structure
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(length, 0);
+        ctx.lineWidth = thickness;
+        ctx.stroke();
+        
+        // Joint ends
+        ctx.beginPath();
+        ctx.arc(0, 0, thickness/2 + 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.arc(length, 0, thickness/2 + 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+      
+      ctx.restore();
     };
     
     // Draw femur (thigh bone) - thicker as it's the largest bone
@@ -421,7 +556,7 @@ export default function BodyScanner() {
     const rightAnkle = landmarks[POSE_LANDMARKS.RIGHT_ANKLE];
     
     if (leftHip && leftKnee) {
-      drawBone(leftHip, leftKnee, 12); // Femur is thicker
+      drawDetailedBone(leftHip, leftKnee, 'Left Femur', 12); // Femur is thicker
       
       // Add femur label
       ctx.fillStyle = '#ffffff';
@@ -430,7 +565,7 @@ export default function BodyScanner() {
     }
     
     if (rightHip && rightKnee) {
-      drawBone(rightHip, rightKnee, 12);
+      drawDetailedBone(rightHip, rightKnee, 'Right Femur', 12);
       ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 11px Arial';
       ctx.fillText('Femur', rightHip.x * width - 35, rightHip.y * height + (rightKnee.y - rightHip.y) * height / 2);
@@ -469,7 +604,7 @@ export default function BodyScanner() {
     ctx.strokeStyle = '#e8e8e8';
     ctx.fillStyle = '#f5f5f5';
     if (leftKnee && leftAnkle) {
-      drawBone(leftKnee, leftAnkle, 10);
+      drawDetailedBone(leftKnee, leftAnkle, 'Left Tibia', 10);
       
       ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 11px Arial';
@@ -477,11 +612,77 @@ export default function BodyScanner() {
     }
     
     if (rightKnee && rightAnkle) {
-      drawBone(rightKnee, rightAnkle, 10);
+      drawDetailedBone(rightKnee, rightAnkle, 'Right Tibia', 10);
       
       ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 11px Arial';
       ctx.fillText('Tibia', rightKnee.x * width - 35, rightKnee.y * height + (rightAnkle.y - rightKnee.y) * height / 2);
+    }
+    
+    // Draw upper body bones (humerus, radius, ulna)
+    const leftShoulder = landmarks[POSE_LANDMARKS.LEFT_SHOULDER];
+    const rightShoulder = landmarks[POSE_LANDMARKS.RIGHT_SHOULDER];
+    const leftElbow = landmarks[POSE_LANDMARKS.LEFT_ELBOW];
+    const rightElbow = landmarks[POSE_LANDMARKS.RIGHT_ELBOW];
+    const leftWrist = landmarks[POSE_LANDMARKS.LEFT_WRIST];
+    const rightWrist = landmarks[POSE_LANDMARKS.RIGHT_WRIST];
+    
+    // Draw humerus (upper arm)
+    if (leftShoulder && leftElbow) {
+      drawDetailedBone(leftShoulder, leftElbow, 'Left Humerus', 10);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 10px Arial';
+      ctx.fillText('Humerus', leftShoulder.x * width + 10, leftShoulder.y * height + (leftElbow.y - leftShoulder.y) * height / 2);
+    }
+    
+    if (rightShoulder && rightElbow) {
+      drawDetailedBone(rightShoulder, rightElbow, 'Right Humerus', 10);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 10px Arial';
+      ctx.fillText('Humerus', rightShoulder.x * width - 40, rightShoulder.y * height + (rightElbow.y - rightShoulder.y) * height / 2);
+    }
+    
+    // Draw radius and ulna (forearm bones)
+    if (leftElbow && leftWrist) {
+      // Radius (thumb side)
+      const radiusOffset = 0.003;
+      drawDetailedBone(
+        { x: leftElbow.x - radiusOffset, y: leftElbow.y },
+        { x: leftWrist.x - radiusOffset, y: leftWrist.y },
+        'Left Radius', 6
+      );
+      
+      // Ulna (pinky side)
+      drawDetailedBone(
+        { x: leftElbow.x + radiusOffset, y: leftElbow.y },
+        { x: leftWrist.x + radiusOffset, y: leftWrist.y },
+        'Left Ulna', 6
+      );
+      
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 9px Arial';
+      ctx.fillText('Radius/Ulna', leftElbow.x * width + 10, leftElbow.y * height + (leftWrist.y - leftElbow.y) * height / 2);
+    }
+    
+    if (rightElbow && rightWrist) {
+      // Radius (thumb side)
+      const radiusOffset = 0.003;
+      drawDetailedBone(
+        { x: rightElbow.x + radiusOffset, y: rightElbow.y },
+        { x: rightWrist.x + radiusOffset, y: rightWrist.y },
+        'Right Radius', 6
+      );
+      
+      // Ulna (pinky side)
+      drawDetailedBone(
+        { x: rightElbow.x - radiusOffset, y: rightElbow.y },
+        { x: rightWrist.x - radiusOffset, y: rightWrist.y },
+        'Right Ulna', 6
+      );
+      
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 9px Arial';
+      ctx.fillText('Radius/Ulna', rightElbow.x * width - 50, rightElbow.y * height + (rightWrist.y - rightElbow.y) * height / 2);
     }
     
     // Draw fibula (smaller bone parallel to tibia)

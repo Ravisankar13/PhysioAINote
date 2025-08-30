@@ -65,10 +65,11 @@ export class DetailedSpineRenderer {
       y: (leftHip.y + rightHip.y) / 2
     };
     
-    // Calculate head position
+    // Calculate stable head position based on shoulder position
+    // Using a fixed offset from shoulders is more stable than nose tracking
     const headCenter = {
-      x: nose ? nose.x : shoulderMidpoint.x,
-      y: nose ? nose.y + 0.08 : shoulderMidpoint.y - 0.15
+      x: shoulderMidpoint.x,
+      y: shoulderMidpoint.y - 0.15 // Fixed distance above shoulders
     };
     
     // Calculate lateral flexion (side bending)
@@ -82,70 +83,54 @@ export class DetailedSpineRenderer {
     );
     const rawLateralFlexion = shoulderTilt - hipTilt;
     
-    // Calculate forward/backward flexion based on trunk angle
-    // This is more reliable than using elbow position
-    const trunkVector = {
-      x: shoulderMidpoint.x - hipMidpoint.x,
-      y: shoulderMidpoint.y - hipMidpoint.y
-    };
-    
-    // Calculate angle from vertical (0 = upright, positive = forward lean)
-    const verticalAngle = Math.atan2(trunkVector.x, -trunkVector.y);
-    
-    // Limit flexion to reasonable range (-0.3 to 0.3 radians)
-    const rawFlexionAmount = Math.max(-0.3, Math.min(0.3, verticalAngle)) * 0.2;
-    
-    // Apply exponential smoothing to prevent sudden changes
-    const flexionAmount = this.previousFlexion + 
-      (rawFlexionAmount - this.previousFlexion) * this.smoothingFactor;
+    // Apply smoothing to lateral flexion
     const lateralFlexion = this.previousLateralFlexion + 
       (rawLateralFlexion - this.previousLateralFlexion) * this.smoothingFactor;
-    
-    // Update previous values for next frame
-    this.previousFlexion = flexionAmount;
     this.previousLateralFlexion = lateralFlexion;
     
-    // Calculate thoracic midpoint
-    const thoracicMidpoint = {
-      x: (shoulderMidpoint.x + hipMidpoint.x) / 2,
-      y: (shoulderMidpoint.y + hipMidpoint.y) / 2
-    };
+    // Calculate forward/backward flexion based on shoulder-hip relationship
+    const shoulderForwardOffset = shoulderMidpoint.x - hipMidpoint.x;
+    const normalizedFlexion = Math.max(-0.1, Math.min(0.1, shoulderForwardOffset));
     
-    // Total spine length calculation
-    const totalSpineLength = Math.sqrt(
-      Math.pow((hipMidpoint.x - headCenter.x) * width, 2) +
-      Math.pow((hipMidpoint.y - headCenter.y) * height, 2)
-    );
+    // Apply smoothing to flexion
+    const flexionAmount = this.previousFlexion + 
+      (normalizedFlexion - this.previousFlexion) * this.smoothingFactor;
+    this.previousFlexion = flexionAmount;
     
-    // Calculate vertebrae positions with smooth transitions
+    // Calculate vertebrae positions with natural spinal curves
     const totalVertebrae = 24; // C1-C7, T1-T12, L1-L5
     
-    // Generate spine curve using bezier interpolation with limited curvature
-    // Control points are positioned to create natural spinal curves
-    const controlPoint1 = {
-      x: shoulderMidpoint.x + flexionAmount * 0.5, // Reduced influence
-      y: shoulderMidpoint.y - 0.05
-    };
-    
-    const controlPoint2 = {
-      x: thoracicMidpoint.x + flexionAmount * 0.7, // Reduced from 1.5x
-      y: thoracicMidpoint.y
-    };
-    
-    // Generate each vertebra along the curved spine
+    // Generate each vertebra along the spine
     for (let i = 0; i < totalVertebrae; i++) {
       const t = i / (totalVertebrae - 1);
       
-      // Cubic bezier curve for smooth spine
-      const position = this.cubicBezier(
-        headCenter,
-        controlPoint1,
-        controlPoint2,
-        hipMidpoint,
-        t
-      );
+      // Base position: linear interpolation from head to hips
+      const baseX = headCenter.x + (hipMidpoint.x - headCenter.x) * t;
+      const baseY = headCenter.y + (hipMidpoint.y - headCenter.y) * t;
       
-      // Apply lateral flexion with natural distribution
+      // Add subtle natural curves
+      // Cervical: slight forward curve (lordosis)
+      // Thoracic: slight backward curve (kyphosis)
+      // Lumbar: slight forward curve (lordosis)
+      let curveOffset = 0;
+      if (i < 7) {
+        // Cervical curve
+        curveOffset = Math.sin((i / 7) * Math.PI) * 0.01;
+      } else if (i < 19) {
+        // Thoracic curve
+        curveOffset = -Math.sin(((i - 7) / 12) * Math.PI) * 0.02;
+      } else {
+        // Lumbar curve
+        curveOffset = Math.sin(((i - 19) / 5) * Math.PI) * 0.015;
+      }
+      
+      // Apply flexion and natural curves
+      const position = {
+        x: baseX + curveOffset + (flexionAmount * Math.sin(t * Math.PI) * 0.5),
+        y: baseY
+      };
+      
+      // Apply lateral flexion
       const lateralOffset = Math.sin(t * Math.PI) * lateralFlexion * 0.1;
       position.x += lateralOffset;
       
@@ -193,34 +178,7 @@ export class DetailedSpineRenderer {
 
     return vertebrae;
   }
-  
-  /**
-   * Calculate point on cubic bezier curve
-   */
-  private cubicBezier(
-    p0: { x: number; y: number },
-    p1: { x: number; y: number },
-    p2: { x: number; y: number },
-    p3: { x: number; y: number },
-    t: number
-  ): { x: number; y: number } {
-    const oneMinusT = 1 - t;
-    const oneMinusTSquared = oneMinusT * oneMinusT;
-    const oneMinusTCubed = oneMinusTSquared * oneMinusT;
-    const tSquared = t * t;
-    const tCubed = tSquared * t;
-    
-    return {
-      x: oneMinusTCubed * p0.x +
-         3 * oneMinusTSquared * t * p1.x +
-         3 * oneMinusT * tSquared * p2.x +
-         tCubed * p3.x,
-      y: oneMinusTCubed * p0.y +
-         3 * oneMinusTSquared * t * p1.y +
-         3 * oneMinusT * tSquared * p2.y +
-         tCubed * p3.y
-    };
-  }
+
 
   private createVertebra(
     level: string,

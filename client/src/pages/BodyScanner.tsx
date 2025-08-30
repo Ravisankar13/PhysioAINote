@@ -35,6 +35,7 @@ import {
   X
 } from 'lucide-react';
 import { loadMediaPipeLibraries } from '@/utils/mediapipeLoader';
+import { AnatomyManager } from '@/services/anatomy/AnatomyManager';
 
 // Pose landmark indices
 const POSE_LANDMARKS = {
@@ -123,6 +124,7 @@ export default function BodyScanner() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
+  const anatomyManagerRef = useRef<AnatomyManager>(new AnatomyManager());
   const poseRef = useRef<Pose | null>(null);
   const cameraRef = useRef<Camera | null>(null);
   const animationFrameRef = useRef<number>();
@@ -301,20 +303,27 @@ export default function BodyScanner() {
   
   // Draw anatomy overlay with realistic structures
   const drawAnatomyOverlay = (ctx: CanvasRenderingContext2D, landmarks: any[], width: number, height: number) => {
-    // Get all necessary landmarks
-    const leftHip = landmarks[POSE_LANDMARKS.LEFT_HIP];
-    const rightHip = landmarks[POSE_LANDMARKS.RIGHT_HIP];
-    const leftKnee = landmarks[POSE_LANDMARKS.LEFT_KNEE];
-    const rightKnee = landmarks[POSE_LANDMARKS.RIGHT_KNEE];
-    const leftAnkle = landmarks[POSE_LANDMARKS.LEFT_ANKLE];
-    const rightAnkle = landmarks[POSE_LANDMARKS.RIGHT_ANKLE];
-    const leftShoulder = landmarks[POSE_LANDMARKS.LEFT_SHOULDER];
-    const rightShoulder = landmarks[POSE_LANDMARKS.RIGHT_SHOULDER];
-    const leftElbow = landmarks[POSE_LANDMARKS.LEFT_ELBOW];
-    const rightElbow = landmarks[POSE_LANDMARKS.RIGHT_ELBOW];
-    const leftWrist = landmarks[POSE_LANDMARKS.LEFT_WRIST];
-    const rightWrist = landmarks[POSE_LANDMARKS.RIGHT_WRIST];
+    // Clear the overlay canvas first
+    ctx.clearRect(0, 0, width, height);
     
+    // First render the new modular anatomy (shoulder and other regions)
+    const anatomyManager = anatomyManagerRef.current;
+    if (anatomyManager) {
+      // Update layer visibility based on current state
+      anatomyManager.setLayerVisibility('bones', visibleLayers.includes('bones'));
+      anatomyManager.setLayerVisibility('muscles', visibleLayers.includes('muscles'));
+      anatomyManager.setLayerVisibility('ligaments', visibleLayers.includes('ligaments'));
+      
+      // Render using the anatomy manager
+      anatomyManager.render({
+        ctx,
+        landmarks,
+        width,
+        height
+      });
+    }
+    
+    // Then render the existing knee anatomy (will be migrated to modular system later)
     visibleLayers.forEach(layerId => {
       const layer = ANATOMY_LAYERS.find(l => l.id === layerId);
       if (!layer) return;
@@ -1852,6 +1861,74 @@ export default function BodyScanner() {
                   Start tracking to see live metrics
                 </p>
               )}
+            </CardContent>
+          </Card>
+          
+          {/* Body Regions */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Target className="h-4 w-4" />
+                Body Regions
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  variant={anatomyManagerRef.current?.isRegionActive('shoulder') ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => {
+                    anatomyManagerRef.current?.toggleRegion('shoulder');
+                    setIsTracking(false);
+                    setTimeout(() => setIsTracking(true), 100);
+                  }}
+                >
+                  Shoulder
+                </Button>
+                <Button
+                  variant={anatomyManagerRef.current?.isRegionActive('knee') ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => {
+                    anatomyManagerRef.current?.toggleRegion('knee');
+                    setIsTracking(false);
+                    setTimeout(() => setIsTracking(true), 100);
+                  }}
+                >
+                  Knee
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled
+                  className="opacity-50"
+                >
+                  Hip (Soon)
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled
+                  className="opacity-50"
+                >
+                  Spine (Soon)
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled
+                  className="opacity-50"
+                >
+                  Elbow (Soon)
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled
+                  className="opacity-50"
+                >
+                  Ankle (Soon)
+                </Button>
+              </div>
             </CardContent>
           </Card>
           

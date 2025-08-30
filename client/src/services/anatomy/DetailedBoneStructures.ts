@@ -31,7 +31,7 @@ export class DetailedSpineRenderer {
   };
 
   /**
-   * Generate detailed vertebrae with anatomical processes
+   * Generate detailed vertebrae with anatomical processes that follow actual spine movement
    */
   generateDetailedVertebrae(
     landmarks: NormalizedLandmark[],
@@ -40,12 +40,18 @@ export class DetailedSpineRenderer {
   ): VertebralSegment[] {
     const vertebrae: VertebralSegment[] = [];
     
-    // Calculate spine line from shoulders to hips
+    // Get key landmarks for spine calculation
+    const nose = landmarks[0];
+    const leftEar = landmarks[7];
+    const rightEar = landmarks[8];
     const leftShoulder = landmarks[11];
     const rightShoulder = landmarks[12];
+    const leftElbow = landmarks[13];
+    const rightElbow = landmarks[14];
     const leftHip = landmarks[23];
     const rightHip = landmarks[24];
     
+    // Calculate midpoints
     const shoulderMidpoint = {
       x: (leftShoulder.x + rightShoulder.x) / 2,
       y: (leftShoulder.y + rightShoulder.y) / 2
@@ -55,67 +61,153 @@ export class DetailedSpineRenderer {
       x: (leftHip.x + rightHip.x) / 2,
       y: (leftHip.y + rightHip.y) / 2
     };
-
-    // Generate cervical vertebrae (C1-C7)
-    // Use nose landmark (0) to determine head position for proper neck alignment
-    const nose = landmarks[0];
-    const neckTop = { 
-      x: shoulderMidpoint.x, 
-      y: nose ? nose.y + 0.08 : shoulderMidpoint.y - 0.15 // Start below nose/chin area
+    
+    // Calculate head position and tilt
+    const headCenter = {
+      x: nose ? nose.x : shoulderMidpoint.x,
+      y: nose ? nose.y + 0.08 : shoulderMidpoint.y - 0.15
     };
-    const cervicalHeight = Math.abs(shoulderMidpoint.y - neckTop.y) / 7;
     
-    for (let i = 0; i < 7; i++) {
-      const level = `C${i + 1}`;
-      const yPos = neckTop.y + (i * cervicalHeight);
+    // Calculate lateral flexion (side bending)
+    const shoulderTilt = Math.atan2(
+      rightShoulder.y - leftShoulder.y,
+      rightShoulder.x - leftShoulder.x
+    );
+    const hipTilt = Math.atan2(
+      rightHip.y - leftHip.y,
+      rightHip.x - leftHip.x
+    );
+    const lateralFlexion = shoulderTilt - hipTilt;
+    
+    // Calculate forward/backward flexion
+    const spineAngle = Math.atan2(
+      hipMidpoint.y - shoulderMidpoint.y,
+      hipMidpoint.x - shoulderMidpoint.x
+    );
+    
+    // Calculate thoracic cage position (using elbows as reference)
+    const thoracicMidpoint = {
+      x: (shoulderMidpoint.x + hipMidpoint.x) / 2,
+      y: (shoulderMidpoint.y + hipMidpoint.y) / 2
+    };
+    
+    // If elbows are forward, spine is likely flexed
+    const elbowMidpoint = leftElbow && rightElbow ? {
+      x: (leftElbow.x + rightElbow.x) / 2,
+      y: (leftElbow.y + rightElbow.y) / 2
+    } : shoulderMidpoint;
+    
+    const flexionAmount = (elbowMidpoint.x - shoulderMidpoint.x) * 0.5;
+    
+    // Total spine length calculation
+    const totalSpineLength = Math.sqrt(
+      Math.pow((hipMidpoint.x - headCenter.x) * width, 2) +
+      Math.pow((hipMidpoint.y - headCenter.y) * height, 2)
+    );
+    
+    // Calculate vertebrae positions with smooth transitions
+    const totalVertebrae = 24; // C1-C7, T1-T12, L1-L5
+    const vertebralSpacing = totalSpineLength / totalVertebrae;
+    
+    // Generate spine curve using bezier interpolation
+    const controlPoint1 = {
+      x: shoulderMidpoint.x + flexionAmount,
+      y: shoulderMidpoint.y - 0.05
+    };
+    
+    const controlPoint2 = {
+      x: thoracicMidpoint.x + flexionAmount * 1.5,
+      y: thoracicMidpoint.y
+    };
+    
+    // Generate each vertebra along the curved spine
+    for (let i = 0; i < totalVertebrae; i++) {
+      const t = i / (totalVertebrae - 1);
+      
+      // Cubic bezier curve for smooth spine
+      const position = this.cubicBezier(
+        headCenter,
+        controlPoint1,
+        controlPoint2,
+        hipMidpoint,
+        t
+      );
+      
+      // Apply lateral flexion
+      const lateralOffset = Math.sin(t * Math.PI) * lateralFlexion * 0.1;
+      position.x += lateralOffset;
+      
+      // Determine vertebra type and label
+      let level: string;
+      let type: 'cervical' | 'thoracic' | 'lumbar';
+      let vertebraWidth: number;
+      let vertebraHeight: number;
+      
+      if (i < 7) {
+        // Cervical vertebrae (C1-C7)
+        level = `C${i + 1}`;
+        type = 'cervical';
+        vertebraWidth = width * 0.025;
+        vertebraHeight = height * 0.018;
+      } else if (i < 19) {
+        // Thoracic vertebrae (T1-T12)
+        level = `T${i - 6}`;
+        type = 'thoracic';
+        vertebraWidth = width * (0.03 + ((i - 7) * 0.001));
+        vertebraHeight = height * 0.022;
+      } else {
+        // Lumbar vertebrae (L1-L5)
+        level = `L${i - 18}`;
+        type = 'lumbar';
+        vertebraWidth = width * 0.04;
+        vertebraHeight = height * 0.028;
+      }
+      
+      // Calculate rotation for this vertebra based on position in spine
+      const vertebraRotation = lateralFlexion * Math.sin(t * Math.PI);
+      const vertebraFlexion = flexionAmount * (1 - Math.abs(t - 0.5) * 2); // Max at mid-spine
       
       vertebrae.push(this.createVertebra(
         level,
-        shoulderMidpoint.x * width,
-        yPos * height,
-        width * 0.025, // Cervical vertebrae are smaller
-        height * 0.018,
-        'cervical'
-      ));
-    }
-
-    // Generate thoracic vertebrae (T1-T12)
-    const thoracicLength = Math.abs(shoulderMidpoint.y - (shoulderMidpoint.y + hipMidpoint.y) / 2);
-    const thoracicHeight = thoracicLength / 12;
-    
-    for (let i = 0; i < 12; i++) {
-      const level = `T${i + 1}`;
-      const yPos = shoulderMidpoint.y + (i * thoracicHeight);
-      
-      vertebrae.push(this.createVertebra(
-        level,
-        shoulderMidpoint.x * width,
-        yPos * height,
-        width * 0.03 + (i * 0.001), // Gradually increase size
-        height * 0.022,
-        'thoracic'
-      ));
-    }
-
-    // Generate lumbar vertebrae (L1-L5)
-    const lumbarStart = shoulderMidpoint.y + thoracicLength;
-    const lumbarHeight = (hipMidpoint.y - lumbarStart) / 5;
-    
-    for (let i = 0; i < 5; i++) {
-      const level = `L${i + 1}`;
-      const yPos = lumbarStart + (i * lumbarHeight);
-      
-      vertebrae.push(this.createVertebra(
-        level,
-        hipMidpoint.x * width,
-        yPos * height,
-        width * 0.04, // Lumbar vertebrae are largest
-        height * 0.028,
-        'lumbar'
+        position.x * width,
+        position.y * height,
+        vertebraWidth,
+        vertebraHeight,
+        type,
+        vertebraRotation,
+        vertebraFlexion
       ));
     }
 
     return vertebrae;
+  }
+  
+  /**
+   * Calculate point on cubic bezier curve
+   */
+  private cubicBezier(
+    p0: { x: number; y: number },
+    p1: { x: number; y: number },
+    p2: { x: number; y: number },
+    p3: { x: number; y: number },
+    t: number
+  ): { x: number; y: number } {
+    const oneMinusT = 1 - t;
+    const oneMinusTSquared = oneMinusT * oneMinusT;
+    const oneMinusTCubed = oneMinusTSquared * oneMinusT;
+    const tSquared = t * t;
+    const tCubed = tSquared * t;
+    
+    return {
+      x: oneMinusTCubed * p0.x +
+         3 * oneMinusTSquared * t * p1.x +
+         3 * oneMinusT * tSquared * p2.x +
+         tCubed * p3.x,
+      y: oneMinusTCubed * p0.y +
+         3 * oneMinusTSquared * t * p1.y +
+         3 * oneMinusT * tSquared * p2.y +
+         tCubed * p3.y
+    };
   }
 
   private createVertebra(
@@ -124,11 +216,17 @@ export class DetailedSpineRenderer {
     y: number,
     width: number,
     height: number,
-    type: 'cervical' | 'thoracic' | 'lumbar'
+    type: 'cervical' | 'thoracic' | 'lumbar',
+    rotation: number = 0,
+    flexion: number = 0
   ): VertebralSegment {
     // Adjust morphology based on vertebral type
     const bodyShape = type === 'cervical' ? 0.8 : type === 'thoracic' ? 0.9 : 1.0;
     const processLength = type === 'cervical' ? 0.6 : type === 'thoracic' ? 0.8 : 1.0;
+    
+    // Apply rotation to processes based on spine movement
+    const cosRot = Math.cos(rotation);
+    const sinRot = Math.sin(rotation);
 
     return {
       level,
@@ -140,24 +238,24 @@ export class DetailedSpineRenderer {
       },
       spinousProcess: [
         { x, y },
-        { x: x - width * 0.15 * processLength, y: y - height * 0.8 },
-        { x: x - width * 0.2 * processLength, y: y - height * 1.2 }
+        { x: x - width * 0.15 * processLength * cosRot, y: y - height * 0.8 },
+        { x: x - width * 0.2 * processLength * cosRot, y: y - height * 1.2 }
       ],
       transverseProcesses: {
         left: [
           { x, y },
-          { x: x - width * 0.8, y: y - height * 0.3 },
-          { x: x - width * 1.2, y: y - height * 0.4 }
+          { x: x - width * 0.8 * (1 + sinRot * 0.3), y: y - height * 0.3 },
+          { x: x - width * 1.2 * (1 + sinRot * 0.3), y: y - height * 0.4 }
         ],
         right: [
           { x, y },
-          { x: x + width * 0.8, y: y - height * 0.3 },
-          { x: x + width * 1.2, y: y - height * 0.4 }
+          { x: x + width * 0.8 * (1 - sinRot * 0.3), y: y - height * 0.3 },
+          { x: x + width * 1.2 * (1 - sinRot * 0.3), y: y - height * 0.4 }
         ]
       },
       facetJoints: {
-        superior: { x, y: y - height / 2 },
-        inferior: { x, y: y + height / 2 }
+        superior: { x: x + flexion * width * 0.2, y: y - height / 2 },
+        inferior: { x: x - flexion * width * 0.2, y: y + height / 2 }
       }
     };
   }
@@ -170,6 +268,23 @@ export class DetailedSpineRenderer {
     vertebrae: VertebralSegment[],
     showLabels: boolean = true
   ) {
+    // First draw intervertebral discs between vertebrae
+    for (let i = 0; i < vertebrae.length - 1; i++) {
+      const currentVert = vertebrae[i];
+      const nextVert = vertebrae[i + 1];
+      
+      // Calculate disc position and size
+      const discY = (currentVert.body.y + currentVert.body.height + nextVert.body.y) / 2;
+      const discHeight = Math.abs(nextVert.body.y - (currentVert.body.y + currentVert.body.height));
+      const discX = (currentVert.body.x + nextVert.body.x) / 2;
+      const discWidth = (currentVert.body.width + nextVert.body.width) / 2;
+      
+      // Draw intervertebral disc
+      ctx.fillStyle = 'rgba(180, 180, 200, 0.5)';
+      ctx.fillRect(discX, discY - discHeight/2, discWidth, discHeight);
+    }
+    
+    // Then draw vertebrae on top
     vertebrae.forEach(vertebra => {
       // Draw vertebral body
       ctx.fillStyle = 'rgba(240, 240, 240, 0.9)';

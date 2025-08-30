@@ -42,10 +42,10 @@ import {
   type BodyPartAnalysis,
   type BodyRegionId
 } from '@/services/biomechanics/BodyPartAnalysis';
-import { DetailedSpineRenderer, RibcageRenderer, PelvisRenderer, BoneMeasurements } from '@/services/anatomy/DetailedBoneStructures';
+import { DetailedSpineRenderer } from '@/services/anatomy/DetailedBoneStructures';
+import { RibcageRenderer } from '@/services/anatomy/RibcageRenderer';
 import { ShoulderComplexRenderer } from '@/services/anatomy/shoulder/ShoulderComplex';
 import { 
-  EnhancedRibcageRenderer, 
   EnhancedPelvisRenderer, 
   EnhancedKneeRenderer, 
   EnhancedElbowRenderer 
@@ -157,7 +157,7 @@ export default function BodyScanner() {
   const fullscreenContainerRef = useRef<HTMLDivElement>(null);
   const spineRendererRef = useRef<DetailedSpineRenderer>(new DetailedSpineRenderer());
   const ribcageRendererRef = useRef<RibcageRenderer>(new RibcageRenderer());
-  const pelvisRendererRef = useRef<PelvisRenderer>(new PelvisRenderer());
+  const pelvisRendererRef = useRef<EnhancedPelvisRenderer>(new EnhancedPelvisRenderer());
   const shoulderRendererRef = useRef<ShoulderComplexRenderer>(new ShoulderComplexRenderer());
   
   // Fullscreen handling
@@ -330,29 +330,21 @@ export default function BodyScanner() {
     
     // Render detailed bone structures if bones layer is visible
     if (visibleLayers.includes('bones')) {
-      // Render detailed spine with individual vertebrae (keeping only this for spine measurements)
+      // Render detailed spine with individual vertebrae
       const spineRenderer = spineRendererRef.current;
+      let vertebrae: any[] = [];
       if (spineRenderer) {
-        const vertebrae = spineRenderer.generateDetailedVertebrae(landmarks, width, height);
+        vertebrae = spineRenderer.generateDetailedVertebrae(landmarks, width, height);
         spineRenderer.renderVertebrae(ctx, vertebrae, true);
-        
-        // Calculate and display clinical measurements
-        const cobbAngle = BoneMeasurements.calculateCobbAngle(vertebrae);
-        const thoracicKyphosis = BoneMeasurements.calculateSpinalCurvature(vertebrae, 'thoracic');
-        const lumbarLordosis = BoneMeasurements.calculateSpinalCurvature(vertebrae, 'lumbar');
-        
-        // Display measurements
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-        ctx.font = 'bold 12px Arial';
-        ctx.fillText(`Cobb Angle: ${cobbAngle.toFixed(1)}°`, 10, height - 60);
-        ctx.fillText(`Thoracic Kyphosis: ${thoracicKyphosis.toFixed(1)}°`, 10, height - 45);
-        ctx.fillText(`Lumbar Lordosis: ${lumbarLordosis.toFixed(1)}°`, 10, height - 30);
       }
       
-      // Enhanced Ribcage with costovertebral joints and detailed anatomy
-      const enhancedRibcageRenderer = new EnhancedRibcageRenderer();
-      const enhancedRibcageData = enhancedRibcageRenderer.generateEnhancedRibcage(landmarks, width, height);
-      enhancedRibcageRenderer.renderEnhancedRibcage(ctx, enhancedRibcageData);
+      // Render anatomically accurate ribcage
+      const ribcageRenderer = ribcageRendererRef.current;
+      if (ribcageRenderer && vertebrae.length > 0) {
+        const ribs = ribcageRenderer.generateRibs(vertebrae, landmarks, width, height);
+        const sternum = ribcageRenderer.generateSternum(landmarks, width, height);
+        ribcageRenderer.renderRibcage(ctx, ribs, sternum, true);
+      }
       
       // Enhanced Pelvis with ASIS, PSIS, and clinical measurements
       const enhancedPelvisRenderer = new EnhancedPelvisRenderer();

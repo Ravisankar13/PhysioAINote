@@ -1514,30 +1514,34 @@ export default function BodyScanner() {
         </div>
       )}
       
+      {/* Video element always present but hidden */}
+      <video
+        ref={videoRef}
+        className="hidden"
+        playsInline
+        muted
+        autoPlay
+      />
+      
       {/* Main Content Area */}
       {isFullscreen ? (
         // Fullscreen Video Area
         <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
           <div className="relative w-full h-full flex items-center justify-center">
-            <video
-              ref={videoRef}
-              className="hidden"
-              playsInline
-            />
             <canvas
               ref={canvasRef}
               width={1920}
               height={1080}
-              className="w-full h-full object-contain cursor-crosshair z-0"
+              className="w-full h-full object-contain cursor-crosshair"
               onClick={handleCanvasClick}
-              style={{ maxWidth: '100vw', maxHeight: '100vh', display: 'block' }}
+              style={{ maxWidth: '100vw', maxHeight: '100vh' }}
             />
             <canvas
               ref={overlayCanvasRef}
               width={1920}
               height={1080}
-              className="absolute inset-0 w-full h-full object-contain pointer-events-none z-[1]"
-              style={{ maxWidth: '100vw', maxHeight: '100vh', display: 'block' }}
+              className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+              style={{ maxWidth: '100vw', maxHeight: '100vh' }}
             />
             
             {!isTracking && (
@@ -1631,11 +1635,6 @@ export default function BodyScanner() {
               </CardHeader>
               <CardContent>
                 <div className="relative bg-black rounded-lg overflow-hidden">
-                  <video
-                    ref={videoRef}
-                    className="hidden"
-                    playsInline
-                  />
                   <canvas
                     ref={canvasRef}
                     width={1280}

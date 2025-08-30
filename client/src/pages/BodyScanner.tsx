@@ -43,6 +43,7 @@ import {
   type BodyRegionId
 } from '@/services/biomechanics/BodyPartAnalysis';
 import { DetailedSpineRenderer, RibcageRenderer, PelvisRenderer, BoneMeasurements } from '@/services/anatomy/DetailedBoneStructures';
+import { ShoulderComplexRenderer } from '@/services/anatomy/shoulder/ShoulderComplex';
 
 // Pose landmark indices
 const POSE_LANDMARKS = {
@@ -151,6 +152,7 @@ export default function BodyScanner() {
   const spineRendererRef = useRef<DetailedSpineRenderer>(new DetailedSpineRenderer());
   const ribcageRendererRef = useRef<RibcageRenderer>(new RibcageRenderer());
   const pelvisRendererRef = useRef<PelvisRenderer>(new PelvisRenderer());
+  const shoulderRendererRef = useRef<ShoulderComplexRenderer>(new ShoulderComplexRenderer());
   
   // Fullscreen handling
   const toggleFullscreen = async () => {
@@ -368,6 +370,20 @@ export default function BodyScanner() {
       if (pelvisRenderer) {
         const pelvis = pelvisRenderer.generatePelvis(landmarks, width, height);
         pelvisRenderer.renderPelvis(ctx, pelvis);
+      }
+      
+      // Render shoulder complex (both sides)
+      const shoulderRenderer = shoulderRendererRef.current;
+      if (shoulderRenderer) {
+        // Render left shoulder
+        if (landmarks[11]) { // Left shoulder landmark exists
+          shoulderRenderer.render(ctx, landmarks, width, height, 'left');
+        }
+        
+        // Render right shoulder
+        if (landmarks[12]) { // Right shoulder landmark exists
+          shoulderRenderer.render(ctx, landmarks, width, height, 'right');
+        }
       }
     }
     

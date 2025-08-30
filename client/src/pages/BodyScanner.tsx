@@ -19,6 +19,7 @@ import {
   CheckCircle,
   RefreshCw,
   Maximize2,
+  Minimize2,
   Target,
   Info,
   Layers,
@@ -27,7 +28,11 @@ import {
   ZoomIn,
   ZoomOut,
   RotateCw,
-  Sparkles
+  Sparkles,
+  Settings,
+  ChevronLeft,
+  ChevronRight,
+  X
 } from 'lucide-react';
 import { loadMediaPipeLibraries } from '@/utils/mediapipeLoader';
 
@@ -108,6 +113,11 @@ export default function BodyScanner() {
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]);
   const [selectedCameraId, setSelectedCameraId] = useState<string>('');
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showControls, setShowControls] = useState(true);
+  const [leftPanelOpen, setLeftPanelOpen] = useState(false);
+  const [rightPanelOpen, setRightPanelOpen] = useState(false);
+  const [controlsTimeout, setControlsTimeout] = useState<NodeJS.Timeout | null>(null);
   
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -116,7 +126,48 @@ export default function BodyScanner() {
   const poseRef = useRef<Pose | null>(null);
   const cameraRef = useRef<Camera | null>(null);
   const animationFrameRef = useRef<number>();
+  const fullscreenContainerRef = useRef<HTMLDivElement>(null);
   
+  // Fullscreen handling
+  const toggleFullscreen = async () => {
+    if (!document.fullscreenElement) {
+      if (fullscreenContainerRef.current) {
+        await fullscreenContainerRef.current.requestFullscreen();
+        setIsFullscreen(true);
+        showControlsTemporarily();
+      }
+    } else {
+      await document.exitFullscreen();
+      setIsFullscreen(false);
+      setShowControls(true);
+    }
+  };
+
+  // Show controls temporarily when user interacts
+  const showControlsTemporarily = () => {
+    setShowControls(true);
+    
+    // Clear existing timeout
+    if (controlsTimeout) {
+      clearTimeout(controlsTimeout);
+    }
+    
+    // Hide controls after 3 seconds if in fullscreen
+    if (isFullscreen) {
+      const timeout = setTimeout(() => {
+        setShowControls(false);
+      }, 3000);
+      setControlsTimeout(timeout);
+    }
+  };
+
+  // Handle mouse movement to show controls
+  const handleMouseMove = () => {
+    if (isFullscreen) {
+      showControlsTemporarily();
+    }
+  };
+
   // Helper function to calculate angle between three points
   const calculateAngle = (a: any, b: any, c: any) => {
     const radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
@@ -695,115 +746,444 @@ export default function BodyScanner() {
   };
   
   return (
-    <div className="container mx-auto p-6 max-w-7xl">
+    <div 
+      ref={fullscreenContainerRef}
+      className={`${isFullscreen ? 'fixed inset-0 bg-black z-50' : 'container mx-auto p-6 max-w-7xl'}`}
+      onMouseMove={handleMouseMove}
+      onTouchStart={handleMouseMove}
+    >
       
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Activity className="h-6 w-6" />
-            Advanced Knee Assessment Tool
-          </CardTitle>
-          <CardDescription>
-            Educational visualization with real-time pose tracking and anatomical overlays
-          </CardDescription>
-        </CardHeader>
-      </Card>
-      
-      <Alert className="mb-6">
-        <AlertTriangle className="h-4 w-4" />
-        <AlertTitle>Educational Tool Only</AlertTitle>
-        <AlertDescription>
-          This tool provides anatomical education and visualization. It is not intended for diagnosis or treatment.
-          Always consult with qualified healthcare professionals for clinical decisions.
-        </AlertDescription>
-      </Alert>
-      
-      {/* Phase 2 Features Info */}
-      <Card className="mb-6 border-blue-200 bg-blue-50/50">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-blue-600" />
-            Advanced Features (Phase 2)
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-            <div className="flex items-start gap-2">
-              <Target className="h-4 w-4 text-blue-600 mt-0.5" />
-              <div>
-                <p className="font-medium">SAM 2 Segmentation</p>
-                <p className="text-muted-foreground">Click to precisely segment regions of interest</p>
+      {/* Non-fullscreen header */}
+      {!isFullscreen && (
+        <>
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Activity className="h-6 w-6" />
+                Advanced Knee Assessment Tool
+              </CardTitle>
+              <CardDescription>
+                Educational visualization with real-time pose tracking and anatomical overlays
+              </CardDescription>
+            </CardHeader>
+          </Card>
+          
+          <Alert className="mb-6">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Educational Tool Only</AlertTitle>
+            <AlertDescription>
+              This tool provides anatomical education and visualization. It is not intended for diagnosis or treatment.
+              Always consult with qualified healthcare professionals for clinical decisions.
+            </AlertDescription>
+          </Alert>
+          
+          {/* Phase 2 Features Info */}
+          <Card className="mb-6 border-blue-200 bg-blue-50/50">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-blue-600" />
+                Advanced Features (Phase 2)
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                <div className="flex items-start gap-2">
+                  <Target className="h-4 w-4 text-blue-600 mt-0.5" />
+                  <div>
+                    <p className="font-medium">SAM 2 Segmentation</p>
+                    <p className="text-muted-foreground">Click to precisely segment regions of interest</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2">
+                  <Layers className="h-4 w-4 text-blue-600 mt-0.5" />
+                  <div>
+                    <p className="font-medium">MiDaS Depth Estimation</p>
+                    <p className="text-muted-foreground">3D depth analysis for volume comparison</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2">
+                  <Activity className="h-4 w-4 text-blue-600 mt-0.5" />
+                  <div>
+                    <p className="font-medium">Educational Insights</p>
+                    <p className="text-muted-foreground">Anatomical correlations and clinical tests</p>
+                  </div>
+                </div>
               </div>
+            </CardContent>
+          </Card>
+        </>
+      )}
+      
+      {/* Fullscreen Top Bar */}
+      {isFullscreen && (
+        <div 
+          className={`absolute top-0 left-0 right-0 bg-black/80 backdrop-blur-sm transition-all duration-300 z-10 ${
+            showControls ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'
+          }`}
+        >
+          <div className="flex justify-between items-center p-4">
+            <div className="flex items-center gap-4">
+              <Badge variant={cameraStatus === 'ready' ? 'default' : 'secondary'}>
+                {cameraStatus === 'ready' ? 'Active' : 
+                 cameraStatus === 'initializing' ? 'Initializing...' : 
+                 cameraStatus === 'error' ? 'Error' : 'Inactive'}
+              </Badge>
+              <Badge variant="outline">{selectedView} View</Badge>
+              {isTracking && (
+                <Badge variant="secondary">
+                  {isPaused ? 'Paused' : 'Tracking'}
+                </Badge>
+              )}
             </div>
-            <div className="flex items-start gap-2">
-              <Layers className="h-4 w-4 text-blue-600 mt-0.5" />
+            
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setLeftPanelOpen(!leftPanelOpen)}
+                className="text-white hover:bg-white/20"
+              >
+                <Settings className="h-4 w-4" />
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={toggleFullscreen}
+                className="text-white hover:bg-white/20"
+              >
+                <Minimize2 className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Fullscreen Left Panel - Camera Settings */}
+      {isFullscreen && (
+        <div 
+          className={`absolute left-0 top-20 bottom-20 bg-black/80 backdrop-blur-sm transition-all duration-300 z-10 ${
+            leftPanelOpen && showControls ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0'
+          }`}
+          style={{ width: '280px' }}
+        >
+          <div className="p-4 border-b border-white/20">
+            <div className="flex justify-between items-center">
+              <h3 className="text-white font-semibold">Camera Settings</h3>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setLeftPanelOpen(false)}
+                className="text-white hover:bg-white/20"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+          
+          <div className="p-4 space-y-4">
+            {/* Camera Selector */}
+            {availableCameras.length > 0 && (
               <div>
-                <p className="font-medium">MiDaS Depth Estimation</p>
-                <p className="text-muted-foreground">3D depth analysis for volume comparison</p>
+                <label className="text-white text-sm mb-2 block">Camera</label>
+                <select 
+                  className="w-full px-3 py-2 border border-white/20 rounded-md text-sm bg-black/50 text-white"
+                  value={selectedCameraId || facingMode}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value === 'user' || value === 'environment') {
+                      setFacingMode(value as 'user' | 'environment');
+                      setSelectedCameraId('');
+                    } else {
+                      setSelectedCameraId(value);
+                      const camera = availableCameras.find(c => c.deviceId === value);
+                      if (camera?.label.toLowerCase().includes('front')) {
+                        setFacingMode('user');
+                      } else if (camera?.label.toLowerCase().includes('back')) {
+                        setFacingMode('environment');
+                      }
+                    }
+                    toast({
+                      title: "Camera Selected",
+                      description: "Will apply when tracking restarts",
+                      duration: 1500,
+                    });
+                  }}
+                >
+                  <optgroup label="Standard">
+                    <option value="user">Front Camera</option>
+                    <option value="environment">Back Camera</option>
+                  </optgroup>
+                  {availableCameras.length > 1 && (
+                    <optgroup label="Available Cameras">
+                      {availableCameras.map((camera, idx) => (
+                        <option key={camera.deviceId} value={camera.deviceId}>
+                          {camera.label || `Camera ${idx + 1}`}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                </select>
               </div>
-            </div>
-            <div className="flex items-start gap-2">
-              <Activity className="h-4 w-4 text-blue-600 mt-0.5" />
-              <div>
-                <p className="font-medium">Educational Insights</p>
-                <p className="text-muted-foreground">Anatomical correlations and clinical tests</p>
+            )}
+            
+            {/* View Mode */}
+            <div>
+              <label className="text-white text-sm mb-2 block">View Mode</label>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant={selectedView === 'frontal' ? 'secondary' : 'ghost'}
+                  onClick={() => setSelectedView('frontal')}
+                  className="flex-1 text-white"
+                >
+                  Front
+                </Button>
+                <Button
+                  size="sm"
+                  variant={selectedView === 'lateral' ? 'secondary' : 'ghost'}
+                  onClick={() => setSelectedView('lateral')}
+                  className="flex-1 text-white"
+                >
+                  Side
+                </Button>
+                <Button
+                  size="sm"
+                  variant={selectedView === 'posterior' ? 'secondary' : 'ghost'}
+                  onClick={() => setSelectedView('posterior')}
+                  className="flex-1 text-white"
+                >
+                  Back
+                </Button>
               </div>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      )}
       
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main Video/Canvas Area */}
-        <div className="lg:col-span-2">
-          <Card>
-            <CardHeader>
-              <div className="flex justify-between items-center">
-                <CardTitle>Live Tracking</CardTitle>
-                <div className="flex gap-2">
-                  <Badge variant={cameraStatus === 'ready' ? 'default' : 'secondary'}>
-                    {cameraStatus === 'ready' ? 'Active' : 
-                     cameraStatus === 'initializing' ? 'Initializing...' : 
-                     cameraStatus === 'error' ? 'Error' : 'Inactive'}
-                  </Badge>
-                  <Badge variant="outline">{selectedView} View</Badge>
+      {/* Fullscreen Right Panel - Visualization Settings */}
+      {isFullscreen && (
+        <div 
+          className={`absolute right-0 top-20 bottom-20 bg-black/80 backdrop-blur-sm transition-all duration-300 z-10 ${
+            rightPanelOpen && showControls ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'
+          }`}
+          style={{ width: '280px' }}
+        >
+          <div className="p-4 border-b border-white/20">
+            <div className="flex justify-between items-center">
+              <h3 className="text-white font-semibold">Visualization</h3>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setRightPanelOpen(false)}
+                className="text-white hover:bg-white/20"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+          
+          <div className="p-4 space-y-4">
+            {/* Anatomy Layers */}
+            <div>
+              <label className="text-white text-sm mb-2 block">Anatomy Layers</label>
+              <div className="space-y-2">
+                {ANATOMY_LAYERS.map(layer => (
+                  <label key={layer.id} className="flex items-center gap-2 text-white">
+                    <input
+                      type="checkbox"
+                      checked={visibleLayers.includes(layer.id)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setVisibleLayers([...visibleLayers, layer.id]);
+                        } else {
+                          setVisibleLayers(visibleLayers.filter(l => l !== layer.id));
+                        }
+                      }}
+                      className="rounded border-white/20"
+                    />
+                    <span className="text-sm">{layer.label}</span>
+                    <div 
+                      className="w-3 h-3 rounded-full ml-auto"
+                      style={{ backgroundColor: layer.color }}
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
+            
+            {/* Measurement Display */}
+            {kneeMetrics && (
+              <div>
+                <label className="text-white text-sm mb-2 block">Measurements</label>
+                <div className="space-y-1 text-white text-sm">
+                  <div className="flex justify-between">
+                    <span>Flexion:</span>
+                    <span>{kneeMetrics.flexionAngle.toFixed(1)}°</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Valgus:</span>
+                    <span>{kneeMetrics.valgusAngle.toFixed(1)}°</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Rotation:</span>
+                    <span>{kneeMetrics.rotationAngle.toFixed(1)}°</span>
+                  </div>
                 </div>
               </div>
-            </CardHeader>
-            <CardContent>
-              <div className="relative bg-black rounded-lg overflow-hidden">
-                <video
-                  ref={videoRef}
-                  className="hidden"
-                  playsInline
-                />
-                <canvas
-                  ref={canvasRef}
-                  width={1280}
-                  height={720}
-                  className="w-full h-auto cursor-crosshair"
-                  onClick={handleCanvasClick}
-                />
-                <canvas
-                  ref={overlayCanvasRef}
-                  width={1280}
-                  height={720}
-                  className="absolute top-0 left-0 w-full h-auto pointer-events-none"
-                />
-                
-                {!isTracking && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* Main Content Area */}
+      {isFullscreen ? (
+        // Fullscreen Video Area
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="relative w-full h-full">
+            <video
+              ref={videoRef}
+              className="hidden"
+              playsInline
+            />
+            <canvas
+              ref={canvasRef}
+              width={1920}
+              height={1080}
+              className="absolute inset-0 w-full h-full object-contain cursor-crosshair"
+              onClick={handleCanvasClick}
+              style={{ maxWidth: '100%', maxHeight: '100%' }}
+            />
+            <canvas
+              ref={overlayCanvasRef}
+              width={1920}
+              height={1080}
+              className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+              style={{ maxWidth: '100%', maxHeight: '100%' }}
+            />
+            
+            {!isTracking && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                <Button
+                  size="lg"
+                  onClick={() => setIsTracking(true)}
+                  className="gap-2 bg-primary hover:bg-primary/90"
+                >
+                  <Play className="h-5 w-5" />
+                  Start Tracking
+                </Button>
+              </div>
+            )}
+            
+            {/* Fullscreen Bottom Control Bar */}
+            <div 
+              className={`absolute bottom-0 left-0 right-0 bg-black/80 backdrop-blur-sm transition-all duration-300 ${
+                showControls ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'
+              }`}
+            >
+              <div className="flex justify-center items-center gap-4 p-4">
+                <Button
+                  variant={isTracking ? 'destructive' : 'default'}
+                  onClick={() => setIsTracking(!isTracking)}
+                  disabled={cameraStatus === 'initializing'}
+                  size="sm"
+                >
+                  {isTracking ? <StopCircle className="h-4 w-4 mr-2" /> : <Play className="h-4 w-4 mr-2" />}
+                  {isTracking ? 'Stop' : 'Start'}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsPaused(!isPaused)}
+                  disabled={!isTracking}
+                  size="sm"
+                  className="text-white border-white/20 hover:bg-white/20"
+                >
+                  {isPaused ? <Play className="h-4 w-4 mr-2" /> : <Pause className="h-4 w-4 mr-2" />}
+                  {isPaused ? 'Resume' : 'Pause'}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={captureFrame}
+                  disabled={!isTracking || cameraStatus !== 'ready'}
+                  size="sm"
+                  className="text-white border-white/20 hover:bg-white/20"
+                >
+                  <CameraIcon className="h-4 w-4 mr-2" />
+                  Capture
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setRightPanelOpen(!rightPanelOpen)}
+                  size="sm"
+                  className="text-white border-white/20 hover:bg-white/20"
+                >
+                  <Layers className="h-4 w-4 mr-2" />
+                  Layers
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        // Regular Mode Layout
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Main Video/Canvas Area */}
+          <div className="lg:col-span-2">
+            <Card>
+              <CardHeader>
+                <div className="flex justify-between items-center">
+                  <CardTitle>Live Tracking</CardTitle>
+                  <div className="flex gap-2">
+                    <Badge variant={cameraStatus === 'ready' ? 'default' : 'secondary'}>
+                      {cameraStatus === 'ready' ? 'Active' : 
+                       cameraStatus === 'initializing' ? 'Initializing...' : 
+                       cameraStatus === 'error' ? 'Error' : 'Inactive'}
+                    </Badge>
+                    <Badge variant="outline">{selectedView} View</Badge>
                     <Button
-                      size="lg"
-                      onClick={() => setIsTracking(true)}
-                      className="gap-2"
+                      size="sm"
+                      variant="ghost"
+                      onClick={toggleFullscreen}
+                      title="Enter fullscreen"
                     >
-                      <Play className="h-5 w-5" />
-                      Start Tracking
+                      <Maximize2 className="h-4 w-4" />
                     </Button>
                   </div>
-                )}
-              </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="relative bg-black rounded-lg overflow-hidden">
+                  <video
+                    ref={videoRef}
+                    className="hidden"
+                    playsInline
+                  />
+                  <canvas
+                    ref={canvasRef}
+                    width={1280}
+                    height={720}
+                    className="w-full h-auto cursor-crosshair"
+                    onClick={handleCanvasClick}
+                  />
+                  <canvas
+                    ref={overlayCanvasRef}
+                    width={1280}
+                    height={720}
+                    className="absolute top-0 left-0 w-full h-auto pointer-events-none"
+                  />
+                  
+                  {!isTracking && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                      <Button
+                        size="lg"
+                        onClick={() => setIsTracking(true)}
+                        className="gap-2"
+                      >
+                        <Play className="h-5 w-5" />
+                        Start Tracking
+                      </Button>
+                    </div>
+                  )}
+                </div>
               
               {/* Control Buttons */}
               <div className="flex justify-between items-center mt-4 flex-wrap gap-2">
@@ -1193,9 +1573,10 @@ export default function BodyScanner() {
           </Card>
         </div>
       </div>
+      )}
       
       {/* Captured Frames Gallery */}
-      {capturedFrames.length > 0 && (
+      {!isFullscreen && capturedFrames.length > 0 && (
         <Card className="mt-6">
           <CardHeader>
             <CardTitle>Captured Frames</CardTitle>

@@ -167,35 +167,66 @@ export class ShoulderAnatomy extends AnatomyRenderer {
     
     const shoulder = getLandmarkPosition(landmarks, shoulderIndex, width, height);
     const oppositeShoulder = getLandmarkPosition(landmarks, oppositeShoulderIndex, width, height);
-    const sternum = getMidpoint(landmarks, POSE_LANDMARKS.LEFT_SHOULDER, POSE_LANDMARKS.RIGHT_SHOULDER, width, height);
     
-    if (!shoulder || !sternum) return;
+    if (!shoulder || !oppositeShoulder) return;
     
-    const thickness = getDistance(shoulder, oppositeShoulder) * 0.05;
+    // Calculate sternum position (slightly below midpoint between shoulders)
+    const sternum = {
+      x: (shoulder.x + oppositeShoulder.x) / 2,
+      y: Math.min(shoulder.y, oppositeShoulder.y) + getDistance(shoulder, oppositeShoulder) * 0.1
+    };
     
+    const thickness = getDistance(shoulder, oppositeShoulder) * 0.03;
+    
+    // Create anatomically correct S-curve for clavicle
     ctx.beginPath();
     ctx.strokeStyle = '#E8D4B0';
     ctx.lineWidth = thickness;
     ctx.lineCap = 'round';
     
-    // Draw clavicle as curved line from sternum to shoulder
-    const controlPoint = {
-      x: sternum.x + (shoulder.x - sternum.x) * 0.5,
-      y: sternum.y - thickness * 2
+    // Calculate control points for S-curve
+    const midPoint = interpolatePoint(sternum, shoulder, 0.5);
+    if (!midPoint) return;
+    
+    // First control point (medial curve - convex anteriorly)
+    const cp1 = {
+      x: sternum.x + (midPoint.x - sternum.x) * 0.8,
+      y: sternum.y - thickness * 1.5 // Curves slightly upward and forward
     };
     
-    ctx.moveTo(sternum.x, sternum.y);
-    ctx.quadraticCurveTo(controlPoint.x, controlPoint.y, shoulder.x, shoulder.y);
-    ctx.stroke();
+    // Second control point (lateral curve - concave anteriorly)  
+    const cp2 = {
+      x: midPoint.x + (shoulder.x - midPoint.x) * 0.3,
+      y: shoulder.y + thickness * 0.5 // Curves slightly backward
+    };
     
-    // Add gradient fill for depth
+    // Draw the S-curved clavicle
+    ctx.moveTo(sternum.x, sternum.y);
+    ctx.bezierCurveTo(
+      cp1.x, cp1.y,
+      cp2.x, cp2.y,
+      shoulder.x, shoulder.y
+    );
+    
+    // Apply gradient for 3D effect
     const gradient = ctx.createLinearGradient(sternum.x, sternum.y, shoulder.x, shoulder.y);
     gradient.addColorStop(0, '#F4E4C1');
-    gradient.addColorStop(0.5, '#E8D4B0');
+    gradient.addColorStop(0.3, '#EDD9B5');
+    gradient.addColorStop(0.7, '#E8D4B0');
     gradient.addColorStop(1, '#D4C4A0');
     
     ctx.strokeStyle = gradient;
     ctx.stroke();
+    
+    // Add bone ends (sternoclavicular and acromioclavicular joints)
+    ctx.fillStyle = '#E8D4B0';
+    ctx.beginPath();
+    ctx.arc(sternum.x, sternum.y, thickness * 0.8, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.beginPath();
+    ctx.arc(shoulder.x, shoulder.y, thickness * 0.8, 0, Math.PI * 2);
+    ctx.fill();
   }
 
   private renderHumerus(ctx: CanvasRenderingContext2D, landmarks: any, width: number, height: number, side: 'left' | 'right') {
@@ -260,78 +291,193 @@ export class ShoulderAnatomy extends AnatomyRenderer {
 
   private renderScapula(ctx: CanvasRenderingContext2D, landmarks: any, width: number, height: number, side: 'left' | 'right') {
     const shoulderIndex = side === 'left' ? POSE_LANDMARKS.LEFT_SHOULDER : POSE_LANDMARKS.RIGHT_SHOULDER;
-    const elbowIndex = side === 'left' ? POSE_LANDMARKS.LEFT_ELBOW : POSE_LANDMARKS.RIGHT_ELBOW;
+    const oppositeShoulderIndex = side === 'left' ? POSE_LANDMARKS.RIGHT_SHOULDER : POSE_LANDMARKS.LEFT_SHOULDER;
     const hipIndex = side === 'left' ? POSE_LANDMARKS.LEFT_HIP : POSE_LANDMARKS.RIGHT_HIP;
+    const elbowIndex = side === 'left' ? POSE_LANDMARKS.LEFT_ELBOW : POSE_LANDMARKS.RIGHT_ELBOW;
     
     const shoulder = getLandmarkPosition(landmarks, shoulderIndex, width, height);
-    const elbow = getLandmarkPosition(landmarks, elbowIndex, width, height);
+    const oppositeShoulder = getLandmarkPosition(landmarks, oppositeShoulderIndex, width, height);
     const hip = getLandmarkPosition(landmarks, hipIndex, width, height);
+    const elbow = getLandmarkPosition(landmarks, elbowIndex, width, height);
     
-    if (!shoulder || !elbow) return;
+    if (!shoulder || !oppositeShoulder || !hip) return;
     
-    const armLength = getDistance(shoulder, elbow);
-    const scapulaWidth = armLength * 0.4;
-    const scapulaHeight = armLength * 0.5;
+    const shoulderWidth = getDistance(shoulder, oppositeShoulder);
+    const torsoHeight = hip ? getDistance(shoulder, hip) : shoulderWidth * 1.5;
     
-    // Calculate scapula position (behind shoulder)
-    const scapulaCenter = {
-      x: shoulder.x + (side === 'left' ? -scapulaWidth * 0.3 : scapulaWidth * 0.3),
-      y: shoulder.y + scapulaHeight * 0.2
+    // Anatomically correct scapula dimensions and position
+    const scapulaWidth = shoulderWidth * 0.35;
+    const scapulaHeight = torsoHeight * 0.4;
+    
+    // Position scapula on the posterior thorax (T2-T7)
+    // The acromion process should align with the shoulder point
+    const acromionX = shoulder.x;
+    const acromionY = shoulder.y;
+    
+    // Calculate spine position (medial border should be about 3 inches from spine)
+    const spineX = (shoulder.x + oppositeShoulder.x) / 2;
+    const medialOffset = shoulderWidth * 0.15; // Distance from spine to medial border
+    
+    // Superior angle (top point of scapula)
+    const superiorAngle = {
+      x: spineX + (side === 'left' ? -medialOffset : medialOffset),
+      y: acromionY - scapulaHeight * 0.1
     };
     
+    // Inferior angle (bottom point of scapula)
+    const inferiorAngle = {
+      x: spineX + (side === 'left' ? -medialOffset * 1.2 : medialOffset * 1.2),
+      y: acromionY + scapulaHeight * 0.8
+    };
+    
+    // Lateral angle (glenoid cavity area)
+    const lateralAngle = {
+      x: acromionX + (side === 'left' ? -scapulaWidth * 0.1 : scapulaWidth * 0.1),
+      y: acromionY + scapulaHeight * 0.15
+    };
+    
+    // Draw scapula body
+    ctx.save();
+    ctx.globalAlpha = 0.8;
+    
+    // Main triangular body
     ctx.beginPath();
     ctx.fillStyle = '#D4C4A0';
-    
-    // Draw triangular scapula shape
-    ctx.moveTo(scapulaCenter.x, scapulaCenter.y - scapulaHeight * 0.4);
-    ctx.lineTo(scapulaCenter.x - scapulaWidth * 0.4, scapulaCenter.y + scapulaHeight * 0.3);
-    ctx.lineTo(scapulaCenter.x + scapulaWidth * 0.4, scapulaCenter.y + scapulaHeight * 0.3);
+    ctx.moveTo(superiorAngle.x, superiorAngle.y);
+    ctx.lineTo(inferiorAngle.x, inferiorAngle.y);
+    ctx.lineTo(lateralAngle.x, lateralAngle.y);
     ctx.closePath();
-    ctx.fill();
     
-    // Add gradient for depth
-    const gradient = ctx.createRadialGradient(
-      scapulaCenter.x, scapulaCenter.y, 0,
-      scapulaCenter.x, scapulaCenter.y, scapulaWidth
+    // Apply gradient for depth
+    const gradient = ctx.createLinearGradient(
+      superiorAngle.x, superiorAngle.y,
+      lateralAngle.x, lateralAngle.y
     );
     gradient.addColorStop(0, '#E8D4B0');
+    gradient.addColorStop(0.5, '#DCC8A8');
     gradient.addColorStop(1, '#C4B4A0');
     
     ctx.fillStyle = gradient;
     ctx.fill();
+    
+    // Draw spine of scapula (ridge across posterior surface)
+    ctx.beginPath();
+    ctx.strokeStyle = '#C4B4A0';
+    ctx.lineWidth = 3;
+    
+    const spineStart = interpolatePoint(superiorAngle, inferiorAngle, 0.3);
+    if (spineStart) {
+      ctx.moveTo(spineStart.x, spineStart.y);
+      ctx.lineTo(acromionX, acromionY);
+      ctx.stroke();
+    }
+    
+    // Draw acromion process
+    ctx.beginPath();
+    ctx.fillStyle = '#DCC8A8';
+    ctx.arc(acromionX, acromionY, scapulaWidth * 0.08, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Draw glenoid cavity (shoulder socket)
+    ctx.beginPath();
+    ctx.fillStyle = '#C0A080';
+    ctx.arc(lateralAngle.x, lateralAngle.y, scapulaWidth * 0.06, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.restore();
   }
 
   private renderDeltoid(ctx: CanvasRenderingContext2D, landmarks: any, width: number, height: number, side: 'left' | 'right', color: string) {
     const shoulderIndex = side === 'left' ? POSE_LANDMARKS.LEFT_SHOULDER : POSE_LANDMARKS.RIGHT_SHOULDER;
     const elbowIndex = side === 'left' ? POSE_LANDMARKS.LEFT_ELBOW : POSE_LANDMARKS.RIGHT_ELBOW;
+    const oppositeShoulderIndex = side === 'left' ? POSE_LANDMARKS.RIGHT_SHOULDER : POSE_LANDMARKS.LEFT_SHOULDER;
     
     const shoulder = getLandmarkPosition(landmarks, shoulderIndex, width, height);
     const elbow = getLandmarkPosition(landmarks, elbowIndex, width, height);
-    const midArm = interpolatePoint(shoulder, elbow, 0.3);
+    const oppositeShoulder = getLandmarkPosition(landmarks, oppositeShoulderIndex, width, height);
     
-    if (!shoulder || !elbow || !midArm) return;
+    if (!shoulder || !elbow) return;
     
-    const muscleWidth = getDistance(shoulder, elbow) * 0.25;
+    const armLength = getDistance(shoulder, elbow);
+    const shoulderWidth = oppositeShoulder ? getDistance(shoulder, oppositeShoulder) : armLength;
+    const insertionPoint = interpolatePoint(shoulder, elbow, 0.35); // Deltoid inserts about 1/3 down humerus
     
-    ctx.beginPath();
+    if (!insertionPoint) return;
+    
+    ctx.save();
     ctx.fillStyle = color;
+    ctx.globalAlpha = 0.6;
     
-    // Draw deltoid as rounded triangle
-    ctx.moveTo(shoulder.x - muscleWidth * 0.5, shoulder.y - muscleWidth * 0.3);
-    ctx.quadraticCurveTo(
-      shoulder.x, shoulder.y - muscleWidth * 0.5,
-      shoulder.x + muscleWidth * 0.5, shoulder.y - muscleWidth * 0.3
-    );
-    ctx.quadraticCurveTo(
-      midArm.x + muscleWidth * 0.3, midArm.y,
-      midArm.x, midArm.y + muscleWidth * 0.1
-    );
-    ctx.quadraticCurveTo(
-      midArm.x - muscleWidth * 0.3, midArm.y,
-      shoulder.x - muscleWidth * 0.5, shoulder.y - muscleWidth * 0.3
-    );
+    // Deltoid has three heads: anterior, middle, and posterior
+    // Draw as a cap over the shoulder joint
     
+    // Anterior deltoid (front)
+    ctx.beginPath();
+    const anteriorOrigin = {
+      x: shoulder.x + (side === 'left' ? -shoulderWidth * 0.08 : shoulderWidth * 0.08),
+      y: shoulder.y - armLength * 0.1
+    };
+    ctx.moveTo(anteriorOrigin.x, anteriorOrigin.y);
+    ctx.quadraticCurveTo(
+      shoulder.x,
+      shoulder.y - armLength * 0.05,
+      insertionPoint.x - armLength * 0.05,
+      insertionPoint.y
+    );
+    ctx.lineTo(insertionPoint.x, insertionPoint.y);
+    ctx.quadraticCurveTo(
+      shoulder.x - armLength * 0.1,
+      shoulder.y,
+      anteriorOrigin.x,
+      anteriorOrigin.y
+    );
     ctx.fill();
+    
+    // Middle deltoid (lateral)
+    ctx.beginPath();
+    const middleOrigin = {
+      x: shoulder.x,
+      y: shoulder.y - armLength * 0.12
+    };
+    ctx.moveTo(middleOrigin.x, middleOrigin.y);
+    ctx.quadraticCurveTo(
+      shoulder.x + (side === 'left' ? -armLength * 0.15 : armLength * 0.15),
+      shoulder.y,
+      insertionPoint.x,
+      insertionPoint.y
+    );
+    ctx.lineTo(insertionPoint.x + armLength * 0.03, insertionPoint.y);
+    ctx.quadraticCurveTo(
+      shoulder.x + (side === 'left' ? -armLength * 0.08 : armLength * 0.08),
+      shoulder.y - armLength * 0.05,
+      middleOrigin.x,
+      middleOrigin.y
+    );
+    ctx.fill();
+    
+    // Posterior deltoid (back)
+    ctx.beginPath();
+    const posteriorOrigin = {
+      x: shoulder.x + (side === 'left' ? armLength * 0.08 : -armLength * 0.08),
+      y: shoulder.y - armLength * 0.08
+    };
+    ctx.moveTo(posteriorOrigin.x, posteriorOrigin.y);
+    ctx.quadraticCurveTo(
+      shoulder.x + (side === 'left' ? armLength * 0.05 : -armLength * 0.05),
+      shoulder.y,
+      insertionPoint.x + armLength * 0.05,
+      insertionPoint.y
+    );
+    ctx.lineTo(insertionPoint.x, insertionPoint.y);
+    ctx.quadraticCurveTo(
+      shoulder.x,
+      shoulder.y - armLength * 0.03,
+      posteriorOrigin.x,
+      posteriorOrigin.y
+    );
+    ctx.fill();
+    
+    ctx.restore();
   }
 
   private renderTrapezius(ctx: CanvasRenderingContext2D, landmarks: any, width: number, height: number, color: string) {

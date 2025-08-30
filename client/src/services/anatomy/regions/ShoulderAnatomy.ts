@@ -1099,31 +1099,50 @@ export class ShoulderAnatomy extends AnatomyRenderer {
     
     ctx.save();
     
-    // Draw sacrum first (triangular bone at the base of spine)
+    // Draw sacrum (triangular bone at base of spine, between hip bones)
     ctx.fillStyle = '#D4C4A0';
     ctx.strokeStyle = '#C4B4A0';
     ctx.lineWidth = 2;
     
-    const sacrumTop = hipMidpoint.y - hipWidth * 0.15;
-    const sacrumBottom = hipMidpoint.y + hipWidth * 0.05;
-    const sacrumWidth = hipWidth * 0.25;
+    // Sacrum is wedge-shaped and tilted backward
+    const sacrumTop = hipMidpoint.y - hipWidth * 0.25;
+    const sacrumBottom = hipMidpoint.y + hipWidth * 0.02;
+    const sacrumTopWidth = hipWidth * 0.18;
+    const sacrumBottomWidth = hipWidth * 0.12;
     
     ctx.beginPath();
-    ctx.moveTo(hipMidpoint.x, sacrumTop); // Top point
-    ctx.lineTo(hipMidpoint.x - sacrumWidth / 2, sacrumBottom); // Bottom left
-    ctx.lineTo(hipMidpoint.x + sacrumWidth / 2, sacrumBottom); // Bottom right
+    // Top of sacrum (connects to L5 vertebra)
+    ctx.moveTo(hipMidpoint.x - sacrumTopWidth / 2, sacrumTop);
+    ctx.lineTo(hipMidpoint.x + sacrumTopWidth / 2, sacrumTop);
+    
+    // Sacroiliac joints (where sacrum meets ilium)
+    ctx.lineTo(hipMidpoint.x + sacrumBottomWidth / 2, sacrumBottom);
+    ctx.lineTo(hipMidpoint.x - sacrumBottomWidth / 2, sacrumBottom);
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
     
-    // Draw coccyx (tailbone)
+    // Draw sacral foramina (holes in sacrum)
+    ctx.fillStyle = 'rgba(200, 180, 160, 0.5)';
+    for (let i = 0; i < 4; i++) {
+      const y = sacrumTop + (sacrumBottom - sacrumTop) * (0.2 + i * 0.2);
+      ctx.beginPath();
+      ctx.arc(hipMidpoint.x - sacrumTopWidth * 0.15, y, hipWidth * 0.008, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(hipMidpoint.x + sacrumTopWidth * 0.15, y, hipWidth * 0.008, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    
+    // Draw coccyx (tailbone - smaller triangular bone)
     ctx.beginPath();
     ctx.fillStyle = '#C4B4A0';
-    ctx.moveTo(hipMidpoint.x - sacrumWidth * 0.15, sacrumBottom);
-    ctx.lineTo(hipMidpoint.x + sacrumWidth * 0.15, sacrumBottom);
-    ctx.lineTo(hipMidpoint.x, sacrumBottom + hipWidth * 0.08);
+    ctx.moveTo(hipMidpoint.x - sacrumBottomWidth * 0.4, sacrumBottom);
+    ctx.lineTo(hipMidpoint.x + sacrumBottomWidth * 0.4, sacrumBottom);
+    ctx.lineTo(hipMidpoint.x, sacrumBottom + hipWidth * 0.06);
     ctx.closePath();
     ctx.fill();
+    ctx.stroke();
     
     // Draw left innominate bone
     this.renderInnominate(ctx, leftHip, hipMidpoint, hipWidth, 'left');
@@ -1160,53 +1179,70 @@ export class ShoulderAnatomy extends AnatomyRenderer {
     ctx.strokeStyle = '#D4C4A0';
     ctx.lineWidth = 2;
     
-    // Ilium (large wing-like bone)
+    // Anatomically correct ilium (large wing-like bone)
     ctx.beginPath();
     
-    // Iliac crest (top of hip bone)
+    // Iliac crest (top of hip bone - should be wider and more lateral)
     const iliacCrestTop = {
+      x: hipJoint.x + sideMultiplier * hipWidth * 0.6,
+      y: hipJoint.y - hipWidth * 0.5
+    };
+    
+    // ASIS (Anterior Superior Iliac Spine - front point)
+    const asisPoint = {
       x: hipJoint.x + sideMultiplier * hipWidth * 0.4,
+      y: hipJoint.y - hipWidth * 0.15
+    };
+    
+    // PSIS (Posterior Superior Iliac Spine - connects to sacrum)
+    const psisPoint = {
+      x: hipMidpoint.x + sideMultiplier * hipWidth * 0.15,
+      y: hipJoint.y - hipWidth * 0.25
+    };
+    
+    // Iliac fossa (inner curve of ilium)
+    const iliacFossaPoint = {
+      x: hipJoint.x + sideMultiplier * hipWidth * 0.3,
       y: hipJoint.y - hipWidth * 0.35
     };
     
-    // ASIS (Anterior Superior Iliac Spine)
-    const asisPoint = {
-      x: hipJoint.x + sideMultiplier * hipWidth * 0.3,
-      y: hipJoint.y - hipWidth * 0.1
-    };
-    
-    // PSIS (Posterior Superior Iliac Spine) - connects to sacrum
-    const psisPoint = {
-      x: hipMidpoint.x + sideMultiplier * hipWidth * 0.12,
-      y: hipJoint.y - hipWidth * 0.2
-    };
-    
-    // Draw ilium wing
+    // Draw ilium wing with proper anatomical shape
     ctx.moveTo(psisPoint.x, psisPoint.y);
     
-    // Curve up to iliac crest
-    ctx.quadraticCurveTo(
-      hipJoint.x + sideMultiplier * hipWidth * 0.2,
-      hipJoint.y - hipWidth * 0.4,
+    // From PSIS to iliac crest (posterior section)
+    ctx.bezierCurveTo(
+      hipJoint.x + sideMultiplier * hipWidth * 0.25,
+      hipJoint.y - hipWidth * 0.45,
+      hipJoint.x + sideMultiplier * hipWidth * 0.5,
+      hipJoint.y - hipWidth * 0.55,
       iliacCrestTop.x,
       iliacCrestTop.y
     );
     
-    // Curve down to ASIS
-    ctx.quadraticCurveTo(
+    // Iliac crest to ASIS (anterior section with characteristic S-curve)
+    ctx.bezierCurveTo(
+      hipJoint.x + sideMultiplier * hipWidth * 0.55,
+      hipJoint.y - hipWidth * 0.35,
       hipJoint.x + sideMultiplier * hipWidth * 0.45,
       hipJoint.y - hipWidth * 0.2,
       asisPoint.x,
       asisPoint.y
     );
     
-    // Down to acetabulum area
-    ctx.lineTo(hipJoint.x + sideMultiplier * hipWidth * 0.05, hipJoint.y);
-    
-    // Back up to sacrum connection
+    // ASIS to acetabulum (descending to hip socket)
     ctx.quadraticCurveTo(
-      hipMidpoint.x + sideMultiplier * hipWidth * 0.08,
+      hipJoint.x + sideMultiplier * hipWidth * 0.2,
       hipJoint.y - hipWidth * 0.05,
+      hipJoint.x + sideMultiplier * hipWidth * 0.08,
+      hipJoint.y - hipWidth * 0.02
+    );
+    
+    // Inner edge back to PSIS (medial border)
+    ctx.bezierCurveTo(
+      hipJoint.x + sideMultiplier * hipWidth * 0.05,
+      hipJoint.y - hipWidth * 0.1,
+      hipMidpoint.x + sideMultiplier * hipWidth * 0.1,
+      hipJoint.y - hipWidth * 0.15,
       psisPoint.x,
       psisPoint.y
     );
@@ -1215,22 +1251,22 @@ export class ShoulderAnatomy extends AnatomyRenderer {
     ctx.fill();
     ctx.stroke();
     
-    // Draw acetabulum (hip socket)
+    // Draw acetabulum (hip socket) - positioned correctly at hip joint
     ctx.beginPath();
     ctx.fillStyle = '#C4B4A0';
     ctx.strokeStyle = '#B4A490';
     ctx.lineWidth = 2;
     
-    // Acetabulum is a deep socket
-    ctx.arc(hipJoint.x, hipJoint.y, hipWidth * 0.06, 0, Math.PI * 2);
+    // Acetabulum is a deep socket where femur connects
+    ctx.arc(hipJoint.x, hipJoint.y, hipWidth * 0.08, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
     
-    // Draw acetabular rim (edge of socket)
+    // Draw acetabular labrum (rim of socket)
     ctx.beginPath();
     ctx.strokeStyle = '#A49480';
     ctx.lineWidth = 3;
-    ctx.arc(hipJoint.x, hipJoint.y, hipWidth * 0.06, 0, Math.PI * 2);
+    ctx.arc(hipJoint.x, hipJoint.y, hipWidth * 0.08, 0, Math.PI * 2);
     ctx.stroke();
     
     // Draw femoral head in the socket
@@ -1238,31 +1274,51 @@ export class ShoulderAnatomy extends AnatomyRenderer {
     ctx.fillStyle = '#F0E4D0';
     ctx.strokeStyle = '#E0D4C0';
     ctx.lineWidth = 1;
-    ctx.arc(hipJoint.x, hipJoint.y, hipWidth * 0.045, 0, Math.PI * 2);
+    ctx.arc(hipJoint.x, hipJoint.y, hipWidth * 0.06, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
     
-    // Ischium (lower back part)
+    // Ischium (sits bone - lower posterior part)
     ctx.beginPath();
     ctx.fillStyle = '#E8D4B0';
     ctx.strokeStyle = '#D4C4A0';
     ctx.lineWidth = 2;
     
+    // Ischial tuberosity (sitting bone)
     const ischialTuberosity = {
-      x: hipJoint.x + sideMultiplier * hipWidth * 0.05,
+      x: hipJoint.x - sideMultiplier * hipWidth * 0.1,
+      y: hipJoint.y + hipWidth * 0.25
+    };
+    
+    // Ischial ramus
+    const ischialRamus = {
+      x: hipJoint.x - sideMultiplier * hipWidth * 0.05,
       y: hipJoint.y + hipWidth * 0.15
     };
     
-    // Draw ischium
-    ctx.moveTo(hipJoint.x, hipJoint.y + hipWidth * 0.02);
-    ctx.quadraticCurveTo(
-      hipJoint.x + sideMultiplier * hipWidth * 0.02,
-      hipJoint.y + hipWidth * 0.08,
+    // Draw ischium body
+    ctx.moveTo(hipJoint.x - sideMultiplier * hipWidth * 0.02, hipJoint.y + hipWidth * 0.05);
+    
+    // Descend to ischial tuberosity
+    ctx.bezierCurveTo(
+      hipJoint.x - sideMultiplier * hipWidth * 0.08,
+      hipJoint.y + hipWidth * 0.12,
+      hipJoint.x - sideMultiplier * hipWidth * 0.12,
+      hipJoint.y + hipWidth * 0.2,
       ischialTuberosity.x,
       ischialTuberosity.y
     );
-    ctx.lineTo(ischialTuberosity.x - sideMultiplier * hipWidth * 0.08, ischialTuberosity.y - hipWidth * 0.02);
-    ctx.lineTo(hipJoint.x - sideMultiplier * hipWidth * 0.05, hipJoint.y + hipWidth * 0.02);
+    
+    // Curve forward to ischial ramus
+    ctx.quadraticCurveTo(
+      ischialTuberosity.x + sideMultiplier * hipWidth * 0.05,
+      ischialTuberosity.y - hipWidth * 0.03,
+      ischialRamus.x,
+      ischialRamus.y
+    );
+    
+    // Back to acetabulum
+    ctx.lineTo(hipJoint.x, hipJoint.y + hipWidth * 0.08);
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
@@ -1271,49 +1327,64 @@ export class ShoulderAnatomy extends AnatomyRenderer {
     ctx.beginPath();
     ctx.fillStyle = '#E8D4B0';
     ctx.strokeStyle = '#D4C4A0';
+    ctx.lineWidth = 2;
     
-    const pubicRamus = {
-      x: hipMidpoint.x + sideMultiplier * hipWidth * 0.03,
-      y: hipJoint.y + hipWidth * 0.12
-    };
-    
-    // Superior pubic ramus
-    ctx.moveTo(hipJoint.x, hipJoint.y + hipWidth * 0.02);
-    ctx.quadraticCurveTo(
-      hipJoint.x - sideMultiplier * hipWidth * 0.1,
-      hipJoint.y + hipWidth * 0.08,
-      pubicRamus.x,
-      pubicRamus.y
-    );
-    
-    // Inferior pubic ramus (connects to ischium)
-    ctx.lineTo(pubicRamus.x, pubicRamus.y + hipWidth * 0.03);
-    ctx.quadraticCurveTo(
-      hipJoint.x - sideMultiplier * hipWidth * 0.05,
-      hipJoint.y + hipWidth * 0.13,
-      ischialTuberosity.x - sideMultiplier * hipWidth * 0.08,
-      ischialTuberosity.y - hipWidth * 0.02
-    );
-    
-    ctx.stroke();
-    
-    // Draw obturator foramen (large hole in pelvis)
-    ctx.beginPath();
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-    ctx.strokeStyle = '#C4B4A0';
-    ctx.lineWidth = 1;
-    
-    const foramenCenter = {
-      x: hipJoint.x - sideMultiplier * hipWidth * 0.02,
+    // Superior pubic ramus (connects acetabulum to pubic symphysis)
+    const superiorPubicRamus = {
+      x: hipMidpoint.x + sideMultiplier * hipWidth * 0.05,
       y: hipJoint.y + hipWidth * 0.08
     };
     
+    // Inferior pubic ramus
+    const inferiorPubicRamus = {
+      x: hipMidpoint.x + sideMultiplier * hipWidth * 0.04,
+      y: hipJoint.y + hipWidth * 0.18
+    };
+    
+    // Draw pubis
+    ctx.moveTo(hipJoint.x, hipJoint.y + hipWidth * 0.05);
+    
+    // Superior pubic ramus to pubic symphysis
+    ctx.quadraticCurveTo(
+      hipJoint.x - sideMultiplier * hipWidth * 0.15,
+      hipJoint.y + hipWidth * 0.06,
+      superiorPubicRamus.x,
+      superiorPubicRamus.y
+    );
+    
+    // Down to inferior pubic ramus
+    ctx.lineTo(inferiorPubicRamus.x, inferiorPubicRamus.y);
+    
+    // Connect to ischial ramus
+    ctx.quadraticCurveTo(
+      hipJoint.x - sideMultiplier * hipWidth * 0.08,
+      hipJoint.y + hipWidth * 0.17,
+      ischialRamus.x,
+      ischialRamus.y
+    );
+    
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    
+    // Draw obturator foramen (large opening in pelvis)
+    ctx.beginPath();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.strokeStyle = '#C4B4A0';
+    ctx.lineWidth = 2;
+    
+    const foramenCenter = {
+      x: hipJoint.x - sideMultiplier * hipWidth * 0.08,
+      y: hipJoint.y + hipWidth * 0.12
+    };
+    
+    // Obturator foramen is oval-shaped
     ctx.ellipse(
       foramenCenter.x,
       foramenCenter.y,
-      hipWidth * 0.04,
       hipWidth * 0.06,
-      sideMultiplier * 0.2,
+      hipWidth * 0.08,
+      sideMultiplier * 0.3,
       0,
       Math.PI * 2
     );

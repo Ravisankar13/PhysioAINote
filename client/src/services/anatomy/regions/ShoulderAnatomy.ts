@@ -584,17 +584,30 @@ export class ShoulderAnatomy extends AnatomyRenderer {
       
       if (i < 7) {
         // Cervical vertebrae (C1-C7)
-        const cervicalT = i / 7;
+        const cervicalT = i / 6; // 0 to 1 for C1 to C7
         const startY = skullBase.y;
         const endY = shoulderMidpoint.y;
         
-        // Use quadratic curve for cervical region
+        // Create lordotic curve (forward curve) for cervical spine
+        // C1-C2 are more horizontal, C3-C7 gradually become more vertical
+        const curveAmount = shoulderWidth * 0.08 * Math.sin(cervicalT * Math.PI * 0.7);
+        
         vertebraPos = {
-          x: skullBase.x + (cervicalCP.x - skullBase.x) * cervicalT * 2 * (1 - cervicalT) + 
-             shoulderMidpoint.x * cervicalT * cervicalT,
+          x: skullBase.x + curveAmount, // Forward curve
           y: startY + (endY - startY) * cervicalT
         };
-        vertebraWidth = shoulderWidth * 0.03;
+        
+        // C1-C2 are smaller and more ring-like, C3-C7 gradually increase in size
+        if (i === 0) {
+          // C1 (Atlas) - smaller, ring-shaped
+          vertebraWidth = shoulderWidth * 0.025;
+        } else if (i === 1) {
+          // C2 (Axis) - slightly larger
+          vertebraWidth = shoulderWidth * 0.028;
+        } else {
+          // C3-C7 - progressively larger
+          vertebraWidth = shoulderWidth * (0.03 + (i - 2) * 0.002);
+        }
       } else if (i < 19) {
         // Thoracic vertebrae (T1-T12)
         const thoracicT = (i - 7) / 12;
@@ -627,17 +640,55 @@ export class ShoulderAnatomy extends AnatomyRenderer {
       ctx.strokeStyle = '#D4C4A0';
       ctx.lineWidth = 1;
       
-      // Draw as slightly rectangular shape
-      const vertebraHeight = shoulderWidth * 0.025;
-      ctx.roundRect(
-        vertebraPos.x - vertebraWidth / 2,
-        vertebraPos.y - vertebraHeight / 2,
-        vertebraWidth,
-        vertebraHeight,
-        2
-      );
-      ctx.fill();
-      ctx.stroke();
+      // Adjust vertebra height and shape based on region
+      let vertebraHeight = shoulderWidth * 0.025;
+      let rotation = 0; // Rotation angle for vertebra orientation
+      
+      if (i < 7) {
+        // Cervical vertebrae are more horizontal and smaller
+        vertebraHeight = shoulderWidth * 0.02;
+        // C1-C2 are more horizontal, gradually become vertical
+        rotation = (1 - i / 7) * 0.3; // More rotation for upper cervical
+        
+        // Draw cervical vertebra with proper orientation
+        ctx.save();
+        ctx.translate(vertebraPos.x, vertebraPos.y);
+        ctx.rotate(rotation);
+        
+        if (i === 0) {
+          // C1 (Atlas) - ring-shaped
+          ctx.beginPath();
+          ctx.arc(0, 0, vertebraWidth * 0.4, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(0, 0, vertebraWidth * 0.25, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          // C2-C7 - more typical vertebral shape
+          ctx.roundRect(
+            -vertebraWidth / 2,
+            -vertebraHeight / 2,
+            vertebraWidth,
+            vertebraHeight,
+            2
+          );
+          ctx.fill();
+          ctx.stroke();
+        }
+        
+        ctx.restore();
+      } else {
+        // Thoracic and lumbar vertebrae
+        ctx.roundRect(
+          vertebraPos.x - vertebraWidth / 2,
+          vertebraPos.y - vertebraHeight / 2,
+          vertebraWidth,
+          vertebraHeight,
+          2
+        );
+        ctx.fill();
+        ctx.stroke();
+      }
       
       // Draw spinous process (posterior projection)
       ctx.beginPath();
@@ -650,19 +701,30 @@ export class ShoulderAnatomy extends AnatomyRenderer {
       let processEndY = vertebraPos.y;
       
       if (i < 7) {
-        // Cervical - point slightly backward and down
-        processEndX -= vertebraWidth * 0.3;
-        processEndY -= vertebraHeight * 0.2;
+        // Cervical - bifid (split) spinous processes, point backward
+        processEndX = vertebraPos.x - vertebraWidth * 0.4;
+        processEndY = vertebraPos.y - vertebraHeight * 0.1;
+        
+        // Draw bifid process for C2-C6
+        if (i > 0 && i < 6) {
+          ctx.moveTo(vertebraPos.x, vertebraPos.y);
+          ctx.lineTo(processEndX, processEndY - 1);
+          ctx.moveTo(vertebraPos.x, vertebraPos.y);
+          ctx.lineTo(processEndX, processEndY + 1);
+        } else {
+          ctx.lineTo(processEndX, processEndY);
+        }
       } else if (i < 19) {
         // Thoracic - point more sharply down
         processEndX -= vertebraWidth * 0.2;
         processEndY += vertebraHeight * 0.3;
+        ctx.lineTo(processEndX, processEndY);
       } else {
         // Lumbar - point straight back
         processEndX -= vertebraWidth * 0.4;
+        ctx.lineTo(processEndX, processEndY);
       }
       
-      ctx.lineTo(processEndX, processEndY);
       ctx.stroke();
     }
     

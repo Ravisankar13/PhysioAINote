@@ -142,6 +142,21 @@ export class ShoulderAnatomy extends AnatomyRenderer {
     super(region);
   }
 
+  // Override render method to include spine and ribcage
+  render(context: RenderContext) {
+    const { ctx, landmarks, width, height } = context;
+    
+    // Check if landmarks are available
+    if (!landmarks || landmarks.length === 0) return;
+    
+    // Always render spine and ribcage first (behind everything else)
+    this.renderSpine(ctx, landmarks, width, height);
+    this.renderRibcage(ctx, landmarks, width, height);
+    
+    // Then render the regular anatomy structures
+    super.render(context);
+  }
+
   protected renderPath(structure: AnatomicalStructure, context: RenderContext): void {
     const { ctx, landmarks, width, height } = context;
     
@@ -475,6 +490,255 @@ export class ShoulderAnatomy extends AnatomyRenderer {
       posteriorOrigin.x,
       posteriorOrigin.y
     );
+    ctx.fill();
+    
+    ctx.restore();
+  }
+
+  private renderSpine(ctx: CanvasRenderingContext2D, landmarks: any, width: number, height: number) {
+    const leftShoulder = getLandmarkPosition(landmarks, POSE_LANDMARKS.LEFT_SHOULDER, width, height);
+    const rightShoulder = getLandmarkPosition(landmarks, POSE_LANDMARKS.RIGHT_SHOULDER, width, height);
+    const leftHip = getLandmarkPosition(landmarks, POSE_LANDMARKS.LEFT_HIP, width, height);
+    const rightHip = getLandmarkPosition(landmarks, POSE_LANDMARKS.RIGHT_HIP, width, height);
+    const nose = getLandmarkPosition(landmarks, POSE_LANDMARKS.NOSE, width, height);
+    
+    if (!leftShoulder || !rightShoulder || !leftHip || !rightHip) return;
+    
+    // Calculate spine position (midline of the body)
+    const shoulderMidpoint = getMidpoint(landmarks, POSE_LANDMARKS.LEFT_SHOULDER, POSE_LANDMARKS.RIGHT_SHOULDER, width, height);
+    const hipMidpoint = getMidpoint(landmarks, POSE_LANDMARKS.LEFT_HIP, POSE_LANDMARKS.RIGHT_HIP, width, height);
+    
+    if (!shoulderMidpoint || !hipMidpoint) return;
+    
+    // Calculate neck/C7 position
+    const neckBase = {
+      x: shoulderMidpoint.x,
+      y: shoulderMidpoint.y - getDistance(leftShoulder, rightShoulder) * 0.05
+    };
+    
+    ctx.save();
+    
+    // Draw vertebral column
+    const vertebraeCount = 24; // 7 cervical + 12 thoracic + 5 lumbar
+    const spineLength = getDistance(neckBase, hipMidpoint);
+    const vertebraHeight = spineLength / vertebraeCount;
+    
+    // Draw each vertebra
+    for (let i = 0; i < vertebraeCount; i++) {
+      const t = i / (vertebraeCount - 1);
+      const vertebraPos = interpolatePoint(neckBase, hipMidpoint, t);
+      
+      if (!vertebraPos) continue;
+      
+      // Determine vertebra size based on region
+      let vertebraWidth: number;
+      if (i < 7) {
+        // Cervical vertebrae (smaller)
+        vertebraWidth = getDistance(leftShoulder, rightShoulder) * 0.04;
+      } else if (i < 19) {
+        // Thoracic vertebrae (medium)
+        vertebraWidth = getDistance(leftShoulder, rightShoulder) * 0.05;
+      } else {
+        // Lumbar vertebrae (larger)
+        vertebraWidth = getDistance(leftShoulder, rightShoulder) * 0.06;
+      }
+      
+      // Draw vertebral body
+      ctx.beginPath();
+      ctx.fillStyle = '#E8D4B0';
+      ctx.strokeStyle = '#D4C4A0';
+      ctx.lineWidth = 1;
+      
+      // Draw as slightly rectangular shape
+      ctx.roundRect(
+        vertebraPos.x - vertebraWidth / 2,
+        vertebraPos.y - vertebraHeight / 2,
+        vertebraWidth,
+        vertebraHeight * 0.8,
+        2
+      );
+      ctx.fill();
+      ctx.stroke();
+      
+      // Draw spinous process (posterior projection)
+      ctx.beginPath();
+      ctx.strokeStyle = '#C4B4A0';
+      ctx.lineWidth = 2;
+      ctx.moveTo(vertebraPos.x, vertebraPos.y);
+      ctx.lineTo(vertebraPos.x, vertebraPos.y - vertebraHeight * 0.3);
+      ctx.stroke();
+    }
+    
+    // Draw intervertebral discs
+    for (let i = 1; i < vertebraeCount; i++) {
+      const t = (i - 0.5) / (vertebraeCount - 1);
+      const discPos = interpolatePoint(neckBase, hipMidpoint, t);
+      
+      if (!discPos) continue;
+      
+      ctx.beginPath();
+      ctx.fillStyle = 'rgba(100, 100, 150, 0.3)';
+      ctx.arc(discPos.x, discPos.y, vertebraHeight * 0.3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    
+    ctx.restore();
+  }
+  
+  private renderRibcage(ctx: CanvasRenderingContext2D, landmarks: any, width: number, height: number) {
+    const leftShoulder = getLandmarkPosition(landmarks, POSE_LANDMARKS.LEFT_SHOULDER, width, height);
+    const rightShoulder = getLandmarkPosition(landmarks, POSE_LANDMARKS.RIGHT_SHOULDER, width, height);
+    const leftHip = getLandmarkPosition(landmarks, POSE_LANDMARKS.LEFT_HIP, width, height);
+    const rightHip = getLandmarkPosition(landmarks, POSE_LANDMARKS.RIGHT_HIP, width, height);
+    
+    if (!leftShoulder || !rightShoulder || !leftHip || !rightHip) return;
+    
+    const shoulderWidth = getDistance(leftShoulder, rightShoulder);
+    const torsoHeight = getDistance(leftShoulder, leftHip);
+    const shoulderMidpoint = getMidpoint(landmarks, POSE_LANDMARKS.LEFT_SHOULDER, POSE_LANDMARKS.RIGHT_SHOULDER, width, height);
+    
+    if (!shoulderMidpoint) return;
+    
+    ctx.save();
+    ctx.strokeStyle = '#D4C4A0';
+    ctx.fillStyle = 'rgba(232, 212, 176, 0.2)';
+    
+    // Draw 12 pairs of ribs
+    const ribCount = 12;
+    const ribStartY = shoulderMidpoint.y + shoulderWidth * 0.1; // Start below clavicle
+    const ribEndY = shoulderMidpoint.y + torsoHeight * 0.6; // End at lower thorax
+    
+    for (let i = 0; i < ribCount; i++) {
+      const t = i / (ribCount - 1);
+      const ribY = ribStartY + (ribEndY - ribStartY) * t;
+      
+      // Calculate rib width (wider at top, narrower at bottom)
+      let ribWidth: number;
+      if (i < 7) {
+        // True ribs (1-7) - attached directly to sternum
+        ribWidth = shoulderWidth * (0.8 - i * 0.05);
+      } else if (i < 10) {
+        // False ribs (8-10) - attached to cartilage
+        ribWidth = shoulderWidth * (0.5 - (i - 7) * 0.05);
+      } else {
+        // Floating ribs (11-12) - not attached anteriorly
+        ribWidth = shoulderWidth * 0.35;
+      }
+      
+      // Draw left rib
+      ctx.beginPath();
+      ctx.lineWidth = 3 - i * 0.15; // Ribs get thinner as they go down
+      
+      // Start from spine
+      ctx.moveTo(shoulderMidpoint.x, ribY);
+      
+      // Curve out to the side
+      const leftControlPoint1 = {
+        x: shoulderMidpoint.x - ribWidth * 0.3,
+        y: ribY + shoulderWidth * 0.02
+      };
+      const leftControlPoint2 = {
+        x: shoulderMidpoint.x - ribWidth * 0.7,
+        y: ribY + shoulderWidth * 0.05
+      };
+      const leftEndPoint = {
+        x: shoulderMidpoint.x - ribWidth * 0.4,
+        y: ribY + shoulderWidth * 0.08
+      };
+      
+      // Draw curved rib
+      ctx.bezierCurveTo(
+        leftControlPoint1.x, leftControlPoint1.y,
+        leftControlPoint2.x, leftControlPoint2.y,
+        leftEndPoint.x, leftEndPoint.y
+      );
+      
+      // Connect to sternum for true ribs
+      if (i < 7) {
+        ctx.lineTo(shoulderMidpoint.x - shoulderWidth * 0.05, ribY + shoulderWidth * 0.06);
+      }
+      
+      ctx.stroke();
+      
+      // Draw right rib (mirror of left)
+      ctx.beginPath();
+      ctx.moveTo(shoulderMidpoint.x, ribY);
+      
+      const rightControlPoint1 = {
+        x: shoulderMidpoint.x + ribWidth * 0.3,
+        y: ribY + shoulderWidth * 0.02
+      };
+      const rightControlPoint2 = {
+        x: shoulderMidpoint.x + ribWidth * 0.7,
+        y: ribY + shoulderWidth * 0.05
+      };
+      const rightEndPoint = {
+        x: shoulderMidpoint.x + ribWidth * 0.4,
+        y: ribY + shoulderWidth * 0.08
+      };
+      
+      ctx.bezierCurveTo(
+        rightControlPoint1.x, rightControlPoint1.y,
+        rightControlPoint2.x, rightControlPoint2.y,
+        rightEndPoint.x, rightEndPoint.y
+      );
+      
+      // Connect to sternum for true ribs
+      if (i < 7) {
+        ctx.lineTo(shoulderMidpoint.x + shoulderWidth * 0.05, ribY + shoulderWidth * 0.06);
+      }
+      
+      ctx.stroke();
+      
+      // Draw costal cartilage for false ribs
+      if (i >= 7 && i < 10) {
+        ctx.beginPath();
+        ctx.strokeStyle = 'rgba(150, 150, 200, 0.5)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([3, 3]);
+        
+        // Left cartilage
+        ctx.moveTo(leftEndPoint.x, leftEndPoint.y);
+        ctx.lineTo(shoulderMidpoint.x - shoulderWidth * 0.05, ribY + shoulderWidth * 0.1);
+        
+        // Right cartilage
+        ctx.moveTo(rightEndPoint.x, rightEndPoint.y);
+        ctx.lineTo(shoulderMidpoint.x + shoulderWidth * 0.05, ribY + shoulderWidth * 0.1);
+        
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.strokeStyle = '#D4C4A0';
+      }
+    }
+    
+    // Draw sternum
+    ctx.beginPath();
+    ctx.fillStyle = '#E8D4B0';
+    ctx.strokeStyle = '#C4B4A0';
+    ctx.lineWidth = 2;
+    
+    const sternumTop = ribStartY - shoulderWidth * 0.05;
+    const sternumBottom = ribStartY + (ribEndY - ribStartY) * 0.6;
+    const sternumWidth = shoulderWidth * 0.08;
+    
+    // Draw sternum body
+    ctx.roundRect(
+      shoulderMidpoint.x - sternumWidth / 2,
+      sternumTop,
+      sternumWidth,
+      sternumBottom - sternumTop,
+      4
+    );
+    ctx.fill();
+    ctx.stroke();
+    
+    // Draw xiphoid process
+    ctx.beginPath();
+    ctx.fillStyle = '#D4C4A0';
+    ctx.moveTo(shoulderMidpoint.x - sternumWidth * 0.3, sternumBottom);
+    ctx.lineTo(shoulderMidpoint.x + sternumWidth * 0.3, sternumBottom);
+    ctx.lineTo(shoulderMidpoint.x, sternumBottom + shoulderWidth * 0.03);
+    ctx.closePath();
     ctx.fill();
     
     ctx.restore();

@@ -209,11 +209,8 @@ export class EnhancedRibcageRenderer {
     
     // Render ribs with costovertebral joints
     data.ribs.forEach(rib => {
-      // Draw costovertebral joint
-      ctx.fillStyle = '#ff6b6b';
-      ctx.beginPath();
-      ctx.arc(rib.costovertebralJoint.position.x, rib.costovertebralJoint.position.y, 4, 0, Math.PI * 2);
-      ctx.fill();
+      // Draw costovertebral joint (removed to avoid duplicate spine appearance)
+      // Joint positions are stored but not rendered visually
       
       // Draw rib curve
       ctx.strokeStyle = rib.type === 'floating' ? '#d0d0d0' : '#e8e8e8';

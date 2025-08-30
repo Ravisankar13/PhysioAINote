@@ -861,6 +861,24 @@ export default function BodyScanner() {
       }
     };
     enumerateCameras();
+    
+    // Listen for fullscreen changes
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+      if (!document.fullscreenElement) {
+        setShowControls(true);
+        if (controlsTimeout) {
+          clearTimeout(controlsTimeout);
+          setControlsTimeout(null);
+        }
+      }
+    };
+    
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    };
   }, []);
   
   // Initialize camera and pose detection
@@ -1499,8 +1517,8 @@ export default function BodyScanner() {
       {/* Main Content Area */}
       {isFullscreen ? (
         // Fullscreen Video Area
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="relative w-full h-full">
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
+          <div className="relative w-full h-full flex items-center justify-center">
             <video
               ref={videoRef}
               className="hidden"
@@ -1510,16 +1528,16 @@ export default function BodyScanner() {
               ref={canvasRef}
               width={1920}
               height={1080}
-              className="absolute inset-0 w-full h-full object-contain cursor-crosshair"
+              className="w-full h-full object-contain cursor-crosshair z-0"
               onClick={handleCanvasClick}
-              style={{ maxWidth: '100%', maxHeight: '100%' }}
+              style={{ maxWidth: '100vw', maxHeight: '100vh', display: 'block' }}
             />
             <canvas
               ref={overlayCanvasRef}
               width={1920}
               height={1080}
-              className="absolute inset-0 w-full h-full object-contain pointer-events-none"
-              style={{ maxWidth: '100%', maxHeight: '100%' }}
+              className="absolute inset-0 w-full h-full object-contain pointer-events-none z-[1]"
+              style={{ maxWidth: '100vw', maxHeight: '100vh', display: 'block' }}
             />
             
             {!isTracking && (

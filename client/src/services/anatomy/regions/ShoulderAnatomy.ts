@@ -142,14 +142,15 @@ export class ShoulderAnatomy extends AnatomyRenderer {
     super(region);
   }
 
-  // Override render method to include spine and ribcage
+  // Override render method to include spine, ribcage, and pelvis
   render(context: RenderContext) {
     const { ctx, landmarks, width, height } = context;
     
     // Check if landmarks are available
     if (!landmarks || landmarks.length === 0) return;
     
-    // Always render spine and ribcage first (behind everything else)
+    // Always render pelvis, spine and ribcage first (behind everything else)
+    this.renderPelvis(ctx, landmarks, width, height);
     this.renderSpine(ctx, landmarks, width, height);
     this.renderRibcage(ctx, landmarks, width, height);
     
@@ -1083,5 +1084,242 @@ export class ShoulderAnatomy extends AnatomyRenderer {
       ctx.strokeText('Shoulder', rightShoulder.x - 25, rightShoulder.y - 10);
       ctx.fillText('Shoulder', rightShoulder.x - 25, rightShoulder.y - 10);
     }
+  }
+
+  private renderPelvis(ctx: CanvasRenderingContext2D, landmarks: any, width: number, height: number) {
+    const leftHip = getLandmarkPosition(landmarks, POSE_LANDMARKS.LEFT_HIP, width, height);
+    const rightHip = getLandmarkPosition(landmarks, POSE_LANDMARKS.RIGHT_HIP, width, height);
+    
+    if (!leftHip || !rightHip) return;
+    
+    const hipWidth = getDistance(leftHip, rightHip);
+    const hipMidpoint = getMidpoint(landmarks, POSE_LANDMARKS.LEFT_HIP, POSE_LANDMARKS.RIGHT_HIP, width, height);
+    
+    if (!hipMidpoint) return;
+    
+    ctx.save();
+    
+    // Draw sacrum first (triangular bone at the base of spine)
+    ctx.fillStyle = '#D4C4A0';
+    ctx.strokeStyle = '#C4B4A0';
+    ctx.lineWidth = 2;
+    
+    const sacrumTop = hipMidpoint.y - hipWidth * 0.15;
+    const sacrumBottom = hipMidpoint.y + hipWidth * 0.05;
+    const sacrumWidth = hipWidth * 0.25;
+    
+    ctx.beginPath();
+    ctx.moveTo(hipMidpoint.x, sacrumTop); // Top point
+    ctx.lineTo(hipMidpoint.x - sacrumWidth / 2, sacrumBottom); // Bottom left
+    ctx.lineTo(hipMidpoint.x + sacrumWidth / 2, sacrumBottom); // Bottom right
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    
+    // Draw coccyx (tailbone)
+    ctx.beginPath();
+    ctx.fillStyle = '#C4B4A0';
+    ctx.moveTo(hipMidpoint.x - sacrumWidth * 0.15, sacrumBottom);
+    ctx.lineTo(hipMidpoint.x + sacrumWidth * 0.15, sacrumBottom);
+    ctx.lineTo(hipMidpoint.x, sacrumBottom + hipWidth * 0.08);
+    ctx.closePath();
+    ctx.fill();
+    
+    // Draw left innominate bone
+    this.renderInnominate(ctx, leftHip, hipMidpoint, hipWidth, 'left');
+    
+    // Draw right innominate bone
+    this.renderInnominate(ctx, rightHip, hipMidpoint, hipWidth, 'right');
+    
+    // Draw pubic symphysis (connection between pubic bones)
+    ctx.beginPath();
+    ctx.fillStyle = 'rgba(150, 150, 200, 0.5)';
+    ctx.strokeStyle = '#8888AA';
+    ctx.lineWidth = 1;
+    
+    const pubicY = hipMidpoint.y + hipWidth * 0.12;
+    ctx.roundRect(
+      hipMidpoint.x - hipWidth * 0.03,
+      pubicY - hipWidth * 0.02,
+      hipWidth * 0.06,
+      hipWidth * 0.04,
+      2
+    );
+    ctx.fill();
+    ctx.stroke();
+    
+    ctx.restore();
+  }
+  
+  private renderInnominate(ctx: CanvasRenderingContext2D, hipJoint: { x: number, y: number }, 
+                           hipMidpoint: { x: number, y: number }, hipWidth: number, side: 'left' | 'right') {
+    const sideMultiplier = side === 'left' ? -1 : 1;
+    
+    ctx.save();
+    ctx.fillStyle = '#E8D4B0';
+    ctx.strokeStyle = '#D4C4A0';
+    ctx.lineWidth = 2;
+    
+    // Ilium (large wing-like bone)
+    ctx.beginPath();
+    
+    // Iliac crest (top of hip bone)
+    const iliacCrestTop = {
+      x: hipJoint.x + sideMultiplier * hipWidth * 0.4,
+      y: hipJoint.y - hipWidth * 0.35
+    };
+    
+    // ASIS (Anterior Superior Iliac Spine)
+    const asisPoint = {
+      x: hipJoint.x + sideMultiplier * hipWidth * 0.3,
+      y: hipJoint.y - hipWidth * 0.1
+    };
+    
+    // PSIS (Posterior Superior Iliac Spine) - connects to sacrum
+    const psisPoint = {
+      x: hipMidpoint.x + sideMultiplier * hipWidth * 0.12,
+      y: hipJoint.y - hipWidth * 0.2
+    };
+    
+    // Draw ilium wing
+    ctx.moveTo(psisPoint.x, psisPoint.y);
+    
+    // Curve up to iliac crest
+    ctx.quadraticCurveTo(
+      hipJoint.x + sideMultiplier * hipWidth * 0.2,
+      hipJoint.y - hipWidth * 0.4,
+      iliacCrestTop.x,
+      iliacCrestTop.y
+    );
+    
+    // Curve down to ASIS
+    ctx.quadraticCurveTo(
+      hipJoint.x + sideMultiplier * hipWidth * 0.45,
+      hipJoint.y - hipWidth * 0.2,
+      asisPoint.x,
+      asisPoint.y
+    );
+    
+    // Down to acetabulum area
+    ctx.lineTo(hipJoint.x + sideMultiplier * hipWidth * 0.05, hipJoint.y);
+    
+    // Back up to sacrum connection
+    ctx.quadraticCurveTo(
+      hipMidpoint.x + sideMultiplier * hipWidth * 0.08,
+      hipJoint.y - hipWidth * 0.05,
+      psisPoint.x,
+      psisPoint.y
+    );
+    
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    
+    // Draw acetabulum (hip socket)
+    ctx.beginPath();
+    ctx.fillStyle = '#C4B4A0';
+    ctx.strokeStyle = '#B4A490';
+    ctx.lineWidth = 2;
+    
+    // Acetabulum is a deep socket
+    ctx.arc(hipJoint.x, hipJoint.y, hipWidth * 0.06, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    
+    // Draw acetabular rim (edge of socket)
+    ctx.beginPath();
+    ctx.strokeStyle = '#A49480';
+    ctx.lineWidth = 3;
+    ctx.arc(hipJoint.x, hipJoint.y, hipWidth * 0.06, 0, Math.PI * 2);
+    ctx.stroke();
+    
+    // Draw femoral head in the socket
+    ctx.beginPath();
+    ctx.fillStyle = '#F0E4D0';
+    ctx.strokeStyle = '#E0D4C0';
+    ctx.lineWidth = 1;
+    ctx.arc(hipJoint.x, hipJoint.y, hipWidth * 0.045, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    
+    // Ischium (lower back part)
+    ctx.beginPath();
+    ctx.fillStyle = '#E8D4B0';
+    ctx.strokeStyle = '#D4C4A0';
+    ctx.lineWidth = 2;
+    
+    const ischialTuberosity = {
+      x: hipJoint.x + sideMultiplier * hipWidth * 0.05,
+      y: hipJoint.y + hipWidth * 0.15
+    };
+    
+    // Draw ischium
+    ctx.moveTo(hipJoint.x, hipJoint.y + hipWidth * 0.02);
+    ctx.quadraticCurveTo(
+      hipJoint.x + sideMultiplier * hipWidth * 0.02,
+      hipJoint.y + hipWidth * 0.08,
+      ischialTuberosity.x,
+      ischialTuberosity.y
+    );
+    ctx.lineTo(ischialTuberosity.x - sideMultiplier * hipWidth * 0.08, ischialTuberosity.y - hipWidth * 0.02);
+    ctx.lineTo(hipJoint.x - sideMultiplier * hipWidth * 0.05, hipJoint.y + hipWidth * 0.02);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    
+    // Pubis (front lower part)
+    ctx.beginPath();
+    ctx.fillStyle = '#E8D4B0';
+    ctx.strokeStyle = '#D4C4A0';
+    
+    const pubicRamus = {
+      x: hipMidpoint.x + sideMultiplier * hipWidth * 0.03,
+      y: hipJoint.y + hipWidth * 0.12
+    };
+    
+    // Superior pubic ramus
+    ctx.moveTo(hipJoint.x, hipJoint.y + hipWidth * 0.02);
+    ctx.quadraticCurveTo(
+      hipJoint.x - sideMultiplier * hipWidth * 0.1,
+      hipJoint.y + hipWidth * 0.08,
+      pubicRamus.x,
+      pubicRamus.y
+    );
+    
+    // Inferior pubic ramus (connects to ischium)
+    ctx.lineTo(pubicRamus.x, pubicRamus.y + hipWidth * 0.03);
+    ctx.quadraticCurveTo(
+      hipJoint.x - sideMultiplier * hipWidth * 0.05,
+      hipJoint.y + hipWidth * 0.13,
+      ischialTuberosity.x - sideMultiplier * hipWidth * 0.08,
+      ischialTuberosity.y - hipWidth * 0.02
+    );
+    
+    ctx.stroke();
+    
+    // Draw obturator foramen (large hole in pelvis)
+    ctx.beginPath();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+    ctx.strokeStyle = '#C4B4A0';
+    ctx.lineWidth = 1;
+    
+    const foramenCenter = {
+      x: hipJoint.x - sideMultiplier * hipWidth * 0.02,
+      y: hipJoint.y + hipWidth * 0.08
+    };
+    
+    ctx.ellipse(
+      foramenCenter.x,
+      foramenCenter.y,
+      hipWidth * 0.04,
+      hipWidth * 0.06,
+      sideMultiplier * 0.2,
+      0,
+      Math.PI * 2
+    );
+    ctx.fill();
+    ctx.stroke();
+    
+    ctx.restore();
   }
 }

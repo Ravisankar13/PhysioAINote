@@ -589,12 +589,23 @@ export class ShoulderAnatomy extends AnatomyRenderer {
         const startY = skullBase.y;
         const endY = shoulderMidpoint.y;
         
-        // Create lordotic curve (forward curve) for cervical spine
-        // C1-C2 are more horizontal, C3-C7 gradually become more vertical
-        const curveAmount = shoulderWidth * 0.08 * Math.sin(cervicalT * Math.PI * 0.7);
+        // Create continuous lordotic curve that connects smoothly to thoracic
+        // The curve peaks forward at C4-C5 and transitions back toward thoracic spine
+        const curveDepth = shoulderWidth * 0.12;
+        let curveAmount: number;
         
+        if (i <= 4) {
+          // C1-C5: Progressive forward curve
+          curveAmount = curveDepth * Math.sin(cervicalT * Math.PI * 0.8);
+        } else {
+          // C6-C7: Transition back toward thoracic alignment
+          const transitionT = (i - 4) / 2;
+          curveAmount = curveDepth * Math.sin((1 - transitionT * 0.3) * Math.PI * 0.8);
+        }
+        
+        // Use consistent midpoint reference for all spine sections
         vertebraPos = {
-          x: skullBase.x + curveAmount, // Forward curve
+          x: shoulderMidpoint.x + curveAmount, // Forward curve from shoulder midpoint
           y: startY + (endY - startY) * cervicalT
         };
         
@@ -606,8 +617,8 @@ export class ShoulderAnatomy extends AnatomyRenderer {
           // C2 (Axis) - slightly larger
           vertebraWidth = shoulderWidth * 0.028;
         } else {
-          // C3-C7 - progressively larger
-          vertebraWidth = shoulderWidth * (0.03 + (i - 2) * 0.002);
+          // C3-C7 - progressively larger, matching thoracic transition
+          vertebraWidth = shoulderWidth * (0.03 + (i - 2) * 0.003);
         }
       } else if (i < 19) {
         // Thoracic vertebrae (T1-T12)
@@ -615,9 +626,12 @@ export class ShoulderAnatomy extends AnatomyRenderer {
         const startY = shoulderMidpoint.y;
         const endY = shoulderMidpoint.y + (hipMidpoint.y - shoulderMidpoint.y) * 0.7;
         
-        // Slight backward curve
+        // Kyphotic curve (backward) - smooth transition from cervical
+        const kyphoticDepth = shoulderWidth * 0.06;
+        const curveAmount = -kyphoticDepth * Math.sin(thoracicT * Math.PI);
+        
         vertebraPos = {
-          x: shoulderMidpoint.x - shoulderWidth * 0.03 * Math.sin(thoracicT * Math.PI),
+          x: shoulderMidpoint.x + curveAmount, // Backward curve from midpoint
           y: startY + (endY - startY) * thoracicT
         };
         vertebraWidth = shoulderWidth * 0.04;
@@ -627,9 +641,12 @@ export class ShoulderAnatomy extends AnatomyRenderer {
         const startY = shoulderMidpoint.y + (hipMidpoint.y - shoulderMidpoint.y) * 0.7;
         const endY = hipMidpoint.y;
         
-        // Forward curve
+        // Lordotic curve (forward) - smooth transition from thoracic
+        const lordoticDepth = shoulderWidth * 0.08;
+        const curveAmount = lordoticDepth * Math.sin(lumbarT * Math.PI * 0.7);
+        
         vertebraPos = {
-          x: shoulderMidpoint.x + shoulderWidth * 0.04 * Math.sin(lumbarT * Math.PI * 0.5),
+          x: shoulderMidpoint.x + curveAmount, // Forward curve from midpoint
           y: startY + (endY - startY) * lumbarT
         };
         vertebraWidth = shoulderWidth * 0.05;
@@ -727,6 +744,68 @@ export class ShoulderAnatomy extends AnatomyRenderer {
       }
       
       ctx.stroke();
+      
+      // Draw intervertebral disc between vertebrae for smooth transitions
+      if (i < vertebraeCount - 1) {
+        ctx.beginPath();
+        ctx.fillStyle = 'rgba(150, 150, 200, 0.3)';
+        ctx.strokeStyle = 'rgba(100, 100, 150, 0.5)';
+        ctx.lineWidth = 1;
+        
+        // Calculate next vertebra position for disc placement
+        let nextVertebraPos: { x: number, y: number };
+        const nextI = i + 1;
+        
+        if (nextI < 7) {
+          // Next is cervical
+          const nextCervicalT = nextI / 6;
+          const nextY = skullBase.y + (shoulderMidpoint.y - skullBase.y) * nextCervicalT;
+          let nextCurveAmount: number;
+          
+          if (nextI <= 4) {
+            nextCurveAmount = shoulderWidth * 0.12 * Math.sin(nextCervicalT * Math.PI * 0.8);
+          } else {
+            const transitionT = (nextI - 4) / 2;
+            nextCurveAmount = shoulderWidth * 0.12 * Math.sin((1 - transitionT * 0.3) * Math.PI * 0.8);
+          }
+          
+          nextVertebraPos = {
+            x: shoulderMidpoint.x + nextCurveAmount,
+            y: nextY
+          };
+        } else if (nextI < 19) {
+          // Next is thoracic
+          const nextThoracicT = (nextI - 7) / 12;
+          const nextY = shoulderMidpoint.y + (shoulderMidpoint.y + (hipMidpoint.y - shoulderMidpoint.y) * 0.7 - shoulderMidpoint.y) * nextThoracicT;
+          const nextCurveAmount = -shoulderWidth * 0.06 * Math.sin(nextThoracicT * Math.PI);
+          
+          nextVertebraPos = {
+            x: shoulderMidpoint.x + nextCurveAmount,
+            y: nextY
+          };
+        } else {
+          // Next is lumbar
+          const nextLumbarT = (nextI - 19) / 5;
+          const startY = shoulderMidpoint.y + (hipMidpoint.y - shoulderMidpoint.y) * 0.7;
+          const nextY = startY + (hipMidpoint.y - startY) * nextLumbarT;
+          const nextCurveAmount = shoulderWidth * 0.08 * Math.sin(nextLumbarT * Math.PI * 0.7);
+          
+          nextVertebraPos = {
+            x: shoulderMidpoint.x + nextCurveAmount,
+            y: nextY
+          };
+        }
+        
+        // Draw disc at midpoint between vertebrae
+        const discX = (vertebraPos.x + nextVertebraPos.x) / 2;
+        const discY = (vertebraPos.y + nextVertebraPos.y) / 2;
+        const discWidth = vertebraWidth * 0.7;
+        const discHeight = Math.abs(nextVertebraPos.y - vertebraPos.y) * 0.3;
+        
+        ctx.ellipse(discX, discY, discWidth / 2, discHeight / 2, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
     }
     
     ctx.restore();

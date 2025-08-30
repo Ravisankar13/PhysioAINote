@@ -589,23 +589,23 @@ export class ShoulderAnatomy extends AnatomyRenderer {
         const startY = skullBase.y;
         const endY = shoulderMidpoint.y;
         
-        // Create continuous lordotic curve that connects smoothly to thoracic
-        // The curve peaks forward at C4-C5 and transitions back toward thoracic spine
-        const curveDepth = shoulderWidth * 0.12;
-        let curveAmount: number;
+        // Keep cervical spine straight vertically aligned with slight forward lordotic curve
+        // The lordotic curve should be subtle and only in the sagittal plane (front-back)
+        const lordoticDepth = shoulderWidth * 0.06; // Reduced curve depth
+        let forwardOffset: number;
         
-        if (i <= 4) {
-          // C1-C5: Progressive forward curve
-          curveAmount = curveDepth * Math.sin(cervicalT * Math.PI * 0.8);
+        if (i <= 3) {
+          // C1-C4: Gradual forward curve
+          forwardOffset = lordoticDepth * Math.sin(cervicalT * Math.PI * 0.6);
         } else {
-          // C6-C7: Transition back toward thoracic alignment
-          const transitionT = (i - 4) / 2;
-          curveAmount = curveDepth * Math.sin((1 - transitionT * 0.3) * Math.PI * 0.8);
+          // C5-C7: Transition smoothly to thoracic alignment
+          const transitionT = (i - 3) / 3;
+          forwardOffset = lordoticDepth * Math.sin((1 - transitionT * 0.4) * Math.PI * 0.6);
         }
         
-        // Use consistent midpoint reference for all spine sections
+        // Keep X position centered at shoulder midpoint with only forward offset
         vertebraPos = {
-          x: shoulderMidpoint.x + curveAmount, // Forward curve from shoulder midpoint
+          x: shoulderMidpoint.x + forwardOffset, // Straight alignment with forward curve only
           y: startY + (endY - startY) * cervicalT
         };
         
@@ -760,17 +760,17 @@ export class ShoulderAnatomy extends AnatomyRenderer {
           // Next is cervical
           const nextCervicalT = nextI / 6;
           const nextY = skullBase.y + (shoulderMidpoint.y - skullBase.y) * nextCervicalT;
-          let nextCurveAmount: number;
+          let nextForwardOffset: number;
           
-          if (nextI <= 4) {
-            nextCurveAmount = shoulderWidth * 0.12 * Math.sin(nextCervicalT * Math.PI * 0.8);
+          if (nextI <= 3) {
+            nextForwardOffset = shoulderWidth * 0.06 * Math.sin(nextCervicalT * Math.PI * 0.6);
           } else {
-            const transitionT = (nextI - 4) / 2;
-            nextCurveAmount = shoulderWidth * 0.12 * Math.sin((1 - transitionT * 0.3) * Math.PI * 0.8);
+            const transitionT = (nextI - 3) / 3;
+            nextForwardOffset = shoulderWidth * 0.06 * Math.sin((1 - transitionT * 0.4) * Math.PI * 0.6);
           }
           
           nextVertebraPos = {
-            x: shoulderMidpoint.x + nextCurveAmount,
+            x: shoulderMidpoint.x + nextForwardOffset,
             y: nextY
           };
         } else if (nextI < 19) {

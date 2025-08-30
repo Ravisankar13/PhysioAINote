@@ -31,7 +31,6 @@ export class DetailedSpineRenderer {
   };
   
   // Smoothing variables for spine movement
-  private previousFlexion: number = 0;
   private previousLateralFlexion: number = 0;
   private smoothingFactor: number = 0.3; // Lower = smoother, higher = more responsive
 
@@ -88,15 +87,6 @@ export class DetailedSpineRenderer {
       (rawLateralFlexion - this.previousLateralFlexion) * this.smoothingFactor;
     this.previousLateralFlexion = lateralFlexion;
     
-    // Calculate forward/backward flexion based on shoulder-hip relationship
-    const shoulderForwardOffset = shoulderMidpoint.x - hipMidpoint.x;
-    const normalizedFlexion = Math.max(-0.1, Math.min(0.1, shoulderForwardOffset));
-    
-    // Apply smoothing to flexion
-    const flexionAmount = this.previousFlexion + 
-      (normalizedFlexion - this.previousFlexion) * this.smoothingFactor;
-    this.previousFlexion = flexionAmount;
-    
     // Calculate vertebrae positions with natural spinal curves
     const totalVertebrae = 24; // C1-C7, T1-T12, L1-L5
     
@@ -124,9 +114,9 @@ export class DetailedSpineRenderer {
         curveOffset = Math.sin(((i - 19) / 5) * Math.PI) * 0.015;
       }
       
-      // Apply flexion and natural curves
+      // Apply natural curves only (no flexion to avoid C-shape distortion)
       const position = {
-        x: baseX + curveOffset + (flexionAmount * Math.sin(t * Math.PI) * 0.5),
+        x: baseX + curveOffset,
         y: baseY
       };
       
@@ -162,7 +152,7 @@ export class DetailedSpineRenderer {
       
       // Calculate rotation for this vertebra based on position in spine
       const vertebraRotation = lateralFlexion * Math.sin(t * Math.PI);
-      const vertebraFlexion = flexionAmount * (1 - Math.abs(t - 0.5) * 2); // Max at mid-spine
+      const vertebraFlexion = 0; // Removed flexion to prevent C-shape distortion
       
       vertebrae.push(this.createVertebra(
         level,

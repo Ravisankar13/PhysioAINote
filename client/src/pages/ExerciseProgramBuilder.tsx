@@ -335,10 +335,11 @@ export default function ExerciseProgramBuilder() {
               onSubmit={(e) => {
                 e.preventDefault();
                 const formData = new FormData(e.currentTarget);
+                const bodyPartValue = formData.get("bodyPart");
                 createProgramMutation.mutate({
                   name: formData.get("name"),
                   description: formData.get("description"),
-                  bodyPart: formData.get("bodyPart"),
+                  bodyPart: bodyPartValue === "none" ? null : bodyPartValue,
                   difficulty: formData.get("difficulty"),
                   duration: parseInt(formData.get("duration") as string) || 30,
                   frequency: formData.get("frequency"),
@@ -369,7 +370,7 @@ export default function ExerciseProgramBuilder() {
                       <SelectValue placeholder="Select body part" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">None</SelectItem>
+                      <SelectItem value="none">None</SelectItem>
                       <SelectItem value="shoulder">Shoulder</SelectItem>
                       <SelectItem value="neck">Neck</SelectItem>
                       <SelectItem value="back">Back</SelectItem>

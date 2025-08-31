@@ -162,16 +162,79 @@ export default function BodyScanner() {
   
   // Fullscreen handling
   const toggleFullscreen = async () => {
-    if (!document.fullscreenElement) {
-      if (fullscreenContainerRef.current) {
-        await fullscreenContainerRef.current.requestFullscreen();
-        setIsFullscreen(true);
-        showControlsTemporarily();
+    console.log('[BodyScanner] Toggling fullscreen...');
+    
+    try {
+      // Check if already in fullscreen with vendor prefixes
+      const isCurrentlyFullscreen = !!(
+        document.fullscreenElement ||
+        (document as any).webkitFullscreenElement ||
+        (document as any).mozFullScreenElement ||
+        (document as any).msFullscreenElement
+      );
+      
+      console.log('[BodyScanner] Currently fullscreen:', isCurrentlyFullscreen);
+      console.log('[BodyScanner] Container ref:', fullscreenContainerRef.current);
+      
+      if (!isCurrentlyFullscreen) {
+        if (fullscreenContainerRef.current) {
+          // Try different fullscreen methods for cross-browser compatibility
+          const element = fullscreenContainerRef.current;
+          
+          console.log('[BodyScanner] Requesting fullscreen...');
+          
+          if (element.requestFullscreen) {
+            console.log('[BodyScanner] Using standard requestFullscreen');
+            await element.requestFullscreen();
+          } else if ((element as any).webkitRequestFullscreen) {
+            // Safari
+            console.log('[BodyScanner] Using webkit requestFullscreen');
+            await (element as any).webkitRequestFullscreen();
+          } else if ((element as any).mozRequestFullScreen) {
+            // Firefox
+            console.log('[BodyScanner] Using moz requestFullScreen');
+            await (element as any).mozRequestFullScreen();
+          } else if ((element as any).msRequestFullscreen) {
+            // IE/Edge
+            console.log('[BodyScanner] Using ms requestFullscreen');
+            await (element as any).msRequestFullscreen();
+          } else {
+            console.error('[BodyScanner] No fullscreen API available');
+            throw new Error('Fullscreen API not supported');
+          }
+          
+          setIsFullscreen(true);
+          showControlsTemporarily();
+          
+          toast({
+            title: "Fullscreen Mode",
+            description: "Press ESC to exit fullscreen",
+            duration: 2000,
+          });
+        }
+      } else {
+        // Exit fullscreen with cross-browser compatibility
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        } else if ((document as any).webkitExitFullscreen) {
+          await (document as any).webkitExitFullscreen();
+        } else if ((document as any).mozCancelFullScreen) {
+          await (document as any).mozCancelFullScreen();
+        } else if ((document as any).msExitFullscreen) {
+          await (document as any).msExitFullscreen();
+        }
+        
+        setIsFullscreen(false);
+        setShowControls(true);
       }
-    } else {
-      await document.exitFullscreen();
-      setIsFullscreen(false);
-      setShowControls(true);
+    } catch (error) {
+      console.error('[BodyScanner] Fullscreen error:', error);
+      toast({
+        title: "Fullscreen Error",
+        description: "Unable to toggle fullscreen mode. Try using F11 key instead.",
+        variant: "destructive",
+        duration: 3000,
+      });
     }
   };
 
@@ -1090,6 +1153,20 @@ export default function BodyScanner() {
     };
     loadLibraries();
     
+    // Add keyboard shortcut for fullscreen (F key)
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (e.key === 'f' || e.key === 'F') {
+        // Only trigger if not typing in an input field
+        if (document.activeElement?.tagName !== 'INPUT' && 
+            document.activeElement?.tagName !== 'TEXTAREA') {
+          e.preventDefault();
+          toggleFullscreen();
+        }
+      }
+    };
+    
+    document.addEventListener('keydown', handleKeyPress);
+    
     // Check WebXR support
     webXRService.checkXRSupport().then(support => {
       setXrSupported(support.supported && (support.immersiveAR || support.inline));
@@ -1111,10 +1188,18 @@ export default function BodyScanner() {
     };
     enumerateCameras();
     
-    // Listen for fullscreen changes
+    // Listen for fullscreen changes with vendor prefixes
     const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
-      if (!document.fullscreenElement) {
+      const isCurrentlyFullscreen = !!(
+        document.fullscreenElement ||
+        (document as any).webkitFullscreenElement ||
+        (document as any).mozFullScreenElement ||
+        (document as any).msFullscreenElement
+      );
+      
+      setIsFullscreen(isCurrentlyFullscreen);
+      
+      if (!isCurrentlyFullscreen) {
         setShowControls(true);
         if (controlsTimeout) {
           clearTimeout(controlsTimeout);
@@ -1123,12 +1208,21 @@ export default function BodyScanner() {
       }
     };
     
+    // Add event listeners for all vendor prefixes
     document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
     
+    // Cleanup function
     return () => {
+      document.removeEventListener('keydown', handleKeyPress);
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
     };
-  }, []);
+  }, [toggleFullscreen]); // Add toggleFullscreen as dependency
   
   // Initialize camera and pose detection
   useEffect(() => {
@@ -1995,11 +2089,13 @@ export default function BodyScanner() {
                     <Badge variant="outline">{selectedView} View</Badge>
                     <Button
                       size="sm"
-                      variant="ghost"
+                      variant="outline"
                       onClick={toggleFullscreen}
-                      title="Enter fullscreen"
+                      title="Enter fullscreen mode"
+                      className="hover:bg-primary/10"
                     >
-                      <Maximize2 className="h-4 w-4" />
+                      <Maximize2 className="h-4 w-4 mr-1" />
+                      <span className="hidden sm:inline">Fullscreen</span>
                     </Button>
                   </div>
                 </div>

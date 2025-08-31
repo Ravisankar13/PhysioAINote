@@ -8,16 +8,25 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
-import { Plus, Search, GripVertical, Edit, Trash2, Copy, Globe, Lock, Users, Dumbbell, Clock, Target, ChevronRight, X } from "lucide-react";
+import { Plus, Search, GripVertical, Edit, Trash2, Copy, Globe, Lock, Users, Dumbbell, Clock, Target, ChevronRight, X, Calendar, Save } from "lucide-react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import type { ExerciseProgram, ProgramExercise } from "@shared/schema";
 
 interface ExerciseProgramWithExercises extends ExerciseProgram {
   exercises: ProgramExercise[];
+}
+
+interface EditingExercise {
+  id: number;
+  sets: number;
+  reps: string;
+  restTime: number;
+  day: number;
+  notes: string;
 }
 
 export default function ExerciseProgramBuilder() {
@@ -29,6 +38,9 @@ export default function ExerciseProgramBuilder() {
   const [selectedTarget, setSelectedTarget] = useState("");
   const [isExerciseSearchOpen, setIsExerciseSearchOpen] = useState(false);
   const [hasSyncedExercises, setHasSyncedExercises] = useState(false);
+  const [selectedDay, setSelectedDay] = useState(1);
+  const [editingExercise, setEditingExercise] = useState<EditingExercise | null>(null);
+  const [maxDays, setMaxDays] = useState(3); // Default to 3 day program
 
   // Fetch user's programs
   const { data: programs, isLoading: programsLoading } = useQuery({
@@ -95,6 +107,14 @@ export default function ExerciseProgramBuilder() {
     }
   }, [isExerciseSearchOpen, hasSyncedExercises]);
 
+  // Calculate max days from exercises when program is loaded
+  useEffect(() => {
+    if (selectedProgram?.exercises) {
+      const maxDay = Math.max(...selectedProgram.exercises.map(e => e.day || 1), 3);
+      setMaxDays(maxDay);
+    }
+  }, [selectedProgram]);
+
   // Create program mutation
   const createProgramMutation = useMutation({
     mutationFn: (data: any) => apiRequest("/api/exercise-programs", "POST", data),
@@ -123,7 +143,7 @@ export default function ExerciseProgramBuilder() {
 
   // Delete program mutation
   const deleteProgramMutation = useMutation({
-    mutationFn: (id: number) => apiRequest(`/api/exercise-programs/${id}`, "DELETE"),
+    mutationFn: (id: number) => apiRequest(`/api/exercise-programs/${id}`, "DELETE", {}),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/exercise-programs"] });
       setSelectedProgram(null);
@@ -134,12 +154,13 @@ export default function ExerciseProgramBuilder() {
     },
   });
 
-  // Add exercise to program mutation
+  // Add exercise mutation
   const addExerciseMutation = useMutation({
     mutationFn: ({ programId, exercise }: { programId: number; exercise: any }) =>
       apiRequest(`/api/exercise-programs/${programId}/exercises`, "POST", exercise),
-    onSuccess: (_, variables) => {
+    onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: [`/api/exercise-programs/${variables.programId}`] });
+      // Refresh the current program
       if (selectedProgram) {
         fetchProgramDetails(selectedProgram.id);
       }
@@ -150,9 +171,25 @@ export default function ExerciseProgramBuilder() {
     },
   });
 
+  // Update exercise mutation  
+  const updateExerciseMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: any }) =>
+      apiRequest(`/api/program-exercises/${id}`, "PUT", data),
+    onSuccess: () => {
+      if (selectedProgram) {
+        fetchProgramDetails(selectedProgram.id);
+      }
+      setEditingExercise(null);
+      toast({
+        title: "Success",
+        description: "Exercise updated successfully",
+      });
+    },
+  });
+
   // Remove exercise mutation
   const removeExerciseMutation = useMutation({
-    mutationFn: (exerciseId: number) => apiRequest(`/api/program-exercises/${exerciseId}`, "DELETE"),
+    mutationFn: (id: number) => apiRequest(`/api/program-exercises/${id}`, "DELETE", {}),
     onSuccess: () => {
       if (selectedProgram) {
         fetchProgramDetails(selectedProgram.id);
@@ -168,26 +205,22 @@ export default function ExerciseProgramBuilder() {
   const reorderExercisesMutation = useMutation({
     mutationFn: ({ programId, exerciseIds }: { programId: number; exerciseIds: number[] }) =>
       apiRequest(`/api/exercise-programs/${programId}/reorder`, "POST", { exerciseIds }),
-    onSuccess: () => {
-      toast({
-        title: "Success",
-        description: "Exercise order updated",
-      });
-    },
   });
 
-  // Fetch program details with exercises
+  // Fetch program details
   const fetchProgramDetails = async (programId: number) => {
-    const response = await fetch(`/api/exercise-programs/${programId}`, {
-      credentials: "include",
-    });
-    if (response.ok) {
+    try {
+      const response = await fetch(`/api/exercise-programs/${programId}`, {
+        credentials: "include",
+      });
       const data = await response.json();
       setSelectedProgram(data);
+    } catch (error) {
+      console.error("Error fetching program details:", error);
     }
   };
 
-  // Handle drag end for exercise reordering
+  // Handle drag and drop
   const handleDragEnd = (result: any) => {
     if (!result.destination || !selectedProgram) return;
 
@@ -195,7 +228,7 @@ export default function ExerciseProgramBuilder() {
     const [reorderedItem] = items.splice(result.source.index, 1);
     items.splice(result.destination.index, 0, reorderedItem);
 
-    // Update local state immediately
+    // Update local state optimistically
     setSelectedProgram({
       ...selectedProgram,
       exercises: items,
@@ -225,6 +258,7 @@ export default function ExerciseProgramBuilder() {
       sets: 3,
       reps: "10-12",
       restTime: 60,
+      day: selectedDay, // Use the selected day
     };
 
     addExerciseMutation.mutate({
@@ -232,6 +266,42 @@ export default function ExerciseProgramBuilder() {
       exercise: newExercise,
     });
   };
+
+  // Start editing an exercise
+  const startEditingExercise = (exercise: ProgramExercise) => {
+    setEditingExercise({
+      id: exercise.id,
+      sets: exercise.sets || 3,
+      reps: exercise.reps || "10-12",
+      restTime: exercise.restTime || 60,
+      day: exercise.day || 1,
+      notes: exercise.notes || "",
+    });
+  };
+
+  // Save exercise edits
+  const saveExerciseEdits = () => {
+    if (!editingExercise) return;
+
+    updateExerciseMutation.mutate({
+      id: editingExercise.id,
+      data: {
+        sets: editingExercise.sets,
+        reps: editingExercise.reps,
+        restTime: editingExercise.restTime,
+        day: editingExercise.day,
+        notes: editingExercise.notes,
+      },
+    });
+  };
+
+  // Group exercises by day
+  const exercisesByDay = selectedProgram?.exercises?.reduce((acc, exercise) => {
+    const day = exercise.day || 1;
+    if (!acc[day]) acc[day] = [];
+    acc[day].push(exercise);
+    return acc;
+  }, {} as Record<number, ProgramExercise[]>) || {};
 
   return (
     <div className="container mx-auto p-6 max-w-7xl">
@@ -299,13 +369,16 @@ export default function ExerciseProgramBuilder() {
                       <SelectValue placeholder="Select body part" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="">None</SelectItem>
                       <SelectItem value="shoulder">Shoulder</SelectItem>
                       <SelectItem value="neck">Neck</SelectItem>
                       <SelectItem value="back">Back</SelectItem>
+                      <SelectItem value="elbow">Elbow</SelectItem>
+                      <SelectItem value="wrist">Wrist</SelectItem>
                       <SelectItem value="hip">Hip</SelectItem>
                       <SelectItem value="knee">Knee</SelectItem>
                       <SelectItem value="ankle">Ankle</SelectItem>
-                      <SelectItem value="general">General</SelectItem>
+                      <SelectItem value="foot">Foot</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -326,7 +399,7 @@ export default function ExerciseProgramBuilder() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="duration">Duration (minutes)</Label>
-                  <Input id="duration" name="duration" type="number" defaultValue="30" />
+                  <Input id="duration" name="duration" type="number" placeholder="30" />
                 </div>
                 <div>
                   <Label htmlFor="frequency">Frequency</Label>
@@ -335,27 +408,19 @@ export default function ExerciseProgramBuilder() {
               </div>
               <div>
                 <Label htmlFor="visibility">Visibility</Label>
-                <Select name="visibility" defaultValue="private">
+                <Select name="visibility">
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder="Select visibility" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="private">
-                      <div className="flex items-center">
-                        <Lock className="h-4 w-4 mr-2" />
-                        Private
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="public">
-                      <div className="flex items-center">
-                        <Globe className="h-4 w-4 mr-2" />
-                        Public
-                      </div>
-                    </SelectItem>
+                    <SelectItem value="private">Private</SelectItem>
+                    <SelectItem value="public">Public</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <Button type="submit" className="w-full">Create Program</Button>
+              <Button type="submit" className="w-full">
+                Create Program
+              </Button>
             </form>
           </DialogContent>
           </Dialog>
@@ -363,8 +428,8 @@ export default function ExerciseProgramBuilder() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Programs List */}
-        <div className="lg:col-span-1">
+        {/* Program List */}
+        <div>
           <Card>
             <CardHeader>
               <CardTitle>My Programs</CardTitle>
@@ -479,20 +544,48 @@ export default function ExerciseProgramBuilder() {
                 </div>
               </CardHeader>
               <CardContent>
+                {/* Day selector */}
+                <div className="mb-4 flex items-center gap-2">
+                  <Label>Program Days:</Label>
+                  <div className="flex gap-2">
+                    {[...Array(maxDays)].map((_, i) => (
+                      <Button
+                        key={i + 1}
+                        variant={selectedDay === i + 1 ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setSelectedDay(i + 1)}
+                      >
+                        Day {i + 1}
+                      </Button>
+                    ))}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setMaxDays(maxDays + 1)}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
                 <Tabs defaultValue="exercises">
                   <TabsList className="grid w-full grid-cols-3">
                     <TabsTrigger value="exercises">Exercises</TabsTrigger>
+                    <TabsTrigger value="week-view">Week View</TabsTrigger>
                     <TabsTrigger value="preview">Preview</TabsTrigger>
-                    <TabsTrigger value="assign">Assign</TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="exercises" className="mt-4">
-                    {selectedProgram.exercises && selectedProgram.exercises.length > 0 ? (
+                    <h3 className="font-semibold mb-3 flex items-center gap-2">
+                      <Calendar className="h-4 w-4" />
+                      Day {selectedDay} Exercises
+                    </h3>
+                    {exercisesByDay[selectedDay] && exercisesByDay[selectedDay].length > 0 ? (
                       <DragDropContext onDragEnd={handleDragEnd}>
                         <Droppable droppableId="exercises">
                           {(provided) => (
                             <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-2">
-                              {selectedProgram.exercises.map((exercise, index) => (
+                              {exercisesByDay[selectedDay].map((exercise, index) => (
                                 <Draggable key={exercise.id} draggableId={exercise.id.toString()} index={index}>
                                   {(provided, snapshot) => (
                                     <Card
@@ -507,7 +600,7 @@ export default function ExerciseProgramBuilder() {
                                           </div>
                                           <div className="flex-1">
                                             <div className="flex justify-between items-start">
-                                              <div>
+                                              <div className="flex-1">
                                                 <h4 className="font-semibold">{exercise.name}</h4>
                                                 <div className="flex flex-wrap gap-2 mt-1">
                                                   {exercise.bodyPart && (
@@ -526,24 +619,46 @@ export default function ExerciseProgramBuilder() {
                                                     </Badge>
                                                   )}
                                                 </div>
+                                                
+                                                {/* Exercise Details - Inline Display */}
+                                                <div className="mt-3 flex flex-wrap gap-4 text-sm">
+                                                  <div className="flex items-center gap-1">
+                                                    <span className="font-medium">Sets:</span>
+                                                    <span>{exercise.sets || 3}</span>
+                                                  </div>
+                                                  <div className="flex items-center gap-1">
+                                                    <span className="font-medium">Reps:</span>
+                                                    <span>{exercise.reps || "10-12"}</span>
+                                                  </div>
+                                                  <div className="flex items-center gap-1">
+                                                    <span className="font-medium">Rest:</span>
+                                                    <span>{exercise.restTime || 60}s</span>
+                                                  </div>
+                                                </div>
+                                                
+                                                {exercise.notes && (
+                                                  <p className="text-sm text-muted-foreground mt-2">
+                                                    {exercise.notes}
+                                                  </p>
+                                                )}
                                               </div>
-                                              <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() => removeExerciseMutation.mutate(exercise.id)}
-                                              >
-                                                <X className="h-4 w-4" />
-                                              </Button>
+                                              <div className="flex gap-1">
+                                                <Button
+                                                  variant="ghost"
+                                                  size="sm"
+                                                  onClick={() => startEditingExercise(exercise)}
+                                                >
+                                                  <Edit className="h-4 w-4" />
+                                                </Button>
+                                                <Button
+                                                  variant="ghost"
+                                                  size="sm"
+                                                  onClick={() => removeExerciseMutation.mutate(exercise.id)}
+                                                >
+                                                  <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                              </div>
                                             </div>
-                                            <div className="mt-2 text-sm text-muted-foreground">
-                                              {exercise.sets && `${exercise.sets} sets`}
-                                              {exercise.reps && ` × ${exercise.reps} reps`}
-                                              {exercise.duration && ` × ${exercise.duration}`}
-                                              {exercise.restTime && ` • ${exercise.restTime}s rest`}
-                                            </div>
-                                            {exercise.notes && (
-                                              <p className="mt-2 text-sm">{exercise.notes}</p>
-                                            )}
                                           </div>
                                         </div>
                                       </CardContent>
@@ -558,96 +673,121 @@ export default function ExerciseProgramBuilder() {
                       </DragDropContext>
                     ) : (
                       <div className="text-center py-8 text-muted-foreground">
-                        <Dumbbell className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                        <p>No exercises added yet</p>
-                        <p className="text-sm mt-2">Click "Add Exercise" to build your program</p>
+                        No exercises for Day {selectedDay}. Add exercises to get started.
                       </div>
                     )}
                   </TabsContent>
 
-                  <TabsContent value="preview" className="mt-4">
+                  <TabsContent value="week-view" className="mt-4">
                     <div className="space-y-4">
-                      <Card>
-                        <CardContent className="p-6">
-                          <h3 className="font-semibold mb-4">Program Overview</h3>
-                          <div className="grid grid-cols-2 gap-4 text-sm">
-                            <div>
-                              <span className="text-muted-foreground">Total Exercises:</span>
-                              <span className="ml-2 font-medium">{selectedProgram.exercises?.length || 0}</span>
-                            </div>
-                            <div>
-                              <span className="text-muted-foreground">Estimated Duration:</span>
-                              <span className="ml-2 font-medium">{selectedProgram.duration || 30} minutes</span>
-                            </div>
-                            <div>
-                              <span className="text-muted-foreground">Difficulty:</span>
-                              <span className="ml-2 font-medium">{selectedProgram.difficulty || "Not set"}</span>
-                            </div>
-                            <div>
-                              <span className="text-muted-foreground">Frequency:</span>
-                              <span className="ml-2 font-medium">{selectedProgram.frequency || "Not set"}</span>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                      
-                      {selectedProgram.exercises && selectedProgram.exercises.length > 0 && (
-                        <Card>
-                          <CardContent className="p-6">
-                            <h3 className="font-semibold mb-4">Exercise Sequence</h3>
-                            <ol className="space-y-3">
-                              {selectedProgram.exercises.map((exercise, index) => (
-                                <li key={exercise.id} className="flex items-center gap-3">
-                                  <span className="flex-shrink-0 w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-sm font-semibold">
-                                    {index + 1}
-                                  </span>
-                                  <div className="flex-1">
-                                    <span className="font-medium">{exercise.name}</span>
-                                    <span className="text-sm text-muted-foreground ml-2">
-                                      {exercise.sets && `${exercise.sets} sets`}
-                                      {exercise.reps && ` × ${exercise.reps} reps`}
-                                    </span>
-                                  </div>
-                                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                                </li>
-                              ))}
-                            </ol>
-                          </CardContent>
-                        </Card>
-                      )}
+                      {[...Array(maxDays)].map((_, dayIndex) => {
+                        const day = dayIndex + 1;
+                        const dayExercises = exercisesByDay[day] || [];
+                        return (
+                          <Card key={day}>
+                            <CardHeader className="pb-3">
+                              <h3 className="font-semibold flex items-center gap-2">
+                                <Calendar className="h-4 w-4" />
+                                Day {day}
+                                <Badge variant="secondary" className="ml-2">
+                                  {dayExercises.length} exercises
+                                </Badge>
+                              </h3>
+                            </CardHeader>
+                            <CardContent>
+                              {dayExercises.length > 0 ? (
+                                <div className="space-y-2">
+                                  {dayExercises.map((exercise) => (
+                                    <div key={exercise.id} className="flex items-center justify-between p-2 rounded-lg bg-muted/50">
+                                      <div>
+                                        <span className="font-medium">{exercise.name}</span>
+                                        <span className="text-sm text-muted-foreground ml-2">
+                                          {exercise.sets || 3} x {exercise.reps || "10-12"}
+                                        </span>
+                                      </div>
+                                      <div className="flex gap-2">
+                                        {exercise.bodyPart && (
+                                          <Badge variant="outline" className="text-xs">
+                                            {exercise.bodyPart}
+                                          </Badge>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="text-sm text-muted-foreground">Rest day or no exercises assigned</p>
+                              )}
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
                     </div>
                   </TabsContent>
 
-                  <TabsContent value="assign" className="mt-4">
-                    <Card>
-                      <CardContent className="p-6">
-                        <div className="text-center py-8">
-                          <Users className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
-                          <h3 className="font-semibold text-lg mb-2">Assign to Patients</h3>
-                          <p className="text-muted-foreground mb-4">
-                            Assign this exercise program to your patients and track their progress
-                          </p>
-                          <Button disabled>
-                            <Users className="h-4 w-4 mr-2" />
-                            Coming Soon
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
+                  <TabsContent value="preview" className="mt-4">
+                    <div className="space-y-4">
+                      <h3 className="font-semibold">Program Overview</h3>
+                      <div className="grid grid-cols-2 gap-4">
+                        <Card>
+                          <CardContent className="p-4">
+                            <div className="flex items-center gap-2">
+                              <Calendar className="h-4 w-4 text-muted-foreground" />
+                              <span className="text-sm font-medium">Total Days</span>
+                            </div>
+                            <p className="text-2xl font-bold mt-2">{maxDays}</p>
+                          </CardContent>
+                        </Card>
+                        <Card>
+                          <CardContent className="p-4">
+                            <div className="flex items-center gap-2">
+                              <Dumbbell className="h-4 w-4 text-muted-foreground" />
+                              <span className="text-sm font-medium">Total Exercises</span>
+                            </div>
+                            <p className="text-2xl font-bold mt-2">
+                              {selectedProgram.exercises?.length || 0}
+                            </p>
+                          </CardContent>
+                        </Card>
+                      </div>
+                      
+                      {/* Exercise Distribution */}
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-base">Exercise Distribution</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-2">
+                            {Object.entries(exercisesByDay).map(([day, exercises]) => (
+                              <div key={day} className="flex items-center justify-between">
+                                <span className="text-sm">Day {day}</span>
+                                <div className="flex items-center gap-2">
+                                  <div className="w-32 bg-muted rounded-full h-2">
+                                    <div
+                                      className="bg-primary rounded-full h-2"
+                                      style={{ width: `${(exercises.length / (selectedProgram.exercises?.length || 1)) * 100}%` }}
+                                    />
+                                  </div>
+                                  <span className="text-sm text-muted-foreground">{exercises.length}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
                   </TabsContent>
                 </Tabs>
               </CardContent>
             </Card>
           ) : (
             <Card>
-              <CardContent className="p-12">
-                <div className="text-center">
-                  <Dumbbell className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-                  <h2 className="text-xl font-semibold mb-2">Select or Create a Program</h2>
-                  <p className="text-muted-foreground">
-                    Choose a program from the list or create a new one to get started
-                  </p>
-                </div>
+              <CardContent className="flex flex-col items-center justify-center py-16">
+                <Dumbbell className="h-12 w-12 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No Program Selected</h3>
+                <p className="text-muted-foreground text-center">
+                  Select a program from the list or create a new one to get started
+                </p>
               </CardContent>
             </Card>
           )}
@@ -659,129 +799,235 @@ export default function ExerciseProgramBuilder() {
         <DialogContent className="max-w-4xl max-h-[80vh]">
           <DialogHeader>
             <DialogTitle>Browse Exercise Database</DialogTitle>
-            <p className="text-sm text-muted-foreground mt-1">
-              Search over 1300 exercises with animated demonstrations from ExerciseDB
-            </p>
           </DialogHeader>
+          
+          {selectedProgram && (
+            <div className="mb-4 p-3 bg-accent rounded-lg">
+              <p className="text-sm font-medium">
+                Adding exercises to: <span className="font-bold">{selectedProgram.name}</span>
+              </p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Select day: 
+                <Select value={selectedDay.toString()} onValueChange={(v) => setSelectedDay(parseInt(v))}>
+                  <SelectTrigger className="w-24 h-7 ml-2 inline-flex">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[...Array(maxDays)].map((_, i) => (
+                      <SelectItem key={i + 1} value={(i + 1).toString()}>
+                        Day {i + 1}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </p>
+            </div>
+          )}
+          
+          {/* Search Filters */}
           <div className="space-y-4">
             <div className="flex gap-2">
-              <div className="flex-1">
-                <Input
-                  placeholder="Search by exercise name..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      searchExercises();
-                    }
-                  }}
-                />
-              </div>
-              <Select value={selectedBodyPart || "all"} onValueChange={(value) => {
-                setSelectedBodyPart(value === "all" ? "" : value);
-              }}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Body Part" />
+              <Input
+                placeholder="Search exercises..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="flex-1"
+              />
+              <Button onClick={searchExercises} disabled={searchLoading}>
+                <Search className="h-4 w-4 mr-2" />
+                Search
+              </Button>
+            </div>
+            
+            <div className="grid grid-cols-3 gap-2">
+              <Select value={selectedBodyPart} onValueChange={setSelectedBodyPart}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All Body Parts" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Body Parts</SelectItem>
                   {filters?.bodyParts?.map((part: string) => (
                     <SelectItem key={part} value={part}>
-                      {part.charAt(0).toUpperCase() + part.slice(1)}
+                      {part}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <Select value={selectedEquipment || "all"} onValueChange={(value) => {
-                setSelectedEquipment(value === "all" ? "" : value);
-              }}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Equipment" />
+              
+              <Select value={selectedEquipment} onValueChange={setSelectedEquipment}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All Equipment" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Equipment</SelectItem>
-                  {filters?.equipment?.map((item: string) => (
-                    <SelectItem key={item} value={item}>
-                      {item.charAt(0).toUpperCase() + item.slice(1)}
+                  {filters?.equipment?.map((equip: string) => (
+                    <SelectItem key={equip} value={equip}>
+                      {equip}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <Button onClick={() => searchExercises()}>
-                <Search className="h-4 w-4 mr-2" />
-                Search
-              </Button>
+              
+              <Select value={selectedTarget} onValueChange={setSelectedTarget}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All Targets" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Targets</SelectItem>
+                  {filters?.targets?.map((target: string) => (
+                    <SelectItem key={target} value={target}>
+                      {target}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-
-            <ScrollArea className="h-[400px]">
-              {syncExercisesMutation.isPending ? (
-                <div className="text-center py-8">Syncing exercise database...</div>
-              ) : searchLoading ? (
-                <div className="text-center py-8">Searching exercises...</div>
-              ) : searchResults && searchResults.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {searchResults.map((exercise: any) => (
-                    <Card key={exercise.id || exercise.externalId}>
-                      <CardContent className="p-4">
-                        <div className="flex gap-3">
-                          {exercise.gifUrl && (
-                            <img 
-                              src={exercise.gifUrl} 
-                              alt={exercise.name}
-                              className="w-20 h-20 object-cover rounded"
-                              loading="lazy"
-                              onError={(e) => {
-                                // Hide image if it fails to load
-                                (e.target as HTMLImageElement).style.display = 'none';
-                              }}
-                            />
-                          )}
-                          <div className="flex-1">
-                            <h4 className="font-semibold">{exercise.name}</h4>
-                            <div className="flex flex-wrap gap-1 mt-1">
+          </div>
+          
+          {/* Search Results */}
+          <ScrollArea className="h-[400px] mt-4">
+            {searchLoading ? (
+              <div className="text-center py-8">Loading exercises...</div>
+            ) : searchResults.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {searchResults.map((exercise: any) => (
+                  <Card key={exercise.id} className="overflow-hidden">
+                    <CardContent className="p-3">
+                      <div className="flex gap-3">
+                        {exercise.gifUrl && (
+                          <img
+                            src={exercise.gifUrl}
+                            alt={exercise.name}
+                            className="w-20 h-20 object-cover rounded"
+                          />
+                        )}
+                        <div className="flex-1">
+                          <h4 className="font-semibold text-sm">{exercise.name}</h4>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {exercise.bodyPart && (
                               <Badge variant="secondary" className="text-xs">
                                 {exercise.bodyPart}
                               </Badge>
+                            )}
+                            {exercise.target && (
                               <Badge variant="outline" className="text-xs">
                                 {exercise.target}
                               </Badge>
-                              <Badge variant="outline" className="text-xs">
-                                {exercise.equipment}
-                              </Badge>
-                              {exercise.difficulty && (
-                                <Badge variant="outline" className="text-xs">
-                                  {exercise.difficulty}
-                                </Badge>
-                              )}
-                            </div>
-                            {exercise.instructions && Array.isArray(exercise.instructions) && (
-                              <p className="text-sm text-muted-foreground mt-2 line-clamp-2">
-                                {exercise.instructions[0]}
-                              </p>
                             )}
                           </div>
-                          <Button
-                            size="sm"
-                            onClick={() => {
-                              handleAddExercise(exercise);
-                              setIsExerciseSearchOpen(false);
-                            }}
-                          >
-                            <Plus className="h-4 w-4" />
-                          </Button>
+                          {selectedProgram && (
+                            <Button
+                              size="sm"
+                              className="mt-2"
+                              onClick={() => handleAddExercise(exercise)}
+                            >
+                              <Plus className="h-3 w-3 mr-1" />
+                              Add to Day {selectedDay}
+                            </Button>
+                          )}
                         </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  <p className="mb-2">Select filters and click search to browse exercises</p>
-                  <p className="text-sm">Or type an exercise name to search directly</p>
-                </div>
-              )}
-            </ScrollArea>
-          </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                {hasSyncedExercises ? "No exercises found. Try adjusting your search." : "Click search to load exercises."}
+              </div>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Exercise Dialog */}
+      <Dialog open={!!editingExercise} onOpenChange={() => setEditingExercise(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Exercise Details</DialogTitle>
+          </DialogHeader>
+          {editingExercise && (
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="edit-sets">Sets</Label>
+                <Input
+                  id="edit-sets"
+                  type="number"
+                  value={editingExercise.sets}
+                  onChange={(e) => setEditingExercise({
+                    ...editingExercise,
+                    sets: parseInt(e.target.value) || 3,
+                  })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-reps">Reps</Label>
+                <Input
+                  id="edit-reps"
+                  value={editingExercise.reps}
+                  onChange={(e) => setEditingExercise({
+                    ...editingExercise,
+                    reps: e.target.value,
+                  })}
+                  placeholder="e.g., 10-12, 8, to failure"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-rest">Rest Time (seconds)</Label>
+                <Input
+                  id="edit-rest"
+                  type="number"
+                  value={editingExercise.restTime}
+                  onChange={(e) => setEditingExercise({
+                    ...editingExercise,
+                    restTime: parseInt(e.target.value) || 60,
+                  })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-day">Day</Label>
+                <Select
+                  value={editingExercise.day.toString()}
+                  onValueChange={(v) => setEditingExercise({
+                    ...editingExercise,
+                    day: parseInt(v),
+                  })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[...Array(maxDays)].map((_, i) => (
+                      <SelectItem key={i + 1} value={(i + 1).toString()}>
+                        Day {i + 1}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="edit-notes">Notes</Label>
+                <Textarea
+                  id="edit-notes"
+                  value={editingExercise.notes}
+                  onChange={(e) => setEditingExercise({
+                    ...editingExercise,
+                    notes: e.target.value,
+                  })}
+                  placeholder="e.g., Focus on slow eccentric, keep core tight"
+                />
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setEditingExercise(null)}>
+                  Cancel
+                </Button>
+                <Button onClick={saveExerciseEdits}>
+                  <Save className="h-4 w-4 mr-2" />
+                  Save Changes
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

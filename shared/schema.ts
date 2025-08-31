@@ -3848,6 +3848,7 @@ export const programExercises = pgTable("program_exercises", {
   reps: text("reps"), // Can be range like "8-12"
   duration: text("duration"), // For timed exercises
   restTime: integer("rest_time"), // in seconds
+  day: integer("day").default(1), // Day of the program (1, 2, 3, etc.)
   orderIndex: integer("order_index").notNull(), // Order in program
   notes: text("notes"),
   progressionNotes: text("progression_notes"),

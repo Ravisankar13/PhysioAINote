@@ -12,9 +12,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
-import { Plus, Search, GripVertical, Edit, Trash2, Copy, Globe, Lock, Users, Dumbbell, Clock, Target, ChevronRight, X, Calendar, Save } from "lucide-react";
+import { Plus, Search, GripVertical, Edit, Trash2, Copy, Globe, Lock, Users, Dumbbell, Clock, Target, ChevronRight, X, Calendar, Save, Download } from "lucide-react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import type { ExerciseProgram, ProgramExercise } from "@shared/schema";
+import jsPDF from "jspdf";
 
 interface ExerciseProgramWithExercises extends ExerciseProgram {
   exercises: ProgramExercise[];
@@ -303,6 +304,162 @@ export default function ExerciseProgramBuilder() {
     return acc;
   }, {} as Record<number, ProgramExercise[]>) || {};
 
+  // Generate PDF of the exercise program
+  const generatePDF = () => {
+    if (!selectedProgram) return;
+
+    const doc = new jsPDF();
+    let yPosition = 20;
+    const lineHeight = 7;
+    const pageHeight = 280;
+    
+    // Title
+    doc.setFontSize(20);
+    doc.setFont("helvetica", "bold");
+    doc.text(selectedProgram.name, 20, yPosition);
+    yPosition += 15;
+    
+    // Program details
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "normal");
+    
+    if (selectedProgram.description) {
+      const lines = doc.splitTextToSize(selectedProgram.description, 170);
+      doc.text(lines, 20, yPosition);
+      yPosition += lines.length * lineHeight + 5;
+    }
+    
+    // Program metadata
+    doc.setFontSize(10);
+    if (selectedProgram.bodyPart) {
+      doc.text(`Body Part: ${selectedProgram.bodyPart}`, 20, yPosition);
+      yPosition += lineHeight;
+    }
+    if (selectedProgram.difficulty) {
+      doc.text(`Difficulty: ${selectedProgram.difficulty}`, 20, yPosition);
+      yPosition += lineHeight;
+    }
+    if (selectedProgram.duration) {
+      doc.text(`Duration: ${selectedProgram.duration} minutes`, 20, yPosition);
+      yPosition += lineHeight;
+    }
+    if (selectedProgram.frequency) {
+      doc.text(`Frequency: ${selectedProgram.frequency}`, 20, yPosition);
+      yPosition += lineHeight;
+    }
+    
+    yPosition += 10;
+    
+    // Exercises by day
+    for (let day = 1; day <= maxDays; day++) {
+      const dayExercises = exercisesByDay[day] || [];
+      
+      // Check if we need a new page
+      if (yPosition > pageHeight - 50) {
+        doc.addPage();
+        yPosition = 20;
+      }
+      
+      // Day header
+      doc.setFontSize(14);
+      doc.setFont("helvetica", "bold");
+      doc.text(`Day ${day}`, 20, yPosition);
+      yPosition += 10;
+      
+      if (dayExercises.length === 0) {
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "italic");
+        doc.text("Rest day or no exercises assigned", 25, yPosition);
+        yPosition += lineHeight + 5;
+      } else {
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "normal");
+        
+        dayExercises.forEach((exercise, index) => {
+          // Check if we need a new page
+          if (yPosition > pageHeight - 30) {
+            doc.addPage();
+            yPosition = 20;
+          }
+          
+          // Exercise number and name
+          doc.setFont("helvetica", "bold");
+          doc.text(`${index + 1}. ${exercise.name}`, 25, yPosition);
+          yPosition += lineHeight;
+          
+          // Exercise details
+          doc.setFont("helvetica", "normal");
+          const details = [];
+          if (exercise.sets) details.push(`Sets: ${exercise.sets}`);
+          if (exercise.reps) details.push(`Reps: ${exercise.reps}`);
+          if (exercise.restTime) details.push(`Rest: ${exercise.restTime}s`);
+          if (details.length > 0) {
+            doc.text(details.join(" | "), 30, yPosition);
+            yPosition += lineHeight;
+          }
+          
+          // Exercise metadata
+          const metadata = [];
+          if (exercise.bodyPart) metadata.push(`Body Part: ${exercise.bodyPart}`);
+          if (exercise.target) metadata.push(`Target: ${exercise.target}`);
+          if (exercise.equipment) metadata.push(`Equipment: ${exercise.equipment}`);
+          if (metadata.length > 0) {
+            doc.setFontSize(9);
+            doc.text(metadata.join(" | "), 30, yPosition);
+            yPosition += lineHeight;
+            doc.setFontSize(10);
+          }
+          
+          // Notes
+          if (exercise.notes) {
+            doc.setFont("helvetica", "italic");
+            const noteLines = doc.splitTextToSize(`Notes: ${exercise.notes}`, 160);
+            doc.text(noteLines, 30, yPosition);
+            yPosition += noteLines.length * lineHeight;
+            doc.setFont("helvetica", "normal");
+          }
+          
+          // Instructions (if available)
+          if (exercise.instructions && Array.isArray(exercise.instructions)) {
+            doc.setFontSize(9);
+            doc.setFont("helvetica", "italic");
+            doc.text("Instructions:", 30, yPosition);
+            yPosition += lineHeight - 1;
+            
+            exercise.instructions.forEach((instruction: string, i: number) => {
+              if (yPosition > pageHeight - 10) {
+                doc.addPage();
+                yPosition = 20;
+              }
+              const instLines = doc.splitTextToSize(`${i + 1}. ${instruction}`, 155);
+              doc.text(instLines, 35, yPosition);
+              yPosition += instLines.length * (lineHeight - 1);
+            });
+            doc.setFontSize(10);
+            doc.setFont("helvetica", "normal");
+          }
+          
+          yPosition += 8;
+        });
+      }
+      
+      yPosition += 5;
+    }
+    
+    // Footer
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "italic");
+    doc.text(`Generated from PhysioGPT - ${new Date().toLocaleDateString()}`, 20, 285);
+    
+    // Save the PDF
+    doc.save(`${selectedProgram.name.replace(/[^a-z0-9]/gi, '_')}_program.pdf`);
+    
+    toast({
+      title: "Success",
+      description: "Exercise program PDF downloaded successfully",
+    });
+  };
+
   return (
     <div className="container mx-auto p-6 max-w-7xl">
       <div className="flex justify-between items-center mb-6">
@@ -522,6 +679,14 @@ export default function ExerciseProgramBuilder() {
                     </div>
                   </div>
                   <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={generatePDF}
+                    >
+                      <Download className="h-4 w-4 mr-1" />
+                      Download PDF
+                    </Button>
                     <Button
                       variant="outline"
                       size="sm"

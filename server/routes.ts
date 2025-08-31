@@ -14517,6 +14517,23 @@ Respond in JSON format:
     }
   });
   
+  // Sync knee rehabilitation exercises
+  app.post("/api/exercises/sync-knee", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { KneeRehabExerciseService } = await import('./kneeRehabExerciseService');
+      const kneeService = new KneeRehabExerciseService();
+      await kneeService.syncToDatabase();
+      
+      res.json({ 
+        message: 'Knee rehabilitation exercises synced successfully',
+        success: true
+      });
+    } catch (error) {
+      console.error('Error syncing knee exercises:', error);
+      res.status(500).json({ error: 'Failed to sync knee exercises' });
+    }
+  });
+  
   // Get exercise categories and filters
   app.get("/api/exercises/filters", async (req: Request, res: Response) => {
     try {

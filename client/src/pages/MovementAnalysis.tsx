@@ -2684,6 +2684,219 @@ export default function MovementAnalysis() {
               </>
             )}
 
+            {/* Running Gait Analysis Cards - Comprehensive Metrics */}
+            {selectedTest?.id === 'running-gait' && runningMetrics && (
+              <>
+                {/* Primary Metrics Row */}
+                <Card className="bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20">
+                  <CardContent className="p-4">
+                    <h4 className="text-sm font-semibold mb-3">PRIMARY METRICS</h4>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <span className="text-gray-600">Cadence:</span>
+                        <span className="font-bold ml-1">{runningMetrics.cadence} spm</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Stride Length:</span>
+                        <span className="font-bold ml-1">{runningMetrics.strideLength}m</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Step Width:</span>
+                        <span className="font-bold ml-1">{(runningMetrics.stepWidth * 100).toFixed(1)}cm</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Efficiency:</span>
+                        <span className="font-bold ml-1">{runningMetrics.efficiency}%</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Ground Contact Metrics */}
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <h4 className="text-sm font-semibold">GROUND CONTACT</h4>
+                      <Badge variant={runningMetrics.groundContactTime < 250 ? 'default' : 'secondary'}>
+                        {runningMetrics.groundContactTime < 250 ? '✓ OPTIMAL' : '⚠ LONG'}
+                      </Badge>
+                    </div>
+                    <div className="text-2xl font-bold">{runningMetrics.groundContactTime}ms</div>
+                    <div className="text-xs text-gray-600 mt-1">
+                      Flight: {runningMetrics.flightTime}ms | Ratio: {runningMetrics.contactTimeRatio}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Foot Strike Pattern */}
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <h4 className="text-sm font-semibold">FOOT STRIKE</h4>
+                      <Badge variant={runningMetrics.footStrike === 'midfoot' ? 'default' : 'secondary'}>
+                        {runningMetrics.footStrike.toUpperCase()}
+                      </Badge>
+                    </div>
+                    <div className="text-xs text-gray-600">
+                      Angle: {runningMetrics.footStrikeAngle}°
+                      {runningMetrics.overstriding && (
+                        <span className="text-red-600 ml-2">⚠ Overstriding</span>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Vertical Oscillation */}
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <h4 className="text-sm font-semibold">VERTICAL OSCILLATION</h4>
+                      <Badge variant={runningMetrics.verticalOscillation < 10 ? 'default' : 'secondary'}>
+                        {runningMetrics.verticalOscillation < 10 ? '✓ GOOD' : '⚠ HIGH'}
+                      </Badge>
+                    </div>
+                    <div className="text-2xl font-bold">{runningMetrics.verticalOscillation}cm</div>
+                    <div className="text-xs text-gray-600">
+                      V-Ratio: {(runningMetrics.verticalRatio * 100).toFixed(1)}%
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Joint Angles */}
+                <Card className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20">
+                  <CardContent className="p-4">
+                    <h4 className="text-sm font-semibold mb-3">JOINT ANGLES</h4>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <span className="text-gray-600">Knee Flexion:</span>
+                        <span className="font-bold ml-1">{runningMetrics.kneeFlexion}°</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Hip Extension:</span>
+                        <span className="font-bold ml-1">{runningMetrics.hipExtension}°</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Ankle Angle:</span>
+                        <span className="font-bold ml-1">{runningMetrics.ankleAngle}°</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Trunk Lean:</span>
+                        <span className="font-bold ml-1">{runningMetrics.trunkLean}°</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Body Position */}
+                <Card>
+                  <CardContent className="p-4">
+                    <h4 className="text-sm font-semibold mb-3">BODY POSITION</h4>
+                    <div className="space-y-1 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Lateral Lean:</span>
+                        <span className="font-bold">{runningMetrics.lateralLean}°</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Pelvic Drop:</span>
+                        <span className="font-bold">{runningMetrics.pelvicDrop}°</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Pelvic Rotation:</span>
+                        <span className="font-bold">{runningMetrics.pelvicRotation}°</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Symmetry Analysis */}
+                <Card className={runningMetrics.stepLengthAsymmetry > 10 || runningMetrics.contactTimeAsymmetry > 10 ? 'border-yellow-400 border-2' : ''}>
+                  <CardContent className="p-4">
+                    <h4 className="text-sm font-semibold mb-3">SYMMETRY</h4>
+                    <div className="space-y-2">
+                      <div className="text-xs">
+                        <div className="flex justify-between mb-1">
+                          <span className="text-gray-600">Step Length:</span>
+                          <span className="font-bold">{runningMetrics.stepLengthAsymmetry}%</span>
+                        </div>
+                        <Progress value={100 - runningMetrics.stepLengthAsymmetry} className="h-1.5" />
+                      </div>
+                      <div className="text-xs">
+                        <div className="flex justify-between mb-1">
+                          <span className="text-gray-600">Contact Time:</span>
+                          <span className="font-bold">{runningMetrics.contactTimeAsymmetry}%</span>
+                        </div>
+                        <Progress value={100 - runningMetrics.contactTimeAsymmetry} className="h-1.5" />
+                      </div>
+                      <div className="text-xs">
+                        <div className="flex justify-between mb-1">
+                          <span className="text-gray-600">Arm Swing:</span>
+                          <span className="font-bold">{runningMetrics.armSwingSymmetry}%</span>
+                        </div>
+                        <Progress value={runningMetrics.armSwingSymmetry} className="h-1.5" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Dynamic Metrics */}
+                <Card>
+                  <CardContent className="p-4">
+                    <h4 className="text-sm font-semibold mb-3">DYNAMIC METRICS</h4>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <span className="text-gray-600">Leg Stiffness:</span>
+                        <span className="font-bold ml-1">{runningMetrics.legStiffness}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Power:</span>
+                        <span className="font-bold ml-1">{runningMetrics.propulsivePower}</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Issues & Recommendations */}
+                <Card className="bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-900/20 dark:to-red-900/20">
+                  <CardContent className="p-4">
+                    <h4 className="text-sm font-semibold mb-2">KEY ISSUES</h4>
+                    <div className="space-y-1 text-xs">
+                      {runningMetrics.overstriding && (
+                        <div className="flex items-center text-red-600">
+                          <span className="mr-2">⚠</span>
+                          <span>Overstriding detected - increase cadence</span>
+                        </div>
+                      )}
+                      {runningMetrics.crossoverGait && (
+                        <div className="flex items-center text-yellow-600">
+                          <span className="mr-2">⚠</span>
+                          <span>Crossover gait - widen step width</span>
+                        </div>
+                      )}
+                      {runningMetrics.verticalOscillation > 10 && (
+                        <div className="flex items-center text-yellow-600">
+                          <span className="mr-2">⚠</span>
+                          <span>High vertical oscillation - reduce bounce</span>
+                        </div>
+                      )}
+                      {runningMetrics.stepLengthAsymmetry > 10 && (
+                        <div className="flex items-center text-yellow-600">
+                          <span className="mr-2">⚠</span>
+                          <span>Step length asymmetry - check for injury</span>
+                        </div>
+                      )}
+                      {!runningMetrics.overstriding && !runningMetrics.crossoverGait && 
+                       runningMetrics.verticalOscillation <= 10 && runningMetrics.stepLengthAsymmetry <= 10 && (
+                        <div className="flex items-center text-green-600">
+                          <span className="mr-2">✓</span>
+                          <span>Good running form maintained</span>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+
             {/* Gait Analysis Cards */}
             {selectedTest?.id === 'gait-analysis' && (
               <>

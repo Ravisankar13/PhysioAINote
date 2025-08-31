@@ -1,33 +1,83 @@
 import { NormalizedLandmark } from '@mediapipe/pose';
 
 export interface RunningMetrics {
+  // Primary metrics
   cadence: number; // steps per minute
-  strideLength: number; // relative stride length
-  verticalOscillation: number; // bounce in running
-  groundContactTime: number; // estimated contact time
+  stepRate: number; // steps per minute (same as cadence, for clarity)
+  strideLength: number; // distance between same foot strikes (meters)
+  stepLength: number; // distance between opposite foot strikes (meters)
+  stepWidth: number; // lateral distance between feet (meters)
+  
+  // Temporal metrics
+  groundContactTime: number; // milliseconds on ground
+  flightTime: number; // milliseconds in air
+  contactTimeRatio: number; // ground/flight time ratio
+  
+  // Foot strike and landing
   footStrike: 'heel' | 'midfoot' | 'forefoot';
+  footStrikeAngle: number; // angle of foot at contact (degrees)
+  
+  // Vertical mechanics
+  verticalOscillation: number; // vertical bounce (cm)
+  verticalRatio: number; // vertical oscillation / stride length
+  
+  // Joint angles
   kneeFlexion: number; // knee angle at foot strike
   hipExtension: number; // hip extension angle
-  trunkLean: number; // forward/backward lean
+  ankleAngle: number; // ankle dorsiflexion/plantarflexion
+  
+  // Body position
+  trunkLean: number; // forward/backward lean (degrees)
+  lateralLean: number; // side-to-side lean (degrees)
+  pelvicDrop: number; // hip drop during stance
+  pelvicRotation: number; // pelvis rotation (degrees)
+  
+  // Symmetry metrics
+  stepLengthAsymmetry: number; // % difference left vs right
+  contactTimeAsymmetry: number; // % difference left vs right
   armSwingSymmetry: number; // arm swing balance
+  
+  // Efficiency indicators
   crossoverGait: boolean; // feet crossing midline
   overstriding: boolean; // landing too far ahead
-  pelvicDrop: number; // hip drop during stance
+  efficiency: number; // overall running efficiency score (0-100)
+  
+  // Dynamic metrics
+  legStiffness: number; // spring-like leg behavior
+  propulsivePower: number; // push-off power estimate
 }
 
 interface StepData {
   timestamp: number;
   footPosition: 'left' | 'right';
   landmarks: NormalizedLandmark[];
+  isGroundContact: boolean;
+  footStrikeType?: 'heel' | 'midfoot' | 'forefoot';
+  hipY?: number;
+  ankleX?: number;
+  ankleY?: number;
 }
 
-// Store previous frames for cadence calculation
+// Enhanced tracking for comprehensive metrics
 let stepHistory: StepData[] = [];
 let lastLeftFootY = 0;
 let lastRightFootY = 0;
 let leftStepCount = 0;
 let rightStepCount = 0;
 let analysisStartTime = Date.now();
+
+// Additional tracking for new metrics
+let leftGroundContactStart = 0;
+let rightGroundContactStart = 0;
+let leftFlightStart = 0;
+let rightFlightStart = 0;
+let leftContactTimes: number[] = [];
+let rightContactTimes: number[] = [];
+let leftStepLengths: number[] = [];
+let rightStepLengths: number[] = [];
+let verticalPositions: number[] = [];
+let lastLeftStrikeX = 0;
+let lastRightStrikeX = 0;
 
 export function analyzeRunningMechanics(landmarks: NormalizedLandmark[]): RunningMetrics {
   const currentTime = Date.now();
@@ -51,98 +101,402 @@ export function analyzeRunningMechanics(landmarks: NormalizedLandmark[]): Runnin
   const LEFT_TOE = 31;
   const RIGHT_TOE = 32;
   const NOSE = 0;
+  
+  // Calculate hip midpoint for reference
+  const hipMidpointX = (landmarks[LEFT_HIP].x + landmarks[RIGHT_HIP].x) / 2;
+  const hipMidpointY = (landmarks[LEFT_HIP].y + landmarks[RIGHT_HIP].y) / 2;
 
-  // Detect steps (when foot passes highest point and starts descending)
+  // Enhanced step detection with ground contact tracking
   const leftFootY = landmarks[LEFT_ANKLE].y;
   const rightFootY = landmarks[RIGHT_ANKLE].y;
+  const leftFootX = landmarks[LEFT_ANKLE].x;
+  const rightFootX = landmarks[RIGHT_ANKLE].x;
   
-  // Count steps based on foot movement
-  if (lastLeftFootY < leftFootY && leftFootY > rightFootY) {
+  // Detect ground contact (foot at lowest point with minimal vertical movement)
+  const leftFootVelocity = leftFootY - lastLeftFootY;
+  const rightFootVelocity = rightFootY - lastRightFootY;
+  const velocityThreshold = 0.002; // Threshold for detecting ground contact
+  
+  // Left foot strike detection
+  if (lastLeftFootY > leftFootY && Math.abs(leftFootVelocity) < velocityThreshold) {
     leftStepCount++;
+    
+    // Calculate step length from last right strike
+    if (lastRightStrikeX > 0) {
+      const stepLength = Math.abs(leftFootX - lastRightStrikeX);
+      leftStepLengths.push(stepLength);
+    }
+    lastLeftStrikeX = leftFootX;
+    
+    // Record ground contact start
+    leftGroundContactStart = currentTime;
+    
+    // Determine foot strike type
+    const footStrikeType = determineFootStrike(landmarks);
+    
     stepHistory.push({
       timestamp: currentTime,
       footPosition: 'left',
-      landmarks: [...landmarks]
+      landmarks: [...landmarks],
+      isGroundContact: true,
+      footStrikeType,
+      hipY: hipMidpointY,
+      ankleX: leftFootX,
+      ankleY: leftFootY
     });
   }
   
-  if (lastRightFootY < rightFootY && rightFootY > leftFootY) {
+  // Right foot strike detection
+  if (lastRightFootY > rightFootY && Math.abs(rightFootVelocity) < velocityThreshold) {
     rightStepCount++;
+    
+    // Calculate step length from last left strike
+    if (lastLeftStrikeX > 0) {
+      const stepLength = Math.abs(rightFootX - lastLeftStrikeX);
+      rightStepLengths.push(stepLength);
+    }
+    lastRightStrikeX = rightFootX;
+    
+    // Record ground contact start
+    rightGroundContactStart = currentTime;
+    
+    // Determine foot strike type
+    const footStrikeType = determineFootStrike(landmarks);
+    
     stepHistory.push({
       timestamp: currentTime,
       footPosition: 'right',
-      landmarks: [...landmarks]
+      landmarks: [...landmarks],
+      isGroundContact: true,
+      footStrikeType,
+      hipY: hipMidpointY,
+      ankleX: rightFootX,
+      ankleY: rightFootY
     });
+  }
+  
+  // Detect toe-off (when foot leaves ground)
+  if (leftFootVelocity < -velocityThreshold && leftGroundContactStart > 0) {
+    const contactTime = currentTime - leftGroundContactStart;
+    leftContactTimes.push(contactTime);
+    leftGroundContactStart = 0;
+    leftFlightStart = currentTime;
+  }
+  
+  if (rightFootVelocity < -velocityThreshold && rightGroundContactStart > 0) {
+    const contactTime = currentTime - rightGroundContactStart;
+    rightContactTimes.push(contactTime);
+    rightGroundContactStart = 0;
+    rightFlightStart = currentTime;
   }
 
   lastLeftFootY = leftFootY;
   lastRightFootY = rightFootY;
+  
+  // Track vertical position for oscillation
+  verticalPositions.push(hipMidpointY);
 
   // Clean old step data (keep last 10 seconds)
   stepHistory = stepHistory.filter(step => currentTime - step.timestamp < 10000);
+  leftContactTimes = leftContactTimes.slice(-20); // Keep last 20 values
+  rightContactTimes = rightContactTimes.slice(-20);
+  leftStepLengths = leftStepLengths.slice(-20);
+  rightStepLengths = rightStepLengths.slice(-20);
+  verticalPositions = verticalPositions.slice(-100); // Keep last 100 frames
 
   // Calculate cadence (steps per minute)
   const totalSteps = leftStepCount + rightStepCount;
   const cadence = elapsedSeconds > 0 ? (totalSteps / elapsedSeconds) * 60 : 0;
+  const stepRate = cadence; // Same as cadence, for clarity
 
-  // Calculate stride length (relative to leg length)
-  const legLength = Math.sqrt(
-    Math.pow(landmarks[LEFT_HIP].x - landmarks[LEFT_ANKLE].x, 2) +
-    Math.pow(landmarks[LEFT_HIP].y - landmarks[LEFT_ANKLE].y, 2)
-  );
+  // Calculate average ground contact time (milliseconds)
+  const avgLeftContactTime = leftContactTimes.length > 0 
+    ? leftContactTimes.reduce((a, b) => a + b, 0) / leftContactTimes.length 
+    : 250; // Default 250ms
+  const avgRightContactTime = rightContactTimes.length > 0
+    ? rightContactTimes.reduce((a, b) => a + b, 0) / rightContactTimes.length
+    : 250;
+  const groundContactTime = (avgLeftContactTime + avgRightContactTime) / 2;
   
-  const strideLength = stepHistory.length >= 2 
-    ? Math.abs(stepHistory[stepHistory.length - 1].landmarks[LEFT_ANKLE].x - 
-               stepHistory[stepHistory.length - 2].landmarks[LEFT_ANKLE].x) / legLength
+  // Calculate flight time (estimated from cadence and contact time)
+  const stepDuration = cadence > 0 ? 60000 / cadence : 350; // ms per step
+  const flightTime = Math.max(0, stepDuration - groundContactTime);
+  const contactTimeRatio = flightTime > 0 ? groundContactTime / flightTime : 1;
+
+  // Calculate step metrics
+  const avgLeftStepLength = leftStepLengths.length > 0
+    ? leftStepLengths.reduce((a, b) => a + b, 0) / leftStepLengths.length
+    : 0;
+  const avgRightStepLength = rightStepLengths.length > 0
+    ? rightStepLengths.reduce((a, b) => a + b, 0) / rightStepLengths.length
+    : 0;
+  const stepLength = (avgLeftStepLength + avgRightStepLength) / 2; // In normalized units
+  const strideLength = stepLength * 2; // Stride = 2 steps
+  
+  // Calculate step width (lateral distance between feet)
+  const stepWidth = Math.abs(leftFootX - rightFootX);
+  
+  // Calculate vertical oscillation
+  const maxY = Math.max(...verticalPositions.slice(-20));
+  const minY = Math.min(...verticalPositions.slice(-20));
+  const verticalOscillation = (maxY - minY) * 100; // Convert to cm (approximate)
+  const verticalRatio = strideLength > 0 ? verticalOscillation / (strideLength * 100) : 0;
+  
+  // Calculate asymmetry metrics
+  const stepLengthAsymmetry = avgLeftStepLength > 0 && avgRightStepLength > 0
+    ? Math.abs(avgLeftStepLength - avgRightStepLength) / ((avgLeftStepLength + avgRightStepLength) / 2) * 100
+    : 0;
+  const contactTimeAsymmetry = avgLeftContactTime > 0 && avgRightContactTime > 0
+    ? Math.abs(avgLeftContactTime - avgRightContactTime) / ((avgLeftContactTime + avgRightContactTime) / 2) * 100
     : 0;
 
-  // Calculate vertical oscillation (bounce)
-  const hipMidpointY = (landmarks[LEFT_HIP].y + landmarks[RIGHT_HIP].y) / 2;
-  const verticalOscillation = stepHistory.length >= 2
-    ? Math.abs(hipMidpointY - stepHistory[stepHistory.length - 2].landmarks[LEFT_HIP].y) * 100
-    : 0;
-
-  // Determine foot strike pattern
+  // Determine foot strike pattern and angle
   const footStrike = determineFootStrike(landmarks);
+  const footStrikeAngle = calculateFootStrikeAngle(landmarks);
 
-  // Calculate knee flexion at foot strike
+  // Calculate joint angles
   const kneeFlexion = calculateKneeFlexion(landmarks);
-
-  // Calculate hip extension
   const hipExtension = calculateHipExtension(landmarks);
+  const ankleAngle = calculateAnkleAngle(landmarks);
 
-  // Calculate trunk lean
+  // Calculate body position metrics
   const trunkLean = calculateTrunkLean(landmarks);
+  const lateralLean = calculateLateralLean(landmarks);
+  const pelvicRotation = calculatePelvicRotation(landmarks);
 
   // Calculate arm swing symmetry
   const armSwingSymmetry = calculateArmSwingSymmetry(landmarks);
 
-  // Check for crossover gait
-  const crossoverGait = detectCrossoverGait(landmarks);
+  // Check for crossover gait (feet crossing midline)
+  const crossoverGait = detectCrossoverGait(landmarks, hipMidpointX);
 
   // Check for overstriding
   const overstriding = detectOverstriding(landmarks);
+  
+  // Calculate leg stiffness (simplified spring model)
+  const legStiffness = calculateLegStiffness(verticalOscillation, groundContactTime);
+  
+  // Calculate propulsive power estimate
+  const propulsivePower = calculatePropulsivePower(strideLength, cadence, verticalOscillation);
+  
+  // Calculate overall efficiency score (0-100)
+  const efficiency = calculateRunningEfficiency({
+    cadence,
+    verticalRatio,
+    groundContactTime,
+    stepLengthAsymmetry,
+    contactTimeAsymmetry,
+    overstriding,
+    crossoverGait
+  });
 
   // Calculate pelvic drop
   const pelvicDrop = calculatePelvicDrop(landmarks);
 
-  // Estimate ground contact time (simplified)
-  const groundContactTime = estimateGroundContactTime(cadence);
-
   return {
+    // Primary metrics
     cadence: Math.round(cadence),
-    strideLength: Number(strideLength.toFixed(2)),
-    verticalOscillation: Number(verticalOscillation.toFixed(1)),
-    groundContactTime,
+    stepRate: Math.round(stepRate),
+    strideLength: Number(strideLength.toFixed(3)),
+    stepLength: Number(stepLength.toFixed(3)),
+    stepWidth: Number(stepWidth.toFixed(3)),
+    
+    // Temporal metrics
+    groundContactTime: Math.round(groundContactTime),
+    flightTime: Math.round(flightTime),
+    contactTimeRatio: Number(contactTimeRatio.toFixed(2)),
+    
+    // Foot strike and landing
     footStrike,
+    footStrikeAngle: Math.round(footStrikeAngle),
+    
+    // Vertical mechanics
+    verticalOscillation: Number(verticalOscillation.toFixed(1)),
+    verticalRatio: Number(verticalRatio.toFixed(3)),
+    
+    // Joint angles
     kneeFlexion: Math.round(kneeFlexion),
     hipExtension: Math.round(hipExtension),
+    ankleAngle: Math.round(ankleAngle),
+    
+    // Body position
     trunkLean: Number(trunkLean.toFixed(1)),
+    lateralLean: Number(lateralLean.toFixed(1)),
+    pelvicDrop: Number(pelvicDrop.toFixed(1)),
+    pelvicRotation: Number(pelvicRotation.toFixed(1)),
+    
+    // Symmetry metrics
+    stepLengthAsymmetry: Number(stepLengthAsymmetry.toFixed(1)),
+    contactTimeAsymmetry: Number(contactTimeAsymmetry.toFixed(1)),
     armSwingSymmetry: Number(armSwingSymmetry.toFixed(1)),
+    
+    // Efficiency indicators
     crossoverGait,
     overstriding,
-    pelvicDrop: Number(pelvicDrop.toFixed(1))
+    efficiency: Math.round(efficiency),
+    
+    // Dynamic metrics
+    legStiffness: Number(legStiffness.toFixed(1)),
+    propulsivePower: Number(propulsivePower.toFixed(1))
   };
+}
+
+// New helper functions for comprehensive metrics
+function calculateFootStrikeAngle(landmarks: NormalizedLandmark[]): number {
+  const LEFT_HEEL = 29;
+  const LEFT_TOE = 31;
+  const RIGHT_HEEL = 30;
+  const RIGHT_TOE = 32;
+  const LEFT_ANKLE = 27;
+  const RIGHT_ANKLE = 28;
+  
+  // Use the foot that's lower (in contact)
+  const leftFootLower = landmarks[LEFT_ANKLE].y > landmarks[RIGHT_ANKLE].y;
+  
+  if (leftFootLower) {
+    return Math.atan2(
+      landmarks[LEFT_TOE].y - landmarks[LEFT_HEEL].y,
+      landmarks[LEFT_TOE].x - landmarks[LEFT_HEEL].x
+    ) * (180 / Math.PI);
+  } else {
+    return Math.atan2(
+      landmarks[RIGHT_TOE].y - landmarks[RIGHT_HEEL].y,
+      landmarks[RIGHT_TOE].x - landmarks[RIGHT_HEEL].x
+    ) * (180 / Math.PI);
+  }
+}
+
+function calculateAnkleAngle(landmarks: NormalizedLandmark[]): number {
+  const LEFT_ANKLE = 27;
+  const LEFT_KNEE = 25;
+  const LEFT_TOE = 31;
+  const RIGHT_ANKLE = 28;
+  const RIGHT_KNEE = 26;
+  const RIGHT_TOE = 32;
+  
+  // Calculate for the leg with more knee flexion (stance leg)
+  const leftKneeY = landmarks[LEFT_KNEE].y;
+  const rightKneeY = landmarks[RIGHT_KNEE].y;
+  
+  if (leftKneeY > rightKneeY) {
+    // Left leg is stance
+    const shinVector = {
+      x: landmarks[LEFT_KNEE].x - landmarks[LEFT_ANKLE].x,
+      y: landmarks[LEFT_KNEE].y - landmarks[LEFT_ANKLE].y
+    };
+    const footVector = {
+      x: landmarks[LEFT_TOE].x - landmarks[LEFT_ANKLE].x,
+      y: landmarks[LEFT_TOE].y - landmarks[LEFT_ANKLE].y
+    };
+    
+    const dotProduct = shinVector.x * footVector.x + shinVector.y * footVector.y;
+    const shinMag = Math.sqrt(shinVector.x ** 2 + shinVector.y ** 2);
+    const footMag = Math.sqrt(footVector.x ** 2 + footVector.y ** 2);
+    
+    return Math.acos(dotProduct / (shinMag * footMag)) * (180 / Math.PI) - 90;
+  } else {
+    // Right leg is stance
+    const shinVector = {
+      x: landmarks[RIGHT_KNEE].x - landmarks[RIGHT_ANKLE].x,
+      y: landmarks[RIGHT_KNEE].y - landmarks[RIGHT_ANKLE].y
+    };
+    const footVector = {
+      x: landmarks[RIGHT_TOE].x - landmarks[RIGHT_ANKLE].x,
+      y: landmarks[RIGHT_TOE].y - landmarks[RIGHT_ANKLE].y
+    };
+    
+    const dotProduct = shinVector.x * footVector.x + shinVector.y * footVector.y;
+    const shinMag = Math.sqrt(shinVector.x ** 2 + shinVector.y ** 2);
+    const footMag = Math.sqrt(footVector.x ** 2 + footVector.y ** 2);
+    
+    return Math.acos(dotProduct / (shinMag * footMag)) * (180 / Math.PI) - 90;
+  }
+}
+
+function calculateLateralLean(landmarks: NormalizedLandmark[]): number {
+  const LEFT_SHOULDER = 11;
+  const RIGHT_SHOULDER = 12;
+  const LEFT_HIP = 23;
+  const RIGHT_HIP = 24;
+  
+  const shoulderMidX = (landmarks[LEFT_SHOULDER].x + landmarks[RIGHT_SHOULDER].x) / 2;
+  const hipMidX = (landmarks[LEFT_HIP].x + landmarks[RIGHT_HIP].x) / 2;
+  
+  // Calculate lateral lean in degrees
+  const lateralOffset = shoulderMidX - hipMidX;
+  return Math.atan(lateralOffset * 10) * (180 / Math.PI); // Scale factor for visibility
+}
+
+function calculatePelvicRotation(landmarks: NormalizedLandmark[]): number {
+  const LEFT_HIP = 23;
+  const RIGHT_HIP = 24;
+  
+  // Calculate rotation based on hip positions in 3D space (approximated)
+  const hipWidth = Math.abs(landmarks[RIGHT_HIP].x - landmarks[LEFT_HIP].x);
+  const hipDepthDiff = landmarks[RIGHT_HIP].z - landmarks[LEFT_HIP].z;
+  
+  return Math.atan2(hipDepthDiff, hipWidth) * (180 / Math.PI);
+}
+
+function calculateLegStiffness(verticalOscillation: number, groundContactTime: number): number {
+  // Simplified spring-mass model
+  // Higher stiffness = less vertical oscillation and shorter contact time
+  if (verticalOscillation === 0 || groundContactTime === 0) return 0;
+  
+  // Normalize to 0-100 scale
+  const stiffnessIndex = (1000 / groundContactTime) * (10 / verticalOscillation);
+  return Math.min(100, Math.max(0, stiffnessIndex * 10));
+}
+
+function calculatePropulsivePower(strideLength: number, cadence: number, verticalOscillation: number): number {
+  // Estimate based on movement parameters
+  const velocity = (strideLength * cadence) / 60; // m/s approximation
+  const verticalWork = verticalOscillation / 100; // Convert to meters
+  
+  // Simplified power calculation (arbitrary units)
+  const power = velocity * (1 + verticalWork) * 100;
+  return Math.min(100, Math.max(0, power));
+}
+
+function calculateRunningEfficiency(params: {
+  cadence: number;
+  verticalRatio: number;
+  groundContactTime: number;
+  stepLengthAsymmetry: number;
+  contactTimeAsymmetry: number;
+  overstriding: boolean;
+  crossoverGait: boolean;
+}): number {
+  let score = 100;
+  
+  // Cadence efficiency (optimal 170-180)
+  if (params.cadence < 160 || params.cadence > 190) {
+    score -= 10;
+  } else if (params.cadence < 170 || params.cadence > 180) {
+    score -= 5;
+  }
+  
+  // Vertical ratio (lower is better)
+  if (params.verticalRatio > 0.15) score -= 15;
+  else if (params.verticalRatio > 0.10) score -= 10;
+  else if (params.verticalRatio > 0.08) score -= 5;
+  
+  // Ground contact time (shorter is generally better)
+  if (params.groundContactTime > 300) score -= 10;
+  else if (params.groundContactTime > 250) score -= 5;
+  
+  // Asymmetry penalties
+  if (params.stepLengthAsymmetry > 10) score -= 10;
+  else if (params.stepLengthAsymmetry > 5) score -= 5;
+  
+  if (params.contactTimeAsymmetry > 10) score -= 10;
+  else if (params.contactTimeAsymmetry > 5) score -= 5;
+  
+  // Technique penalties
+  if (params.overstriding) score -= 15;
+  if (params.crossoverGait) score -= 10;
+  
+  return Math.max(0, score);
 }
 
 function determineFootStrike(landmarks: NormalizedLandmark[]): 'heel' | 'midfoot' | 'forefoot' {
@@ -276,7 +630,7 @@ function calculateArmSwingSymmetry(landmarks: NormalizedLandmark[]): number {
   return symmetry;
 }
 
-function detectCrossoverGait(landmarks: NormalizedLandmark[]): boolean {
+function detectCrossoverGait(landmarks: NormalizedLandmark[], hipMidpointX: number): boolean {
   const LEFT_ANKLE = 27;
   const RIGHT_ANKLE = 28;
   const LEFT_HIP = 23;

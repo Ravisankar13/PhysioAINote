@@ -14500,6 +14500,23 @@ Respond in JSON format:
     }
   });
   
+  // Sync hip rehabilitation exercises
+  app.post("/api/exercises/sync-hip", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { HipRehabExerciseService } = await import('./hipRehabExerciseService');
+      const hipService = new HipRehabExerciseService();
+      await hipService.syncToDatabase();
+      
+      res.json({ 
+        message: 'Hip rehabilitation exercises synced successfully',
+        success: true
+      });
+    } catch (error) {
+      console.error('Error syncing hip exercises:', error);
+      res.status(500).json({ error: 'Failed to sync hip exercises' });
+    }
+  });
+  
   // Get exercise categories and filters
   app.get("/api/exercises/filters", async (req: Request, res: Response) => {
     try {

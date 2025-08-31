@@ -104,6 +104,27 @@ const Header = () => {
               </Button>
             </Link>
 
+            <Link to="/body-scanner">
+              <Button className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-semibold shadow-sm flex items-center gap-2">
+                <Scan className="h-4 w-4" />
+                <span>Body Scanner</span>
+              </Button>
+            </Link>
+
+            <Link to="/movement-analysis">
+              <Button className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold shadow-sm flex items-center gap-2">
+                <Activity className="h-4 w-4" />
+                <span>Movement Analysis</span>
+              </Button>
+            </Link>
+
+            <Link to="/virtual-patients">
+              <Button className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold shadow-sm flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                <span>Virtual Patients</span>
+              </Button>
+            </Link>
+
             <Link to="/enhanced-soap-notes">
               <Button className="bg-gradient-to-r from-teal-600 to-blue-600 hover:from-teal-700 hover:to-blue-700 text-white font-semibold shadow-sm flex items-center gap-2 relative">
                 <Stethoscope className="h-4 w-4" />
@@ -113,27 +134,11 @@ const Header = () => {
                 </span>
               </Button>
             </Link>
+
             <Link to="/research">
               <Button className="bg-secondary hover:bg-secondary/90 text-white font-semibold shadow-sm flex items-center gap-2">
                 <BookOpen className="h-4 w-4" />
                 <span>Research</span>
-              </Button>
-            </Link>
-
-
-            <Link to="/intelligent-assessment">
-              <Button className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold shadow-sm flex items-center gap-2">
-                <Brain className="h-4 w-4" />
-                <span>Smart Assessment</span>
-              </Button>
-            </Link>
-            <Link to="/competitions">
-              <Button className="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white font-semibold shadow-sm flex items-center gap-2 relative">
-                <Trophy className="h-4 w-4" />
-                <span>Competitions</span>
-                <span className="absolute -top-1 -right-1 bg-yellow-400 text-yellow-900 text-xs font-bold px-1.5 py-0.5 rounded-full">
-                  NEW
-                </span>
               </Button>
             </Link>
 

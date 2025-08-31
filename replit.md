@@ -8,6 +8,9 @@ PhysioGPT is an advanced AI-powered physiotherapy platform designed to provide c
 
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes (Jan 31, 2025)
+- **Navigation Bar Update**: Removed "Competitions" and "Smart Assessment" buttons from main navigation. Added "Body Scanner", "Movement Analysis", and "Virtual Patients" buttons for direct access to core clinical features. Maintained "Research" button. New navigation order: PhysioGPT → Body Scanner → Movement Analysis → Virtual Patients → Enhanced SOAP → Research.
+
 ## System Architecture
 
 ### Frontend

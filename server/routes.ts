@@ -14365,6 +14365,151 @@ Respond in JSON format:
   });
 
   // ============================================
+  // Cached Exercises API Routes (from ExerciseDB)
+  // ============================================
+  
+  // Get all cached exercises or search
+  app.get("/api/exercises/cached", async (req: Request, res: Response) => {
+    try {
+      const { search, bodyPart, equipment, target, limit = '50' } = req.query;
+      
+      let exercises;
+      
+      if (search) {
+        exercises = await storage.searchCachedExercises(search as string);
+      } else if (bodyPart) {
+        exercises = await storage.getCachedExercisesByBodyPart(bodyPart as string);
+      } else if (equipment) {
+        exercises = await storage.getCachedExercisesByEquipment(equipment as string);
+      } else if (target) {
+        exercises = await storage.getCachedExercisesByTarget(target as string);
+      } else {
+        exercises = await storage.getAllCachedExercises(parseInt(limit as string));
+      }
+      
+      res.json(exercises);
+    } catch (error) {
+      console.error('Error fetching cached exercises:', error);
+      res.status(500).json({ error: 'Failed to fetch exercises' });
+    }
+  });
+  
+  // Get single cached exercise
+  app.get("/api/exercises/cached/:id", async (req: Request, res: Response) => {
+    try {
+      const exercise = await storage.getCachedExercise(parseInt(req.params.id));
+      if (!exercise) {
+        return res.status(404).json({ error: 'Exercise not found' });
+      }
+      res.json(exercise);
+    } catch (error) {
+      console.error('Error fetching exercise:', error);
+      res.status(500).json({ error: 'Failed to fetch exercise' });
+    }
+  });
+  
+  // Sync exercises from ExerciseDB API
+  app.post("/api/exercises/sync", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { exerciseDBService, fallbackExercises } = await import('./exerciseDBService');
+      
+      // Check if we have API key
+      if (!process.env.RAPIDAPI_KEY) {
+        // Use fallback exercises if no API key
+        const existingExercises = await storage.getAllCachedExercises(1000);
+        
+        if (existingExercises.length === 0) {
+          // Only add fallback exercises if database is empty
+          const created = await storage.bulkCreateCachedExercises(
+            fallbackExercises.map(ex => ({
+              externalId: ex.externalId,
+              apiSource: ex.apiSource,
+              name: ex.name,
+              bodyPart: ex.bodyPart,
+              equipment: ex.equipment,
+              gifUrl: ex.gifUrl || '',
+              target: ex.target,
+              secondaryMuscles: ex.secondaryMuscles,
+              instructions: ex.instructions,
+              difficulty: ex.difficulty,
+              category: ex.category,
+            }))
+          );
+          return res.json({ 
+            message: 'Loaded fallback exercises (no API key found)', 
+            count: created.length 
+          });
+        } else {
+          return res.json({ 
+            message: 'Exercises already exist in database', 
+            count: existingExercises.length 
+          });
+        }
+      }
+      
+      // Fetch from ExerciseDB API
+      const exercises = await exerciseDBService.fetchExercisesForInitialLoad();
+      
+      // Check and insert only new exercises
+      const newExercises = [];
+      for (const exercise of exercises) {
+        const existing = await storage.getCachedExerciseByExternalId(exercise.externalId);
+        if (!existing) {
+          newExercises.push({
+            externalId: exercise.externalId,
+            apiSource: exercise.apiSource,
+            name: exercise.name,
+            bodyPart: exercise.bodyPart,
+            equipment: exercise.equipment,
+            gifUrl: exercise.gifUrl || '',
+            target: exercise.target,
+            secondaryMuscles: exercise.secondaryMuscles,
+            instructions: exercise.instructions,
+            difficulty: exercise.difficulty,
+            category: exercise.category,
+          });
+        }
+      }
+      
+      if (newExercises.length > 0) {
+        await storage.bulkCreateCachedExercises(newExercises);
+      }
+      
+      res.json({ 
+        message: 'Exercises synced successfully', 
+        newCount: newExercises.length,
+        totalCount: exercises.length 
+      });
+    } catch (error) {
+      console.error('Error syncing exercises:', error);
+      res.status(500).json({ error: 'Failed to sync exercises' });
+    }
+  });
+  
+  // Get exercise categories and filters
+  app.get("/api/exercises/filters", async (req: Request, res: Response) => {
+    try {
+      const exercises = await storage.getAllCachedExercises(1000);
+      
+      // Extract unique values for filters
+      const bodyParts = [...new Set(exercises.map(ex => ex.bodyPart))].sort();
+      const equipment = [...new Set(exercises.map(ex => ex.equipment))].sort();
+      const targets = [...new Set(exercises.map(ex => ex.target))].sort();
+      const categories = [...new Set(exercises.map(ex => ex.category).filter(Boolean))].sort();
+      
+      res.json({
+        bodyParts,
+        equipment,
+        targets,
+        categories
+      });
+    } catch (error) {
+      console.error('Error fetching exercise filters:', error);
+      res.status(500).json({ error: 'Failed to fetch filters' });
+    }
+  });
+
+  // ============================================
   // Exercise Program Builder API Routes
   // ============================================
 

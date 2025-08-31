@@ -122,6 +122,9 @@ import {
   exerciseImages,
   type ExerciseImage,
   type InsertExerciseImage,
+  cachedExercises,
+  type CachedExercise,
+  type InsertCachedExercise,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, isNull, sql, ilike, not } from "drizzle-orm";
@@ -591,6 +594,18 @@ export interface IStorage {
   searchExerciseImages(searchTerm: string): Promise<ExerciseImage[]>;
   bulkCreateExerciseImages(images: InsertExerciseImage[]): Promise<ExerciseImage[]>;
   updateExerciseImage(id: number, data: Partial<InsertExerciseImage>): Promise<ExerciseImage>;
+  
+  // Cached Exercise Operations (from ExerciseDB API)
+  createCachedExercise(exercise: InsertCachedExercise): Promise<CachedExercise>;
+  getCachedExercise(id: number): Promise<CachedExercise | undefined>;
+  getCachedExerciseByExternalId(externalId: string): Promise<CachedExercise | undefined>;
+  getCachedExercisesByBodyPart(bodyPart: string): Promise<CachedExercise[]>;
+  getCachedExercisesByEquipment(equipment: string): Promise<CachedExercise[]>;
+  getCachedExercisesByTarget(target: string): Promise<CachedExercise[]>;
+  searchCachedExercises(searchTerm: string): Promise<CachedExercise[]>;
+  getAllCachedExercises(limit?: number): Promise<CachedExercise[]>;
+  bulkCreateCachedExercises(exercises: InsertCachedExercise[]): Promise<CachedExercise[]>;
+  updateCachedExercise(id: number, data: Partial<InsertCachedExercise>): Promise<CachedExercise>;
 
   // Temporary SOAP Notes Operations (24-hour expiry)
   createTemporarySoapNote(note: InsertTemporarySoapNote): Promise<TemporarySoapNote>;
@@ -4006,6 +4021,106 @@ export class DatabaseStorage implements IStorage {
       console.error("Error fetching latest temporary SOAP note:", error);
       throw error;
     }
+  }
+  
+  // Cached Exercise Methods (ExerciseDB API)
+  async createCachedExercise(exercise: InsertCachedExercise): Promise<CachedExercise> {
+    const result = await db.insert(cachedExercises).values(exercise).returning();
+    return result[0];
+  }
+
+  async getCachedExercise(id: number): Promise<CachedExercise | undefined> {
+    const result = await db
+      .select()
+      .from(cachedExercises)
+      .where(eq(cachedExercises.id, id))
+      .limit(1);
+    return result[0];
+  }
+
+  async getCachedExerciseByExternalId(externalId: string): Promise<CachedExercise | undefined> {
+    const result = await db
+      .select()
+      .from(cachedExercises)
+      .where(eq(cachedExercises.externalId, externalId))
+      .limit(1);
+    return result[0];
+  }
+
+  async getCachedExercisesByBodyPart(bodyPart: string): Promise<CachedExercise[]> {
+    return await db
+      .select()
+      .from(cachedExercises)
+      .where(and(
+        eq(cachedExercises.bodyPart, bodyPart),
+        eq(cachedExercises.isActive, true)
+      ))
+      .orderBy(cachedExercises.name);
+  }
+
+  async getCachedExercisesByEquipment(equipment: string): Promise<CachedExercise[]> {
+    return await db
+      .select()
+      .from(cachedExercises)
+      .where(and(
+        eq(cachedExercises.equipment, equipment),
+        eq(cachedExercises.isActive, true)
+      ))
+      .orderBy(cachedExercises.name);
+  }
+
+  async getCachedExercisesByTarget(target: string): Promise<CachedExercise[]> {
+    return await db
+      .select()
+      .from(cachedExercises)
+      .where(and(
+        eq(cachedExercises.target, target),
+        eq(cachedExercises.isActive, true)
+      ))
+      .orderBy(cachedExercises.name);
+  }
+
+  async searchCachedExercises(searchTerm: string): Promise<CachedExercise[]> {
+    const searchPattern = `%${searchTerm}%`;
+    
+    return await db
+      .select()
+      .from(cachedExercises)
+      .where(and(
+        or(
+          ilike(cachedExercises.name, searchPattern),
+          ilike(cachedExercises.bodyPart, searchPattern),
+          ilike(cachedExercises.target, searchPattern),
+          ilike(cachedExercises.equipment, searchPattern),
+          ilike(cachedExercises.category || '', searchPattern)
+        ),
+        eq(cachedExercises.isActive, true)
+      ))
+      .orderBy(cachedExercises.name);
+  }
+
+  async getAllCachedExercises(limit: number = 100): Promise<CachedExercise[]> {
+    return await db
+      .select()
+      .from(cachedExercises)
+      .where(eq(cachedExercises.isActive, true))
+      .orderBy(cachedExercises.name)
+      .limit(limit);
+  }
+
+  async bulkCreateCachedExercises(exercises: InsertCachedExercise[]): Promise<CachedExercise[]> {
+    if (exercises.length === 0) return [];
+    const result = await db.insert(cachedExercises).values(exercises).returning();
+    return result;
+  }
+
+  async updateCachedExercise(id: number, data: Partial<InsertCachedExercise>): Promise<CachedExercise> {
+    const result = await db
+      .update(cachedExercises)
+      .set(data)
+      .where(eq(cachedExercises.id, id))
+      .returning();
+    return result[0];
   }
 }
 

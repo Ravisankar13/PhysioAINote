@@ -3970,6 +3970,35 @@ export const insertExerciseImageSchema = createInsertSchema(exerciseImages).omit
 export type InsertExerciseImage = z.infer<typeof insertExerciseImageSchema>;
 export type ExerciseImage = typeof exerciseImages.$inferSelect;
 
+// Cached exercises from ExerciseDB API
+export const cachedExercises = pgTable("cached_exercises", {
+  id: serial("id").primaryKey(),
+  externalId: text("external_id").notNull().unique(), // ID from ExerciseDB
+  apiSource: text("api_source").notNull().default("exercisedb"), // Source API
+  name: text("name").notNull(),
+  bodyPart: text("body_part").notNull(),
+  equipment: text("equipment").notNull(),
+  gifUrl: text("gif_url"), // Animated GIF demonstration
+  target: text("target").notNull(), // Primary muscle
+  secondaryMuscles: json("secondary_muscles").$type<string[]>().default([]),
+  instructions: json("instructions").$type<string[]>().default([]),
+  difficulty: text("difficulty"), // beginner, intermediate, advanced
+  category: text("category"), // Shoulder, Back, Legs, etc.
+  isActive: boolean("is_active").default(true).notNull(),
+  lastSynced: timestamp("last_synced").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertCachedExerciseSchema = createInsertSchema(cachedExercises).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  lastSynced: true,
+});
+export type InsertCachedExercise = z.infer<typeof insertCachedExerciseSchema>;
+export type CachedExercise = typeof cachedExercises.$inferSelect;
+
 // Relations for exercise program tables
 export const exerciseProgramRelations = relations(exercisePrograms, ({ one, many }) => ({
   creator: one(users, {

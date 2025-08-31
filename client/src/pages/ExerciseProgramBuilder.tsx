@@ -26,37 +26,62 @@ export default function ExerciseProgramBuilder() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedBodyPart, setSelectedBodyPart] = useState("");
   const [selectedEquipment, setSelectedEquipment] = useState("");
+  const [selectedTarget, setSelectedTarget] = useState("");
   const [isExerciseSearchOpen, setIsExerciseSearchOpen] = useState(false);
+  const [hasSyncedExercises, setHasSyncedExercises] = useState(false);
 
   // Fetch user's programs
   const { data: programs, isLoading: programsLoading } = useQuery({
     queryKey: ["/api/exercise-programs"],
   });
 
-  // Fetch body parts for filtering
-  const { data: bodyParts } = useQuery({
-    queryKey: ["/api/external/exercises/bodyparts"],
+  // Fetch exercise filters (body parts, equipment, etc.)
+  const { data: filters } = useQuery({
+    queryKey: ["/api/exercises/filters"],
   });
 
-  // Fetch equipment options
-  const { data: equipmentList } = useQuery({
-    queryKey: ["/api/external/exercises/equipment"],
-  });
-
-  // Search exercises from external API
+  // Search cached exercises
   const { data: searchResults, isLoading: searchLoading, refetch: searchExercises } = useQuery({
-    queryKey: ["/api/external/exercises/search", { 
-      bodyPart: selectedBodyPart === "all" ? "" : selectedBodyPart, 
-      equipment: selectedEquipment === "all" ? "" : selectedEquipment, 
-      name: searchQuery 
+    queryKey: ["/api/exercises/cached", { 
+      search: searchQuery,
+      bodyPart: selectedBodyPart,
+      equipment: selectedEquipment,
+      target: selectedTarget,
+      limit: 100
     }],
     enabled: false,
   });
 
-  // Auto-search when dialog opens
-  useEffect(() => {
-    if (isExerciseSearchOpen && !searchResults) {
+  // Sync exercises from ExerciseDB API
+  const syncExercisesMutation = useMutation({
+    mutationFn: () => apiRequest("/api/exercises/sync", "POST", {}),
+    onSuccess: (data) => {
+      setHasSyncedExercises(true);
+      queryClient.invalidateQueries({ queryKey: ["/api/exercises/cached"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/exercises/filters"] });
+      toast({
+        title: "Success",
+        description: `${data.message}. ${data.newCount || data.count} exercises available.`,
+      });
       searchExercises();
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to sync exercises. Using existing database.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Auto-search when dialog opens and sync exercises if needed
+  useEffect(() => {
+    if (isExerciseSearchOpen) {
+      if (!hasSyncedExercises) {
+        syncExercisesMutation.mutate();
+      } else {
+        searchExercises();
+      }
     }
   }, [isExerciseSearchOpen]);
 
@@ -643,15 +668,15 @@ export default function ExerciseProgramBuilder() {
                 />
               </div>
               <Select value={selectedBodyPart} onValueChange={(value) => {
-                setSelectedBodyPart(value);
-                searchExercises();
+                setSelectedBodyPart(value === "all" ? "" : value);
+                setTimeout(() => searchExercises(), 100);
               }}>
                 <SelectTrigger className="w-[180px]">
                   <SelectValue placeholder="Body Part" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Body Parts</SelectItem>
-                  {bodyParts?.map((part: string) => (
+                  {filters?.bodyParts?.map((part: string) => (
                     <SelectItem key={part} value={part}>
                       {part.charAt(0).toUpperCase() + part.slice(1)}
                     </SelectItem>
@@ -659,15 +684,15 @@ export default function ExerciseProgramBuilder() {
                 </SelectContent>
               </Select>
               <Select value={selectedEquipment} onValueChange={(value) => {
-                setSelectedEquipment(value);
-                searchExercises();
+                setSelectedEquipment(value === "all" ? "" : value);
+                setTimeout(() => searchExercises(), 100);
               }}>
                 <SelectTrigger className="w-[180px]">
                   <SelectValue placeholder="Equipment" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Equipment</SelectItem>
-                  {equipmentList?.map((item: string) => (
+                  {filters?.equipment?.map((item: string) => (
                     <SelectItem key={item} value={item}>
                       {item.charAt(0).toUpperCase() + item.slice(1)}
                     </SelectItem>
@@ -681,14 +706,24 @@ export default function ExerciseProgramBuilder() {
             </div>
 
             <ScrollArea className="h-[400px]">
-              {searchLoading ? (
+              {syncExercisesMutation.isPending ? (
+                <div className="text-center py-8">Syncing exercise database...</div>
+              ) : searchLoading ? (
                 <div className="text-center py-8">Searching exercises...</div>
               ) : searchResults && searchResults.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {searchResults.map((exercise: any) => (
-                    <Card key={exercise.id}>
+                    <Card key={exercise.id || exercise.externalId}>
                       <CardContent className="p-4">
-                        <div className="flex justify-between items-start">
+                        <div className="flex gap-3">
+                          {exercise.gifUrl && (
+                            <img 
+                              src={exercise.gifUrl} 
+                              alt={exercise.name}
+                              className="w-20 h-20 object-cover rounded"
+                              loading="lazy"
+                            />
+                          )}
                           <div className="flex-1">
                             <h4 className="font-semibold">{exercise.name}</h4>
                             <div className="flex flex-wrap gap-1 mt-1">
@@ -701,8 +736,13 @@ export default function ExerciseProgramBuilder() {
                               <Badge variant="outline" className="text-xs">
                                 {exercise.equipment}
                               </Badge>
+                              {exercise.difficulty && (
+                                <Badge variant="outline" className="text-xs">
+                                  {exercise.difficulty}
+                                </Badge>
+                              )}
                             </div>
-                            {exercise.instructions && (
+                            {exercise.instructions && Array.isArray(exercise.instructions) && (
                               <p className="text-sm text-muted-foreground mt-2 line-clamp-2">
                                 {exercise.instructions[0]}
                               </p>

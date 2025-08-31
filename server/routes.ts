@@ -14413,11 +14413,14 @@ Respond in JSON format:
     try {
       const { exerciseDBService, fallbackExercises } = await import('./exerciseDBService');
       
+      // Check if force refresh is requested
+      const forceRefresh = req.body.forceRefresh === true;
+      
       // First check if we already have exercises in the database
       const existingExercises = await storage.getAllCachedExercises(1000);
       
-      if (existingExercises.length > 0) {
-        // If we already have exercises, just return success without trying to sync
+      // If we have exercises and not forcing refresh, return existing
+      if (existingExercises.length > 0 && !forceRefresh) {
         return res.json({ 
           message: 'Exercise database already populated', 
           count: existingExercises.length,

@@ -14618,9 +14618,18 @@ Respond in JSON format:
         return res.status(401).json({ error: 'User not authenticated' });
       }
 
+      // Clean up the data - convert empty strings to null for optional fields
       const programData = {
         ...req.body,
-        createdBy: userId
+        createdBy: userId,
+        bodyPart: req.body.bodyPart && req.body.bodyPart !== '' ? req.body.bodyPart : null,
+        patientId: req.body.patientId || null,
+        templateId: req.body.templateId || null,
+        description: req.body.description || null,
+        difficulty: req.body.difficulty || null,
+        frequency: req.body.frequency || null,
+        goals: req.body.goals || [],
+        tags: req.body.tags || []
       };
 
       const program = await storage.createExerciseProgram(programData);

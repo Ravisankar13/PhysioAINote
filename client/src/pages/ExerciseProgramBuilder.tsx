@@ -40,22 +40,30 @@ export default function ExerciseProgramBuilder() {
     queryKey: ["/api/exercises/filters"],
   });
 
-  // Build search URL with query parameters
-  const buildSearchUrl = () => {
-    const params = new URLSearchParams();
-    if (searchQuery) params.append('search', searchQuery);
-    if (selectedBodyPart && selectedBodyPart !== 'all') params.append('bodyPart', selectedBodyPart);
-    if (selectedEquipment && selectedEquipment !== 'all') params.append('equipment', selectedEquipment);
-    if (selectedTarget && selectedTarget !== 'all') params.append('target', selectedTarget);
-    params.append('limit', '100');
-    return `/api/exercises/cached?${params.toString()}`;
+  // Search cached exercises - simpler approach with manual fetching
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  
+  const searchExercises = async () => {
+    setSearchLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (searchQuery) params.append('search', searchQuery);
+      if (selectedBodyPart && selectedBodyPart !== 'all') params.append('bodyPart', selectedBodyPart);
+      if (selectedEquipment && selectedEquipment !== 'all') params.append('equipment', selectedEquipment);
+      if (selectedTarget && selectedTarget !== 'all') params.append('target', selectedTarget);
+      params.append('limit', '100');
+      
+      const response = await fetch(`/api/exercises/cached?${params.toString()}`);
+      const data = await response.json();
+      setSearchResults(data);
+    } catch (error) {
+      console.error('Search failed:', error);
+      setSearchResults([]);
+    } finally {
+      setSearchLoading(false);
+    }
   };
-
-  // Search cached exercises
-  const { data: searchResults, isLoading: searchLoading, refetch: searchExercises } = useQuery({
-    queryKey: [buildSearchUrl()],
-    enabled: false,
-  });
 
   // Sync exercises from ExerciseDB API
   const syncExercisesMutation = useMutation({

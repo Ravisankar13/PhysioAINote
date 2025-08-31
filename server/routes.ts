@@ -14413,11 +14413,21 @@ Respond in JSON format:
     try {
       const { exerciseDBService, fallbackExercises } = await import('./exerciseDBService');
       
+      // First check if we already have exercises in the database
+      const existingExercises = await storage.getAllCachedExercises(1000);
+      
+      if (existingExercises.length > 0) {
+        // If we already have exercises, just return success without trying to sync
+        return res.json({ 
+          message: 'Exercise database already populated', 
+          count: existingExercises.length,
+          success: true
+        });
+      }
+      
       // Check if we have API key
       if (!process.env.RAPIDAPI_KEY) {
-        // Use fallback exercises if no API key
-        const existingExercises = await storage.getAllCachedExercises(1000);
-        
+        // Use fallback exercises if no API key and database is empty
         if (existingExercises.length === 0) {
           // Only add fallback exercises if database is empty
           const created = await storage.bulkCreateCachedExercises(
@@ -14437,7 +14447,8 @@ Respond in JSON format:
           );
           return res.json({ 
             message: 'Loaded fallback exercises (no API key found)', 
-            count: created.length 
+            count: created.length,
+            success: true 
           });
         } else {
           return res.json({ 

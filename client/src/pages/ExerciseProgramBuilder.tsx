@@ -59,18 +59,19 @@ export default function ExerciseProgramBuilder() {
       setHasSyncedExercises(true);
       queryClient.invalidateQueries({ queryKey: ["/api/exercises/cached"] });
       queryClient.invalidateQueries({ queryKey: ["/api/exercises/filters"] });
-      toast({
-        title: "Success",
-        description: `${data.message}. ${data.newCount || data.count} exercises available.`,
-      });
+      // Only show a brief message if truly synced new data
+      if (data.newCount && data.newCount > 0) {
+        toast({
+          title: "Exercises Synced",
+          description: `${data.newCount} new exercises added to database.`,
+        });
+      }
       searchExercises();
     },
     onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to sync exercises. Using existing database.",
-        variant: "destructive",
-      });
+      // Silently use existing database - no error toast
+      setHasSyncedExercises(true);
+      searchExercises();
     },
   });
 

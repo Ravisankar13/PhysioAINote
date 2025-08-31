@@ -125,7 +125,7 @@ export default function BodyScanner() {
     vessels: false
   });
   const [clinicalTests, setClinicalTests] = useState<any[]>([]);
-  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment'); // Default to rear camera
   const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]);
   const [selectedCameraId, setSelectedCameraId] = useState<string>('');
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -1176,13 +1176,35 @@ export default function BodyScanner() {
           if (selectedCameraId) {
             cameraConfig.deviceId = selectedCameraId;
           } else {
-            cameraConfig.facingMode = facingMode;
+            // Use exact constraint for better rear camera support on mobile
+            cameraConfig.facingMode = { exact: facingMode };
           }
           
-          const camera = new window.Camera(videoRef.current, cameraConfig);
+          // Log camera configuration for debugging
+          console.log('[BodyScanner] Camera config:', cameraConfig);
           
-          cameraRef.current = camera;
-          await camera.start();
+          let camera;
+          try {
+            // Try with exact constraint first
+            camera = new window.Camera(videoRef.current, cameraConfig);
+            cameraRef.current = camera;
+            await camera.start();
+          } catch (exactError) {
+            console.warn('[BodyScanner] Exact camera constraint failed, trying ideal:', exactError);
+            
+            // Fallback to ideal constraint if exact fails
+            if (!selectedCameraId && cameraConfig.facingMode) {
+              cameraConfig.facingMode = { ideal: facingMode };
+              console.log('[BodyScanner] Retrying with ideal constraint:', cameraConfig);
+              
+              camera = new window.Camera(videoRef.current, cameraConfig);
+              cameraRef.current = camera;
+              await camera.start();
+            } else {
+              throw exactError;
+            }
+          }
+          
           setCameraStatus('ready');
           
           const cameraDesc = selectedCameraId 
@@ -1195,12 +1217,25 @@ export default function BodyScanner() {
             duration: 3000,
           });
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Failed to initialize tracking:', error);
         setCameraStatus('error');
+        
+        // Provide specific error messages for common issues
+        let errorMessage = "Failed to start camera tracking";
+        if (error.message?.includes('Permission') || error.name === 'NotAllowedError') {
+          errorMessage = "Camera permission denied. Please allow camera access.";
+        } else if (error.message?.includes('NotFound') || error.name === 'NotFoundError') {
+          errorMessage = facingMode === 'environment' 
+            ? "Rear camera not found. Try using the front camera instead."
+            : "Camera not found. Please check your device.";
+        } else if (error.message?.includes('Constraint') || error.name === 'OverconstrainedError') {
+          errorMessage = "Camera configuration not supported. Try selecting a different camera.";
+        }
+        
         toast({
-          title: "Initialization Error",
-          description: "Failed to start camera tracking",
+          title: "Camera Error",
+          description: errorMessage,
           variant: "destructive",
         });
       }
@@ -2025,6 +2060,25 @@ export default function BodyScanner() {
                   >
                     <CameraIcon className="h-4 w-4 mr-2" />
                     Capture
+                  </Button>
+                  
+                  {/* Quick Camera Switch Button */}
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      const newMode = facingMode === 'user' ? 'environment' : 'user';
+                      setFacingMode(newMode);
+                      setSelectedCameraId(''); // Clear specific device selection
+                      toast({
+                        title: "Camera Switched",
+                        description: `Switched to ${newMode === 'user' ? 'front' : 'rear'} camera. Restart tracking to apply.`,
+                        duration: 2000,
+                      });
+                    }}
+                    disabled={cameraStatus === 'initializing'}
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    {facingMode === 'user' ? 'Use Rear' : 'Use Front'}
                   </Button>
                   
                   {/* Camera Selector for Mobile Devices */}

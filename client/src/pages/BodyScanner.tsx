@@ -129,10 +129,12 @@ export default function BodyScanner() {
   const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]);
   const [selectedCameraId, setSelectedCameraId] = useState<string>('');
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isMaximized, setIsMaximized] = useState(false); // iOS-friendly maximized view
   const [showControls, setShowControls] = useState(true);
   const [leftPanelOpen, setLeftPanelOpen] = useState(false);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
   const [controlsTimeout, setControlsTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [isIOS, setIsIOS] = useState(false);
   const [selectedBodyPart, setSelectedBodyPart] = useState<BodyRegionId>('shoulder');
   const [bodyPartAnalyses, setBodyPartAnalyses] = useState<Record<BodyRegionId, BodyPartAnalysis | null>>({
     cervical: null,
@@ -160,18 +162,56 @@ export default function BodyScanner() {
   const pelvisRendererRef = useRef<EnhancedPelvisRenderer>(new EnhancedPelvisRenderer());
   const shoulderRendererRef = useRef<ShoulderComplexRenderer>(new ShoulderComplexRenderer());
   
-  // Fullscreen handling
+  // Detect iOS devices
+  const detectIOS = () => {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+           (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  };
+  
+  // Fullscreen handling with iOS fallback
   const toggleFullscreen = async () => {
-    if (!document.fullscreenElement) {
-      if (fullscreenContainerRef.current) {
-        await fullscreenContainerRef.current.requestFullscreen();
-        setIsFullscreen(true);
-        showControlsTemporarily();
+    if (isIOS) {
+      // iOS fallback: Use maximized view instead of fullscreen
+      setIsMaximized(!isMaximized);
+      if (!isMaximized) {
+        // Scroll to top to hide Safari's address bar
+        window.scrollTo(0, 0);
+        // Try to hide the minimal UI
+        if ('standalone' in window.navigator) {
+          // Already in standalone mode (added to home screen)
+        } else {
+          // Suggest adding to home screen for better experience
+          if (!localStorage.getItem('iosFullscreenHintShown')) {
+            toast({
+              title: "Tip: Better Experience",
+              description: "Add this app to your home screen for a fullscreen experience",
+              duration: 5000,
+            });
+            localStorage.setItem('iosFullscreenHintShown', 'true');
+          }
+        }
       }
+      showControlsTemporarily();
     } else {
-      await document.exitFullscreen();
-      setIsFullscreen(false);
-      setShowControls(true);
+      // Standard fullscreen API for non-iOS devices
+      if (!document.fullscreenElement) {
+        if (fullscreenContainerRef.current) {
+          try {
+            await fullscreenContainerRef.current.requestFullscreen();
+            setIsFullscreen(true);
+            showControlsTemporarily();
+          } catch (error) {
+            console.error('Fullscreen request failed:', error);
+            // Fallback to maximized view if fullscreen fails
+            setIsMaximized(true);
+            showControlsTemporarily();
+          }
+        }
+      } else {
+        await document.exitFullscreen();
+        setIsFullscreen(false);
+        setShowControls(true);
+      }
     }
   };
 
@@ -1075,8 +1115,11 @@ export default function BodyScanner() {
     ctx.globalAlpha = 1;
   };
   
-  // Load MediaPipe libraries, check WebXR, and enumerate cameras on mount
+  // Load MediaPipe libraries, check WebXR, detect iOS, and enumerate cameras on mount
   useEffect(() => {
+    // Detect iOS on mount
+    setIsIOS(detectIOS());
+    
     const loadLibraries = async () => {
       const loaded = await loadMediaPipeLibraries();
       setMediapipeLoaded(loaded);
@@ -1511,13 +1554,23 @@ export default function BodyScanner() {
   return (
     <div 
       ref={fullscreenContainerRef}
-      className={`${isFullscreen ? 'fixed inset-0 bg-black z-50' : 'container mx-auto p-6 max-w-7xl'}`}
+      className={`${
+        isFullscreen ? 'fixed inset-0 bg-black z-50' : 
+        isMaximized ? 'fixed inset-0 bg-gray-900 z-50 overflow-hidden' : 
+        'container mx-auto p-6 max-w-7xl'
+      }`}
+      style={isMaximized && !isFullscreen ? {
+        paddingTop: 'env(safe-area-inset-top)',
+        paddingBottom: 'env(safe-area-inset-bottom)',
+        paddingLeft: 'env(safe-area-inset-left)',
+        paddingRight: 'env(safe-area-inset-right)',
+      } : undefined}
       onMouseMove={handleMouseMove}
       onTouchStart={handleMouseMove}
     >
       
-      {/* Non-fullscreen header */}
-      {!isFullscreen && (
+      {/* Non-fullscreen/maximized header */}
+      {!isFullscreen && !isMaximized && (
         <>
           <Card className="mb-6">
             <CardHeader>
@@ -1577,12 +1630,15 @@ export default function BodyScanner() {
         </>
       )}
       
-      {/* Fullscreen Top Bar */}
-      {isFullscreen && (
+      {/* Fullscreen/Maximized Top Bar */}
+      {(isFullscreen || isMaximized) && (
         <div 
           className={`absolute top-0 left-0 right-0 bg-black/80 backdrop-blur-sm transition-all duration-300 z-10 ${
             showControls ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'
           }`}
+          style={isMaximized && !isFullscreen ? {
+            paddingTop: 'env(safe-area-inset-top)',
+          } : undefined}
         >
           <div className="flex justify-between items-center p-4">
             <div className="flex items-center gap-4">
@@ -1621,8 +1677,8 @@ export default function BodyScanner() {
         </div>
       )}
       
-      {/* Fullscreen Left Panel - Camera Settings */}
-      {isFullscreen && (
+      {/* Fullscreen/Maximized Left Panel - Camera Settings */}
+      {(isFullscreen || isMaximized) && (
         <div 
           className={`absolute left-0 top-20 bottom-20 bg-black/80 backdrop-blur-sm transition-all duration-300 z-10 ${
             leftPanelOpen && showControls ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0'
@@ -1723,8 +1779,8 @@ export default function BodyScanner() {
         </div>
       )}
       
-      {/* Fullscreen Right Panel - Visualization Settings */}
-      {isFullscreen && (
+      {/* Fullscreen/Maximized Right Panel - Visualization Settings */}
+      {(isFullscreen || isMaximized) && (
         <div 
           className={`absolute right-0 top-20 bottom-20 bg-black/80 backdrop-blur-sm transition-all duration-300 z-10 ${
             rightPanelOpen && showControls ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'
@@ -1997,7 +2053,7 @@ export default function BodyScanner() {
                       size="sm"
                       variant="ghost"
                       onClick={toggleFullscreen}
-                      title="Enter fullscreen"
+                      title={isIOS ? "Maximize view" : "Enter fullscreen"}
                     >
                       <Maximize2 className="h-4 w-4" />
                     </Button>

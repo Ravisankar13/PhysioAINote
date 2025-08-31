@@ -40,15 +40,20 @@ export default function ExerciseProgramBuilder() {
     queryKey: ["/api/exercises/filters"],
   });
 
+  // Build search URL with query parameters
+  const buildSearchUrl = () => {
+    const params = new URLSearchParams();
+    if (searchQuery) params.append('search', searchQuery);
+    if (selectedBodyPart && selectedBodyPart !== 'all') params.append('bodyPart', selectedBodyPart);
+    if (selectedEquipment && selectedEquipment !== 'all') params.append('equipment', selectedEquipment);
+    if (selectedTarget && selectedTarget !== 'all') params.append('target', selectedTarget);
+    params.append('limit', '100');
+    return `/api/exercises/cached?${params.toString()}`;
+  };
+
   // Search cached exercises
   const { data: searchResults, isLoading: searchLoading, refetch: searchExercises } = useQuery({
-    queryKey: ["/api/exercises/cached", { 
-      search: searchQuery,
-      bodyPart: selectedBodyPart,
-      equipment: selectedEquipment,
-      target: selectedTarget,
-      limit: 100
-    }],
+    queryKey: [buildSearchUrl()],
     enabled: false,
   });
 
@@ -668,9 +673,8 @@ export default function ExerciseProgramBuilder() {
                   }}
                 />
               </div>
-              <Select value={selectedBodyPart} onValueChange={(value) => {
+              <Select value={selectedBodyPart || "all"} onValueChange={(value) => {
                 setSelectedBodyPart(value === "all" ? "" : value);
-                setTimeout(() => searchExercises(), 100);
               }}>
                 <SelectTrigger className="w-[180px]">
                   <SelectValue placeholder="Body Part" />
@@ -684,9 +688,8 @@ export default function ExerciseProgramBuilder() {
                   ))}
                 </SelectContent>
               </Select>
-              <Select value={selectedEquipment} onValueChange={(value) => {
+              <Select value={selectedEquipment || "all"} onValueChange={(value) => {
                 setSelectedEquipment(value === "all" ? "" : value);
-                setTimeout(() => searchExercises(), 100);
               }}>
                 <SelectTrigger className="w-[180px]">
                   <SelectValue placeholder="Equipment" />
@@ -723,6 +726,10 @@ export default function ExerciseProgramBuilder() {
                               alt={exercise.name}
                               className="w-20 h-20 object-cover rounded"
                               loading="lazy"
+                              onError={(e) => {
+                                // Hide image if it fails to load
+                                (e.target as HTMLImageElement).style.display = 'none';
+                              }}
                             />
                           )}
                           <div className="flex-1">

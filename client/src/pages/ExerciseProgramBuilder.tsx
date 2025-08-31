@@ -88,16 +88,12 @@ export default function ExerciseProgramBuilder() {
     },
   });
 
-  // Auto-search when dialog opens and sync exercises if needed
+  // Auto-sync exercises when dialog opens for the first time only
   useEffect(() => {
-    if (isExerciseSearchOpen) {
-      if (!hasSyncedExercises) {
-        syncExercisesMutation.mutate();
-      } else {
-        searchExercises();
-      }
+    if (isExerciseSearchOpen && !hasSyncedExercises) {
+      syncExercisesMutation.mutate();
     }
-  }, [isExerciseSearchOpen]);
+  }, [isExerciseSearchOpen, hasSyncedExercises]);
 
   // Create program mutation
   const createProgramMutation = useMutation({

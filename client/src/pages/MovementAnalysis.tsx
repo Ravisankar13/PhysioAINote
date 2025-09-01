@@ -3,6 +3,7 @@ import { MEDIAPIPE_CONFIG, checkMediaPipeSupport, requestCameraPermission } from
 import { loadMediaPipeLibraries } from '@/utils/mediapipeLoader';
 import { FrameworkAnalysisPanel } from '@/components/movement/FrameworkAnalysisPanel';
 import { biomechanicalAnalyzer, type BiomechanicalMetrics, type TreatmentPlan } from '@/utils/biomechanicalAnalysis';
+import { VideoRecorder } from '@/components/movement/VideoRecorder';
 
 // MediaPipe types (will be loaded dynamically)
 type Pose = any;
@@ -43,7 +44,8 @@ import {
   Minimize2,
   Info,
   AlertCircle,
-  Sparkles
+  Sparkles,
+  Video
 } from 'lucide-react';
 import {
   analyzeMovementQuality,
@@ -351,6 +353,8 @@ export default function MovementAnalysis() {
   const [isVideoRecording, setIsVideoRecording] = useState(false);
   const [videoRecordingStatus, setVideoRecordingStatus] = useState<'idle' | 'recording' | 'stopping' | 'completed'>('idle');
   const [recordedVideoBlob, setRecordedVideoBlob] = useState<Blob | null>(null);
+  const [videoStream, setVideoStream] = useState<MediaStream | null>(null);
+  const [showVideoRecorder, setShowVideoRecorder] = useState(false);
   
   // Biomechanical analysis state
   const [biomechanicalMetrics, setBiomechanicalMetrics] = useState<BiomechanicalMetrics | null>(null);
@@ -769,6 +773,11 @@ export default function MovementAnalysis() {
           await Promise.race([startPromise, timeoutPromise]);
           setCameraStatus('ready');
           console.log('[MovementAnalysis] Camera started successfully');
+          
+          // Capture the video stream for recording
+          if (videoRef.current && videoRef.current.srcObject) {
+            setVideoStream(videoRef.current.srcObject as MediaStream);
+          }
           
           // Show success message only in production
           if (window.location.hostname !== 'localhost') {
@@ -2299,7 +2308,34 @@ export default function MovementAnalysis() {
         {/* Right Panel - Live Metric Cards for All Tests */}
         {!isFullscreen && selectedTest && (
           <div className="w-1/3 flex flex-col gap-3 overflow-y-auto">
-            <h3 className="text-lg font-semibold">Live Analysis</h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold">Live Analysis</h3>
+              <Button
+                onClick={() => setShowVideoRecorder(!showVideoRecorder)}
+                variant="outline"
+                size="sm"
+              >
+                <Video className="w-4 h-4 mr-2" />
+                {showVideoRecorder ? 'Hide' : 'Show'} Recorder
+              </Button>
+            </div>
+            
+            {/* Video Recorder Component */}
+            {showVideoRecorder && (
+              <VideoRecorder
+                stream={videoStream}
+                isActive={cameraStatus === 'ready'}
+                maxDuration={300}
+                onRecordingComplete={(blob, url) => {
+                  console.log('Recording complete:', blob.size, 'bytes');
+                  toast({
+                    title: "Recording Saved",
+                    description: "Your video has been saved locally. You can download it or record a new one.",
+                  });
+                }}
+                className="mb-4"
+              />
+            )}
             
             {/* Step Down Test Cards */}
             {selectedTest?.id === 'step-down' && (

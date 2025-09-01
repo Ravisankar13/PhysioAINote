@@ -32,7 +32,8 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-  X
+  X,
+  Video
 } from 'lucide-react';
 import { loadMediaPipeLibraries } from '@/utils/mediapipeLoader';
 import { AnatomyManager } from '@/services/anatomy/AnatomyManager';
@@ -42,6 +43,7 @@ import {
   type BodyPartAnalysis,
   type BodyRegionId
 } from '@/services/biomechanics/BodyPartAnalysis';
+import { VideoRecorder } from '@/components/movement/VideoRecorder';
 import { DetailedSpineRenderer } from '@/services/anatomy/DetailedBoneStructures';
 import { RibcageRenderer } from '@/services/anatomy/RibcageRenderer';
 import { ShoulderComplexRenderer } from '@/services/anatomy/shoulder/ShoulderComplex';
@@ -147,6 +149,8 @@ export default function BodyScanner() {
     knee: null,
     ankle: null
   });
+  const [videoStream, setVideoStream] = useState<MediaStream | null>(null);
+  const [showVideoRecorder, setShowVideoRecorder] = useState(false);
   
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -1249,6 +1253,11 @@ export default function BodyScanner() {
           }
           
           setCameraStatus('ready');
+          
+          // Capture the video stream for recording
+          if (videoRef.current && videoRef.current.srcObject) {
+            setVideoStream(videoRef.current.srcObject as MediaStream);
+          }
           
           const cameraDesc = selectedCameraId 
             ? availableCameras.find(c => c.deviceId === selectedCameraId)?.label || 'Selected camera'
@@ -2397,6 +2406,41 @@ export default function BodyScanner() {
         
         {/* Control Panel */}
         <div className="space-y-6">
+          {/* Video Recording Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <Video className="h-4 w-4" />
+                  Video Recording
+                </span>
+                <Button
+                  onClick={() => setShowVideoRecorder(!showVideoRecorder)}
+                  variant="outline"
+                  size="sm"
+                >
+                  {showVideoRecorder ? 'Hide' : 'Show'} Recorder
+                </Button>
+              </CardTitle>
+            </CardHeader>
+            {showVideoRecorder && (
+              <CardContent>
+                <VideoRecorder
+                  stream={videoStream}
+                  isActive={cameraStatus === 'ready'}
+                  maxDuration={300}
+                  onRecordingComplete={(blob, url) => {
+                    console.log('Recording complete:', blob.size, 'bytes');
+                    toast({
+                      title: "Recording Saved",
+                      description: "Your video has been saved locally. You can download it or record a new one.",
+                    });
+                  }}
+                />
+              </CardContent>
+            )}
+          </Card>
+          
           {/* Real-time Metrics */}
           <Card>
             <CardHeader>

@@ -183,8 +183,8 @@ export default function PhysioGPT() {
     if (patientId) {
       const fetchPatientData = async () => {
         try {
-          const response = await apiRequest("GET", `/api/virtual-patients/${patientId}`);
-          const patientData = await response.json();
+          const response = await apiRequest(`/api/virtual-patients/${patientId}`, "GET");
+          const patientData = response;
           
           setPatientContext({
             patientId: parseInt(patientId),
@@ -327,8 +327,7 @@ Please provide assessment recommendations following ${patient.expertFramework} a
           complexity: selectedVirtualPatient.complexity
         } : undefined
       });
-      const result = await response.json();
-      return result;
+      return response;
     },
     onSuccess: (data: PhysioGptResponse) => {
       if (data.evidenceSummary || data.researchPapers || data.evidenceGrade || data.exerciseImages) {
@@ -362,7 +361,7 @@ Please provide assessment recommendations following ${patient.expertFramework} a
   // Delete conversation mutation
   const deleteConversationMutation = useMutation({
     mutationFn: async (conversationId: number) => {
-      await apiRequest("DELETE", `/api/physiogpt/conversations/${conversationId}`);
+      await apiRequest(`/api/physiogpt/conversations/${conversationId}`, "DELETE");
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/physiogpt/conversations"] });

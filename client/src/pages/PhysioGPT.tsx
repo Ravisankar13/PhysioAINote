@@ -304,7 +304,7 @@ Please provide assessment recommendations following ${patient.expertFramework} a
   // Send message mutation
   const sendMessageMutation = useMutation({
     mutationFn: async (messageContent: string) => {
-      const response = await apiRequest("POST", "/api/physiogpt/chat", {
+      const response = await apiRequest("/api/physiogpt/chat", "POST", {
         message: messageContent,
         conversationId: selectedConversationId,
         patientContext: patientContext ? {

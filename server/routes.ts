@@ -280,7 +280,7 @@ const storage_config = multer.diskStorage({
 const upload = multer({
   storage: storage_config,
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10 MB file size limit
+    fileSize: 100 * 1024 * 1024, // 100 MB file size limit for longer recordings
   },
   fileFilter: function (req, file, cb) {
     // Accept audio files only

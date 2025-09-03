@@ -33,6 +33,14 @@ export interface PhysioGptRequest {
     expertFramework: string;
     complexity: string;
   };
+  clinicalContext?: {
+    bodyRegion?: string;
+    conditionType?: 'acute' | 'chronic' | 'post-surgical' | 'sports';
+    patientAge?: 'pediatric' | 'adult' | 'geriatric';
+    activityLevel?: 'sedentary' | 'recreational' | 'competitive' | 'elite';
+    clinicalTags?: string[];
+    professionalMode?: boolean;
+  };
   userId: number;
 }
 
@@ -51,6 +59,18 @@ export interface PhysioGptResponse {
     tips?: string[];
     category?: string;
   }>;
+  clinicalSections?: {
+    assessment?: string;
+    clinicalReasoning?: string;
+    treatmentPlan?: string;
+    precautions?: string;
+    redFlags?: string[];
+    differentialDiagnosis?: string[];
+    outcomeMeasures?: string[];
+  };
+  contraindications?: string[];
+  icdCodes?: string[];
+  cptCodes?: string[];
 }
 
 function getExpertFrameworkGuidance(framework: string): string {
@@ -210,7 +230,7 @@ export class PhysioGptService {
     return { enhancedResponse, exerciseImages };
   }
 
-  private buildSystemPrompt(evidenceSummary?: EvidenceSummary, virtualPatient?: PhysioGptRequest['virtualPatient']): string {
+  private buildSystemPrompt(evidenceSummary?: EvidenceSummary, virtualPatient?: PhysioGptRequest['virtualPatient'], clinicalContext?: PhysioGptRequest['clinicalContext']): string {
     let evidenceContext = "";
     
     if (evidenceSummary) {
@@ -252,7 +272,102 @@ ANALYSIS FOCUS:
 `;
     }
 
-    return `You are PhysioGPT, an expert physiotherapy AI assistant with real-time access to current research evidence. Provide evidence-based guidance to physiotherapists.
+    const professionalMode = clinicalContext?.professionalMode;
+    const bodyRegion = clinicalContext?.bodyRegion;
+    const conditionType = clinicalContext?.conditionType;
+    
+    let contextPrompt = '';
+    if (bodyRegion) {
+      contextPrompt += `\nFOCUS AREA: ${bodyRegion} assessment and treatment\n`;
+    }
+    if (conditionType) {
+      contextPrompt += `CONDITION TYPE: ${conditionType} management\n`;
+    }
+    if (clinicalContext?.patientAge) {
+      contextPrompt += `PATIENT POPULATION: ${clinicalContext.patientAge}\n`;
+    }
+    if (clinicalContext?.activityLevel) {
+      contextPrompt += `ACTIVITY LEVEL: ${clinicalContext.activityLevel} athlete/individual\n`;
+    }
+
+    const clinicalReasoningFramework = `
+CLINICAL REASONING FRAMEWORK:
+1. Pattern Recognition: Identify common clinical patterns and presentations
+2. Hypothesis Generation: Form differential diagnoses based on subjective and objective findings
+3. Hypothesis Testing: Suggest specific tests to confirm/refute hypotheses
+4. Clinical Decision Making: Apply evidence-based reasoning to treatment selection
+5. Reassessment Criteria: Define clear markers for progress and modification needs
+
+RED FLAG SCREENING PROTOCOL:
+- Always screen for serious pathology indicators
+- Include cauda equina, fracture, infection, malignancy, vascular compromise
+- Recommend immediate medical referral when red flags present
+- Document safety screening in all assessments
+
+OUTCOME MEASURES INTEGRATION:
+- Suggest validated outcome measures specific to condition
+- Include MCID (Minimal Clinically Important Difference) values
+- Recommend reassessment timeframes
+- Track functional and patient-reported outcomes
+
+EXERCISE PRESCRIPTION PRINCIPLES:
+- Tissue-specific loading parameters (tendon: heavy slow resistance, muscle: progressive overload)
+- Phase-based progression (protection → mobility → strengthening → return to function)
+- Include dosage: sets, reps, tempo, rest, frequency, intensity (%1RM or RPE)
+- Contraindications and modifications for common comorbidities
+- Home exercise program with minimal equipment options
+`;
+
+    const specialTestsReference = `
+SPECIAL TESTS GUIDANCE:
+- Include sensitivity and specificity values when known
+- Cluster tests for improved diagnostic accuracy
+- Consider likelihood ratios and clinical utility
+- Note test limitations and false positive/negative rates
+`;
+
+    const treatmentHierarchy = `
+TREATMENT SELECTION HIERARCHY:
+1. Education and advice (strongest evidence for most conditions)
+2. Active interventions (exercise, movement retraining)
+3. Manual therapy (when indicated, as adjunct to active care)
+4. Modalities (limited use, specific indications only)
+5. Always emphasize self-management strategies
+`;
+
+    return `You are PhysioGPT, a specialized clinical decision support system for physiotherapists. You provide evidence-based, physiotherapy-specific guidance that goes beyond general medical knowledge.
+
+${contextPrompt}
+
+${professionalMode ? 'PROFESSIONAL MODE ACTIVE: Use technical terminology, include ICD-10/CPT codes, provide detailed clinical reasoning, and cite specific research.' : 'CLINICAL MODE: Balance technical accuracy with clear explanations suitable for clinical documentation and patient communication.'}
+
+${clinicalReasoningFramework}
+
+${specialTestsReference}
+
+${treatmentHierarchy}
+
+PHYSIOTHERAPY-SPECIFIC FOCUS:
+- Movement analysis and biomechanical assessment
+- Functional diagnosis beyond structural pathology
+- Load management and tissue adaptation principles
+- Motor control and movement pattern retraining
+- Biopsychosocial factors affecting recovery
+- Return to function/sport criteria
+- Prevention and risk factor modification
+
+CLINICAL DOCUMENTATION STANDARDS:
+- Structure responses with clear sections when applicable
+- Include objective markers and measurable goals
+- Document clinical reasoning and evidence base
+- Note precautions and contraindications
+- Suggest appropriate referrals when indicated
+
+SAFETY FIRST PRINCIPLE:
+- Always screen for red flags before proceeding
+- Document safety considerations
+- Err on side of caution with unclear presentations
+- Recommend medical consultation when appropriate
 
 ${evidenceContext}
 
@@ -360,17 +475,83 @@ Keep responses concise, practical, and directly applicable to clinical practice.
     return 'PhysioGPT Consultation';
   }
 
-  private generateSuggestions(response: string): string[] {
-    const suggestions = [
-      "What assessment tests should I perform?",
-      "Can you suggest an exercise progression?",
-      "What are the red flags to watch for?",
-      "How should I modify treatment?",
-      "What's the expected recovery timeline?"
+  private generateSuggestions(response: string, clinicalContext?: PhysioGptRequest['clinicalContext']): string[] {
+    // Generate context-specific clinical suggestions
+    const baseSuggestions = [];
+    
+    // Check response content for specific topics
+    const responseLower = response.toLowerCase();
+    
+    if (responseLower.includes('assess') || responseLower.includes('test')) {
+      baseSuggestions.push(
+        "What's the sensitivity and specificity of these tests?",
+        "Should I cluster these tests for better accuracy?",
+        "What functional assessments would complement these?"
+      );
+    }
+    
+    if (responseLower.includes('exercise') || responseLower.includes('strengthen')) {
+      baseSuggestions.push(
+        "What's the optimal dosage and progression?",
+        "Any contraindications I should consider?",
+        "How do I modify for different fitness levels?"
+      );
+    }
+    
+    if (responseLower.includes('pain') || responseLower.includes('symptom')) {
+      baseSuggestions.push(
+        "What are the pain mechanisms involved?",
+        "Any red flags I should screen for?",
+        "What's the prognosis for recovery?"
+      );
+    }
+    
+    if (responseLower.includes('treatment') || responseLower.includes('intervention')) {
+      baseSuggestions.push(
+        "What's the evidence level for this approach?",
+        "What outcome measures should I track?",
+        "When should I reassess and modify?"
+      );
+    }
+    
+    // Add body region specific suggestions
+    if (clinicalContext?.bodyRegion) {
+      const region = clinicalContext.bodyRegion.toLowerCase();
+      if (region.includes('spine') || region.includes('back')) {
+        baseSuggestions.push(
+          "Should I use a clinical prediction rule?",
+          "What movement patterns should I assess?",
+          "Any neurological screening needed?"
+        );
+      } else if (region.includes('shoulder')) {
+        baseSuggestions.push(
+          "How do I assess scapular dyskinesis?",
+          "What's the role of the kinetic chain?",
+          "Should I test for instability?"
+        );
+      } else if (region.includes('knee') || region.includes('hip')) {
+        baseSuggestions.push(
+          "What functional tests are most relevant?",
+          "How do I assess movement quality?",
+          "What's the criteria for return to sport?"
+        );
+      }
+    }
+    
+    // Always include these clinical essentials if not enough suggestions
+    const clinicalEssentials = [
+      "What red flags should I screen for?",
+      "What's the expected recovery timeline?",
+      "What outcome measures are most appropriate?",
+      "When should I refer to another provider?",
+      "What patient education is important?"
     ];
     
-    // Return 3 random suggestions
-    return suggestions.sort(() => 0.5 - Math.random()).slice(0, 3);
+    // Combine and deduplicate
+    const allSuggestions = [...new Set([...baseSuggestions, ...clinicalEssentials])];
+    
+    // Return 4 suggestions (increased from 3 for more clinical options)
+    return allSuggestions.slice(0, 4);
   }
 
   private async identifyResearchQuery(message: string): Promise<string | null> {
@@ -451,8 +632,8 @@ Keep responses concise, practical, and directly applicable to clinical practice.
         content: request.message
       });
       
-      // Prepare messages for OpenAI with evidence context and virtual patient
-      const systemPrompt = this.buildSystemPrompt(evidenceSummary, request.virtualPatient);
+      // Prepare messages for OpenAI with evidence context, virtual patient, and clinical context
+      const systemPrompt = this.buildSystemPrompt(evidenceSummary, request.virtualPatient, request.clinicalContext);
       const openaiMessages = [
         { role: 'system', content: systemPrompt },
         ...previousMessages,
@@ -521,7 +702,7 @@ Keep responses concise, practical, and directly applicable to clinical practice.
       const result: PhysioGptResponse = {
         response: aiResponse,
         conversationId,
-        suggestions: this.generateSuggestions(aiResponse),
+        suggestions: this.generateSuggestions(aiResponse, request.clinicalContext),
         evidenceSummary,
         researchPapers,
         evidenceGrade: evidenceSummary?.evidenceGrade,

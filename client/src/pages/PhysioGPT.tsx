@@ -31,7 +31,8 @@ import {
   AlertTriangle,
   Menu,
   X,
-  Target
+  Target,
+  Calculator
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -46,6 +47,8 @@ import FormattedResponse from "@/components/clinical/FormattedResponse";
 import SOAPBuilderPanel from "@/components/clinical/SOAPBuilderPanel";
 import ClinicalReferenceLibrary from "@/components/clinical/ClinicalReferenceLibrary";
 import { AITreatmentPlanner } from "@/components/clinical/AITreatmentPlanner";
+import ClinicalToolsPanel from "@/components/clinical/ClinicalToolsPanel";
+import ClinicalResponseDisplay from "@/components/clinical/ClinicalResponseDisplay";
 
 // Error Boundary Component
 class ErrorBoundary extends Component<{children: React.ReactNode}, {hasError: boolean}> {
@@ -123,6 +126,18 @@ interface PhysioGptResponse {
     tips?: string[];
     category?: string;
   }>;
+  clinicalSections?: {
+    assessment?: string;
+    clinicalReasoning?: string;
+    treatmentPlan?: string;
+    precautions?: string;
+    redFlags?: string[];
+    differentialDiagnosis?: string[];
+    outcomeMeasures?: string[];
+  };
+  contraindications?: string[];
+  icdCodes?: string[];
+  cptCodes?: string[];
 }
 
 export default function PhysioGPT() {
@@ -154,6 +169,16 @@ export default function PhysioGPT() {
   const [soapBuilderCollapsed, setSOAPBuilderCollapsed] = useState(false);
   const [showReferenceLibrary, setShowReferenceLibrary] = useState(false);
   const [showTreatmentPlanning, setShowTreatmentPlanning] = useState(false);
+  const [showClinicalTools, setShowClinicalTools] = useState(false);
+  const [clinicalContext, setClinicalContext] = useState<{
+    bodyRegion?: string;
+    conditionType?: 'acute' | 'chronic' | 'post-surgical' | 'sports';
+    patientAge?: 'pediatric' | 'adult' | 'geriatric';
+    activityLevel?: 'sedentary' | 'recreational' | 'competitive' | 'elite';
+    clinicalTags?: string[];
+    professionalMode?: boolean;
+  }>({});
+  const [professionalMode, setProfessionalMode] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
@@ -325,7 +350,12 @@ Please provide assessment recommendations following ${patient.expertFramework} a
           medicalHistory: selectedVirtualPatient.medicalHistory,
           expertFramework: selectedVirtualPatient.expertFramework,
           complexity: selectedVirtualPatient.complexity
-        } : undefined
+        } : undefined,
+        clinicalContext: {
+          ...clinicalContext,
+          bodyRegion: selectedBodyRegion || clinicalContext.bodyRegion,
+          professionalMode
+        }
       });
       return response;
     },
@@ -549,6 +579,41 @@ Please provide:
             </div>
           </ScrollArea>
 
+          {/* Clinical Context Section */}
+          <div className="mt-4 p-3 bg-gray-50 rounded-lg space-y-3">
+            <div className="text-sm font-medium text-gray-700">Clinical Context</div>
+            
+            {/* Body Region Quick Select */}
+            <div className="grid grid-cols-3 gap-1">
+              {['Cervical', 'Thoracic', 'Lumbar', 'Shoulder', 'Hip', 'Knee'].map(region => (
+                <Button
+                  key={region}
+                  variant={clinicalContext.bodyRegion === region ? 'default' : 'outline'}
+                  size="sm"
+                  className="text-xs"
+                  onClick={() => setClinicalContext(prev => ({ ...prev, bodyRegion: region }))}
+                >
+                  {region}
+                </Button>
+              ))}
+            </div>
+            
+            {/* Condition Type */}
+            <div className="flex gap-1">
+              {(['acute', 'chronic', 'post-surgical', 'sports'] as const).map(type => (
+                <Button
+                  key={type}
+                  variant={clinicalContext.conditionType === type ? 'default' : 'outline'}
+                  size="sm"
+                  className="text-xs flex-1"
+                  onClick={() => setClinicalContext(prev => ({ ...prev, conditionType: type }))}
+                >
+                  {type.charAt(0).toUpperCase() + type.slice(1)}
+                </Button>
+              ))}
+            </div>
+          </div>
+
           {/* Quick Actions */}
           <div className="mt-4 space-y-2">
             <Button
@@ -566,6 +631,14 @@ Please provide:
             >
               <Activity className="h-4 w-4 mr-2 text-teal-600" />
               3D Anatomy
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full justify-start hover:bg-teal-50 hover:border-teal-300"
+              onClick={() => setShowClinicalTools(!showClinicalTools)}
+            >
+              <Calculator className="h-4 w-4 mr-2 text-teal-600" />
+              Clinical Tools
             </Button>
           </div>
         </div>
@@ -601,6 +674,19 @@ Please provide:
                   Patient: {patientContext.patientName}
                 </Badge>
               )}
+              {/* Professional Mode Toggle */}
+              <Button
+                variant={professionalMode ? "secondary" : "ghost"}
+                size="sm"
+                onClick={() => setProfessionalMode(!professionalMode)}
+                className="text-xs"
+              >
+                {professionalMode ? (
+                  <><FileText className="h-3 w-3 mr-1" /> Pro Mode</>  
+                ) : (
+                  <><User className="h-3 w-3 mr-1" /> Clinical</>
+                )}
+              </Button>
               <Button
                 variant="secondary"
                 size="sm"
@@ -713,7 +799,7 @@ Please provide:
                     >
                       {msg.role === 'assistant' ? (
                         <>
-                          <FormattedResponse 
+                          <ClinicalResponseDisplay 
                             content={msg.content}
                             evidenceGrade={
                               evidenceData.has(selectedConversationId!) && index === messages.length - 1
@@ -725,6 +811,27 @@ Please provide:
                                 ? evidenceData.get(selectedConversationId!)?.confidenceLevel
                                 : undefined
                             }
+                            clinicalSections={
+                              evidenceData.has(selectedConversationId!) && index === messages.length - 1
+                                ? evidenceData.get(selectedConversationId!)?.clinicalSections
+                                : undefined
+                            }
+                            contraindications={
+                              evidenceData.has(selectedConversationId!) && index === messages.length - 1
+                                ? evidenceData.get(selectedConversationId!)?.contraindications
+                                : undefined
+                            }
+                            icdCodes={
+                              evidenceData.has(selectedConversationId!) && index === messages.length - 1
+                                ? evidenceData.get(selectedConversationId!)?.icdCodes
+                                : undefined
+                            }
+                            cptCodes={
+                              evidenceData.has(selectedConversationId!) && index === messages.length - 1
+                                ? evidenceData.get(selectedConversationId!)?.cptCodes
+                                : undefined
+                            }
+                            professionalMode={professionalMode}
                           />
                           {/* Display exercise images if available */}
                           {evidenceData.has(selectedConversationId!) && index === messages.length - 1 && 
@@ -861,6 +968,75 @@ Please provide:
           </div>
         )}
 
+        {/* Clinical Quick Actions Bar */}
+        <div className="px-4 py-2 bg-gray-50 border-t flex gap-2 overflow-x-auto">
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-xs whitespace-nowrap"
+            onClick={() => {
+              const soapPrompt = "Generate a SOAP note based on our conversation";
+              setMessage(soapPrompt);
+              handleSendMessage(soapPrompt);
+            }}
+          >
+            <FileText className="h-3 w-3 mr-1" />
+            Generate SOAP
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-xs whitespace-nowrap"
+            onClick={() => {
+              const reasoningPrompt = "Show the clinical reasoning pathway for this case";
+              setMessage(reasoningPrompt);
+              handleSendMessage(reasoningPrompt);
+            }}
+          >
+            <Brain className="h-3 w-3 mr-1" />
+            Clinical Reasoning
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-xs whitespace-nowrap"
+            onClick={() => {
+              const evidencePrompt = "What's the evidence level for these recommendations?";
+              setMessage(evidencePrompt);
+              handleSendMessage(evidencePrompt);
+            }}
+          >
+            <BookOpen className="h-3 w-3 mr-1" />
+            Evidence Check
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-xs whitespace-nowrap"
+            onClick={() => {
+              const redFlagPrompt = "Screen for red flags in this presentation";
+              setMessage(redFlagPrompt);
+              handleSendMessage(redFlagPrompt);
+            }}
+          >
+            <AlertTriangle className="h-3 w-3 mr-1" />
+            Red Flag Screen
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-xs whitespace-nowrap"
+            onClick={() => {
+              const exercisePrompt = "Generate a phase-based exercise program for this condition";
+              setMessage(exercisePrompt);
+              handleSendMessage(exercisePrompt);
+            }}
+          >
+            <Activity className="h-3 w-3 mr-1" />
+            Exercise Program
+          </Button>
+        </div>
+
         {/* Input Area */}
         <div className="p-4 border-t bg-white/95 backdrop-blur-sm">
           <div className="max-w-4xl mx-auto">
@@ -875,7 +1051,9 @@ Please provide:
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 placeholder={
-                  selectedBodyRegion 
+                  professionalMode
+                    ? "Enter clinical query with ICD/CPT codes, research citations..."
+                    : selectedBodyRegion 
                     ? `Ask about ${selectedBodyRegionName}...`
                     : "Ask me anything about physiotherapy..."
                 }
@@ -898,31 +1076,58 @@ Please provide:
         </div>
       </div>
 
-      {/* Optional Panels */}
-      {show3DPanel && (
-        <div className="w-96 border-l bg-white p-4">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold">3D Anatomy</h3>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setShow3DPanel(false)}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-          <ErrorBoundary>
-            <Suspense fallback={
-              <div className="h-96 flex items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
+      {/* Right Panel - Clinical Tools or 3D Anatomy */}
+      {(show3DPanel || showClinicalTools) && (
+        <div className="w-96 border-l bg-white flex flex-col">
+          {show3DPanel && !showClinicalTools && (
+            <>
+              <div className="flex items-center justify-between p-4 border-b">
+                <h3 className="font-semibold">3D Anatomy</h3>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setShow3DPanel(false)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
               </div>
-            }>
-              <InteractiveSkeleton
-                onBodyPartSelected={handleBodyPartSelected}
-                selectedBodyPart={selectedBodyRegion}
-              />
-            </Suspense>
-          </ErrorBoundary>
+              <div className="flex-1 p-4">
+                <ErrorBoundary>
+                  <Suspense fallback={
+                    <div className="h-96 flex items-center justify-center">
+                      <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
+                    </div>
+                  }>
+                    <InteractiveSkeleton
+                      onBodyPartSelected={handleBodyPartSelected}
+                      selectedBodyPart={selectedBodyRegion}
+                    />
+                  </Suspense>
+                </ErrorBoundary>
+              </div>
+            </>
+          )}
+          
+          {showClinicalTools && (
+            <>
+              <div className="flex items-center justify-between p-4 border-b">
+                <h3 className="font-semibold flex items-center gap-2">
+                  <Calculator className="h-4 w-4 text-teal-600" />
+                  Clinical Tools
+                </h3>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setShowClinicalTools(false)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="flex-1 overflow-hidden">
+                <ClinicalToolsPanel />
+              </div>
+            </>
+          )}
         </div>
       )}
 

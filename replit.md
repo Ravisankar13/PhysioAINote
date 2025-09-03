@@ -10,6 +10,14 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (Jan 31, 2025)
 - **Navigation Bar Update**: Removed "Competitions" and "Smart Assessment" buttons from main navigation. Added "Body Scanner", "Movement Analysis", and "Virtual Patients" buttons for direct access to core clinical features. Maintained "Research" button. New navigation order: PhysioGPT → Body Scanner → Movement Analysis → Virtual Patients → Enhanced SOAP → Research.
+- **PhysioGPT Clinical Enhancements**: Transformed PhysioGPT page into comprehensive clinical decision support system with:
+  - Clinical Context Panel for body region and condition type selection
+  - Integrated Clinical Tools Panel with outcome measure calculators (ODI, DASH), prediction rules (Ottawa, C-Spine), and special tests library
+  - Clinical Quick Actions toolbar for rapid SOAP generation, reasoning pathways, evidence checking, red flag screening, and exercise prescription
+  - Professional Mode toggle for technical documentation with ICD/CPT codes
+  - Enhanced system prompts with physiotherapy-specific clinical reasoning frameworks, red flag protocols, and treatment hierarchies
+  - Structured clinical response display with automatic parsing of assessment, clinical reasoning, treatment plans, and contraindications
+  - Context-aware suggestions based on conversation content and clinical focus
 
 ## System Architecture
 

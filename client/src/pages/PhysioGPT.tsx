@@ -32,7 +32,8 @@ import {
   Menu,
   X,
   Target,
-  Calculator
+  Calculator,
+  Download
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -49,6 +50,7 @@ import ClinicalReferenceLibrary from "@/components/clinical/ClinicalReferenceLib
 import { AITreatmentPlanner } from "@/components/clinical/AITreatmentPlanner";
 import ClinicalToolsPanel from "@/components/clinical/ClinicalToolsPanel";
 import ClinicalResponseDisplay from "@/components/clinical/ClinicalResponseDisplay";
+import { pdfGenerator } from "@/services/pdfGenerator";
 
 // Error Boundary Component
 class ErrorBoundary extends Component<{children: React.ReactNode}, {hasError: boolean}> {
@@ -1085,6 +1087,38 @@ Please provide:
                               </div>
                             </div>
                           )}
+                          {/* PDF Generation Button */}
+                          <div className="mt-3 flex justify-end">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                const contentType = msg.content.toLowerCase().includes('exercise') || 
+                                                   msg.content.toLowerCase().includes('phase') ? 'exercise' : 
+                                                   msg.content.toLowerCase().includes('subjective') ||
+                                                   msg.content.toLowerCase().includes('objective') ? 'soap' : 'general';
+                                
+                                pdfGenerator.downloadPDF({
+                                  title: `Clinical Response - ${new Date().toLocaleDateString()}`,
+                                  content: msg.content,
+                                  type: contentType as any,
+                                  patientName: patientContext?.patientName || selectedVirtualPatient?.patientName,
+                                  date: new Date().toLocaleDateString(),
+                                  therapistName: 'PhysioGPT User',
+                                  clinicName: 'PhysioGPT Clinical Services'
+                                });
+                                
+                                toast({
+                                  title: "PDF Generated",
+                                  description: "The document has been downloaded to your device.",
+                                });
+                              }}
+                              className="text-xs"
+                            >
+                              <Download className="h-3 w-3 mr-1" />
+                              Download PDF
+                            </Button>
+                          </div>
                         </>
                       ) : (
                         <p className="text-white">
@@ -1119,6 +1153,38 @@ Please provide:
                         content={streamingContent}
                         professionalMode={professionalMode}
                       />
+                      {/* PDF Button for streaming content */}
+                      <div className="mt-3 flex justify-end">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const contentType = streamingContent.toLowerCase().includes('exercise') || 
+                                               streamingContent.toLowerCase().includes('phase') ? 'exercise' : 
+                                               streamingContent.toLowerCase().includes('subjective') ||
+                                               streamingContent.toLowerCase().includes('objective') ? 'soap' : 'general';
+                            
+                            pdfGenerator.downloadPDF({
+                              title: `Clinical Response - ${new Date().toLocaleDateString()}`,
+                              content: streamingContent,
+                              type: contentType as any,
+                              patientName: patientContext?.patientName || selectedVirtualPatient?.patientName,
+                              date: new Date().toLocaleDateString(),
+                              therapistName: 'PhysioGPT User',
+                              clinicName: 'PhysioGPT Clinical Services'
+                            });
+                            
+                            toast({
+                              title: "PDF Generated",
+                              description: "The document has been downloaded to your device.",
+                            });
+                          }}
+                          className="text-xs"
+                        >
+                          <Download className="h-3 w-3 mr-1" />
+                          Download PDF
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </div>

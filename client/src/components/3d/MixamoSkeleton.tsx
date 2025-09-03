@@ -122,10 +122,10 @@ export default function MixamoSkeleton({
       bones: {}
     };
 
-    // Default to Mixamo FBX if no model URL provided
-    const urlToLoad = modelUrl || 'models/mixamo-skeleton.fbx';
+    // Default to procedural skeleton if no model URL provided
+    const urlToLoad = modelUrl || null;
     
-    // Create or load model
+    // Create or load model - default to procedural skeleton
     if (urlToLoad && (urlToLoad.endsWith('.glb') || urlToLoad.endsWith('.gltf') || urlToLoad.endsWith('.fbx'))) {
       // Load external Mixamo model
       const loader = urlToLoad.endsWith('.fbx') ? new FBXLoader() : new GLTFLoader();

@@ -7923,64 +7923,65 @@ Respond with only a number between 1-100 representing the relevance score.`;
   const streamingWss = new WebSocketServer({ server: httpServer, path: '/ws/streaming-transcription' });
   
   streamingWss.on('connection', async (ws: WebSocket, req) => {
-    const url = new URL(req.url!, `http://${req.headers.host}`);
-    const userId = url.searchParams.get('userId');
-    const sessionId = url.searchParams.get('sessionId') || uuidv4();
-    
-    if (!userId) {
-      ws.close(1000, 'Missing userId');
-      return;
-    }
-    
-    console.log(`[Streaming Transcription] New connection - User: ${userId}, Session: ${sessionId}`);
-    
-    // Import streaming service
-    const { streamingTranscriptionService } = await import('./streamingTranscriptionService');
-    
-    // Handle audio chunks
-    ws.on('message', async (data: Buffer) => {
-      try {
-        // Process the audio chunk
-        const result = await streamingTranscriptionService.processAudioChunk(
-          sessionId,
-          data,
-          parseInt(userId)
-        );
-        
-        // Send back transcription and SOAP sections if available
-        if (result.transcript || result.soapSections) {
+    try {
+      const url = new URL(req.url || '', `http://${req.headers?.host || 'localhost'}`);
+      const userId = url.searchParams.get('userId') || '1'; // Default to user ID 1
+      const sessionId = url.searchParams.get('sessionId') || uuidv4();
+      
+      console.log(`[Streaming Transcription] New connection - User: ${userId}, Session: ${sessionId}`);
+      
+      // Import streaming service
+      const { streamingTranscriptionService } = await import('./streamingTranscriptionService');
+      
+      // Handle audio chunks
+      ws.on('message', async (data: Buffer) => {
+        try {
+          // Process the audio chunk
+          const result = await streamingTranscriptionService.processAudioChunk(
+            sessionId,
+            data,
+            parseInt(userId)
+          );
+          
+          // Send back transcription and SOAP sections if available
+          if (result.transcript || result.soapSections) {
+            ws.send(JSON.stringify({
+              type: 'transcription',
+              transcript: result.transcript,
+              soapSections: result.soapSections,
+              timestamp: new Date().toISOString()
+            }));
+          }
+        } catch (error) {
+          console.error('[Streaming Transcription] Error processing audio chunk:', error);
           ws.send(JSON.stringify({
-            type: 'transcription',
-            transcript: result.transcript,
-            soapSections: result.soapSections,
-            timestamp: new Date().toISOString()
+            type: 'error',
+            message: 'Error processing audio'
           }));
         }
-      } catch (error) {
-        console.error('[Streaming Transcription] Error processing audio chunk:', error);
-        ws.send(JSON.stringify({
-          type: 'error',
-          message: 'Error processing audio'
-        }));
-      }
-    });
-    
-    // Handle finalization
-    ws.on('close', async () => {
-      try {
-        const finalResult = await streamingTranscriptionService.flushSession(sessionId);
-        console.log(`[Streaming Transcription] Session ${sessionId} finalized`);
-      } catch (error) {
-        console.error('[Streaming Transcription] Error finalizing session:', error);
-      }
-    });
-    
-    // Send initial acknowledgment
-    ws.send(JSON.stringify({
-      type: 'connected',
-      sessionId,
-      timestamp: new Date().toISOString()
-    }));
+      });
+      
+      // Handle finalization
+      ws.on('close', async () => {
+        try {
+          const finalResult = await streamingTranscriptionService.flushSession(sessionId);
+          console.log(`[Streaming Transcription] Session ${sessionId} finalized`);
+        } catch (error) {
+          console.error('[Streaming Transcription] Error finalizing session:', error);
+        }
+      });
+      
+      // Send initial acknowledgment
+      ws.send(JSON.stringify({
+        type: 'connected',
+        sessionId,
+        timestamp: new Date().toISOString()
+      }));
+      
+    } catch (error) {
+      console.error('[Streaming Transcription] Connection error:', error);
+      ws.close(1011, 'Server error');
+    }
   });
   
   console.log('🎙️ Streaming Transcription WebSocket server started on /ws/streaming-transcription');

@@ -64,11 +64,13 @@ export function StreamingSOAPNotes() {
   
   // Initialize WebSocket connection
   const initializeWebSocket = useCallback(() => {
-    if (!user?.id) return;
+    // Use a default user ID if not authenticated (for testing)
+    const userId = user?.id || '1';
     
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws/streaming-transcription?userId=${user.id}`;
+    const wsUrl = `${protocol}//${window.location.host}/ws/streaming-transcription?userId=${userId}`;
     
+    console.log('Connecting to WebSocket:', wsUrl);
     const ws = new WebSocket(wsUrl);
     
     ws.onopen = () => {
@@ -128,7 +130,7 @@ export function StreamingSOAPNotes() {
     };
     
     wsRef.current = ws;
-  }, [user?.id, toast]);
+  }, [user, toast]);
   
   // Start recording
   const startRecording = async () => {
@@ -138,9 +140,18 @@ export function StreamingSOAPNotes() {
       // Initialize WebSocket
       initializeWebSocket();
       
-      // Set up MediaRecorder
+      // Wait a moment for WebSocket to connect
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Set up MediaRecorder with proper MIME type detection
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/webm')
+        ? 'audio/webm'
+        : 'audio/mp4'; // Fallback for iOS
+      
       const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm;codecs=opus'
+        mimeType
       });
       
       mediaRecorderRef.current = mediaRecorder;

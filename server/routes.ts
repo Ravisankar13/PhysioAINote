@@ -20,6 +20,7 @@ import { grimaldiHipApproaches, grimaldiTreatmentPrinciples } from "./grimaldi-h
 import { bissetElbowApproaches, bissetTreatmentPrinciples } from "./bisset-elbow-library";
 import { generateAICaseStudy, generateDiagnosticFeedback } from "./aiCaseStudyGenerator";
 import { physioGptService } from "./physioGptService";
+import { physioGptStreamService } from "./physioGptStreamService";
 import { researchGapAnalysisService } from "./researchGapAnalysis";
 import { researchStorage } from "./researchStorage";
 import { competitionStorage } from "./competitionStorage";
@@ -5524,7 +5525,7 @@ Respond with only a number between 1-100 representing the relevance score.`;
   app.post("/api/physiogpt/chat", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       console.log("PhysioGPT chat request received:", req.body);
-      const { message, conversationId, patientContext } = req.body;
+      const { message, conversationId, patientContext, virtualPatient, clinicalContext } = req.body;
       
       if (!message || typeof message !== 'string') {
         console.log("Invalid message:", message);
@@ -5536,6 +5537,8 @@ Respond with only a number between 1-100 representing the relevance score.`;
         message,
         conversationId,
         patientContext,
+        virtualPatient,
+        clinicalContext,
         userId: req.user!.id
       });
 
@@ -5548,6 +5551,32 @@ Respond with only a number between 1-100 representing the relevance score.`;
       console.error("Error message:", error?.message);
       console.error("Error stack:", error?.stack);
       res.status(500).json({ error: "Unable to process your request at this time" });
+    }
+  });
+
+  // PhysioGPT Streaming Chat Endpoint
+  app.post("/api/physiogpt/chat/stream", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      console.log("PhysioGPT stream request received");
+      const { message, conversationId, patientContext, virtualPatient, clinicalContext } = req.body;
+      
+      if (!message || typeof message !== 'string') {
+        return res.status(400).json({ error: "Message is required" });
+      }
+
+      // Use the streaming service
+      await physioGptStreamService.streamResponse({
+        message,
+        conversationId,
+        patientContext,
+        virtualPatient,
+        clinicalContext,
+        userId: req.user!.id
+      }, res);
+      
+    } catch (error: any) {
+      console.error("PhysioGPT streaming error:", error);
+      res.status(500).json({ error: "Unable to process your streaming request" });
     }
   });
 

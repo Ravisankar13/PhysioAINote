@@ -179,8 +179,12 @@ export default function PhysioGPT() {
     professionalMode?: boolean;
   }>({});
   const [professionalMode, setProfessionalMode] = useState(false);
+  const [useStreaming, setUseStreaming] = useState(true); // Enable streaming by default
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamingContent, setStreamingContent] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Fetch user conversations
   const { data: conversations = [], isLoading: loadingConversations } = useQuery<PhysioGptConversation[]>({
@@ -327,6 +331,162 @@ Please provide assessment recommendations following ${patient.expertFramework} a
   };
 
   // Send message mutation
+  // Streaming message handler
+  const sendMessageStreaming = async (messageContent: string) => {
+    if (isStreaming) return;
+    
+    setIsStreaming(true);
+    setStreamingContent("");
+    
+    // Abort any previous streaming
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    
+    abortControllerRef.current = new AbortController();
+    
+    try {
+      const response = await fetch("/api/physiogpt/chat/stream", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: messageContent,
+          conversationId: selectedConversationId,
+          patientContext: patientContext ? {
+            patientId: patientContext.patientId
+          } : selectedBodyRegion ? {
+            bodyRegion: selectedBodyRegion,
+            regionName: selectedBodyRegionName
+          } : undefined,
+          virtualPatient: selectedVirtualPatient ? {
+            id: selectedVirtualPatient.id,
+            patientName: selectedVirtualPatient.patientName,
+            age: selectedVirtualPatient.age,
+            gender: selectedVirtualPatient.gender,
+            bodyPart: selectedVirtualPatient.bodyPart,
+            condition: selectedVirtualPatient.condition,
+            chiefComplaint: selectedVirtualPatient.chiefComplaint,
+            presentingSymptoms: selectedVirtualPatient.presentingSymptoms,
+            medicalHistory: selectedVirtualPatient.medicalHistory,
+            expertFramework: selectedVirtualPatient.expertFramework,
+            complexity: selectedVirtualPatient.complexity
+          } : undefined,
+          clinicalContext: {
+            ...clinicalContext,
+            bodyRegion: selectedBodyRegion || clinicalContext.bodyRegion,
+            professionalMode
+          }
+        }),
+        signal: abortControllerRef.current.signal,
+      });
+      
+      if (!response.ok) {
+        throw new Error("Failed to send message");
+      }
+      
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let accumulatedContent = "";
+      let newConversationId = selectedConversationId;
+      let evidenceDataReceived: any = {};
+      
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          
+          const chunk = decoder.decode(value);
+          const lines = chunk.split("\n");
+          
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                
+                switch (data.type) {
+                  case 'conversationId':
+                    newConversationId = data.data;
+                    setSelectedConversationId(newConversationId);
+                    break;
+                    
+                  case 'chunk':
+                    accumulatedContent += data.data;
+                    setStreamingContent(accumulatedContent);
+                    break;
+                    
+                  case 'evidence':
+                    evidenceDataReceived.evidenceSummary = data.data;
+                    evidenceDataReceived.evidenceGrade = data.data.evidenceGrade;
+                    evidenceDataReceived.confidenceLevel = data.data.confidenceLevel;
+                    break;
+                    
+                  case 'exercises':
+                    evidenceDataReceived.exerciseImages = data.data;
+                    break;
+                    
+                  case 'suggestions':
+                    setSuggestions(data.data || []);
+                    break;
+                    
+                  case 'clinicalSections':
+                    evidenceDataReceived.clinicalSections = data.data;
+                    break;
+                    
+                  case 'done':
+                    // Update evidence data if received
+                    if (Object.keys(evidenceDataReceived).length > 0 && newConversationId) {
+                      setEvidenceData(prev => new Map(prev.set(newConversationId, {
+                        ...evidenceDataReceived,
+                        conversationId: newConversationId,
+                        response: accumulatedContent
+                      })));
+                    }
+                    
+                    // Refresh conversations
+                    setTimeout(() => {
+                      queryClient.invalidateQueries({ queryKey: ["/api/physiogpt/conversations"] });
+                      queryClient.invalidateQueries({ 
+                        queryKey: [`/api/physiogpt/conversations/${newConversationId}`] 
+                      });
+                    }, 100);
+                    break;
+                    
+                  case 'error':
+                    toast({
+                      title: "Error",
+                      description: data.data,
+                      variant: "destructive",
+                    });
+                    break;
+                }
+              } catch (e) {
+                console.error("Error parsing SSE data:", e);
+              }
+            }
+          }
+        }
+      }
+      
+      setMessage("");
+      setStreamingContent("");
+      
+    } catch (error: any) {
+      if (error.name !== 'AbortError') {
+        console.error("Streaming error:", error);
+        toast({
+          title: "Error",
+          description: "Failed to send message. Please try again.",
+          variant: "destructive",
+        });
+      }
+    } finally {
+      setIsStreaming(false);
+    }
+  };
+  
+  // Regular mutation for non-streaming
   const sendMessageMutation = useMutation({
     mutationFn: async (messageContent: string) => {
       const response = await apiRequest("/api/physiogpt/chat", "POST", {
@@ -412,7 +572,12 @@ Please provide assessment recommendations following ${patient.expertFramework} a
     if (!content) {
       return;
     }
-    sendMessageMutation.mutate(content);
+    
+    if (useStreaming) {
+      sendMessageStreaming(content);
+    } else {
+      sendMessageMutation.mutate(content);
+    }
   };
 
   const handleNewConversation = () => {
@@ -687,6 +852,20 @@ Please provide:
                   <><User className="h-3 w-3 mr-1" /> Clinical</>
                 )}
               </Button>
+              {/* Streaming Toggle */}
+              <Button
+                variant={useStreaming ? "secondary" : "ghost"}
+                size="sm"
+                onClick={() => setUseStreaming(!useStreaming)}
+                className="text-xs"
+                title={useStreaming ? "Streaming enabled - responses appear instantly" : "Streaming disabled - wait for complete response"}
+              >
+                {useStreaming ? (
+                  <><Activity className="h-3 w-3 mr-1 animate-pulse" /> Fast</>
+                ) : (
+                  <><Clock className="h-3 w-3 mr-1" /> Standard</>
+                )}
+              </Button>
               <Button
                 variant="secondary"
                 size="sm"
@@ -926,7 +1105,25 @@ Please provide:
                   )}
                 </div>
               ))}
-              {sendMessageMutation.isPending && (
+              {/* Show streaming content if streaming */}
+              {isStreaming && streamingContent && (
+                <div className="flex gap-3 animate-fadeIn">
+                  <Avatar className="h-8 w-8 border-2 border-teal-200">
+                    <AvatarFallback className="bg-gradient-to-br from-teal-500 to-teal-600 text-white">
+                      <Bot className="h-4 w-4" />
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="max-w-[70%]">
+                    <div className="rounded-2xl p-4 shadow-sm bg-white border border-gray-200">
+                      <ClinicalResponseDisplay 
+                        content={streamingContent}
+                        professionalMode={professionalMode}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+              {(sendMessageMutation.isPending || (isStreaming && !streamingContent)) && (
                 <div className="flex gap-3 animate-pulse">
                   <Avatar className="h-8 w-8 border-2 border-teal-200">
                     <AvatarFallback className="bg-gradient-to-br from-teal-500 to-teal-600 text-white">
@@ -1057,15 +1254,15 @@ Please provide:
                     ? `Ask about ${selectedBodyRegionName}...`
                     : "Ask me anything about physiotherapy..."
                 }
-                disabled={sendMessageMutation.isPending}
+                disabled={sendMessageMutation.isPending || isStreaming}
                 className="flex-1 border-gray-200 focus:border-teal-400 focus:ring-teal-400"
               />
               <Button 
                 type="submit" 
-                disabled={!message.trim() || sendMessageMutation.isPending}
+                disabled={!message.trim() || sendMessageMutation.isPending || isStreaming}
                 className="bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 text-white shadow-sm"
               >
-                {sendMessageMutation.isPending ? (
+                {(sendMessageMutation.isPending || isStreaming) ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <Send className="h-4 w-4" />

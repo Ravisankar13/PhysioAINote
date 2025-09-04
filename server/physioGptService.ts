@@ -653,7 +653,7 @@ Keep responses concise, practical, and directly applicable to clinical practice.
         const completion = await openai.chat.completions.create({
           model: "gpt-4o",
           messages: openaiMessages as any,
-          max_tokens: 500,
+          max_tokens: 2500,
           temperature: 0.7,
         });
         

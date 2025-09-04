@@ -1,15 +1,12 @@
-import { useRef, useState, Suspense } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
-import * as THREE from "three";
+import { useRef, useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Save, RotateCcw, AlertCircle } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Save, RotateCcw } from "lucide-react";
+import * as THREE from "three";
 
 interface SkeletonConfig {
   limbLengths: {
@@ -53,285 +50,265 @@ const defaultConfig: SkeletonConfig = {
   },
 };
 
-// Simple 3D bone component using basic geometries only
-function Bone3D({ 
-  position, 
-  rotation, 
-  length, 
-  thickness = 0.025,
-  color = "#e0e0e0"
-}: any) {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const [hovered, setHovered] = useState(false);
-  
-  return (
-    <group position={position} rotation={rotation}>
-      <mesh
-        ref={meshRef}
-        onPointerOver={() => setHovered(true)}
-        onPointerOut={() => setHovered(false)}
-      >
-        <boxGeometry args={[thickness, length, thickness]} />
-        <meshStandardMaterial color={hovered ? "#60a5fa" : color} />
-      </mesh>
-      {/* Joint sphere */}
-      <mesh position={[0, length/2, 0]}>
-        <sphereGeometry args={[thickness * 0.8, 8, 8]} />
-        <meshStandardMaterial color={color} />
-      </mesh>
-    </group>
-  );
-}
+// Pure Three.js implementation without React Three Fiber to avoid crashes
+function ThreeJSSkeleton({ config }: { config: SkeletonConfig }) {
+  const mountRef = useRef<HTMLDivElement>(null);
+  const sceneRef = useRef<THREE.Scene | null>(null);
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const frameRef = useRef<number>(0);
+  const skeletonGroupRef = useRef<THREE.Group | null>(null);
 
-// 3D skeleton model - simplified to prevent crashes
-function SkeletonModel({ config }: { config: SkeletonConfig }) {
-  const groupRef = useRef<THREE.Group>(null);
-  
-  // Slow rotation
-  useFrame((state, delta) => {
-    if (groupRef.current) {
-      groupRef.current.rotation.y += delta * 0.2;
+  useEffect(() => {
+    if (!mountRef.current) return;
+
+    // Scene setup
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x111827);
+    sceneRef.current = scene;
+
+    // Camera setup
+    const camera = new THREE.PerspectiveCamera(
+      50,
+      mountRef.current.clientWidth / mountRef.current.clientHeight,
+      0.1,
+      1000
+    );
+    camera.position.set(2, 1, 2);
+    camera.lookAt(0, 0, 0);
+
+    // Renderer setup with minimal settings
+    const renderer = new THREE.WebGLRenderer({ 
+      antialias: false,
+      alpha: false,
+      powerPreference: "low-power"
+    });
+    renderer.setSize(mountRef.current.clientWidth, mountRef.current.clientHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    mountRef.current.appendChild(renderer.domElement);
+    rendererRef.current = renderer;
+
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambientLight);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.4);
+    directionalLight.position.set(5, 5, 5);
+    scene.add(directionalLight);
+
+    // Create skeleton group
+    const skeletonGroup = new THREE.Group();
+    skeletonGroupRef.current = skeletonGroup;
+    scene.add(skeletonGroup);
+
+    // Simple ground plane
+    const groundGeometry = new THREE.PlaneGeometry(3, 3);
+    const groundMaterial = new THREE.MeshBasicMaterial({ 
+      color: 0x1a1a1a, 
+      side: THREE.DoubleSide 
+    });
+    const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -1;
+    scene.add(ground);
+
+    // Mouse controls
+    let mouseX = 0;
+    let mouseY = 0;
+    let isMouseDown = false;
+
+    const handleMouseMove = (event: MouseEvent) => {
+      if (!isMouseDown) return;
+      mouseX = (event.clientX / window.innerWidth) * 2 - 1;
+      mouseY = -(event.clientY / window.innerHeight) * 2 + 1;
+    };
+
+    const handleMouseDown = () => { isMouseDown = true; };
+    const handleMouseUp = () => { isMouseDown = false; };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mousedown', handleMouseDown);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    // Animation loop
+    const animate = () => {
+      frameRef.current = requestAnimationFrame(animate);
+      
+      if (skeletonGroup) {
+        skeletonGroup.rotation.y += 0.005;
+        if (isMouseDown) {
+          skeletonGroup.rotation.y += mouseX * 0.05;
+          skeletonGroup.rotation.x = mouseY * 0.5;
+        }
+      }
+      
+      renderer.render(scene, camera);
+    };
+    animate();
+
+    // Handle resize
+    const handleResize = () => {
+      if (!mountRef.current) return;
+      camera.aspect = mountRef.current.clientWidth / mountRef.current.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(mountRef.current.clientWidth, mountRef.current.clientHeight);
+    };
+    window.addEventListener('resize', handleResize);
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mousedown', handleMouseDown);
+      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('resize', handleResize);
+      
+      if (frameRef.current) {
+        cancelAnimationFrame(frameRef.current);
+      }
+      
+      if (mountRef.current && renderer.domElement) {
+        mountRef.current.removeChild(renderer.domElement);
+      }
+      
+      renderer.dispose();
+    };
+  }, []);
+
+  // Update skeleton based on config
+  useEffect(() => {
+    if (!skeletonGroupRef.current) return;
+
+    // Clear existing skeleton
+    while (skeletonGroupRef.current.children.length > 0) {
+      const child = skeletonGroupRef.current.children[0];
+      skeletonGroupRef.current.remove(child);
+      if (child instanceof THREE.Mesh) {
+        child.geometry.dispose();
+        if (child.material instanceof THREE.Material) {
+          child.material.dispose();
+        }
+      }
     }
-  });
-  
-  const scale = 0.01;
-  const { limbLengths, jointAngles, bodyProportions } = config;
-  
-  // Convert degrees to radians
-  const toRad = (deg: number) => (deg * Math.PI) / 180;
-  
-  return (
-    <group ref={groupRef}>
-      {/* Spine/Torso */}
-      <Bone3D
-        position={[0, 0, 0]}
-        rotation={[0, 0, 0]}
-        length={limbLengths.spine * scale}
-        thickness={0.04}
-      />
-      
-      {/* Head */}
-      <mesh position={[0, (limbLengths.spine + 10) * scale, 0]}>
-        <sphereGeometry args={[0.08, 16, 16]} />
-        <meshStandardMaterial color="#f0f0f0" />
-      </mesh>
-      
-      {/* Shoulders */}
-      <group position={[0, limbLengths.spine * scale, 0]}>
-        {/* Left shoulder to arm */}
-        <Bone3D
-          position={[-bodyProportions.shoulderWidth * scale / 2, 0, 0]}
-          rotation={[0, 0, toRad(90)]}
-          length={bodyProportions.shoulderWidth * scale / 2}
-          thickness={0.03}
-        />
-        {/* Right shoulder to arm */}
-        <Bone3D
-          position={[bodyProportions.shoulderWidth * scale / 2, 0, 0]}
-          rotation={[0, 0, toRad(-90)]}
-          length={bodyProportions.shoulderWidth * scale / 2}
-          thickness={0.03}
-        />
-      </group>
-      
-      {/* Left Arm */}
-      <group position={[-bodyProportions.shoulderWidth * scale / 2, limbLengths.spine * scale, 0]}>
-        {/* Upper arm */}
-        <Bone3D
-          position={[0, 0, 0]}
-          rotation={[toRad(jointAngles.shoulderFlexion), 0, toRad(jointAngles.shoulderAbduction)]}
-          length={limbLengths.upperArm * scale}
-          thickness={0.025}
-        />
-        {/* Forearm at elbow position */}
-        <group 
-          position={[
-            -limbLengths.upperArm * scale * Math.sin(toRad(jointAngles.shoulderAbduction)),
-            -limbLengths.upperArm * scale * Math.cos(toRad(jointAngles.shoulderFlexion)),
-            0
-          ]}
-        >
-          <Bone3D
-            position={[0, 0, 0]}
-            rotation={[toRad(jointAngles.elbowFlexion), 0, 0]}
-            length={limbLengths.forearm * scale}
-            thickness={0.02}
-          />
-        </group>
-      </group>
-      
-      {/* Right Arm */}
-      <group position={[bodyProportions.shoulderWidth * scale / 2, limbLengths.spine * scale, 0]}>
-        {/* Upper arm */}
-        <Bone3D
-          position={[0, 0, 0]}
-          rotation={[toRad(jointAngles.shoulderFlexion), 0, toRad(-jointAngles.shoulderAbduction)]}
-          length={limbLengths.upperArm * scale}
-          thickness={0.025}
-        />
-        {/* Forearm at elbow position */}
-        <group 
-          position={[
-            limbLengths.upperArm * scale * Math.sin(toRad(jointAngles.shoulderAbduction)),
-            -limbLengths.upperArm * scale * Math.cos(toRad(jointAngles.shoulderFlexion)),
-            0
-          ]}
-        >
-          <Bone3D
-            position={[0, 0, 0]}
-            rotation={[toRad(jointAngles.elbowFlexion), 0, 0]}
-            length={limbLengths.forearm * scale}
-            thickness={0.02}
-          />
-        </group>
-      </group>
-      
-      {/* Pelvis */}
-      <Bone3D
-        position={[0, 0, 0]}
-        rotation={[0, 0, toRad(90)]}
-        length={bodyProportions.hipWidth * scale}
-        thickness={0.035}
-      />
-      
-      {/* Left Leg */}
-      <group position={[-bodyProportions.hipWidth * scale / 2, 0, 0]}>
-        {/* Thigh */}
-        <Bone3D
-          position={[0, 0, 0]}
-          rotation={[toRad(jointAngles.hipFlexion), 0, 0]}
-          length={limbLengths.thigh * scale}
-          thickness={0.035}
-        />
-        {/* Shin at knee position */}
-        <group 
-          position={[
-            0,
-            -limbLengths.thigh * scale * Math.cos(toRad(jointAngles.hipFlexion)),
-            limbLengths.thigh * scale * Math.sin(toRad(jointAngles.hipFlexion))
-          ]}
-        >
-          <Bone3D
-            position={[0, 0, 0]}
-            rotation={[toRad(jointAngles.kneeFlexion), 0, 0]}
-            length={limbLengths.shin * scale}
-            thickness={0.03}
-          />
-        </group>
-      </group>
-      
-      {/* Right Leg */}
-      <group position={[bodyProportions.hipWidth * scale / 2, 0, 0]}>
-        {/* Thigh */}
-        <Bone3D
-          position={[0, 0, 0]}
-          rotation={[toRad(jointAngles.hipFlexion), 0, 0]}
-          length={limbLengths.thigh * scale}
-          thickness={0.035}
-        />
-        {/* Shin at knee position */}
-        <group 
-          position={[
-            0,
-            -limbLengths.thigh * scale * Math.cos(toRad(jointAngles.hipFlexion)),
-            limbLengths.thigh * scale * Math.sin(toRad(jointAngles.hipFlexion))
-          ]}
-        >
-          <Bone3D
-            position={[0, 0, 0]}
-            rotation={[toRad(jointAngles.kneeFlexion), 0, 0]}
-            length={limbLengths.shin * scale}
-            thickness={0.03}
-          />
-        </group>
-      </group>
-      
-      {/* Simple ground plane - no gridHelper to avoid crashes */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1, 0]}>
-        <planeGeometry args={[2, 2]} />
-        <meshStandardMaterial color="#1a1a1a" transparent opacity={0.5} />
-      </mesh>
-      
-      {/* Manual grid lines using simple line segments */}
-      {[-1, -0.5, 0, 0.5, 1].map((pos) => (
-        <group key={`grid-${pos}`}>
-          {/* Horizontal lines */}
-          <mesh position={[0, -0.99, pos]}>
-            <boxGeometry args={[2, 0.002, 0.002]} />
-            <meshBasicMaterial color="#303030" />
-          </mesh>
-          {/* Vertical lines */}
-          <mesh position={[pos, -0.99, 0]}>
-            <boxGeometry args={[0.002, 0.002, 2]} />
-            <meshBasicMaterial color="#303030" />
-          </mesh>
-        </group>
-      ))}
-    </group>
-  );
-}
 
-// Error fallback component
-function ErrorFallback() {
-  return (
-    <div className="flex items-center justify-center h-full bg-gray-900 rounded-lg">
-      <Alert className="max-w-md">
-        <AlertCircle className="h-4 w-4" />
-        <AlertDescription>
-          3D rendering encountered an issue. Please refresh the page or try a different browser.
-        </AlertDescription>
-      </Alert>
-    </div>
-  );
-}
+    const scale = 0.01;
+    const { limbLengths, jointAngles, bodyProportions } = config;
+    const toRad = (deg: number) => (deg * Math.PI) / 180;
 
-// Canvas wrapper with error boundary and crash prevention
-function Canvas3D({ config }: { config: SkeletonConfig }) {
-  const [hasError, setHasError] = useState(false);
-  
-  if (hasError) {
-    return <ErrorFallback />;
-  }
-  
+    // Create bones using simple box geometry
+    const boneMaterial = new THREE.MeshPhongMaterial({ color: 0xe0e0e0 });
+    const jointMaterial = new THREE.MeshPhongMaterial({ color: 0x60a5fa });
+
+    // Spine
+    const spineGeometry = new THREE.BoxGeometry(0.04, limbLengths.spine * scale, 0.04);
+    const spine = new THREE.Mesh(spineGeometry, boneMaterial);
+    spine.position.y = limbLengths.spine * scale / 2;
+    skeletonGroupRef.current.add(spine);
+
+    // Head
+    const headGeometry = new THREE.SphereGeometry(0.08, 8, 8);
+    const head = new THREE.Mesh(headGeometry, new THREE.MeshPhongMaterial({ color: 0xf0f0f0 }));
+    head.position.y = limbLengths.spine * scale + 0.1;
+    skeletonGroupRef.current.add(head);
+
+    // Shoulders
+    const shoulderGeometry = new THREE.BoxGeometry(bodyProportions.shoulderWidth * scale, 0.03, 0.03);
+    const shoulders = new THREE.Mesh(shoulderGeometry, boneMaterial);
+    shoulders.position.y = limbLengths.spine * scale;
+    skeletonGroupRef.current.add(shoulders);
+
+    // Pelvis
+    const pelvisGeometry = new THREE.BoxGeometry(bodyProportions.hipWidth * scale, 0.035, 0.035);
+    const pelvis = new THREE.Mesh(pelvisGeometry, boneMaterial);
+    pelvis.position.y = 0;
+    skeletonGroupRef.current.add(pelvis);
+
+    // Left arm
+    const leftUpperArmGeometry = new THREE.BoxGeometry(0.025, limbLengths.upperArm * scale, 0.025);
+    const leftUpperArm = new THREE.Mesh(leftUpperArmGeometry, boneMaterial);
+    leftUpperArm.position.set(
+      -bodyProportions.shoulderWidth * scale / 2,
+      limbLengths.spine * scale - limbLengths.upperArm * scale / 2,
+      0
+    );
+    leftUpperArm.rotation.z = toRad(jointAngles.shoulderAbduction);
+    skeletonGroupRef.current.add(leftUpperArm);
+
+    // Left forearm
+    const leftForearmGeometry = new THREE.BoxGeometry(0.02, limbLengths.forearm * scale, 0.02);
+    const leftForearm = new THREE.Mesh(leftForearmGeometry, boneMaterial);
+    leftForearm.position.set(
+      -bodyProportions.shoulderWidth * scale / 2 - Math.sin(toRad(jointAngles.shoulderAbduction)) * limbLengths.upperArm * scale,
+      limbLengths.spine * scale - limbLengths.upperArm * scale - limbLengths.forearm * scale / 2,
+      0
+    );
+    leftForearm.rotation.z = toRad(jointAngles.elbowFlexion);
+    skeletonGroupRef.current.add(leftForearm);
+
+    // Right arm (mirror of left)
+    const rightUpperArmGeometry = new THREE.BoxGeometry(0.025, limbLengths.upperArm * scale, 0.025);
+    const rightUpperArm = new THREE.Mesh(rightUpperArmGeometry, boneMaterial);
+    rightUpperArm.position.set(
+      bodyProportions.shoulderWidth * scale / 2,
+      limbLengths.spine * scale - limbLengths.upperArm * scale / 2,
+      0
+    );
+    rightUpperArm.rotation.z = -toRad(jointAngles.shoulderAbduction);
+    skeletonGroupRef.current.add(rightUpperArm);
+
+    const rightForearmGeometry = new THREE.BoxGeometry(0.02, limbLengths.forearm * scale, 0.02);
+    const rightForearm = new THREE.Mesh(rightForearmGeometry, boneMaterial);
+    rightForearm.position.set(
+      bodyProportions.shoulderWidth * scale / 2 + Math.sin(toRad(jointAngles.shoulderAbduction)) * limbLengths.upperArm * scale,
+      limbLengths.spine * scale - limbLengths.upperArm * scale - limbLengths.forearm * scale / 2,
+      0
+    );
+    rightForearm.rotation.z = -toRad(jointAngles.elbowFlexion);
+    skeletonGroupRef.current.add(rightForearm);
+
+    // Left leg
+    const leftThighGeometry = new THREE.BoxGeometry(0.035, limbLengths.thigh * scale, 0.035);
+    const leftThigh = new THREE.Mesh(leftThighGeometry, boneMaterial);
+    leftThigh.position.set(
+      -bodyProportions.hipWidth * scale / 2,
+      -limbLengths.thigh * scale / 2,
+      0
+    );
+    leftThigh.rotation.x = toRad(jointAngles.hipFlexion);
+    skeletonGroupRef.current.add(leftThigh);
+
+    const leftShinGeometry = new THREE.BoxGeometry(0.03, limbLengths.shin * scale, 0.03);
+    const leftShin = new THREE.Mesh(leftShinGeometry, boneMaterial);
+    leftShin.position.set(
+      -bodyProportions.hipWidth * scale / 2,
+      -limbLengths.thigh * scale - limbLengths.shin * scale / 2,
+      Math.sin(toRad(jointAngles.hipFlexion)) * limbLengths.thigh * scale
+    );
+    leftShin.rotation.x = toRad(jointAngles.kneeFlexion);
+    skeletonGroupRef.current.add(leftShin);
+
+    // Right leg (mirror of left)
+    const rightThighGeometry = new THREE.BoxGeometry(0.035, limbLengths.thigh * scale, 0.035);
+    const rightThigh = new THREE.Mesh(rightThighGeometry, boneMaterial);
+    rightThigh.position.set(
+      bodyProportions.hipWidth * scale / 2,
+      -limbLengths.thigh * scale / 2,
+      0
+    );
+    rightThigh.rotation.x = toRad(jointAngles.hipFlexion);
+    skeletonGroupRef.current.add(rightThigh);
+
+    const rightShinGeometry = new THREE.BoxGeometry(0.03, limbLengths.shin * scale, 0.03);
+    const rightShin = new THREE.Mesh(rightShinGeometry, boneMaterial);
+    rightShin.position.set(
+      bodyProportions.hipWidth * scale / 2,
+      -limbLengths.thigh * scale - limbLengths.shin * scale / 2,
+      Math.sin(toRad(jointAngles.hipFlexion)) * limbLengths.thigh * scale
+    );
+    rightShin.rotation.x = toRad(jointAngles.kneeFlexion);
+    skeletonGroupRef.current.add(rightShin);
+
+  }, [config]);
+
   return (
-    <div className="h-full w-full bg-gray-900 rounded-lg">
-      <Suspense fallback={
-        <div className="flex items-center justify-center h-full">
-          <div className="text-white">Loading 3D model...</div>
-        </div>
-      }>
-        <Canvas
-          camera={{ position: [1.5, 0.5, 1.5], fov: 50 }}
-          onCreated={({ gl }) => {
-            // Set background color
-            gl.setClearColor('#111827');
-            // Limit pixel ratio to prevent performance issues
-            gl.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-          }}
-          onError={(error) => {
-            console.error('Canvas error:', error);
-            setHasError(true);
-          }}
-          // Add performance settings
-          dpr={[1, 2]}
-          performance={{ min: 0.5 }}
-        >
-          <ambientLight intensity={0.5} />
-          <pointLight position={[10, 10, 10]} intensity={0.5} />
-          <pointLight position={[-10, -10, -10]} intensity={0.3} />
-          
-          <SkeletonModel config={config} />
-          
-          <OrbitControls
-            enablePan={true}
-            enableZoom={true}
-            enableRotate={true}
-            minDistance={1}
-            maxDistance={5}
-          />
-        </Canvas>
-      </Suspense>
-    </div>
+    <div ref={mountRef} className="w-full h-full bg-gray-900 rounded-lg" />
   );
 }
 
@@ -402,7 +379,7 @@ export default function Skeleton3D({
         <Card className="h-full">
           <CardContent className="p-4 h-full">
             <div className="h-full relative">
-              <Canvas3D config={config} />
+              <ThreeJSSkeleton config={config} />
               
               <div className="absolute top-4 left-4 flex gap-2">
                 <Button
@@ -421,6 +398,10 @@ export default function Skeleton3D({
                   <Save className="h-4 w-4 mr-1" />
                   Save
                 </Button>
+              </div>
+              
+              <div className="absolute bottom-4 left-4 text-xs text-gray-400">
+                Click and drag to rotate
               </div>
             </div>
           </CardContent>

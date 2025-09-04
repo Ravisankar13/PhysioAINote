@@ -53,14 +53,13 @@ const defaultConfig: SkeletonConfig = {
   },
 };
 
-// Simple 3D bone component
+// Simple 3D bone component using basic geometries only
 function Bone3D({ 
   position, 
   rotation, 
   length, 
   thickness = 0.025,
-  color = "#e0e0e0",
-  name 
+  color = "#e0e0e0"
 }: any) {
   const meshRef = useRef<THREE.Mesh>(null);
   const [hovered, setHovered] = useState(false);
@@ -84,7 +83,7 @@ function Bone3D({
   );
 }
 
-// 3D skeleton model with error boundaries
+// 3D skeleton model - simplified to prevent crashes
 function SkeletonModel({ config }: { config: SkeletonConfig }) {
   const groupRef = useRef<THREE.Group>(null);
   
@@ -109,7 +108,6 @@ function SkeletonModel({ config }: { config: SkeletonConfig }) {
         rotation={[0, 0, 0]}
         length={limbLengths.spine * scale}
         thickness={0.04}
-        name="Spine"
       />
       
       {/* Head */}
@@ -126,7 +124,6 @@ function SkeletonModel({ config }: { config: SkeletonConfig }) {
           rotation={[0, 0, toRad(90)]}
           length={bodyProportions.shoulderWidth * scale / 2}
           thickness={0.03}
-          name="Left Shoulder"
         />
         {/* Right shoulder to arm */}
         <Bone3D
@@ -134,7 +131,6 @@ function SkeletonModel({ config }: { config: SkeletonConfig }) {
           rotation={[0, 0, toRad(-90)]}
           length={bodyProportions.shoulderWidth * scale / 2}
           thickness={0.03}
-          name="Right Shoulder"
         />
       </group>
       
@@ -146,7 +142,6 @@ function SkeletonModel({ config }: { config: SkeletonConfig }) {
           rotation={[toRad(jointAngles.shoulderFlexion), 0, toRad(jointAngles.shoulderAbduction)]}
           length={limbLengths.upperArm * scale}
           thickness={0.025}
-          name="Left Upper Arm"
         />
         {/* Forearm at elbow position */}
         <group 
@@ -161,7 +156,6 @@ function SkeletonModel({ config }: { config: SkeletonConfig }) {
             rotation={[toRad(jointAngles.elbowFlexion), 0, 0]}
             length={limbLengths.forearm * scale}
             thickness={0.02}
-            name="Left Forearm"
           />
         </group>
       </group>
@@ -174,7 +168,6 @@ function SkeletonModel({ config }: { config: SkeletonConfig }) {
           rotation={[toRad(jointAngles.shoulderFlexion), 0, toRad(-jointAngles.shoulderAbduction)]}
           length={limbLengths.upperArm * scale}
           thickness={0.025}
-          name="Right Upper Arm"
         />
         {/* Forearm at elbow position */}
         <group 
@@ -189,7 +182,6 @@ function SkeletonModel({ config }: { config: SkeletonConfig }) {
             rotation={[toRad(jointAngles.elbowFlexion), 0, 0]}
             length={limbLengths.forearm * scale}
             thickness={0.02}
-            name="Right Forearm"
           />
         </group>
       </group>
@@ -200,7 +192,6 @@ function SkeletonModel({ config }: { config: SkeletonConfig }) {
         rotation={[0, 0, toRad(90)]}
         length={bodyProportions.hipWidth * scale}
         thickness={0.035}
-        name="Pelvis"
       />
       
       {/* Left Leg */}
@@ -211,7 +202,6 @@ function SkeletonModel({ config }: { config: SkeletonConfig }) {
           rotation={[toRad(jointAngles.hipFlexion), 0, 0]}
           length={limbLengths.thigh * scale}
           thickness={0.035}
-          name="Left Thigh"
         />
         {/* Shin at knee position */}
         <group 
@@ -226,7 +216,6 @@ function SkeletonModel({ config }: { config: SkeletonConfig }) {
             rotation={[toRad(jointAngles.kneeFlexion), 0, 0]}
             length={limbLengths.shin * scale}
             thickness={0.03}
-            name="Left Shin"
           />
         </group>
       </group>
@@ -239,7 +228,6 @@ function SkeletonModel({ config }: { config: SkeletonConfig }) {
           rotation={[toRad(jointAngles.hipFlexion), 0, 0]}
           length={limbLengths.thigh * scale}
           thickness={0.035}
-          name="Right Thigh"
         />
         {/* Shin at knee position */}
         <group 
@@ -254,19 +242,31 @@ function SkeletonModel({ config }: { config: SkeletonConfig }) {
             rotation={[toRad(jointAngles.kneeFlexion), 0, 0]}
             length={limbLengths.shin * scale}
             thickness={0.03}
-            name="Right Shin"
           />
         </group>
       </group>
       
-      {/* Ground plane */}
+      {/* Simple ground plane - no gridHelper to avoid crashes */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1, 0]}>
         <planeGeometry args={[2, 2]} />
-        <meshBasicMaterial color="#1a1a1a" transparent opacity={0.5} />
+        <meshStandardMaterial color="#1a1a1a" transparent opacity={0.5} />
       </mesh>
       
-      {/* Grid lines */}
-      <gridHelper args={[2, 20, "#303030", "#303030"]} position={[0, -0.99, 0]} />
+      {/* Manual grid lines using simple line segments */}
+      {[-1, -0.5, 0, 0.5, 1].map((pos) => (
+        <group key={`grid-${pos}`}>
+          {/* Horizontal lines */}
+          <mesh position={[0, -0.99, pos]}>
+            <boxGeometry args={[2, 0.002, 0.002]} />
+            <meshBasicMaterial color="#303030" />
+          </mesh>
+          {/* Vertical lines */}
+          <mesh position={[pos, -0.99, 0]}>
+            <boxGeometry args={[0.002, 0.002, 2]} />
+            <meshBasicMaterial color="#303030" />
+          </mesh>
+        </group>
+      ))}
     </group>
   );
 }
@@ -274,18 +274,18 @@ function SkeletonModel({ config }: { config: SkeletonConfig }) {
 // Error fallback component
 function ErrorFallback() {
   return (
-    <div className="flex items-center justify-center h-full">
+    <div className="flex items-center justify-center h-full bg-gray-900 rounded-lg">
       <Alert className="max-w-md">
         <AlertCircle className="h-4 w-4" />
         <AlertDescription>
-          3D rendering is not available. Please try refreshing the page or use a different browser.
+          3D rendering encountered an issue. Please refresh the page or try a different browser.
         </AlertDescription>
       </Alert>
     </div>
   );
 }
 
-// Canvas wrapper with error boundary
+// Canvas wrapper with error boundary and crash prevention
 function Canvas3D({ config }: { config: SkeletonConfig }) {
   const [hasError, setHasError] = useState(false);
   
@@ -303,9 +303,18 @@ function Canvas3D({ config }: { config: SkeletonConfig }) {
         <Canvas
           camera={{ position: [1.5, 0.5, 1.5], fov: 50 }}
           onCreated={({ gl }) => {
+            // Set background color
             gl.setClearColor('#111827');
+            // Limit pixel ratio to prevent performance issues
+            gl.setPixelRatio(Math.min(window.devicePixelRatio, 2));
           }}
-          onError={() => setHasError(true)}
+          onError={(error) => {
+            console.error('Canvas error:', error);
+            setHasError(true);
+          }}
+          // Add performance settings
+          dpr={[1, 2]}
+          performance={{ min: 0.5 }}
         >
           <ambientLight intensity={0.5} />
           <pointLight position={[10, 10, 10]} intensity={0.5} />

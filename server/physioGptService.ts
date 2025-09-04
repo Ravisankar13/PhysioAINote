@@ -3,6 +3,7 @@ import { physioGptStorage } from "./physioGptStorage";
 import { patientSessionStorage } from "./patientSessionStorage";
 import { storage } from "./storage";
 import { evidenceService, EvidenceSummary, ResearchPaper } from "./evidenceIntegration";
+import { visualContentService, type VisualContentResult } from "./visualContentService";
 
 if (!process.env.OPENAI_API_KEY) {
   throw new Error("OPENAI_API_KEY is required for PhysioGPT");
@@ -59,6 +60,7 @@ export interface PhysioGptResponse {
     tips?: string[];
     category?: string;
   }>;
+  visualContent?: VisualContentResult[];
   clinicalSections?: {
     assessment?: string;
     clinicalReasoning?: string;
@@ -681,7 +683,58 @@ Keep responses concise, practical, and directly applicable to clinical practice.
       
       // Check if response contains exercise recommendations and enhance with images
       let exerciseImages: any[] = [];
+      let visualContent: VisualContentResult[] = [];
       const lowerResponse = aiResponse.toLowerCase();
+      
+      // Check if user is asking for images/visual content
+      const isVisualRequest = visualContentService.detectImageRequest(request.message);
+      
+      if (isVisualRequest) {
+        console.log("Visual content requested - generating multi-modal content");
+        
+        // Extract exercise names or topics from the message
+        const extractedExercises = visualContentService.extractExerciseNames(request.message);
+        
+        // If no specific exercises found, try to get them from the AI response
+        if (extractedExercises.length === 0 && aiResponse) {
+          extractedExercises.push(...visualContentService.extractExerciseNames(aiResponse));
+        }
+        
+        // Generate visual content for each exercise/topic
+        for (const exercise of extractedExercises) {
+          try {
+            const content = await visualContentService.getVisualContent(exercise, {
+              includeAI: true,
+              includeExternal: true,
+              includeVideos: true,
+              maxResults: 3
+            });
+            visualContent.push(...content);
+          } catch (error) {
+            console.error(`Error getting visual content for ${exercise}:`, error);
+          }
+        }
+        
+        // If no exercises found, try a general query based on the message
+        if (visualContent.length === 0) {
+          try {
+            const generalQuery = request.message.replace(/show|image|picture|video|demonstrate/gi, '').trim();
+            const content = await visualContentService.getVisualContent(generalQuery, {
+              includeAI: true,
+              includeExternal: true,
+              includeVideos: true,
+              maxResults: 5
+            });
+            visualContent.push(...content);
+          } catch (error) {
+            console.error("Error getting general visual content:", error);
+          }
+        }
+        
+        console.log(`Generated ${visualContent.length} visual content items`);
+      }
+      
+      // Also check for exercise recommendations in the response
       if (lowerResponse.includes('exercise') || lowerResponse.includes('stretch') || 
           lowerResponse.includes('strengthen') || lowerResponse.includes('mobility') ||
           lowerResponse.includes('program') || lowerResponse.includes('perform')) {
@@ -707,7 +760,8 @@ Keep responses concise, practical, and directly applicable to clinical practice.
         researchPapers,
         evidenceGrade: evidenceSummary?.evidenceGrade,
         confidenceLevel: evidenceSummary?.confidenceLevel,
-        exerciseImages: exerciseImages.length > 0 ? exerciseImages : undefined
+        exerciseImages: exerciseImages.length > 0 ? exerciseImages : undefined,
+        visualContent: visualContent.length > 0 ? visualContent : undefined
       };
       
       console.log("Returning result:", JSON.stringify(result));

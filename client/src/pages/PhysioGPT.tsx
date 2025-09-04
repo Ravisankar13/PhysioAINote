@@ -50,6 +50,7 @@ import ClinicalReferenceLibrary from "@/components/clinical/ClinicalReferenceLib
 import { AITreatmentPlanner } from "@/components/clinical/AITreatmentPlanner";
 import ClinicalToolsPanel from "@/components/clinical/ClinicalToolsPanel";
 import ClinicalResponseDisplay from "@/components/clinical/ClinicalResponseDisplay";
+import VisualContentDisplay from "@/components/clinical/VisualContentDisplay";
 import { pdfGenerator } from "@/services/pdfGenerator";
 
 // Error Boundary Component
@@ -86,6 +87,7 @@ class ErrorBoundary extends Component<{children: React.ReactNode}, {hasError: bo
 
 interface ChatMessage extends PhysioGptMessage {
   suggestions?: string[];
+  visualContent?: any[];
 }
 
 interface ResearchPaper {
@@ -522,7 +524,7 @@ Please provide assessment recommendations following ${patient.expertFramework} a
       return response;
     },
     onSuccess: (data: PhysioGptResponse) => {
-      if (data.evidenceSummary || data.researchPapers || data.evidenceGrade || data.exerciseImages) {
+      if (data.evidenceSummary || data.researchPapers || data.evidenceGrade || data.exerciseImages || data.visualContent) {
         setEvidenceData(prev => new Map(prev.set(data.conversationId, data)));
       }
       
@@ -1014,8 +1016,17 @@ Please provide:
                             }
                             professionalMode={professionalMode}
                           />
-                          {/* Display exercise images if available */}
+                          {/* Display visual content (AI images, external images, videos) */}
                           {evidenceData.has(selectedConversationId!) && index === messages.length - 1 && 
+                           evidenceData.get(selectedConversationId!)?.visualContent && (                            
+                            <VisualContentDisplay 
+                              visualContent={evidenceData.get(selectedConversationId!)!.visualContent}
+                              exerciseImages={evidenceData.get(selectedConversationId!)?.exerciseImages}
+                            />
+                          )}
+                          {/* Display exercise images if available and no visual content */}
+                          {evidenceData.has(selectedConversationId!) && index === messages.length - 1 && 
+                           !evidenceData.get(selectedConversationId!)?.visualContent &&
                            evidenceData.get(selectedConversationId!)?.exerciseImages && 
                            evidenceData.get(selectedConversationId!)!.exerciseImages!.length > 0 && (
                             <div className="mt-6 space-y-4">

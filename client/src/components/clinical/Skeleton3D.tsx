@@ -1,6 +1,6 @@
-import { useRef, useState, useEffect, useMemo } from "react";
+import { useRef, useState } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls, Text, Html } from "@react-three/drei";
+import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import { Card, CardContent } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
@@ -14,30 +14,20 @@ interface SkeletonConfig {
   limbLengths: {
     upperArm: number;
     forearm: number;
-    hand: number;
     thigh: number;
     shin: number;
-    foot: number;
     spine: number;
-    neck: number;
   };
   jointAngles: {
     shoulderFlexion: number;
     shoulderAbduction: number;
     elbowFlexion: number;
-    wristFlexion: number;
     hipFlexion: number;
-    hipAbduction: number;
     kneeFlexion: number;
-    ankleFlexion: number;
-    spineFlexion: number;
-    neckFlexion: number;
   };
   bodyProportions: {
     shoulderWidth: number;
     hipWidth: number;
-    chestDepth: number;
-    headSize: number;
   };
 }
 
@@ -45,248 +35,26 @@ const defaultConfig: SkeletonConfig = {
   limbLengths: {
     upperArm: 30,
     forearm: 28,
-    hand: 8,
     thigh: 42,
     shin: 40,
-    foot: 10,
     spine: 50,
-    neck: 10,
   },
   jointAngles: {
     shoulderFlexion: 0,
     shoulderAbduction: 0,
     elbowFlexion: 0,
-    wristFlexion: 0,
     hipFlexion: 0,
-    hipAbduction: 0,
     kneeFlexion: 0,
-    ankleFlexion: 0,
-    spineFlexion: 0,
-    neckFlexion: 0,
   },
   bodyProportions: {
     shoulderWidth: 40,
     hipWidth: 30,
-    chestDepth: 20,
-    headSize: 10,
   },
 };
 
-// Simple bone component
-function Bone({ 
-  start, 
-  end, 
-  thickness = 0.025,
-  color = "#e0e0e0",
-  onClick,
-  name 
-}: { 
-  start: [number, number, number]; 
-  end: [number, number, number]; 
-  thickness?: number;
-  color?: string;
-  onClick?: () => void;
-  name?: string;
-}) {
-  const [hovered, setHovered] = useState(false);
-  
-  const startVec = new THREE.Vector3(...start);
-  const endVec = new THREE.Vector3(...end);
-  const direction = endVec.clone().sub(startVec);
-  const length = direction.length();
-  const midpoint = startVec.clone().add(direction.clone().multiplyScalar(0.5));
-  
-  return (
-    <>
-      <mesh
-        position={[midpoint.x, midpoint.y, midpoint.z]}
-        onClick={onClick}
-        onPointerOver={() => setHovered(true)}
-        onPointerOut={() => setHovered(false)}
-      >
-        <cylinderGeometry args={[thickness, thickness, length, 8]} />
-        <meshStandardMaterial color={hovered ? "#60a5fa" : color} />
-      </mesh>
-      
-      {/* Joint spheres */}
-      <mesh position={start}>
-        <sphereGeometry args={[thickness * 1.5, 8, 8]} />
-        <meshStandardMaterial color={color} />
-      </mesh>
-      <mesh position={end}>
-        <sphereGeometry args={[thickness * 1.5, 8, 8]} />
-        <meshStandardMaterial color={color} />
-      </mesh>
-      
-      {hovered && name && (
-        <Html position={[midpoint.x, midpoint.y + 0.1, midpoint.z]}>
-          <Badge className="bg-blue-500 text-white text-xs">
-            {name}
-          </Badge>
-        </Html>
-      )}
-    </>
-  );
-}
-
-// Main skeleton model
-function SkeletonModel({ config, onBoneSelect }: { 
-  config: SkeletonConfig;
-  onBoneSelect: (bone: string) => void;
-}) {
+// Simple skeleton model using basic Three.js meshes
+function SkeletonModel({ config }: { config: SkeletonConfig }) {
   const groupRef = useRef<THREE.Group>(null);
-  
-  // Convert cm to Three.js units (1 unit = 100cm)
-  const scale = 0.01;
-  
-  // Calculate positions based on config
-  const bones = useMemo(() => {
-    const { limbLengths, jointAngles, bodyProportions } = config;
-    const bones = [];
-    
-    // Convert degrees to radians
-    const toRad = (deg: number) => deg * Math.PI / 180;
-    
-    // Spine
-    bones.push({
-      name: "Spine",
-      start: [0, 0, 0] as [number, number, number],
-      end: [0, limbLengths.spine * scale, 0] as [number, number, number],
-      thickness: 0.04,
-    });
-    
-    // Neck
-    bones.push({
-      name: "Neck",
-      start: [0, limbLengths.spine * scale, 0] as [number, number, number],
-      end: [0, (limbLengths.spine + limbLengths.neck) * scale, 0] as [number, number, number],
-      thickness: 0.03,
-    });
-    
-    // Head
-    bones.push({
-      name: "Head",
-      start: [0, (limbLengths.spine + limbLengths.neck) * scale, 0] as [number, number, number],
-      end: [0, (limbLengths.spine + limbLengths.neck + bodyProportions.headSize) * scale, 0] as [number, number, number],
-      thickness: 0.05,
-    });
-    
-    // Left arm
-    const leftShoulderX = -bodyProportions.shoulderWidth * scale / 2;
-    const leftShoulderY = limbLengths.spine * scale;
-    
-    bones.push({
-      name: "Left Clavicle",
-      start: [0, leftShoulderY, 0] as [number, number, number],
-      end: [leftShoulderX, leftShoulderY, 0] as [number, number, number],
-      thickness: 0.02,
-    });
-    
-    const leftElbowX = leftShoulderX - limbLengths.upperArm * scale * Math.sin(toRad(jointAngles.shoulderAbduction));
-    const leftElbowY = leftShoulderY - limbLengths.upperArm * scale * Math.cos(toRad(jointAngles.shoulderFlexion));
-    
-    bones.push({
-      name: "Left Humerus",
-      start: [leftShoulderX, leftShoulderY, 0] as [number, number, number],
-      end: [leftElbowX, leftElbowY, 0] as [number, number, number],
-      thickness: 0.025,
-    });
-    
-    const leftWristX = leftElbowX - limbLengths.forearm * scale * Math.sin(toRad(jointAngles.elbowFlexion));
-    const leftWristY = leftElbowY - limbLengths.forearm * scale;
-    
-    bones.push({
-      name: "Left Forearm",
-      start: [leftElbowX, leftElbowY, 0] as [number, number, number],
-      end: [leftWristX, leftWristY, 0] as [number, number, number],
-      thickness: 0.02,
-    });
-    
-    // Right arm (mirror)
-    const rightShoulderX = bodyProportions.shoulderWidth * scale / 2;
-    const rightShoulderY = limbLengths.spine * scale;
-    
-    bones.push({
-      name: "Right Clavicle",
-      start: [0, rightShoulderY, 0] as [number, number, number],
-      end: [rightShoulderX, rightShoulderY, 0] as [number, number, number],
-      thickness: 0.02,
-    });
-    
-    const rightElbowX = rightShoulderX + limbLengths.upperArm * scale * Math.sin(toRad(jointAngles.shoulderAbduction));
-    const rightElbowY = rightShoulderY - limbLengths.upperArm * scale * Math.cos(toRad(jointAngles.shoulderFlexion));
-    
-    bones.push({
-      name: "Right Humerus",
-      start: [rightShoulderX, rightShoulderY, 0] as [number, number, number],
-      end: [rightElbowX, rightElbowY, 0] as [number, number, number],
-      thickness: 0.025,
-    });
-    
-    const rightWristX = rightElbowX + limbLengths.forearm * scale * Math.sin(toRad(jointAngles.elbowFlexion));
-    const rightWristY = rightElbowY - limbLengths.forearm * scale;
-    
-    bones.push({
-      name: "Right Forearm",
-      start: [rightElbowX, rightElbowY, 0] as [number, number, number],
-      end: [rightWristX, rightWristY, 0] as [number, number, number],
-      thickness: 0.02,
-    });
-    
-    // Pelvis
-    bones.push({
-      name: "Pelvis",
-      start: [-bodyProportions.hipWidth * scale / 2, 0, 0] as [number, number, number],
-      end: [bodyProportions.hipWidth * scale / 2, 0, 0] as [number, number, number],
-      thickness: 0.03,
-    });
-    
-    // Left leg
-    const leftHipX = -bodyProportions.hipWidth * scale / 2;
-    const leftKneeX = leftHipX - limbLengths.thigh * scale * Math.sin(toRad(jointAngles.hipAbduction));
-    const leftKneeY = -limbLengths.thigh * scale * Math.cos(toRad(jointAngles.hipFlexion));
-    
-    bones.push({
-      name: "Left Femur",
-      start: [leftHipX, 0, 0] as [number, number, number],
-      end: [leftKneeX, leftKneeY, 0] as [number, number, number],
-      thickness: 0.035,
-    });
-    
-    const leftAnkleX = leftKneeX;
-    const leftAnkleY = leftKneeY - limbLengths.shin * scale * Math.cos(toRad(jointAngles.kneeFlexion));
-    
-    bones.push({
-      name: "Left Tibia",
-      start: [leftKneeX, leftKneeY, 0] as [number, number, number],
-      end: [leftAnkleX, leftAnkleY, 0] as [number, number, number],
-      thickness: 0.03,
-    });
-    
-    // Right leg (mirror)
-    const rightHipX = bodyProportions.hipWidth * scale / 2;
-    const rightKneeX = rightHipX + limbLengths.thigh * scale * Math.sin(toRad(jointAngles.hipAbduction));
-    const rightKneeY = -limbLengths.thigh * scale * Math.cos(toRad(jointAngles.hipFlexion));
-    
-    bones.push({
-      name: "Right Femur",
-      start: [rightHipX, 0, 0] as [number, number, number],
-      end: [rightKneeX, rightKneeY, 0] as [number, number, number],
-      thickness: 0.035,
-    });
-    
-    const rightAnkleX = rightKneeX;
-    const rightAnkleY = rightKneeY - limbLengths.shin * scale * Math.cos(toRad(jointAngles.kneeFlexion));
-    
-    bones.push({
-      name: "Right Tibia",
-      start: [rightKneeX, rightKneeY, 0] as [number, number, number],
-      end: [rightAnkleX, rightAnkleY, 0] as [number, number, number],
-      thickness: 0.03,
-    });
-    
-    return bones;
-  }, [config]);
   
   // Rotate model slowly
   useFrame((state, delta) => {
@@ -295,21 +63,180 @@ function SkeletonModel({ config, onBoneSelect }: {
     }
   });
   
+  const scale = 0.01;
+  const toRad = (deg: number) => deg * Math.PI / 180;
+  
+  const { limbLengths, jointAngles, bodyProportions } = config;
+  
   return (
     <group ref={groupRef}>
-      {bones.map((bone, index) => (
-        <Bone
-          key={index}
-          name={bone.name}
-          start={bone.start}
-          end={bone.end}
-          thickness={bone.thickness}
-          onClick={() => onBoneSelect(bone.name)}
-        />
-      ))}
+      {/* Spine */}
+      <mesh position={[0, limbLengths.spine * scale / 2, 0]}>
+        <cylinderGeometry args={[0.03, 0.03, limbLengths.spine * scale, 8]} />
+        <meshStandardMaterial color="#e0e0e0" />
+      </mesh>
       
-      {/* Grid for reference */}
-      <gridHelper args={[2, 20, "#303030", "#303030"]} position={[0, -1, 0]} />
+      {/* Pelvis */}
+      <mesh position={[0, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0.02, 0.02, bodyProportions.hipWidth * scale, 8]} />
+        <meshStandardMaterial color="#e0e0e0" />
+      </mesh>
+      
+      {/* Shoulders */}
+      <mesh position={[0, limbLengths.spine * scale, 0]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0.02, 0.02, bodyProportions.shoulderWidth * scale, 8]} />
+        <meshStandardMaterial color="#e0e0e0" />
+      </mesh>
+      
+      {/* Head */}
+      <mesh position={[0, limbLengths.spine * scale + 0.15, 0]}>
+        <sphereGeometry args={[0.08, 16, 16]} />
+        <meshStandardMaterial color="#f0f0f0" />
+      </mesh>
+      
+      {/* Left Arm */}
+      <group position={[-bodyProportions.shoulderWidth * scale / 2, limbLengths.spine * scale, 0]}>
+        {/* Upper arm */}
+        <mesh 
+          position={[
+            -limbLengths.upperArm * scale * Math.sin(toRad(jointAngles.shoulderAbduction)) / 2,
+            -limbLengths.upperArm * scale * Math.cos(toRad(jointAngles.shoulderFlexion)) / 2,
+            0
+          ]}
+          rotation={[0, 0, toRad(-jointAngles.shoulderAbduction)]}
+        >
+          <cylinderGeometry args={[0.025, 0.025, limbLengths.upperArm * scale, 8]} />
+          <meshStandardMaterial color="#e0e0e0" />
+        </mesh>
+        
+        {/* Forearm */}
+        <group position={[
+          -limbLengths.upperArm * scale * Math.sin(toRad(jointAngles.shoulderAbduction)),
+          -limbLengths.upperArm * scale * Math.cos(toRad(jointAngles.shoulderFlexion)),
+          0
+        ]}>
+          <mesh 
+            position={[
+              -limbLengths.forearm * scale * Math.sin(toRad(jointAngles.elbowFlexion)) / 2,
+              -limbLengths.forearm * scale / 2,
+              0
+            ]}
+          >
+            <cylinderGeometry args={[0.02, 0.02, limbLengths.forearm * scale, 8]} />
+            <meshStandardMaterial color="#e0e0e0" />
+          </mesh>
+        </group>
+      </group>
+      
+      {/* Right Arm */}
+      <group position={[bodyProportions.shoulderWidth * scale / 2, limbLengths.spine * scale, 0]}>
+        {/* Upper arm */}
+        <mesh 
+          position={[
+            limbLengths.upperArm * scale * Math.sin(toRad(jointAngles.shoulderAbduction)) / 2,
+            -limbLengths.upperArm * scale * Math.cos(toRad(jointAngles.shoulderFlexion)) / 2,
+            0
+          ]}
+          rotation={[0, 0, toRad(jointAngles.shoulderAbduction)]}
+        >
+          <cylinderGeometry args={[0.025, 0.025, limbLengths.upperArm * scale, 8]} />
+          <meshStandardMaterial color="#e0e0e0" />
+        </mesh>
+        
+        {/* Forearm */}
+        <group position={[
+          limbLengths.upperArm * scale * Math.sin(toRad(jointAngles.shoulderAbduction)),
+          -limbLengths.upperArm * scale * Math.cos(toRad(jointAngles.shoulderFlexion)),
+          0
+        ]}>
+          <mesh 
+            position={[
+              limbLengths.forearm * scale * Math.sin(toRad(jointAngles.elbowFlexion)) / 2,
+              -limbLengths.forearm * scale / 2,
+              0
+            ]}
+          >
+            <cylinderGeometry args={[0.02, 0.02, limbLengths.forearm * scale, 8]} />
+            <meshStandardMaterial color="#e0e0e0" />
+          </mesh>
+        </group>
+      </group>
+      
+      {/* Left Leg */}
+      <group position={[-bodyProportions.hipWidth * scale / 2, 0, 0]}>
+        {/* Thigh */}
+        <mesh 
+          position={[
+            0,
+            -limbLengths.thigh * scale * Math.cos(toRad(jointAngles.hipFlexion)) / 2,
+            limbLengths.thigh * scale * Math.sin(toRad(jointAngles.hipFlexion)) / 2
+          ]}
+          rotation={[toRad(jointAngles.hipFlexion), 0, 0]}
+        >
+          <cylinderGeometry args={[0.035, 0.035, limbLengths.thigh * scale, 8]} />
+          <meshStandardMaterial color="#e0e0e0" />
+        </mesh>
+        
+        {/* Shin */}
+        <group position={[
+          0,
+          -limbLengths.thigh * scale * Math.cos(toRad(jointAngles.hipFlexion)),
+          limbLengths.thigh * scale * Math.sin(toRad(jointAngles.hipFlexion))
+        ]}>
+          <mesh 
+            position={[
+              0,
+              -limbLengths.shin * scale * Math.cos(toRad(jointAngles.kneeFlexion)) / 2,
+              limbLengths.shin * scale * Math.sin(toRad(jointAngles.kneeFlexion)) / 2
+            ]}
+            rotation={[toRad(jointAngles.kneeFlexion), 0, 0]}
+          >
+            <cylinderGeometry args={[0.03, 0.03, limbLengths.shin * scale, 8]} />
+            <meshStandardMaterial color="#e0e0e0" />
+          </mesh>
+        </group>
+      </group>
+      
+      {/* Right Leg */}
+      <group position={[bodyProportions.hipWidth * scale / 2, 0, 0]}>
+        {/* Thigh */}
+        <mesh 
+          position={[
+            0,
+            -limbLengths.thigh * scale * Math.cos(toRad(jointAngles.hipFlexion)) / 2,
+            limbLengths.thigh * scale * Math.sin(toRad(jointAngles.hipFlexion)) / 2
+          ]}
+          rotation={[toRad(jointAngles.hipFlexion), 0, 0]}
+        >
+          <cylinderGeometry args={[0.035, 0.035, limbLengths.thigh * scale, 8]} />
+          <meshStandardMaterial color="#e0e0e0" />
+        </mesh>
+        
+        {/* Shin */}
+        <group position={[
+          0,
+          -limbLengths.thigh * scale * Math.cos(toRad(jointAngles.hipFlexion)),
+          limbLengths.thigh * scale * Math.sin(toRad(jointAngles.hipFlexion))
+        ]}>
+          <mesh 
+            position={[
+              0,
+              -limbLengths.shin * scale * Math.cos(toRad(jointAngles.kneeFlexion)) / 2,
+              limbLengths.shin * scale * Math.sin(toRad(jointAngles.kneeFlexion)) / 2
+            ]}
+            rotation={[toRad(jointAngles.kneeFlexion), 0, 0]}
+          >
+            <cylinderGeometry args={[0.03, 0.03, limbLengths.shin * scale, 8]} />
+            <meshStandardMaterial color="#e0e0e0" />
+          </mesh>
+        </group>
+      </group>
+      
+      {/* Floor plane for reference */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1, 0]}>
+        <planeGeometry args={[2, 2]} />
+        <meshStandardMaterial color="#303030" opacity={0.5} transparent />
+      </mesh>
     </group>
   );
 }
@@ -320,7 +247,6 @@ export default function Skeleton3D({
   onPatientDataChange?: (config: SkeletonConfig) => void 
 }) {
   const [config, setConfig] = useState<SkeletonConfig>(defaultConfig);
-  const [selectedBone, setSelectedBone] = useState<string>("");
   const [selectedTab, setSelectedTab] = useState("limbs");
   
   const updateLimbLength = (limb: keyof typeof config.limbLengths, value: number) => {
@@ -362,7 +288,6 @@ export default function Skeleton3D({
   const resetToDefault = () => {
     setConfig(defaultConfig);
     onPatientDataChange?.(defaultConfig);
-    setSelectedBone("");
   };
   
   const saveConfiguration = () => {
@@ -385,15 +310,13 @@ export default function Skeleton3D({
             <div className="h-full relative bg-gray-900 rounded-lg">
               <Canvas
                 camera={{ position: [1.5, 0.5, 1.5], fov: 50 }}
+                gl={{ antialias: false, alpha: false }}
               >
                 <ambientLight intensity={0.5} />
                 <pointLight position={[10, 10, 10]} intensity={0.5} />
                 <pointLight position={[-10, -10, -10]} intensity={0.3} />
                 
-                <SkeletonModel
-                  config={config}
-                  onBoneSelect={setSelectedBone}
-                />
+                <SkeletonModel config={config} />
                 
                 <OrbitControls
                   enablePan={true}
@@ -422,14 +345,6 @@ export default function Skeleton3D({
                   Save
                 </Button>
               </div>
-              
-              {selectedBone && (
-                <div className="absolute top-4 right-4">
-                  <Badge className="bg-green-500 text-white">
-                    Selected: {selectedBone}
-                  </Badge>
-                </div>
-              )}
             </div>
           </CardContent>
         </Card>
@@ -516,18 +431,6 @@ export default function Skeleton3D({
                       className="w-full"
                     />
                   </div>
-                  
-                  <div className="space-y-2">
-                    <Label className="text-xs">Neck: {config.limbLengths.neck}cm</Label>
-                    <Slider
-                      value={[config.limbLengths.neck]}
-                      onValueChange={([v]) => updateLimbLength("neck", v)}
-                      min={8}
-                      max={15}
-                      step={1}
-                      className="w-full"
-                    />
-                  </div>
                 </div>
               </TabsContent>
               
@@ -588,18 +491,6 @@ export default function Skeleton3D({
                     />
                   </div>
                   
-                  <div className="space-y-2">
-                    <Label className="text-xs">Abduction: {config.jointAngles.hipAbduction}°</Label>
-                    <Slider
-                      value={[config.jointAngles.hipAbduction]}
-                      onValueChange={([v]) => updateJointAngle("hipAbduction", v)}
-                      min={0}
-                      max={45}
-                      step={5}
-                      className="w-full"
-                    />
-                  </div>
-                  
                   <h4 className="font-medium text-sm text-muted-foreground pt-4">Knee</h4>
                   
                   <div className="space-y-2">
@@ -638,30 +529,6 @@ export default function Skeleton3D({
                       onValueChange={([v]) => updateBodyProportion("hipWidth", v)}
                       min={25}
                       max={40}
-                      step={1}
-                      className="w-full"
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label className="text-xs">Chest Depth: {config.bodyProportions.chestDepth}cm</Label>
-                    <Slider
-                      value={[config.bodyProportions.chestDepth]}
-                      onValueChange={([v]) => updateBodyProportion("chestDepth", v)}
-                      min={15}
-                      max={30}
-                      step={1}
-                      className="w-full"
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label className="text-xs">Head Size: {config.bodyProportions.headSize}cm</Label>
-                    <Slider
-                      value={[config.bodyProportions.headSize]}
-                      onValueChange={([v]) => updateBodyProportion("headSize", v)}
-                      min={8}
-                      max={15}
                       step={1}
                       className="w-full"
                     />

@@ -1,11 +1,15 @@
-import { useState } from "react";
+import { useRef, useState, Suspense } from "react";
+import { Canvas, useFrame } from "@react-three/fiber";
+import { OrbitControls } from "@react-three/drei";
+import * as THREE from "three";
 import { Card, CardContent } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Save, RotateCcw, User } from "lucide-react";
+import { Save, RotateCcw, AlertCircle } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface SkeletonConfig {
   limbLengths: {
@@ -49,178 +53,276 @@ const defaultConfig: SkeletonConfig = {
   },
 };
 
-// 2D SVG Skeleton Visualization as fallback
-function SkeletonVisualization({ config }: { config: SkeletonConfig }) {
-  const scale = 2;
-  const centerX = 200;
-  const centerY = 50;
-  
-  const { limbLengths, jointAngles, bodyProportions } = config;
-  
-  // Calculate positions
-  const shoulderY = centerY + limbLengths.spine * scale;
-  const leftShoulderX = centerX - (bodyProportions.shoulderWidth * scale) / 2;
-  const rightShoulderX = centerX + (bodyProportions.shoulderWidth * scale) / 2;
-  
-  const leftHipX = centerX - (bodyProportions.hipWidth * scale) / 2;
-  const rightHipX = centerX + (bodyProportions.hipWidth * scale) / 2;
-  
-  // Calculate arm positions with angles
-  const leftElbowX = leftShoulderX - Math.sin(jointAngles.shoulderAbduction * Math.PI / 180) * limbLengths.upperArm * scale;
-  const leftElbowY = shoulderY + Math.cos(jointAngles.shoulderFlexion * Math.PI / 180) * limbLengths.upperArm * scale;
-  
-  const leftWristX = leftElbowX - Math.sin((jointAngles.shoulderAbduction + jointAngles.elbowFlexion) * Math.PI / 180) * limbLengths.forearm * scale;
-  const leftWristY = leftElbowY + limbLengths.forearm * scale;
-  
-  const rightElbowX = rightShoulderX + Math.sin(jointAngles.shoulderAbduction * Math.PI / 180) * limbLengths.upperArm * scale;
-  const rightElbowY = shoulderY + Math.cos(jointAngles.shoulderFlexion * Math.PI / 180) * limbLengths.upperArm * scale;
-  
-  const rightWristX = rightElbowX + Math.sin((jointAngles.shoulderAbduction + jointAngles.elbowFlexion) * Math.PI / 180) * limbLengths.forearm * scale;
-  const rightWristY = rightElbowY + limbLengths.forearm * scale;
-  
-  // Calculate leg positions
-  const hipY = centerY + limbLengths.spine * scale;
-  
-  const leftKneeX = leftHipX - Math.sin(jointAngles.hipFlexion * Math.PI / 180) * limbLengths.thigh * scale * 0.2;
-  const leftKneeY = hipY + limbLengths.thigh * scale;
-  
-  const leftAnkleX = leftKneeX - Math.sin(jointAngles.kneeFlexion * Math.PI / 180) * limbLengths.shin * scale * 0.2;
-  const leftAnkleY = leftKneeY + limbLengths.shin * scale;
-  
-  const rightKneeX = rightHipX + Math.sin(jointAngles.hipFlexion * Math.PI / 180) * limbLengths.thigh * scale * 0.2;
-  const rightKneeY = hipY + limbLengths.thigh * scale;
-  
-  const rightAnkleX = rightKneeX + Math.sin(jointAngles.kneeFlexion * Math.PI / 180) * limbLengths.shin * scale * 0.2;
-  const rightAnkleY = rightKneeY + limbLengths.shin * scale;
+// Simple 3D bone component
+function Bone3D({ 
+  position, 
+  rotation, 
+  length, 
+  thickness = 0.025,
+  color = "#e0e0e0",
+  name 
+}: any) {
+  const meshRef = useRef<THREE.Mesh>(null);
+  const [hovered, setHovered] = useState(false);
   
   return (
-    <svg viewBox="0 0 400 400" className="w-full h-full">
-      {/* Grid background */}
-      <defs>
-        <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
-          <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#374151" strokeWidth="1" opacity="0.2"/>
-        </pattern>
-      </defs>
-      <rect width="400" height="400" fill="#111827" />
-      <rect width="400" height="400" fill="url(#grid)" />
+    <group position={position} rotation={rotation}>
+      <mesh
+        ref={meshRef}
+        onPointerOver={() => setHovered(true)}
+        onPointerOut={() => setHovered(false)}
+      >
+        <boxGeometry args={[thickness, length, thickness]} />
+        <meshStandardMaterial color={hovered ? "#60a5fa" : color} />
+      </mesh>
+      {/* Joint sphere */}
+      <mesh position={[0, length/2, 0]}>
+        <sphereGeometry args={[thickness * 0.8, 8, 8]} />
+        <meshStandardMaterial color={color} />
+      </mesh>
+    </group>
+  );
+}
+
+// 3D skeleton model with error boundaries
+function SkeletonModel({ config }: { config: SkeletonConfig }) {
+  const groupRef = useRef<THREE.Group>(null);
+  
+  // Slow rotation
+  useFrame((state, delta) => {
+    if (groupRef.current) {
+      groupRef.current.rotation.y += delta * 0.2;
+    }
+  });
+  
+  const scale = 0.01;
+  const { limbLengths, jointAngles, bodyProportions } = config;
+  
+  // Convert degrees to radians
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  
+  return (
+    <group ref={groupRef}>
+      {/* Spine/Torso */}
+      <Bone3D
+        position={[0, 0, 0]}
+        rotation={[0, 0, 0]}
+        length={limbLengths.spine * scale}
+        thickness={0.04}
+        name="Spine"
+      />
       
       {/* Head */}
-      <circle cx={centerX} cy={centerY - 15} r="15" fill="#e0e0e0" stroke="#60a5fa" strokeWidth="2" />
-      
-      {/* Spine */}
-      <line 
-        x1={centerX} 
-        y1={centerY} 
-        x2={centerX} 
-        y2={shoulderY} 
-        stroke="#e0e0e0" 
-        strokeWidth="6"
-      />
+      <mesh position={[0, (limbLengths.spine + 10) * scale, 0]}>
+        <sphereGeometry args={[0.08, 16, 16]} />
+        <meshStandardMaterial color="#f0f0f0" />
+      </mesh>
       
       {/* Shoulders */}
-      <line 
-        x1={leftShoulderX} 
-        y1={shoulderY} 
-        x2={rightShoulderX} 
-        y2={shoulderY} 
-        stroke="#e0e0e0" 
-        strokeWidth="4"
-      />
+      <group position={[0, limbLengths.spine * scale, 0]}>
+        {/* Left shoulder to arm */}
+        <Bone3D
+          position={[-bodyProportions.shoulderWidth * scale / 2, 0, 0]}
+          rotation={[0, 0, toRad(90)]}
+          length={bodyProportions.shoulderWidth * scale / 2}
+          thickness={0.03}
+          name="Left Shoulder"
+        />
+        {/* Right shoulder to arm */}
+        <Bone3D
+          position={[bodyProportions.shoulderWidth * scale / 2, 0, 0]}
+          rotation={[0, 0, toRad(-90)]}
+          length={bodyProportions.shoulderWidth * scale / 2}
+          thickness={0.03}
+          name="Right Shoulder"
+        />
+      </group>
       
       {/* Left Arm */}
-      <line 
-        x1={leftShoulderX} 
-        y1={shoulderY} 
-        x2={leftElbowX} 
-        y2={leftElbowY} 
-        stroke="#e0e0e0" 
-        strokeWidth="4"
-      />
-      <circle cx={leftElbowX} cy={leftElbowY} r="4" fill="#60a5fa" />
-      <line 
-        x1={leftElbowX} 
-        y1={leftElbowY} 
-        x2={leftWristX} 
-        y2={leftWristY} 
-        stroke="#e0e0e0" 
-        strokeWidth="3"
-      />
-      <circle cx={leftWristX} cy={leftWristY} r="3" fill="#60a5fa" />
+      <group position={[-bodyProportions.shoulderWidth * scale / 2, limbLengths.spine * scale, 0]}>
+        {/* Upper arm */}
+        <Bone3D
+          position={[0, 0, 0]}
+          rotation={[toRad(jointAngles.shoulderFlexion), 0, toRad(jointAngles.shoulderAbduction)]}
+          length={limbLengths.upperArm * scale}
+          thickness={0.025}
+          name="Left Upper Arm"
+        />
+        {/* Forearm at elbow position */}
+        <group 
+          position={[
+            -limbLengths.upperArm * scale * Math.sin(toRad(jointAngles.shoulderAbduction)),
+            -limbLengths.upperArm * scale * Math.cos(toRad(jointAngles.shoulderFlexion)),
+            0
+          ]}
+        >
+          <Bone3D
+            position={[0, 0, 0]}
+            rotation={[toRad(jointAngles.elbowFlexion), 0, 0]}
+            length={limbLengths.forearm * scale}
+            thickness={0.02}
+            name="Left Forearm"
+          />
+        </group>
+      </group>
       
       {/* Right Arm */}
-      <line 
-        x1={rightShoulderX} 
-        y1={shoulderY} 
-        x2={rightElbowX} 
-        y2={rightElbowY} 
-        stroke="#e0e0e0" 
-        strokeWidth="4"
-      />
-      <circle cx={rightElbowX} cy={rightElbowY} r="4" fill="#60a5fa" />
-      <line 
-        x1={rightElbowX} 
-        y1={rightElbowY} 
-        x2={rightWristX} 
-        y2={rightWristY} 
-        stroke="#e0e0e0" 
-        strokeWidth="3"
-      />
-      <circle cx={rightWristX} cy={rightWristY} r="3" fill="#60a5fa" />
+      <group position={[bodyProportions.shoulderWidth * scale / 2, limbLengths.spine * scale, 0]}>
+        {/* Upper arm */}
+        <Bone3D
+          position={[0, 0, 0]}
+          rotation={[toRad(jointAngles.shoulderFlexion), 0, toRad(-jointAngles.shoulderAbduction)]}
+          length={limbLengths.upperArm * scale}
+          thickness={0.025}
+          name="Right Upper Arm"
+        />
+        {/* Forearm at elbow position */}
+        <group 
+          position={[
+            limbLengths.upperArm * scale * Math.sin(toRad(jointAngles.shoulderAbduction)),
+            -limbLengths.upperArm * scale * Math.cos(toRad(jointAngles.shoulderFlexion)),
+            0
+          ]}
+        >
+          <Bone3D
+            position={[0, 0, 0]}
+            rotation={[toRad(jointAngles.elbowFlexion), 0, 0]}
+            length={limbLengths.forearm * scale}
+            thickness={0.02}
+            name="Right Forearm"
+          />
+        </group>
+      </group>
       
       {/* Pelvis */}
-      <line 
-        x1={leftHipX} 
-        y1={hipY} 
-        x2={rightHipX} 
-        y2={hipY} 
-        stroke="#e0e0e0" 
-        strokeWidth="5"
+      <Bone3D
+        position={[0, 0, 0]}
+        rotation={[0, 0, toRad(90)]}
+        length={bodyProportions.hipWidth * scale}
+        thickness={0.035}
+        name="Pelvis"
       />
       
       {/* Left Leg */}
-      <line 
-        x1={leftHipX} 
-        y1={hipY} 
-        x2={leftKneeX} 
-        y2={leftKneeY} 
-        stroke="#e0e0e0" 
-        strokeWidth="5"
-      />
-      <circle cx={leftKneeX} cy={leftKneeY} r="5" fill="#60a5fa" />
-      <line 
-        x1={leftKneeX} 
-        y1={leftKneeY} 
-        x2={leftAnkleX} 
-        y2={leftAnkleY} 
-        stroke="#e0e0e0" 
-        strokeWidth="4"
-      />
-      <circle cx={leftAnkleX} cy={leftAnkleY} r="4" fill="#60a5fa" />
+      <group position={[-bodyProportions.hipWidth * scale / 2, 0, 0]}>
+        {/* Thigh */}
+        <Bone3D
+          position={[0, 0, 0]}
+          rotation={[toRad(jointAngles.hipFlexion), 0, 0]}
+          length={limbLengths.thigh * scale}
+          thickness={0.035}
+          name="Left Thigh"
+        />
+        {/* Shin at knee position */}
+        <group 
+          position={[
+            0,
+            -limbLengths.thigh * scale * Math.cos(toRad(jointAngles.hipFlexion)),
+            limbLengths.thigh * scale * Math.sin(toRad(jointAngles.hipFlexion))
+          ]}
+        >
+          <Bone3D
+            position={[0, 0, 0]}
+            rotation={[toRad(jointAngles.kneeFlexion), 0, 0]}
+            length={limbLengths.shin * scale}
+            thickness={0.03}
+            name="Left Shin"
+          />
+        </group>
+      </group>
       
       {/* Right Leg */}
-      <line 
-        x1={rightHipX} 
-        y1={hipY} 
-        x2={rightKneeX} 
-        y2={rightKneeY} 
-        stroke="#e0e0e0" 
-        strokeWidth="5"
-      />
-      <circle cx={rightKneeX} cy={rightKneeY} r="5" fill="#60a5fa" />
-      <line 
-        x1={rightKneeX} 
-        y1={rightKneeY} 
-        x2={rightAnkleX} 
-        y2={rightAnkleY} 
-        stroke="#e0e0e0" 
-        strokeWidth="4"
-      />
-      <circle cx={rightAnkleX} cy={rightAnkleY} r="4" fill="#60a5fa" />
+      <group position={[bodyProportions.hipWidth * scale / 2, 0, 0]}>
+        {/* Thigh */}
+        <Bone3D
+          position={[0, 0, 0]}
+          rotation={[toRad(jointAngles.hipFlexion), 0, 0]}
+          length={limbLengths.thigh * scale}
+          thickness={0.035}
+          name="Right Thigh"
+        />
+        {/* Shin at knee position */}
+        <group 
+          position={[
+            0,
+            -limbLengths.thigh * scale * Math.cos(toRad(jointAngles.hipFlexion)),
+            limbLengths.thigh * scale * Math.sin(toRad(jointAngles.hipFlexion))
+          ]}
+        >
+          <Bone3D
+            position={[0, 0, 0]}
+            rotation={[toRad(jointAngles.kneeFlexion), 0, 0]}
+            length={limbLengths.shin * scale}
+            thickness={0.03}
+            name="Right Shin"
+          />
+        </group>
+      </group>
       
-      {/* Labels */}
-      <text x="10" y="20" fill="#9ca3af" fontSize="12">Front View</text>
-      <text x="10" y="390" fill="#9ca3af" fontSize="10">Measurements in cm | Angles in degrees</text>
-    </svg>
+      {/* Ground plane */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1, 0]}>
+        <planeGeometry args={[2, 2]} />
+        <meshBasicMaterial color="#1a1a1a" transparent opacity={0.5} />
+      </mesh>
+      
+      {/* Grid lines */}
+      <gridHelper args={[2, 20, "#303030", "#303030"]} position={[0, -0.99, 0]} />
+    </group>
+  );
+}
+
+// Error fallback component
+function ErrorFallback() {
+  return (
+    <div className="flex items-center justify-center h-full">
+      <Alert className="max-w-md">
+        <AlertCircle className="h-4 w-4" />
+        <AlertDescription>
+          3D rendering is not available. Please try refreshing the page or use a different browser.
+        </AlertDescription>
+      </Alert>
+    </div>
+  );
+}
+
+// Canvas wrapper with error boundary
+function Canvas3D({ config }: { config: SkeletonConfig }) {
+  const [hasError, setHasError] = useState(false);
+  
+  if (hasError) {
+    return <ErrorFallback />;
+  }
+  
+  return (
+    <div className="h-full w-full bg-gray-900 rounded-lg">
+      <Suspense fallback={
+        <div className="flex items-center justify-center h-full">
+          <div className="text-white">Loading 3D model...</div>
+        </div>
+      }>
+        <Canvas
+          camera={{ position: [1.5, 0.5, 1.5], fov: 50 }}
+          onCreated={({ gl }) => {
+            gl.setClearColor('#111827');
+          }}
+          onError={() => setHasError(true)}
+        >
+          <ambientLight intensity={0.5} />
+          <pointLight position={[10, 10, 10]} intensity={0.5} />
+          <pointLight position={[-10, -10, -10]} intensity={0.3} />
+          
+          <SkeletonModel config={config} />
+          
+          <OrbitControls
+            enablePan={true}
+            enableZoom={true}
+            enableRotate={true}
+            minDistance={1}
+            maxDistance={5}
+          />
+        </Canvas>
+      </Suspense>
+    </div>
   );
 }
 
@@ -286,12 +388,12 @@ export default function Skeleton3D({
   
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-[700px]">
-      {/* Visualization */}
+      {/* 3D Viewport */}
       <div className="lg:col-span-2">
         <Card className="h-full">
           <CardContent className="p-4 h-full">
-            <div className="h-full relative bg-gray-900 rounded-lg flex items-center justify-center">
-              <SkeletonVisualization config={config} />
+            <div className="h-full relative">
+              <Canvas3D config={config} />
               
               <div className="absolute top-4 left-4 flex gap-2">
                 <Button
@@ -310,13 +412,6 @@ export default function Skeleton3D({
                   <Save className="h-4 w-4 mr-1" />
                   Save
                 </Button>
-              </div>
-              
-              <div className="absolute top-4 right-4">
-                <Badge className="bg-blue-500 text-white flex items-center gap-1">
-                  <User className="h-3 w-3" />
-                  Patient Model
-                </Badge>
               </div>
             </div>
           </CardContent>
@@ -417,7 +512,7 @@ export default function Skeleton3D({
                     <Slider
                       value={[config.jointAngles.shoulderFlexion]}
                       onValueChange={([v]) => updateJointAngle("shoulderFlexion", v)}
-                      min={-180}
+                      min={-90}
                       max={180}
                       step={5}
                       className="w-full"
@@ -508,11 +603,11 @@ export default function Skeleton3D({
                   </div>
                   
                   <div className="mt-6 p-4 bg-gray-800 rounded-lg">
-                    <h4 className="text-sm font-medium text-gray-300 mb-2">Current Configuration Summary</h4>
+                    <h4 className="text-sm font-medium text-gray-300 mb-2">Patient Measurements</h4>
                     <div className="space-y-1 text-xs text-gray-400">
-                      <p>• Total Height: ~{(config.limbLengths.spine + config.limbLengths.thigh + config.limbLengths.shin + 20)}cm</p>
-                      <p>• Arm Span: ~{(config.bodyProportions.shoulderWidth + (config.limbLengths.upperArm + config.limbLengths.forearm) * 2)}cm</p>
-                      <p>• Body Type: {config.bodyProportions.shoulderWidth > config.bodyProportions.hipWidth ? 'V-Shape' : 'Balanced'}</p>
+                      <p>• Height estimate: ~{(config.limbLengths.spine + config.limbLengths.thigh + config.limbLengths.shin + 20)}cm</p>
+                      <p>• Arm reach: ~{(config.limbLengths.upperArm + config.limbLengths.forearm) * 2}cm</p>
+                      <p>• Shoulder-to-hip ratio: {(config.bodyProportions.shoulderWidth / config.bodyProportions.hipWidth).toFixed(2)}</p>
                     </div>
                   </div>
                 </div>

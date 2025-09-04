@@ -661,6 +661,9 @@ Keep responses concise, practical, and directly applicable to clinical practice.
           "I apologize, but I'm unable to provide a response at the moment. Please try again.";
           
         console.log("OpenAI response received successfully");
+        console.log("Response length:", aiResponse.length);
+        console.log("Finish reason:", completion.choices[0]?.finish_reason);
+        console.log("Token usage:", completion.usage);
       } catch (apiError: any) {
         console.error("OpenAI API error:", apiError);
         

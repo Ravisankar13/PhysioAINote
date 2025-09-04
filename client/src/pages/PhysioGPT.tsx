@@ -429,6 +429,10 @@ Please provide assessment recommendations following ${patient.expertFramework} a
                   case 'exercises':
                     evidenceDataReceived.exerciseImages = data.data;
                     break;
+                  
+                  case 'visualContent':
+                    evidenceDataReceived.visualContent = data.data;
+                    break;
                     
                   case 'suggestions':
                     setSuggestions(data.data || []);

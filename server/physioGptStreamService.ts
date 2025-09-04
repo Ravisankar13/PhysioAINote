@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { physioGptStorage } from "./physioGptStorage";
 import { storage } from "./storage";
 import { evidenceService, EvidenceSummary, ResearchPaper } from "./evidenceIntegration";
+import { visualContentService, type VisualContentResult } from "./visualContentService";
 import { Response } from "express";
 
 if (!process.env.OPENAI_API_KEY) {
@@ -165,6 +166,25 @@ Keep responses concise, practical, and directly applicable to clinical practice.
       // Start parallel processing for enhancements
       const enhancementsPromises = [];
       
+      // Check if visual content is requested
+      const isVisualRequest = visualContentService.detectImageRequest(request.message);
+      if (isVisualRequest) {
+        console.log("Visual content requested - generating multi-modal content");
+        
+        enhancementsPromises.push(
+          this.fetchVisualContentAsync(request.message, fullResponse)
+            .then(visualContent => {
+              if (visualContent && visualContent.length > 0) {
+                res.write(`data: ${JSON.stringify({ 
+                  type: 'visualContent', 
+                  data: visualContent 
+                })}\n\n`);
+              }
+            })
+            .catch(err => console.error("Visual content fetch error:", err))
+        );
+      }
+      
       // Check if evidence search is needed (run in parallel)
       const needsEvidence = this.checkNeedsEvidence(request.message);
       if (needsEvidence) {
@@ -271,6 +291,56 @@ Keep responses concise, practical, and directly applicable to clinical practice.
     } catch (error) {
       console.error("Error fetching evidence:", error);
       return null;
+    }
+  }
+  
+  private async fetchVisualContentAsync(userMessage: string, aiResponse: string): Promise<VisualContentResult[]> {
+    try {
+      const visualContent: VisualContentResult[] = [];
+      
+      // Extract exercise names or topics from both messages
+      let extractedExercises = visualContentService.extractExerciseNames(userMessage);
+      
+      // If no specific exercises found in user message, try AI response
+      if (extractedExercises.length === 0 && aiResponse) {
+        extractedExercises = visualContentService.extractExerciseNames(aiResponse);
+      }
+      
+      // Generate visual content for each exercise/topic
+      for (const exercise of extractedExercises) {
+        try {
+          const content = await visualContentService.getVisualContent(exercise, {
+            includeAI: true,
+            includeExternal: true,
+            includeVideos: true,
+            maxResults: 3
+          });
+          visualContent.push(...content);
+        } catch (error) {
+          console.error(`Error getting visual content for ${exercise}:`, error);
+        }
+      }
+      
+      // If no specific exercises found, try general query
+      if (visualContent.length === 0) {
+        try {
+          const generalQuery = userMessage.replace(/show|image|picture|video|demonstrate/gi, '').trim();
+          const content = await visualContentService.getVisualContent(generalQuery, {
+            includeAI: true,
+            includeExternal: true,
+            includeVideos: true,
+            maxResults: 5
+          });
+          visualContent.push(...content);
+        } catch (error) {
+          console.error("Error getting general visual content:", error);
+        }
+      }
+      
+      return visualContent;
+    } catch (error) {
+      console.error("Error in fetchVisualContentAsync:", error);
+      return [];
     }
   }
   

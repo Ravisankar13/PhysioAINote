@@ -51,6 +51,7 @@ import { AITreatmentPlanner } from "@/components/clinical/AITreatmentPlanner";
 import ClinicalToolsPanel from "@/components/clinical/ClinicalToolsPanel";
 import ClinicalResponseDisplay from "@/components/clinical/ClinicalResponseDisplay";
 import VisualContentDisplay from "@/components/clinical/VisualContentDisplay";
+import Skeleton3D from "@/components/clinical/Skeleton3D";
 import { pdfGenerator } from "@/services/pdfGenerator";
 
 // Error Boundary Component
@@ -174,6 +175,8 @@ export default function PhysioGPT() {
   const [showReferenceLibrary, setShowReferenceLibrary] = useState(false);
   const [showTreatmentPlanning, setShowTreatmentPlanning] = useState(false);
   const [showClinicalTools, setShowClinicalTools] = useState(false);
+  const [show3DSkeleton, setShow3DSkeleton] = useState(false);
+  const [skeletonConfig, setSkeletonConfig] = useState<any>(null);
   const [clinicalContext, setClinicalContext] = useState<{
     bodyRegion?: string;
     conditionType?: 'acute' | 'chronic' | 'post-surgical' | 'sports';
@@ -901,6 +904,15 @@ Please provide:
                 <Activity className="h-4 w-4 mr-1" />
                 Treatment Plan
               </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setShow3DSkeleton(!show3DSkeleton)}
+                className="bg-white/20 hover:bg-white/30 text-white border-white/30"
+              >
+                <User className="h-4 w-4 mr-1" />
+                3D Patient Model
+              </Button>
             </div>
           </div>
         </div>
@@ -1437,6 +1449,45 @@ Please provide:
             });
           }}
         />
+      )}
+
+      {/* 3D Skeleton Panel */}
+      {show3DSkeleton && (
+        <div className="fixed right-4 top-20 w-[90%] max-w-6xl h-[calc(100vh-6rem)] z-40 animate-slideIn">
+          <Card className="h-full shadow-2xl">
+            <CardHeader className="pb-3 flex flex-row items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <User className="h-5 w-5 text-teal-600" />
+                3D Patient Model Builder
+              </CardTitle>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShow3DSkeleton(false)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </CardHeader>
+            <CardContent className="h-[calc(100%-4rem)] p-4">
+              <Skeleton3D 
+                onPatientDataChange={(config) => {
+                  setSkeletonConfig(config);
+                  // Automatically add patient model data to conversation context
+                  if (config) {
+                    const modelSummary = `Patient Model Data:
+- Limb proportions configured
+- Joint angles: Shoulder ${config.jointAngles.shoulderFlexion}°, Hip ${config.jointAngles.hipFlexion}°, Knee ${config.jointAngles.kneeFlexion}°
+- Body proportions set`;
+                    setPatientContext(prev => ({
+                      ...prev,
+                      modelData: modelSummary
+                    }));
+                  }
+                }}
+              />
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {/* Clinical Reference Library Panel */}

@@ -31,16 +31,17 @@ interface BioDigitalPublicEmbedProps {
   };
 }
 
-// BioDigital public model IDs that don't require authentication
+// BioDigital public model IDs that work without authentication
+// These are actual public model IDs from BioDigital's gallery
 const BIODIGITAL_PUBLIC_MODELS = {
-  fullSkeleton: "production/maleAdult/male_skeleton_system",
-  skeletonMuscles: "production/maleAdult/male_musculoskeletal_system", 
-  spine: "production/maleAdult/male_spine",
-  shoulder: "production/maleAdult/male_shoulder",
-  knee: "production/maleAdult/male_knee_joint",
-  hip: "production/maleAdult/male_hip_joint",
-  nervous: "production/maleAdult/male_nervous_system",
-  muscular: "production/maleAdult/male_muscular_system"
+  fullSkeleton: "be1q8xQ2h8z", // Full skeletal system
+  skeletonMuscles: "be5MwN9P6Lx", // Skeleton with muscles
+  spine: "be1fbjBBvuz", // Spine detail
+  shoulder: "be1o2hPf-M4", // Shoulder complex  
+  knee: "be1u3iQK14r", // Knee joint
+  hip: "be1nVrO95Kx", // Hip joint
+  nervous: "be2VKlSgqJP", // Nervous system
+  muscular: "bexk-Lg-vN1" // Muscular system
 };
 
 export default function BioDigitalPublicEmbed({ config }: BioDigitalPublicEmbedProps) {
@@ -56,11 +57,11 @@ export default function BioDigitalPublicEmbed({ config }: BioDigitalPublicEmbedP
     setIsLoading(true);
     
     // BioDigital Human public embed URL - no authentication required
-    // Using their public viewer with model selection
-    const modelPath = BIODIGITAL_PUBLIC_MODELS[currentModel as keyof typeof BIODIGITAL_PUBLIC_MODELS];
+    // Using their widget embed with public model IDs
+    const modelId = BIODIGITAL_PUBLIC_MODELS[currentModel as keyof typeof BIODIGITAL_PUBLIC_MODELS];
     
-    // Public embed URL with controls
-    const embedUrl = `https://human.biodigital.com/viewer/?id=${modelPath}&ui-info=true&ui-reset=true&ui-fullscreen=true&ui-share=false&ui-tools=true&dk=guest`;
+    // Public widget embed URL (doesn't require authentication)
+    const embedUrl = `https://human.biodigital.com/widget?be=${modelId}&ui-info=true&ui-reset=true&ui-fullscreen=true&ui-share=false&ui-tools=true`;
     
     iframe.src = embedUrl;
 

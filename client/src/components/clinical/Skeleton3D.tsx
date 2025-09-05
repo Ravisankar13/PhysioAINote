@@ -6,9 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Save, RotateCcw, Download, Upload } from "lucide-react";
-import * as THREE from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import AnatomicalSkeleton3D from "./AnatomicalSkeleton3D";
 
 interface SkeletonConfig {
   limbLengths: {
@@ -52,8 +50,13 @@ const defaultConfig: SkeletonConfig = {
   },
 };
 
-// Enhanced Three.js implementation with GLTF loading support
+// Use the new anatomical skeleton component
 function ThreeJSSkeleton({ config }: { config: SkeletonConfig }) {
+  return <AnatomicalSkeleton3D config={config} />;
+}
+
+// Original implementation kept for reference
+function ThreeJSSkeletonOld({ config }: { config: SkeletonConfig }) {
   const mountRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);

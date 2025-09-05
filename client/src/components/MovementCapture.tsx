@@ -99,8 +99,7 @@ export const MovementCapture: React.FC<MovementCaptureProps> = ({
         video: {
           width: 640,
           height: 480,
-          facingMode: isMobileDevice() ? { ideal: 'environment' } : 'user',
-          facingMode: 'user'
+          facingMode: isMobileDevice() ? { ideal: 'environment' } : 'user'
         }
       });
 

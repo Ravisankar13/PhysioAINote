@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -316,5 +316,3 @@ export default function MedicalSkeleton3D({ config }: MedicalSkeletonProps) {
   );
 }
 
-// Add React import for lazy loading
-import React from 'react';

@@ -7,8 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Save, RotateCcw, Download, Upload } from "lucide-react";
 import AnatomicalSkeleton3D from "./AnatomicalSkeleton3D";
-import BioDigitalEmbedViewer from "./BioDigitalEmbedViewer";
-import MedicalSkeleton3D from "./MedicalSkeleton3D";
+import SimpleMedicalSkeleton from "./SimpleMedicalSkeleton";
 
 interface SkeletonConfig {
   limbLengths: {
@@ -61,7 +60,7 @@ function ThreeJSSkeleton({ config }: { config: SkeletonConfig }) {
   if (useBioDigital && !bioDigitalError) {
     return (
       <div className="relative w-full h-full">
-        <MedicalSkeleton3D config={config} />
+        <SimpleMedicalSkeleton config={config} />
         {/* Fallback button if user prefers procedural */}
         <Button
           size="sm"

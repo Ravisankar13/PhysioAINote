@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState } from "react";
 import * as THREE from "three";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
@@ -204,6 +204,9 @@ export default function PoseableSkeleton({ config }: PoseableSkeletonProps) {
     const spine = createBone(spineLength, 0.05);
     spine.position.y = spineLength / 2;
     spineGroup.add(spine);
+    
+    // Position the entire skeleton above ground
+    spineGroup.position.y = 0.8;
     
     // Pelvis
     const pelvis = new THREE.Mesh(

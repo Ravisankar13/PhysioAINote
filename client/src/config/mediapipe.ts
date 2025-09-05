@@ -6,6 +6,12 @@
 // Use a specific version to ensure consistency across deployments
 export const MEDIAPIPE_VERSION = '0.5.1675469404';
 
+// Helper to detect if device is mobile/tablet
+export function isMobileDevice(): boolean {
+  const userAgent = navigator.userAgent.toLowerCase();
+  return /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent);
+}
+
 // MediaPipe CDN configuration
 export const MEDIAPIPE_CONFIG = {
   pose: {
@@ -23,7 +29,7 @@ export const MEDIAPIPE_CONFIG = {
       enableSegmentation: false,
       minDetectionConfidence: 0.5,
       minTrackingConfidence: 0.5,
-      selfieMode: true // Mirror the video for better UX
+      selfieMode: false // Don't mirror for back camera
     }
   },
   
@@ -31,7 +37,8 @@ export const MEDIAPIPE_CONFIG = {
   camera: {
     width: 1280,
     height: 720,
-    facingMode: 'user' as 'user' | 'environment'
+    // Default to back camera (environment) on mobile devices, front camera (user) on desktop
+    facingMode: (isMobileDevice() ? 'environment' : 'user') as 'user' | 'environment'
   },
   
   // Timeout settings for production
@@ -82,15 +89,31 @@ export function checkMediaPipeSupport(): { supported: boolean; error?: string } 
 }
 
 // Helper function to request camera permission with better error handling
-export async function requestCameraPermission(): Promise<void> {
+export async function requestCameraPermission(preferredFacingMode?: 'user' | 'environment'): Promise<void> {
+  const facingMode = preferredFacingMode || MEDIAPIPE_CONFIG.camera.facingMode;
+  
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ 
-      video: {
-        width: { ideal: MEDIAPIPE_CONFIG.camera.width },
-        height: { ideal: MEDIAPIPE_CONFIG.camera.height },
-        facingMode: MEDIAPIPE_CONFIG.camera.facingMode
-      }
-    });
+    // First try with ideal constraint for better compatibility
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ 
+        video: {
+          width: { ideal: MEDIAPIPE_CONFIG.camera.width },
+          height: { ideal: MEDIAPIPE_CONFIG.camera.height },
+          facingMode: { ideal: facingMode }
+        }
+      });
+    } catch (firstError) {
+      // If ideal fails, try with exact constraint
+      console.warn('Ideal camera constraint failed, trying exact:', firstError);
+      stream = await navigator.mediaDevices.getUserMedia({ 
+        video: {
+          width: { ideal: MEDIAPIPE_CONFIG.camera.width },
+          height: { ideal: MEDIAPIPE_CONFIG.camera.height },
+          facingMode: { exact: facingMode }
+        }
+      });
+    }
     
     // Stop the stream as we only need to check permission
     stream.getTracks().forEach(track => track.stop());

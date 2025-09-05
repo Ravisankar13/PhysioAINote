@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { isMobileDevice } from '@/config/mediapipe';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -198,7 +199,7 @@ export default function EnhancedPosturalAnalysis({
           deviceId: selectedCamera ? { exact: selectedCamera } : undefined,
           width: { ideal: 1280 },
           height: { ideal: 720 },
-          facingMode: selectedCamera ? undefined : { ideal: currentCameraType === 'rear' ? 'environment' : 'user' }
+          facingMode: selectedCamera ? undefined : { ideal: (currentCameraType === 'rear' || isMobileDevice()) ? 'environment' : 'user' }
         },
         audio: false
       };

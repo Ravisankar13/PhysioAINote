@@ -36,6 +36,7 @@ import {
   Video
 } from 'lucide-react';
 import { loadMediaPipeLibraries } from '@/utils/mediapipeLoader';
+import { isMobileDevice } from '@/config/mediapipe';
 import { AnatomyManager } from '@/services/anatomy/AnatomyManager';
 import { 
   BODY_REGIONS, 
@@ -127,7 +128,10 @@ export default function BodyScanner() {
     vessels: false
   });
   const [clinicalTests, setClinicalTests] = useState<any[]>([]);
-  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment'); // Default to rear camera
+  // Default to back camera on mobile, front on desktop
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>(
+    isMobileDevice() ? 'environment' : 'user'
+  );
   const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]);
   const [selectedCameraId, setSelectedCameraId] = useState<string>('');
   const [isFullscreen, setIsFullscreen] = useState(false);

@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import * as poseDetection from '@tensorflow-models/pose-detection';
 import '@tensorflow/tfjs-backend-webgl';
 import '@tensorflow/tfjs-backend-webgpu';
+import { isMobileDevice } from '@/config/mediapipe';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -98,6 +99,7 @@ export const MovementCapture: React.FC<MovementCaptureProps> = ({
         video: {
           width: 640,
           height: 480,
+          facingMode: isMobileDevice() ? { ideal: 'environment' } : 'user',
           facingMode: 'user'
         }
       });

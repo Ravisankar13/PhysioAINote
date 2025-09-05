@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { MEDIAPIPE_CONFIG, checkMediaPipeSupport, requestCameraPermission } from '@/config/mediapipe';
+import { MEDIAPIPE_CONFIG, checkMediaPipeSupport, requestCameraPermission, isMobileDevice } from '@/config/mediapipe';
 import { loadMediaPipeLibraries } from '@/utils/mediapipeLoader';
 import { FrameworkAnalysisPanel } from '@/components/movement/FrameworkAnalysisPanel';
 import { biomechanicalAnalyzer, type BiomechanicalMetrics, type TreatmentPlan } from '@/utils/biomechanicalAnalysis';
@@ -320,7 +320,10 @@ export default function MovementAnalysis() {
   const [elapsedTime, setElapsedTime] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [selectedCamera, setSelectedCamera] = useState<'user' | 'environment'>('user');
+  // Default to back camera on mobile devices
+  const [selectedCamera, setSelectedCamera] = useState<'user' | 'environment'>(
+    isMobileDevice() ? 'environment' : 'user'
+  );
   const [isSwitchingCamera, setIsSwitchingCamera] = useState(false);
   const [patientInfo, setPatientInfo] = useState({
     name: '',
@@ -678,7 +681,7 @@ export default function MovementAnalysis() {
         console.log('[MovementAnalysis] Requesting camera permission...');
         
         try {
-          await requestCameraPermission();
+          await requestCameraPermission(selectedCamera);
           console.log('[MovementAnalysis] Camera permission granted');
           setCameraStatus('initializing');
         } catch (permissionError: any) {

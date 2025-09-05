@@ -1,8 +1,9 @@
 import React, { useState } from "react";
+import BodyParts3DSkeleton from "./BodyParts3DSkeleton";
 import PoseableSkeleton from "./PoseableSkeleton";
 import AnatomicalSkeleton3D from "./AnatomicalSkeleton3D";
 import { Button } from "@/components/ui/button";
-import { User, Bone } from "lucide-react";
+import { User, Bone, Brain } from "lucide-react";
 
 interface SimpleMedicalSkeletonProps {
   config: {
@@ -33,27 +34,49 @@ interface SimpleMedicalSkeletonProps {
 }
 
 export default function SimpleMedicalSkeleton({ config }: SimpleMedicalSkeletonProps) {
-  const [viewMode, setViewMode] = useState<'poseable' | 'anatomical'>('poseable');
+  const [viewMode, setViewMode] = useState<'bodyparts3d' | 'poseable' | 'anatomical'>('bodyparts3d');
 
-  // Use the Poseable skeleton with full slider controls by default
+  // Use BodyParts3D model by default
   return (
     <div className="relative w-full h-full">
-      {viewMode === 'poseable' ? (
+      {viewMode === 'bodyparts3d' ? (
+        <BodyParts3DSkeleton config={config} />
+      ) : viewMode === 'poseable' ? (
         <PoseableSkeleton config={config} />
       ) : (
         <AnatomicalSkeleton3D config={config} />
       )}
       
-      {/* Toggle button */}
-      <Button
-        size="sm"
-        variant="ghost"
-        onClick={() => setViewMode(viewMode === 'poseable' ? 'anatomical' : 'poseable')}
-        className="absolute bottom-4 left-4 text-xs opacity-70 hover:opacity-100 z-20"
-      >
-        {viewMode === 'poseable' ? <Bone className="w-4 h-4 mr-1" /> : <User className="w-4 h-4 mr-1" />}
-        Switch to {viewMode === 'poseable' ? 'Anatomical Skeleton' : 'Poseable Model'}
-      </Button>
+      {/* Toggle buttons */}
+      <div className="absolute bottom-4 left-4 flex gap-2">
+        <Button
+          size="sm"
+          variant={viewMode === 'bodyparts3d' ? 'default' : 'ghost'}
+          onClick={() => setViewMode('bodyparts3d')}
+          className="text-xs"
+        >
+          <Brain className="w-4 h-4 mr-1" />
+          BodyParts3D
+        </Button>
+        <Button
+          size="sm"
+          variant={viewMode === 'poseable' ? 'default' : 'ghost'}
+          onClick={() => setViewMode('poseable')}
+          className="text-xs"
+        >
+          <User className="w-4 h-4 mr-1" />
+          Poseable
+        </Button>
+        <Button
+          size="sm"
+          variant={viewMode === 'anatomical' ? 'default' : 'ghost'}
+          onClick={() => setViewMode('anatomical')}
+          className="text-xs"
+        >
+          <Bone className="w-4 h-4 mr-1" />
+          Anatomical
+        </Button>
+      </div>
     </div>
   );
 }

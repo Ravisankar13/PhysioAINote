@@ -70,8 +70,7 @@ function ThreeJSSkeleton({ config }: { config: SkeletonConfig }) {
 
     // Scene setup
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x111827);
-    scene.fog = new THREE.Fog(0x111827, 10, 50);
+    scene.background = new THREE.Color(0x000000);
     sceneRef.current = scene;
 
     // Camera setup
@@ -99,11 +98,11 @@ function ThreeJSSkeleton({ config }: { config: SkeletonConfig }) {
     mountRef.current.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
-    // Lighting setup
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+    // Lighting setup for anatomical visualization
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
     scene.add(ambientLight);
     
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.7);
     directionalLight.position.set(5, 10, 5);
     directionalLight.castShadow = true;
     directionalLight.shadow.camera.near = 0.1;
@@ -114,32 +113,20 @@ function ThreeJSSkeleton({ config }: { config: SkeletonConfig }) {
     directionalLight.shadow.camera.bottom = -10;
     scene.add(directionalLight);
 
-    const fillLight = new THREE.DirectionalLight(0x88aaff, 0.3);
+    const fillLight = new THREE.DirectionalLight(0xffd4a3, 0.4);
     fillLight.position.set(-5, 3, -5);
     scene.add(fillLight);
+    
+    const backLight = new THREE.DirectionalLight(0xffffff, 0.2);
+    backLight.position.set(0, 5, -10);
+    scene.add(backLight);
 
     // Create skeleton group
     const skeletonGroup = new THREE.Group();
     skeletonGroupRef.current = skeletonGroup;
     scene.add(skeletonGroup);
 
-    // Enhanced ground plane
-    const groundGeometry = new THREE.PlaneGeometry(10, 10);
-    const groundMaterial = new THREE.MeshStandardMaterial({ 
-      color: 0x1a1a2e,
-      roughness: 0.9,
-      metalness: 0.1
-    });
-    const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-    ground.rotation.x = -Math.PI / 2;
-    ground.position.y = -1;
-    ground.receiveShadow = true;
-    scene.add(ground);
-
-    // Grid helper
-    const gridHelper = new THREE.GridHelper(10, 20, 0x2a2a3a, 0x1a1a2a);
-    gridHelper.position.y = -0.99;
-    scene.add(gridHelper);
+    // Remove ground plane and grid for clean anatomical view
 
     // OrbitControls for better interaction
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -284,18 +271,21 @@ function ThreeJSSkeleton({ config }: { config: SkeletonConfig }) {
     const { limbLengths, jointAngles, bodyProportions } = config;
     const toRad = (deg: number) => (deg * Math.PI) / 180;
 
-    // Materials
+    // Anatomical bone materials
     const boneMaterial = new THREE.MeshStandardMaterial({ 
-      color: 0xe0e0e0,
-      roughness: 0.7,
-      metalness: 0.3
+      color: 0xd4c5b9,  // Bone color
+      roughness: 0.85,
+      metalness: 0.1
     });
     const jointMaterial = new THREE.MeshStandardMaterial({ 
-      color: 0x60a5fa,
-      roughness: 0.5,
-      metalness: 0.5,
-      emissive: 0x60a5fa,
-      emissiveIntensity: 0.1
+      color: 0xc8b8a8,  // Slightly darker bone color for joints
+      roughness: 0.8,
+      metalness: 0.15
+    });
+    const ribMaterial = new THREE.MeshStandardMaterial({ 
+      color: 0xddd0c0,  // Lighter bone for ribs
+      roughness: 0.9,
+      metalness: 0.05
     });
 
     // Helper function to create bone with joints
@@ -323,90 +313,306 @@ function ThreeJSSkeleton({ config }: { config: SkeletonConfig }) {
       return bone;
     };
 
-    // Spine with vertebrae
+    // Anatomical spine with vertebrae
     const spineGroup = new THREE.Group();
-    const vertebraeCount = 5;
+    const vertebraeCount = 24; // More realistic vertebrae count
     for (let i = 0; i < vertebraeCount; i++) {
-      const vertebra = createBone(limbLengths.spine / vertebraeCount, 0.04);
-      vertebra.position.y = (limbLengths.spine * scale / vertebraeCount) * i;
+      const vertebraHeight = limbLengths.spine * scale / vertebraeCount;
+      const vertebraRadius = 0.02 - (i * 0.0003); // Slightly taper
+      
+      // Vertebral body
+      const vertebraGeometry = new THREE.CylinderGeometry(
+        vertebraRadius * 1.2, 
+        vertebraRadius * 1.2, 
+        vertebraHeight * 0.7, 
+        8
+      );
+      const vertebra = new THREE.Mesh(vertebraGeometry, boneMaterial);
+      vertebra.position.y = vertebraHeight * i;
+      vertebra.castShadow = true;
       spineGroup.add(vertebra);
+      
+      // Spinous process (back spike of vertebra)
+      const processGeometry = new THREE.ConeGeometry(vertebraRadius * 0.3, vertebraHeight * 0.5, 4);
+      const process = new THREE.Mesh(processGeometry, boneMaterial);
+      process.position.y = vertebraHeight * i;
+      process.position.z = -vertebraRadius * 1.5;
+      process.rotation.x = -Math.PI / 2;
+      process.castShadow = true;
+      spineGroup.add(process);
+      
+      // Intervertebral disc (simplified)
+      if (i < vertebraeCount - 1) {
+        const discGeometry = new THREE.CylinderGeometry(
+          vertebraRadius * 0.9,
+          vertebraRadius * 0.9,
+          vertebraHeight * 0.2,
+          8
+        );
+        const disc = new THREE.Mesh(discGeometry, new THREE.MeshStandardMaterial({ 
+          color: 0x8b7d6b,
+          roughness: 0.9,
+          metalness: 0
+        }));
+        disc.position.y = vertebraHeight * (i + 0.5);
+        disc.castShadow = true;
+        spineGroup.add(disc);
+      }
     }
     group.add(spineGroup);
 
-    // Ribcage
-    const ribcageGeometry = new THREE.TorusGeometry(
-      bodyProportions.shoulderWidth * scale * 0.4, 
-      0.015, 
-      6, 
-      8
-    );
-    const ribcage = new THREE.Mesh(ribcageGeometry, boneMaterial);
-    ribcage.position.y = limbLengths.spine * scale * 0.7;
-    ribcage.rotation.x = Math.PI / 2;
-    ribcage.scale.y = 1.5;
-    ribcage.castShadow = true;
-    group.add(ribcage);
+    // Anatomical ribcage with individual ribs
+    const ribcageGroup = new THREE.Group();
+    const numRibs = 12;
+    for (let i = 0; i < numRibs; i++) {
+      const ribAngle = (i / numRibs) * 0.8 - 0.4;
+      const ribRadius = bodyProportions.shoulderWidth * scale * 0.35 * (1 - i * 0.02);
+      const ribThickness = 0.008;
+      
+      // Left rib
+      const leftRibGeometry = new THREE.TorusGeometry(ribRadius, ribThickness, 4, 12, Math.PI * 0.6);
+      const leftRib = new THREE.Mesh(leftRibGeometry, ribMaterial);
+      leftRib.position.y = limbLengths.spine * scale * 0.8 - (i * limbLengths.spine * scale * 0.04);
+      leftRib.rotation.x = Math.PI / 2 + ribAngle;
+      leftRib.rotation.y = -Math.PI * 0.2;
+      leftRib.castShadow = true;
+      ribcageGroup.add(leftRib);
+      
+      // Right rib
+      const rightRibGeometry = new THREE.TorusGeometry(ribRadius, ribThickness, 4, 12, Math.PI * 0.6);
+      const rightRib = new THREE.Mesh(rightRibGeometry, ribMaterial);
+      rightRib.position.y = limbLengths.spine * scale * 0.8 - (i * limbLengths.spine * scale * 0.04);
+      rightRib.rotation.x = Math.PI / 2 + ribAngle;
+      rightRib.rotation.y = Math.PI * 1.2;
+      rightRib.castShadow = true;
+      ribcageGroup.add(rightRib);
+    }
+    
+    // Sternum
+    const sternumGeometry = new THREE.BoxGeometry(0.02, limbLengths.spine * scale * 0.4, 0.03);
+    const sternum = new THREE.Mesh(sternumGeometry, boneMaterial);
+    sternum.position.y = limbLengths.spine * scale * 0.6;
+    sternum.position.z = bodyProportions.shoulderWidth * scale * 0.25;
+    sternum.castShadow = true;
+    ribcageGroup.add(sternum);
+    
+    group.add(ribcageGroup);
 
-    // Head (skull)
+    // Anatomical skull
     const skullGroup = new THREE.Group();
-    const craniumGeometry = new THREE.SphereGeometry(0.1, 12, 12);
+    
+    // Cranium
+    const craniumGeometry = new THREE.SphereGeometry(0.1, 16, 16);
     const cranium = new THREE.Mesh(craniumGeometry, boneMaterial);
-    cranium.scale.y = 1.2;
+    cranium.scale.set(0.9, 1.1, 0.95);
     cranium.castShadow = true;
     skullGroup.add(cranium);
     
-    const jawGeometry = new THREE.BoxGeometry(0.08, 0.04, 0.08);
+    // Eye sockets
+    const eyeSocketGeometry = new THREE.SphereGeometry(0.025, 8, 8);
+    const leftEyeSocket = new THREE.Mesh(eyeSocketGeometry, new THREE.MeshStandardMaterial({ color: 0x000000 }));
+    leftEyeSocket.position.set(-0.03, 0.02, 0.08);
+    skullGroup.add(leftEyeSocket);
+    
+    const rightEyeSocket = new THREE.Mesh(eyeSocketGeometry, new THREE.MeshStandardMaterial({ color: 0x000000 }));
+    rightEyeSocket.position.set(0.03, 0.02, 0.08);
+    skullGroup.add(rightEyeSocket);
+    
+    // Nasal cavity
+    const nasalGeometry = new THREE.ConeGeometry(0.015, 0.03, 3);
+    const nasal = new THREE.Mesh(nasalGeometry, new THREE.MeshStandardMaterial({ color: 0x000000 }));
+    nasal.position.set(0, -0.01, 0.09);
+    nasal.rotation.x = Math.PI;
+    skullGroup.add(nasal);
+    
+    // Jaw/Mandible
+    const jawGeometry = new THREE.BoxGeometry(0.08, 0.04, 0.07);
     const jaw = new THREE.Mesh(jawGeometry, boneMaterial);
-    jaw.position.y = -0.06;
+    jaw.position.y = -0.07;
+    jaw.position.z = 0.01;
     jaw.castShadow = true;
     skullGroup.add(jaw);
+    
+    // Teeth (simplified)
+    const teethGeometry = new THREE.BoxGeometry(0.06, 0.008, 0.01);
+    const upperTeeth = new THREE.Mesh(teethGeometry, new THREE.MeshStandardMaterial({ color: 0xffffff }));
+    upperTeeth.position.set(0, -0.04, 0.04);
+    skullGroup.add(upperTeeth);
+    
+    const lowerTeeth = new THREE.Mesh(teethGeometry, new THREE.MeshStandardMaterial({ color: 0xffffff }));
+    lowerTeeth.position.set(0, -0.08, 0.04);
+    skullGroup.add(lowerTeeth);
     
     skullGroup.position.y = limbLengths.spine * scale + 0.15;
     group.add(skullGroup);
 
-    // Shoulders (clavicles and scapulae)
-    const shoulderGeometry = new THREE.CapsuleGeometry(0.015, bodyProportions.shoulderWidth * scale, 4, 8);
-    const shoulders = new THREE.Mesh(shoulderGeometry, boneMaterial);
-    shoulders.rotation.z = Math.PI / 2;
-    shoulders.position.y = limbLengths.spine * scale;
-    shoulders.castShadow = true;
-    group.add(shoulders);
-
-    // Pelvis
-    const pelvisGeometry = new THREE.TorusGeometry(
-      bodyProportions.hipWidth * scale * 0.4,
-      0.02,
-      6,
-      8
+    // Anatomical shoulders with clavicles and scapulae
+    const shoulderGroup = new THREE.Group();
+    
+    // Clavicles (collar bones)
+    const clavicleLength = bodyProportions.shoulderWidth * scale * 0.45;
+    const clavicleCurve = new THREE.QuadraticBezierCurve3(
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(clavicleLength * 0.4, 0, clavicleLength * 0.2),
+      new THREE.Vector3(clavicleLength, 0, 0)
     );
-    const pelvis = new THREE.Mesh(pelvisGeometry, boneMaterial);
-    pelvis.rotation.x = Math.PI / 2;
-    pelvis.scale.z = 0.5;
-    pelvis.castShadow = true;
-    group.add(pelvis);
+    const clavicleGeometry = new THREE.TubeGeometry(clavicleCurve, 8, 0.01, 6);
+    
+    const leftClavicle = new THREE.Mesh(clavicleGeometry, boneMaterial);
+    leftClavicle.position.set(-clavicleLength * 0.1, limbLengths.spine * scale, 0.02);
+    leftClavicle.rotation.y = Math.PI;
+    leftClavicle.castShadow = true;
+    shoulderGroup.add(leftClavicle);
+    
+    const rightClavicle = new THREE.Mesh(clavicleGeometry, boneMaterial);
+    rightClavicle.position.set(clavicleLength * 0.1, limbLengths.spine * scale, 0.02);
+    rightClavicle.castShadow = true;
+    shoulderGroup.add(rightClavicle);
+    
+    // Scapulae (shoulder blades)
+    const scapulaGeometry = new THREE.BoxGeometry(0.06, 0.08, 0.01);
+    
+    const leftScapula = new THREE.Mesh(scapulaGeometry, boneMaterial);
+    leftScapula.position.set(
+      -bodyProportions.shoulderWidth * scale * 0.4,
+      limbLengths.spine * scale * 0.9,
+      -0.04
+    );
+    leftScapula.rotation.set(0, -0.3, -0.2);
+    leftScapula.castShadow = true;
+    shoulderGroup.add(leftScapula);
+    
+    const rightScapula = new THREE.Mesh(scapulaGeometry, boneMaterial);
+    rightScapula.position.set(
+      bodyProportions.shoulderWidth * scale * 0.4,
+      limbLengths.spine * scale * 0.9,
+      -0.04
+    );
+    rightScapula.rotation.set(0, 0.3, 0.2);
+    rightScapula.castShadow = true;
+    shoulderGroup.add(rightScapula);
+    
+    group.add(shoulderGroup);
+
+    // Anatomical pelvis
+    const pelvisGroup = new THREE.Group();
+    
+    // Ilium (hip bones)
+    const iliumGeometry = new THREE.SphereGeometry(bodyProportions.hipWidth * scale * 0.35, 8, 6);
+    const leftIlium = new THREE.Mesh(iliumGeometry, boneMaterial);
+    leftIlium.scale.set(0.6, 0.4, 0.3);
+    leftIlium.position.set(-bodyProportions.hipWidth * scale * 0.3, 0, 0);
+    leftIlium.rotation.z = -0.2;
+    leftIlium.castShadow = true;
+    pelvisGroup.add(leftIlium);
+    
+    const rightIlium = new THREE.Mesh(iliumGeometry, boneMaterial);
+    rightIlium.scale.set(0.6, 0.4, 0.3);
+    rightIlium.position.set(bodyProportions.hipWidth * scale * 0.3, 0, 0);
+    rightIlium.rotation.z = 0.2;
+    rightIlium.castShadow = true;
+    pelvisGroup.add(rightIlium);
+    
+    // Sacrum
+    const sacrumGeometry = new THREE.ConeGeometry(0.04, 0.08, 6);
+    const sacrum = new THREE.Mesh(sacrumGeometry, boneMaterial);
+    sacrum.position.set(0, -0.02, -0.03);
+    sacrum.rotation.x = Math.PI * 0.1;
+    sacrum.castShadow = true;
+    pelvisGroup.add(sacrum);
+    
+    // Pubic symphysis
+    const pubicGeometry = new THREE.BoxGeometry(bodyProportions.hipWidth * scale * 0.15, 0.02, 0.03);
+    const pubic = new THREE.Mesh(pubicGeometry, boneMaterial);
+    pubic.position.set(0, -0.05, 0.03);
+    pubic.castShadow = true;
+    pelvisGroup.add(pubic);
+    
+    group.add(pelvisGroup);
 
     // Arms
     const createArm = (side: number) => {
       const armGroup = new THREE.Group();
       
-      // Upper arm
-      const upperArm = createBone(limbLengths.upperArm, 0.03);
-      upperArm.rotation.z = toRad(side * jointAngles.shoulderAbduction);
-      upperArm.rotation.x = toRad(jointAngles.shoulderFlexion);
-      armGroup.add(upperArm);
+      // Humerus (upper arm)
+      const humerusGroup = new THREE.Group();
       
-      // Forearm
-      const forearm = createBone(limbLengths.forearm, 0.025);
-      forearm.position.y = -limbLengths.upperArm * scale;
-      forearm.rotation.x = toRad(-jointAngles.elbowFlexion);
-      upperArm.add(forearm);
+      // Humeral head (ball joint)
+      const humeralHeadGeometry = new THREE.SphereGeometry(0.025, 8, 8);
+      const humeralHead = new THREE.Mesh(humeralHeadGeometry, jointMaterial);
+      humeralHead.castShadow = true;
+      humerusGroup.add(humeralHead);
       
-      // Hand
-      const handGeometry = new THREE.BoxGeometry(0.04, 0.08, 0.015);
-      const hand = new THREE.Mesh(handGeometry, boneMaterial);
-      hand.position.y = -limbLengths.forearm * scale - 0.04;
-      hand.castShadow = true;
-      forearm.add(hand);
+      // Humerus shaft
+      const humerusGeometry = new THREE.CylinderGeometry(0.015, 0.02, limbLengths.upperArm * scale, 8);
+      const humerus = new THREE.Mesh(humerusGeometry, boneMaterial);
+      humerus.position.y = -limbLengths.upperArm * scale / 2;
+      humerus.castShadow = true;
+      humerusGroup.add(humerus);
+      
+      // Elbow joint
+      const elbowGeometry = new THREE.SphereGeometry(0.02, 8, 8);
+      const elbow = new THREE.Mesh(elbowGeometry, jointMaterial);
+      elbow.position.y = -limbLengths.upperArm * scale;
+      elbow.scale.set(1.2, 0.8, 1);
+      elbow.castShadow = true;
+      humerusGroup.add(elbow);
+      
+      humerusGroup.rotation.z = toRad(side * jointAngles.shoulderAbduction);
+      humerusGroup.rotation.x = toRad(jointAngles.shoulderFlexion);
+      armGroup.add(humerusGroup);
+      
+      // Radius and Ulna (forearm bones)
+      const forearmGroup = new THREE.Group();
+      
+      // Ulna (larger forearm bone)
+      const ulnaGeometry = new THREE.CylinderGeometry(0.01, 0.012, limbLengths.forearm * scale, 6);
+      const ulna = new THREE.Mesh(ulnaGeometry, boneMaterial);
+      ulna.position.set(side * 0.008, -limbLengths.forearm * scale / 2, 0);
+      ulna.castShadow = true;
+      forearmGroup.add(ulna);
+      
+      // Radius (smaller forearm bone)
+      const radiusGeometry = new THREE.CylinderGeometry(0.008, 0.01, limbLengths.forearm * scale, 6);
+      const radius = new THREE.Mesh(radiusGeometry, boneMaterial);
+      radius.position.set(-side * 0.008, -limbLengths.forearm * scale / 2, 0);
+      radius.castShadow = true;
+      forearmGroup.add(radius);
+      
+      // Wrist joint
+      const wristGeometry = new THREE.BoxGeometry(0.03, 0.01, 0.02);
+      const wrist = new THREE.Mesh(wristGeometry, jointMaterial);
+      wrist.position.y = -limbLengths.forearm * scale;
+      wrist.castShadow = true;
+      forearmGroup.add(wrist);
+      
+      forearmGroup.position.y = -limbLengths.upperArm * scale;
+      forearmGroup.rotation.x = toRad(-jointAngles.elbowFlexion);
+      humerusGroup.add(forearmGroup);
+      
+      // Anatomical hand with fingers
+      const handGroup = new THREE.Group();
+      
+      // Palm
+      const palmGeometry = new THREE.BoxGeometry(0.04, 0.05, 0.012);
+      const palm = new THREE.Mesh(palmGeometry, boneMaterial);
+      palm.castShadow = true;
+      handGroup.add(palm);
+      
+      // Fingers (simplified)
+      for (let f = 0; f < 5; f++) {
+        const fingerLength = f === 0 ? 0.025 : 0.035; // Thumb is shorter
+        const fingerX = f === 0 ? -0.025 : -0.015 + (f - 1) * 0.01;
+        
+        const fingerGeometry = new THREE.CylinderGeometry(0.003, 0.003, fingerLength);
+        const finger = new THREE.Mesh(fingerGeometry, boneMaterial);
+        finger.position.set(fingerX, -0.025 - fingerLength/2, 0);
+        finger.castShadow = true;
+        handGroup.add(finger);
+      }
+      
+      handGroup.position.y = -limbLengths.forearm * scale - 0.04;
+      forearmGroup.add(handGroup);
       
       armGroup.position.set(
         side * bodyProportions.shoulderWidth * scale / 2,
@@ -424,24 +630,114 @@ function ThreeJSSkeleton({ config }: { config: SkeletonConfig }) {
     const createLeg = (side: number) => {
       const legGroup = new THREE.Group();
       
-      // Thigh
-      const thigh = createBone(limbLengths.thigh, 0.04);
-      thigh.rotation.x = toRad(jointAngles.hipFlexion);
-      legGroup.add(thigh);
+      // Femur (thigh bone)
+      const femurGroup = new THREE.Group();
       
-      // Shin
-      const shin = createBone(limbLengths.shin, 0.035);
-      shin.position.y = -limbLengths.thigh * scale;
-      shin.rotation.x = toRad(-jointAngles.kneeFlexion);
-      thigh.add(shin);
+      // Femoral head (ball joint)
+      const femoralHeadGeometry = new THREE.SphereGeometry(0.03, 8, 8);
+      const femoralHead = new THREE.Mesh(femoralHeadGeometry, jointMaterial);
+      femoralHead.castShadow = true;
+      femurGroup.add(femoralHead);
       
-      // Foot
-      const footGeometry = new THREE.BoxGeometry(0.06, 0.02, 0.12);
-      const foot = new THREE.Mesh(footGeometry, boneMaterial);
-      foot.position.y = -limbLengths.shin * scale - 0.01;
-      foot.position.z = 0.04;
-      foot.castShadow = true;
-      shin.add(foot);
+      // Femur shaft (with slight curve)
+      const femurGeometry = new THREE.CylinderGeometry(0.02, 0.025, limbLengths.thigh * scale, 8);
+      const femur = new THREE.Mesh(femurGeometry, boneMaterial);
+      femur.position.y = -limbLengths.thigh * scale / 2;
+      femur.castShadow = true;
+      femurGroup.add(femur);
+      
+      // Knee joint (patella and condyles)
+      const kneeGroup = new THREE.Group();
+      
+      // Knee condyles
+      const condyleGeometry = new THREE.SphereGeometry(0.025, 8, 8);
+      const medialCondyle = new THREE.Mesh(condyleGeometry, jointMaterial);
+      medialCondyle.position.set(side * 0.015, 0, 0);
+      medialCondyle.scale.set(0.8, 1, 1.2);
+      medialCondyle.castShadow = true;
+      kneeGroup.add(medialCondyle);
+      
+      const lateralCondyle = new THREE.Mesh(condyleGeometry, jointMaterial);
+      lateralCondyle.position.set(-side * 0.015, 0, 0);
+      lateralCondyle.scale.set(0.8, 1, 1.2);
+      lateralCondyle.castShadow = true;
+      kneeGroup.add(lateralCondyle);
+      
+      // Patella (kneecap)
+      const patellaGeometry = new THREE.SphereGeometry(0.018, 6, 6);
+      const patella = new THREE.Mesh(patellaGeometry, boneMaterial);
+      patella.position.set(0, 0, 0.025);
+      patella.scale.set(1, 1, 0.6);
+      patella.castShadow = true;
+      kneeGroup.add(patella);
+      
+      kneeGroup.position.y = -limbLengths.thigh * scale;
+      femurGroup.add(kneeGroup);
+      
+      femurGroup.rotation.x = toRad(jointAngles.hipFlexion);
+      legGroup.add(femurGroup);
+      
+      // Tibia and Fibula (shin bones)
+      const shinGroup = new THREE.Group();
+      
+      // Tibia (larger shin bone)
+      const tibiaGeometry = new THREE.CylinderGeometry(0.018, 0.02, limbLengths.shin * scale, 8);
+      const tibia = new THREE.Mesh(tibiaGeometry, boneMaterial);
+      tibia.position.set(side * 0.005, -limbLengths.shin * scale / 2, 0);
+      tibia.castShadow = true;
+      shinGroup.add(tibia);
+      
+      // Fibula (smaller shin bone)
+      const fibulaGeometry = new THREE.CylinderGeometry(0.008, 0.008, limbLengths.shin * scale, 6);
+      const fibula = new THREE.Mesh(fibulaGeometry, boneMaterial);
+      fibula.position.set(-side * 0.012, -limbLengths.shin * scale / 2, 0);
+      fibula.castShadow = true;
+      shinGroup.add(fibula);
+      
+      // Ankle joint
+      const ankleGeometry = new THREE.BoxGeometry(0.035, 0.015, 0.025);
+      const ankle = new THREE.Mesh(ankleGeometry, jointMaterial);
+      ankle.position.y = -limbLengths.shin * scale;
+      ankle.castShadow = true;
+      shinGroup.add(ankle);
+      
+      shinGroup.position.y = -limbLengths.thigh * scale;
+      shinGroup.rotation.x = toRad(-jointAngles.kneeFlexion);
+      femurGroup.add(shinGroup);
+      
+      // Anatomical foot
+      const footGroup = new THREE.Group();
+      
+      // Heel (calcaneus)
+      const heelGeometry = new THREE.BoxGeometry(0.03, 0.025, 0.04);
+      const heel = new THREE.Mesh(heelGeometry, boneMaterial);
+      heel.position.set(0, 0, -0.02);
+      heel.castShadow = true;
+      footGroup.add(heel);
+      
+      // Midfoot
+      const midfootGeometry = new THREE.BoxGeometry(0.045, 0.02, 0.06);
+      const midfoot = new THREE.Mesh(midfootGeometry, boneMaterial);
+      midfoot.position.set(0, -0.005, 0.02);
+      midfoot.castShadow = true;
+      footGroup.add(midfoot);
+      
+      // Toes (simplified)
+      for (let t = 0; t < 5; t++) {
+        const toeLength = t === 0 ? 0.02 : 0.015;
+        const toeX = -0.02 + t * 0.01;
+        
+        const toeGeometry = new THREE.CylinderGeometry(0.003, 0.003, toeLength);
+        const toe = new THREE.Mesh(toeGeometry, boneMaterial);
+        toe.position.set(toeX, -0.01, 0.05 + toeLength/2);
+        toe.rotation.x = Math.PI / 2;
+        toe.castShadow = true;
+        footGroup.add(toe);
+      }
+      
+      footGroup.position.y = -limbLengths.shin * scale - 0.01;
+      footGroup.position.z = 0.02;
+      shinGroup.add(footGroup);
       
       legGroup.position.set(
         side * bodyProportions.hipWidth * scale / 2,
@@ -458,7 +754,7 @@ function ThreeJSSkeleton({ config }: { config: SkeletonConfig }) {
 
   return (
     <div className="relative w-full h-full">
-      <div ref={mountRef} className="w-full h-full bg-gray-900 rounded-lg" />
+      <div ref={mountRef} className="w-full h-full bg-black rounded-lg" />
       {loadError && (
         <div className="absolute top-4 right-4">
           <Badge variant="secondary" className="bg-yellow-900/50 text-yellow-300">

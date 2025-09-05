@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Save, RotateCcw, Download, Upload } from "lucide-react";
 import AnatomicalSkeleton3D from "./AnatomicalSkeleton3D";
+import BioDigitalEmbedViewer from "./BioDigitalEmbedViewer";
 
 interface SkeletonConfig {
   limbLengths: {
@@ -50,9 +51,46 @@ const defaultConfig: SkeletonConfig = {
   },
 };
 
-// Use the new anatomical skeleton component
+// Use BioDigital if available, fallback to anatomical skeleton
 function ThreeJSSkeleton({ config }: { config: SkeletonConfig }) {
-  return <AnatomicalSkeleton3D config={config} />;
+  const [useBioDigital, setUseBioDigital] = useState(true);
+  const [bioDigitalError, setBioDigitalError] = useState(false);
+
+  // Try BioDigital first, fallback to procedural if it fails
+  if (useBioDigital && !bioDigitalError) {
+    return (
+      <div className="relative w-full h-full">
+        <BioDigitalEmbedViewer config={config} />
+        {/* Fallback button if user prefers procedural */}
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => setUseBioDigital(false)}
+          className="absolute bottom-4 left-4 text-xs opacity-50 hover:opacity-100"
+        >
+          Use Procedural Model
+        </Button>
+      </div>
+    );
+  }
+
+  // Fallback to anatomical skeleton
+  return (
+    <div className="relative w-full h-full">
+      <AnatomicalSkeleton3D config={config} />
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={() => {
+          setUseBioDigital(true);
+          setBioDigitalError(false);
+        }}
+        className="absolute bottom-4 left-4 text-xs opacity-50 hover:opacity-100"
+      >
+        Try BioDigital
+      </Button>
+    </div>
+  );
 }
 
 // Original implementation kept for reference

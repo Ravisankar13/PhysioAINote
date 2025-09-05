@@ -177,13 +177,13 @@ export default function BodyParts3DSkeleton({ config }: BodyParts3DSkeletonProps
       0.1,
       1000
     );
-    camera.position.set(3, 2, 5);
+    camera.position.set(2, 1.5, 3);
 
     // Controls
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
-    controls.target.set(0, 1, 0);
+    controls.target.set(0, 0.8, 0);
     controls.update();
     controlsRef.current = controls;
 
@@ -317,9 +317,10 @@ export default function BodyParts3DSkeleton({ config }: BodyParts3DSkeletonProps
     setIsLoading(true);
     setModelError(null);
     
-    // For now, we'll create a procedural skeleton since direct GLTF loading from URLs requires CORS setup
-    // In production, you would download the BodyParts3D OBJ files and convert them to GLTF
-    createProceduralSkeleton();
+    // Create the procedural skeleton immediately
+    setTimeout(() => {
+      createProceduralSkeleton();
+    }, 100);
   };
 
   // Create a procedural skeleton (fallback when external models aren't available)
@@ -335,9 +336,9 @@ export default function BodyParts3DSkeleton({ config }: BodyParts3DSkeletonProps
     const skeletonGroup = new THREE.Group();
     
     const boneMaterial = new THREE.MeshPhongMaterial({
-      color: 0xf4f1e8,
-      emissive: 0x404030,
-      shininess: 20
+      color: 0xffffff,
+      emissive: 0x606060,
+      shininess: 30
     });
     
     // Helper to create bones
@@ -353,27 +354,59 @@ export default function BodyParts3DSkeleton({ config }: BodyParts3DSkeletonProps
     // Spine
     const spine = new THREE.Group();
     spine.name = "spine";
+    const spineHeight = 0.8;
+    const spineMain = createBone(spineHeight, 0.06);
+    spineMain.position.y = spineHeight / 2;
+    spine.add(spineMain);
+    
+    // Add vertebrae details
     for (let i = 0; i < 5; i++) {
-      const vertebra = createBone(0.15, 0.05);
-      vertebra.position.y = i * 0.15;
+      const vertebra = new THREE.Mesh(
+        new THREE.BoxGeometry(0.08, 0.04, 0.06),
+        boneMaterial
+      );
+      vertebra.position.y = 0.15 + i * 0.15;
+      vertebra.castShadow = true;
       spine.add(vertebra);
     }
-    spine.position.y = 0.5;
+    spine.position.y = 0.4;
     skeletonGroup.add(spine);
     
     // Ribcage
     const ribcage = new THREE.Group();
     for (let i = 0; i < 12; i++) {
       const ribLevel = new THREE.Group();
-      const leftRib = createBone(0.3, 0.01);
-      leftRib.rotation.z = Math.PI / 3;
-      leftRib.position.set(-0.15, 1.2 - i * 0.05, 0);
+      const ribRadius = 0.15 - i * 0.005; // Taper ribs
       
-      const rightRib = createBone(0.3, 0.01);
-      rightRib.rotation.z = -Math.PI / 3;
-      rightRib.position.set(0.15, 1.2 - i * 0.05, 0);
+      // Create curved ribs using segments
+      const leftRibCurve = new THREE.Group();
+      const rightRibCurve = new THREE.Group();
       
-      ribLevel.add(leftRib, rightRib);
+      for (let j = 0; j < 5; j++) {
+        const angle = (j / 4) * Math.PI / 3;
+        const leftSegment = createBone(0.08, 0.015);
+        leftSegment.rotation.z = angle;
+        leftSegment.position.set(
+          -Math.sin(angle) * ribRadius,
+          0,
+          -Math.cos(angle) * ribRadius * 0.5
+        );
+        leftRibCurve.add(leftSegment);
+        
+        const rightSegment = createBone(0.08, 0.015);
+        rightSegment.rotation.z = -angle;
+        rightSegment.position.set(
+          Math.sin(angle) * ribRadius,
+          0,
+          -Math.cos(angle) * ribRadius * 0.5
+        );
+        rightRibCurve.add(rightSegment);
+      }
+      
+      leftRibCurve.position.y = 1.2 - i * 0.06;
+      rightRibCurve.position.y = 1.2 - i * 0.06;
+      
+      ribLevel.add(leftRibCurve, rightRibCurve);
       ribcage.add(ribLevel);
     }
     skeletonGroup.add(ribcage);
@@ -467,6 +500,9 @@ export default function BodyParts3DSkeleton({ config }: BodyParts3DSkeletonProps
     
     skeletonGroup.add(createLeg(-1)); // Left leg
     skeletonGroup.add(createLeg(1));  // Right leg
+    
+    // Position the skeleton properly
+    skeletonGroup.position.y = 0;
     
     modelRef.current = skeletonGroup;
     sceneRef.current.add(skeletonGroup);

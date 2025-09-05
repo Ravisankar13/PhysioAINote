@@ -32,26 +32,6 @@ interface SimpleMedicalSkeletonProps {
 }
 
 export default function SimpleMedicalSkeleton({ config }: SimpleMedicalSkeletonProps) {
-  const [viewMode, setViewMode] = useState<'3dmodel' | 'anatomical'>('3dmodel');
-
-  // Switch between free 3D models and anatomical skeleton
-  return (
-    <div className="relative w-full h-full">
-      {viewMode === '3dmodel' ? (
-        <FreeMedical3D config={config} />
-      ) : (
-        <AnatomicalSkeleton3D config={config} />
-      )}
-      
-      {/* Toggle button */}
-      <Button
-        size="sm"
-        variant="ghost"
-        onClick={() => setViewMode(viewMode === '3dmodel' ? 'anatomical' : '3dmodel')}
-        className="absolute top-4 right-20 text-xs opacity-70 hover:opacity-100 z-20"
-      >
-        Switch to {viewMode === '3dmodel' ? 'Anatomical' : '3D Model'}
-      </Button>
-    </div>
-  );
+  // Use the anatomical skeleton which is working properly
+  return <AnatomicalSkeleton3D config={config} />;
 }

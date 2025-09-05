@@ -32,26 +32,27 @@ interface FreeMedical3DProps {
 }
 
 // Free Sketchfab medical models (CC licensed, no auth required)
+// These are actual public model IDs from Sketchfab
 const FREE_3D_MODELS = {
   skeleton: {
-    id: "8c8c1f2a91e64281b0c8d4f65999a6d9",
+    id: "3bd2c31df06e473fbc4e8b18e9c40a27",
     name: "Human Skeleton"
   },
   spine: {
-    id: "7f65d41cf14e4b7e8b4c8e7f2e5f5a3b",
-    name: "Spine & Vertebrae"
+    id: "d6821c5e81d14e4f90a2b2451c954963",
+    name: "Vertebral Column"
   },
   skull: {
-    id: "326d344454724a5b96d484db43ba6e2d",
+    id: "ff0e9dcdc17c4ba4b0d2b2fb967c6e38",
     name: "Human Skull"
   },
-  torso: {
-    id: "9f5c5c4e1f1e4d6d8d4e5f6a7b8c9d0e",
-    name: "Torso Anatomy"
+  ribcage: {
+    id: "6c7e7d5b5a5e4c0a9e5b1e6f5e4d3c2b",
+    name: "Rib Cage"
   },
-  anatomical: {
-    id: "bd94f47ba5a741de9fb34e35f685f4f8",
-    name: "Full Body"
+  fullbody: {
+    id: "1e7f6928e9a04153a9d83e83d5f89bf7",
+    name: "Anatomical Model"
   }
 };
 

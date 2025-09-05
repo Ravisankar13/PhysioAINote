@@ -1,5 +1,5 @@
 import React from "react";
-import AnatomicalSkeleton3D from "./AnatomicalSkeleton3D";
+import BioDigitalPublicEmbed from "./BioDigitalPublicEmbed";
 
 interface SimpleMedicalSkeletonProps {
   config: {
@@ -30,6 +30,6 @@ interface SimpleMedicalSkeletonProps {
 }
 
 export default function SimpleMedicalSkeleton({ config }: SimpleMedicalSkeletonProps) {
-  // Use the anatomical skeleton 3D component which is working
-  return <AnatomicalSkeleton3D config={config} />;
+  // Use the BioDigital public embed viewer
+  return <BioDigitalPublicEmbed config={config} />;
 }

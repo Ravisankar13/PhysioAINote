@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Save, RotateCcw, Download, Upload } from "lucide-react";
 import AnatomicalSkeleton3D from "./AnatomicalSkeleton3D";
 import BioDigitalEmbedViewer from "./BioDigitalEmbedViewer";
+import MedicalSkeleton3D from "./MedicalSkeleton3D";
 
 interface SkeletonConfig {
   limbLengths: {
@@ -60,7 +61,7 @@ function ThreeJSSkeleton({ config }: { config: SkeletonConfig }) {
   if (useBioDigital && !bioDigitalError) {
     return (
       <div className="relative w-full h-full">
-        <BioDigitalEmbedViewer config={config} />
+        <MedicalSkeleton3D config={config} />
         {/* Fallback button if user prefers procedural */}
         <Button
           size="sm"

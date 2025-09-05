@@ -2,6 +2,7 @@ import { useRef, useEffect, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
@@ -37,37 +38,17 @@ interface BodyParts3DSkeletonProps {
   };
 }
 
-// Free anatomical 3D models (using Sketchfab's free medical models)
+// Artec 3D Professional Models
 const ANATOMICAL_MODELS = {
   skeleton: {
-    url: "https://sketchfab.com/models/3bd2c31df06e473fbc4e8b18e9c40a27/embed",
-    modelUrl: "https://sketchfab.com/models/3bd2c31df06e473fbc4e8b18e9c40a27", 
-    name: "Complete Skeleton",
-    description: "Full human skeleton with all bones"
+    file: "/models/Human skeleton HD.obj",
+    name: "Artec 3D Human Skeleton HD",
+    description: "Professional 3D scanned human skeleton with ultra-high detail"
   },
-  skull: {
-    url: "https://sketchfab.com/models/ff0e9dcdc17c4ba4b0d2b2fb967c6e38/embed",
-    modelUrl: "https://sketchfab.com/models/ff0e9dcdc17c4ba4b0d2b2fb967c6e38",
-    name: "Human Skull",
-    description: "Detailed skull anatomy"
-  },
-  spine: {
-    url: "https://sketchfab.com/models/d6821c5e81d14e4f90a2b2451c954963/embed",
-    modelUrl: "https://sketchfab.com/models/d6821c5e81d14e4f90a2b2451c954963",
-    name: "Vertebral Column",
-    description: "Complete spine with vertebrae"
-  },
-  pelvis: {
-    url: "https://sketchfab.com/models/8e5e2a5e2a8f4c9d9f2c1b3a4d5e6f7a/embed",
-    modelUrl: "https://sketchfab.com/models/8e5e2a5e2a8f4c9d9f2c1b3a4d5e6f7a",
-    name: "Pelvis",
-    description: "Hip bones and sacrum"
-  },
-  femur: {
-    url: "https://sketchfab.com/models/1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d/embed",
-    modelUrl: "https://sketchfab.com/models/1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d",
-    name: "Femur",
-    description: "Thigh bone"
+  glb: {
+    file: "/models/skeleton.glb",
+    name: "GLB Skeleton Model",
+    description: "Optimized skeleton in GLB format"
   }
 };
 
@@ -317,10 +298,67 @@ export default function BodyParts3DSkeleton({ config }: BodyParts3DSkeletonProps
     setIsLoading(true);
     setModelError(null);
     
-    // Create the procedural skeleton immediately
-    setTimeout(() => {
-      createProceduralSkeleton();
-    }, 100);
+    if (!sceneRef.current) {
+      setTimeout(() => {
+        loadModel();
+      }, 100);
+      return;
+    }
+    
+    // Try to load the Artec 3D skeleton first
+    const objLoader = new OBJLoader();
+    
+    // Load the high-quality Artec 3D Human Skeleton HD model
+    objLoader.load(
+      '/models/Human skeleton HD.obj',
+      (object) => {
+        // Remove existing model
+        if (modelRef.current) {
+          sceneRef.current!.remove(modelRef.current);
+        }
+        
+        // Apply material to the loaded model
+        const material = new THREE.MeshPhongMaterial({
+          color: 0xffffff,
+          emissive: 0x404040,
+          shininess: 30,
+          specular: 0x808080
+        });
+        
+        object.traverse((child) => {
+          if (child instanceof THREE.Mesh) {
+            child.material = material;
+            child.castShadow = true;
+            child.receiveShadow = true;
+          }
+        });
+        
+        // Scale and position the model
+        object.scale.set(0.01, 0.01, 0.01); // Artec model is large, scale it down
+        object.position.set(0, 0, 0);
+        
+        // Center the model
+        const box = new THREE.Box3().setFromObject(object);
+        const center = box.getCenter(new THREE.Vector3());
+        object.position.sub(center);
+        object.position.y = 0;
+        
+        modelRef.current = object;
+        sceneRef.current!.add(object);
+        setIsLoading(false);
+        
+        console.log('Artec 3D skeleton loaded successfully');
+      },
+      (progress) => {
+        console.log('Loading:', (progress.loaded / progress.total * 100).toFixed(0) + '%');
+      },
+      (error) => {
+        console.error('Error loading Artec skeleton:', error);
+        setModelError('Failed to load Artec 3D model, using fallback');
+        // Fall back to procedural skeleton
+        createProceduralSkeleton();
+      }
+    );
   };
 
   // Create a procedural skeleton (fallback when external models aren't available)
@@ -612,17 +650,10 @@ export default function BodyParts3DSkeleton({ config }: BodyParts3DSkeletonProps
           </div>
         )}
         
-        {/* Model selector */}
-        <div className="absolute top-4 left-4 flex gap-2">
-          <select
-            value={currentModel}
-            onChange={(e) => setCurrentModel(e.target.value)}
-            className="bg-black/50 backdrop-blur text-white px-3 py-1.5 rounded text-sm"
-          >
-            {Object.entries(ANATOMICAL_MODELS).map(([key, model]) => (
-              <option key={key} value={key}>{model.name}</option>
-            ))}
-          </select>
+        {/* Model info */}
+        <div className="absolute top-4 left-4 bg-black/50 backdrop-blur text-white px-3 py-2 rounded">
+          <h3 className="text-sm font-semibold">Artec 3D Human Skeleton HD</h3>
+          <p className="text-xs text-gray-300">Professional 3D scanned model</p>
         </div>
         
         {/* Preset poses */}
@@ -671,10 +702,10 @@ export default function BodyParts3DSkeleton({ config }: BodyParts3DSkeletonProps
           </Button>
         </div>
         
-        {/* Attribution */}
+        {/* Attribution for Artec 3D */}
         <div className="absolute bottom-4 left-4 bg-black/70 text-white px-3 py-2 rounded text-xs max-w-md">
-          <p>BodyParts3D Model - © The Database Center for Life Science</p>
-          <p className="text-gray-400">Licensed under CC Attribution-Share Alike 2.1 Japan</p>
+          <p>Human Skeleton HD by <a href="https://www.artec3d.com/portable-3d-scanners" target="_blank" rel="noopener noreferrer" className="underline">Artec 3D</a></p>
+          <p className="text-gray-400">Licensed under Creative Commons Attribution v4</p>
         </div>
       </div>
 

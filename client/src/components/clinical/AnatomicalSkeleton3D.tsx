@@ -525,43 +525,161 @@ export default function AnatomicalSkeleton3D({ config }: { config: SkeletonConfi
     rightClavicle.position.set(0, limbLengths.spine * scale, 0.025);
     shoulderGroup.add(rightClavicle);
 
-    // Scapulae (shoulder blades)
+    // Scapulae (shoulder blades) - Enhanced anatomical accuracy
     const createScapula = (side: number) => {
       const scapulaGroup = new THREE.Group();
       
-      // Main body
-      const body = new THREE.Mesh(
-        new THREE.BoxGeometry(0.07, 0.09, 0.008),
-        boneMaterial
-      );
+      // Main triangular body with realistic shape
+      const bodyShape = new THREE.Shape();
+      bodyShape.moveTo(0, 0);
+      bodyShape.lineTo(-0.04, -0.08);
+      bodyShape.bezierCurveTo(-0.045, -0.09, -0.035, -0.095, -0.02, -0.09);
+      bodyShape.lineTo(0.03, -0.05);
+      bodyShape.lineTo(0.04, 0.02);
+      bodyShape.bezierCurveTo(0.035, 0.04, 0.02, 0.045, 0, 0.04);
+      bodyShape.closePath();
+      
+      const extrudeSettings = {
+        steps: 2,
+        depth: 0.008,
+        bevelEnabled: true,
+        bevelThickness: 0.002,
+        bevelSize: 0.002,
+        bevelSegments: 2
+      };
+      
+      const bodyGeometry = new THREE.ExtrudeGeometry(bodyShape, extrudeSettings);
+      const body = new THREE.Mesh(bodyGeometry, boneMaterial);
+      body.rotation.y = side * 0.2;
       body.rotation.z = side * 0.15;
+      body.position.z = -0.004;
       scapulaGroup.add(body);
       
-      // Acromion process
-      const acromion = new THREE.Mesh(
-        new THREE.BoxGeometry(0.025, 0.015, 0.01),
+      // Glenoid fossa (socket for humerus)
+      const glenoidFossa = new THREE.Mesh(
+        new THREE.SphereGeometry(0.012, 12, 12),
         boneMaterial
       );
-      acromion.position.set(side * 0.03, 0.045, 0.01);
+      glenoidFossa.position.set(side * 0.038, 0.015, 0.005);
+      glenoidFossa.scale.set(1, 1, 0.6);
+      scapulaGroup.add(glenoidFossa);
+      
+      // Glenoid rim
+      const glenoidRim = new THREE.Mesh(
+        new THREE.TorusGeometry(0.012, 0.003, 8, 16),
+        cartilaginousMaterial
+      );
+      glenoidRim.position.set(side * 0.038, 0.015, 0.008);
+      glenoidRim.rotation.y = Math.PI / 2;
+      scapulaGroup.add(glenoidRim);
+      
+      // Acromion process (more detailed)
+      const acromionCurve = new THREE.CubicBezierCurve3(
+        new THREE.Vector3(side * 0.02, 0.035, -0.005),
+        new THREE.Vector3(side * 0.03, 0.04, 0),
+        new THREE.Vector3(side * 0.035, 0.042, 0.008),
+        new THREE.Vector3(side * 0.04, 0.04, 0.015)
+      );
+      const acromionGeometry = new THREE.TubeGeometry(acromionCurve, 8, 0.008, 6, false);
+      const acromion = new THREE.Mesh(acromionGeometry, boneMaterial);
       scapulaGroup.add(acromion);
       
-      // Coracoid process
-      const coracoid = new THREE.Mesh(
-        new THREE.ConeGeometry(0.006, 0.02, 6),
-        boneMaterial
+      // Coracoid process (curved like a crow's beak)
+      const coracoidCurve = new THREE.QuadraticBezierCurve3(
+        new THREE.Vector3(side * 0.015, 0.025, 0.005),
+        new THREE.Vector3(side * 0.02, 0.03, 0.015),
+        new THREE.Vector3(side * 0.022, 0.028, 0.025)
       );
-      coracoid.position.set(side * 0.02, 0.03, 0.02);
-      coracoid.rotation.x = -0.5;
+      const coracoidGeometry = new THREE.TubeGeometry(coracoidCurve, 8, 0.006, 6, false);
+      const coracoid = new THREE.Mesh(coracoidGeometry, boneMaterial);
       scapulaGroup.add(coracoid);
       
-      // Spine of scapula
-      const spine = new THREE.Mesh(
-        new THREE.BoxGeometry(0.06, 0.005, 0.01),
+      // Coracoid tip
+      const coracoidTip = new THREE.Mesh(
+        new THREE.SphereGeometry(0.006, 8, 8),
         boneMaterial
       );
-      spine.position.set(0, 0.02, -0.005);
+      coracoidTip.position.set(side * 0.022, 0.028, 0.025);
+      scapulaGroup.add(coracoidTip);
+      
+      // Spine of scapula (prominent ridge)
+      const spineShape = new THREE.Shape();
+      spineShape.moveTo(0, 0);
+      spineShape.lineTo(0.05, 0.002);
+      spineShape.lineTo(0.055, 0.008);
+      spineShape.lineTo(0.045, 0.01);
+      spineShape.lineTo(-0.01, 0.005);
+      spineShape.closePath();
+      
+      const spineExtrudeSettings = {
+        steps: 1,
+        depth: 0.012,
+        bevelEnabled: true,
+        bevelThickness: 0.002,
+        bevelSize: 0.001,
+        bevelSegments: 1
+      };
+      
+      const spineGeometry = new THREE.ExtrudeGeometry(spineShape, spineExtrudeSettings);
+      const spine = new THREE.Mesh(spineGeometry, boneMaterial);
+      spine.position.set(side * -0.01, 0.01, -0.012);
       spine.rotation.z = side * 0.1;
+      spine.rotation.x = -0.1;
       scapulaGroup.add(spine);
+      
+      // Supraspinous fossa (depression above spine)
+      const supraspinosF = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.04, 0.025),
+        new THREE.MeshPhongMaterial({
+          color: 0xf4f1e8,
+          opacity: 0.3,
+          transparent: true,
+          side: THREE.DoubleSide
+        })
+      );
+      supraspinosF.position.set(side * 0.01, 0.025, -0.006);
+      supraspinosF.rotation.x = -Math.PI / 2;
+      scapulaGroup.add(supraspinosF);
+      
+      // Infraspinous fossa (depression below spine)
+      const infraspinosF = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.045, 0.035),
+        new THREE.MeshPhongMaterial({
+          color: 0xf4f1e8,
+          opacity: 0.3,
+          transparent: true,
+          side: THREE.DoubleSide
+        })
+      );
+      infraspinosF.position.set(side * 0.008, -0.015, -0.006);
+      infraspinosF.rotation.x = -Math.PI / 2;
+      scapulaGroup.add(infraspinosF);
+      
+      // Medial border (vertebral border)
+      const medialBorder = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.003, 0.003, 0.09, 6),
+        boneMaterial
+      );
+      medialBorder.position.set(side * -0.02, -0.025, -0.004);
+      medialBorder.rotation.z = side * 0.05;
+      scapulaGroup.add(medialBorder);
+      
+      // Superior angle
+      const superiorAngle = new THREE.Mesh(
+        new THREE.SphereGeometry(0.006, 8, 8),
+        boneMaterial
+      );
+      superiorAngle.position.set(side * -0.02, 0.02, -0.004);
+      scapulaGroup.add(superiorAngle);
+      
+      // Inferior angle
+      const inferiorAngle = new THREE.Mesh(
+        new THREE.ConeGeometry(0.008, 0.015, 6),
+        boneMaterial
+      );
+      inferiorAngle.position.set(side * -0.02, -0.07, -0.004);
+      inferiorAngle.rotation.z = Math.PI;
+      scapulaGroup.add(inferiorAngle);
       
       scapulaGroup.position.set(
         side * bodyProportions.shoulderWidth * scale * 0.45,

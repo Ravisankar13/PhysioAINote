@@ -5,8 +5,10 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Save, RotateCcw } from "lucide-react";
+import { Save, RotateCcw, Download, Upload } from "lucide-react";
 import * as THREE from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
 interface SkeletonConfig {
   limbLengths: {
@@ -50,13 +52,18 @@ const defaultConfig: SkeletonConfig = {
   },
 };
 
-// Pure Three.js implementation without React Three Fiber to avoid crashes
+// Enhanced Three.js implementation with GLTF loading support
 function ThreeJSSkeleton({ config }: { config: SkeletonConfig }) {
   const mountRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const frameRef = useRef<number>(0);
   const skeletonGroupRef = useRef<THREE.Group | null>(null);
+  const modelRef = useRef<THREE.Object3D | null>(null);
+  const controlsRef = useRef<OrbitControls | null>(null);
+  const mixerRef = useRef<THREE.AnimationMixer | null>(null);
+  const [modelLoaded, setModelLoaded] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!mountRef.current) return;
@@ -64,6 +71,7 @@ function ThreeJSSkeleton({ config }: { config: SkeletonConfig }) {
     // Scene setup
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x111827);
+    scene.fog = new THREE.Fog(0x111827, 10, 50);
     sceneRef.current = scene;
 
     // Camera setup
@@ -73,71 +81,133 @@ function ThreeJSSkeleton({ config }: { config: SkeletonConfig }) {
       0.1,
       1000
     );
-    camera.position.set(2, 1, 2);
+    camera.position.set(3, 2, 3);
     camera.lookAt(0, 0, 0);
 
-    // Renderer setup with minimal settings
+    // Renderer setup with enhanced settings
     const renderer = new THREE.WebGLRenderer({ 
-      antialias: false,
+      antialias: true,
       alpha: false,
-      powerPreference: "low-power"
+      powerPreference: "high-performance"
     });
     renderer.setSize(mountRef.current.clientWidth, mountRef.current.clientHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1;
     mountRef.current.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
-    // Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    // Lighting setup
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
     scene.add(ambientLight);
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.4);
-    directionalLight.position.set(5, 5, 5);
+    
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight.position.set(5, 10, 5);
+    directionalLight.castShadow = true;
+    directionalLight.shadow.camera.near = 0.1;
+    directionalLight.shadow.camera.far = 50;
+    directionalLight.shadow.camera.left = -10;
+    directionalLight.shadow.camera.right = 10;
+    directionalLight.shadow.camera.top = 10;
+    directionalLight.shadow.camera.bottom = -10;
     scene.add(directionalLight);
+
+    const fillLight = new THREE.DirectionalLight(0x88aaff, 0.3);
+    fillLight.position.set(-5, 3, -5);
+    scene.add(fillLight);
 
     // Create skeleton group
     const skeletonGroup = new THREE.Group();
     skeletonGroupRef.current = skeletonGroup;
     scene.add(skeletonGroup);
 
-    // Simple ground plane
-    const groundGeometry = new THREE.PlaneGeometry(3, 3);
-    const groundMaterial = new THREE.MeshBasicMaterial({ 
-      color: 0x1a1a1a, 
-      side: THREE.DoubleSide 
+    // Enhanced ground plane
+    const groundGeometry = new THREE.PlaneGeometry(10, 10);
+    const groundMaterial = new THREE.MeshStandardMaterial({ 
+      color: 0x1a1a2e,
+      roughness: 0.9,
+      metalness: 0.1
     });
     const ground = new THREE.Mesh(groundGeometry, groundMaterial);
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = -1;
+    ground.receiveShadow = true;
     scene.add(ground);
 
-    // Mouse controls
-    let mouseX = 0;
-    let mouseY = 0;
-    let isMouseDown = false;
+    // Grid helper
+    const gridHelper = new THREE.GridHelper(10, 20, 0x2a2a3a, 0x1a1a2a);
+    gridHelper.position.y = -0.99;
+    scene.add(gridHelper);
 
-    const handleMouseMove = (event: MouseEvent) => {
-      if (!isMouseDown) return;
-      mouseX = (event.clientX / window.innerWidth) * 2 - 1;
-      mouseY = -(event.clientY / window.innerHeight) * 2 + 1;
-    };
+    // OrbitControls for better interaction
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.screenSpacePanning = false;
+    controls.minDistance = 1;
+    controls.maxDistance = 10;
+    controls.maxPolarAngle = Math.PI / 2;
+    controlsRef.current = controls;
 
-    const handleMouseDown = () => { isMouseDown = true; };
-    const handleMouseUp = () => { isMouseDown = false; };
-
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mousedown', handleMouseDown);
-    window.addEventListener('mouseup', handleMouseUp);
+    // Try to load GLTF model
+    const loader = new GLTFLoader();
+    loader.load(
+      '/models/skeleton.glb',
+      (gltf: any) => {
+        // Model loaded successfully
+        modelRef.current = gltf.scene;
+        gltf.scene.scale.set(1, 1, 1);
+        gltf.scene.position.y = -1;
+        gltf.scene.traverse((child: any) => {
+          if ((child as THREE.Mesh).isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+          }
+        });
+        skeletonGroup.add(gltf.scene);
+        
+        // Setup animations if available
+        if (gltf.animations && gltf.animations.length > 0) {
+          mixerRef.current = new THREE.AnimationMixer(gltf.scene);
+        }
+        
+        setModelLoaded(true);
+        setLoadError(null);
+      },
+      (progress: any) => {
+        // Progress callback
+        console.log('Loading model...', (progress.loaded / progress.total) * 100 + '%');
+      },
+      (error: any) => {
+        console.warn('Failed to load 3D model, using procedural skeleton:', error);
+        setLoadError('Using procedural skeleton');
+        // Create procedural skeleton as fallback
+        createProceduralSkeleton(skeletonGroup, config);
+      }
+    );
 
     // Animation loop
+    const clock = new THREE.Clock();
     const animate = () => {
       frameRef.current = requestAnimationFrame(animate);
       
-      if (skeletonGroup) {
+      const delta = clock.getDelta();
+      
+      // Update controls
+      if (controls) {
+        controls.update();
+      }
+      
+      // Update animations
+      if (mixerRef.current) {
+        mixerRef.current.update(delta);
+      }
+      
+      // Auto-rotate if no model is loaded
+      if (!modelLoaded && skeletonGroup) {
         skeletonGroup.rotation.y += 0.005;
-        if (isMouseDown) {
-          skeletonGroup.rotation.y += mouseX * 0.05;
-          skeletonGroup.rotation.x = mouseY * 0.5;
-        }
       }
       
       renderer.render(scene, camera);
@@ -155,28 +225,44 @@ function ThreeJSSkeleton({ config }: { config: SkeletonConfig }) {
 
     // Cleanup
     return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mousedown', handleMouseDown);
-      window.removeEventListener('mouseup', handleMouseUp);
       window.removeEventListener('resize', handleResize);
       
       if (frameRef.current) {
         cancelAnimationFrame(frameRef.current);
       }
       
+      if (controls) {
+        controls.dispose();
+      }
+      
       if (mountRef.current && renderer.domElement) {
         mountRef.current.removeChild(renderer.domElement);
+      }
+      
+      // Dispose of model
+      if (modelRef.current) {
+        modelRef.current.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh) {
+            const mesh = child as THREE.Mesh;
+            mesh.geometry.dispose();
+            if (Array.isArray(mesh.material)) {
+              mesh.material.forEach(material => material.dispose());
+            } else {
+              mesh.material.dispose();
+            }
+          }
+        });
       }
       
       renderer.dispose();
     };
   }, []);
 
-  // Update skeleton based on config
+  // Update skeleton based on config (for procedural skeleton)
   useEffect(() => {
-    if (!skeletonGroupRef.current) return;
+    if (!skeletonGroupRef.current || modelLoaded) return;
 
-    // Clear existing skeleton
+    // Clear existing procedural skeleton
     while (skeletonGroupRef.current.children.length > 0) {
       const child = skeletonGroupRef.current.children[0];
       skeletonGroupRef.current.remove(child);
@@ -188,127 +274,206 @@ function ThreeJSSkeleton({ config }: { config: SkeletonConfig }) {
       }
     }
 
+    // Recreate procedural skeleton with new config
+    createProceduralSkeleton(skeletonGroupRef.current, config);
+  }, [config, modelLoaded]);
+
+  // Function to create procedural skeleton
+  const createProceduralSkeleton = (group: THREE.Group, config: SkeletonConfig) => {
     const scale = 0.01;
     const { limbLengths, jointAngles, bodyProportions } = config;
     const toRad = (deg: number) => (deg * Math.PI) / 180;
 
-    // Create bones using simple box geometry
-    const boneMaterial = new THREE.MeshPhongMaterial({ color: 0xe0e0e0 });
-    const jointMaterial = new THREE.MeshPhongMaterial({ color: 0x60a5fa });
+    // Materials
+    const boneMaterial = new THREE.MeshStandardMaterial({ 
+      color: 0xe0e0e0,
+      roughness: 0.7,
+      metalness: 0.3
+    });
+    const jointMaterial = new THREE.MeshStandardMaterial({ 
+      color: 0x60a5fa,
+      roughness: 0.5,
+      metalness: 0.5,
+      emissive: 0x60a5fa,
+      emissiveIntensity: 0.1
+    });
 
-    // Spine
-    const spineGeometry = new THREE.BoxGeometry(0.04, limbLengths.spine * scale, 0.04);
-    const spine = new THREE.Mesh(spineGeometry, boneMaterial);
-    spine.position.y = limbLengths.spine * scale / 2;
-    skeletonGroupRef.current.add(spine);
+    // Helper function to create bone with joints
+    const createBone = (length: number, radius: number = 0.025) => {
+      const bone = new THREE.Group();
+      
+      // Bone shaft
+      const shaftGeometry = new THREE.CylinderGeometry(radius * 0.8, radius, length * scale, 8);
+      const shaft = new THREE.Mesh(shaftGeometry, boneMaterial);
+      shaft.position.y = length * scale / 2;
+      shaft.castShadow = true;
+      bone.add(shaft);
+      
+      // Joint balls at ends
+      const jointGeometry = new THREE.SphereGeometry(radius * 1.2, 8, 8);
+      const topJoint = new THREE.Mesh(jointGeometry, jointMaterial);
+      topJoint.position.y = length * scale;
+      topJoint.castShadow = true;
+      bone.add(topJoint);
+      
+      const bottomJoint = new THREE.Mesh(jointGeometry, jointMaterial);
+      bottomJoint.castShadow = true;
+      bone.add(bottomJoint);
+      
+      return bone;
+    };
 
-    // Head
-    const headGeometry = new THREE.SphereGeometry(0.08, 8, 8);
-    const head = new THREE.Mesh(headGeometry, new THREE.MeshPhongMaterial({ color: 0xf0f0f0 }));
-    head.position.y = limbLengths.spine * scale + 0.1;
-    skeletonGroupRef.current.add(head);
+    // Spine with vertebrae
+    const spineGroup = new THREE.Group();
+    const vertebraeCount = 5;
+    for (let i = 0; i < vertebraeCount; i++) {
+      const vertebra = createBone(limbLengths.spine / vertebraeCount, 0.04);
+      vertebra.position.y = (limbLengths.spine * scale / vertebraeCount) * i;
+      spineGroup.add(vertebra);
+    }
+    group.add(spineGroup);
 
-    // Shoulders
-    const shoulderGeometry = new THREE.BoxGeometry(bodyProportions.shoulderWidth * scale, 0.03, 0.03);
+    // Ribcage
+    const ribcageGeometry = new THREE.TorusGeometry(
+      bodyProportions.shoulderWidth * scale * 0.4, 
+      0.015, 
+      6, 
+      8
+    );
+    const ribcage = new THREE.Mesh(ribcageGeometry, boneMaterial);
+    ribcage.position.y = limbLengths.spine * scale * 0.7;
+    ribcage.rotation.x = Math.PI / 2;
+    ribcage.scale.y = 1.5;
+    ribcage.castShadow = true;
+    group.add(ribcage);
+
+    // Head (skull)
+    const skullGroup = new THREE.Group();
+    const craniumGeometry = new THREE.SphereGeometry(0.1, 12, 12);
+    const cranium = new THREE.Mesh(craniumGeometry, boneMaterial);
+    cranium.scale.y = 1.2;
+    cranium.castShadow = true;
+    skullGroup.add(cranium);
+    
+    const jawGeometry = new THREE.BoxGeometry(0.08, 0.04, 0.08);
+    const jaw = new THREE.Mesh(jawGeometry, boneMaterial);
+    jaw.position.y = -0.06;
+    jaw.castShadow = true;
+    skullGroup.add(jaw);
+    
+    skullGroup.position.y = limbLengths.spine * scale + 0.15;
+    group.add(skullGroup);
+
+    // Shoulders (clavicles and scapulae)
+    const shoulderGeometry = new THREE.CapsuleGeometry(0.015, bodyProportions.shoulderWidth * scale, 4, 8);
     const shoulders = new THREE.Mesh(shoulderGeometry, boneMaterial);
+    shoulders.rotation.z = Math.PI / 2;
     shoulders.position.y = limbLengths.spine * scale;
-    skeletonGroupRef.current.add(shoulders);
+    shoulders.castShadow = true;
+    group.add(shoulders);
 
     // Pelvis
-    const pelvisGeometry = new THREE.BoxGeometry(bodyProportions.hipWidth * scale, 0.035, 0.035);
+    const pelvisGeometry = new THREE.TorusGeometry(
+      bodyProportions.hipWidth * scale * 0.4,
+      0.02,
+      6,
+      8
+    );
     const pelvis = new THREE.Mesh(pelvisGeometry, boneMaterial);
-    pelvis.position.y = 0;
-    skeletonGroupRef.current.add(pelvis);
+    pelvis.rotation.x = Math.PI / 2;
+    pelvis.scale.z = 0.5;
+    pelvis.castShadow = true;
+    group.add(pelvis);
 
-    // Left arm
-    const leftUpperArmGeometry = new THREE.BoxGeometry(0.025, limbLengths.upperArm * scale, 0.025);
-    const leftUpperArm = new THREE.Mesh(leftUpperArmGeometry, boneMaterial);
-    leftUpperArm.position.set(
-      -bodyProportions.shoulderWidth * scale / 2,
-      limbLengths.spine * scale - limbLengths.upperArm * scale / 2,
-      0
-    );
-    leftUpperArm.rotation.z = toRad(jointAngles.shoulderAbduction);
-    skeletonGroupRef.current.add(leftUpperArm);
+    // Arms
+    const createArm = (side: number) => {
+      const armGroup = new THREE.Group();
+      
+      // Upper arm
+      const upperArm = createBone(limbLengths.upperArm, 0.03);
+      upperArm.rotation.z = toRad(side * jointAngles.shoulderAbduction);
+      upperArm.rotation.x = toRad(jointAngles.shoulderFlexion);
+      armGroup.add(upperArm);
+      
+      // Forearm
+      const forearm = createBone(limbLengths.forearm, 0.025);
+      forearm.position.y = -limbLengths.upperArm * scale;
+      forearm.rotation.x = toRad(-jointAngles.elbowFlexion);
+      upperArm.add(forearm);
+      
+      // Hand
+      const handGeometry = new THREE.BoxGeometry(0.04, 0.08, 0.015);
+      const hand = new THREE.Mesh(handGeometry, boneMaterial);
+      hand.position.y = -limbLengths.forearm * scale - 0.04;
+      hand.castShadow = true;
+      forearm.add(hand);
+      
+      armGroup.position.set(
+        side * bodyProportions.shoulderWidth * scale / 2,
+        limbLengths.spine * scale,
+        0
+      );
+      
+      return armGroup;
+    };
 
-    // Left forearm
-    const leftForearmGeometry = new THREE.BoxGeometry(0.02, limbLengths.forearm * scale, 0.02);
-    const leftForearm = new THREE.Mesh(leftForearmGeometry, boneMaterial);
-    leftForearm.position.set(
-      -bodyProportions.shoulderWidth * scale / 2 - Math.sin(toRad(jointAngles.shoulderAbduction)) * limbLengths.upperArm * scale,
-      limbLengths.spine * scale - limbLengths.upperArm * scale - limbLengths.forearm * scale / 2,
-      0
-    );
-    leftForearm.rotation.z = toRad(jointAngles.elbowFlexion);
-    skeletonGroupRef.current.add(leftForearm);
+    group.add(createArm(-1)); // Left arm
+    group.add(createArm(1));  // Right arm
 
-    // Right arm (mirror of left)
-    const rightUpperArmGeometry = new THREE.BoxGeometry(0.025, limbLengths.upperArm * scale, 0.025);
-    const rightUpperArm = new THREE.Mesh(rightUpperArmGeometry, boneMaterial);
-    rightUpperArm.position.set(
-      bodyProportions.shoulderWidth * scale / 2,
-      limbLengths.spine * scale - limbLengths.upperArm * scale / 2,
-      0
-    );
-    rightUpperArm.rotation.z = -toRad(jointAngles.shoulderAbduction);
-    skeletonGroupRef.current.add(rightUpperArm);
+    // Legs
+    const createLeg = (side: number) => {
+      const legGroup = new THREE.Group();
+      
+      // Thigh
+      const thigh = createBone(limbLengths.thigh, 0.04);
+      thigh.rotation.x = toRad(jointAngles.hipFlexion);
+      legGroup.add(thigh);
+      
+      // Shin
+      const shin = createBone(limbLengths.shin, 0.035);
+      shin.position.y = -limbLengths.thigh * scale;
+      shin.rotation.x = toRad(-jointAngles.kneeFlexion);
+      thigh.add(shin);
+      
+      // Foot
+      const footGeometry = new THREE.BoxGeometry(0.06, 0.02, 0.12);
+      const foot = new THREE.Mesh(footGeometry, boneMaterial);
+      foot.position.y = -limbLengths.shin * scale - 0.01;
+      foot.position.z = 0.04;
+      foot.castShadow = true;
+      shin.add(foot);
+      
+      legGroup.position.set(
+        side * bodyProportions.hipWidth * scale / 2,
+        0,
+        0
+      );
+      
+      return legGroup;
+    };
 
-    const rightForearmGeometry = new THREE.BoxGeometry(0.02, limbLengths.forearm * scale, 0.02);
-    const rightForearm = new THREE.Mesh(rightForearmGeometry, boneMaterial);
-    rightForearm.position.set(
-      bodyProportions.shoulderWidth * scale / 2 + Math.sin(toRad(jointAngles.shoulderAbduction)) * limbLengths.upperArm * scale,
-      limbLengths.spine * scale - limbLengths.upperArm * scale - limbLengths.forearm * scale / 2,
-      0
-    );
-    rightForearm.rotation.z = -toRad(jointAngles.elbowFlexion);
-    skeletonGroupRef.current.add(rightForearm);
-
-    // Left leg
-    const leftThighGeometry = new THREE.BoxGeometry(0.035, limbLengths.thigh * scale, 0.035);
-    const leftThigh = new THREE.Mesh(leftThighGeometry, boneMaterial);
-    leftThigh.position.set(
-      -bodyProportions.hipWidth * scale / 2,
-      -limbLengths.thigh * scale / 2,
-      0
-    );
-    leftThigh.rotation.x = toRad(jointAngles.hipFlexion);
-    skeletonGroupRef.current.add(leftThigh);
-
-    const leftShinGeometry = new THREE.BoxGeometry(0.03, limbLengths.shin * scale, 0.03);
-    const leftShin = new THREE.Mesh(leftShinGeometry, boneMaterial);
-    leftShin.position.set(
-      -bodyProportions.hipWidth * scale / 2,
-      -limbLengths.thigh * scale - limbLengths.shin * scale / 2,
-      Math.sin(toRad(jointAngles.hipFlexion)) * limbLengths.thigh * scale
-    );
-    leftShin.rotation.x = toRad(jointAngles.kneeFlexion);
-    skeletonGroupRef.current.add(leftShin);
-
-    // Right leg (mirror of left)
-    const rightThighGeometry = new THREE.BoxGeometry(0.035, limbLengths.thigh * scale, 0.035);
-    const rightThigh = new THREE.Mesh(rightThighGeometry, boneMaterial);
-    rightThigh.position.set(
-      bodyProportions.hipWidth * scale / 2,
-      -limbLengths.thigh * scale / 2,
-      0
-    );
-    rightThigh.rotation.x = toRad(jointAngles.hipFlexion);
-    skeletonGroupRef.current.add(rightThigh);
-
-    const rightShinGeometry = new THREE.BoxGeometry(0.03, limbLengths.shin * scale, 0.03);
-    const rightShin = new THREE.Mesh(rightShinGeometry, boneMaterial);
-    rightShin.position.set(
-      bodyProportions.hipWidth * scale / 2,
-      -limbLengths.thigh * scale - limbLengths.shin * scale / 2,
-      Math.sin(toRad(jointAngles.hipFlexion)) * limbLengths.thigh * scale
-    );
-    rightShin.rotation.x = toRad(jointAngles.kneeFlexion);
-    skeletonGroupRef.current.add(rightShin);
-
-  }, [config]);
+    group.add(createLeg(-1)); // Left leg
+    group.add(createLeg(1));  // Right leg
+  };
 
   return (
-    <div ref={mountRef} className="w-full h-full bg-gray-900 rounded-lg" />
+    <div className="relative w-full h-full">
+      <div ref={mountRef} className="w-full h-full bg-gray-900 rounded-lg" />
+      {loadError && (
+        <div className="absolute top-4 right-4">
+          <Badge variant="secondary" className="bg-yellow-900/50 text-yellow-300">
+            {loadError}
+          </Badge>
+        </div>
+      )}
+      {modelLoaded && (
+        <div className="absolute top-4 right-4">
+          <Badge variant="secondary" className="bg-green-900/50 text-green-300">
+            3D Model Loaded
+          </Badge>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -319,6 +484,7 @@ export default function Skeleton3D({
 }) {
   const [config, setConfig] = useState<SkeletonConfig>(defaultConfig);
   const [selectedTab, setSelectedTab] = useState("limbs");
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const updateLimbLength = (limb: keyof typeof config.limbLengths, value: number) => {
     const newConfig = {
@@ -371,6 +537,23 @@ export default function Skeleton3D({
     linkElement.setAttribute('download', exportFileDefaultName);
     linkElement.click();
   };
+
+  const loadConfiguration = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const loadedConfig = JSON.parse(e.target?.result as string);
+        setConfig(loadedConfig);
+        onPatientDataChange?.(loadedConfig);
+      } catch (error) {
+        console.error('Failed to load configuration:', error);
+      }
+    };
+    reader.readAsText(file);
+  };
   
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-[700px]">
@@ -395,13 +578,28 @@ export default function Skeleton3D({
                   variant="secondary"
                   onClick={saveConfiguration}
                 >
-                  <Save className="h-4 w-4 mr-1" />
+                  <Download className="h-4 w-4 mr-1" />
                   Save
                 </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Upload className="h-4 w-4 mr-1" />
+                  Load
+                </Button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".json"
+                  onChange={loadConfiguration}
+                  style={{ display: 'none' }}
+                />
               </div>
               
               <div className="absolute bottom-4 left-4 text-xs text-gray-400">
-                Click and drag to rotate
+                Click and drag to rotate • Scroll to zoom
               </div>
             </div>
           </CardContent>
@@ -600,9 +798,29 @@ export default function Skeleton3D({
                       <p>• Shoulder-to-hip ratio: {(config.bodyProportions.shoulderWidth / config.bodyProportions.hipWidth).toFixed(2)}</p>
                     </div>
                   </div>
+                  
+                  <div className="mt-4 p-4 bg-blue-900/20 rounded-lg">
+                    <h4 className="text-sm font-medium text-blue-300 mb-2">Clinical Notes</h4>
+                    <div className="space-y-1 text-xs text-blue-200">
+                      <p>• Joint angles represent restrictions</p>
+                      <p>• 0° indicates neutral position</p>
+                      <p>• Positive values show flexion/abduction</p>
+                      <p>• Save configurations for tracking</p>
+                    </div>
+                  </div>
                 </div>
               </TabsContent>
             </Tabs>
+            
+            {/* Status Information */}
+            <div className="mt-4 pt-4 border-t border-gray-700">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-400">3D Model: Professional Skeleton</span>
+                <Badge variant="outline" className="text-green-400 border-green-400">
+                  Active
+                </Badge>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>

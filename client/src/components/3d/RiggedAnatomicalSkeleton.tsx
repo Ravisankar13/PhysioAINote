@@ -196,16 +196,18 @@ export default function RiggedAnatomicalSkeleton({
         model.traverse((child: any) => {
           if (child.isSkinnedMesh && child.skeleton) {
             skeleton = child.skeleton;
-            console.log('Found skeleton with', skeleton.bones.length, 'bones');
+            console.log('Found skeleton with', skeleton?.bones.length, 'bones');
             
             // Map bones by name
-            skeleton.bones.forEach((bone: THREE.Bone) => {
+            skeleton?.bones.forEach((bone: THREE.Bone) => {
               bones[bone.name] = bone;
               console.log('Bone found:', bone.name);
             });
           } else if (child.isBone) {
             // Also collect any loose bones
             bones[child.name] = child;
+          // Also add uppercase version for easier matching
+          bones[child.name.toUpperCase()] = child;
           }
         });
         
@@ -234,7 +236,8 @@ export default function RiggedAnatomicalSkeleton({
       },
       (error) => {
         console.error('Error loading rigged skeleton:', error);
-        setError(`Failed to load skeleton model: ${error.message || 'Unknown error'}`);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        setError(`Failed to load skeleton model: ${errorMessage}`);
         setIsLoading(false);
       }
     );
@@ -247,11 +250,7 @@ export default function RiggedAnatomicalSkeleton({
         controls.update();
       }
       
-      // Apply joint rotations to bones
-      applyJointRotations();
-      
-      // Apply limb scales
-      applyLimbScales();
+      // Joint rotations and limb scales are now applied via useEffect
       
       renderer.render(scene, camera);
     }
@@ -284,6 +283,16 @@ export default function RiggedAnatomicalSkeleton({
     };
   }, [modelUrl]);
 
+  // Update bones when joint rotations change
+  useEffect(() => {
+    applyJointRotations();
+  }, [jointRotations]);
+
+  // Update scales when limb scales change
+  useEffect(() => {
+    applyLimbScales();
+  }, [limbScales]);
+
   // Apply joint rotations to the skeleton
   const applyJointRotations = () => {
     if (!sceneRef.current || !sceneRef.current.bones) return;
@@ -291,32 +300,56 @@ export default function RiggedAnatomicalSkeleton({
     const bones = sceneRef.current.bones;
     const toRad = (deg: number) => (deg * Math.PI) / 180;
     
+    // Log available bones for debugging (only once)
+    if (Object.keys(bones).length > 0 && !(window as any)['bonesLogged']) {
+      console.log('Available bones for control:', Object.keys(bones).filter(name => 
+        name.includes('SPINE') || name.includes('NECK') || name.includes('HUMERUS') || 
+        name.includes('RADIUS') || name.includes('FEMUR') || name.includes('TIBIA')
+      ));
+      (window as any)['bonesLogged'] = true;
+    }
+    
     // Apply rotations to specific bones if they exist
-    // Map common bone names
+    // Map common bone names - updated for skeleton_rig.glb
     const boneMap: { [key: string]: string[] } = {
-      spine: ['Spine', 'spine', 'mixamorigSpine', 'Spine1'],
-      neck: ['Neck', 'neck', 'mixamorigNeck', 'Head'],
-      leftShoulder: ['LeftShoulder', 'left_shoulder', 'mixamorigLeftArm', 'LeftArm'],
-      rightShoulder: ['RightShoulder', 'right_shoulder', 'mixamorigRightArm', 'RightArm'],
-      leftElbow: ['LeftElbow', 'left_elbow', 'mixamorigLeftForeArm', 'LeftForeArm'],
-      rightElbow: ['RightElbow', 'right_elbow', 'mixamorigRightForeArm', 'RightForeArm'],
-      leftHip: ['LeftHip', 'left_hip', 'mixamorigLeftUpLeg', 'LeftUpLeg'],
-      rightHip: ['RightHip', 'right_hip', 'mixamorigRightUpLeg', 'RightUpLeg'],
-      leftKnee: ['LeftKnee', 'left_knee', 'mixamorigLeftLeg', 'LeftLeg'],
-      rightKnee: ['RightKnee', 'right_knee', 'mixamorigRightLeg', 'RightLeg']
+      spine: ['SPINE_C', 'SPINE_B', 'SPINE_A', 'Spine', 'spine', 'mixamorigSpine', 'Spine1'],
+      neck: ['NECK', 'HEAD', 'Neck', 'neck', 'mixamorigNeck', 'Head'],
+      leftShoulder: ['CLAVICLEL', 'HUMERUSL', 'SHOULDERL', 'LeftShoulder', 'left_shoulder', 'mixamorigLeftArm', 'LeftArm'],
+      rightShoulder: ['CLAVICLER', 'HUMERUSR', 'SHOULDERR', 'RightShoulder', 'right_shoulder', 'mixamorigRightArm', 'RightArm'],
+      leftElbow: ['RADIALFAL', 'RADIALSAL', 'RADIUSL', 'LeftElbow', 'left_elbow', 'mixamorigLeftForeArm', 'LeftForeArm'],
+      rightElbow: ['RADIALFAR', 'RADIALSAR', 'RADIUSR', 'RightElbow', 'right_elbow', 'mixamorigRightForeArm', 'RightForeArm'],
+      leftHip: ['FEMURL', 'HIPL', 'LeftHip', 'left_hip', 'mixamorigLeftUpLeg', 'LeftUpLeg'],
+      rightHip: ['FEMURR', 'HIPR', 'RightHip', 'right_hip', 'mixamorigRightUpLeg', 'RightUpLeg'],
+      leftKnee: ['TIBIAL', 'KNEEL', 'LeftKnee', 'left_knee', 'mixamorigLeftLeg', 'LeftLeg'],
+      rightKnee: ['TIBIAR', 'KNEER', 'RightKnee', 'right_knee', 'mixamorigRightLeg', 'RightLeg']
     };
     
     // Apply rotations
     Object.entries(jointRotations).forEach(([jointName, rotation]) => {
       const possibleNames = boneMap[jointName] || [];
+      let found = false;
       
       for (const boneName of possibleNames) {
         if (bones[boneName]) {
+          // Apply rotation
           bones[boneName].rotation.x = toRad(rotation.x);
           bones[boneName].rotation.y = toRad(rotation.y);
           bones[boneName].rotation.z = toRad(rotation.z);
+          
+          // Update the bone's matrix
+          bones[boneName].updateMatrix();
+          bones[boneName].updateMatrixWorld(true);
+          
+          found = true;
           break; // Found and applied, move to next joint
         }
+      }
+      
+      // Log if we couldn't find a bone for this joint (only once)
+      if (!found && rotation.x !== 0 && !(window as any)[`${jointName}NotFound`]) {
+        console.log(`Could not find bone for ${jointName}. Tried:`, possibleNames);
+        console.log('Available bones:', Object.keys(bones).slice(0, 20));
+        (window as any)[`${jointName}NotFound`] = true;
       }
     });
   };
@@ -525,9 +558,10 @@ export default function RiggedAnatomicalSkeleton({
                     <Label className="text-sm font-medium">Spine Flexion</Label>
                     <Slider
                       value={[jointRotations.spine.x]}
-                      onValueChange={([value]) => 
-                        setJointRotations(prev => ({...prev, spine: {...prev.spine, x: value}}))
-                      }
+                      onValueChange={([value]) => {
+                        console.log('Spine flexion changed to:', value);
+                        setJointRotations(prev => ({...prev, spine: {...prev.spine, x: value}}));
+                      }}
                       min={-45}
                       max={45}
                       step={1}
@@ -540,6 +574,7 @@ export default function RiggedAnatomicalSkeleton({
                     <Slider
                       value={[jointRotations.leftShoulder.x]}
                       onValueChange={([value]) => {
+                        console.log('Shoulder flexion changed to:', value);
                         setJointRotations(prev => ({
                           ...prev, 
                           leftShoulder: {...prev.leftShoulder, x: value},

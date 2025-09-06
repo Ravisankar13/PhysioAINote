@@ -5,9 +5,18 @@ import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { RotateCcw } from "lucide-react";
+import { RotateCcw, Link, Unlink, Copy, ArrowRight, ArrowLeft } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 
 export default function TestSkeleton() {
+  const [linkedSides, setLinkedSides] = useState({
+    hips: false,
+    knees: false,
+    ankles: false,
+    shoulders: false,
+    elbows: false,
+  });
+
   const [modelConfig, setModelConfig] = useState({
     limbScales: {
       upperArm: 1.0,
@@ -15,6 +24,103 @@ export default function TestSkeleton() {
       thigh: 1.0,
       shin: 1.0,
       overall: 1.0,
+    },
+    spine: {
+      cervicalLordosis: -40,
+      thoracicKyphosis: 35,
+      lumbarLordosis: -50,
+      scoliosis: 0,
+      forwardHead: 0,
+      lateralShift: 0,
+    },
+    pelvis: {
+      tilt: 0,
+      obliquity: 0,
+      rotation: 0,
+    },
+    leftHip: {
+      flexion: 0,
+      extension: 0,
+      abduction: 0,
+      adduction: 0,
+      internalRotation: 0,
+      externalRotation: 0,
+      anteversion: 15,
+      neckShaftAngle: 130,
+    },
+    rightHip: {
+      flexion: 0,
+      extension: 0,
+      abduction: 0,
+      adduction: 0,
+      internalRotation: 0,
+      externalRotation: 0,
+      anteversion: 15,
+      neckShaftAngle: 130,
+    },
+    leftKnee: {
+      flexion: 0,
+      varus: 0,
+      tibialTorsion: 0,
+      patellaAlta: 0,
+      anteriorTranslation: 0,
+    },
+    rightKnee: {
+      flexion: 0,
+      varus: 0,
+      tibialTorsion: 0,
+      patellaAlta: 0,
+      anteriorTranslation: 0,
+    },
+    leftAnkle: {
+      dorsiflexion: 0,
+      plantarflexion: 0,
+      inversion: 0,
+      eversion: 0,
+      archHeight: 0,
+      halluxValgus: 0,
+    },
+    rightAnkle: {
+      dorsiflexion: 0,
+      plantarflexion: 0,
+      inversion: 0,
+      eversion: 0,
+      archHeight: 0,
+      halluxValgus: 0,
+    },
+    leftShoulder: {
+      flexion: 0,
+      extension: 0,
+      abduction: 0,
+      adduction: 0,
+      internalRotation: 0,
+      externalRotation: 0,
+      protraction: 0,
+      elevation: 0,
+      winging: 0,
+    },
+    rightShoulder: {
+      flexion: 0,
+      extension: 0,
+      abduction: 0,
+      adduction: 0,
+      internalRotation: 0,
+      externalRotation: 0,
+      protraction: 0,
+      elevation: 0,
+      winging: 0,
+    },
+    leftElbow: {
+      flexion: 0,
+      carryingAngle: 10,
+      pronation: 0,
+      supination: 0,
+    },
+    rightElbow: {
+      flexion: 0,
+      carryingAngle: 10,
+      pronation: 0,
+      supination: 0,
     },
     spinalPathology: {
       spineFlexion: 0,
@@ -45,6 +151,118 @@ export default function TestSkeleton() {
     }));
   };
 
+  const updateSpine = (key: string, value: number) => {
+    setModelConfig(prev => ({
+      ...prev,
+      spine: {
+        ...prev.spine,
+        [key]: value
+      },
+      // Update legacy spinalPathology for compatibility
+      spinalPathology: {
+        spineFlexion: key === 'cervicalLordosis' ? value : prev.spinalPathology.spineFlexion,
+        spineLateralFlexion: key === 'scoliosis' ? value : prev.spinalPathology.spineLateralFlexion,
+        spineRotation: key === 'lateralShift' ? value : prev.spinalPathology.spineRotation,
+      }
+    }));
+  };
+
+  const updatePelvis = (key: string, value: number) => {
+    setModelConfig(prev => ({
+      ...prev,
+      pelvis: {
+        ...prev.pelvis,
+        [key]: value
+      }
+    }));
+  };
+
+  const updateJoint = (joint: string, side: 'left' | 'right', key: string, value: number) => {
+    const jointKey = `${side}${joint.charAt(0).toUpperCase() + joint.slice(1)}` as keyof typeof modelConfig;
+    
+    setModelConfig(prev => {
+      const newConfig = {
+        ...prev,
+        [jointKey]: {
+          ...prev[jointKey],
+          [key]: value
+        }
+      };
+
+      // If sides are linked, update the opposite side too
+      if (linkedSides[joint as keyof typeof linkedSides]) {
+        const oppositeJointKey = `${side === 'left' ? 'right' : 'left'}${joint.charAt(0).toUpperCase() + joint.slice(1)}` as keyof typeof modelConfig;
+        newConfig[oppositeJointKey] = {
+          ...newConfig[oppositeJointKey],
+          [key]: value
+        };
+      }
+
+      // Update legacy pathology for hips/knees/ankles
+      if (joint === 'hip' && key === 'flexion') {
+        newConfig.lowerLimbPathology = {
+          ...prev.lowerLimbPathology,
+          hipFlexion: value
+        };
+      } else if (joint === 'hip' && key === 'abduction') {
+        newConfig.lowerLimbPathology = {
+          ...prev.lowerLimbPathology,
+          hipAbduction: value
+        };
+      } else if (joint === 'hip' && key === 'internalRotation') {
+        newConfig.lowerLimbPathology = {
+          ...prev.lowerLimbPathology,
+          hipRotation: value
+        };
+      } else if (joint === 'knee' && key === 'flexion') {
+        newConfig.lowerLimbPathology = {
+          ...prev.lowerLimbPathology,
+          kneeFlexion: value
+        };
+      } else if (joint === 'ankle' && key === 'dorsiflexion') {
+        newConfig.lowerLimbPathology = {
+          ...prev.lowerLimbPathology,
+          ankleDorsiflexion: value
+        };
+      } else if (joint === 'shoulder' && key === 'flexion') {
+        newConfig.shoulderPathology = {
+          ...prev.shoulderPathology,
+          shoulderFlexion: value
+        };
+      } else if (joint === 'shoulder' && key === 'abduction') {
+        newConfig.shoulderPathology = {
+          ...prev.shoulderPathology,
+          shoulderAbduction: value
+        };
+      } else if (joint === 'shoulder' && key === 'internalRotation') {
+        newConfig.shoulderPathology = {
+          ...prev.shoulderPathology,
+          shoulderRotation: value
+        };
+      }
+
+      return newConfig;
+    });
+  };
+
+  const copyToOpposite = (joint: string, fromSide: 'left' | 'right') => {
+    const fromKey = `${fromSide}${joint.charAt(0).toUpperCase() + joint.slice(1)}` as keyof typeof modelConfig;
+    const toKey = `${fromSide === 'left' ? 'right' : 'left'}${joint.charAt(0).toUpperCase() + joint.slice(1)}` as keyof typeof modelConfig;
+    
+    setModelConfig(prev => ({
+      ...prev,
+      [toKey]: { ...prev[fromKey] }
+    }));
+  };
+
+  const toggleLinkedSides = (joint: keyof typeof linkedSides) => {
+    setLinkedSides(prev => ({
+      ...prev,
+      [joint]: !prev[joint]
+    }));
+  };
+
+  // Keep old update functions for backward compatibility
   const updateSpinePathology = (key: string, value: number) => {
     setModelConfig(prev => ({
       ...prev,

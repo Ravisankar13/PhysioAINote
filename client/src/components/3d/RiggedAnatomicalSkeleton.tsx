@@ -420,79 +420,88 @@ export default function RiggedAnatomicalSkeleton({
     
     // Apply spine rotations
     if (spinalPathology) {
-      // Find the main spine bone (usually the lowest/root spine bone)
-      let mainSpineBone = null;
-      const spineBonesFound: THREE.Bone[] = [];
+      // Find all spine and vertebrae bones, excluding pelvis
+      const spineBonesFound: { bone: THREE.Bone, priority: number }[] = [];
       
-      // Collect all spine-related bones
       Object.keys(bones).forEach(boneName => {
-        if (boneName.toLowerCase().includes('spine') || 
-            boneName.toLowerCase().includes('vertebr') ||
-            boneName.toLowerCase().includes('thorac') ||
-            boneName.toLowerCase().includes('lumbar') ||
-            boneName.toLowerCase().includes('pelvis')) {
-          spineBonesFound.push(bones[boneName]);
-          
-          // Try to find the main/root spine bone
-          if (boneName.toLowerCase().includes('spine') && !boneName.toLowerCase().includes('spine_')) {
-            mainSpineBone = bones[boneName];
-          }
+        const lowerName = boneName.toLowerCase();
+        let priority = 10; // Default low priority
+        
+        // Higher priority for actual spine/vertebrae bones
+        if (lowerName.includes('vertebr')) {
+          priority = 1;
+          if (lowerName.includes('l1') || lowerName.includes('l2')) priority = 2;
+          if (lowerName.includes('t12') || lowerName.includes('t11')) priority = 3;
+          if (lowerName.includes('t1') || lowerName.includes('c7')) priority = 4;
+          spineBonesFound.push({ bone: bones[boneName], priority });
+        } else if (lowerName.includes('spine') && !lowerName.includes('pelvis')) {
+          priority = 5;
+          spineBonesFound.push({ bone: bones[boneName], priority });
+        } else if (lowerName.includes('thorac') || lowerName.includes('lumbar')) {
+          priority = 6;
+          spineBonesFound.push({ bone: bones[boneName], priority });
         }
       });
       
-      // If we didn't find a main spine bone, use the first spine bone found
-      if (!mainSpineBone && spineBonesFound.length > 0) {
-        mainSpineBone = spineBonesFound[0];
-      }
+      // Sort by priority to get the most appropriate spine bone
+      spineBonesFound.sort((a, b) => a.priority - b.priority);
       
-      // Log once to help debug bone hierarchy
-      if (mainSpineBone && !(window as any)['spineHierarchyLogged']) {
-        console.log('Main spine bone found:', mainSpineBone.name);
-        console.log('Spine bone children count:', mainSpineBone.children.length);
-        if (mainSpineBone.children.length > 0) {
-          console.log('Connected bones:', mainSpineBone.children.map((child: any) => child.name).slice(0, 5));
-        }
-        (window as any)['spineHierarchyLogged'] = true;
-      }
-      
-      // Apply rotation to the main spine bone - this should propagate to children (head, neck, etc.)
-      if (mainSpineBone) {
-        // Reset rotation first
-        mainSpineBone.rotation.set(0, 0, 0);
-        
-        // Apply spine flexion/extension (rotation around X axis)
-        if (spinalPathology.spineFlexion !== undefined) {
-          mainSpineBone.rotation.x = toRad(spinalPathology.spineFlexion);
+      // Apply rotation to all spine bones with graduated effect
+      if (spineBonesFound.length > 0) {
+        // Log once to debug
+        if (!(window as any)['spineBonesLogged']) {
+          console.log('Spine bones found for rotation:', spineBonesFound.map(item => item.bone.name));
+          (window as any)['spineBonesLogged'] = true;
         }
         
-        // Apply spine lateral flexion (rotation around Z axis)
-        if (spinalPathology.spineLateralFlexion !== undefined) {
-          mainSpineBone.rotation.z = toRad(spinalPathology.spineLateralFlexion);
-        }
+        spineBonesFound.forEach((item, index) => {
+          const bone = item.bone;
+          
+          // Reset rotation first
+          bone.rotation.set(0, 0, 0);
+          
+          // Apply graduated rotation - more rotation for lower spine bones
+          const factor = 1.0 - (index * 0.1); // Reduce rotation as we go up the spine
+          const clampedFactor = Math.max(0.3, factor); // Minimum 30% rotation
+          
+          // Apply spine flexion/extension (rotation around X axis)
+          if (spinalPathology.spineFlexion !== undefined) {
+            bone.rotation.x = toRad(spinalPathology.spineFlexion * clampedFactor);
+          }
+          
+          // Apply spine lateral flexion (rotation around Z axis)
+          if (spinalPathology.spineLateralFlexion !== undefined) {
+            bone.rotation.z = toRad(spinalPathology.spineLateralFlexion * clampedFactor);
+          }
+          
+          // Apply spine rotation (rotation around Y axis)
+          if (spinalPathology.spineRotation !== undefined) {
+            bone.rotation.y = toRad(spinalPathology.spineRotation * clampedFactor);
+          }
+          
+          bone.updateMatrix();
+          bone.updateMatrixWorld(true);
+        });
         
-        // Apply spine rotation (rotation around Y axis)
-        if (spinalPathology.spineRotation !== undefined) {
-          mainSpineBone.rotation.y = toRad(spinalPathology.spineRotation);
-        }
-        
-        mainSpineBone.updateMatrix();
-        mainSpineBone.updateMatrixWorld(true);
-        
-        // Also apply a smaller rotation to other spine segments for more natural bending
-        spineBonesFound.forEach(bone => {
-          if (bone !== mainSpineBone) {
+        // Also apply rotation to neck and head bones to ensure they move with spine
+        Object.keys(bones).forEach(boneName => {
+          const lowerName = boneName.toLowerCase();
+          if (lowerName.includes('neck') || lowerName.includes('head') || lowerName.includes('skull')) {
+            const bone = bones[boneName];
+            
+            // Apply smaller rotation to neck/head
             bone.rotation.set(0, 0, 0);
             
             if (spinalPathology.spineFlexion !== undefined) {
-              bone.rotation.x = toRad(spinalPathology.spineFlexion * 0.3); // 30% of main rotation
+              bone.rotation.x = toRad(spinalPathology.spineFlexion * 0.2);
             }
             
             if (spinalPathology.spineLateralFlexion !== undefined) {
-              bone.rotation.z = toRad(spinalPathology.spineLateralFlexion * 0.3);
+              bone.rotation.z = toRad(spinalPathology.spineLateralFlexion * 0.2);
             }
             
             if (spinalPathology.spineRotation !== undefined) {
-              bone.rotation.y = toRad(spinalPathology.spineRotation * 0.3);
+              bone.rotation.y = toRad(spinalPathology.spineRotation * 0.2);
             }
             
             bone.updateMatrix();

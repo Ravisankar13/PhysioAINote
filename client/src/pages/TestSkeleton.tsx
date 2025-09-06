@@ -4,6 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { RotateCcw } from "lucide-react";
 
 export default function TestSkeleton() {
   const [modelConfig, setModelConfig] = useState({
@@ -73,6 +75,35 @@ export default function TestSkeleton() {
     }));
   };
 
+  const resetAll = () => {
+    setModelConfig({
+      limbScales: {
+        upperArm: 1.0,
+        forearm: 1.0,
+        thigh: 1.0,
+        shin: 1.0,
+        overall: 1.0,
+      },
+      spinalPathology: {
+        spineFlexion: 0,
+        spineLateralFlexion: 0,
+        spineRotation: 0,
+      },
+      shoulderPathology: {
+        shoulderFlexion: 0,
+        shoulderAbduction: 0,
+        shoulderRotation: 0,
+      },
+      lowerLimbPathology: {
+        hipFlexion: 0,
+        hipAbduction: 0,
+        hipRotation: 0,
+        kneeFlexion: 0,
+        ankleDorsiflexion: 0,
+      },
+    });
+  };
+
   return (
     <div className="container mx-auto p-8">
       <h1 className="text-3xl font-bold mb-6">3D Anatomical Skeleton Test - Interactive Controls</h1>
@@ -106,7 +137,18 @@ export default function TestSkeleton() {
         {/* Control Panel */}
         <Card className="w-full">
           <CardHeader>
-            <CardTitle>Skeleton Controls</CardTitle>
+            <div className="flex justify-between items-center">
+              <CardTitle>Skeleton Controls</CardTitle>
+              <Button 
+                onClick={resetAll} 
+                variant="outline" 
+                size="sm"
+                className="flex items-center gap-2"
+              >
+                <RotateCcw className="h-4 w-4" />
+                Reset All
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="proportions" className="w-full">

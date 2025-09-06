@@ -483,31 +483,77 @@ export default function RiggedAnatomicalSkeleton({
           bone.updateMatrixWorld(true);
         });
         
-        // Also apply rotation to neck and head bones to ensure they move with spine
+        // Find and rotate head/skull bones to match spine movement
+        // The head needs the full rotation to stay connected
         Object.keys(bones).forEach(boneName => {
           const lowerName = boneName.toLowerCase();
-          if (lowerName.includes('neck') || lowerName.includes('head') || lowerName.includes('skull')) {
+          
+          // Look for head, skull, and cranium bones
+          if (lowerName.includes('head') || lowerName.includes('skull') || 
+              lowerName.includes('cranium') || lowerName.includes('mandible') ||
+              lowerName.includes('maxilla') || lowerName.includes('frontal') ||
+              lowerName.includes('parietal') || lowerName.includes('occipital') ||
+              lowerName.includes('temporal') || lowerName.includes('sphenoid')) {
+            
             const bone = bones[boneName];
             
-            // Apply smaller rotation to neck/head
+            // Apply full spine rotation to head bones so they stay connected
             bone.rotation.set(0, 0, 0);
             
             if (spinalPathology.spineFlexion !== undefined) {
-              bone.rotation.x = toRad(spinalPathology.spineFlexion * 0.2);
+              bone.rotation.x = toRad(spinalPathology.spineFlexion);
             }
             
             if (spinalPathology.spineLateralFlexion !== undefined) {
-              bone.rotation.z = toRad(spinalPathology.spineLateralFlexion * 0.2);
+              bone.rotation.z = toRad(spinalPathology.spineLateralFlexion);
             }
             
             if (spinalPathology.spineRotation !== undefined) {
-              bone.rotation.y = toRad(spinalPathology.spineRotation * 0.2);
+              bone.rotation.y = toRad(spinalPathology.spineRotation);
+            }
+            
+            bone.updateMatrix();
+            bone.updateMatrixWorld(true);
+          }
+          // Apply slightly less rotation to neck bones for natural transition
+          else if (lowerName.includes('neck') || lowerName.includes('cervical')) {
+            const bone = bones[boneName];
+            
+            bone.rotation.set(0, 0, 0);
+            
+            if (spinalPathology.spineFlexion !== undefined) {
+              bone.rotation.x = toRad(spinalPathology.spineFlexion * 0.7);
+            }
+            
+            if (spinalPathology.spineLateralFlexion !== undefined) {
+              bone.rotation.z = toRad(spinalPathology.spineLateralFlexion * 0.7);
+            }
+            
+            if (spinalPathology.spineRotation !== undefined) {
+              bone.rotation.y = toRad(spinalPathology.spineRotation * 0.7);
             }
             
             bone.updateMatrix();
             bone.updateMatrixWorld(true);
           }
         });
+        
+        // Log head bones for debugging (once only)
+        if (!(window as any)['headBonesLogged']) {
+          const headBones = Object.keys(bones).filter(name => 
+            name.toLowerCase().includes('head') || 
+            name.toLowerCase().includes('skull') ||
+            name.toLowerCase().includes('cranium')
+          );
+          if (headBones.length > 0) {
+            console.log('Head/skull bones found:', headBones);
+          } else {
+            console.log('No head/skull bones found - checking all bone names for head-related terms');
+            const allBoneNames = Object.keys(bones);
+            console.log('Sample bone names:', allBoneNames.slice(0, 30));
+          }
+          (window as any)['headBonesLogged'] = true;
+        }
       }
     }
     

@@ -420,36 +420,86 @@ export default function RiggedAnatomicalSkeleton({
     
     // Apply spine rotations
     if (spinalPathology) {
-      // Find spine bones
+      // Find the main spine bone (usually the lowest/root spine bone)
+      let mainSpineBone = null;
+      const spineBonesFound: THREE.Bone[] = [];
+      
+      // Collect all spine-related bones
       Object.keys(bones).forEach(boneName => {
         if (boneName.toLowerCase().includes('spine') || 
             boneName.toLowerCase().includes('vertebr') ||
             boneName.toLowerCase().includes('thorac') ||
-            boneName.toLowerCase().includes('lumbar')) {
-          const bone = bones[boneName];
+            boneName.toLowerCase().includes('lumbar') ||
+            boneName.toLowerCase().includes('pelvis')) {
+          spineBonesFound.push(bones[boneName]);
           
-          // Reset rotation first
-          bone.rotation.set(0, 0, 0);
-          
-          // Apply spine flexion/extension (rotation around X axis)
-          if (spinalPathology.spineFlexion !== undefined) {
-            bone.rotation.x = toRad(spinalPathology.spineFlexion);
+          // Try to find the main/root spine bone
+          if (boneName.toLowerCase().includes('spine') && !boneName.toLowerCase().includes('spine_')) {
+            mainSpineBone = bones[boneName];
           }
-          
-          // Apply spine lateral flexion (rotation around Z axis)
-          if (spinalPathology.spineLateralFlexion !== undefined) {
-            bone.rotation.z = toRad(spinalPathology.spineLateralFlexion);
-          }
-          
-          // Apply spine rotation (rotation around Y axis)
-          if (spinalPathology.spineRotation !== undefined) {
-            bone.rotation.y = toRad(spinalPathology.spineRotation);
-          }
-          
-          bone.updateMatrix();
-          bone.updateMatrixWorld(true);
         }
       });
+      
+      // If we didn't find a main spine bone, use the first spine bone found
+      if (!mainSpineBone && spineBonesFound.length > 0) {
+        mainSpineBone = spineBonesFound[0];
+      }
+      
+      // Log once to help debug bone hierarchy
+      if (mainSpineBone && !(window as any)['spineHierarchyLogged']) {
+        console.log('Main spine bone found:', mainSpineBone.name);
+        console.log('Spine bone children count:', mainSpineBone.children.length);
+        if (mainSpineBone.children.length > 0) {
+          console.log('Connected bones:', mainSpineBone.children.map((child: any) => child.name).slice(0, 5));
+        }
+        (window as any)['spineHierarchyLogged'] = true;
+      }
+      
+      // Apply rotation to the main spine bone - this should propagate to children (head, neck, etc.)
+      if (mainSpineBone) {
+        // Reset rotation first
+        mainSpineBone.rotation.set(0, 0, 0);
+        
+        // Apply spine flexion/extension (rotation around X axis)
+        if (spinalPathology.spineFlexion !== undefined) {
+          mainSpineBone.rotation.x = toRad(spinalPathology.spineFlexion);
+        }
+        
+        // Apply spine lateral flexion (rotation around Z axis)
+        if (spinalPathology.spineLateralFlexion !== undefined) {
+          mainSpineBone.rotation.z = toRad(spinalPathology.spineLateralFlexion);
+        }
+        
+        // Apply spine rotation (rotation around Y axis)
+        if (spinalPathology.spineRotation !== undefined) {
+          mainSpineBone.rotation.y = toRad(spinalPathology.spineRotation);
+        }
+        
+        mainSpineBone.updateMatrix();
+        mainSpineBone.updateMatrixWorld(true);
+        
+        // Also apply a smaller rotation to other spine segments for more natural bending
+        spineBonesFound.forEach(bone => {
+          if (bone !== mainSpineBone) {
+            bone.rotation.set(0, 0, 0);
+            
+            if (spinalPathology.spineFlexion !== undefined) {
+              bone.rotation.x = toRad(spinalPathology.spineFlexion * 0.3); // 30% of main rotation
+            }
+            
+            if (spinalPathology.spineLateralFlexion !== undefined) {
+              bone.rotation.z = toRad(spinalPathology.spineLateralFlexion * 0.3);
+            }
+            
+            if (spinalPathology.spineRotation !== undefined) {
+              bone.rotation.y = toRad(spinalPathology.spineRotation * 0.3);
+            }
+            
+            bone.updateMatrix();
+            bone.updateMatrixWorld(true);
+          }
+        });
+      }
     }
     
     // Apply shoulder rotations

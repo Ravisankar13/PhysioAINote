@@ -96,9 +96,9 @@ export default function RiggedAnatomicalSkeleton({
     scene.background = new THREE.Color(0x1a1a1a);
     scene.fog = new THREE.Fog(0x1a1a1a, 10, 100);
 
-    // Create camera
-    const camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 1000);
-    camera.position.set(3, 2, 5);
+    // Create camera - closer for better view
+    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+    camera.position.set(0, 1.5, 3);
     camera.lookAt(0, 1, 0);
 
     // Create renderer
@@ -133,12 +133,12 @@ export default function RiggedAnatomicalSkeleton({
     const gridHelper = new THREE.GridHelper(10, 10, 0x444444, 0x222222);
     scene.add(gridHelper);
 
-    // Orbit controls
+    // Orbit controls - adjusted for closer view
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
-    controls.minDistance = 2;
-    controls.maxDistance = 20;
+    controls.minDistance = 1;
+    controls.maxDistance = 10;
     controls.target.set(0, 1, 0);
     controls.update();
 
@@ -163,15 +163,28 @@ export default function RiggedAnatomicalSkeleton({
         console.log('Rigged skeleton loaded successfully:', gltf);
         const model = gltf.scene;
         
-        // Scale and position model
-        model.scale.set(0.01, 0.01, 0.01); // Artec model is large, scale it down
+        // Scale and position model - larger scale for better visibility
+        model.scale.set(0.02, 0.02, 0.02); // Increased scale for better visibility
         model.position.set(0, 0, 0);
         
-        // Center the model
+        // Center the model and adjust position
         const box = new THREE.Box3().setFromObject(model);
         const center = box.getCenter(new THREE.Vector3());
-        model.position.sub(center);
-        model.position.y = 0;
+        const size = box.getSize(new THREE.Vector3());
+        
+        // Center horizontally but keep at ground level
+        model.position.x = -center.x;
+        model.position.z = -center.z;
+        model.position.y = -box.min.y; // Place feet at ground level
+        
+        // Auto-adjust camera based on model size
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const fov = camera.fov * (Math.PI / 180);
+        const cameraDistance = Math.abs(maxDim / Math.sin(fov / 2)) * 0.5;
+        camera.position.set(0, size.y * 0.5, cameraDistance);
+        camera.lookAt(0, size.y * 0.5, 0);
+        controls.target.set(0, size.y * 0.5, 0);
+        controls.update();
         
         // Enable shadows and enhance materials
         model.traverse((child: any) => {
@@ -360,11 +373,11 @@ export default function RiggedAnatomicalSkeleton({
     
     const model = sceneRef.current.model;
     
-    // Apply overall scale
+    // Apply overall scale - increased base scale
     model.scale.set(
-      0.01 * limbScales.overall,
-      0.01 * limbScales.overall,
-      0.01 * limbScales.overall
+      0.02 * limbScales.overall,
+      0.02 * limbScales.overall,
+      0.02 * limbScales.overall
     );
     
     // If we have bones, apply specific limb scales

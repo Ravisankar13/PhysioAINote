@@ -34,6 +34,32 @@ interface RiggedAnatomicalSkeletonProps {
     painAreas?: string[];
     movementPatterns?: any;
   };
+  modelConfig?: {
+    limbScales?: {
+      upperArm: number;
+      forearm: number;
+      thigh: number;
+      shin: number;
+      overall: number;
+    };
+    spinalPathology?: {
+      spineFlexion: number;
+      spineLateralFlexion: number;
+      spineRotation: number;
+    };
+    shoulderPathology?: {
+      shoulderFlexion: number;
+      shoulderAbduction: number;
+      shoulderRotation: number;
+    };
+    lowerLimbPathology?: {
+      hipFlexion: number;
+      hipAbduction: number;
+      hipRotation: number;
+      kneeFlexion: number;
+      ankleDorsiflexion: number;
+    };
+  };
   className?: string;
   showControls?: boolean;
   modelUrl?: string;
@@ -41,6 +67,7 @@ interface RiggedAnatomicalSkeletonProps {
 
 export default function RiggedAnatomicalSkeleton({
   patientData,
+  modelConfig,
   className = '',
   showControls = true,
   modelUrl = '/skeleton_rig.glb' // Use the existing skeleton rig GLB
@@ -307,10 +334,17 @@ export default function RiggedAnatomicalSkeleton({
     applyJointRotations();
   }, [jointRotations]);
 
-  // Update scales when limb scales change
+  // Update scales when limb scales change from state or modelConfig
   useEffect(() => {
     applyLimbScales();
-  }, [limbScales]);
+  }, [limbScales, modelConfig?.limbScales]);
+  
+  // Update bones when pathology changes from modelConfig
+  useEffect(() => {
+    if (modelConfig) {
+      applyPathologyRotations();
+    }
+  }, [modelConfig?.spinalPathology, modelConfig?.shoulderPathology, modelConfig?.lowerLimbPathology]);
 
   // Apply joint rotations to the skeleton
   const applyJointRotations = () => {
@@ -372,6 +406,189 @@ export default function RiggedAnatomicalSkeleton({
       }
     });
   };
+  
+  // Apply pathology-based rotations to the skeleton
+  const applyPathologyRotations = () => {
+    if (!sceneRef.current || !sceneRef.current.bones) return;
+    
+    // Skip if no modelConfig is provided
+    if (!modelConfig) return;
+    
+    const bones = sceneRef.current.bones;
+    const toRad = THREE.MathUtils.degToRad;
+    const { spinalPathology, shoulderPathology, lowerLimbPathology } = modelConfig;
+    
+    // Apply spine rotations
+    if (spinalPathology) {
+      // Find spine bones
+      Object.keys(bones).forEach(boneName => {
+        if (boneName.toLowerCase().includes('spine') || 
+            boneName.toLowerCase().includes('vertebr') ||
+            boneName.toLowerCase().includes('thorac') ||
+            boneName.toLowerCase().includes('lumbar')) {
+          const bone = bones[boneName];
+          
+          // Reset rotation first
+          bone.rotation.set(0, 0, 0);
+          
+          // Apply spine flexion/extension (rotation around X axis)
+          if (spinalPathology.spineFlexion !== undefined) {
+            bone.rotation.x = toRad(spinalPathology.spineFlexion);
+          }
+          
+          // Apply spine lateral flexion (rotation around Z axis)
+          if (spinalPathology.spineLateralFlexion !== undefined) {
+            bone.rotation.z = toRad(spinalPathology.spineLateralFlexion);
+          }
+          
+          // Apply spine rotation (rotation around Y axis)
+          if (spinalPathology.spineRotation !== undefined) {
+            bone.rotation.y = toRad(spinalPathology.spineRotation);
+          }
+          
+          bone.updateMatrix();
+          bone.updateMatrixWorld(true);
+        }
+      });
+    }
+    
+    // Apply shoulder rotations
+    if (shoulderPathology) {
+      // Left shoulder
+      ['HUMERUSL_83', 'HUMERUSL', 'humerusl'].forEach(boneName => {
+        if (bones[boneName]) {
+          const bone = bones[boneName];
+          bone.rotation.set(0, 0, 0);
+          
+          if (shoulderPathology.shoulderFlexion !== undefined) {
+            bone.rotation.x = toRad(shoulderPathology.shoulderFlexion);
+          }
+          
+          if (shoulderPathology.shoulderAbduction !== undefined) {
+            bone.rotation.z = toRad(-shoulderPathology.shoulderAbduction);
+          }
+          
+          if (shoulderPathology.shoulderRotation !== undefined) {
+            bone.rotation.y = toRad(shoulderPathology.shoulderRotation);
+          }
+          
+          bone.updateMatrix();
+          bone.updateMatrixWorld(true);
+        }
+      });
+      
+      // Right shoulder
+      ['HUMERUSR_125', 'HUMERUSR', 'humerusr'].forEach(boneName => {
+        if (bones[boneName]) {
+          const bone = bones[boneName];
+          bone.rotation.set(0, 0, 0);
+          
+          if (shoulderPathology.shoulderFlexion !== undefined) {
+            bone.rotation.x = toRad(shoulderPathology.shoulderFlexion);
+          }
+          
+          if (shoulderPathology.shoulderAbduction !== undefined) {
+            bone.rotation.z = toRad(shoulderPathology.shoulderAbduction);
+          }
+          
+          if (shoulderPathology.shoulderRotation !== undefined) {
+            bone.rotation.y = toRad(-shoulderPathology.shoulderRotation);
+          }
+          
+          bone.updateMatrix();
+          bone.updateMatrixWorld(true);
+        }
+      });
+    }
+    
+    // Apply hip rotations
+    if (lowerLimbPathology) {
+      // Left hip
+      ['FEMURL_233', 'FEMURL', 'femurl'].forEach(boneName => {
+        if (bones[boneName]) {
+          const bone = bones[boneName];
+          bone.rotation.set(0, 0, 0);
+          
+          if (lowerLimbPathology.hipFlexion !== undefined) {
+            bone.rotation.x = toRad(-lowerLimbPathology.hipFlexion);
+          }
+          
+          if (lowerLimbPathology.hipAbduction !== undefined) {
+            bone.rotation.z = toRad(-lowerLimbPathology.hipAbduction);
+          }
+          
+          if (lowerLimbPathology.hipRotation !== undefined) {
+            bone.rotation.y = toRad(lowerLimbPathology.hipRotation);
+          }
+          
+          bone.updateMatrix();
+          bone.updateMatrixWorld(true);
+        }
+      });
+      
+      // Right hip
+      ['FEMURR_194', 'FEMURR', 'femurr'].forEach(boneName => {
+        if (bones[boneName]) {
+          const bone = bones[boneName];
+          bone.rotation.set(0, 0, 0);
+          
+          if (lowerLimbPathology.hipFlexion !== undefined) {
+            bone.rotation.x = toRad(-lowerLimbPathology.hipFlexion);
+          }
+          
+          if (lowerLimbPathology.hipAbduction !== undefined) {
+            bone.rotation.z = toRad(lowerLimbPathology.hipAbduction);
+          }
+          
+          if (lowerLimbPathology.hipRotation !== undefined) {
+            bone.rotation.y = toRad(-lowerLimbPathology.hipRotation);
+          }
+          
+          bone.updateMatrix();
+          bone.updateMatrixWorld(true);
+        }
+      });
+      
+      // Knee flexion
+      ['TIBIAL_232', 'TIBIAL', 'tibial'].forEach(boneName => {
+        if (bones[boneName] && lowerLimbPathology.kneeFlexion !== undefined) {
+          const bone = bones[boneName];
+          bone.rotation.set(0, 0, 0);
+          bone.rotation.x = toRad(lowerLimbPathology.kneeFlexion);
+          bone.updateMatrix();
+          bone.updateMatrixWorld(true);
+        }
+      });
+      
+      ['TIBIAR_193', 'TIBIAR', 'tibiar'].forEach(boneName => {
+        if (bones[boneName] && lowerLimbPathology.kneeFlexion !== undefined) {
+          const bone = bones[boneName];
+          bone.rotation.set(0, 0, 0);
+          bone.rotation.x = toRad(lowerLimbPathology.kneeFlexion);
+          bone.updateMatrix();
+          bone.updateMatrixWorld(true);
+        }
+      });
+      
+      // Ankle dorsiflexion
+      Object.keys(bones).forEach(boneName => {
+        if ((boneName.toLowerCase().includes('foot') || 
+             boneName.toLowerCase().includes('ankle')) &&
+            lowerLimbPathology.ankleDorsiflexion !== undefined) {
+          const bone = bones[boneName];
+          bone.rotation.set(0, 0, 0);
+          bone.rotation.x = toRad(-lowerLimbPathology.ankleDorsiflexion);
+          bone.updateMatrix();
+          bone.updateMatrixWorld(true);
+        }
+      });
+    }
+    
+    // Update skeleton if it exists
+    if (sceneRef.current?.skeleton) {
+      sceneRef.current.skeleton.update();
+    }
+  };
 
   // Apply limb scales to the skeleton
   const applyLimbScales = () => {
@@ -380,11 +597,14 @@ export default function RiggedAnatomicalSkeleton({
     const model = sceneRef.current.model;
     const bones = sceneRef.current.bones;
     
+    // Use modelConfig limbScales if provided, otherwise use state limbScales
+    const scales = modelConfig?.limbScales || limbScales;
+    
     // Apply overall scale - increased base scale
     model.scale.set(
-      0.02 * limbScales.overall,
-      0.02 * limbScales.overall,
-      0.02 * limbScales.overall
+      0.02 * scales.overall,
+      0.02 * scales.overall,
+      0.02 * scales.overall
     );
     
     // If we have bones, apply specific limb scales
@@ -431,23 +651,23 @@ export default function RiggedAnatomicalSkeleton({
       let upperArmScaled = false;
       upperArmBones.forEach(boneName => {
         if (bones[boneName]) {
-          bones[boneName].scale.set(1, limbScales.upperArm, 1);
+          bones[boneName].scale.set(1, scales.upperArm, 1);
           bones[boneName].updateMatrix();
           bones[boneName].updateMatrixWorld(true);
           upperArmScaled = true;
-          if (limbScales.upperArm !== 1.0) {
-            console.log(`Scaling upper arm ${boneName} to ${limbScales.upperArm}`);
+          if (scales.upperArm !== 1.0) {
+            console.log(`Scaling upper arm ${boneName} to ${scales.upperArm}`);
           }
         }
       });
       
-      if (!upperArmScaled && limbScales.upperArm !== 1.0) {
+      if (!upperArmScaled && scales.upperArm !== 1.0) {
         // Try to find any bone with 'arm' in the name
         Object.keys(bones).forEach(boneName => {
           if ((boneName.toLowerCase().includes('humerus') || 
                boneName.toLowerCase().includes('upperarm')) && 
               !boneName.toLowerCase().includes('fore')) {
-            bones[boneName].scale.set(1, limbScales.upperArm, 1);
+            bones[boneName].scale.set(1, scales.upperArm, 1);
             bones[boneName].updateMatrix();
             bones[boneName].updateMatrixWorld(true);
             console.log(`Found and scaled arm bone: ${boneName}`);
@@ -474,23 +694,23 @@ export default function RiggedAnatomicalSkeleton({
       let forearmScaled = false;
       forearmBones.forEach(boneName => {
         if (bones[boneName]) {
-          bones[boneName].scale.set(1, limbScales.forearm, 1);
+          bones[boneName].scale.set(1, scales.forearm, 1);
           bones[boneName].updateMatrix();
           bones[boneName].updateMatrixWorld(true);
           forearmScaled = true;
-          if (limbScales.forearm !== 1.0) {
-            console.log(`Scaling forearm ${boneName} to ${limbScales.forearm}`);
+          if (scales.forearm !== 1.0) {
+            console.log(`Scaling forearm ${boneName} to ${scales.forearm}`);
           }
         }
       });
       
-      if (!forearmScaled && limbScales.forearm !== 1.0) {
+      if (!forearmScaled && scales.forearm !== 1.0) {
         // Try to find any bone with 'radius' or 'ulna' in the name
         Object.keys(bones).forEach(boneName => {
           if (boneName.toLowerCase().includes('radius') || 
               boneName.toLowerCase().includes('ulna') ||
               boneName.toLowerCase().includes('forearm')) {
-            bones[boneName].scale.set(1, limbScales.forearm, 1);
+            bones[boneName].scale.set(1, scales.forearm, 1);
             bones[boneName].updateMatrix();
             bones[boneName].updateMatrixWorld(true);
             console.log(`Found and scaled forearm bone: ${boneName}`);
@@ -503,7 +723,7 @@ export default function RiggedAnatomicalSkeleton({
       const thighBones = ['FEMURL', 'FEMURR', 'MCH_femurL_234', 'MCH_femurR_195'];
       thighBones.forEach(boneName => {
         if (bones[boneName]) {
-          bones[boneName].scale.set(1, limbScales.thigh, 1);
+          bones[boneName].scale.set(1, scales.thigh, 1);
           bones[boneName].updateMatrix();
           bones[boneName].updateMatrixWorld(true);
         }
@@ -522,24 +742,24 @@ export default function RiggedAnatomicalSkeleton({
       let shinScaled = false;
       shinBones.forEach(boneName => {
         if (bones[boneName]) {
-          bones[boneName].scale.set(1, limbScales.shin, 1);
+          bones[boneName].scale.set(1, scales.shin, 1);
           bones[boneName].updateMatrix();
           bones[boneName].updateMatrixWorld(true);
           shinScaled = true;
-          if (limbScales.shin !== 1.0) {
-            console.log(`Scaling shin ${boneName} to ${limbScales.shin}`);
+          if (scales.shin !== 1.0) {
+            console.log(`Scaling shin ${boneName} to ${scales.shin}`);
           }
         }
       });
       
-      if (!shinScaled && limbScales.shin !== 1.0) {
+      if (!shinScaled && scales.shin !== 1.0) {
         // Try to find any bone with 'tibia' or 'fibula' in the name
         Object.keys(bones).forEach(boneName => {
           if ((boneName.toLowerCase().includes('tibia') || 
                boneName.toLowerCase().includes('fibula') ||
                boneName.toLowerCase().includes('shin')) &&
               !boneName.toLowerCase().includes('toe')) {
-            bones[boneName].scale.set(1, limbScales.shin, 1);
+            bones[boneName].scale.set(1, scales.shin, 1);
             bones[boneName].updateMatrix();
             bones[boneName].updateMatrixWorld(true);
             console.log(`Found and scaled shin bone: ${boneName}`);
@@ -548,15 +768,17 @@ export default function RiggedAnatomicalSkeleton({
         });
       }
       
-      // Scale spine
-      const spineBones = ['SPINE_A', 'SPINE_B', 'SPINE_C', 'SPINE_D'];
-      spineBones.forEach(boneName => {
-        if (bones[boneName]) {
-          bones[boneName].scale.y = limbScales.spine;
-          bones[boneName].updateMatrix();
-          bones[boneName].updateMatrixWorld(true);
-        }
-      });
+      // Scale spine if available in scales
+      if ('spine' in scales) {
+        const spineBones = ['SPINE_A', 'SPINE_B', 'SPINE_C', 'SPINE_D'];
+        spineBones.forEach(boneName => {
+          if (bones[boneName]) {
+            bones[boneName].scale.y = (scales as any).spine;
+            bones[boneName].updateMatrix();
+            bones[boneName].updateMatrixWorld(true);
+          }
+        });
+      }
     }
   };
 
@@ -843,7 +1065,7 @@ export default function RiggedAnatomicalSkeleton({
                   <div className="space-y-2">
                     <Label className="text-sm font-medium">Upper Arm Length</Label>
                     <Slider
-                      value={[limbScales.upperArm]}
+                      value={[scales.upperArm]}
                       onValueChange={([value]) => {
                         console.log('Upper arm scale changed to:', value);
                         setLimbScales(prev => ({...prev, upperArm: value}));
@@ -857,7 +1079,7 @@ export default function RiggedAnatomicalSkeleton({
                   <div className="space-y-2">
                     <Label className="text-sm font-medium">Forearm Length</Label>
                     <Slider
-                      value={[limbScales.forearm]}
+                      value={[scales.forearm]}
                       onValueChange={([value]) => 
                         setLimbScales(prev => ({...prev, forearm: value}))
                       }
@@ -870,7 +1092,7 @@ export default function RiggedAnatomicalSkeleton({
                   <div className="space-y-2">
                     <Label className="text-sm font-medium">Thigh Length</Label>
                     <Slider
-                      value={[limbScales.thigh]}
+                      value={[scales.thigh]}
                       onValueChange={([value]) => 
                         setLimbScales(prev => ({...prev, thigh: value}))
                       }
@@ -883,7 +1105,7 @@ export default function RiggedAnatomicalSkeleton({
                   <div className="space-y-2">
                     <Label className="text-sm font-medium">Shin Length</Label>
                     <Slider
-                      value={[limbScales.shin]}
+                      value={[scales.shin]}
                       onValueChange={([value]) => 
                         setLimbScales(prev => ({...prev, shin: value}))
                       }

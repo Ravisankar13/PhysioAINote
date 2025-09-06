@@ -391,19 +391,43 @@ export default function RiggedAnatomicalSkeleton({
     if (bones) {
       // Log available bones first time we try to scale
       if (!(window as any)['availableBonesLogged']) {
-        const limbBones = Object.keys(bones).filter(name => 
-          name.includes('HUMERUS') || name.includes('RADIUS') || 
-          name.includes('FEMUR') || name.includes('TIBIA') ||
-          name.includes('ARM') || name.includes('LEG')
+        // Get all bone names
+        const allBones = Object.keys(bones);
+        console.log('Total bones available:', allBones.length);
+        
+        // Find arm-related bones
+        const armBones = allBones.filter(name => 
+          name.toLowerCase().includes('arm') || 
+          name.toLowerCase().includes('humerus') || 
+          name.toLowerCase().includes('radius') ||
+          name.toLowerCase().includes('ulna') ||
+          name.toLowerCase().includes('elbow') ||
+          name.toLowerCase().includes('shoulder')
         );
-        if (limbBones.length > 0) {
-          console.log('Available limb bones for scaling:', limbBones);
-          (window as any)['availableBonesLogged'] = true;
-        }
+        console.log('Arm-related bones:', armBones);
+        
+        // Find leg-related bones  
+        const legBones = allBones.filter(name =>
+          name.toLowerCase().includes('femur') ||
+          name.toLowerCase().includes('tibia') ||
+          name.toLowerCase().includes('fibula') ||
+          name.toLowerCase().includes('leg') ||
+          name.toLowerCase().includes('shin')
+        );
+        console.log('Leg-related bones:', legBones);
+        
+        (window as any)['availableBonesLogged'] = true;
       }
       
-      // Scale upper arms (humerus bones)
-      const upperArmBones = ['HUMERUSL', 'HUMERUSR', 'CONTROL_HUMERUSL', 'CONTROL_HUMERUSR'];
+      // Scale upper arms - try multiple possible names
+      const upperArmBones = [
+        'HUMERUSL', 'HUMERUSR', 
+        'humerusl', 'humerusr',
+        'MCH_humerusL', 'MCH_humerusR',
+        'CONTROL_HUMERUSL', 'CONTROL_HUMERUSR',
+        'ARM_L', 'ARM_R',
+        'UpperArm_L', 'UpperArm_R'
+      ];
       let upperArmScaled = false;
       upperArmBones.forEach(boneName => {
         if (bones[boneName]) {
@@ -412,24 +436,68 @@ export default function RiggedAnatomicalSkeleton({
           bones[boneName].updateMatrixWorld(true);
           upperArmScaled = true;
           if (limbScales.upperArm !== 1.0) {
-            console.log(`Scaling ${boneName} to ${limbScales.upperArm}`);
+            console.log(`Scaling upper arm ${boneName} to ${limbScales.upperArm}`);
           }
         }
       });
       
       if (!upperArmScaled && limbScales.upperArm !== 1.0) {
-        console.log('Could not find upper arm bones to scale');
+        // Try to find any bone with 'arm' in the name
+        Object.keys(bones).forEach(boneName => {
+          if ((boneName.toLowerCase().includes('humerus') || 
+               boneName.toLowerCase().includes('upperarm')) && 
+              !boneName.toLowerCase().includes('fore')) {
+            bones[boneName].scale.set(1, limbScales.upperArm, 1);
+            bones[boneName].updateMatrix();
+            bones[boneName].updateMatrixWorld(true);
+            console.log(`Found and scaled arm bone: ${boneName}`);
+            upperArmScaled = true;
+          }
+        });
+        
+        if (!upperArmScaled) {
+          console.log('Could not find upper arm bones to scale');
+        }
       }
       
-      // Scale forearms (radius/ulna bones)
-      const forearmBones = ['RADIUSL', 'RADIUSR', 'ULNAL', 'ULNAR', 'RADIALFAL', 'RADIALFAR', 'RADIALSAL', 'RADIALSAR'];
+      // Scale forearms - try multiple possible names
+      const forearmBones = [
+        'RADIUSL', 'RADIUSR', 
+        'ULNAL', 'ULNAR',
+        'radiusl', 'radiusr',
+        'ulnal', 'ulnar',
+        'RADIALFAL', 'RADIALFAR', 
+        'RADIALSAL', 'RADIALSAR',
+        'ForeArm_L', 'ForeArm_R',
+        'LowerArm_L', 'LowerArm_R'
+      ];
+      let forearmScaled = false;
       forearmBones.forEach(boneName => {
         if (bones[boneName]) {
           bones[boneName].scale.set(1, limbScales.forearm, 1);
           bones[boneName].updateMatrix();
           bones[boneName].updateMatrixWorld(true);
+          forearmScaled = true;
+          if (limbScales.forearm !== 1.0) {
+            console.log(`Scaling forearm ${boneName} to ${limbScales.forearm}`);
+          }
         }
       });
+      
+      if (!forearmScaled && limbScales.forearm !== 1.0) {
+        // Try to find any bone with 'radius' or 'ulna' in the name
+        Object.keys(bones).forEach(boneName => {
+          if (boneName.toLowerCase().includes('radius') || 
+              boneName.toLowerCase().includes('ulna') ||
+              boneName.toLowerCase().includes('forearm')) {
+            bones[boneName].scale.set(1, limbScales.forearm, 1);
+            bones[boneName].updateMatrix();
+            bones[boneName].updateMatrixWorld(true);
+            console.log(`Found and scaled forearm bone: ${boneName}`);
+            forearmScaled = true;
+          }
+        });
+      }
       
       // Scale thighs (femur bones)
       const thighBones = ['FEMURL', 'FEMURR', 'MCH_femurL_234', 'MCH_femurR_195'];
@@ -441,15 +509,44 @@ export default function RiggedAnatomicalSkeleton({
         }
       });
       
-      // Scale shins (tibia/fibula bones)
-      const shinBones = ['TIBIAL', 'TIBIAR', 'FIBULAL', 'FIBULAR'];
+      // Scale shins - try multiple possible names
+      const shinBones = [
+        'TIBIAL', 'TIBIAR', 
+        'FIBULAL', 'FIBULAR',
+        'tibial', 'tibiar',
+        'fibulal', 'fibular',
+        'TIBIA_L', 'TIBIA_R',
+        'Shin_L', 'Shin_R',
+        'LowerLeg_L', 'LowerLeg_R'
+      ];
+      let shinScaled = false;
       shinBones.forEach(boneName => {
         if (bones[boneName]) {
           bones[boneName].scale.set(1, limbScales.shin, 1);
           bones[boneName].updateMatrix();
           bones[boneName].updateMatrixWorld(true);
+          shinScaled = true;
+          if (limbScales.shin !== 1.0) {
+            console.log(`Scaling shin ${boneName} to ${limbScales.shin}`);
+          }
         }
       });
+      
+      if (!shinScaled && limbScales.shin !== 1.0) {
+        // Try to find any bone with 'tibia' or 'fibula' in the name
+        Object.keys(bones).forEach(boneName => {
+          if ((boneName.toLowerCase().includes('tibia') || 
+               boneName.toLowerCase().includes('fibula') ||
+               boneName.toLowerCase().includes('shin')) &&
+              !boneName.toLowerCase().includes('toe')) {
+            bones[boneName].scale.set(1, limbScales.shin, 1);
+            bones[boneName].updateMatrix();
+            bones[boneName].updateMatrixWorld(true);
+            console.log(`Found and scaled shin bone: ${boneName}`);
+            shinScaled = true;
+          }
+        });
+      }
       
       // Scale spine
       const spineBones = ['SPINE_A', 'SPINE_B', 'SPINE_C', 'SPINE_D'];

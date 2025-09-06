@@ -30,7 +30,6 @@ export default function TestSkeleton() {
               }}
               className="w-full h-full"
               showControls={true}
-              modelUrl="/skeleton_rig.glb"
             />
           </div>
         </CardContent>

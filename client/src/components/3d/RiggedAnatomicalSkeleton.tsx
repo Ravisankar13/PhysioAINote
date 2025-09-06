@@ -334,52 +334,76 @@ export default function RiggedAnatomicalSkeleton({
     applyJointRotations();
   }, [jointRotations]);
 
+  // Helper function to check if all values are reset
+  const isResetState = (config: typeof modelConfig) => {
+    if (!config) return false;
+    return (
+      config.limbScales.upperArm === 1.0 &&
+      config.limbScales.forearm === 1.0 &&
+      config.limbScales.thigh === 1.0 &&
+      config.limbScales.shin === 1.0 &&
+      config.limbScales.overall === 1.0 &&
+      config.spinalPathology.spineFlexion === 0 &&
+      config.spinalPathology.spineLateralFlexion === 0 &&
+      config.spinalPathology.spineRotation === 0 &&
+      config.shoulderPathology.shoulderFlexion === 0 &&
+      config.shoulderPathology.shoulderAbduction === 0 &&
+      config.shoulderPathology.shoulderRotation === 0 &&
+      config.lowerLimbPathology.hipFlexion === 0 &&
+      config.lowerLimbPathology.hipAbduction === 0 &&
+      config.lowerLimbPathology.hipRotation === 0 &&
+      config.lowerLimbPathology.kneeFlexion === 0 &&
+      config.lowerLimbPathology.ankleDorsiflexion === 0
+    );
+  };
+
+  // Reset all bones to default state
+  const resetAllBones = () => {
+    if (!sceneRef.current) return;
+    
+    // Reset all bone transformations
+    if (sceneRef.current.bones) {
+      const bones = sceneRef.current.bones;
+      Object.values(bones).forEach(bone => {
+        bone.rotation.set(0, 0, 0);
+        bone.scale.set(1, 1, 1);
+        bone.position.set(bone.position.x, bone.position.y, bone.position.z); // Keep original position
+        bone.updateMatrix();
+        bone.updateMatrixWorld(true);
+      });
+    }
+    
+    // Reset the model scale
+    if (sceneRef.current.model) {
+      sceneRef.current.model.scale.set(0.02, 0.02, 0.02);
+      sceneRef.current.model.rotation.set(0, 0, 0);
+      sceneRef.current.model.updateMatrix();
+      sceneRef.current.model.updateMatrixWorld(true);
+    }
+    
+    // Update skeleton
+    if (sceneRef.current.skeleton) {
+      sceneRef.current.skeleton.update();
+    }
+  };
+
   // Update scales when limb scales change from state or modelConfig
   useEffect(() => {
-    applyLimbScales();
+    if (modelConfig && isResetState(modelConfig)) {
+      resetAllBones();
+    } else {
+      applyLimbScales();
+    }
   }, [limbScales, modelConfig?.limbScales]);
   
   // Update bones when pathology changes from modelConfig
   useEffect(() => {
-    if (modelConfig) {
-      // Check if we're in a reset state (all values at defaults)
-      const isReset = 
-        modelConfig.limbScales.upperArm === 1.0 &&
-        modelConfig.limbScales.forearm === 1.0 &&
-        modelConfig.limbScales.thigh === 1.0 &&
-        modelConfig.limbScales.shin === 1.0 &&
-        modelConfig.limbScales.overall === 1.0 &&
-        modelConfig.spinalPathology.spineFlexion === 0 &&
-        modelConfig.spinalPathology.spineLateralFlexion === 0 &&
-        modelConfig.spinalPathology.spineRotation === 0 &&
-        modelConfig.shoulderPathology.shoulderFlexion === 0 &&
-        modelConfig.shoulderPathology.shoulderAbduction === 0 &&
-        modelConfig.shoulderPathology.shoulderRotation === 0 &&
-        modelConfig.lowerLimbPathology.hipFlexion === 0 &&
-        modelConfig.lowerLimbPathology.hipAbduction === 0 &&
-        modelConfig.lowerLimbPathology.hipRotation === 0 &&
-        modelConfig.lowerLimbPathology.kneeFlexion === 0 &&
-        modelConfig.lowerLimbPathology.ankleDorsiflexion === 0;
-      
-      if (isReset && sceneRef.current?.bones) {
-        // Reset all bones to default position
-        const bones = sceneRef.current.bones;
-        Object.values(bones).forEach(bone => {
-          bone.rotation.set(0, 0, 0);
-          bone.scale.set(1, 1, 1);
-          bone.updateMatrix();
-          bone.updateMatrixWorld(true);
-        });
-        
-        // Reset the model scale
-        if (sceneRef.current?.model) {
-          sceneRef.current.model.scale.set(0.02, 0.02, 0.02);
-        }
-      } else {
-        applyPathologyRotations();
-      }
+    if (modelConfig && isResetState(modelConfig)) {
+      resetAllBones();
+    } else if (modelConfig) {
+      applyPathologyRotations();
     }
-  }, [modelConfig?.spinalPathology, modelConfig?.shoulderPathology, modelConfig?.lowerLimbPathology, modelConfig?.limbScales]);
+  }, [modelConfig?.spinalPathology, modelConfig?.shoulderPathology, modelConfig?.lowerLimbPathology]);
 
   // Apply joint rotations to the skeleton
   const applyJointRotations = () => {

@@ -51,7 +51,7 @@ import { StickFigureAnimation } from '../components/StickFigureAnimation';
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { SoapVirtualPatient } from "@shared/schema";
 import MotionCapture from "@/components/MotionCapture";
-import ThreeDAnatomicalVisualization from "@/components/ThreeDAnatomicalVisualization";
+import RiggedAnatomicalSkeleton from "@/components/3d/RiggedAnatomicalSkeleton";
 import InteractiveSkeleton from "@/components/virtualPatient/InteractiveSkeleton";
 import SkeletonAnimationPlayer from "@/components/SkeletonAnimationPlayer";
 
@@ -1737,20 +1737,25 @@ export default function VirtualPatientsPage() {
                       {selectedPatient.motionData ? (
                         <div className="w-full h-full">
                           {currentView === 'anterior' ? (
-                            <ThreeDAnatomicalVisualization 
-                              animationData={selectedPatient.motionData ? (() => {
-                                try {
-                                  return typeof selectedPatient.motionData === 'string' 
-                                    ? JSON.parse(selectedPatient.motionData) 
-                                    : selectedPatient.motionData;
-                                } catch (e) {
-                                  console.error('Error parsing motion data:', e);
-                                  return null;
-                                }
-                              })() : null}
-                              isPlaying={isPlaying}
-                              currentFrame={playbackTime}
+                            <RiggedAnatomicalSkeleton 
+                              patientData={{
+                                anthropometrics: {
+                                  height: 170,
+                                  weight: 70,
+                                  limbLengths: {
+                                    upperArm: 30,
+                                    forearm: 25,
+                                    thigh: 40,
+                                    shin: 35,
+                                  },
+                                },
+                                jointRestrictions: {},
+                                painAreas: [],
+                                movementPatterns: selectedPatient.motionData
+                              }}
                               className="w-full h-full"
+                              showControls={true}
+                              modelUrl="/models/skeleton.glb"
                             />
                           ) : (
                             <TwoDVirtualPatient 
@@ -1763,11 +1768,25 @@ export default function VirtualPatientsPage() {
                       ) : (
                         <div className="text-center space-y-3">
                           {currentView === 'anterior' ? (
-                            <ThreeDAnatomicalVisualization 
-                              animationData={null}
-                              isPlaying={false}
-                              currentFrame={0}
+                            <RiggedAnatomicalSkeleton 
+                              patientData={{
+                                anthropometrics: {
+                                  height: 170,
+                                  weight: 70,
+                                  limbLengths: {
+                                    upperArm: 30,
+                                    forearm: 25,
+                                    thigh: 40,
+                                    shin: 35,
+                                  },
+                                },
+                                jointRestrictions: {},
+                                painAreas: [],
+                                movementPatterns: null
+                              }}
                               className="w-full h-full"
+                              showControls={true}
+                              modelUrl="/models/skeleton.glb"
                             />
                           ) : (
                             <>

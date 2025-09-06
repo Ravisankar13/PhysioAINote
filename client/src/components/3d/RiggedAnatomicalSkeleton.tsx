@@ -342,9 +342,44 @@ export default function RiggedAnatomicalSkeleton({
   // Update bones when pathology changes from modelConfig
   useEffect(() => {
     if (modelConfig) {
-      applyPathologyRotations();
+      // Check if we're in a reset state (all values at defaults)
+      const isReset = 
+        modelConfig.limbScales.upperArm === 1.0 &&
+        modelConfig.limbScales.forearm === 1.0 &&
+        modelConfig.limbScales.thigh === 1.0 &&
+        modelConfig.limbScales.shin === 1.0 &&
+        modelConfig.limbScales.overall === 1.0 &&
+        modelConfig.spinalPathology.spineFlexion === 0 &&
+        modelConfig.spinalPathology.spineLateralFlexion === 0 &&
+        modelConfig.spinalPathology.spineRotation === 0 &&
+        modelConfig.shoulderPathology.shoulderFlexion === 0 &&
+        modelConfig.shoulderPathology.shoulderAbduction === 0 &&
+        modelConfig.shoulderPathology.shoulderRotation === 0 &&
+        modelConfig.lowerLimbPathology.hipFlexion === 0 &&
+        modelConfig.lowerLimbPathology.hipAbduction === 0 &&
+        modelConfig.lowerLimbPathology.hipRotation === 0 &&
+        modelConfig.lowerLimbPathology.kneeFlexion === 0 &&
+        modelConfig.lowerLimbPathology.ankleDorsiflexion === 0;
+      
+      if (isReset && sceneRef.current?.bones) {
+        // Reset all bones to default position
+        const bones = sceneRef.current.bones;
+        Object.values(bones).forEach(bone => {
+          bone.rotation.set(0, 0, 0);
+          bone.scale.set(1, 1, 1);
+          bone.updateMatrix();
+          bone.updateMatrixWorld(true);
+        });
+        
+        // Reset the model scale
+        if (sceneRef.current?.model) {
+          sceneRef.current.model.scale.set(0.02, 0.02, 0.02);
+        }
+      } else {
+        applyPathologyRotations();
+      }
     }
-  }, [modelConfig?.spinalPathology, modelConfig?.shoulderPathology, modelConfig?.lowerLimbPathology]);
+  }, [modelConfig?.spinalPathology, modelConfig?.shoulderPathology, modelConfig?.lowerLimbPathology, modelConfig?.limbScales]);
 
   // Apply joint rotations to the skeleton
   const applyJointRotations = () => {

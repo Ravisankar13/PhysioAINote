@@ -43,7 +43,7 @@ export default function RiggedAnatomicalSkeleton({
   patientData,
   className = '',
   showControls = true,
-  modelUrl = '/models/skeleton.glb' // Use the skeleton.glb from Artec 3D by default
+  modelUrl = '/skeleton_rig.glb' // Use the existing skeleton rig GLB
 }: RiggedAnatomicalSkeletonProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(true);

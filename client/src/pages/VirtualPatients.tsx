@@ -1733,7 +1733,7 @@ export default function VirtualPatientsPage() {
                     </div>
 
                     {/* Animation Display */}
-                    <div className="h-64 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center relative overflow-hidden">
+                    <div className="h-[500px] bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center relative overflow-hidden">
                       {selectedPatient.motionData ? (
                         <div className="w-full h-full">
                           {currentView === 'anterior' ? (
@@ -1754,7 +1754,7 @@ export default function VirtualPatientsPage() {
                                 movementPatterns: selectedPatient.motionData
                               }}
                               className="w-full h-full"
-                              showControls={true}
+                              showControls={false}
                               modelUrl="/models/skeleton.glb"
                             />
                           ) : (
@@ -1766,7 +1766,7 @@ export default function VirtualPatientsPage() {
                           )}
                         </div>
                       ) : (
-                        <div className="text-center space-y-3">
+                        <div className="w-full h-full">
                           {currentView === 'anterior' ? (
                             <RiggedAnatomicalSkeleton 
                               patientData={{
@@ -1785,7 +1785,7 @@ export default function VirtualPatientsPage() {
                                 movementPatterns: null
                               }}
                               className="w-full h-full"
-                              showControls={true}
+                              showControls={false}
                               modelUrl="/models/skeleton.glb"
                             />
                           ) : (

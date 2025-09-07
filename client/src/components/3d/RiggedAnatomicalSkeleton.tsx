@@ -499,29 +499,33 @@ export default function RiggedAnatomicalSkeleton({
         leftFemurBones.forEach(boneName => {
           const bone = bones[boneName];
           
-          // Reset rotation first to avoid accumulation
-          bone.rotation.set(0, 0, 0);
-          
-          // Apply femoral anteversion (internal/external rotation)
-          // This should rotate around the longitudinal axis of the femur
-          if (configAny.leftHip.anteversion !== undefined) {
-            // For left leg, positive anteversion should rotate the knee inward
-            // Try Z-axis rotation for internal/external rotation
-            const anteversionAngle = configAny.leftHip.anteversion - 15; // 15 is normal
-            bone.rotation.z = toRad(anteversionAngle);
+          // Only apply to the main femur bone, not the MCH bones
+          if (!boneName.includes('MCH')) {
+            // Reset rotation first to avoid accumulation
+            bone.rotation.set(0, 0, 0);
+            
+            // Apply femoral anteversion (internal/external rotation)
+            // Try X-axis as it might be the longitudinal axis in this rig
+            if (configAny.leftHip.anteversion !== undefined) {
+              // For left leg, positive anteversion should rotate the knee inward
+              const anteversionAngle = configAny.leftHip.anteversion - 15; // 15 is normal
+              bone.rotation.x = toRad(anteversionAngle);
+              console.log(`Applied anteversion to ${boneName}: rotation.x = ${bone.rotation.x}`);
+            }
+            
+            // Apply neck-shaft angle (coxa vara/valga)
+            // This affects the frontal plane angle
+            if (configAny.leftHip.neckShaftAngle !== undefined) {
+              // Neck-shaft angle affects how much the femur angles outward
+              const angleDeviation = configAny.leftHip.neckShaftAngle - 130; // 130 is normal
+              // Try Y-axis for frontal plane
+              bone.rotation.y = toRad(angleDeviation * 0.3); // Scale down
+              console.log(`Applied neck-shaft to ${boneName}: rotation.y = ${bone.rotation.y}`);
+            }
+            
+            bone.updateMatrix();
+            bone.updateMatrixWorld(true);
           }
-          
-          // Apply neck-shaft angle (coxa vara/valga)
-          // This affects how much the femur angles outward from the hip
-          if (configAny.leftHip.neckShaftAngle !== undefined) {
-            // Neck-shaft angle affects the frontal plane (abduction/adduction)
-            const angleDeviation = configAny.leftHip.neckShaftAngle - 130; // 130 is normal
-            // For left side, decreased angle (coxa vara) should adduct
-            bone.rotation.x = toRad(-angleDeviation * 0.3); // Scale down and negate for proper direction
-          }
-          
-          bone.updateMatrix();
-          bone.updateMatrixWorld(true);
         });
       }
       
@@ -534,25 +538,30 @@ export default function RiggedAnatomicalSkeleton({
         rightFemurBones.forEach(boneName => {
           const bone = bones[boneName];
           
-          // Reset rotation first to avoid accumulation
-          bone.rotation.set(0, 0, 0);
-          
-          // Apply femoral anteversion (internal/external rotation)
-          if (configAny.rightHip.anteversion !== undefined) {
-            // For right leg, positive anteversion should rotate the knee inward
-            const anteversionAngle = configAny.rightHip.anteversion - 15;
-            bone.rotation.z = toRad(-anteversionAngle); // Negative for right side
+          // Only apply to the main femur bone, not the MCH bones
+          if (!boneName.includes('MCH')) {
+            // Reset rotation first to avoid accumulation
+            bone.rotation.set(0, 0, 0);
+            
+            // Apply femoral anteversion (internal/external rotation)
+            if (configAny.rightHip.anteversion !== undefined) {
+              // For right leg, positive anteversion should rotate the knee inward
+              const anteversionAngle = configAny.rightHip.anteversion - 15;
+              bone.rotation.x = toRad(-anteversionAngle); // Negative for right side symmetry
+              console.log(`Applied anteversion to ${boneName}: rotation.x = ${bone.rotation.x}`);
+            }
+            
+            // Apply neck-shaft angle (coxa vara/valga)
+            if (configAny.rightHip.neckShaftAngle !== undefined) {
+              const angleDeviation = configAny.rightHip.neckShaftAngle - 130;
+              // Try Y-axis for frontal plane
+              bone.rotation.y = toRad(-angleDeviation * 0.3); // Negative for right side
+              console.log(`Applied neck-shaft to ${boneName}: rotation.y = ${bone.rotation.y}`);
+            }
+            
+            bone.updateMatrix();
+            bone.updateMatrixWorld(true);
           }
-          
-          // Apply neck-shaft angle (coxa vara/valga)
-          if (configAny.rightHip.neckShaftAngle !== undefined) {
-            const angleDeviation = configAny.rightHip.neckShaftAngle - 130;
-            // For right side, decreased angle (coxa vara) should adduct
-            bone.rotation.x = toRad(angleDeviation * 0.3); // Positive for right side
-          }
-          
-          bone.updateMatrix();
-          bone.updateMatrixWorld(true);
         });
       }
     }

@@ -473,6 +473,264 @@ export default function RiggedAnatomicalSkeleton({
     }
   }, [modelConfig?.spinalPathology, modelConfig?.shoulderPathology, modelConfig?.lowerLimbPathology]);
 
+  // Apply femoral morphology changes from new bilateral parameters
+  useEffect(() => {
+    if (!sceneRef.current || !sceneRef.current.bones) return;
+    
+    const bones = sceneRef.current.bones;
+    const toRad = (deg: number) => (deg * Math.PI) / 180;
+    const configAny = modelConfig as any;
+    
+    // Apply femoral anteversion and neck-shaft angle if they exist
+    if (configAny?.leftHip || configAny?.rightHip) {
+      // Left femur
+      if (configAny.leftHip) {
+        const leftFemurBones = Object.keys(bones).filter(name => 
+          name.toLowerCase().includes('femur') && name.toLowerCase().includes('l')
+        );
+        
+        // Debug logging
+        if (configAny.leftHip.anteversion !== 15 || configAny.leftHip.neckShaftAngle !== 130) {
+          console.log('Left femur bones found:', leftFemurBones);
+          console.log('Applying anteversion:', configAny.leftHip.anteversion, 'neck-shaft:', configAny.leftHip.neckShaftAngle);
+        }
+        
+        leftFemurBones.forEach(boneName => {
+          const bone = bones[boneName];
+          
+          // Apply femoral anteversion (internal rotation of femoral neck)
+          if (configAny.leftHip.anteversion !== undefined) {
+            // Anteversion is rotation around the vertical axis
+            bone.rotation.y = toRad(configAny.leftHip.anteversion - 15); // 15 is normal
+          }
+          
+          // Apply neck-shaft angle (varus/valgus of femoral neck)
+          if (configAny.leftHip.neckShaftAngle !== undefined) {
+            // Neck-shaft angle affects the frontal plane
+            const angleDeviation = configAny.leftHip.neckShaftAngle - 130; // 130 is normal
+            bone.rotation.z = toRad(angleDeviation * 0.5); // Scale down for realistic effect
+          }
+          
+          bone.updateMatrix();
+          bone.updateMatrixWorld(true);
+        });
+      }
+      
+      // Right femur
+      if (configAny.rightHip) {
+        const rightFemurBones = Object.keys(bones).filter(name => 
+          name.toLowerCase().includes('femur') && name.toLowerCase().includes('r')
+        );
+        
+        rightFemurBones.forEach(boneName => {
+          const bone = bones[boneName];
+          
+          // Apply femoral anteversion
+          if (configAny.rightHip.anteversion !== undefined) {
+            bone.rotation.y = toRad(configAny.rightHip.anteversion - 15);
+          }
+          
+          // Apply neck-shaft angle
+          if (configAny.rightHip.neckShaftAngle !== undefined) {
+            const angleDeviation = configAny.rightHip.neckShaftAngle - 130;
+            bone.rotation.z = toRad(-angleDeviation * 0.5); // Negative for right side
+          }
+          
+          bone.updateMatrix();
+          bone.updateMatrixWorld(true);
+        });
+      }
+    }
+  }, [(modelConfig as any)?.leftHip?.anteversion, (modelConfig as any)?.leftHip?.neckShaftAngle,
+      (modelConfig as any)?.rightHip?.anteversion, (modelConfig as any)?.rightHip?.neckShaftAngle]);
+
+  // Apply other bilateral morphological parameters
+  useEffect(() => {
+    if (!sceneRef.current || !sceneRef.current.bones) return;
+    
+    const bones = sceneRef.current.bones;
+    const toRad = (deg: number) => (deg * Math.PI) / 180;
+    const configAny = modelConfig as any;
+    
+    // Apply knee morphology
+    if (configAny?.leftKnee || configAny?.rightKnee) {
+      // Left knee/tibia
+      if (configAny.leftKnee) {
+        const leftTibiaBones = Object.keys(bones).filter(name => 
+          name.toLowerCase().includes('tibia') && name.toLowerCase().includes('l')
+        );
+        
+        leftTibiaBones.forEach(boneName => {
+          const bone = bones[boneName];
+          
+          // Apply tibial torsion
+          if (configAny.leftKnee.tibialTorsion !== undefined) {
+            bone.rotation.y = toRad(configAny.leftKnee.tibialTorsion);
+          }
+          
+          // Apply varus/valgus
+          if (configAny.leftKnee.varus !== undefined) {
+            bone.rotation.z = toRad(configAny.leftKnee.varus);
+          }
+          
+          bone.updateMatrix();
+          bone.updateMatrixWorld(true);
+        });
+        
+        // Patella alta/baja (vertical displacement of patella)
+        const leftPatellaBones = Object.keys(bones).filter(name => 
+          name.toLowerCase().includes('patella') && name.toLowerCase().includes('l')
+        );
+        
+        leftPatellaBones.forEach(boneName => {
+          const bone = bones[boneName];
+          if (configAny.leftKnee.patellaAlta !== undefined) {
+            bone.position.y += configAny.leftKnee.patellaAlta * 0.001; // Convert mm to model units
+            bone.updateMatrix();
+            bone.updateMatrixWorld(true);
+          }
+        });
+      }
+      
+      // Right knee/tibia
+      if (configAny.rightKnee) {
+        const rightTibiaBones = Object.keys(bones).filter(name => 
+          name.toLowerCase().includes('tibia') && name.toLowerCase().includes('r')
+        );
+        
+        rightTibiaBones.forEach(boneName => {
+          const bone = bones[boneName];
+          
+          if (configAny.rightKnee.tibialTorsion !== undefined) {
+            bone.rotation.y = toRad(configAny.rightKnee.tibialTorsion);
+          }
+          
+          if (configAny.rightKnee.varus !== undefined) {
+            bone.rotation.z = toRad(-configAny.rightKnee.varus); // Negative for right side
+          }
+          
+          bone.updateMatrix();
+          bone.updateMatrixWorld(true);
+        });
+      }
+    }
+    
+    // Apply elbow morphology
+    if (configAny?.leftElbow || configAny?.rightElbow) {
+      // Left elbow
+      if (configAny.leftElbow) {
+        const leftElbowBones = Object.keys(bones).filter(name => 
+          (name.toLowerCase().includes('radius') || name.toLowerCase().includes('ulna')) && 
+          name.toLowerCase().includes('l')
+        );
+        
+        leftElbowBones.forEach(boneName => {
+          const bone = bones[boneName];
+          
+          // Apply carrying angle
+          if (configAny.leftElbow.carryingAngle !== undefined) {
+            const angleDeviation = configAny.leftElbow.carryingAngle - 10; // 10 is normal
+            bone.rotation.z = toRad(angleDeviation * 0.5);
+          }
+          
+          // Apply pronation/supination
+          if (configAny.leftElbow.pronation !== undefined) {
+            bone.rotation.x = toRad(configAny.leftElbow.pronation);
+          }
+          
+          bone.updateMatrix();
+          bone.updateMatrixWorld(true);
+        });
+      }
+      
+      // Right elbow
+      if (configAny.rightElbow) {
+        const rightElbowBones = Object.keys(bones).filter(name => 
+          (name.toLowerCase().includes('radius') || name.toLowerCase().includes('ulna')) && 
+          name.toLowerCase().includes('r')
+        );
+        
+        rightElbowBones.forEach(boneName => {
+          const bone = bones[boneName];
+          
+          if (configAny.rightElbow.carryingAngle !== undefined) {
+            const angleDeviation = configAny.rightElbow.carryingAngle - 10;
+            bone.rotation.z = toRad(-angleDeviation * 0.5);
+          }
+          
+          if (configAny.rightElbow.pronation !== undefined) {
+            bone.rotation.x = toRad(configAny.rightElbow.pronation);
+          }
+          
+          bone.updateMatrix();
+          bone.updateMatrixWorld(true);
+        });
+      }
+    }
+    
+    // Apply shoulder morphology (scapular winging, protraction, elevation)
+    if (configAny?.leftShoulder || configAny?.rightShoulder) {
+      // Left shoulder/scapula
+      if (configAny.leftShoulder) {
+        const leftScapulaBones = Object.keys(bones).filter(name => 
+          (name.toLowerCase().includes('scapula') || name.toLowerCase().includes('clavicle')) && 
+          name.toLowerCase().includes('l')
+        );
+        
+        leftScapulaBones.forEach(boneName => {
+          const bone = bones[boneName];
+          
+          // Apply scapular winging
+          if (configAny.leftShoulder.winging !== undefined) {
+            bone.rotation.y = toRad(configAny.leftShoulder.winging);
+          }
+          
+          // Apply protraction/retraction
+          if (configAny.leftShoulder.protraction !== undefined) {
+            bone.position.z += configAny.leftShoulder.protraction * 0.001;
+          }
+          
+          // Apply elevation/depression
+          if (configAny.leftShoulder.elevation !== undefined) {
+            bone.position.y += configAny.leftShoulder.elevation * 0.001;
+          }
+          
+          bone.updateMatrix();
+          bone.updateMatrixWorld(true);
+        });
+      }
+      
+      // Right shoulder/scapula
+      if (configAny.rightShoulder) {
+        const rightScapulaBones = Object.keys(bones).filter(name => 
+          (name.toLowerCase().includes('scapula') || name.toLowerCase().includes('clavicle')) && 
+          name.toLowerCase().includes('r')
+        );
+        
+        rightScapulaBones.forEach(boneName => {
+          const bone = bones[boneName];
+          
+          if (configAny.rightShoulder.winging !== undefined) {
+            bone.rotation.y = toRad(-configAny.rightShoulder.winging);
+          }
+          
+          if (configAny.rightShoulder.protraction !== undefined) {
+            bone.position.z += configAny.rightShoulder.protraction * 0.001;
+          }
+          
+          if (configAny.rightShoulder.elevation !== undefined) {
+            bone.position.y += configAny.rightShoulder.elevation * 0.001;
+          }
+          
+          bone.updateMatrix();
+          bone.updateMatrixWorld(true);
+        });
+      }
+    }
+  }, [(modelConfig as any)?.leftKnee, (modelConfig as any)?.rightKnee,
+      (modelConfig as any)?.leftElbow, (modelConfig as any)?.rightElbow,
+      (modelConfig as any)?.leftShoulder, (modelConfig as any)?.rightShoulder]);
+
   // Apply joint rotations to the skeleton
   const applyJointRotations = () => {
     if (!sceneRef.current || !sceneRef.current.bones) return;

@@ -489,12 +489,6 @@ export default function RiggedAnatomicalSkeleton({
           name.toLowerCase().includes('femur') && name.toLowerCase().includes('l')
         );
         
-        // Debug logging
-        if (configAny.leftHip.anteversion !== 15 || configAny.leftHip.neckShaftAngle !== 130) {
-          console.log('Left femur bones found:', leftFemurBones);
-          console.log('Applying LEFT hip - anteversion:', configAny.leftHip.anteversion, 'neck-shaft:', configAny.leftHip.neckShaftAngle);
-          console.log('Rotation values - Z (anteversion):', toRad(configAny.leftHip.anteversion - 15), 'X (neck-shaft):', toRad(-(configAny.leftHip.neckShaftAngle - 130) * 0.3));
-        }
         
         leftFemurBones.forEach(boneName => {
           const bone = bones[boneName];
@@ -510,7 +504,7 @@ export default function RiggedAnatomicalSkeleton({
               // For left leg, positive anteversion should rotate the knee inward
               const anteversionAngle = configAny.leftHip.anteversion - 15; // 15 is normal
               bone.rotation.x = toRad(anteversionAngle);
-              console.log(`Applied anteversion to ${boneName}: rotation.x = ${bone.rotation.x}`);
+
             }
             
             // Apply neck-shaft angle (coxa vara/valga)
@@ -520,7 +514,7 @@ export default function RiggedAnatomicalSkeleton({
               const angleDeviation = configAny.leftHip.neckShaftAngle - 130; // 130 is normal
               // Try Y-axis for frontal plane
               bone.rotation.y = toRad(angleDeviation * 0.3); // Scale down
-              console.log(`Applied neck-shaft to ${boneName}: rotation.y = ${bone.rotation.y}`);
+
             }
             
             bone.updateMatrix();
@@ -548,7 +542,7 @@ export default function RiggedAnatomicalSkeleton({
               // For right leg, positive anteversion should rotate the knee inward
               const anteversionAngle = configAny.rightHip.anteversion - 15;
               bone.rotation.x = toRad(-anteversionAngle); // Negative for right side symmetry
-              console.log(`Applied anteversion to ${boneName}: rotation.x = ${bone.rotation.x}`);
+
             }
             
             // Apply neck-shaft angle (coxa vara/valga)
@@ -556,7 +550,7 @@ export default function RiggedAnatomicalSkeleton({
               const angleDeviation = configAny.rightHip.neckShaftAngle - 130;
               // Try Y-axis for frontal plane
               bone.rotation.y = toRad(-angleDeviation * 0.3); // Negative for right side
-              console.log(`Applied neck-shaft to ${boneName}: rotation.y = ${bone.rotation.y}`);
+
             }
             
             bone.updateMatrix();
@@ -760,121 +754,32 @@ export default function RiggedAnatomicalSkeleton({
     if (!sceneRef.current || !sceneRef.current.bones) return;
     
     const bones = sceneRef.current.bones;
-    const toRad = (deg: number) => (deg * Math.PI) / 180;
     const configAny = modelConfig as any;
     
+    // IMPORTANT: This skeleton rig doesn't support individual vertebrae rotation
+    // Attempting to rotate spine bones causes the skeleton to break apart
+    // For now, we'll disable spine curve functionality to maintain skeleton integrity
+    
+    // Log a message when spine parameters change
     if (configAny?.spine) {
-      // Group vertebrae by region
-      const cervicalBones: string[] = [];
-      const thoracicBones: string[] = [];
-      const lumbarBones: string[] = [];
+      const hasChanges = (
+        configAny.spine.cervicalLordosis !== -40 ||
+        configAny.spine.thoracicKyphosis !== 35 ||
+        configAny.spine.lumbarLordosis !== -50 ||
+        configAny.spine.scoliosis !== 0
+      );
       
-      Object.keys(bones).forEach(boneName => {
-        const upperName = boneName.toUpperCase();
-        if (upperName.includes('VERTEBR')) {
-          if (upperName.includes('_C') && !upperName.includes('COCCYX')) {
-            cervicalBones.push(boneName);
-          } else if (upperName.includes('_T')) {
-            thoracicBones.push(boneName);
-          } else if (upperName.includes('_L')) {
-            lumbarBones.push(boneName);
-          }
-        }
-      });
-      
-      console.log('Spine bones grouped - Cervical:', cervicalBones.length, 'Thoracic:', thoracicBones.length, 'Lumbar:', lumbarBones.length);
-      
-      // The issue is that this skeleton doesn't have separate vertebrae bones that can be individually rotated
-      // Instead, we need to apply the curves to the main spine control bones
-      // Let's find the main spine/torso bones that control the overall posture
-      
-      const spineBones: string[] = [];
-      const torsoBones: string[] = [];
-      
-      Object.keys(bones).forEach(boneName => {
-        const lowerName = boneName.toLowerCase();
-        // Look for spine, torso, chest bones that aren't individual vertebrae
-        if ((lowerName.includes('spine') || lowerName.includes('torso') || 
-             lowerName.includes('chest') || lowerName.includes('abdomen')) &&
-            !lowerName.includes('vertebr')) {
-          spineBones.push(boneName);
-        }
-        // Also look for pelvis/hip bones as they affect overall posture
-        if (lowerName.includes('pelvis') || (lowerName.includes('hip') && !lowerName.includes('hiptar'))) {
-          torsoBones.push(boneName);
-        }
-      });
-      
-      console.log('Main spine control bones found:', spineBones);
-      console.log('Torso/pelvis bones found:', torsoBones);
-      
-      // Reset all spine-related bones
-      [...spineBones, ...torsoBones].forEach(boneName => {
-        const bone = bones[boneName];
-        if (bone) {
-          bone.rotation.set(0, 0, 0);
-        }
-      });
-      
-      // Apply spinal curves to the main control bones
-      // Since we don't have individual vertebrae, we'll apply the curves to the main spine segments
-      
-      // For now, let's apply a simplified version to prevent the skeleton from breaking
-      // We'll apply the curves to any spine/torso bones we find
-      spineBones.forEach(boneName => {
-        const bone = bones[boneName];
-        if (!bone) return;
-        
-        // Apply a combined effect of all spinal curves
-        let totalRotationX = 0;
-        let totalRotationZ = 0;
-        
-        // Cervical lordosis effect (forward curve of neck)
-        if (configAny.spine.cervicalLordosis !== undefined && boneName.toLowerCase().includes('neck')) {
-          const deviation = (configAny.spine.cervicalLordosis + 40) * 0.01; // Very small rotation
-          totalRotationX += toRad(deviation);
-        }
-        
-        // Thoracic kyphosis effect (backward curve of upper back)
-        if (configAny.spine.thoracicKyphosis !== undefined && 
-            (boneName.toLowerCase().includes('chest') || boneName.toLowerCase().includes('thorac'))) {
-          const deviation = (configAny.spine.thoracicKyphosis - 35) * 0.01;
-          totalRotationX -= toRad(deviation); // Negative for backward curve
-        }
-        
-        // Lumbar lordosis effect (forward curve of lower back)
-        if (configAny.spine.lumbarLordosis !== undefined && 
-            (boneName.toLowerCase().includes('lumbar') || boneName.toLowerCase().includes('abdomen'))) {
-          const deviation = (configAny.spine.lumbarLordosis + 50) * 0.01;
-          totalRotationX += toRad(deviation);
-        }
-        
-        // Scoliosis (lateral curve)
-        if (configAny.spine.scoliosis !== undefined) {
-          totalRotationZ = toRad(configAny.spine.scoliosis * 0.01);
-        }
-        
-        // Apply the combined rotations
-        bone.rotation.x = totalRotationX;
-        bone.rotation.z = totalRotationZ;
-        bone.updateMatrix();
-        bone.updateMatrixWorld(true);
-      });
-      
-      // For pelvis/hip bones, apply a tilt based on lumbar lordosis
-      torsoBones.forEach(boneName => {
-        const bone = bones[boneName];
-        if (!bone) return;
-        
-        if (configAny.spine.lumbarLordosis !== undefined) {
-          // Pelvis tilts with lumbar curve
-          const tilt = (configAny.spine.lumbarLordosis + 50) * 0.005;
-          bone.rotation.x = toRad(tilt);
-          bone.updateMatrix();
-          bone.updateMatrixWorld(true);
-        }
-      });
+      if (hasChanges) {
+        console.log('Note: Spine curve adjustments are currently disabled for this skeleton model to prevent deformation.');
+        console.log('The skeleton rig does not support individual vertebrae rotation.');
+      }
     }
+    
+    // Future implementation could:
+    // 1. Use a different skeleton model with proper spine rigging
+    // 2. Apply very subtle rotations only to the main torso bone
+    // 3. Use morph targets or blend shapes instead of bone rotation
+    
   }, [(modelConfig as any)?.spine?.cervicalLordosis, (modelConfig as any)?.spine?.thoracicKyphosis,
       (modelConfig as any)?.spine?.lumbarLordosis, (modelConfig as any)?.spine?.scoliosis]);
 

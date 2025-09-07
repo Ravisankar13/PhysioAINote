@@ -337,24 +337,98 @@ export default function RiggedAnatomicalSkeleton({
   // Helper function to check if all values are reset
   const isResetState = (config: typeof modelConfig) => {
     if (!config) return false;
-    return (
-      config.limbScales.upperArm === 1.0 &&
-      config.limbScales.forearm === 1.0 &&
-      config.limbScales.thigh === 1.0 &&
-      config.limbScales.shin === 1.0 &&
-      config.limbScales.overall === 1.0 &&
-      config.spinalPathology.spineFlexion === 0 &&
-      config.spinalPathology.spineLateralFlexion === 0 &&
-      config.spinalPathology.spineRotation === 0 &&
-      config.shoulderPathology.shoulderFlexion === 0 &&
-      config.shoulderPathology.shoulderAbduction === 0 &&
-      config.shoulderPathology.shoulderRotation === 0 &&
-      config.lowerLimbPathology.hipFlexion === 0 &&
-      config.lowerLimbPathology.hipAbduction === 0 &&
-      config.lowerLimbPathology.hipRotation === 0 &&
-      config.lowerLimbPathology.kneeFlexion === 0 &&
-      config.lowerLimbPathology.ankleDorsiflexion === 0
+    
+    // Cast to any to check new properties
+    const configAny = config as any;
+    
+    // Check legacy pathology values
+    const legacyReset = (
+      config.limbScales?.upperArm === 1.0 &&
+      config.limbScales?.forearm === 1.0 &&
+      config.limbScales?.thigh === 1.0 &&
+      config.limbScales?.shin === 1.0 &&
+      config.limbScales?.overall === 1.0 &&
+      config.spinalPathology?.spineFlexion === 0 &&
+      config.spinalPathology?.spineLateralFlexion === 0 &&
+      config.spinalPathology?.spineRotation === 0 &&
+      config.shoulderPathology?.shoulderFlexion === 0 &&
+      config.shoulderPathology?.shoulderAbduction === 0 &&
+      config.shoulderPathology?.shoulderRotation === 0 &&
+      config.lowerLimbPathology?.hipFlexion === 0 &&
+      config.lowerLimbPathology?.hipAbduction === 0 &&
+      config.lowerLimbPathology?.hipRotation === 0 &&
+      config.lowerLimbPathology?.kneeFlexion === 0 &&
+      config.lowerLimbPathology?.ankleDorsiflexion === 0
     );
+    
+    // Check new bilateral values if they exist
+    const bilateralReset = !configAny.leftHip ? true : (
+      configAny.leftHip?.flexion === 0 &&
+      configAny.leftHip?.abduction === 0 &&
+      configAny.leftHip?.internalRotation === 0 &&
+      configAny.leftHip?.anteversion === 15 &&
+      configAny.leftHip?.neckShaftAngle === 130 &&
+      configAny.rightHip?.flexion === 0 &&
+      configAny.rightHip?.abduction === 0 &&
+      configAny.rightHip?.internalRotation === 0 &&
+      configAny.rightHip?.anteversion === 15 &&
+      configAny.rightHip?.neckShaftAngle === 130 &&
+      configAny.leftKnee?.flexion === 0 &&
+      configAny.leftKnee?.varus === 0 &&
+      configAny.leftKnee?.tibialTorsion === 0 &&
+      configAny.leftKnee?.patellaAlta === 0 &&
+      configAny.rightKnee?.flexion === 0 &&
+      configAny.rightKnee?.varus === 0 &&
+      configAny.rightKnee?.tibialTorsion === 0 &&
+      configAny.rightKnee?.patellaAlta === 0 &&
+      configAny.leftAnkle?.dorsiflexion === 0 &&
+      configAny.leftAnkle?.plantarflexion === 0 &&
+      configAny.leftAnkle?.inversion === 0 &&
+      configAny.leftAnkle?.eversion === 0 &&
+      configAny.leftAnkle?.archHeight === 0 &&
+      configAny.rightAnkle?.dorsiflexion === 0 &&
+      configAny.rightAnkle?.plantarflexion === 0 &&
+      configAny.rightAnkle?.inversion === 0 &&
+      configAny.rightAnkle?.eversion === 0 &&
+      configAny.rightAnkle?.archHeight === 0 &&
+      configAny.leftShoulder?.flexion === 0 &&
+      configAny.leftShoulder?.abduction === 0 &&
+      configAny.leftShoulder?.internalRotation === 0 &&
+      configAny.leftShoulder?.protraction === 0 &&
+      configAny.leftShoulder?.elevation === 0 &&
+      configAny.leftShoulder?.winging === 0 &&
+      configAny.rightShoulder?.flexion === 0 &&
+      configAny.rightShoulder?.abduction === 0 &&
+      configAny.rightShoulder?.internalRotation === 0 &&
+      configAny.rightShoulder?.protraction === 0 &&
+      configAny.rightShoulder?.elevation === 0 &&
+      configAny.rightShoulder?.winging === 0 &&
+      configAny.leftElbow?.flexion === 0 &&
+      configAny.leftElbow?.carryingAngle === 10 &&
+      configAny.leftElbow?.pronation === 0 &&
+      configAny.rightElbow?.flexion === 0 &&
+      configAny.rightElbow?.carryingAngle === 10 &&
+      configAny.rightElbow?.pronation === 0
+    );
+    
+    // Check spine values if they exist (with clinical normal values)
+    const spineReset = !configAny.spine ? true : (
+      configAny.spine?.cervicalLordosis === -40 &&
+      configAny.spine?.thoracicKyphosis === 35 &&
+      configAny.spine?.lumbarLordosis === -50 &&
+      configAny.spine?.scoliosis === 0 &&
+      configAny.spine?.forwardHead === 0 &&
+      configAny.spine?.lateralShift === 0
+    );
+    
+    // Check pelvis values if they exist
+    const pelvisReset = !configAny.pelvis ? true : (
+      configAny.pelvis?.tilt === 0 &&
+      configAny.pelvis?.obliquity === 0 &&
+      configAny.pelvis?.rotation === 0
+    );
+    
+    return legacyReset && bilateralReset && spineReset && pelvisReset;
   };
 
   // Reset all bones to default state

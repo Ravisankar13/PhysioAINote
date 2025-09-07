@@ -66,6 +66,7 @@ import TournamentMatchPage from "@/pages/TournamentMatchPage";
 import TournamentResultsPage from "@/pages/TournamentResultsPage";
 import BodyScanner from "@/pages/BodyScanner";
 import TestSkeleton from "@/pages/TestSkeleton";
+import TestSkeletonNew from "@/pages/TestSkeletonNew";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { ThemeProvider } from "next-themes";
@@ -116,6 +117,7 @@ function Router() {
             <ProtectedRoute component={VirtualPatientsManagement} />
           </Route>
           <Route path="/test-skeleton" component={TestSkeleton} />
+          <Route path="/test-skeleton-new" component={TestSkeletonNew} />
           <Route path="/virtual-patients-debug">
             <ProtectedRoute component={VirtualPatientsSimple} />
           </Route>

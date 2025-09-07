@@ -302,6 +302,103 @@ export default function TestSkeleton() {
         shin: 1.0,
         overall: 1.0,
       },
+      spine: {
+        cervicalLordosis: -40,
+        thoracicKyphosis: 35,
+        lumbarLordosis: -50,
+        scoliosis: 0,
+        forwardHead: 0,
+        lateralShift: 0,
+      },
+      pelvis: {
+        tilt: 0,
+        obliquity: 0,
+        rotation: 0,
+      },
+      leftHip: {
+        flexion: 0,
+        extension: 0,
+        abduction: 0,
+        adduction: 0,
+        internalRotation: 0,
+        externalRotation: 0,
+        anteversion: 15,
+        neckShaftAngle: 130,
+      },
+      rightHip: {
+        flexion: 0,
+        extension: 0,
+        abduction: 0,
+        adduction: 0,
+        internalRotation: 0,
+        externalRotation: 0,
+        anteversion: 15,
+        neckShaftAngle: 130,
+      },
+      leftKnee: {
+        flexion: 0,
+        varus: 0,
+        tibialTorsion: 0,
+        patellaAlta: 0,
+        anteriorTranslation: 0,
+      },
+      rightKnee: {
+        flexion: 0,
+        varus: 0,
+        tibialTorsion: 0,
+        patellaAlta: 0,
+        anteriorTranslation: 0,
+      },
+      leftAnkle: {
+        dorsiflexion: 0,
+        plantarflexion: 0,
+        inversion: 0,
+        eversion: 0,
+        archHeight: 0,
+        halluxValgus: 0,
+      },
+      rightAnkle: {
+        dorsiflexion: 0,
+        plantarflexion: 0,
+        inversion: 0,
+        eversion: 0,
+        archHeight: 0,
+        halluxValgus: 0,
+      },
+      leftShoulder: {
+        flexion: 0,
+        extension: 0,
+        abduction: 0,
+        adduction: 0,
+        internalRotation: 0,
+        externalRotation: 0,
+        protraction: 0,
+        elevation: 0,
+        winging: 0,
+      },
+      rightShoulder: {
+        flexion: 0,
+        extension: 0,
+        abduction: 0,
+        adduction: 0,
+        internalRotation: 0,
+        externalRotation: 0,
+        protraction: 0,
+        elevation: 0,
+        winging: 0,
+      },
+      leftElbow: {
+        flexion: 0,
+        carryingAngle: 10,
+        pronation: 0,
+        supination: 0,
+      },
+      rightElbow: {
+        flexion: 0,
+        carryingAngle: 10,
+        pronation: 0,
+        supination: 0,
+      },
       spinalPathology: {
         spineFlexion: 0,
         spineLateralFlexion: 0,
@@ -319,6 +416,13 @@ export default function TestSkeleton() {
         kneeFlexion: 0,
         ankleDorsiflexion: 0,
       },
+    });
+    setLinkedSides({
+      hips: false,
+      knees: false,
+      ankles: false,
+      shoulders: false,
+      elbows: false,
     });
   };
 
@@ -369,10 +473,11 @@ export default function TestSkeleton() {
             </div>
           </CardHeader>
           <CardContent>
-            <Tabs defaultValue="proportions" className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="proportions">Proportions</TabsTrigger>
-                <TabsTrigger value="joints">Joint Rotations</TabsTrigger>
+            <Tabs defaultValue="spine" className="w-full">
+              <TabsList className="grid w-full grid-cols-3 mb-4">
+                <TabsTrigger value="spine">Spine & Pelvis</TabsTrigger>
+                <TabsTrigger value="lower">Lower Body</TabsTrigger>
+                <TabsTrigger value="upper">Upper Body</TabsTrigger>
               </TabsList>
 
               <TabsContent value="proportions" className="space-y-4">

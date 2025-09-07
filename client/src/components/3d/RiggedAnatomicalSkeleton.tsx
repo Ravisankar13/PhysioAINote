@@ -435,24 +435,22 @@ export default function RiggedAnatomicalSkeleton({
   const resetAllBones = () => {
     if (!sceneRef.current) return;
     
-    // Reset all bone transformations
-    if (sceneRef.current.bones) {
-      const bones = sceneRef.current.bones;
-      Object.values(bones).forEach(bone => {
-        bone.rotation.set(0, 0, 0);
-        bone.scale.set(1, 1, 1);
-        bone.position.set(bone.position.x, bone.position.y, bone.position.z); // Keep original position
-        bone.updateMatrix();
-        bone.updateMatrixWorld(true);
-      });
-    }
+    // Don't reset bones individually - just ensure model is at correct scale
+    // The bones will be reset through the normal pathology application process
     
-    // Reset the model scale
+    // Reset the model scale to default
     if (sceneRef.current.model) {
       sceneRef.current.model.scale.set(0.02, 0.02, 0.02);
       sceneRef.current.model.rotation.set(0, 0, 0);
+      sceneRef.current.model.position.set(0, 0, 0);
       sceneRef.current.model.updateMatrix();
       sceneRef.current.model.updateMatrixWorld(true);
+    }
+    
+    // Force re-apply the default scales to ensure skeleton is visible
+    if (sceneRef.current.bones) {
+      // Apply default limb scales (1.0 for all)
+      applyLimbScales();
     }
     
     // Update skeleton
@@ -463,18 +461,14 @@ export default function RiggedAnatomicalSkeleton({
 
   // Update scales when limb scales change from state or modelConfig
   useEffect(() => {
-    if (modelConfig && isResetState(modelConfig)) {
-      resetAllBones();
-    } else {
-      applyLimbScales();
-    }
+    // Always apply limb scales - when reset, they'll be 1.0 which is correct
+    applyLimbScales();
   }, [limbScales, modelConfig?.limbScales]);
   
   // Update bones when pathology changes from modelConfig
   useEffect(() => {
-    if (modelConfig && isResetState(modelConfig)) {
-      resetAllBones();
-    } else if (modelConfig) {
+    if (modelConfig) {
+      // Always apply pathology rotations - when reset, they'll be 0 which is correct
       applyPathologyRotations();
     }
   }, [modelConfig?.spinalPathology, modelConfig?.shoulderPathology, modelConfig?.lowerLimbPathology]);

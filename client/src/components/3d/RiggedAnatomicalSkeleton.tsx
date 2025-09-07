@@ -755,6 +755,105 @@ export default function RiggedAnatomicalSkeleton({
       (modelConfig as any)?.leftElbow, (modelConfig as any)?.rightElbow,
       (modelConfig as any)?.leftShoulder, (modelConfig as any)?.rightShoulder]);
 
+  // Apply spinal curve parameters (lordosis and kyphosis)
+  useEffect(() => {
+    if (!sceneRef.current || !sceneRef.current.bones) return;
+    
+    const bones = sceneRef.current.bones;
+    const toRad = (deg: number) => (deg * Math.PI) / 180;
+    const configAny = modelConfig as any;
+    
+    if (configAny?.spine) {
+      // Group vertebrae by region
+      const cervicalBones: string[] = [];
+      const thoracicBones: string[] = [];
+      const lumbarBones: string[] = [];
+      
+      Object.keys(bones).forEach(boneName => {
+        const upperName = boneName.toUpperCase();
+        if (upperName.includes('VERTEBR')) {
+          if (upperName.includes('_C') && !upperName.includes('COCCYX')) {
+            cervicalBones.push(boneName);
+          } else if (upperName.includes('_T')) {
+            thoracicBones.push(boneName);
+          } else if (upperName.includes('_L')) {
+            lumbarBones.push(boneName);
+          }
+        }
+      });
+      
+      console.log('Spine bones grouped - Cervical:', cervicalBones.length, 'Thoracic:', thoracicBones.length, 'Lumbar:', lumbarBones.length);
+      
+      // Reset all spine bones first to prevent accumulation
+      [...cervicalBones, ...thoracicBones, ...lumbarBones].forEach(boneName => {
+        const bone = bones[boneName];
+        bone.rotation.set(0, 0, 0);
+      });
+      
+      // Apply cervical lordosis (negative = forward curve)
+      if (configAny.spine.cervicalLordosis !== undefined && cervicalBones.length > 0) {
+        const totalCurve = configAny.spine.cervicalLordosis + 40; // Deviation from normal (-40)
+        const curvePerBone = totalCurve / cervicalBones.length;
+        
+        cervicalBones.forEach((boneName, index) => {
+          const bone = bones[boneName];
+          // Progressive curve - more at top of neck
+          const factor = (index + 1) / cervicalBones.length;
+          bone.rotation.x = toRad(curvePerBone * factor * 0.3); // Scale down for natural curve
+          bone.updateMatrix();
+          bone.updateMatrixWorld(true);
+        });
+      }
+      
+      // Apply thoracic kyphosis (positive = backward curve)
+      if (configAny.spine.thoracicKyphosis !== undefined && thoracicBones.length > 0) {
+        const totalCurve = configAny.spine.thoracicKyphosis - 35; // Deviation from normal (35)
+        const curvePerBone = totalCurve / thoracicBones.length;
+        
+        thoracicBones.forEach((boneName, index) => {
+          const bone = bones[boneName];
+          // Progressive curve - more in middle of thoracic spine
+          const midPoint = thoracicBones.length / 2;
+          const factor = 1 - Math.abs(index - midPoint) / midPoint * 0.5;
+          bone.rotation.x = toRad(-curvePerBone * factor * 0.3); // Negative for backward curve
+          bone.updateMatrix();
+          bone.updateMatrixWorld(true);
+        });
+      }
+      
+      // Apply lumbar lordosis (negative = forward curve)
+      if (configAny.spine.lumbarLordosis !== undefined && lumbarBones.length > 0) {
+        const totalCurve = configAny.spine.lumbarLordosis + 50; // Deviation from normal (-50)
+        const curvePerBone = totalCurve / lumbarBones.length;
+        
+        lumbarBones.forEach((boneName, index) => {
+          const bone = bones[boneName];
+          // Progressive curve - more at bottom of lumbar spine
+          const factor = (lumbarBones.length - index) / lumbarBones.length;
+          bone.rotation.x = toRad(curvePerBone * factor * 0.3); // Scale down for natural curve
+          bone.updateMatrix();
+          bone.updateMatrixWorld(true);
+        });
+      }
+      
+      // Apply scoliosis (lateral curve)
+      if (configAny.spine.scoliosis !== undefined) {
+        const allSpineBones = [...cervicalBones, ...thoracicBones, ...lumbarBones];
+        const curvePerBone = configAny.spine.scoliosis / allSpineBones.length;
+        
+        allSpineBones.forEach((boneName, index) => {
+          const bone = bones[boneName];
+          // S-curve pattern for scoliosis
+          const factor = Math.sin((index / allSpineBones.length) * Math.PI);
+          bone.rotation.z = toRad(curvePerBone * factor * 0.5);
+          bone.updateMatrix();
+          bone.updateMatrixWorld(true);
+        });
+      }
+    }
+  }, [(modelConfig as any)?.spine?.cervicalLordosis, (modelConfig as any)?.spine?.thoracicKyphosis,
+      (modelConfig as any)?.spine?.lumbarLordosis, (modelConfig as any)?.spine?.scoliosis]);
+
   // Apply joint rotations to the skeleton
   const applyJointRotations = () => {
     if (!sceneRef.current || !sceneRef.current.bones) return;

@@ -473,8 +473,9 @@ export default function TestSkeleton() {
             </div>
           </CardHeader>
           <CardContent>
-            <Tabs defaultValue="spine" className="w-full">
-              <TabsList className="grid w-full grid-cols-3 mb-4">
+            <Tabs defaultValue="proportions" className="w-full">
+              <TabsList className="grid w-full grid-cols-4 mb-4">
+                <TabsTrigger value="proportions">Proportions</TabsTrigger>
                 <TabsTrigger value="spine">Spine & Pelvis</TabsTrigger>
                 <TabsTrigger value="lower">Lower Body</TabsTrigger>
                 <TabsTrigger value="upper">Upper Body</TabsTrigger>

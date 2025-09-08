@@ -278,7 +278,10 @@ export default function RiggedAnatomicalSkeleton({
         let ikSolver: CCDIKSolver | undefined;
         const ikTargets: any = {};
         
-        if (skinnedMesh && skeleton) {
+        // TEMPORARILY DISABLED IK SOLVER TO DEBUG LOADING ISSUE
+        const enableIK = false; // Set to true to enable IK
+        
+        if (skinnedMesh && skeleton && enableIK) {
           console.log('Setting up IK solver for skeleton');
           
           // Create IK targets (invisible objects that define where bones should reach)
@@ -913,11 +916,11 @@ export default function RiggedAnatomicalSkeleton({
 
   // Apply spinal curve parameters (lordosis and kyphosis) with IK
   useEffect(() => {
-    if (!sceneRef.current || !sceneRef.current.bones || !sceneRef.current.ikSolver) return;
+    if (!sceneRef.current || !sceneRef.current.bones) return;
     
     const bones = sceneRef.current.bones;
-    const ikSolver = sceneRef.current.ikSolver;
-    const ikTargets = sceneRef.current.ikTargets;
+    const ikSolver = sceneRef.current?.ikSolver; // Optional - may not exist
+    const ikTargets = sceneRef.current?.ikTargets;
     const configAny = modelConfig as any;
     
     if (configAny?.spine && ikTargets) {
@@ -1010,10 +1013,13 @@ export default function RiggedAnatomicalSkeleton({
         ikTargets.rightFoot.position.copy(originalPositions.rightFoot);
       }
       
-      // Run IK solver to adjust limbs and maintain connectivity
-      ikSolver.update();
-      
-      console.log('Applied spine curves with IK constraints');
+      // Run IK solver to adjust limbs and maintain connectivity (if available)
+      if (ikSolver) {
+        ikSolver.update();
+        console.log('Applied spine curves with IK constraints');
+      } else {
+        console.log('Applied spine curves without IK (IK disabled)');
+      }
     }
   }, [(modelConfig as any)?.spine?.cervicalLordosis, (modelConfig as any)?.spine?.thoracicKyphosis,
       (modelConfig as any)?.spine?.lumbarLordosis, (modelConfig as any)?.spine?.scoliosis]);

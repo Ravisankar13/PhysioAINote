@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { CCDIKSolver, IKConfig } from './CCDIKHelper';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
@@ -85,6 +86,15 @@ export default function RiggedAnatomicalSkeleton({
     mixer?: THREE.AnimationMixer;
     clock: THREE.Clock;
     bones: { [key: string]: THREE.Bone };
+    ikSolver?: CCDIKSolver;
+    skinnedMesh?: THREE.SkinnedMesh;
+    ikTargets?: {
+      leftHand?: THREE.Object3D;
+      rightHand?: THREE.Object3D;
+      leftFoot?: THREE.Object3D;
+      rightFoot?: THREE.Object3D;
+      head?: THREE.Object3D;
+    };
   } | null>(null);
 
   // Joint control states
@@ -231,11 +241,13 @@ export default function RiggedAnatomicalSkeleton({
         
         // Find skeleton and bones if the model is rigged
         let skeleton: THREE.Skeleton | undefined;
+        let skinnedMesh: THREE.SkinnedMesh | undefined;
         const bones: { [key: string]: THREE.Bone } = {};
         
         model.traverse((child: any) => {
           if (child.isSkinnedMesh && child.skeleton) {
             skeleton = child.skeleton;
+            skinnedMesh = child;
             console.log('Found skeleton with', skeleton?.bones.length, 'bones');
             
             // Map bones by name
@@ -262,12 +274,157 @@ export default function RiggedAnatomicalSkeleton({
           console.log('No rigged skeleton found, model will be static');
         }
         
+        // Set up IK solver if we have a skinned mesh and skeleton
+        let ikSolver: CCDIKSolver | undefined;
+        const ikTargets: any = {};
+        
+        if (skinnedMesh && skeleton) {
+          console.log('Setting up IK solver for skeleton');
+          
+          // Create IK targets (invisible objects that define where bones should reach)
+          ikTargets.leftHand = new THREE.Object3D();
+          ikTargets.rightHand = new THREE.Object3D();
+          ikTargets.leftFoot = new THREE.Object3D();
+          ikTargets.rightFoot = new THREE.Object3D();
+          ikTargets.head = new THREE.Object3D();
+          
+          // Add targets to scene
+          scene.add(ikTargets.leftHand);
+          scene.add(ikTargets.rightHand);
+          scene.add(ikTargets.leftFoot);
+          scene.add(ikTargets.rightFoot);
+          scene.add(ikTargets.head);
+          
+          // Find bone indices for IK chains
+          const findBoneIndex = (name: string): number => {
+            const index = skeleton!.bones.findIndex(b => 
+              b.name.toUpperCase().includes(name.toUpperCase())
+            );
+            return index >= 0 ? index : -1;
+          };
+          
+          // Create IK configurations
+          const ikConfigs: IKConfig[] = [];
+          
+          // Try to find spine bones for IK
+          const spineIndices: number[] = [];
+          for (let i = 0; i < skeleton.bones.length; i++) {
+            const boneName = skeleton.bones[i].name.toUpperCase();
+            if (boneName.includes('SPINE') || boneName.includes('CHEST') || 
+                boneName.includes('ABDOMEN') || boneName.includes('TORSO')) {
+              spineIndices.push(i);
+            }
+          }
+          
+          // If we found spine bones, create spine IK config
+          if (spineIndices.length > 1) {
+            const headIndex = findBoneIndex('HEAD');
+            if (headIndex >= 0) {
+              ikConfigs.push(CCDIKSolver.createSpineIKConfig(
+                skeleton,
+                spineIndices,
+                headIndex
+              ));
+              console.log('Created spine IK chain with', spineIndices.length, 'bones');
+            }
+          }
+          
+          // Create arm IK chains
+          const leftShoulderIndex = findBoneIndex('HUMERUSL');
+          const leftElbowIndex = findBoneIndex('RADIUSL');
+          const leftWristIndex = findBoneIndex('HANDL');
+          
+          if (leftShoulderIndex >= 0 && leftElbowIndex >= 0 && leftWristIndex >= 0) {
+            // Add a target bone for left hand
+            const leftHandTarget = new THREE.Bone();
+            leftHandTarget.name = 'IK_TARGET_LEFT_HAND';
+            skeleton.bones.push(leftHandTarget);
+            
+            ikConfigs.push(CCDIKSolver.createLimbIKConfig(
+              skeleton,
+              leftShoulderIndex,
+              leftElbowIndex,
+              leftWristIndex,
+              skeleton.bones.length - 1
+            ));
+            console.log('Created left arm IK chain');
+          }
+          
+          // Create right arm IK chain
+          const rightShoulderIndex = findBoneIndex('HUMERUSR');
+          const rightElbowIndex = findBoneIndex('RADIUSR');
+          const rightWristIndex = findBoneIndex('HANDR');
+          
+          if (rightShoulderIndex >= 0 && rightElbowIndex >= 0 && rightWristIndex >= 0) {
+            const rightHandTarget = new THREE.Bone();
+            rightHandTarget.name = 'IK_TARGET_RIGHT_HAND';
+            skeleton.bones.push(rightHandTarget);
+            
+            ikConfigs.push(CCDIKSolver.createLimbIKConfig(
+              skeleton,
+              rightShoulderIndex,
+              rightElbowIndex,
+              rightWristIndex,
+              skeleton.bones.length - 1
+            ));
+            console.log('Created right arm IK chain');
+          }
+          
+          // Create leg IK chains
+          const leftHipIndex = findBoneIndex('FEMURL');
+          const leftKneeIndex = findBoneIndex('TIBIAL');
+          const leftAnkleIndex = findBoneIndex('FOOTL');
+          
+          if (leftHipIndex >= 0 && leftKneeIndex >= 0 && leftAnkleIndex >= 0) {
+            const leftFootTarget = new THREE.Bone();
+            leftFootTarget.name = 'IK_TARGET_LEFT_FOOT';
+            skeleton.bones.push(leftFootTarget);
+            
+            ikConfigs.push(CCDIKSolver.createLimbIKConfig(
+              skeleton,
+              leftHipIndex,
+              leftKneeIndex,
+              leftAnkleIndex,
+              skeleton.bones.length - 1
+            ));
+            console.log('Created left leg IK chain');
+          }
+          
+          const rightHipIndex = findBoneIndex('FEMURR');
+          const rightKneeIndex = findBoneIndex('TIBIAR');
+          const rightAnkleIndex = findBoneIndex('FOOTR');
+          
+          if (rightHipIndex >= 0 && rightKneeIndex >= 0 && rightAnkleIndex >= 0) {
+            const rightFootTarget = new THREE.Bone();
+            rightFootTarget.name = 'IK_TARGET_RIGHT_FOOT';
+            skeleton.bones.push(rightFootTarget);
+            
+            ikConfigs.push(CCDIKSolver.createLimbIKConfig(
+              skeleton,
+              rightHipIndex,
+              rightKneeIndex,
+              rightAnkleIndex,
+              skeleton.bones.length - 1
+            ));
+            console.log('Created right leg IK chain');
+          }
+          
+          // Create the IK solver with all configurations
+          if (ikConfigs.length > 0) {
+            ikSolver = new CCDIKSolver(skinnedMesh, ikConfigs);
+            console.log('IK solver created with', ikConfigs.length, 'chains');
+          }
+        }
+        
         scene.add(model);
         
         if (sceneRef.current) {
           sceneRef.current.model = model;
           sceneRef.current.skeleton = skeleton;
           sceneRef.current.bones = bones;
+          sceneRef.current.skinnedMesh = skinnedMesh;
+          sceneRef.current.ikSolver = ikSolver;
+          sceneRef.current.ikTargets = ikTargets;
         }
         
         setIsLoading(false);
@@ -294,6 +451,11 @@ export default function RiggedAnatomicalSkeleton({
       
       if (controls) {
         controls.update();
+      }
+      
+      // Update IK solver if it exists
+      if (sceneRef.current?.ikSolver) {
+        sceneRef.current.ikSolver.update();
       }
       
       // Joint rotations and limb scales are now applied via useEffect
@@ -749,37 +911,110 @@ export default function RiggedAnatomicalSkeleton({
       (modelConfig as any)?.leftElbow, (modelConfig as any)?.rightElbow,
       (modelConfig as any)?.leftShoulder, (modelConfig as any)?.rightShoulder]);
 
-  // Apply spinal curve parameters (lordosis and kyphosis)
+  // Apply spinal curve parameters (lordosis and kyphosis) with IK
   useEffect(() => {
-    if (!sceneRef.current || !sceneRef.current.bones) return;
+    if (!sceneRef.current || !sceneRef.current.bones || !sceneRef.current.ikSolver) return;
     
     const bones = sceneRef.current.bones;
+    const ikSolver = sceneRef.current.ikSolver;
+    const ikTargets = sceneRef.current.ikTargets;
     const configAny = modelConfig as any;
     
-    // IMPORTANT: This skeleton rig doesn't support individual vertebrae rotation
-    // Attempting to rotate spine bones causes the skeleton to break apart
-    // For now, we'll disable spine curve functionality to maintain skeleton integrity
-    
-    // Log a message when spine parameters change
-    if (configAny?.spine) {
-      const hasChanges = (
-        configAny.spine.cervicalLordosis !== -40 ||
-        configAny.spine.thoracicKyphosis !== 35 ||
-        configAny.spine.lumbarLordosis !== -50 ||
-        configAny.spine.scoliosis !== 0
-      );
+    if (configAny?.spine && ikTargets) {
+      // Store current end effector positions before spine adjustment
+      const leftHandBone = Object.values(bones).find(b => b.name.includes('HANDL'));
+      const rightHandBone = Object.values(bones).find(b => b.name.includes('HANDR'));
+      const leftFootBone = Object.values(bones).find(b => b.name.includes('FOOTL'));
+      const rightFootBone = Object.values(bones).find(b => b.name.includes('FOOTR'));
+      const headBone = Object.values(bones).find(b => b.name.includes('HEAD'));
       
-      if (hasChanges) {
-        console.log('Note: Spine curve adjustments are currently disabled for this skeleton model to prevent deformation.');
-        console.log('The skeleton rig does not support individual vertebrae rotation.');
+      // Store original positions
+      const originalPositions: { [key: string]: THREE.Vector3 } = {};
+      
+      if (leftHandBone) {
+        originalPositions.leftHand = new THREE.Vector3();
+        leftHandBone.getWorldPosition(originalPositions.leftHand);
       }
+      if (rightHandBone) {
+        originalPositions.rightHand = new THREE.Vector3();
+        rightHandBone.getWorldPosition(originalPositions.rightHand);
+      }
+      if (leftFootBone) {
+        originalPositions.leftFoot = new THREE.Vector3();
+        leftFootBone.getWorldPosition(originalPositions.leftFoot);
+      }
+      if (rightFootBone) {
+        originalPositions.rightFoot = new THREE.Vector3();
+        rightFootBone.getWorldPosition(originalPositions.rightFoot);
+      }
+      
+      // Apply spine curves with very small increments
+      const spineBones = Object.values(bones).filter(b => {
+        const name = b.name.toUpperCase();
+        return name.includes('SPINE') || name.includes('CHEST') || 
+               name.includes('TORSO') || name.includes('ABDOMEN');
+      });
+      
+      // Apply subtle spine rotations
+      spineBones.forEach(bone => {
+        const name = bone.name.toUpperCase();
+        
+        // Reset rotation first
+        bone.rotation.set(0, 0, 0);
+        
+        // Apply very subtle curves based on bone location
+        let totalRotationX = 0;
+        let totalRotationZ = 0;
+        
+        // Cervical lordosis (neck curve)
+        if (configAny.spine.cervicalLordosis !== undefined && name.includes('NECK')) {
+          const deviation = (configAny.spine.cervicalLordosis + 40) * 0.002; // Very subtle
+          totalRotationX += THREE.MathUtils.degToRad(deviation);
+        }
+        
+        // Thoracic kyphosis (upper back curve)
+        if (configAny.spine.thoracicKyphosis !== undefined && name.includes('CHEST')) {
+          const deviation = (configAny.spine.thoracicKyphosis - 35) * 0.002;
+          totalRotationX -= THREE.MathUtils.degToRad(deviation);
+        }
+        
+        // Lumbar lordosis (lower back curve)
+        if (configAny.spine.lumbarLordosis !== undefined && 
+            (name.includes('ABDOMEN') || name.includes('LUMBAR'))) {
+          const deviation = (configAny.spine.lumbarLordosis + 50) * 0.002;
+          totalRotationX += THREE.MathUtils.degToRad(deviation);
+        }
+        
+        // Scoliosis (lateral curve)
+        if (configAny.spine.scoliosis !== undefined) {
+          totalRotationZ = THREE.MathUtils.degToRad(configAny.spine.scoliosis * 0.002);
+        }
+        
+        // Apply the rotations
+        bone.rotation.x = totalRotationX;
+        bone.rotation.z = totalRotationZ;
+        bone.updateMatrixWorld(true);
+      });
+      
+      // Update IK targets to maintain original positions
+      if (ikTargets.leftHand && originalPositions.leftHand) {
+        ikTargets.leftHand.position.copy(originalPositions.leftHand);
+      }
+      if (ikTargets.rightHand && originalPositions.rightHand) {
+        ikTargets.rightHand.position.copy(originalPositions.rightHand);
+      }
+      if (ikTargets.leftFoot && originalPositions.leftFoot) {
+        ikTargets.leftFoot.position.copy(originalPositions.leftFoot);
+      }
+      if (ikTargets.rightFoot && originalPositions.rightFoot) {
+        ikTargets.rightFoot.position.copy(originalPositions.rightFoot);
+      }
+      
+      // Run IK solver to adjust limbs and maintain connectivity
+      ikSolver.update();
+      
+      console.log('Applied spine curves with IK constraints');
     }
-    
-    // Future implementation could:
-    // 1. Use a different skeleton model with proper spine rigging
-    // 2. Apply very subtle rotations only to the main torso bone
-    // 3. Use morph targets or blend shapes instead of bone rotation
-    
   }, [(modelConfig as any)?.spine?.cervicalLordosis, (modelConfig as any)?.spine?.thoracicKyphosis,
       (modelConfig as any)?.spine?.lumbarLordosis, (modelConfig as any)?.spine?.scoliosis]);
 
@@ -1607,7 +1842,7 @@ export default function RiggedAnatomicalSkeleton({
                   <div className="space-y-2">
                     <Label className="text-sm font-medium">Upper Arm Length</Label>
                     <Slider
-                      value={[scales.upperArm]}
+                      value={[limbScales.upperArm]}
                       onValueChange={([value]) => {
                         console.log('Upper arm scale changed to:', value);
                         setLimbScales(prev => ({...prev, upperArm: value}));
@@ -1621,7 +1856,7 @@ export default function RiggedAnatomicalSkeleton({
                   <div className="space-y-2">
                     <Label className="text-sm font-medium">Forearm Length</Label>
                     <Slider
-                      value={[scales.forearm]}
+                      value={[limbScales.forearm]}
                       onValueChange={([value]) => 
                         setLimbScales(prev => ({...prev, forearm: value}))
                       }
@@ -1634,7 +1869,7 @@ export default function RiggedAnatomicalSkeleton({
                   <div className="space-y-2">
                     <Label className="text-sm font-medium">Thigh Length</Label>
                     <Slider
-                      value={[scales.thigh]}
+                      value={[limbScales.thigh]}
                       onValueChange={([value]) => 
                         setLimbScales(prev => ({...prev, thigh: value}))
                       }
@@ -1647,7 +1882,7 @@ export default function RiggedAnatomicalSkeleton({
                   <div className="space-y-2">
                     <Label className="text-sm font-medium">Shin Length</Label>
                     <Slider
-                      value={[scales.shin]}
+                      value={[limbScales.shin]}
                       onValueChange={([value]) => 
                         setLimbScales(prev => ({...prev, shin: value}))
                       }

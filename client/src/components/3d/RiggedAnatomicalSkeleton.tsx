@@ -2,7 +2,6 @@ import React, { useRef, useEffect, useState } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { CCDIKSolver, IKConfig } from './CCDIKHelper';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
@@ -86,7 +85,6 @@ export default function RiggedAnatomicalSkeleton({
     mixer?: THREE.AnimationMixer;
     clock: THREE.Clock;
     bones: { [key: string]: THREE.Bone };
-    ikSolver?: CCDIKSolver;
     skinnedMesh?: THREE.SkinnedMesh;
     ikTargets?: {
       leftHand?: THREE.Object3D;
@@ -274,14 +272,13 @@ export default function RiggedAnatomicalSkeleton({
           console.log('No rigged skeleton found, model will be static');
         }
         
-        // Set up IK solver if we have a skinned mesh and skeleton
-        let ikSolver: CCDIKSolver | undefined;
+        // IK solver disabled to prevent skeleton deformation
         const ikTargets: any = {};
         
-        // Enable IK solver for maintaining skeleton integrity
-        const enableIK = true; // IK enabled to prevent deformation
+        // Skip IK setup - causes deformation with current rig
+        const enableIK = false;
         
-        if (skinnedMesh && skeleton && enableIK) {
+        if (false) { // Disabled IK setup
           console.log('Setting up IK solver for skeleton');
           
           // Create IK targets (invisible objects that define where bones should reach)
@@ -309,8 +306,8 @@ export default function RiggedAnatomicalSkeleton({
             return index >= 0 ? index : -1;
           };
           
-          // Create IK configurations
-          const ikConfigs: IKConfig[] = [];
+          // IK configurations disabled
+          const ikConfigs: any[] = [];
           
           // Try to find spine bones for IK
           const spineIndices: number[] = [];
@@ -326,11 +323,8 @@ export default function RiggedAnatomicalSkeleton({
           if (spineIndices.length > 1) {
             const headIndex = findBoneIndex('HEAD');
             if (headIndex >= 0) {
-              ikConfigs.push(CCDIKSolver.createSpineIKConfig(
-                skeleton,
-                spineIndices,
-                headIndex
-              ));
+              // Spine IK disabled
+              console.log('Spine IK would use', spineIndices.length, 'bones');
               console.log('Created spine IK chain with', spineIndices.length, 'bones');
             }
           }
@@ -346,13 +340,8 @@ export default function RiggedAnatomicalSkeleton({
             leftHandTarget.name = 'IK_TARGET_LEFT_HAND';
             skeleton.bones.push(leftHandTarget);
             
-            ikConfigs.push(CCDIKSolver.createLimbIKConfig(
-              skeleton,
-              leftShoulderIndex,
-              leftElbowIndex,
-              leftWristIndex,
-              skeleton.bones.length - 1
-            ));
+            // Left arm IK disabled
+            console.log('Left arm IK disabled');
             console.log('Created left arm IK chain');
           }
           
@@ -366,13 +355,8 @@ export default function RiggedAnatomicalSkeleton({
             rightHandTarget.name = 'IK_TARGET_RIGHT_HAND';
             skeleton.bones.push(rightHandTarget);
             
-            ikConfigs.push(CCDIKSolver.createLimbIKConfig(
-              skeleton,
-              rightShoulderIndex,
-              rightElbowIndex,
-              rightWristIndex,
-              skeleton.bones.length - 1
-            ));
+            // Right arm IK disabled
+            console.log('Right arm IK disabled');
             console.log('Created right arm IK chain');
           }
           
@@ -386,13 +370,8 @@ export default function RiggedAnatomicalSkeleton({
             leftFootTarget.name = 'IK_TARGET_LEFT_FOOT';
             skeleton.bones.push(leftFootTarget);
             
-            ikConfigs.push(CCDIKSolver.createLimbIKConfig(
-              skeleton,
-              leftHipIndex,
-              leftKneeIndex,
-              leftAnkleIndex,
-              skeleton.bones.length - 1
-            ));
+            // Left leg IK disabled
+            console.log('Left leg IK disabled');
             console.log('Created left leg IK chain');
           }
           
@@ -405,21 +384,13 @@ export default function RiggedAnatomicalSkeleton({
             rightFootTarget.name = 'IK_TARGET_RIGHT_FOOT';
             skeleton.bones.push(rightFootTarget);
             
-            ikConfigs.push(CCDIKSolver.createLimbIKConfig(
-              skeleton,
-              rightHipIndex,
-              rightKneeIndex,
-              rightAnkleIndex,
-              skeleton.bones.length - 1
-            ));
+            // Right leg IK disabled
+            console.log('Right leg IK disabled');
             console.log('Created right leg IK chain');
           }
           
-          // Create the IK solver with all configurations
-          if (ikConfigs.length > 0) {
-            ikSolver = new CCDIKSolver(skinnedMesh, ikConfigs);
-            console.log('IK solver created with', ikConfigs.length, 'chains');
-          }
+          // IK solver creation disabled
+          console.log('IK solver disabled to prevent deformation');
         }
         
         scene.add(model);
@@ -429,7 +400,7 @@ export default function RiggedAnatomicalSkeleton({
           sceneRef.current.skeleton = skeleton;
           sceneRef.current.bones = bones;
           sceneRef.current.skinnedMesh = skinnedMesh;
-          sceneRef.current.ikSolver = ikSolver;
+          // IK solver disabled
           sceneRef.current.ikTargets = ikTargets;
         }
         
@@ -459,10 +430,7 @@ export default function RiggedAnatomicalSkeleton({
         controls.update();
       }
       
-      // Update IK solver if it exists
-      if (sceneRef.current?.ikSolver) {
-        sceneRef.current.ikSolver.update();
-      }
+      // IK solver disabled to prevent skeleton deformation
       
       // Joint rotations and limb scales are now applied via useEffect
       
@@ -922,7 +890,7 @@ export default function RiggedAnatomicalSkeleton({
     if (!sceneRef.current || !sceneRef.current.bones) return;
     
     const bones = sceneRef.current.bones;
-    const ikSolver = sceneRef.current?.ikSolver;
+    // IK solver disabled
     const configAny = modelConfig as any;
     
     // IMPORTANT: Spine rotation disabled to prevent deformation
@@ -948,9 +916,7 @@ export default function RiggedAnatomicalSkeleton({
       }
       
       // Run IK solver to maintain skeleton integrity
-      if (ikSolver) {
-        ikSolver.update();
-      }
+      // IK solver update disabled
     }
   }, [(modelConfig as any)?.spine?.cervicalLordosis, (modelConfig as any)?.spine?.thoracicKyphosis,
       (modelConfig as any)?.spine?.lumbarLordosis, (modelConfig as any)?.spine?.scoliosis]);
@@ -1018,11 +984,6 @@ export default function RiggedAnatomicalSkeleton({
   
   // Apply pathology-based rotations to the skeleton
   const applyPathologyRotations = () => {
-    if (!sceneRef.current || !sceneRef.current.bones) return;
-    
-    // Skip if no modelConfig is provided
-    if (!modelConfig) return;
-    
     // DISABLE PATHOLOGY ROTATIONS TO PREVENT DEFORMATION
     // The skeleton rig doesn't support these complex rotations
     console.log('Pathology rotations disabled to prevent skeleton deformation');

@@ -153,6 +153,16 @@ export default function TestSkeletonNew() {
     }));
   };
 
+  const updateLimbScale = (key: string, value: number) => {
+    setModelConfig(prev => ({
+      ...prev,
+      limbScales: {
+        ...prev.limbScales,
+        [key]: value
+      }
+    }));
+  };
+
   const updateJoint = (joint: string, side: 'left' | 'right', key: string, value: number) => {
     const jointKey = `${side}${joint.charAt(0).toUpperCase() + joint.slice(1)}` as keyof typeof modelConfig;
     
@@ -461,12 +471,63 @@ export default function TestSkeletonNew() {
             </div>
           </CardHeader>
           <CardContent>
-            <Tabs defaultValue="spine" className="w-full">
-              <TabsList className="grid w-full grid-cols-3 mb-4">
+            <Tabs defaultValue="proportions" className="w-full">
+              <TabsList className="grid w-full grid-cols-4 mb-4">
+                <TabsTrigger value="proportions">Proportions</TabsTrigger>
                 <TabsTrigger value="spine">Spine & Pelvis</TabsTrigger>
                 <TabsTrigger value="lower">Lower Body</TabsTrigger>
                 <TabsTrigger value="upper">Upper Body</TabsTrigger>
               </TabsList>
+
+              {/* Proportions Tab */}
+              <TabsContent value="proportions" className="space-y-4">
+                <h3 className="font-semibold text-lg">Body Proportions</h3>
+                <SliderControl
+                  label="Overall Scale"
+                  value={modelConfig.limbScales.overall}
+                  onChange={(v: number) => updateLimbScale('overall', v)}
+                  min={0.5}
+                  max={2}
+                  step={0.1}
+                  unit="x"
+                />
+                <SliderControl
+                  label="Upper Arm Length"
+                  value={modelConfig.limbScales.upperArm}
+                  onChange={(v: number) => updateLimbScale('upperArm', v)}
+                  min={0.5}
+                  max={2}
+                  step={0.1}
+                  unit="x"
+                />
+                <SliderControl
+                  label="Forearm Length"
+                  value={modelConfig.limbScales.forearm}
+                  onChange={(v: number) => updateLimbScale('forearm', v)}
+                  min={0.5}
+                  max={2}
+                  step={0.1}
+                  unit="x"
+                />
+                <SliderControl
+                  label="Thigh Length"
+                  value={modelConfig.limbScales.thigh}
+                  onChange={(v: number) => updateLimbScale('thigh', v)}
+                  min={0.5}
+                  max={2}
+                  step={0.1}
+                  unit="x"
+                />
+                <SliderControl
+                  label="Shin Length"
+                  value={modelConfig.limbScales.shin}
+                  onChange={(v: number) => updateLimbScale('shin', v)}
+                  min={0.5}
+                  max={2}
+                  step={0.1}
+                  unit="x"
+                />
+              </TabsContent>
 
               {/* Spine & Pelvis Tab */}
               <TabsContent value="spine" className="space-y-6">

@@ -278,8 +278,8 @@ export default function RiggedAnatomicalSkeleton({
         let ikSolver: CCDIKSolver | undefined;
         const ikTargets: any = {};
         
-        // TEMPORARILY DISABLED IK SOLVER TO DEBUG LOADING ISSUE
-        const enableIK = false; // Set to true to enable IK
+        // Enable IK solver for maintaining skeleton integrity
+        const enableIK = true; // IK enabled to prevent deformation
         
         if (skinnedMesh && skeleton && enableIK) {
           console.log('Setting up IK solver for skeleton');
@@ -303,6 +303,9 @@ export default function RiggedAnatomicalSkeleton({
             const index = skeleton!.bones.findIndex(b => 
               b.name.toUpperCase().includes(name.toUpperCase())
             );
+            if (index < 0) {
+              console.log(`Warning: Could not find bone with name containing "${name}"`);
+            }
             return index >= 0 ? index : -1;
           };
           
@@ -919,106 +922,34 @@ export default function RiggedAnatomicalSkeleton({
     if (!sceneRef.current || !sceneRef.current.bones) return;
     
     const bones = sceneRef.current.bones;
-    const ikSolver = sceneRef.current?.ikSolver; // Optional - may not exist
-    const ikTargets = sceneRef.current?.ikTargets;
+    const ikSolver = sceneRef.current?.ikSolver;
     const configAny = modelConfig as any;
     
-    if (configAny?.spine && ikTargets) {
-      // Store current end effector positions before spine adjustment
-      const leftHandBone = Object.values(bones).find(b => b.name.includes('HANDL'));
-      const rightHandBone = Object.values(bones).find(b => b.name.includes('HANDR'));
-      const leftFootBone = Object.values(bones).find(b => b.name.includes('FOOTL'));
-      const rightFootBone = Object.values(bones).find(b => b.name.includes('FOOTR'));
-      const headBone = Object.values(bones).find(b => b.name.includes('HEAD'));
+    // IMPORTANT: Spine rotation disabled to prevent deformation
+    // The skeleton rig doesn't support individual spine bone rotation
+    // IK solver will maintain limb positions while other controls work
+    
+    if (configAny?.spine) {
+      const hasSpineChanges = (
+        configAny.spine.cervicalLordosis !== -40 ||
+        configAny.spine.thoracicKyphosis !== 35 ||
+        configAny.spine.lumbarLordosis !== -50 ||
+        configAny.spine.scoliosis !== 0
+      );
       
-      // Store original positions
-      const originalPositions: { [key: string]: THREE.Vector3 } = {};
-      
-      if (leftHandBone) {
-        originalPositions.leftHand = new THREE.Vector3();
-        leftHandBone.getWorldPosition(originalPositions.leftHand);
-      }
-      if (rightHandBone) {
-        originalPositions.rightHand = new THREE.Vector3();
-        rightHandBone.getWorldPosition(originalPositions.rightHand);
-      }
-      if (leftFootBone) {
-        originalPositions.leftFoot = new THREE.Vector3();
-        leftFootBone.getWorldPosition(originalPositions.leftFoot);
-      }
-      if (rightFootBone) {
-        originalPositions.rightFoot = new THREE.Vector3();
-        rightFootBone.getWorldPosition(originalPositions.rightFoot);
+      if (hasSpineChanges) {
+        console.log('Spine adjustments detected but disabled to prevent deformation');
+        console.log('Current values:', {
+          cervicalLordosis: configAny.spine.cervicalLordosis,
+          thoracicKyphosis: configAny.spine.thoracicKyphosis,
+          lumbarLordosis: configAny.spine.lumbarLordosis,
+          scoliosis: configAny.spine.scoliosis
+        });
       }
       
-      // Apply spine curves with very small increments
-      const spineBones = Object.values(bones).filter(b => {
-        const name = b.name.toUpperCase();
-        return name.includes('SPINE') || name.includes('CHEST') || 
-               name.includes('TORSO') || name.includes('ABDOMEN');
-      });
-      
-      // Apply subtle spine rotations
-      spineBones.forEach(bone => {
-        const name = bone.name.toUpperCase();
-        
-        // Reset rotation first
-        bone.rotation.set(0, 0, 0);
-        
-        // Apply very subtle curves based on bone location
-        let totalRotationX = 0;
-        let totalRotationZ = 0;
-        
-        // Cervical lordosis (neck curve)
-        if (configAny.spine.cervicalLordosis !== undefined && name.includes('NECK')) {
-          const deviation = (configAny.spine.cervicalLordosis + 40) * 0.002; // Very subtle
-          totalRotationX += THREE.MathUtils.degToRad(deviation);
-        }
-        
-        // Thoracic kyphosis (upper back curve)
-        if (configAny.spine.thoracicKyphosis !== undefined && name.includes('CHEST')) {
-          const deviation = (configAny.spine.thoracicKyphosis - 35) * 0.002;
-          totalRotationX -= THREE.MathUtils.degToRad(deviation);
-        }
-        
-        // Lumbar lordosis (lower back curve)
-        if (configAny.spine.lumbarLordosis !== undefined && 
-            (name.includes('ABDOMEN') || name.includes('LUMBAR'))) {
-          const deviation = (configAny.spine.lumbarLordosis + 50) * 0.002;
-          totalRotationX += THREE.MathUtils.degToRad(deviation);
-        }
-        
-        // Scoliosis (lateral curve)
-        if (configAny.spine.scoliosis !== undefined) {
-          totalRotationZ = THREE.MathUtils.degToRad(configAny.spine.scoliosis * 0.002);
-        }
-        
-        // Apply the rotations
-        bone.rotation.x = totalRotationX;
-        bone.rotation.z = totalRotationZ;
-        bone.updateMatrixWorld(true);
-      });
-      
-      // Update IK targets to maintain original positions
-      if (ikTargets.leftHand && originalPositions.leftHand) {
-        ikTargets.leftHand.position.copy(originalPositions.leftHand);
-      }
-      if (ikTargets.rightHand && originalPositions.rightHand) {
-        ikTargets.rightHand.position.copy(originalPositions.rightHand);
-      }
-      if (ikTargets.leftFoot && originalPositions.leftFoot) {
-        ikTargets.leftFoot.position.copy(originalPositions.leftFoot);
-      }
-      if (ikTargets.rightFoot && originalPositions.rightFoot) {
-        ikTargets.rightFoot.position.copy(originalPositions.rightFoot);
-      }
-      
-      // Run IK solver to adjust limbs and maintain connectivity (if available)
+      // Run IK solver to maintain skeleton integrity
       if (ikSolver) {
         ikSolver.update();
-        console.log('Applied spine curves with IK constraints');
-      } else {
-        console.log('Applied spine curves without IK (IK disabled)');
       }
     }
   }, [(modelConfig as any)?.spine?.cervicalLordosis, (modelConfig as any)?.spine?.thoracicKyphosis,
@@ -1091,6 +1022,11 @@ export default function RiggedAnatomicalSkeleton({
     
     // Skip if no modelConfig is provided
     if (!modelConfig) return;
+    
+    // DISABLE PATHOLOGY ROTATIONS TO PREVENT DEFORMATION
+    // The skeleton rig doesn't support these complex rotations
+    console.log('Pathology rotations disabled to prevent skeleton deformation');
+    return;
     
     const bones = sceneRef.current.bones;
     const toRad = THREE.MathUtils.degToRad;

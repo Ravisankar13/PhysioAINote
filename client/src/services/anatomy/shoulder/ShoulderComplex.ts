@@ -217,83 +217,84 @@ export class ShoulderComplexRenderer {
     
     // Dynamic scapula dimensions based on body proportions
     // Scapula height is approximately 15-17cm in adults (covers ribs 2-7)
-    const scapulaHeight = torsoHeight * 0.28; // Reduced to proper anatomical size
+    const scapulaHeight = torsoHeight * 0.3; // Proper vertebral coverage T2-T7
     // Scapula width is approximately 10-11cm
-    const scapulaWidth = shoulderWidth * 0.26; // Reduced to proper width
+    const scapulaWidth = shoulderWidth * 0.28; // Proper width ratio
     
-    // Calculate anatomically accurate scapular position
-    // The glenoid must align with the shoulder joint (glenohumeral articulation)
-    // We'll position the scapula so its glenoid ends up at the shoulder landmark
+    // Position scapula with three key anatomical points forming a triangle:
+    // 1. Superior angle (near T2 vertebra)
+    // 2. Inferior angle (near T7 vertebra)  
+    // 3. Lateral angle (glenoid - at shoulder joint)
     
-    // First, determine where the glenoid will be relative to scapula base
-    const glenoidOffsetFromScapulaX = (side === 'left' ? -scapulaWidth * 0.2 : scapulaWidth * 0.2);
-    const glenoidOffsetFromScapulaY = scapulaHeight * 0.18;
+    // The glenoid (lateral angle) must be at the shoulder joint
+    // The medial border should be about 5-7cm from spine
+    const medialBorderOffset = shoulderWidth * 0.12; // Distance from shoulder to medial border
     
-    // Now work backwards: position scapula so glenoid aligns with shoulder
-    const scapulaX = shoulderX - glenoidOffsetFromScapulaX;
-    const scapulaY = shoulderY - glenoidOffsetFromScapulaY;
+    // Superior angle position (top of scapula, near spine)
+    const superiorAngleX = shoulderX + (side === 'left' ? medialBorderOffset : -medialBorderOffset);
+    const superiorAngleY = shoulderY - scapulaHeight * 0.15; // Above shoulder level
     
     // Account for scapular plane (30-35° anterior to coronal plane)
     const planeAngle = 32 * Math.PI / 180;
     const depthAdjustment = Math.sin(planeAngle) * scapulaWidth * 0.3;
     
-    // Create anatomically accurate scapular borders
+    // Define the three key angles of the scapular triangle
+    // Inferior angle position (bottom of scapula, near spine at T7)
+    const inferiorAngleX = shoulderX + (side === 'left' ? medialBorderOffset : -medialBorderOffset);
+    const inferiorAngleY = shoulderY + scapulaHeight * 0.85; // Below shoulder level
+    
+    // Lateral angle (glenoid) - at shoulder joint
+    const lateralAngleX = shoulderX; // Glenoid aligns with shoulder
+    const lateralAngleY = shoulderY;
+    
+    // Create the three borders forming a triangle
     const medialBorder: Vector3[] = [];
     const lateralBorder: Vector3[] = [];
     const superiorBorder: Vector3[] = [];
     
-    // Medial (vertebral) border - with realistic curvature
-    const medialPoints = 15; // More points for smoother curve
+    // Medial (vertebral) border - runs from superior to inferior angle
+    const medialPoints = 12;
     for (let i = 0; i <= medialPoints; i++) {
       const t = i / medialPoints;
-      // Add slight lateral curve at middle third (natural scapular shape)
-      const curve = Math.sin(t * Math.PI) * scapulaWidth * 0.06;
-      // Slight anterior tilt at inferior angle
-      const anteriorTilt = Math.pow(t, 2) * bodyDepth * 0.03;
+      // Slight lateral curve for natural shape
+      const curve = Math.sin(t * Math.PI) * scapulaWidth * 0.04;
       medialBorder.push(new Vector3(
-        scapulaX + (side === 'left' ? scapulaWidth * 0.35 - curve : -scapulaWidth * 0.35 + curve),
-        scapulaY + (t * scapulaHeight),
-        shoulderZ - depthAdjustment - anteriorTilt
+        superiorAngleX + (t * (inferiorAngleX - superiorAngleX)) - curve * (side === 'left' ? 1 : -1),
+        superiorAngleY + (t * (inferiorAngleY - superiorAngleY)),
+        shoulderZ - depthAdjustment
       ));
     }
     
-    // Lateral border - from inferior angle to glenoid with proper angulation
-    const lateralPoints = 12;
+    // Lateral border - runs from inferior angle to lateral angle (glenoid)
+    const lateralPoints = 10;
     for (let i = 0; i <= lateralPoints; i++) {
       const t = i / lateralPoints;
-      // Lateral border curves toward glenoid cavity
-      const xOffset = Math.pow(t, 1.3) * scapulaWidth * 0.45;
-      const yOffset = (1 - Math.pow(t, 1.8)) * scapulaHeight;
-      // Natural forward curve toward glenoid
-      const zOffset = t * bodyDepth * 0.08;
+      // Slight curve toward glenoid
+      const curve = Math.sin(t * Math.PI * 0.5) * scapulaWidth * 0.03;
       lateralBorder.push(new Vector3(
-        scapulaX + (side === 'left' ? -xOffset : xOffset),
-        scapulaY + scapulaHeight - yOffset,
-        shoulderZ - depthAdjustment + zOffset
+        inferiorAngleX + (t * (lateralAngleX - inferiorAngleX)) + curve * (side === 'left' ? -1 : 1),
+        inferiorAngleY + (t * (lateralAngleY - inferiorAngleY)),
+        shoulderZ - depthAdjustment + (t * bodyDepth * 0.05)
       ));
     }
     
-    // Superior border - with suprascapular notch
-    const superiorPoints = 10;
+    // Superior border - runs from superior angle to lateral angle (glenoid)
+    const superiorPoints = 8;
     for (let i = 0; i <= superiorPoints; i++) {
       const t = i / superiorPoints;
-      // Add suprascapular notch at 65-75% from medial
-      const notchDepth = (t > 0.65 && t < 0.75) ? scapulaHeight * 0.02 : 0;
-      // Curve downward toward coracoid
-      const yDrop = Math.pow(t, 2) * scapulaHeight * 0.03;
+      // Add suprascapular notch at 70% from medial
+      const notchDepth = (t > 0.65 && t < 0.75) ? scapulaHeight * 0.015 : 0;
       superiorBorder.push(new Vector3(
-        scapulaX + (side === 'left' ? 
-          scapulaWidth * 0.35 - (t * scapulaWidth * 0.55) : 
-          -scapulaWidth * 0.35 + (t * scapulaWidth * 0.55)),
-        scapulaY + notchDepth + yDrop,
-        shoulderZ - depthAdjustment + (t * bodyDepth * 0.1)
+        superiorAngleX + (t * (lateralAngleX - superiorAngleX)),
+        superiorAngleY + (t * (lateralAngleY - superiorAngleY)) + notchDepth,
+        shoulderZ - depthAdjustment + (t * bodyDepth * 0.08)
       ));
     }
     
-    // Scapular spine - positioned at junction of upper and middle thirds
-    const spineY = scapulaY + scapulaHeight * 0.33; // Anatomically accurate position
-    const spineMedialX = scapulaX + (side === 'left' ? scapulaWidth * 0.3 : -scapulaWidth * 0.3);
-    const spineLateralX = scapulaX + (side === 'left' ? -scapulaWidth * 0.25 : scapulaWidth * 0.25);
+    // Scapular spine - runs from medial border toward acromion
+    const spineY = superiorAngleY + scapulaHeight * 0.33; // At upper third
+    const spineMedialX = superiorAngleX + (side === 'left' ? scapulaWidth * 0.05 : -scapulaWidth * 0.05);
+    const spineLateralX = shoulderX + (side === 'left' ? -scapulaWidth * 0.1 : scapulaWidth * 0.1);
     
     // Spine rises laterally toward acromion
     const spineElevation = scapulaHeight * 0.08;
@@ -336,10 +337,10 @@ export class ShoulderComplexRenderer {
       type: 'curved' as const
     };
     
-    // Coracoid process - anatomically accurate projection
-    const coracoidBaseX = scapulaX + (side === 'left' ? -scapulaWidth * 0.1 : scapulaWidth * 0.1);
-    const coracoidBaseY = scapulaY + scapulaHeight * 0.08;
-    const coracoidLength = scapulaWidth * 0.22;
+    // Coracoid process - projects anteriorly from superior border
+    const coracoidBaseX = shoulderX + (side === 'left' ? -scapulaWidth * 0.05 : scapulaWidth * 0.05);
+    const coracoidBaseY = shoulderY - scapulaHeight * 0.08;
+    const coracoidLength = scapulaWidth * 0.18;
     
     const coracoid = {
       base: new Vector3(coracoidBaseX, coracoidBaseY, shoulderZ + bodyDepth * 0.1),
@@ -367,11 +368,11 @@ export class ShoulderComplexRenderer {
       ]
     };
     
-    // Glenoid fossa - properly positioned at lateral angle
-    const glenoidX = scapulaX + (side === 'left' ? -scapulaWidth * 0.2 : scapulaWidth * 0.2);
-    const glenoidY = scapulaY + scapulaHeight * 0.18;
-    const glenoidHeight = scapulaHeight * 0.1;
-    const glenoidWidth = scapulaWidth * 0.07;
+    // Glenoid fossa - at the lateral angle (shoulder joint)
+    const glenoidX = lateralAngleX; // At shoulder joint
+    const glenoidY = lateralAngleY; // At shoulder joint
+    const glenoidHeight = scapulaHeight * 0.08;
+    const glenoidWidth = scapulaWidth * 0.06;
     
     const glenoid = {
       center: new Vector3(glenoidX, glenoidY, shoulderZ),
@@ -391,11 +392,13 @@ export class ShoulderComplexRenderer {
       inclination: 5 // 5° superior tilt
     };
     
-    // Fossae - positioned relative to spine
+    // Fossae - positioned relative to spine location
+    const fossaCenterX = (superiorAngleX + inferiorAngleX) / 2; // Midpoint of medial border
+    
     const supraspinousFossa = {
       center: new Vector3(
-        scapulaX + (side === 'left' ? scapulaWidth * 0.2 : -scapulaWidth * 0.2),
-        scapulaY + scapulaHeight * 0.15,
+        fossaCenterX + (side === 'left' ? -scapulaWidth * 0.1 : scapulaWidth * 0.1),
+        spineY - scapulaHeight * 0.15, // Above spine
         shoulderZ - depthAdjustment * 0.7
       ),
       depth: scapulaHeight * 0.05
@@ -403,25 +406,25 @@ export class ShoulderComplexRenderer {
     
     const infraspinousFossa = {
       center: new Vector3(
-        scapulaX + (side === 'left' ? scapulaWidth * 0.2 : -scapulaWidth * 0.2),
-        scapulaY + scapulaHeight * 0.6,
+        fossaCenterX + (side === 'left' ? -scapulaWidth * 0.1 : scapulaWidth * 0.1),
+        spineY + scapulaHeight * 0.25, // Below spine
         shoulderZ - depthAdjustment * 0.7
       ),
       depth: scapulaHeight * 0.06
     };
     
-    // Scapular angles - anatomically positioned
-    const superiorAngle = new Vector3(
-      scapulaX + (side === 'left' ? scapulaWidth * 0.35 : -scapulaWidth * 0.35),
-      scapulaY,
+    // The three angles of the scapular triangle are already defined
+    const superiorAngleVec = new Vector3(
+      superiorAngleX,
+      superiorAngleY,
       shoulderZ - depthAdjustment
     );
-    const inferiorAngle = new Vector3(
-      scapulaX + (side === 'left' ? scapulaWidth * 0.35 : -scapulaWidth * 0.35),
-      scapulaY + scapulaHeight,
+    const inferiorAngleVec = new Vector3(
+      inferiorAngleX,
+      inferiorAngleY,
       shoulderZ - depthAdjustment - bodyDepth * 0.03
     );
-    const lateralAngle = new Vector3(glenoidX, glenoidY, shoulderZ);
+    const lateralAngleVec = new Vector3(lateralAngleX, lateralAngleY, shoulderZ);
     
     return {
       body: { medialBorder, lateralBorder, superiorBorder },
@@ -431,9 +434,9 @@ export class ShoulderComplexRenderer {
       glenoid,
       supraspinousFossa,
       infraspinousFossa,
-      superiorAngle,
-      inferiorAngle,
-      lateralAngle,
+      superiorAngle: superiorAngleVec,
+      inferiorAngle: inferiorAngleVec,
+      lateralAngle: lateralAngleVec,
       planeAngle: 35 // 35° anterior to coronal plane
     };
   }

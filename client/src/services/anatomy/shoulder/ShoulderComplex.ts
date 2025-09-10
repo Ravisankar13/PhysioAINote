@@ -343,11 +343,14 @@ export class ShoulderComplexRenderer {
     const rotationCenterY = (superiorAngleY + inferiorAngleY + lateralAngleY) / 3;
     
     // Helper function to rotate a point around the rotation center
+    // Left scapula rotates counterclockwise (negative), right clockwise (positive)
     function rotatePoint(point: Vector3): Vector3 {
       const relX = point.x - rotationCenterX;
       const relY = point.y - rotationCenterY;
-      const cosR = Math.cos(-scapularRotation); // Negative for upward rotation
-      const sinR = Math.sin(-scapularRotation);
+      // Opposite rotation direction for each side
+      const rotationAngle = side === 'left' ? -scapularRotation : scapularRotation;
+      const cosR = Math.cos(rotationAngle);
+      const sinR = Math.sin(rotationAngle);
       const newX = relX * cosR - relY * sinR;
       const newY = relX * sinR + relY * cosR;
       return new Vector3(

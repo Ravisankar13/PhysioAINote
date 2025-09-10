@@ -155,11 +155,13 @@ export default function BodyScanner() {
   });
   const [videoStream, setVideoStream] = useState<MediaStream | null>(null);
   const [showVideoRecorder, setShowVideoRecorder] = useState(false);
+  const [compositeStream, setCompositeStream] = useState<MediaStream | null>(null);
   
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
+  const compositeCanvasRef = useRef<HTMLCanvasElement>(null); // For recording with overlay
   const anatomyManagerRef = useRef<AnatomyManager>(new AnatomyManager());
   const poseRef = useRef<Pose | null>(null);
   const cameraRef = useRef<Camera | null>(null);
@@ -169,6 +171,7 @@ export default function BodyScanner() {
   const ribcageRendererRef = useRef<RibcageRenderer>(new RibcageRenderer());
   const pelvisRendererRef = useRef<EnhancedPelvisRenderer>(new EnhancedPelvisRenderer());
   const shoulderRendererRef = useRef<ShoulderComplexRenderer>(new ShoulderComplexRenderer());
+  const compositeStreamRef = useRef<MediaStream | null>(null);
   
   // Detect iOS devices
   const detectIOS = () => {
@@ -370,6 +373,65 @@ export default function BodyScanner() {
     
     ctx.restore();
   }, [visibleLayers, trackedRegions, selectedBodyPart]);
+  
+  // Create composite stream for recording with skeleton overlay
+  const createCompositeStream = useCallback(() => {
+    if (!compositeCanvasRef.current) return null;
+    
+    const compositeCanvas = compositeCanvasRef.current;
+    const compositeCtx = compositeCanvas.getContext('2d');
+    
+    if (!compositeCtx) return null;
+    
+    // Set canvas dimensions to match the main canvas
+    if (canvasRef.current) {
+      compositeCanvas.width = canvasRef.current.width;
+      compositeCanvas.height = canvasRef.current.height;
+    }
+    
+    let animationId: number;
+    
+    // Create a function to composite frames
+    const compositeFrame = () => {
+      if (!canvasRef.current || !overlayCanvasRef.current || !compositeCtx) return;
+      
+      // Clear composite canvas
+      compositeCtx.clearRect(0, 0, compositeCanvas.width, compositeCanvas.height);
+      
+      // Draw main canvas (video with some overlays)
+      compositeCtx.drawImage(canvasRef.current, 0, 0);
+      
+      // Draw overlay canvas (skeleton) on top
+      compositeCtx.drawImage(overlayCanvasRef.current, 0, 0);
+      
+      // Request next frame
+      if (compositeStreamRef.current) {
+        animationId = requestAnimationFrame(compositeFrame);
+      }
+    };
+    
+    // Start compositing
+    compositeFrame();
+    
+    // Create and return stream from composite canvas
+    const stream = compositeCanvas.captureStream(30); // 30 FPS
+    compositeStreamRef.current = stream;
+    return stream;
+  }, []);
+  
+  // Create composite stream when video recorder is shown
+  useEffect(() => {
+    if (showVideoRecorder && cameraStatus === 'ready' && !compositeStream) {
+      const stream = createCompositeStream();
+      setCompositeStream(stream);
+    }
+    
+    // Cleanup when video recorder is hidden
+    if (!showVideoRecorder && compositeStream) {
+      compositeStreamRef.current = null;
+      setCompositeStream(null);
+    }
+  }, [showVideoRecorder, cameraStatus, compositeStream, createCompositeStream]);
   
   // Draw anatomy overlay with realistic structures
   const drawAnatomyOverlay = (ctx: CanvasRenderingContext2D, landmarks: any[], width: number, height: number) => {
@@ -1896,6 +1958,13 @@ export default function BodyScanner() {
               className="absolute inset-0 w-full h-full object-contain pointer-events-none"
               style={{ maxWidth: '100vw', maxHeight: '100vh' }}
             />
+            {/* Hidden composite canvas for recording */}
+            <canvas
+              ref={compositeCanvasRef}
+              width={1920}
+              height={1080}
+              className="hidden"
+            />
             
             {!isTracking && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/50">
@@ -2087,6 +2156,13 @@ export default function BodyScanner() {
                     width={1280}
                     height={720}
                     className="absolute top-0 left-0 w-full h-auto pointer-events-none"
+                  />
+                  {/* Hidden composite canvas for recording */}
+                  <canvas
+                    ref={compositeCanvasRef}
+                    width={1280}
+                    height={720}
+                    className="hidden"
                   />
                   
                   {!isTracking && (
@@ -2430,14 +2506,14 @@ export default function BodyScanner() {
             {showVideoRecorder && (
               <CardContent>
                 <VideoRecorder
-                  stream={videoStream}
-                  isActive={cameraStatus === 'ready'}
+                  stream={compositeStream || videoStream}
+                  isActive={cameraStatus === 'ready' && (compositeStream !== null || videoStream !== null)}
                   maxDuration={300}
                   onRecordingComplete={(blob, url) => {
                     console.log('Recording complete:', blob.size, 'bytes');
                     toast({
                       title: "Recording Saved",
-                      description: "Your video has been saved locally. You can download it or record a new one.",
+                      description: "Your video has been saved locally with skeleton overlay.",
                     });
                   }}
                 />

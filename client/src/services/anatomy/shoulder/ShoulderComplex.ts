@@ -222,14 +222,16 @@ export class ShoulderComplexRenderer {
     const scapulaWidth = shoulderWidth * 0.26; // Reduced to proper width
     
     // Calculate anatomically accurate scapular position
-    // Medial border is 5-7cm from spine (closer to midline)
-    const midlineOffset = shoulderWidth * 0.08; // Much closer to spine
-    // Superior angle at T2 level (upper back, not mid-back)
-    const scapulaTopOffset = -torsoHeight * 0.05; // Higher up on the back (negative to go up)
+    // The glenoid must align with the shoulder joint (glenohumeral articulation)
+    // We'll position the scapula so its glenoid ends up at the shoulder landmark
     
-    // Base position with improved anatomical accuracy
-    const scapulaX = shoulderX + (side === 'left' ? midlineOffset : -midlineOffset);
-    const scapulaY = shoulderY + scapulaTopOffset;
+    // First, determine where the glenoid will be relative to scapula base
+    const glenoidOffsetFromScapulaX = (side === 'left' ? -scapulaWidth * 0.2 : scapulaWidth * 0.2);
+    const glenoidOffsetFromScapulaY = scapulaHeight * 0.18;
+    
+    // Now work backwards: position scapula so glenoid aligns with shoulder
+    const scapulaX = shoulderX - glenoidOffsetFromScapulaX;
+    const scapulaY = shoulderY - glenoidOffsetFromScapulaY;
     
     // Account for scapular plane (30-35° anterior to coronal plane)
     const planeAngle = 32 * Math.PI / 180;
@@ -441,6 +443,7 @@ export class ShoulderComplexRenderer {
    */
   generateHumeralHead(landmarks: any[], width: number, height: number, side: 'left' | 'right'): HumeralHead {
     const shoulder = side === 'left' ? landmarks[11] : landmarks[12];
+    const oppositeShoulder = side === 'left' ? landmarks[12] : landmarks[11];
     const elbow = side === 'left' ? landmarks[13] : landmarks[14];
     
     if (!shoulder || !elbow) return this.getDefaultHumeralHead();
@@ -449,9 +452,12 @@ export class ShoulderComplexRenderer {
     const shoulderY = shoulder.y * height;
     const shoulderZ = shoulder.z || 0;
     
-    // Humeral head center and dimensions
+    // Calculate proportional radius based on body size
+    const shoulderWidth = oppositeShoulder ? Math.abs((oppositeShoulder.x - shoulder.x) * width) : 150;
+    
+    // Humeral head center and dimensions - positioned at glenohumeral joint
     const center = new Vector3(shoulderX, shoulderY, shoulderZ);
-    const radius = 22; // Average humeral head radius in pixels
+    const radius = shoulderWidth * 0.06; // Proportional to body size
     
     // Greater tuberosity (lateral aspect)
     const greaterTuberosity = {

@@ -1,13 +1,11 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import * as tf from '@tensorflow/tfjs';
-import * as poseDetection from '@tensorflow-models/pose-detection';
-import * as bodyPix from '@tensorflow-models/body-pix';
+import { loadTensorFlow, loadPoseDetection, loadBodyPix, initializeTensorFlowBackend } from '@/utils/tensorflowLoader';
 
 // Ensure TensorFlow.js is properly loaded
 if (typeof window !== 'undefined') {
   // Set up TensorFlow.js platform with local backend preference
-  tf.ready().then(() => {
-    console.log('TensorFlow.js ready, backend:', tf.getBackend());
+  initializeTensorFlowBackend().then(() => {
+    console.log('TensorFlow.js initialized dynamically');
   });
 }
 

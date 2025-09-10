@@ -4,8 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Camera, Play, Square, RotateCcw, Activity, AlertTriangle, CheckCircle, XCircle, User, FlipHorizontal } from 'lucide-react';
-import * as tf from '@tensorflow/tfjs';
-import * as poseDetection from '@tensorflow-models/pose-detection';
+import { loadTensorFlow, loadPoseDetection, initializeTensorFlowBackend } from '@/utils/tensorflowLoader';
 
 interface PosturalAnalysisResult {
   // Spinal Alignment

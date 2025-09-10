@@ -1,6 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import * as tf from '@tensorflow/tfjs';
-import * as poseDetection from '@tensorflow-models/pose-detection';
+import { loadTensorFlow, loadPoseDetection, initializeTensorFlowBackend } from '@/utils/tensorflowLoader';
 import { AdvancedPoseFilterSystem, FilteredPose, PosePoint } from './AdvancedPoseFilters';
 
 // Enhanced pose detection with multiple models and filtering
@@ -18,10 +17,11 @@ interface EnhancedPoseDetectionProps {
 
 // Multi-model pose detector ensemble
 class EnhancedPoseDetector {
-  private detectors: Map<string, poseDetection.PoseDetector> = new Map();
+  private detectors: Map<string, any> = new Map(); // Changed from poseDetection.PoseDetector to any
   private filterSystem: AdvancedPoseFilterSystem;
   private poseHistory: FilteredPose[] = [];
   private readonly historySize = 10;
+  private poseDetection: any = null; // Store loaded module
 
   constructor() {
     this.filterSystem = new AdvancedPoseFilterSystem();
@@ -29,9 +29,13 @@ class EnhancedPoseDetector {
 
   async initializeModels() {
     try {
+      // Load TensorFlow and pose detection dynamically
+      await initializeTensorFlowBackend();
+      this.poseDetection = await loadPoseDetection();
+      
       // Initialize BlazePose (high accuracy)
-      const blazePoseDetector = await poseDetection.createDetector(
-        poseDetection.SupportedModels.BlazePose,
+      const blazePoseDetector = await this.poseDetection.createDetector(
+        this.poseDetection.SupportedModels.BlazePose,
         {
           runtime: 'tfjs',
           modelType: 'full',
@@ -42,14 +46,14 @@ class EnhancedPoseDetector {
       this.detectors.set('blazepose', blazePoseDetector);
 
       // Initialize MoveNet (fast)
-      const moveNetDetector = await poseDetection.createDetector(
-        poseDetection.SupportedModels.MoveNet,
+      const moveNetDetector = await this.poseDetection.createDetector(
+        this.poseDetection.SupportedModels.MoveNet,
         {
-          modelType: poseDetection.movenet.modelType.SINGLEPOSE_THUNDER,
+          modelType: this.poseDetection.movenet.modelType.SINGLEPOSE_THUNDER,
           enableSmoothing: true,
           multiPoseMaxDimension: 256,
           enableTracking: true,
-          trackerType: poseDetection.TrackerType.BoundingBox
+          trackerType: this.poseDetection.TrackerType.BoundingBox
         }
       );
       this.detectors.set('movenet', moveNetDetector);

@@ -1,7 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import * as poseDetection from '@tensorflow-models/pose-detection';
-import '@tensorflow/tfjs-backend-webgl';
-import '@tensorflow/tfjs-backend-webgpu';
+import { loadPoseDetection, initializeTensorFlowBackend } from '@/utils/tensorflowLoader';
 import { isMobileDevice } from '@/config/mediapipe';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 interface MovementData {
   timestamp: number;
-  poses: poseDetection.Pose[];
+  poses: any[]; // Changed from poseDetection.Pose[] to any[] for dynamic loading
   movementType: string;
   qualityScore: number;
   jointAngles?: Record<string, number>;
@@ -36,7 +34,7 @@ export const MovementCapture: React.FC<MovementCaptureProps> = ({
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [detector, setDetector] = useState<poseDetection.PoseDetector | null>(null);
+  const [detector, setDetector] = useState<any | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [capturedData, setCapturedData] = useState<MovementData[]>([]);
@@ -67,7 +65,13 @@ export const MovementCapture: React.FC<MovementCaptureProps> = ({
   useEffect(() => {
     const initializeDetector = async () => {
       try {
-        const detectorConfig: poseDetection.MoveNetModelConfig = {
+        // Initialize TensorFlow backend first
+        await initializeTensorFlowBackend();
+        
+        // Load pose detection module dynamically
+        const poseDetection = await loadPoseDetection();
+        
+        const detectorConfig = {
           modelType: poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING,
           enableTracking: true,
           trackerType: poseDetection.TrackerType.BoundingBox

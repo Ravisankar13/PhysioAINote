@@ -303,29 +303,6 @@ export class ShoulderComplexRenderer {
     const spineMedialX = superiorAngleX + (side === 'left' ? scapulaWidth * 0.02 : -scapulaWidth * 0.02); // Start near medial border
     const spineLateralX = shoulderX + (side === 'left' ? -scapulaWidth * 0.05 : scapulaWidth * 0.05); // End near acromion
     
-    // Spine rises laterally toward acromion
-    const spineElevation = scapulaHeight * 0.08;
-    const spine = {
-      medialEnd: new Vector3(spineMedialX, spineY, shoulderZ - depthAdjustment * 0.8),
-      lateralEnd: new Vector3(spineLateralX, spineY - spineElevation, shoulderZ - depthAdjustment * 0.4),
-      thickness: scapulaHeight * 0.035 // Proportional thickness
-    };
-    
-    // Apply rotation to spine endpoints
-    const spineMedialRotated = rotatePoint(new Vector3(spineMedialX, spineY, shoulderZ - depthAdjustment * 0.8));
-    const spineLateralRotated = rotatePoint(new Vector3(spineLateralX, spineY - spineElevation, shoulderZ - depthAdjustment * 0.4));
-    
-    // Update spine with rotated positions
-    spine.medialEnd.x = spineMedialRotated.x;
-    spine.medialEnd.y = spineMedialRotated.y;
-    spine.lateralEnd.x = spineLateralRotated.x;
-    spine.lateralEnd.y = spineLateralRotated.y;
-    
-    // Acromion process - properly sized and positioned over shoulder
-    const acromionWidth = scapulaWidth * 0.12;
-    const acromionLength = scapulaWidth * 0.18;
-    const acromionHeight = scapulaHeight * 0.04;
-    
     // Calculate proper arm elevation angle from body (not just elbow angle)
     // Arm elevation is measured from the anatomical position (arm at side)
     const restingPosition = { x: shoulderX, y: shoulderY + 100 }; // Arm at side position
@@ -366,7 +343,7 @@ export class ShoulderComplexRenderer {
     const rotationCenterY = (superiorAngleY + inferiorAngleY + lateralAngleY) / 3;
     
     // Helper function to rotate a point around the rotation center
-    const rotatePoint = (point: Vector3): Vector3 => {
+    function rotatePoint(point: Vector3): Vector3 {
       const relX = point.x - rotationCenterX;
       const relY = point.y - rotationCenterY;
       const cosR = Math.cos(-scapularRotation); // Negative for upward rotation
@@ -378,7 +355,30 @@ export class ShoulderComplexRenderer {
         rotationCenterY + newY,
         point.z
       );
+    }
+    
+    // Spine rises laterally toward acromion
+    const spineElevation = scapulaHeight * 0.08;
+    const spine = {
+      medialEnd: new Vector3(spineMedialX, spineY, shoulderZ - depthAdjustment * 0.8),
+      lateralEnd: new Vector3(spineLateralX, spineY - spineElevation, shoulderZ - depthAdjustment * 0.4),
+      thickness: scapulaHeight * 0.035 // Proportional thickness
     };
+    
+    // Apply rotation to spine endpoints
+    const spineMedialRotated = rotatePoint(new Vector3(spineMedialX, spineY, shoulderZ - depthAdjustment * 0.8));
+    const spineLateralRotated = rotatePoint(new Vector3(spineLateralX, spineY - spineElevation, shoulderZ - depthAdjustment * 0.4));
+    
+    // Update spine with rotated positions
+    spine.medialEnd.x = spineMedialRotated.x;
+    spine.medialEnd.y = spineMedialRotated.y;
+    spine.lateralEnd.x = spineLateralRotated.x;
+    spine.lateralEnd.y = spineLateralRotated.y;
+    
+    // Acromion process - properly sized and positioned over shoulder
+    const acromionWidth = scapulaWidth * 0.12;
+    const acromionLength = scapulaWidth * 0.18;
+    const acromionHeight = scapulaHeight * 0.04;
     
     // Apply rotation to all border points
     medialBorder.forEach(point => {
@@ -503,18 +503,15 @@ export class ShoulderComplexRenderer {
       depth: scapulaHeight * 0.06
     };
     
-    // The three angles of the scapular triangle are already defined
-    const superiorAngleVec = new Vector3(
-      superiorAngleX,
-      superiorAngleY,
-      shoulderZ - depthAdjustment
-    );
-    const inferiorAngleVec = new Vector3(
-      inferiorAngleX,
-      inferiorAngleY,
-      shoulderZ - depthAdjustment - bodyDepth * 0.03
-    );
-    const lateralAngleVec = new Vector3(lateralAngleX, lateralAngleY, shoulderZ);
+    // Use the rotated angles if rotation was applied, otherwise use original positions
+    const finalSuperiorAngle = scapularRotation > 0 ? rotatedSuperiorAngle : 
+      new Vector3(superiorAngleX, superiorAngleY, shoulderZ - depthAdjustment);
+    
+    const finalInferiorAngle = scapularRotation > 0 ? rotatedInferiorAngle :
+      new Vector3(inferiorAngleX, inferiorAngleY, shoulderZ - depthAdjustment - bodyDepth * 0.03);
+    
+    // Lateral angle (glenoid) should also be rotated
+    const lateralAngleVec = rotatePoint(new Vector3(lateralAngleX, lateralAngleY, shoulderZ));
     
     return {
       body: { medialBorder, lateralBorder, superiorBorder },
@@ -524,8 +521,8 @@ export class ShoulderComplexRenderer {
       glenoid,
       supraspinousFossa,
       infraspinousFossa,
-      superiorAngle: superiorAngleVec,
-      inferiorAngle: inferiorAngleVec,
+      superiorAngle: finalSuperiorAngle,
+      inferiorAngle: finalInferiorAngle,
       lateralAngle: lateralAngleVec,
       planeAngle: 35 // 35° anterior to coronal plane
     };

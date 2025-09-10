@@ -112,7 +112,7 @@ app.use((req, res, next) => {
       }
     });
 
-    const server = app.listen(PORT, "0.0.0.0", () => {
+    const httpServer = app.listen(PORT, "0.0.0.0", () => {
       console.log(`Server running on port ${PORT}`);
       console.log(`Environment: ${process.env.NODE_ENV}`);
       console.log(`Memory usage:`, process.memoryUsage());
@@ -138,7 +138,7 @@ app.use((req, res, next) => {
 
       // Real-time WebSocket server - temporarily disabled
       try {
-        // realTimeCompetitionService.setupWebSocket(server);
+        // realTimeCompetitionService.setupWebSocket(httpServer);
         log('✓ Real-time competition WebSocket server temporarily disabled');
       } catch (error) {
         log('Real-time WebSocket setup failed:', error instanceof Error ? error.message : 'Unknown error');

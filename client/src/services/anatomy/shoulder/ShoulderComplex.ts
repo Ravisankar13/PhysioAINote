@@ -12,6 +12,8 @@ export interface ShoulderMeasurements {
   scapularIndex: number; // Height to width ratio
   acJointAlignment: number; // Vertical step-off
   scapularUpwardRotation: number; // During arm elevation
+  scapulohumeralRhythm: string; // Ratio of glenohumeral to scapular motion
+  armElevationAngle: number; // Total arm elevation from body
 }
 
 export interface ScapulaStructure {
@@ -309,14 +311,97 @@ export class ShoulderComplexRenderer {
       thickness: scapulaHeight * 0.035 // Proportional thickness
     };
     
+    // Apply rotation to spine endpoints
+    const spineMedialRotated = rotatePoint(new Vector3(spineMedialX, spineY, shoulderZ - depthAdjustment * 0.8));
+    const spineLateralRotated = rotatePoint(new Vector3(spineLateralX, spineY - spineElevation, shoulderZ - depthAdjustment * 0.4));
+    
+    // Update spine with rotated positions
+    spine.medialEnd.x = spineMedialRotated.x;
+    spine.medialEnd.y = spineMedialRotated.y;
+    spine.lateralEnd.x = spineLateralRotated.x;
+    spine.lateralEnd.y = spineLateralRotated.y;
+    
     // Acromion process - properly sized and positioned over shoulder
     const acromionWidth = scapulaWidth * 0.12;
     const acromionLength = scapulaWidth * 0.18;
     const acromionHeight = scapulaHeight * 0.04;
     
-    // Calculate arm elevation for scapular rotation
-    const armElevation = elbow ? Math.atan2(shoulder.y - elbow.y, Math.abs(shoulder.x - elbow.x)) : 0;
-    const scapularRotation = Math.min(armElevation * 0.3, Math.PI / 6); // Up to 30° upward rotation
+    // Calculate proper arm elevation angle from body (not just elbow angle)
+    // Arm elevation is measured from the anatomical position (arm at side)
+    const restingPosition = { x: shoulderX, y: shoulderY + 100 }; // Arm at side position
+    const armVector = elbow ? 
+      { x: elbow.x * width - shoulderX, y: elbow.y * height - shoulderY } :
+      { x: 0, y: 100 };
+    const restVector = { x: 0, y: 100 };
+    
+    // Calculate angle between arm and resting position
+    const dotProduct = armVector.x * restVector.x + armVector.y * restVector.y;
+    const magArm = Math.sqrt(armVector.x * armVector.x + armVector.y * armVector.y);
+    const magRest = Math.sqrt(restVector.x * restVector.x + restVector.y * restVector.y);
+    
+    let armElevationDegrees = 0;
+    if (magArm > 0 && magRest > 0) {
+      const cosAngle = dotProduct / (magArm * magRest);
+      armElevationDegrees = Math.acos(Math.max(-1, Math.min(1, cosAngle))) * 180 / Math.PI;
+    }
+    
+    // Calculate scapular rotation based on scapulohumeral rhythm phases
+    let scapularRotationDegrees = 0;
+    if (armElevationDegrees <= 30) {
+      // Setting phase: minimal scapular movement
+      scapularRotationDegrees = armElevationDegrees * 0.1; // Very minimal
+    } else if (armElevationDegrees <= 90) {
+      // 2:1 phase (30-90 degrees)
+      scapularRotationDegrees = 3 + (armElevationDegrees - 30) * 0.33; // Approximately 1/3 of glenohumeral
+    } else {
+      // 1:1 phase (90-180 degrees)
+      scapularRotationDegrees = 23 + (armElevationDegrees - 90) * 0.5; // More scapular contribution
+    }
+    
+    const scapularRotation = scapularRotationDegrees * Math.PI / 180;
+    
+    // Apply scapular rotation to all scapula points
+    // Rotation center is approximately at the mid-scapular area
+    const rotationCenterX = (superiorAngleX + inferiorAngleX + lateralAngleX) / 3;
+    const rotationCenterY = (superiorAngleY + inferiorAngleY + lateralAngleY) / 3;
+    
+    // Helper function to rotate a point around the rotation center
+    const rotatePoint = (point: Vector3): Vector3 => {
+      const relX = point.x - rotationCenterX;
+      const relY = point.y - rotationCenterY;
+      const cosR = Math.cos(-scapularRotation); // Negative for upward rotation
+      const sinR = Math.sin(-scapularRotation);
+      const newX = relX * cosR - relY * sinR;
+      const newY = relX * sinR + relY * cosR;
+      return new Vector3(
+        rotationCenterX + newX,
+        rotationCenterY + newY,
+        point.z
+      );
+    };
+    
+    // Apply rotation to all border points
+    medialBorder.forEach(point => {
+      const rotated = rotatePoint(point);
+      point.x = rotated.x;
+      point.y = rotated.y;
+    });
+    
+    lateralBorder.forEach(point => {
+      const rotated = rotatePoint(point);
+      point.x = rotated.x;
+      point.y = rotated.y;
+    });
+    
+    superiorBorder.forEach(point => {
+      const rotated = rotatePoint(point);
+      point.x = rotated.x;
+      point.y = rotated.y;
+    });
+    
+    // Update the angle positions after rotation
+    const rotatedSuperiorAngle = rotatePoint(new Vector3(superiorAngleX, superiorAngleY, shoulderZ - depthAdjustment));
+    const rotatedInferiorAngle = rotatePoint(new Vector3(inferiorAngleX, inferiorAngleY, shoulderZ - depthAdjustment - bodyDepth * 0.03));
     
     const acromion = {
       anteriorEdge: new Vector3(
@@ -595,7 +680,7 @@ export class ShoulderComplexRenderer {
   /**
    * Calculate clinical measurements
    */
-  calculateMeasurements(scapula: ScapulaStructure, humeralHead: HumeralHead, acJoint: ACJoint): ShoulderMeasurements {
+  calculateMeasurements(scapula: ScapulaStructure, humeralHead: HumeralHead, acJoint: ACJoint, landmarks: any[], width: number, height: number, side: 'left' | 'right'): ShoulderMeasurements {
     // Acromiohumeral distance
     const acromiohumetalDistance = Math.abs(
       scapula.acromion.undersurface.y - (humeralHead.center.y - humeralHead.radius)
@@ -619,11 +704,53 @@ export class ShoulderComplexRenderer {
     // AC joint alignment
     const acJointAlignment = acJoint.jointSpace;
     
-    // Scapular upward rotation (simplified)
-    const scapularUpwardRotation = Math.atan2(
-      scapula.acromion.lateralEdge.y - scapula.inferiorAngle.y,
-      scapula.acromion.lateralEdge.x - scapula.inferiorAngle.x
-    ) * 180 / Math.PI;
+    // Get shoulder and elbow landmarks for proper arm elevation calculation
+    const shoulder = side === 'left' ? landmarks[11] : landmarks[12];
+    const elbow = side === 'left' ? landmarks[13] : landmarks[14];
+    
+    // Calculate arm elevation angle from anatomical position
+    let armElevationAngle = 0;
+    let scapularUpwardRotation = 0;
+    let scapulohumeralRhythm = "1:0"; // Default setting phase
+    
+    if (shoulder && elbow) {
+      const shoulderX = shoulder.x * width;
+      const shoulderY = shoulder.y * height;
+      
+      // Arm vector from shoulder to elbow
+      const armVector = { 
+        x: elbow.x * width - shoulderX, 
+        y: elbow.y * height - shoulderY 
+      };
+      // Resting position vector (arm at side)
+      const restVector = { x: 0, y: 100 };
+      
+      // Calculate angle between arm and resting position
+      const dotProduct = armVector.x * restVector.x + armVector.y * restVector.y;
+      const magArm = Math.sqrt(armVector.x * armVector.x + armVector.y * armVector.y);
+      const magRest = Math.sqrt(restVector.x * restVector.x + restVector.y * restVector.y);
+      
+      if (magArm > 0 && magRest > 0) {
+        const cosAngle = dotProduct / (magArm * magRest);
+        armElevationAngle = Math.acos(Math.max(-1, Math.min(1, cosAngle))) * 180 / Math.PI;
+      }
+      
+      // Calculate scapular rotation based on scapulohumeral rhythm phases
+      if (armElevationAngle <= 30) {
+        // Setting phase: minimal scapular movement
+        scapularUpwardRotation = armElevationAngle * 0.1;
+        scapulohumeralRhythm = "10:1"; // Very little scapular movement
+      } else if (armElevationAngle <= 90) {
+        // 2:1 phase (30-90 degrees)
+        scapularUpwardRotation = 3 + (armElevationAngle - 30) * 0.33;
+        scapulohumeralRhythm = "2:1";
+      } else {
+        // Approaching 1:1 phase (90-180 degrees)
+        scapularUpwardRotation = 23 + (armElevationAngle - 90) * 0.5;
+        const ratio = 180 / (90 + scapularUpwardRotation);
+        scapulohumeralRhythm = `${ratio.toFixed(1)}:1`;
+      }
+    }
     
     return {
       acromiohumetalDistance,
@@ -631,7 +758,9 @@ export class ShoulderComplexRenderer {
       glenoidVersion,
       scapularIndex,
       acJointAlignment,
-      scapularUpwardRotation
+      scapularUpwardRotation,
+      scapulohumeralRhythm,
+      armElevationAngle
     };
   }
   
@@ -654,7 +783,7 @@ export class ShoulderComplexRenderer {
     this.renderACJoint(ctx, this.acJoint);
     
     // Calculate and display measurements
-    const measurements = this.calculateMeasurements(this.scapula, this.humeralHead, this.acJoint);
+    const measurements = this.calculateMeasurements(this.scapula, this.humeralHead, this.acJoint, landmarks, width, height, side);
     this.renderMeasurements(ctx, measurements, side, width, height);
   }
   
@@ -1076,6 +1205,8 @@ export class ShoulderComplexRenderer {
     ctx.fillText(`Scapular Index: ${measurements.scapularIndex.toFixed(2)}`, x, y + 60);
     ctx.fillText(`AC Joint Space: ${measurements.acJointAlignment.toFixed(1)}mm`, x, y + 75);
     ctx.fillText(`Scapular Rotation: ${measurements.scapularUpwardRotation.toFixed(1)}°`, x, y + 90);
+    ctx.fillText(`Scapulohumeral Rhythm: ${measurements.scapulohumeralRhythm}`, x, y + 105);
+    ctx.fillText(`Arm Elevation: ${measurements.armElevationAngle.toFixed(1)}°`, x, y + 120);
     
     ctx.restore();
   }

@@ -1,16 +1,17 @@
+
 #!/bin/bash
 
 echo "🚀 Starting Replit deployment build..."
 echo "📊 Memory available: $(free -m | awk '/^Mem:/{print $7}') MB"
 
-# Set Node memory limit
+# Set Node memory limit for large bundles
 export NODE_OPTIONS="--max-old-space-size=4096"
 
 # Clean previous build
 echo "🧹 Cleaning previous build..."
 rm -rf dist
 
-# Build frontend with deployment config
+# Build frontend with deployment optimizations
 echo "🎨 Building frontend with optimized chunking..."
 npx vite build --config vite.config.deployment.ts --mode production
 
@@ -22,7 +23,7 @@ fi
 echo "✅ Frontend build complete!"
 
 # Check frontend bundle size
-FRONTEND_SIZE=$(du -sh dist/public | cut -f1)
+FRONTEND_SIZE=$(du -sh dist/public 2>/dev/null | cut -f1)
 echo "📦 Frontend bundle size: $FRONTEND_SIZE"
 
 # Build backend with minimal bundling
@@ -34,7 +35,8 @@ npx esbuild server/index.ts \
   --format=esm \
   --outdir=dist \
   --minify \
-  --log-level=warning
+  --log-level=warning \
+  --define:process.env.NODE_ENV='"production"'
 
 if [ $? -ne 0 ]; then
     echo "❌ Backend build failed!"
@@ -47,25 +49,19 @@ echo "✅ Backend build complete!"
 BACKEND_SIZE=$(du -sh dist/index.js 2>/dev/null | cut -f1)
 echo "📦 Backend bundle size: $BACKEND_SIZE"
 
-# Create health check file for deployment verification
-cat > dist/health-check.js << 'EOF'
-export const checkHealth = () => {
-  return {
-    status: 'healthy',
+# Create deployment health check
+cat > dist/health.js << 'EOF'
+export const healthCheck = (req, res) => {
+  res.json({ 
+    status: 'healthy', 
     timestamp: new Date().toISOString(),
     memory: process.memoryUsage(),
     uptime: process.uptime()
-  };
+  });
 };
 EOF
 
-echo "📝 Health check file created"
-
-# Final summary
-echo ""
-echo "✅ Build completed successfully!"
-echo "📊 Final memory usage: $(free -m | awk '/^Mem:/{print $3}') MB used"
-echo ""
+echo "🎉 Build completed successfully!"
+echo "📁 Contents of dist directory:"
+ls -la dist/
 echo "🚀 Ready for deployment!"
-echo ""
-echo "To deploy: Use Replit's deployment button or run 'npm start' to test locally"

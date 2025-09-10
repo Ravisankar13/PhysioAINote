@@ -43,7 +43,7 @@ app.use((req, res, next) => {
 (async () => {
   try {
     log("Starting PhysioGPT server initialization...");
-    
+
     // Register routes with error handling
     const server = await registerRoutes(app).catch(err => {
       console.error("Failed to register routes:", err);
@@ -62,10 +62,10 @@ app.use((req, res, next) => {
         stack: err.stack,
         status
       });
-      
+
       // Only send response if not already sent
       if (!res.headersSent) {
-        res.status(status).json({ 
+        res.status(status).json({
           message,
           timestamp: new Date().toISOString(),
           path: req.path
@@ -95,34 +95,29 @@ app.use((req, res, next) => {
     }
 
     // Start server with enhanced error handling
-    const port = 5000;
-    const startServer = () => new Promise((resolve, reject) => {
-      const serverInstance = server.listen(
-        {
-          port,
-          host: "0.0.0.0",
-          reusePort: true,
-        },
-        (err?: Error) => {
-          if (err) {
-            reject(err);
-            return;
-          }
-          resolve(serverInstance);
-        }
-      );
+    const PORT = Number(process.env.PORT) || 5000;
 
-      serverInstance.on('error', (err: any) => {
-        if (err.code === 'EADDRINUSE') {
-          console.error(`Port ${port} is already in use`);
-        }
-        reject(err);
-      });
+    // Enhanced error handling for deployment
+    process.on('uncaughtException', (error) => {
+      console.error('Uncaught Exception:', error);
+      if (process.env.NODE_ENV === 'production') {
+        process.exit(1);
+      }
     });
 
-    await startServer();
-    log(`PhysioGPT server running on port ${port}`);
-    
+    process.on('unhandledRejection', (reason, promise) => {
+      console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+      if (process.env.NODE_ENV === 'production') {
+        process.exit(1);
+      }
+    });
+
+    const server = app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on port ${PORT}`);
+      console.log(`Environment: ${process.env.NODE_ENV}`);
+      console.log(`Memory usage:`, process.memoryUsage());
+    });
+
     // Initialize background services with individual error handling
     const initializeBackgroundServices = async () => {
       // Auto-seed complex cases - temporarily disabled
@@ -132,7 +127,7 @@ app.use((req, res, next) => {
       } catch (error) {
         log('Complex case seeding skipped:', error instanceof Error ? error.message : 'Unknown error');
       }
-      
+
       // Competition scheduler - temporarily disabled
       try {
         // competitionScheduler.startScheduler();
@@ -152,11 +147,11 @@ app.use((req, res, next) => {
 
     // Initialize background services without blocking server startup
     setImmediate(initializeBackgroundServices);
-    
+
   } catch (err) {
     console.error("[FATAL] Server startup error:", err);
     console.error("Stack trace:", err instanceof Error ? err.stack : 'No stack trace available');
-    
+
     // Attempt graceful shutdown
     try {
       // Close any open connections/resources here if needed
@@ -164,7 +159,7 @@ app.use((req, res, next) => {
     } catch (shutdownErr) {
       console.error("Error during shutdown:", shutdownErr);
     }
-    
+
     process.exit(1);
   }
 })();

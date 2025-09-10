@@ -194,109 +194,232 @@ export class ShoulderComplexRenderer {
   private rotatorCuff: RotatorCuffFootprints | null = null;
   
   /**
-   * Generate anatomically accurate scapula based on landmarks
+   * Generate anatomically accurate scapula based on landmarks with dynamic sizing
    */
   generateScapula(landmarks: any[], width: number, height: number, side: 'left' | 'right'): ScapulaStructure {
     const shoulder = side === 'left' ? landmarks[11] : landmarks[12];
+    const oppositeShoulder = side === 'left' ? landmarks[12] : landmarks[11];
     const elbow = side === 'left' ? landmarks[13] : landmarks[14];
     const hip = side === 'left' ? landmarks[23] : landmarks[24];
+    const oppositeHip = side === 'left' ? landmarks[24] : landmarks[23];
+    const nose = landmarks[0];
     
-    if (!shoulder) return this.getDefaultScapula();
+    if (!shoulder || !oppositeShoulder || !hip) return this.getDefaultScapula();
     
     const shoulderX = shoulder.x * width;
     const shoulderY = shoulder.y * height;
     const shoulderZ = shoulder.z || 0;
     
-    // Calculate scapular position (posterior to shoulder joint)
-    const scapulaX = shoulderX + (side === 'left' ? 30 : -30);
-    const scapulaY = shoulderY - 20;
+    // Calculate body proportions for dynamic sizing
+    const shoulderWidth = Math.abs((oppositeShoulder.x - shoulder.x) * width);
+    const torsoHeight = Math.abs((hip.y - shoulder.y) * height);
+    const bodyDepth = Math.abs(shoulder.z || 0) * width;
     
-    // Create scapular borders
+    // Dynamic scapula dimensions based on body proportions
+    // Scapula height is approximately 18-20cm in adults, scale to body
+    const scapulaHeight = torsoHeight * 0.55; // Proper anatomical proportion
+    // Scapula width is approximately 10-11cm, scale to shoulder width
+    const scapulaWidth = shoulderWidth * 0.42;
+    
+    // Calculate anatomically accurate scapular position
+    // Medial border is 5-7cm from spine (T2-T7 vertebrae)
+    const midlineOffset = shoulderWidth * 0.18; // Distance from spine
+    // Superior angle at T2 level (just below C7)
+    const scapulaTopOffset = torsoHeight * 0.02; // T2 level from shoulder
+    
+    // Base position with improved anatomical accuracy
+    const scapulaX = shoulderX + (side === 'left' ? midlineOffset : -midlineOffset);
+    const scapulaY = shoulderY + scapulaTopOffset;
+    
+    // Account for scapular plane (30-35° anterior to coronal plane)
+    const planeAngle = 32 * Math.PI / 180;
+    const depthAdjustment = Math.sin(planeAngle) * scapulaWidth * 0.3;
+    
+    // Create anatomically accurate scapular borders
     const medialBorder: Vector3[] = [];
     const lateralBorder: Vector3[] = [];
     const superiorBorder: Vector3[] = [];
     
-    // Medial (vertebral) border - runs vertically
-    for (let i = 0; i <= 10; i++) {
+    // Medial (vertebral) border - with realistic curvature
+    const medialPoints = 15; // More points for smoother curve
+    for (let i = 0; i <= medialPoints; i++) {
+      const t = i / medialPoints;
+      // Add slight lateral curve at middle third (natural scapular shape)
+      const curve = Math.sin(t * Math.PI) * scapulaWidth * 0.08;
+      // Slight anterior tilt at inferior angle
+      const anteriorTilt = Math.pow(t, 2) * bodyDepth * 0.05;
       medialBorder.push(new Vector3(
-        scapulaX + (side === 'left' ? 40 : -40),
-        scapulaY - 30 + (i * 12),
-        shoulderZ - 20
+        scapulaX + (side === 'left' ? scapulaWidth * 0.45 - curve : -scapulaWidth * 0.45 + curve),
+        scapulaY + (t * scapulaHeight),
+        shoulderZ - depthAdjustment - anteriorTilt
       ));
     }
     
-    // Lateral border - runs from inferior angle to glenoid
-    for (let i = 0; i <= 8; i++) {
+    // Lateral border - from inferior angle to glenoid with proper angulation
+    const lateralPoints = 12;
+    for (let i = 0; i <= lateralPoints; i++) {
+      const t = i / lateralPoints;
+      // Lateral border curves toward glenoid cavity
+      const xOffset = Math.pow(t, 1.3) * scapulaWidth * 0.55;
+      const yOffset = (1 - Math.pow(t, 1.8)) * scapulaHeight;
+      // Natural forward curve toward glenoid
+      const zOffset = t * bodyDepth * 0.12;
       lateralBorder.push(new Vector3(
-        scapulaX + (side === 'left' ? -10 : 10) - (i * 3),
-        scapulaY + 90 - (i * 10),
-        shoulderZ - 15
+        scapulaX + (side === 'left' ? -xOffset : xOffset),
+        scapulaY + scapulaHeight - yOffset,
+        shoulderZ - depthAdjustment + zOffset
       ));
     }
     
-    // Superior border - runs from superior angle to coracoid
-    for (let i = 0; i <= 5; i++) {
+    // Superior border - with suprascapular notch
+    const superiorPoints = 10;
+    for (let i = 0; i <= superiorPoints; i++) {
+      const t = i / superiorPoints;
+      // Add suprascapular notch at 65-75% from medial
+      const notchDepth = (t > 0.65 && t < 0.75) ? scapulaHeight * 0.025 : 0;
+      // Curve downward toward coracoid
+      const yDrop = Math.pow(t, 2) * scapulaHeight * 0.05;
       superiorBorder.push(new Vector3(
-        scapulaX + (side === 'left' ? 40 : -40) - (i * 10),
-        scapulaY - 30,
-        shoulderZ - 20 + (i * 2)
+        scapulaX + (side === 'left' ? 
+          scapulaWidth * 0.45 - (t * scapulaWidth * 0.7) : 
+          -scapulaWidth * 0.45 + (t * scapulaWidth * 0.7)),
+        scapulaY + notchDepth + yDrop,
+        shoulderZ - depthAdjustment + (t * bodyDepth * 0.15)
       ));
     }
     
-    // Scapular spine (horizontal ridge)
-    const spineY = scapulaY + 10;
+    // Scapular spine - positioned at junction of upper and middle thirds
+    const spineY = scapulaY + scapulaHeight * 0.33; // Anatomically accurate position
+    const spineMedialX = scapulaX + (side === 'left' ? scapulaWidth * 0.38 : -scapulaWidth * 0.38);
+    const spineLateralX = scapulaX + (side === 'left' ? -scapulaWidth * 0.3 : scapulaWidth * 0.3);
+    
+    // Spine rises laterally toward acromion
+    const spineElevation = scapulaHeight * 0.08;
     const spine = {
-      medialEnd: new Vector3(scapulaX + (side === 'left' ? 35 : -35), spineY, shoulderZ - 18),
-      lateralEnd: new Vector3(scapulaX + (side === 'left' ? -15 : 15), spineY, shoulderZ - 10),
-      thickness: 4
+      medialEnd: new Vector3(spineMedialX, spineY, shoulderZ - depthAdjustment * 0.8),
+      lateralEnd: new Vector3(spineLateralX, spineY - spineElevation, shoulderZ - depthAdjustment * 0.4),
+      thickness: scapulaHeight * 0.035 // Proportional thickness
     };
     
-    // Acromion process (continuation of spine)
+    // Acromion process - properly sized and positioned
+    const acromionWidth = scapulaWidth * 0.18;
+    const acromionLength = scapulaWidth * 0.25;
+    const acromionHeight = scapulaHeight * 0.06;
+    
+    // Calculate arm elevation for scapular rotation
+    const armElevation = elbow ? Math.atan2(shoulder.y - elbow.y, Math.abs(shoulder.x - elbow.x)) : 0;
+    const scapularRotation = Math.min(armElevation * 0.3, Math.PI / 6); // Up to 30° upward rotation
+    
     const acromion = {
-      anteriorEdge: new Vector3(scapulaX + (side === 'left' ? -20 : 20), spineY - 5, shoulderZ),
-      posteriorEdge: new Vector3(scapulaX + (side === 'left' ? -15 : 15), spineY, shoulderZ - 10),
-      lateralEdge: new Vector3(scapulaX + (side === 'left' ? -25 : 25), spineY - 3, shoulderZ - 5),
-      undersurface: new Vector3(scapulaX + (side === 'left' ? -20 : 20), spineY + 5, shoulderZ - 2),
-      type: 'curved' as const // Most common type
+      anteriorEdge: new Vector3(
+        spineLateralX + (side === 'left' ? -acromionLength : acromionLength),
+        spineY - spineElevation - acromionHeight,
+        shoulderZ + bodyDepth * 0.05
+      ),
+      posteriorEdge: new Vector3(
+        spineLateralX + (side === 'left' ? -acromionLength * 0.6 : acromionLength * 0.6),
+        spineY - spineElevation,
+        shoulderZ - depthAdjustment * 0.3
+      ),
+      lateralEdge: new Vector3(
+        spineLateralX + (side === 'left' ? -acromionLength * 1.2 : acromionLength * 1.2),
+        spineY - spineElevation - acromionHeight * 0.5 - (scapularRotation * scapulaHeight * 0.1),
+        shoulderZ - depthAdjustment * 0.15
+      ),
+      undersurface: new Vector3(
+        spineLateralX + (side === 'left' ? -acromionLength : acromionLength),
+        spineY - spineElevation + acromionHeight * 0.3,
+        shoulderZ - depthAdjustment * 0.1
+      ),
+      type: 'curved' as const
     };
     
-    // Coracoid process (hook-like projection)
+    // Coracoid process - anatomically accurate projection
+    const coracoidBaseX = scapulaX + (side === 'left' ? -scapulaWidth * 0.1 : scapulaWidth * 0.1);
+    const coracoidBaseY = scapulaY + scapulaHeight * 0.08;
+    const coracoidLength = scapulaWidth * 0.22;
+    
     const coracoid = {
-      base: new Vector3(scapulaX + (side === 'left' ? -5 : 5), scapulaY - 15, shoulderZ + 10),
-      tip: new Vector3(scapulaX + (side === 'left' ? -25 : 25), scapulaY - 10, shoulderZ + 20),
+      base: new Vector3(coracoidBaseX, coracoidBaseY, shoulderZ + bodyDepth * 0.1),
+      tip: new Vector3(
+        coracoidBaseX + (side === 'left' ? -coracoidLength : coracoidLength),
+        coracoidBaseY - scapulaHeight * 0.03,
+        shoulderZ + bodyDepth * 0.25
+      ),
       curvature: [
-        new Vector3(scapulaX + (side === 'left' ? -10 : 10), scapulaY - 14, shoulderZ + 12),
-        new Vector3(scapulaX + (side === 'left' ? -18 : 18), scapulaY - 12, shoulderZ + 16),
-        new Vector3(scapulaX + (side === 'left' ? -25 : 25), scapulaY - 10, shoulderZ + 20)
+        new Vector3(
+          coracoidBaseX + (side === 'left' ? -coracoidLength * 0.3 : coracoidLength * 0.3),
+          coracoidBaseY - scapulaHeight * 0.01,
+          shoulderZ + bodyDepth * 0.15
+        ),
+        new Vector3(
+          coracoidBaseX + (side === 'left' ? -coracoidLength * 0.7 : coracoidLength * 0.7),
+          coracoidBaseY - scapulaHeight * 0.02,
+          shoulderZ + bodyDepth * 0.22
+        ),
+        new Vector3(
+          coracoidBaseX + (side === 'left' ? -coracoidLength : coracoidLength),
+          coracoidBaseY - scapulaHeight * 0.03,
+          shoulderZ + bodyDepth * 0.25
+        )
       ]
     };
     
-    // Glenoid fossa (socket for humeral head)
+    // Glenoid fossa - properly positioned at lateral angle
+    const glenoidX = scapulaX + (side === 'left' ? -scapulaWidth * 0.25 : scapulaWidth * 0.25);
+    const glenoidY = scapulaY + scapulaHeight * 0.15;
+    const glenoidHeight = scapulaHeight * 0.12;
+    const glenoidWidth = scapulaWidth * 0.08;
+    
     const glenoid = {
-      center: new Vector3(scapulaX + (side === 'left' ? -10 : 10), scapulaY + 10, shoulderZ),
-      superiorPole: new Vector3(scapulaX + (side === 'left' ? -10 : 10), scapulaY, shoulderZ),
-      inferiorPole: new Vector3(scapulaX + (side === 'left' ? -10 : 10), scapulaY + 20, shoulderZ),
-      anteriorRim: new Vector3(scapulaX + (side === 'left' ? -12 : 12), scapulaY + 10, shoulderZ + 3),
-      posteriorRim: new Vector3(scapulaX + (side === 'left' ? -8 : 8), scapulaY + 10, shoulderZ - 3),
+      center: new Vector3(glenoidX, glenoidY, shoulderZ),
+      superiorPole: new Vector3(glenoidX, glenoidY - glenoidHeight * 0.5, shoulderZ),
+      inferiorPole: new Vector3(glenoidX, glenoidY + glenoidHeight * 0.5, shoulderZ),
+      anteriorRim: new Vector3(
+        glenoidX + (side === 'left' ? -glenoidWidth * 0.3 : glenoidWidth * 0.3),
+        glenoidY,
+        shoulderZ + bodyDepth * 0.03
+      ),
+      posteriorRim: new Vector3(
+        glenoidX + (side === 'left' ? glenoidWidth * 0.3 : -glenoidWidth * 0.3),
+        glenoidY,
+        shoulderZ - bodyDepth * 0.03
+      ),
       version: -5, // 5° retroversion
       inclination: 5 // 5° superior tilt
     };
     
-    // Fossae
+    // Fossae - positioned relative to spine
     const supraspinousFossa = {
-      center: new Vector3(scapulaX + (side === 'left' ? 15 : -15), scapulaY - 10, shoulderZ - 15),
-      depth: 8
+      center: new Vector3(
+        scapulaX + (side === 'left' ? scapulaWidth * 0.2 : -scapulaWidth * 0.2),
+        scapulaY + scapulaHeight * 0.15,
+        shoulderZ - depthAdjustment * 0.7
+      ),
+      depth: scapulaHeight * 0.05
     };
     
     const infraspinousFossa = {
-      center: new Vector3(scapulaX + (side === 'left' ? 15 : -15), scapulaY + 40, shoulderZ - 15),
-      depth: 12
+      center: new Vector3(
+        scapulaX + (side === 'left' ? scapulaWidth * 0.2 : -scapulaWidth * 0.2),
+        scapulaY + scapulaHeight * 0.6,
+        shoulderZ - depthAdjustment * 0.7
+      ),
+      depth: scapulaHeight * 0.06
     };
     
-    // Scapular angles
-    const superiorAngle = new Vector3(scapulaX + (side === 'left' ? 40 : -40), scapulaY - 30, shoulderZ - 20);
-    const inferiorAngle = new Vector3(scapulaX + (side === 'left' ? 35 : -35), scapulaY + 90, shoulderZ - 18);
-    const lateralAngle = new Vector3(scapulaX + (side === 'left' ? -10 : 10), scapulaY + 10, shoulderZ);
+    // Scapular angles - anatomically positioned
+    const superiorAngle = new Vector3(
+      scapulaX + (side === 'left' ? scapulaWidth * 0.45 : -scapulaWidth * 0.45),
+      scapulaY,
+      shoulderZ - depthAdjustment
+    );
+    const inferiorAngle = new Vector3(
+      scapulaX + (side === 'left' ? scapulaWidth * 0.45 : -scapulaWidth * 0.45),
+      scapulaY + scapulaHeight,
+      shoulderZ - depthAdjustment - bodyDepth * 0.05
+    );
+    const lateralAngle = new Vector3(glenoidX, glenoidY, shoulderZ);
     
     return {
       body: { medialBorder, lateralBorder, superiorBorder },
@@ -523,74 +646,254 @@ export class ShoulderComplexRenderer {
   
   private renderScapula(ctx: CanvasRenderingContext2D, scapula: ScapulaStructure) {
     ctx.save();
-    ctx.strokeStyle = '#e0e0e0';
-    ctx.fillStyle = 'rgba(240, 240, 240, 0.8)';
+    
+    // Add subtle shadow for depth perception
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.15)';
+    ctx.shadowBlur = 5;
+    ctx.shadowOffsetX = 2;
+    ctx.shadowOffsetY = 3;
+    
+    // Create gradient for realistic bone appearance
+    const gradient = ctx.createLinearGradient(
+      scapula.superiorAngle.x, scapula.superiorAngle.y,
+      scapula.inferiorAngle.x, scapula.inferiorAngle.y
+    );
+    gradient.addColorStop(0, 'rgba(248, 248, 248, 0.95)');
+    gradient.addColorStop(0.3, 'rgba(243, 243, 243, 0.9)');
+    gradient.addColorStop(0.7, 'rgba(238, 238, 238, 0.85)');
+    gradient.addColorStop(1, 'rgba(233, 233, 233, 0.8)');
+    
+    ctx.fillStyle = gradient;
+    ctx.strokeStyle = '#d5d5d5';
     ctx.lineWidth = 2;
     
-    // Draw body outline
+    // Draw body outline with smooth curves
     ctx.beginPath();
-    scapula.body.medialBorder.forEach((point, i) => {
-      if (i === 0) ctx.moveTo(point.x, point.y);
-      else ctx.lineTo(point.x, point.y);
-    });
     
-    scapula.body.lateralBorder.reverse().forEach(point => {
-      ctx.lineTo(point.x, point.y);
-    });
+    // Start from superior angle
+    const firstPoint = scapula.body.medialBorder[0];
+    ctx.moveTo(firstPoint.x, firstPoint.y);
     
-    scapula.body.superiorBorder.forEach(point => {
-      ctx.lineTo(point.x, point.y);
+    // Draw medial border with smooth curves
+    for (let i = 1; i < scapula.body.medialBorder.length; i++) {
+      const prev = scapula.body.medialBorder[i - 1];
+      const curr = scapula.body.medialBorder[i];
+      const next = scapula.body.medialBorder[i + 1] || curr;
+      
+      // Use quadratic curve for smoother appearance
+      const cpx = curr.x;
+      const cpy = (prev.y + next.y) / 2;
+      ctx.quadraticCurveTo(cpx, prev.y, curr.x, cpy);
+    }
+    const lastMedial = scapula.body.medialBorder[scapula.body.medialBorder.length - 1];
+    ctx.lineTo(lastMedial.x, lastMedial.y);
+    
+    // Draw lateral border (reversed for proper connection)
+    const reversedLateral = [...scapula.body.lateralBorder].reverse();
+    for (let i = 0; i < reversedLateral.length; i++) {
+      const point = reversedLateral[i];
+      if (i === 0) {
+        // Smooth transition from inferior angle
+        ctx.quadraticCurveTo(
+          lastMedial.x - 10, lastMedial.y,
+          point.x, point.y
+        );
+      } else {
+        const prev = reversedLateral[i - 1];
+        ctx.lineTo(point.x, point.y);
+      }
+    }
+    
+    // Draw superior border to close the shape
+    scapula.body.superiorBorder.forEach((point, i) => {
+      if (i > 0) {
+        ctx.lineTo(point.x, point.y);
+      }
     });
     
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
     
-    // Draw scapular spine
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = '#d0d0d0';
+    // Reset shadow for detailed features
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    
+    // Draw scapular spine with anatomical accuracy
+    const spineGradient = ctx.createLinearGradient(
+      scapula.spine.medialEnd.x, scapula.spine.medialEnd.y,
+      scapula.spine.lateralEnd.x, scapula.spine.lateralEnd.y
+    );
+    spineGradient.addColorStop(0, '#d0d0d0');
+    spineGradient.addColorStop(0.5, '#c8c8c8');
+    spineGradient.addColorStop(1, '#c0c0c0');
+    
+    ctx.strokeStyle = spineGradient;
+    ctx.lineWidth = scapula.spine.thickness;
+    ctx.lineCap = 'round';
     ctx.beginPath();
     ctx.moveTo(scapula.spine.medialEnd.x, scapula.spine.medialEnd.y);
     ctx.lineTo(scapula.spine.lateralEnd.x, scapula.spine.lateralEnd.y);
     ctx.stroke();
     
-    // Draw acromion
-    ctx.fillStyle = 'rgba(230, 230, 230, 0.9)';
+    // Draw acromion with enhanced anatomical detail
+    const acromionGradient = ctx.createRadialGradient(
+      scapula.acromion.lateralEdge.x, scapula.acromion.lateralEdge.y, 0,
+      scapula.acromion.lateralEdge.x, scapula.acromion.lateralEdge.y, 25
+    );
+    acromionGradient.addColorStop(0, 'rgba(238, 238, 238, 0.95)');
+    acromionGradient.addColorStop(1, 'rgba(228, 228, 228, 0.85)');
+    
+    ctx.fillStyle = acromionGradient;
+    ctx.strokeStyle = '#c5c5c5';
+    ctx.lineWidth = 2;
+    
     ctx.beginPath();
-    ctx.moveTo(scapula.acromion.anteriorEdge.x, scapula.acromion.anteriorEdge.y);
-    ctx.lineTo(scapula.acromion.lateralEdge.x, scapula.acromion.lateralEdge.y);
-    ctx.lineTo(scapula.acromion.posteriorEdge.x, scapula.acromion.posteriorEdge.y);
+    ctx.moveTo(scapula.spine.lateralEnd.x, scapula.spine.lateralEnd.y);
+    ctx.quadraticCurveTo(
+      scapula.acromion.anteriorEdge.x,
+      scapula.acromion.anteriorEdge.y + 3,
+      scapula.acromion.lateralEdge.x,
+      scapula.acromion.lateralEdge.y
+    );
+    ctx.quadraticCurveTo(
+      scapula.acromion.posteriorEdge.x,
+      scapula.acromion.posteriorEdge.y - 2,
+      scapula.spine.lateralEnd.x,
+      scapula.spine.lateralEnd.y + 5
+    );
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
     
-    // Draw coracoid process
-    ctx.strokeStyle = '#c0c0c0';
-    ctx.lineWidth = 3;
+    // Draw coracoid process with anatomical accuracy
+    ctx.strokeStyle = '#b5b5b5';
+    ctx.fillStyle = 'rgba(225, 225, 225, 0.7)';
+    ctx.lineWidth = Math.max(3, scapula.spine.thickness * 0.8);
+    ctx.lineCap = 'round';
+    
     ctx.beginPath();
     ctx.moveTo(scapula.coracoid.base.x, scapula.coracoid.base.y);
-    scapula.coracoid.curvature.forEach(point => {
-      ctx.lineTo(point.x, point.y);
-    });
+    
+    // Smooth curve through coracoid points
+    for (let i = 0; i < scapula.coracoid.curvature.length; i++) {
+      const point = scapula.coracoid.curvature[i];
+      if (i === scapula.coracoid.curvature.length - 1) {
+        ctx.lineTo(point.x, point.y);
+      } else {
+        const next = scapula.coracoid.curvature[i + 1];
+        ctx.quadraticCurveTo(
+          point.x, point.y,
+          (point.x + next.x) / 2, (point.y + next.y) / 2
+        );
+      }
+    }
     ctx.stroke();
     
-    // Draw glenoid fossa
-    ctx.strokeStyle = '#b0b0b0';
+    // Add coracoid tip
+    ctx.beginPath();
+    ctx.arc(scapula.coracoid.tip.x, scapula.coracoid.tip.y, 4, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Draw glenoid fossa with proper pear shape
+    const glenoidHeight = Math.abs(scapula.glenoid.inferiorPole.y - scapula.glenoid.superiorPole.y);
+    const glenoidWidth = Math.abs(scapula.glenoid.anteriorRim.x - scapula.glenoid.posteriorRim.x) || glenoidHeight * 0.7;
+    
+    ctx.strokeStyle = '#a8a8a8';
+    ctx.fillStyle = 'rgba(215, 215, 215, 0.5)';
     ctx.lineWidth = 2;
+    
+    ctx.beginPath();
+    // Pear-shaped glenoid (narrower superior, wider inferior)
+    ctx.moveTo(scapula.glenoid.superiorPole.x, scapula.glenoid.superiorPole.y);
+    ctx.quadraticCurveTo(
+      scapula.glenoid.center.x - glenoidWidth * 0.4,
+      scapula.glenoid.center.y - glenoidHeight * 0.2,
+      scapula.glenoid.center.x - glenoidWidth * 0.5,
+      scapula.glenoid.center.y
+    );
+    ctx.quadraticCurveTo(
+      scapula.glenoid.center.x - glenoidWidth * 0.4,
+      scapula.glenoid.center.y + glenoidHeight * 0.3,
+      scapula.glenoid.inferiorPole.x,
+      scapula.glenoid.inferiorPole.y
+    );
+    ctx.quadraticCurveTo(
+      scapula.glenoid.center.x + glenoidWidth * 0.4,
+      scapula.glenoid.center.y + glenoidHeight * 0.3,
+      scapula.glenoid.center.x + glenoidWidth * 0.5,
+      scapula.glenoid.center.y
+    );
+    ctx.quadraticCurveTo(
+      scapula.glenoid.center.x + glenoidWidth * 0.4,
+      scapula.glenoid.center.y - glenoidHeight * 0.2,
+      scapula.glenoid.superiorPole.x,
+      scapula.glenoid.superiorPole.y
+    );
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    
+    // Add subtle fossa indications
+    ctx.strokeStyle = 'rgba(200, 200, 200, 0.3)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    
+    // Supraspinous fossa
     ctx.beginPath();
     ctx.ellipse(
-      scapula.glenoid.center.x,
-      scapula.glenoid.center.y,
-      8, 12, 0, 0, Math.PI * 2
+      scapula.supraspinousFossa.center.x,
+      scapula.supraspinousFossa.center.y,
+      scapula.supraspinousFossa.depth * 1.5,
+      scapula.supraspinousFossa.depth,
+      0, 0, Math.PI * 2
     );
     ctx.stroke();
     
-    // Add labels
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 10px Arial';
-    ctx.fillText('Acromion', scapula.acromion.lateralEdge.x - 30, scapula.acromion.lateralEdge.y - 5);
-    ctx.fillText('Glenoid', scapula.glenoid.center.x - 25, scapula.glenoid.center.y + 25);
-    ctx.fillText('Coracoid', scapula.coracoid.tip.x - 30, scapula.coracoid.tip.y + 15);
+    // Infraspinous fossa
+    ctx.beginPath();
+    ctx.ellipse(
+      scapula.infraspinousFossa.center.x,
+      scapula.infraspinousFossa.center.y,
+      scapula.infraspinousFossa.depth * 1.5,
+      scapula.infraspinousFossa.depth,
+      0, 0, Math.PI * 2
+    );
+    ctx.stroke();
+    
+    ctx.setLineDash([]); // Reset line dash
+    
+    // Add anatomical labels with improved visibility
+    ctx.fillStyle = '#4a4a4a';
+    ctx.font = 'bold 11px Arial';
+    ctx.shadowColor = 'rgba(255, 255, 255, 0.9)';
+    ctx.shadowBlur = 3;
+    
+    // Dynamic label positioning
+    ctx.fillText(
+      'Acromion',
+      scapula.acromion.lateralEdge.x - 35,
+      scapula.acromion.lateralEdge.y - 8
+    );
+    ctx.fillText(
+      'Glenoid',
+      scapula.glenoid.center.x - 25,
+      scapula.glenoid.inferiorPole.y + 15
+    );
+    ctx.fillText(
+      'Coracoid',
+      scapula.coracoid.tip.x - 30,
+      scapula.coracoid.tip.y + 12
+    );
+    
+    // Spine label
+    ctx.font = '10px Arial';
+    const spineMiddleX = (scapula.spine.medialEnd.x + scapula.spine.lateralEnd.x) / 2;
+    const spineMiddleY = (scapula.spine.medialEnd.y + scapula.spine.lateralEnd.y) / 2;
+    ctx.fillText('Spine', spineMiddleX - 15, spineMiddleY - 8);
+    
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
     
     ctx.restore();
   }

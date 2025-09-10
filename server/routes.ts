@@ -10522,27 +10522,44 @@ Respond with only a number between 1-100 representing the relevance score.`;
         return res.status(400).json({ error: 'Audio chunk is required' });
       }
 
-      console.log(`[REAL-TIME] Processing chunk: ${audioFile.size} bytes at ${new Date().toLocaleTimeString()}`);
+      console.log(`[REAL-TIME] Processing chunk: ${audioFile.size} bytes at ${new Date().toLocaleTimeString()}, mimetype: ${audioFile.mimetype}`);
 
-      // Transcribe the complete audio
-      const fullTranscript = await transcribeAudio(audioFile.path);
+      // Read the file buffer for the SOAP notes service
+      const audioBuffer = fs.readFileSync(audioFile.path);
+      
+      // Use SOAP notes service transcription which handles the format better
+      let transcriptionResult;
+      try {
+        transcriptionResult = await soapNotesService.transcribeAudio(audioBuffer, audioFile.originalname || 'chunk.webm');
+      } catch (transcribeError) {
+        console.error('[REAL-TIME] Transcription error:', transcribeError);
+        // If transcription fails, return empty to keep the flow going
+        transcriptionResult = { text: '' };
+      }
+      
+      const fullTranscript = transcriptionResult.text || '';
       
       // Clean up temp file after transcription
-      fs.unlinkSync(audioFile.path);
+      try {
+        fs.unlinkSync(audioFile.path);
+      } catch (cleanupError) {
+        console.log('[REAL-TIME] Failed to clean up temp file:', cleanupError);
+      }
       
-      // Extract only the new portion by removing the progressive transcript from the full transcript
+      // Since we're now sending only the last 30 seconds as chunks (not complete audio),
+      // the full transcript is already just the new chunk
       let chunkTranscript = fullTranscript;
-      if (isCompleteAudio && progressiveTranscript) {
-        // Find the new content by removing the already processed portion
-        const progressiveLength = progressiveTranscript.length;
-        if (fullTranscript.length > progressiveLength) {
-          // Extract the new portion
-          chunkTranscript = fullTranscript.substring(progressiveLength).trim();
-          if (!chunkTranscript) {
-            // If no new content, use the last portion of the full transcript
-            chunkTranscript = fullTranscript.split(' ').slice(-50).join(' ');
-          }
-        }
+      
+      // If transcription failed or is empty, don't generate SOAP
+      if (!chunkTranscript || chunkTranscript.includes('fallback transcription')) {
+        console.log('[REAL-TIME] Skipping SOAP generation due to empty or fallback transcription');
+        return res.json({
+          transcription: '',
+          soapSections: null,
+          aiSuggestions: [],
+          patientSwitch: { patientSwitchDetected: false, confidence: 0 },
+          timestamp: new Date().toISOString()
+        });
       }
 
       // Combine with progressive transcript for context

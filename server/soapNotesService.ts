@@ -368,7 +368,13 @@ Respond with JSON in this format:
    */
   async generateProgressiveSoapSections(
     recentContext: string,
-    newChunk: string
+    newChunk: string,
+    existingSections?: {
+      subjective: string;
+      objective: string;
+      assessment: string;
+      plan: string;
+    }
   ): Promise<{
     subjective: string;
     objective: string;
@@ -377,23 +383,35 @@ Respond with JSON in this format:
   }> {
     try {
       const prompt = `
-You are analyzing a real-time physiotherapy consultation. Based on the recent conversation context and the latest chunk, progressively update the SOAP note sections.
+You are analyzing a real-time physiotherapy consultation. Your task is to ENHANCE and ADD TO the existing SOAP notes with new information, NOT replace them.
+
+EXISTING SOAP SECTIONS (preserve and enhance these):
+Subjective: ${existingSections?.subjective || 'None yet'}
+Objective: ${existingSections?.objective || 'None yet'}
+Assessment: ${existingSections?.assessment || 'None yet'}
+Plan: ${existingSections?.plan || 'None yet'}
 
 Recent Context (last 5 minutes):
 "${recentContext}"
 
-New Information:
+New Information (last 30 seconds):
 "${newChunk}"
 
-Generate updated SOAP sections incorporating the new information. Be concise but comprehensive.
-Focus on clinically relevant information and maintain professional medical documentation standards.
+IMPORTANT INSTRUCTIONS:
+1. PRESERVE all existing information from the SOAP sections above
+2. ADD any new clinically relevant information from the new chunk
+3. ENHANCE existing points with additional details if the new chunk provides them
+4. DO NOT remove or replace existing information unless directly contradicted
+5. Maintain chronological flow and avoid redundancy
 
-Respond with JSON in this format:
+Example: If existing says "shoulder pain" and new chunk adds "limited to 60 degrees", combine as "shoulder pain with range limited to 60 degrees"
+
+Respond with JSON containing the ENHANCED sections:
 {
-  "subjective": "Patient's reported symptoms, history, and concerns",
-  "objective": "Observable findings, measurements, and test results",
-  "assessment": "Clinical analysis and diagnosis",
-  "plan": "Treatment plan and recommendations"
+  "subjective": "Complete subjective including both existing and new patient reports",
+  "objective": "Complete objective findings including both existing and new observations",
+  "assessment": "Complete assessment combining existing and new clinical analysis",
+  "plan": "Complete plan including existing and any new treatment recommendations"
 }
 `;
 
@@ -402,7 +420,7 @@ Respond with JSON in this format:
         messages: [
           {
             role: "system",
-            content: "You are an expert physiotherapist creating progressive SOAP notes during a live consultation. Update sections as new information becomes available."
+            content: "You are an expert physiotherapist creating progressive SOAP notes during a live consultation. ENHANCE existing sections with new information - never replace or remove existing content unless directly contradicted."
           },
           {
             role: "user",
@@ -411,7 +429,7 @@ Respond with JSON in this format:
         ],
         response_format: { type: "json_object" },
         temperature: 0.3,
-        max_tokens: 1000
+        max_tokens: 1500
       });
 
       const result = JSON.parse(response.choices[0].message.content || '{}');

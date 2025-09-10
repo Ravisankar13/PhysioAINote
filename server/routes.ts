@@ -10517,6 +10517,15 @@ Respond with only a number between 1-100 representing the relevance score.`;
       const audioFile = req.file;
       const progressiveTranscript = req.body.progressiveTranscript || '';
       const isCompleteAudio = req.body.isCompleteAudio === 'true';
+      // Parse existing SOAP sections to enhance rather than replace
+      let existingSoapSections = { subjective: '', objective: '', assessment: '', plan: '' };
+      try {
+        if (req.body.existingSoapSections) {
+          existingSoapSections = JSON.parse(req.body.existingSoapSections);
+        }
+      } catch (parseError) {
+        console.log('[REAL-TIME] Could not parse existing SOAP sections, starting fresh');
+      }
 
       if (!audioFile) {
         return res.status(400).json({ error: 'Audio chunk is required' });
@@ -10573,12 +10582,13 @@ Respond with only a number between 1-100 representing the relevance score.`;
 
       console.log(`[REAL-TIME] Transcription complete: ${chunkTranscript.substring(0, 100)}...`);
 
-      // Generate SOAP sections progressively
+      // Generate SOAP sections progressively - pass existing sections to enhance
       const soapSections = await soapNotesService.generateProgressiveSoapSections(
         recentContext,
-        chunkTranscript
+        chunkTranscript,
+        existingSoapSections // Pass existing sections to enhance rather than replace
       );
-      console.log(`[REAL-TIME] SOAP sections generated`);
+      console.log(`[REAL-TIME] SOAP sections enhanced`);
 
       // Generate AI suggestions based on current context
       const aiSuggestions = await soapNotesService.generateAISuggestions(recentContext);

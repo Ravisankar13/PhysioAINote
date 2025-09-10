@@ -1589,7 +1589,7 @@ export default function BodyScanner() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Activity className="h-6 w-6" />
-                Advanced Knee Assessment Tool
+                Body Scanner
               </CardTitle>
               <CardDescription>
                 Educational visualization with real-time pose tracking and anatomical overlays

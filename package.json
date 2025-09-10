@@ -127,6 +127,7 @@
     "stripe": "^18.4.0",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
+    "terser": "^5.44.0",
     "three": "^0.161.0",
     "three-fbx-loader": "^1.0.3",
     "three-gltf-loader": "^1.111.0",

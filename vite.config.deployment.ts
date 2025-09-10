@@ -24,55 +24,58 @@ export default defineConfig({
     chunkSizeWarningLimit: 10000,
     rollupOptions: {
       output: {
-        manualChunks: {
-          // Core React ecosystem
-          'react-vendor': ['react', 'react-dom', 'react-router-dom', 'wouter'],
-          
-          // Heavy ML/3D libraries
-          'tensorflow': ['@tensorflow/tfjs', '@tensorflow-models/body-pix', '@tensorflow-models/pose-detection'],
-          'three': ['three', '@react-three/fiber', '@react-three/drei', 'three-fbx-loader', 'three-gltf-loader', 'three-obj-loader', 'three-stdlib'],
-          'mediapipe': ['@mediapipe/camera_utils', '@mediapipe/drawing_utils', '@mediapipe/pose'],
-          
-          // UI Libraries
-          'mui': ['@mui/material', '@mui/icons-material', '@emotion/react', '@emotion/styled'],
-          'radix-ui': [
-            '@radix-ui/react-accordion', '@radix-ui/react-alert-dialog', '@radix-ui/react-aspect-ratio',
-            '@radix-ui/react-avatar', '@radix-ui/react-checkbox', '@radix-ui/react-collapsible',
-            '@radix-ui/react-context-menu', '@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu',
-            '@radix-ui/react-hover-card', '@radix-ui/react-label', '@radix-ui/react-menubar',
-            '@radix-ui/react-navigation-menu', '@radix-ui/react-popover', '@radix-ui/react-progress',
-            '@radix-ui/react-radio-group', '@radix-ui/react-scroll-area', '@radix-ui/react-select',
-            '@radix-ui/react-separator', '@radix-ui/react-slider', '@radix-ui/react-slot',
-            '@radix-ui/react-switch', '@radix-ui/react-tabs', '@radix-ui/react-toast',
-            '@radix-ui/react-toggle', '@radix-ui/react-toggle-group', '@radix-ui/react-tooltip'
-          ],
-          
-          // Cloud Services
-          'cloud-services': ['firebase', '@aws-sdk/client-s3', '@aws-sdk/lib-storage', '@google-cloud/storage', '@google-cloud/vertexai'],
-          
-          // Payment
-          'payment': ['@stripe/react-stripe-js', '@stripe/stripe-js', 'stripe', '@paypal/paypal-server-sdk'],
-          
-          // AI Services
-          'ai-services': ['openai', '@anthropic-ai/sdk'],
-          
-          // File handling
-          'file-handling': ['@uppy/core', '@uppy/dashboard', '@uppy/drag-drop', '@uppy/file-input', '@uppy/progress-bar', '@uppy/react', '@uppy/aws-s3'],
-          
-          // Document processing
-          'documents': ['pdf-lib', 'pdf2pic', 'jspdf', 'docx', 'mammoth', 'html-pdf-node'],
-          
-          // Data visualization
-          'visualization': ['recharts', 'framer-motion'],
-          
-          // Form handling
-          'forms': ['react-hook-form', '@hookform/resolvers', 'zod', 'zod-validation-error'],
-          
-          // Icons
-          'icons': ['lucide-react', 'react-icons'],
-          
-          // Utils
-          'utils': ['axios', 'date-fns', 'clsx', 'tailwind-merge', 'nanoid', 'papaparse', 'marked']
+        manualChunks: (id) => {
+          // Handle dependencies by checking the actual path
+          if (id.includes('node_modules')) {
+            // Core React ecosystem
+            if (id.includes('react') && !id.includes('react-')) return 'react-vendor';
+            if (id.includes('react-dom')) return 'react-vendor';
+            if (id.includes('react-router-dom') || id.includes('wouter')) return 'react-vendor';
+            
+            // Heavy ML/3D libraries
+            if (id.includes('@tensorflow') || id.includes('tfjs')) return 'tensorflow';
+            if (id.includes('three') || id.includes('@react-three')) return 'three';
+            if (id.includes('@mediapipe')) return 'mediapipe';
+            
+            // UI Libraries
+            if (id.includes('@mui') || id.includes('@emotion')) return 'mui';
+            if (id.includes('@radix-ui')) return 'radix-ui';
+            
+            // Cloud Services (Firebase handled specially)
+            if (id.includes('firebase')) return 'firebase';
+            if (id.includes('@aws-sdk')) return 'aws-sdk';
+            if (id.includes('@google-cloud')) return 'google-cloud';
+            
+            // Payment
+            if (id.includes('@stripe') || id.includes('stripe')) return 'payment';
+            if (id.includes('@paypal')) return 'payment';
+            
+            // AI Services
+            if (id.includes('openai') || id.includes('@anthropic-ai')) return 'ai-services';
+            
+            // File handling
+            if (id.includes('@uppy')) return 'file-handling';
+            
+            // Document processing
+            if (id.includes('pdf') || id.includes('docx') || id.includes('mammoth')) return 'documents';
+            
+            // Data visualization
+            if (id.includes('recharts') || id.includes('framer-motion')) return 'visualization';
+            
+            // Form handling
+            if (id.includes('react-hook-form') || id.includes('@hookform') || id.includes('zod')) return 'forms';
+            
+            // Icons
+            if (id.includes('lucide-react') || id.includes('react-icons')) return 'icons';
+            
+            // Utils
+            if (id.includes('axios') || id.includes('date-fns') || id.includes('clsx') || 
+                id.includes('tailwind-merge') || id.includes('nanoid') || 
+                id.includes('papaparse') || id.includes('marked')) return 'utils';
+            
+            // Default vendor chunk for remaining modules
+            return 'vendor';
+          }
         },
         chunkFileNames: 'assets/js/[name]-[hash].js',
         entryFileNames: 'assets/js/[name]-[hash].js',

@@ -227,20 +227,23 @@ export class ShoulderComplexRenderer {
     // 3. Lateral angle (glenoid - MUST be at shoulder joint)
     
     // The medial border should be only 2-3 inches (5-7cm) from spine
-    // In body proportions, this is much closer than before
-    const spineToScapulaDistance = shoulderWidth * 0.05; // Much closer to spine (was 0.12)
+    // This needs to be MUCH closer to the midline
+    const midlineX = (shoulder.x + oppositeShoulder.x) / 2 * width; // Center of body
     
-    // Superior angle position (T2 level - below shoulder)
-    const superiorAngleX = shoulderX + (side === 'left' ? spineToScapulaDistance * 2 : -spineToScapulaDistance * 2);
-    const superiorAngleY = shoulderY + scapulaHeight * 0.05; // BELOW shoulder level (was negative)
+    // Medial border should be only about 2-3 inches from spine
+    const medialBorderDistanceFromSpine = shoulderWidth * 0.08; // About 2-3 inches scaled
+    
+    // Superior angle position (T2 level - very close to spine)
+    const superiorAngleX = midlineX + (side === 'left' ? medialBorderDistanceFromSpine : -medialBorderDistanceFromSpine);
+    const superiorAngleY = shoulderY + scapulaHeight * 0.05; // Below shoulder level at T2
     
     // Account for scapular plane (30-35° anterior to coronal plane)
     const planeAngle = 32 * Math.PI / 180;
     const depthAdjustment = Math.sin(planeAngle) * scapulaWidth * 0.3;
     
     // Define the three key angles of the scapular triangle
-    // Inferior angle position (bottom of scapula, at T7 - closer to spine)
-    const inferiorAngleX = shoulderX + (side === 'left' ? spineToScapulaDistance * 2.2 : -spineToScapulaDistance * 2.2);
+    // Inferior angle position (bottom of scapula, at T7 - also very close to spine)
+    const inferiorAngleX = midlineX + (side === 'left' ? medialBorderDistanceFromSpine * 1.1 : -medialBorderDistanceFromSpine * 1.1);
     const inferiorAngleY = superiorAngleY + scapulaHeight; // Full height from superior angle
     
     // Lateral angle (glenoid) - EXACTLY at shoulder joint for proper articulation
@@ -295,8 +298,8 @@ export class ShoulderComplexRenderer {
     
     // Scapular spine - runs from medial border toward acromion
     const spineY = superiorAngleY + scapulaHeight * 0.3; // At upper third
-    const spineMedialX = superiorAngleX; // Start at medial border
-    const spineLateralX = shoulderX + (side === 'left' ? -scapulaWidth * 0.08 : scapulaWidth * 0.08);
+    const spineMedialX = superiorAngleX + (side === 'left' ? scapulaWidth * 0.02 : -scapulaWidth * 0.02); // Start near medial border
+    const spineLateralX = shoulderX + (side === 'left' ? -scapulaWidth * 0.05 : scapulaWidth * 0.05); // End near acromion
     
     // Spine rises laterally toward acromion
     const spineElevation = scapulaHeight * 0.08;

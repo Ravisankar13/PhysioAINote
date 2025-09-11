@@ -7,9 +7,9 @@ echo "📊 Memory available: $(free -m | awk '/^Mem:/{print $7}') MB"
 # Set Node memory limit for large bundles
 export NODE_OPTIONS="--max-old-space-size=4096"
 
-# Install dependencies
-echo "📦 Installing production dependencies..."
-npm ci --only=production
+# Install dependencies (including dev dependencies needed for build)
+echo "📦 Installing all dependencies..."
+npm ci
 
 # Clean previous build
 echo "🧹 Cleaning previous build..."
@@ -52,6 +52,10 @@ echo "✅ Backend build complete!"
 # Check backend bundle size
 BACKEND_SIZE=$(du -sh dist/index.js 2>/dev/null | cut -f1)
 echo "📦 Backend bundle size: $BACKEND_SIZE"
+
+# Remove dev dependencies to minimize runtime footprint
+echo "🧹 Removing dev dependencies for production..."
+npm prune --omit=dev
 
 # Create deployment health check
 cat > dist/health.js << 'EOF'

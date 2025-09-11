@@ -5,7 +5,8 @@
 // src/components/SoapNote.jsx
 import React, { useState, useCallback, useEffect } from "react";
 import axios from "axios";
-import DOMPurify from "dompurify";
+// DOMPurify loaded via CDN globally
+const DOMPurify = (typeof window !== 'undefined' && window.DOMPurify) ? window.DOMPurify : { sanitize: (html) => html };
 import { marked } from "marked";
 
 const SoapSection = ({

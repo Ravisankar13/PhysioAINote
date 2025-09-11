@@ -1,5 +1,7 @@
 import React from "react";
-import DOMPurify from "dompurify";
+// DOMPurify loaded via CDN globally
+declare const DOMPurify: { sanitize: (html: string) => string };
+const DOMPurifyInstance = (typeof window !== 'undefined' && (window as any).DOMPurify) ? (window as any).DOMPurify : { sanitize: (html: string) => html };
 import { marked } from "marked";
 
 interface SoapSectionProps {
@@ -71,7 +73,7 @@ const SoapSection: React.FC<SoapSectionProps> = ({
             <div
               className="soap-content markdown-content"
               dangerouslySetInnerHTML={{
-                __html: DOMPurify.sanitize(content ? marked(content) : ""),
+                __html: DOMPurifyInstance.sanitize(content ? marked(content) : ""),
               }}
             />
           ) : (

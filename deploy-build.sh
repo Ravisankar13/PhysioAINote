@@ -13,6 +13,12 @@ export NPM_CONFIG_INCLUDE_DEPENDENCIES=true
 echo "📦 Cleaning npm cache and installing dependencies with lockfile..."
 npm cache clean --force 2>/dev/null || true
 
+# Generate package-lock.json if missing for npm ci
+if [ ! -f package-lock.json ]; then
+  echo "📝 Generating missing package-lock.json..."
+  npm install --package-lock-only --no-audit --no-fund
+fi
+
 # Use npm ci for reproducible builds with lockfile
 echo "📦 Installing dependencies reproducibly with npm ci..."
 npm ci --no-audit --no-fund

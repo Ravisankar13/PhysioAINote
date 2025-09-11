@@ -15141,5 +15141,15 @@ Respond in JSON format:
     }
   });
 
+  // Health check endpoint for Cloud Run
+  app.get("/health", (req: Request, res: Response) => {
+    res.json({
+      status: "healthy",
+      timestamp: new Date().toISOString(),
+      memory: process.memoryUsage(),
+      uptime: process.uptime()
+    });
+  });
+
   return httpServer;
 }

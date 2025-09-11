@@ -7,9 +7,10 @@ echo "📊 Memory available: $(free -m | awk '/^Mem:/{print $7}') MB"
 # Set Node memory limit for large bundles
 export NODE_OPTIONS="--max-old-space-size=4096"
 
-# Install dependencies (including dev dependencies needed for build)
-echo "📦 Installing all dependencies..."
-npm ci
+# Clean npm cache and install dependencies (including dev dependencies needed for build)
+echo "📦 Cleaning npm cache and installing all dependencies..."
+npm cache clean --force
+npm ci --no-optional
 
 # Clean previous build
 echo "🧹 Cleaning previous build..."
@@ -30,17 +31,24 @@ echo "✅ Frontend build complete!"
 FRONTEND_SIZE=$(du -sh dist/public 2>/dev/null | cut -f1)
 echo "📦 Frontend bundle size: $FRONTEND_SIZE"
 
-# Build backend with minimal bundling
+# Build backend with critical dependencies bundled
 echo "⚙️ Building backend..."
 npx esbuild server/index.ts \
   --platform=node \
-  --packages=external \
   --bundle \
   --format=esm \
   --outdir=dist \
   --minify \
   --log-level=warning \
-  --define:process.env.NODE_ENV='"production"'
+  --define:process.env.NODE_ENV='"production"' \
+  --external:@types/* \
+  --external:typescript \
+  --external:tsx \
+  --external:vite \
+  --external:esbuild \
+  --external:autoprefixer \
+  --external:postcss \
+  --external:tailwindcss
 
 if [ $? -ne 0 ]; then
     echo "❌ Backend build failed!"
@@ -53,9 +61,10 @@ echo "✅ Backend build complete!"
 BACKEND_SIZE=$(du -sh dist/index.js 2>/dev/null | cut -f1)
 echo "📦 Backend bundle size: $BACKEND_SIZE"
 
-# Remove dev dependencies to minimize runtime footprint
-echo "🧹 Removing dev dependencies for production..."
-npm prune --omit=dev
+# Keep production dependencies and remove only build-specific dev dependencies
+echo "🧹 Keeping production dependencies..."
+# Only remove specific build tools, keep all runtime dependencies
+npm uninstall --no-save @types/node @types/express @types/react typescript tsx vite esbuild autoprefixer postcss tailwindcss 2>/dev/null || true
 
 # Create deployment health check
 cat > dist/health.js << 'EOF'

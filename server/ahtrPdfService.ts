@@ -1,4 +1,5 @@
-import { PDFDocument, PDFForm, PDFTextField, PDFCheckBox, PDFDropdown } from 'pdf-lib';
+// Lazy import to prevent module resolution issues during startup
+// import { PDFDocument, PDFForm, PDFTextField, PDFCheckBox, PDFDropdown } from 'pdf-lib';
 import fs from 'fs/promises';
 import path from 'path';
 import OpenAI from 'openai';
@@ -199,6 +200,9 @@ Focus on clinical accuracy and realistic progression. Use appropriate outcome me
    */
   async createFilledPDF(formData: AHTRFormData): Promise<Buffer> {
     try {
+      // Lazy import pdf-lib to prevent startup failures
+      const { PDFDocument, PDFForm, PDFTextField, PDFCheckBox, PDFDropdown } = await import('pdf-lib');
+      
       // Load the original SIRA AHTR template
       const templatePath = path.join(process.cwd(), 'attached_assets', 'SIRA-Allied-health-treatment-request-form_1751798303980.pdf');
       const templateBytes = await fs.readFile(templatePath);
@@ -329,7 +333,8 @@ Focus on clinical accuracy and realistic progression. Use appropriate outcome me
       console.error('Error creating PDF:', error);
       
       // Fallback: create a new PDF with the template structure if loading fails
-      const fallbackDoc = await PDFDocument.create();
+      const { PDFDocument: FallbackPDFDocument } = await import('pdf-lib');
+      const fallbackDoc = await FallbackPDFDocument.create();
       const page = fallbackDoc.addPage([595, 842]);
       const { width, height } = page.getSize();
       

@@ -1,5 +1,6 @@
 import { Document, Packer, Paragraph, HeadingLevel, AlignmentType } from 'docx';
-import { PDFDocument, PDFForm, rgb, StandardFonts } from 'pdf-lib';
+// Lazy import to prevent module resolution issues during startup
+// import { PDFDocument, PDFForm, rgb, StandardFonts } from 'pdf-lib';
 import fs from 'fs/promises';
 import path from 'path';
 import { randomUUID } from 'crypto';
@@ -378,6 +379,9 @@ ${JSON.stringify(request.soapData, null, 2)}`
   // Fill AHTR PDF form with generated content
   private async fillAHTRPdfForm(content: any, documentId: string): Promise<string> {
     try {
+      // Lazy import pdf-lib to prevent startup failures
+      const { PDFDocument, PDFForm, rgb, StandardFonts } = await import('pdf-lib');
+      
       // Load the template PDF
       const templatePath = path.join(process.cwd(), 'server', 'templates', 'ahtr-template.pdf');
       const existingPdfBytes = await fs.readFile(templatePath);

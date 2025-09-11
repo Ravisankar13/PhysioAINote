@@ -1,0 +1,94 @@
+# Files to exclude from deployment bundle
+# Replit will reinstall dependencies from package.json
+
+# Replit system directories (IMPORTANT - these cause bundle failures)
+.cache/
+.config/
+.local/
+.upm/
+.pythonlibs/
+
+# Development dependencies (will be reinstalled)
+node_modules/
+
+# Version control
+.git/
+.gitignore
+
+# Source files (we only need dist for production)
+client/
+!dist/
+
+# Development configs (not needed for production)
+vite.config.deployment.ts
+vite.config.simple.ts
+drizzle.config.ts
+tsconfig.json
+postcss.config.js
+tailwind.config.ts
+components.json
+
+# Test and debug files
+test-*.js
+test-*.html
+test-*.ts
+debug-*.js
+*.test.js
+*.spec.js
+*.test.ts
+*.spec.ts
+__tests__/
+__mocks__/
+test/
+tests/
+test-uploads/
+soap-note-litellm-streaming/
+
+# Build scripts (not needed after build)
+build-*.sh
+build-*.js
+deploy-*.sh
+replit-*.js
+npm-*.js
+*.sh
+
+# Documentation
+*.md
+docs/
+documentation/
+
+# Temporary files
+temp/
+tmp/
+coverage/
+*.log
+logs/
+
+# IDE files
+.vscode/
+.idea/
+.replit
+
+# System files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Environment files (sensitive)
+.env.local
+.env.development
+.env.test
+google-credentials.json
+
+# Lock files (package.json is enough)
+pnpm-lock.yaml
+package-lock.json
+
+# Misc files
+cookies.txt
+routes-start.txt
+test-audio.txt
+generated-icon.png
+attached_assets/

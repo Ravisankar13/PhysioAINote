@@ -17,10 +17,13 @@ try {
     rmSync('dist', { recursive: true, force: true });
   }
 
-  // Always install dependencies to ensure they're up to date
-  console.log('📦 Installing dependencies (this may take a moment)...');
-  execSync('npm install --no-audit --no-fund --prefer-offline', { stdio: 'inherit' });
-  console.log('✅ Dependencies installed');
+  // Check if dependencies are installed
+  if (!existsSync('node_modules')) {
+    console.log('📦 Installing dependencies...');
+    execSync('npm install --no-audit --no-fund --prefer-offline', { stdio: 'inherit' });
+  } else {
+    console.log('✅ Dependencies already installed');
+  }
 
   // Build frontend
   console.log('🎨 Building frontend...');

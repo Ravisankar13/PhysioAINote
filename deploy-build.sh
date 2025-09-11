@@ -7,6 +7,10 @@ echo "📊 Memory available: $(free -m | awk '/^Mem:/{print $7}') MB"
 # Set Node memory limit for large bundles
 export NODE_OPTIONS="--max-old-space-size=4096"
 
+# Install dependencies
+echo "📦 Installing production dependencies..."
+npm ci --only=production
+
 # Clean previous build
 echo "🧹 Cleaning previous build..."
 rm -rf dist

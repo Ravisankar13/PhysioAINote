@@ -61,10 +61,10 @@ echo "✅ Backend build complete!"
 BACKEND_SIZE=$(du -sh dist/index.js 2>/dev/null | cut -f1)
 echo "📦 Backend bundle size: $BACKEND_SIZE"
 
-# Keep production dependencies and remove only build-specific dev dependencies
-echo "🧹 Keeping production dependencies..."
-# Only remove specific build tools, keep all runtime dependencies
-npm uninstall --no-save @types/node @types/express @types/react typescript tsx vite esbuild autoprefixer postcss tailwindcss 2>/dev/null || true
+# Keep all dependencies for runtime stability
+echo "🧹 Keeping all dependencies for runtime stability..."
+# Note: In production, all dependencies should be available to prevent import failures
+echo "📦 All dependencies preserved for stable deployment"
 
 # Create deployment health check
 cat > dist/health.js << 'EOF'

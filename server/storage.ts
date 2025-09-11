@@ -2712,21 +2712,6 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getSoapVirtualPatient(id: number): Promise<SoapVirtualPatient | undefined> {
-    try {
-      const result = await db
-        .select()
-        .from(soapVirtualPatients)
-        .where(eq(soapVirtualPatients.id, id))
-        .limit(1);
-      
-      return result[0];
-    } catch (error) {
-      console.error("Error getting SOAP virtual patient:", error);
-      throw error;
-    }
-  }
-
   // Virtual Patient Config Operations
   async getVirtualPatientConfig(id: number): Promise<VirtualPatientConfig | undefined> {
     try {

@@ -507,58 +507,6 @@ Respond with JSON array of suggestions in this format:
   }
 
   /**
-   * Analyzes transcript for patient switch indicators
-   */
-  async analyzePatientSwitch(
-    newChunk: string,
-    progressiveTranscript: string
-  ): Promise<{
-    patientSwitchDetected: boolean;
-    confidence: number;
-    currentPatientNumber?: number;
-  }> {
-    try {
-      // Simple heuristics for patient switch detection
-      const switchIndicators = [
-        'next patient',
-        'new patient',
-        'okay, thank you',
-        'goodbye',
-        'see you next time',
-        'take care',
-        'that\'s all for today',
-        'hello, I\'m',
-        'hi, my name is',
-        'good morning',
-        'good afternoon'
-      ];
-      
-      const lowerChunk = newChunk.toLowerCase();
-      const hasSwitch = switchIndicators.some(indicator => lowerChunk.includes(indicator));
-      
-      if (hasSwitch) {
-        // You could enhance this with AI analysis
-        return {
-          patientSwitchDetected: true,
-          confidence: 0.8,
-          currentPatientNumber: 2 // This would be tracked properly in production
-        };
-      }
-      
-      return {
-        patientSwitchDetected: false,
-        confidence: 0
-      };
-    } catch (error) {
-      console.error("Error analyzing patient switch:", error);
-      return {
-        patientSwitchDetected: false,
-        confidence: 0
-      };
-    }
-  }
-
-  /**
    * Generates automatic paperwork for a SOAP note using AI
    */
   async generateAutomaticPaperwork(soapNoteId: number): Promise<SoapNote> {

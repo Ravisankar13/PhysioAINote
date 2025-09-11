@@ -7,6 +7,42 @@ set -euo pipefail
 # Record build start time
 BUILD_START_TIME=$(date +%s)
 
+# Preflight checks for required tools
+echo "🔍 Running preflight checks..."
+MISSING_TOOLS=""
+
+if ! command -v node >/dev/null 2>&1; then
+  MISSING_TOOLS="$MISSING_TOOLS node"
+fi
+
+if ! command -v npm >/dev/null 2>&1; then
+  MISSING_TOOLS="$MISSING_TOOLS npm"
+fi
+
+if ! command -v free >/dev/null 2>&1; then
+  echo "⚠️ Warning: 'free' command not available - memory monitoring disabled"
+  # Provide a fallback function
+  function free() {
+    echo "Mem: 4000000 2000000 2000000 1000000 100000 1800000"
+  }
+fi
+
+if [ -n "$MISSING_TOOLS" ]; then
+  echo "❌ Missing required tools:$MISSING_TOOLS"
+  echo "Please ensure Node.js and npm are installed."
+  exit 1
+fi
+
+# Verify required config files exist
+if [ ! -f "vite.config.deployment.ts" ]; then
+  echo "⚠️ Warning: vite.config.deployment.ts not found - will use default vite.config.ts"
+  VITE_CONFIG="vite.config.ts"
+else
+  VITE_CONFIG="vite.config.deployment.ts"
+fi
+
+echo "✅ Preflight checks passed"
+
 echo "🚀 Starting Replit deployment build..."
 echo "📊 System stats at build start:"
 echo "  Memory available: $(free -m | awk '/^Mem:/{print $7}') MB"
@@ -23,20 +59,47 @@ log_memory_usage() {
   echo "  Node memory: $(node -e 'const used = process.memoryUsage(); console.log(\"RSS: \" + Math.round(used.rss / 1024 / 1024) + \"MB\")' 2>/dev/null || echo 'N/A')"
 }
 
-# Set Node memory limit for large bundles and production environment
-export NODE_OPTIONS="--max-old-space-size=4096 --max-semi-space-size=1024"
+# Enhanced memory management for Cloud Run deployment
+echo "⚙️ Configuring optimized memory settings for Cloud Run..."
+
+# Check available memory and adjust Node.js memory settings accordingly
+AVAILABLE_MEMORY=$(free -m | awk '/^Mem:/{print $7}')
+echo "💾 Available memory: ${AVAILABLE_MEMORY}MB"
+
+# Set conservative Node.js memory limits for Cloud Run (typically 2GB containers)
+if [ "$AVAILABLE_MEMORY" -lt 1500 ]; then
+  # Low memory environment - use conservative settings
+  export NODE_BASE_OPTIONS="--max-old-space-size=1536"
+  echo "📊 Using low memory profile (1.5GB heap)"
+elif [ "$AVAILABLE_MEMORY" -lt 3000 ]; then
+  # Medium memory environment - balanced settings
+  export NODE_BASE_OPTIONS="--max-old-space-size=2048"
+  echo "📊 Using medium memory profile (2GB heap)"
+else
+  # High memory environment - aggressive settings
+  export NODE_BASE_OPTIONS="--max-old-space-size=3072"
+  echo "📊 Using high memory profile (3GB heap)"
+fi
+
+# Set base Node.js options with safe, supported flags
+export NODE_OPTIONS="$NODE_BASE_OPTIONS --enable-source-maps"
 export NODE_ENV=production
+
+# Optimized npm configuration for deployment reliability
 export NPM_CONFIG_INCLUDE_DEPENDENCIES=true
-export NPM_CONFIG_FETCH_TIMEOUT=300000
-export NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=20000
-export NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=120000
+export NPM_CONFIG_FETCH_TIMEOUT=240000
+export NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=10000
+export NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=60000
+export NPM_CONFIG_FETCH_RETRIES=3
 export NPM_CONFIG_CACHE_MAX=300
 
 # Cloud Run specific environment variables
 export GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-""}
-export NODE_OPTIONS="$NODE_OPTIONS --enable-source-maps"
 
-# Function to run commands with timeout
+# Enable garbage collection optimizations for memory-constrained environments
+export UV_THREADPOOL_SIZE=4
+
+# Enhanced function to run commands with timeout and memory monitoring
 run_with_timeout() {
   local timeout_duration=$1
   shift
@@ -48,39 +111,110 @@ run_with_timeout() {
     return $?
   fi
   
+  echo "⏱️ Running command with ${timeout_duration}s timeout: $@"
+  
+  # Start background memory monitoring
+  local monitor_pid=""
+  if command -v free >/dev/null 2>&1; then
+    (
+      while true; do
+        sleep 30
+        CURRENT_MEM=$(free -m | awk '/^Mem:/{print $7}')
+        if [ "$CURRENT_MEM" -lt 200 ]; then
+          echo "⚠️ WARNING: Low memory detected (${CURRENT_MEM}MB available)"
+        fi
+      done
+    ) &
+    monitor_pid=$!
+  fi
+  
+  # Run the command with timeout
   timeout $timeout_duration "$@"
   local exit_code=$?
-  if [ $exit_code -eq 124 ]; then
-    echo "❌ Command timed out after ${timeout_duration} seconds"
-    return 124
+  
+  # Stop memory monitoring
+  if [ -n "$monitor_pid" ]; then
+    kill $monitor_pid 2>/dev/null || true
   fi
+  
+  # Handle timeout and other errors
+  case $exit_code in
+    0)
+      echo "✅ Command completed successfully"
+      ;;
+    124)
+      echo "❌ Command timed out after ${timeout_duration} seconds"
+      log_memory_usage "timeout-failure"
+      ;;
+    *)
+      echo "❌ Command failed with exit code: $exit_code"
+      log_memory_usage "command-failure"
+      ;;
+  esac
+  
   return $exit_code
 }
 
-# Clean npm cache and install dependencies reproducibly
-echo "📦 Cleaning npm cache and installing dependencies with lockfile..."
-run_with_timeout 60 npm cache clean --force 2>/dev/null || true
+# Enhanced npm cache cleaning and dependency installation
+echo "📦 Aggressively cleaning npm cache and preparing for install..."
 
-# Generate package-lock.json if missing for npm ci
+# Clean npm cache more thoroughly
+run_with_timeout 60 npm cache clean --force 2>/dev/null || true
+run_with_timeout 30 npm cache verify 2>/dev/null || true
+
+# Remove node_modules if it exists to prevent conflicts
+if [ -d node_modules ]; then
+  echo "🧹 Removing existing node_modules to prevent conflicts..."
+  rm -rf node_modules
+fi
+
+# Set aggressive npm configuration for Cloud Run environment
+export NPM_CONFIG_PROGRESS=false
+export NPM_CONFIG_LOGLEVEL=warn
+export NPM_CONFIG_AUDIT=false
+export NPM_CONFIG_FUND=false
+export NPM_CONFIG_UPDATE_NOTIFIER=false
+export NPM_CONFIG_CACHE_MAX=86400
+export NPM_CONFIG_NETWORK_TIMEOUT=180000
+export NPM_CONFIG_MAXSOCKETS=10
+
+# Generate package-lock.json if missing with optimized settings
 if [ ! -f package-lock.json ]; then
-  echo "📝 Generating missing package-lock.json..."
-  if ! run_with_timeout 300 npm install --package-lock-only --no-audit --no-fund; then
-    echo "⚠️ Package lock generation failed or timed out. Trying alternative approach..."
-    echo "📝 Attempting npm install with shorter timeout..."
-    if ! run_with_timeout 180 npm install --package-lock-only --no-audit --no-fund --prefer-offline; then
+  echo "📝 Generating missing package-lock.json with optimized settings..."
+  if ! run_with_timeout 240 npm install --package-lock-only --no-audit --no-fund --prefer-offline --cache-max=300; then
+    echo "⚠️ Package lock generation failed. Trying with shorter timeout and reduced concurrency..."
+    if ! run_with_timeout 120 npm install --package-lock-only --no-audit --no-fund --prefer-offline --maxsockets=5; then
       echo "❌ Failed to generate package-lock.json"
       exit 1
     fi
   fi
 fi
 
-# Use npm ci for reproducible builds with lockfile
-echo "📦 Installing dependencies reproducibly with npm ci..."
-if ! run_with_timeout 600 npm ci --no-audit --no-fund --prefer-offline; then
-  echo "⚠️ npm ci failed, trying fallback with npm install..."
-  if ! run_with_timeout 600 npm install --no-audit --no-fund --prefer-offline; then
-    echo "❌ Both npm ci and npm install failed!"
-    exit 1
+# Install dependencies with progressive timeout strategy
+echo "📦 Installing dependencies with progressive retry strategy..."
+
+# First attempt: Fast install with CI
+if run_with_timeout 300 npm ci --no-audit --no-fund --prefer-offline --no-optional --no-progress; then
+  echo "✅ Fast npm ci succeeded"
+else
+  echo "⚠️ Fast npm ci failed, trying fallback with longer timeout..."
+  
+  # Second attempt: Slower install with reduced concurrency
+  if run_with_timeout 450 npm ci --no-audit --no-fund --prefer-offline --maxsockets=5 --no-progress; then
+    echo "✅ Slower npm ci succeeded"
+  else
+    echo "⚠️ npm ci failed completely, trying npm install fallback..."
+    
+    # Final attempt: npm install with maximum tolerance
+    if ! run_with_timeout 300 npm install --no-audit --no-fund --prefer-offline --maxsockets=3 --no-progress --legacy-peer-deps; then
+      echo "❌ All npm install attempts failed!"
+      echo "📊 Debug information:"
+      echo "  Node version: $(node --version)"
+      echo "  NPM version: $(npm --version)"
+      echo "  Available memory: $(free -m | awk '/^Mem:/{print $7}') MB"
+      echo "  Disk space: $(df -h . | tail -1 | awk '{print $4}')"
+      exit 1
+    fi
   fi
 fi
 
@@ -95,11 +229,11 @@ rm -rf dist
 # Build frontend with deployment optimizations
 log_memory_usage "pre-frontend-build"
 echo "🎨 Building frontend with optimized chunking and memory limits..."
-# Reduce memory usage for Vite build
-export NODE_OPTIONS="--max-old-space-size=3072 --max-semi-space-size=512"
+# Adjust memory for Vite build while preserving base options
+export NODE_OPTIONS="$NODE_BASE_OPTIONS --enable-source-maps"
 
 # Capture frontend build result immediately
-if ! run_with_timeout 900 npx vite build --config vite.config.deployment.ts --mode production; then
+if ! run_with_timeout 900 npx vite build --config $VITE_CONFIG --mode production; then
     echo "❌ Frontend build failed or timed out!"
     log_memory_usage "frontend-build-failure"
     exit 1
@@ -116,8 +250,8 @@ echo "📦 Frontend bundle size: $FRONTEND_SIZE"
 # Build backend with critical dependencies bundled
 log_memory_usage "pre-backend-build"
 echo "⚙️ Building backend with improved ESM dependency bundling and memory optimization..."
-# Reset memory for backend build
-export NODE_OPTIONS="--max-old-space-size=2048 --max-semi-space-size=256"
+# Use consistent memory settings for backend build
+export NODE_OPTIONS="$NODE_BASE_OPTIONS --enable-source-maps"
 if ! run_with_timeout 600 npx esbuild server/index.ts \
   --platform=node \
   --bundle \

@@ -295,6 +295,25 @@ const upload = multer({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Health check endpoints for Cloud Run deployment (must be early in route registration)
+  app.get('/health', (req: Request, res: Response) => {
+    res.status(200).json({
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || 'development',
+      uptime: process.uptime(),
+      memory: {
+        used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+        total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024)
+      }
+    });
+  });
+
+  // Readiness probe for Cloud Run
+  app.get('/ready', (req: Request, res: Response) => {
+    res.status(200).json({ status: 'ready' });
+  });
+
   // Use auth setup from auth.ts
   setupAuth(app);
 

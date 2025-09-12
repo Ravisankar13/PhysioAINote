@@ -1,28 +1,39 @@
 #!/usr/bin/env node
 
+// Replit deployment build script
+// This script prepares the application for deployment by:
+// 1. Building the backend code
+// 2. Keeping dependencies in package.json for Replit to install
+// 3. Copying necessary directories
+
 import { execSync } from 'child_process';
 import { existsSync, rmSync, mkdirSync, cpSync } from 'fs';
+import { dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 console.log('🚀 Starting Replit deployment build...');
+console.log('   Current directory:', process.cwd());
 
 try {
-  // Build directly in place without dist directory
-  // This ensures dependencies installed by Replit are available
-  
+  // Clean up any old dist directory
+  if (existsSync('dist')) {
+    console.log('🧹 Cleaning old dist directory...');
+    rmSync('dist', { recursive: true, force: true });
+  }
+  mkdirSync('dist', { recursive: true });
+
   console.log('⏭️  Skipping frontend Vite build (known hanging issue)...');
-  console.log('   Frontend will be served from public/client directories');
   
-  // Bundle the backend with external packages
-  console.log('⚙️ Building backend server...');
-  console.log('   Dependencies will be loaded from node_modules at runtime');
-  
-  // Build index.js in the root directory where node_modules exists
-  execSync(`npx --yes esbuild server/index.ts \
+  // Build the backend server
+  console.log('⚙️  Building backend server...');
+  execSync(`npx esbuild server/index.ts \
     --bundle \
     --packages=external \
     --platform=node \
     --format=esm \
-    --outfile=index-production.js \
+    --outfile=dist/server.js \
     --target=node20 \
     --minify \
     --legal-comments=none`, { 
@@ -30,22 +41,52 @@ try {
     timeout: 180000
   });
   
-  console.log('✅ Backend built successfully as index-production.js');
+  console.log('✅ Backend built to dist/server.js');
   
-  // Update npm start script to use the production build
-  console.log('📦 Updating package.json start script...');
+  // Copy package.json and package-lock.json to dist
+  // Replit will install these dependencies automatically
+  console.log('📦 Copying package files to dist...');
+  execSync('cp package.json dist/package.json', { stdio: 'inherit' });
+  if (existsSync('package-lock.json')) {
+    execSync('cp package-lock.json dist/package-lock.json', { stdio: 'inherit' });
+  }
+  
+  // Copy necessary directories to dist
+  if (existsSync('shared')) {
+    console.log('📁 Copying shared directory...');
+    cpSync('shared', 'dist/shared', { recursive: true });
+  }
+  
+  if (existsSync('public')) {
+    console.log('📄 Copying public directory...');
+    cpSync('public', 'dist/public', { recursive: true });
+  }
+  
+  if (existsSync('client')) {
+    console.log('📱 Copying client directory...');
+    cpSync('client', 'dist/client', { recursive: true });
+  }
+  
+  // Update the start script in dist/package.json to run the built server
+  console.log('📝 Updating start script in dist/package.json...');
   execSync(`node -e "
     const fs = require('fs');
-    const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-    pkg.scripts.start = 'NODE_ENV=production node index-production.js';
-    fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
+    const pkg = JSON.parse(fs.readFileSync('dist/package.json', 'utf8'));
+    pkg.scripts = pkg.scripts || {};
+    pkg.scripts.start = 'NODE_ENV=production node server.js';
+    fs.writeFileSync('dist/package.json', JSON.stringify(pkg, null, 2));
   "`, { stdio: 'inherit' });
   
+  console.log('📋 Deployment build structure:');
+  execSync('ls -la dist/ | head -10', { stdio: 'inherit' });
+  
+  console.log('');
   console.log('🎉 Build completed successfully!');
-  console.log('   Backend: ✅ Built as index-production.js');
-  console.log('   Dependencies: ✅ Will use installed node_modules');
-  console.log('   Start script: ✅ Updated to use production build');
+  console.log('   - Backend: dist/server.js');
+  console.log('   - Dependencies: dist/package.json (Replit will install)');
+  console.log('   - Static files: dist/public, dist/client');
   console.log('   Ready for deployment!');
+  
   process.exit(0);
 
 } catch (error) {

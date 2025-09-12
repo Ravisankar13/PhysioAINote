@@ -34,12 +34,12 @@ try {
   console.log('📝 Updating package.json for production...');
   const pkg = JSON.parse(execSync('cat package.json', { encoding: 'utf8' }));
   pkg.scripts = pkg.scripts || {};
-  pkg.scripts.start = 'NODE_ENV=production npx tsx server/index.ts';
+  pkg.scripts.start = 'NODE_ENV=production npx tsx server/production.ts';
   writeFileSync('package.json', JSON.stringify(pkg, null, 2));
   
   console.log('📋 Deployment preparation complete:');
   console.log('   - Backend: Using tsx to run TypeScript directly');
-  console.log('   - Start script: NODE_ENV=production npx tsx server/index.ts');
+  console.log('   - Start script: NODE_ENV=production npx tsx server/production.ts');
   console.log('   - Dependencies: Available via package.json');
   
   console.log('');

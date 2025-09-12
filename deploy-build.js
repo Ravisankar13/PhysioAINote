@@ -35,10 +35,10 @@ try {
     console.log('⚠️  Frontend build failed, deployment will serve API only');
   }
   
-  // Copy simplified deployment server (designed for Reserved VM)
-  console.log('⚙️  Preparing Reserved VM compatible server...');
-  execSync('cp deploy-simple.cjs deploy-server.cjs', { stdio: 'inherit' });
-  console.log('✅ Production server ready (single port, CommonJS)');
+  // Copy complete deployment server
+  console.log('⚙️  Preparing complete production server...');
+  execSync('cp deploy-complete.cjs deploy-server.cjs', { stdio: 'inherit' });
+  console.log('✅ Production server ready (full application)');
   
   // Update the start script in package.json for production
   console.log('📝 Updating package.json for production...');

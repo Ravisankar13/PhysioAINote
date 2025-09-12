@@ -35,10 +35,10 @@ try {
     console.log('⚠️  Frontend build failed, deployment will serve API only');
   }
   
-  // Copy production server as CommonJS file (to avoid ESM issues)
-  console.log('⚙️  Preparing production server...');
-  execSync('cp server/production-full.cjs deploy-server.cjs', { stdio: 'inherit' });
-  console.log('✅ Production server ready (CommonJS format)');
+  // Copy simplified deployment server (designed for Reserved VM)
+  console.log('⚙️  Preparing Reserved VM compatible server...');
+  execSync('cp deploy-simple.cjs deploy-server.cjs', { stdio: 'inherit' });
+  console.log('✅ Production server ready (single port, CommonJS)');
   
   // Update the start script in package.json for production
   console.log('📝 Updating package.json for production...');

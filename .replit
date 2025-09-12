@@ -7,7 +7,7 @@ channel = "stable-24_05"
 packages = ["lsof", "jq"]
 
 [deployment]
-deploymentTarget = "autoscale"
+deploymentTarget = "gce"
 build = ["sh", "-c", "node deploy-build.js"]
 run = ["sh", "-c", "npm start"]
 

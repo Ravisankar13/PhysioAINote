@@ -60,10 +60,10 @@ try {
   });
   console.log('✅ Frontend build complete');
 
-  // Step 5: Build backend - BUNDLE EVERYTHING EXCEPT DEV TOOLS
+  // Step 5: Build backend - BUNDLE EVERYTHING
   console.log('⚙️ Building backend (fully bundled)...');
   
-  // Bundle all runtime dependencies, only exclude dev tools
+  // Use esbuild with minimal externals (only dev tools)
   execSync(`npx esbuild server/index.ts \
     --platform=node \
     --bundle \
@@ -75,12 +75,7 @@ try {
     --external:@vitejs/* \
     --external:esbuild \
     --external:drizzle-kit \
-    --external:tsx \
-    --external:typescript \
-    --external:@types/* \
-    --external:tailwindcss \
-    --external:autoprefixer \
-    --external:postcss`, { 
+    --external:tsx`, { 
     stdio: 'inherit',
     timeout: 120000 // 2 minute timeout
   });
@@ -91,20 +86,6 @@ try {
   if (existsSync('dist/index.js')) {
     const distSize = readFileSync('dist/index.js', 'utf-8').length;
     console.log(`📊 Bundle size: ${(distSize / 1024 / 1024).toFixed(2)} MB`);
-    
-    // Check for potential issues
-    const bundleContent = readFileSync('dist/index.js', 'utf-8');
-    const hasBareDrizzle = bundleContent.includes('from "drizzle-orm') || 
-                           bundleContent.includes("from 'drizzle-orm");
-    
-    if (hasBareDrizzle) {
-      console.warn('⚠️ Warning: Found potential bare drizzle-orm imports');
-      console.warn('This may cause runtime errors - attempting to fix...');
-      
-      // The imports should be bundled, not bare
-      console.log('Verifying bundle integrity...');
-    }
-    
     console.log('🎉 Build completed successfully!');
     process.exit(0);
   } else {

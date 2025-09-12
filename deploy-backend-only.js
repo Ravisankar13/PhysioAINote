@@ -3,7 +3,7 @@
 import { execSync } from 'child_process';
 import { existsSync, rmSync, mkdirSync, cpSync } from 'fs';
 
-console.log('🚀 Starting Replit deployment build...');
+console.log('🚀 Starting Replit deployment build (backend-focused)...');
 
 try {
   // Clean dist directory
@@ -12,15 +12,14 @@ try {
   }
   mkdirSync('dist', { recursive: true });
 
-  // Skip frontend build to avoid hanging issue
-  console.log('⏭️  Skipping frontend Vite build (known hanging issue)...');
-  console.log('   Frontend will be served from public/client directories');
-
-  // Build backend with external packages (native modules can't be bundled)
-  console.log('⚙️ Building backend...');
-  console.log('  Using --packages=external to avoid bundling native modules...');
+  // Skip frontend build - serve static files directly
+  console.log('⏭️  Skipping frontend build to avoid timeout issues...');
   
-  execSync(`npx --yes esbuild server/index.ts \
+  // Build backend with external packages
+  console.log('⚙️  Building backend...');
+  console.log('   Using --packages=external to avoid bundling native modules...');
+  
+  execSync(`npx esbuild server/index.ts \
     --bundle \
     --packages=external \
     --platform=node \
@@ -30,7 +29,7 @@ try {
     --minify \
     --legal-comments=none`, { 
     stdio: 'inherit',
-    timeout: 180000
+    timeout: 180000 // 3 minutes timeout
   });
   
   console.log('✅ Backend built successfully');
@@ -42,7 +41,7 @@ try {
     execSync('cp package-lock.json dist/', { stdio: 'inherit' });
   }
   
-  // Copy shared directory if exists
+  // Copy shared directory if exists (required for schema)
   if (existsSync('shared')) {
     console.log('📁 Copying shared directory...');
     cpSync('shared', 'dist/shared', { recursive: true });
@@ -50,20 +49,27 @@ try {
 
   // Copy public directory for static serving
   if (existsSync('public')) {
-    console.log('📄 Copying public directory...');
+    console.log('📄 Copying public directory for static serving...');
     cpSync('public', 'dist/public', { recursive: true });
   }
 
   // Copy client directory for development fallback
   if (existsSync('client')) {
-    console.log('📱 Copying client directory...');
+    console.log('📱 Copying client directory for development fallback...');
     cpSync('client', 'dist/client', { recursive: true });
   }
   
   console.log('🎉 Build completed successfully!');
-  console.log('   Backend: ✅ Built and optimized');
-  console.log('   Frontend: ✅ Static files copied');
-  console.log('   Ready for deployment!');
+  console.log('');
+  console.log('📋 Build output summary:');
+  try {
+    execSync('ls -la dist/ | head -10', { stdio: 'inherit' });
+  } catch (e) {
+    // Ignore ls errors
+  }
+  
+  console.log('');
+  console.log('✨ Ready for deployment!');
   process.exit(0);
 
 } catch (error) {

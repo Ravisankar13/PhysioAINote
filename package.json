@@ -25,6 +25,7 @@
     "@hello-pangea/dnd": "^18.0.1",
     "@hookform/resolvers": "^3.10.0",
     "@jridgewell/trace-mapping": "^0.3.25",
+    "@libsql/client": "^0.10.0",
     "@mediapipe/camera_utils": "^0.3.1675466862",
     "@mediapipe/drawing_utils": "^0.3.1675466124",
     "@mediapipe/pose": "^0.5.1675469404",
@@ -143,8 +144,7 @@
     "ws": "^8.18.0",
     "ytdl-core": "^4.11.5",
     "zod": "^3.24.2",
-    "zod-validation-error": "^3.4.0",
-    "@libsql/client": "^0.5.0"
+    "zod-validation-error": "^3.4.0"
   },
   "devDependencies": {
     "@replit/vite-plugin-cartographer": "^0.2.7",

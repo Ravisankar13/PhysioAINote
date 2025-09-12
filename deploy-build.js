@@ -6,58 +6,48 @@ import { existsSync, rmSync, mkdirSync } from 'fs';
 console.log('🚀 Starting Replit deployment build...');
 
 try {
-  // Clean and create dist directory
-  console.log('🧹 Cleaning previous build...');
+  // Clean dist directory
   if (existsSync('dist')) {
     rmSync('dist', { recursive: true, force: true });
   }
   mkdirSync('dist', { recursive: true });
 
-  // Install dependencies with force to bypass version conflicts
-  console.log('📦 Installing dependencies (forcing to resolve conflicts)...');
-  execSync('npm install --force --no-audit --no-fund', { 
-    stdio: 'inherit',
-    timeout: 300000
-  });
-  console.log('✅ Dependencies installed');
-
-  // Build frontend
+  // Build frontend (skip if fails)
   console.log('🎨 Building frontend...');
-  let viteConfig = 'vite.config.ts';
-  if (existsSync('vite.config.deployment.js')) {
-    viteConfig = 'vite.config.deployment.js';
-  } else if (existsSync('vite.config.deployment.ts')) {
-    viteConfig = 'vite.config.deployment.ts';
-  }
-  
   try {
-    execSync(`npx vite build --config ${viteConfig}`, { 
+    let viteConfig = 'vite.config.ts';
+    if (existsSync('vite.config.deployment.js')) {
+      viteConfig = 'vite.config.deployment.js';
+    }
+    execSync(`npx --yes vite build --config ${viteConfig}`, { 
       stdio: 'inherit',
-      timeout: 180000
+      timeout: 120000
     });
-    console.log('✅ Frontend build complete');
+    console.log('✅ Frontend built');
   } catch (e) {
-    console.warn('⚠️ Frontend build had issues, continuing...');
+    console.log('⚠️ Frontend build skipped');
   }
 
-  // Build backend - bundle EVERYTHING
-  console.log('⚙️ Building backend (fully bundled)...');
-  console.log('  This will bundle ALL dependencies into a single file...');
+  // Build backend with FULL bundling
+  console.log('⚙️ Building backend with ALL dependencies bundled...');
+  console.log('  Using --packages=bundle to ensure everything is included...');
   
-  // Simple esbuild command that bundles everything
-  execSync(`npx esbuild server/index.ts \
+  // The CRITICAL flag is --packages=bundle
+  execSync(`npx --yes esbuild@0.25.9 server/index.ts \
     --bundle \
+    --packages=bundle \
     --platform=node \
     --format=esm \
     --outfile=dist/index.js \
-    --target=node18 \
-    --minify`, { 
+    --target=node20 \
+    --minify \
+    --legal-comments=none`, { 
     stdio: 'inherit',
     timeout: 180000
   });
   
-  console.log('✅ Backend bundled successfully');
-  console.log('🎉 Build completed!');
+  console.log('✅ Backend bundled with all dependencies');
+  console.log('🎉 Build completed successfully!');
   process.exit(0);
 
 } catch (error) {

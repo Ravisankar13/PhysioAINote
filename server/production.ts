@@ -84,8 +84,8 @@ app.use((err: any, req: any, res: any, next: any) => {
   res.status(500).json({ error: "Internal Server Error" });
 });
 
-// Start server
-const PORT = parseInt(process.env.PORT || "3000", 10);
+// Start server - Use port 5000 for Reserved VM deployment
+const PORT = parseInt(process.env.PORT || "5000", 10);
 
 const server = app.listen(PORT, "0.0.0.0", () => {
   console.log(`✅ Server running on port ${PORT}`);

@@ -6,26 +6,23 @@ import { existsSync, rmSync, mkdirSync, cpSync } from 'fs';
 console.log('🚀 Starting Replit deployment build...');
 
 try {
-  // Clean dist directory
-  if (existsSync('dist')) {
-    rmSync('dist', { recursive: true, force: true });
-  }
-  mkdirSync('dist', { recursive: true });
-
-  // Skip frontend build to avoid hanging issue
+  // Build directly in place without dist directory
+  // This ensures dependencies installed by Replit are available
+  
   console.log('⏭️  Skipping frontend Vite build (known hanging issue)...');
   console.log('   Frontend will be served from public/client directories');
-
-  // Build backend with all packages external
-  console.log('⚙️ Building backend...');
-  console.log('  Using --packages=external - Replit will install dependencies...');
   
+  // Bundle the backend with external packages
+  console.log('⚙️ Building backend server...');
+  console.log('   Dependencies will be loaded from node_modules at runtime');
+  
+  // Build index.js in the root directory where node_modules exists
   execSync(`npx --yes esbuild server/index.ts \
     --bundle \
     --packages=external \
     --platform=node \
     --format=esm \
-    --outfile=dist/index.js \
+    --outfile=index-production.js \
     --target=node20 \
     --minify \
     --legal-comments=none`, { 
@@ -33,39 +30,21 @@ try {
     timeout: 180000
   });
   
-  console.log('✅ Backend built successfully');
+  console.log('✅ Backend built successfully as index-production.js');
   
-  // Copy package files - Replit deployment will install these dependencies
-  console.log('📦 Copying package files for Replit deployment...');
-  execSync('cp package.json dist/', { stdio: 'inherit' });
-  if (existsSync('package-lock.json')) {
-    execSync('cp package-lock.json dist/', { stdio: 'inherit' });
-  }
-  
-  // Copy shared directory (required for schema)
-  if (existsSync('shared')) {
-    console.log('📁 Copying shared directory...');
-    cpSync('shared', 'dist/shared', { recursive: true });
-  }
-
-  // Copy public directory for static serving
-  if (existsSync('public')) {
-    console.log('📄 Copying public directory...');
-    cpSync('public', 'dist/public', { recursive: true });
-  }
-
-  // Copy client directory for development fallback
-  if (existsSync('client')) {
-    console.log('📱 Copying client directory...');
-    cpSync('client', 'dist/client', { recursive: true });
-  }
+  // Update npm start script to use the production build
+  console.log('📦 Updating package.json start script...');
+  execSync(`node -e "
+    const fs = require('fs');
+    const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+    pkg.scripts.start = 'NODE_ENV=production node index-production.js';
+    fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
+  "`, { stdio: 'inherit' });
   
   console.log('🎉 Build completed successfully!');
-  console.log('   Backend: ✅ Built and optimized');
-  console.log('   Frontend: ✅ Static files copied');
-  console.log('   Dependencies: ✅ package.json ready for Replit deployment');
-  console.log('');
-  console.log('📋 Replit deployment will automatically install dependencies from package.json');
+  console.log('   Backend: ✅ Built as index-production.js');
+  console.log('   Dependencies: ✅ Will use installed node_modules');
+  console.log('   Start script: ✅ Updated to use production build');
   console.log('   Ready for deployment!');
   process.exit(0);
 

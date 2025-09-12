@@ -8,7 +8,7 @@
     "build": "./deploy-build.sh",
     "build:frontend": "vite build --config vite.config.deployment.ts",
     "build:backend": "esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist --minify",
-    "start": "NODE_ENV=production node dist/index.js",
+    "start": "NODE_ENV=production node index-production.js",
     "check": "tsc",
     "db:push": "drizzle-kit push",
     "script": "tsx server/scripts/runScript.ts"

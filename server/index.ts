@@ -44,9 +44,27 @@ app.use((req, res, next) => {
   try {
     log("Starting PhysioGPT server initialization...");
 
+    // Environment validation for deployment
+    const requiredEnvVars = ['DATABASE_URL'];
+    const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
+    
+    if (missingEnvVars.length > 0) {
+      console.warn(`⚠️  Missing environment variables: ${missingEnvVars.join(', ')}`);
+      console.warn(`⚠️  Server will continue but some features may not work correctly`);
+    }
+
+    // Optional environment variables with warnings
+    const optionalEnvVars = ['OPENAI_API_KEY', 'STRIPE_SECRET_KEY'];
+    const missingOptionalVars = optionalEnvVars.filter(envVar => !process.env[envVar]);
+    
+    if (missingOptionalVars.length > 0) {
+      console.log(`ℹ️  Optional environment variables not set: ${missingOptionalVars.join(', ')}`);
+    }
+
     // Register routes with error handling
     const server = await registerRoutes(app).catch(err => {
-      console.error("Failed to register routes:", err);
+      console.error("❌ Failed to register routes:", err);
+      console.error("Stack trace:", err.stack);
       throw new Error(`Route registration failed: ${err.message}`);
     });
     log("Routes registered successfully");
@@ -97,25 +115,65 @@ app.use((req, res, next) => {
     // Start server with enhanced error handling
     const PORT = Number(process.env.PORT) || 5000;
 
-    // Enhanced error handling for deployment
+    // Enhanced error handling for deployment with better diagnostics
     process.on('uncaughtException', (error) => {
-      console.error('Uncaught Exception:', error);
+      console.error('💥 Uncaught Exception detected:');
+      console.error('Error:', error.message);
+      console.error('Stack:', error.stack);
+      console.error('Time:', new Date().toISOString());
+      console.error('Environment:', process.env.NODE_ENV);
+      console.error('Memory usage:', process.memoryUsage());
+      
       if (process.env.NODE_ENV === 'production') {
+        console.error('🚨 Exiting process due to uncaught exception in production');
         process.exit(1);
+      } else {
+        console.error('⚠️  Continuing in development mode, but this should be fixed');
       }
     });
 
     process.on('unhandledRejection', (reason, promise) => {
-      console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+      console.error('💥 Unhandled Promise Rejection detected:');
+      console.error('Promise:', promise);
+      console.error('Reason:', reason);
+      console.error('Time:', new Date().toISOString());
+      console.error('Environment:', process.env.NODE_ENV);
+      
       if (process.env.NODE_ENV === 'production') {
+        console.error('🚨 Exiting process due to unhandled rejection in production');
         process.exit(1);
+      } else {
+        console.error('⚠️  Continuing in development mode, but this should be fixed');
       }
     });
 
+    process.on('SIGTERM', () => {
+      console.log('💤 SIGTERM received, shutting down gracefully');
+      process.exit(0);
+    });
+
+    process.on('SIGINT', () => {
+      console.log('💤 SIGINT received, shutting down gracefully');
+      process.exit(0);
+    });
+
     const httpServer = app.listen(PORT, "0.0.0.0", () => {
-      console.log(`Server running on port ${PORT}`);
-      console.log(`Environment: ${process.env.NODE_ENV}`);
-      console.log(`Memory usage:`, process.memoryUsage());
+      // Enhanced startup logging for deployment verification
+      console.log(`✅ PhysioGPT Server successfully started`);
+      console.log(`🌐 Server running on http://0.0.0.0:${PORT}`);
+      console.log(`📦 Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`🏗️  Build time: ${process.env.BUILD_TIME || 'unknown'}`);
+      console.log(`🔧 Node.js version: ${process.version}`);
+      console.log(`💾 Memory usage:`, {
+        rss: Math.round(process.memoryUsage().rss / 1024 / 1024) + 'MB',
+        heapTotal: Math.round(process.memoryUsage().heapTotal / 1024 / 1024) + 'MB',
+        heapUsed: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + 'MB'
+      });
+      console.log(`🔑 Environment check:`, {
+        database: process.env.DATABASE_URL ? '✅ configured' : '❌ not configured',
+        openai: process.env.OPENAI_API_KEY ? '✅ configured' : '❌ not configured'
+      });
+      console.log(`🚀 Server ready to accept connections`);
     });
 
     // Initialize background services with individual error handling

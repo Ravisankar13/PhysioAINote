@@ -335,18 +335,39 @@ const upload = multer({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Health check endpoints for Cloud Run deployment (must be early in route registration)
+  // Health check endpoints for deployment verification (must be early in route registration)
   app.get('/health', (req: Request, res: Response) => {
-    res.status(200).json({
+    const healthData = {
       status: 'healthy',
       timestamp: new Date().toISOString(),
       environment: process.env.NODE_ENV || 'development',
       uptime: process.uptime(),
       memory: {
         used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
-        total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024)
+        total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
+        rss: Math.round(process.memoryUsage().rss / 1024 / 1024),
+        external: Math.round(process.memoryUsage().external / 1024 / 1024)
+      },
+      server: {
+        port: process.env.PORT || 5000,
+        host: '0.0.0.0',
+        nodeVersion: process.version,
+        platform: process.platform,
+        arch: process.arch,
+        pid: process.pid
+      },
+      deployment: {
+        buildTime: process.env.BUILD_TIME || 'unknown',
+        gitCommit: process.env.GIT_COMMIT || 'unknown',
+        deploymentId: process.env.DEPLOYMENT_ID || 'unknown'
+      },
+      services: {
+        database: process.env.DATABASE_URL ? 'configured' : 'not configured',
+        openai: process.env.OPENAI_API_KEY ? 'configured' : 'not configured'
       }
-    });
+    };
+
+    res.status(200).json(healthData);
   });
 
   // Readiness probe for Cloud Run

@@ -22,6 +22,10 @@ try {
   
   console.log('⏭️  Skipping frontend Vite build (known hanging issue)...');
   
+  // Ensure server/public directory exists with index.html for production
+  console.log('📂 Ensuring server/public directory exists...');
+  execSync('mkdir -p server/public && cp public/index.html server/public/', { stdio: 'inherit' });
+  
   // Build the backend server to the root directory
   console.log('⚙️  Building backend server...');
   execSync(`npx esbuild server/index.ts \

@@ -19,20 +19,50 @@ try {
 
   // Always install dependencies to ensure they're up to date
   console.log('📦 Installing dependencies (this may take a moment)...');
-  execSync('npm install --no-audit --no-fund --prefer-offline', { stdio: 'inherit' });
+  // Clean install to ensure all deps are present
+  if (existsSync('node_modules')) {
+    console.log('🧹 Cleaning old node_modules...');
+    rmSync('node_modules', { recursive: true, force: true });
+  }
+  if (existsSync('package-lock.json')) {
+    rmSync('package-lock.json', { force: true });
+  }
+  execSync('npm install --no-audit --no-fund', { stdio: 'inherit' });
+  
+  // Verify vite is installed
+  if (!existsSync('node_modules/vite')) {
+    console.error('❌ Vite was not installed properly, trying to install it directly...');
+    execSync('npm install vite@5.4.20 @vitejs/plugin-react --save-dev --no-audit --no-fund', { stdio: 'inherit' });
+  }
   console.log('✅ Dependencies installed');
 
   // Build frontend
   console.log('🎨 Building frontend...');
-  const viteConfig = existsSync('vite.config.deployment.ts') 
-    ? 'vite.config.deployment.ts' 
-    : 'vite.config.ts';
-  execSync(`npx vite build --config ${viteConfig} --mode production`, { stdio: 'inherit' });
+  // Try to find the best config file
+  let viteConfig = 'vite.config.ts';
+  
+  // Check if vite is properly installed before choosing config
+  if (existsSync('node_modules/vite/package.json')) {
+    console.log('✓ Vite found in node_modules');
+    if (existsSync('vite.config.deployment.js')) {
+      viteConfig = 'vite.config.deployment.js';
+    } else if (existsSync('vite.config.deployment.ts')) {
+      viteConfig = 'vite.config.deployment.ts';
+    }
+  } else {
+    console.log('⚠️ Vite not found in node_modules, using simple config');
+    viteConfig = existsSync('vite.config.simple.js') ? 'vite.config.simple.js' : 'vite.config.ts';
+  }
+  
+  console.log(`Using config: ${viteConfig}`);
+  
+  // Build with the selected config
+  execSync(`npx --yes vite@5.4.20 build --config ${viteConfig} --mode production`, { stdio: 'inherit' });
   console.log('✅ Frontend build complete!');
 
   // Build backend with proper bundling (no --packages=external)
   console.log('⚙️ Building backend with bundled dependencies...');
-  execSync(`npx esbuild server/index.ts \
+  execSync(`npx --yes esbuild@0.25.9 server/index.ts \
     --platform=node \
     --bundle \
     --format=esm \

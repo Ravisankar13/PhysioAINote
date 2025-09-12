@@ -1,0 +1,40 @@
+CRITICAL DEPLOYMENT FIX REQUIRED
+================================
+
+THE PROBLEM:
+Your deployment is failing because the .replit file has multiple external ports configured.
+Autoscale deployments ONLY support a single external port.
+
+THE FIX - You need to manually edit .replit:
+
+1. Open the .replit file in the editor
+2. Find lines 14-24 which look like this:
+
+[[ports]]
+localPort = 5000
+externalPort = 80
+
+[[ports]]
+localPort = 44523
+externalPort = 3001
+
+[[ports]]
+localPort = 46801
+externalPort = 3000
+
+3. DELETE or comment out the extra port configurations (lines 18-24).
+   Keep ONLY the first port configuration:
+
+[[ports]]
+localPort = 5000
+externalPort = 80
+
+4. Save the file
+5. Click "Republish" in the Publishing panel
+
+Your final ports section should ONLY have:
+[[ports]]
+localPort = 5000
+externalPort = 80
+
+This is the ONLY way to fix the deployment issue.

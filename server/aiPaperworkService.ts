@@ -184,9 +184,9 @@ Format as a formal medical referral letter.
   }
 
   /**
-   * Generates comprehensive discharge summary
+   * Generates comprehensive discharge summary from a single session
    */
-  async generateDischargeSummary(soapNote: SoapNote): Promise<string> {
+  async generateSingleSessionDischargeSummary(soapNote: SoapNote): Promise<string> {
     try {
       const prompt = `
 Generate a comprehensive discharge summary based on this SOAP note:
@@ -236,9 +236,9 @@ Format as a comprehensive discharge summary for medical records.
   }
 
   /**
-   * Generates formal progress report
+   * Generates formal progress report from a single session
    */
-  async generateProgressReport(soapNote: SoapNote): Promise<string> {
+  async generateSingleSessionProgressReport(soapNote: SoapNote): Promise<string> {
     try {
       const prompt = `
 Generate a formal progress report based on this SOAP note:

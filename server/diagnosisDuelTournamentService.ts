@@ -314,17 +314,6 @@ export class DiagnosisDuelTournamentService {
     return createdMatches;
   }
 
-  /**
-   * Get match details by ID
-   */
-  async getMatchDetails(matchId: number) {
-    const [match] = await db
-      .select()
-      .from(tournamentMatches)
-      .where(eq(tournamentMatches.id, matchId));
-    
-    return match;
-  }
 
   /**
    * Get user's current match in a tournament

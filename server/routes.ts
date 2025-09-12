@@ -10775,7 +10775,7 @@ Respond with only a number between 1-100 representing the relevance score.`;
         return res.status(404).json({ error: 'SOAP note not found' });
       }
 
-      const dischargeSummary = await aiPaperworkService.generateDischargeSummary(soapNote);
+      const dischargeSummary = await aiPaperworkService.generateSingleSessionDischargeSummary(soapNote);
       res.json({ dischargeSummary });
     } catch (error: any) {
       console.error("Error generating discharge summary:", error);
@@ -10797,7 +10797,7 @@ Respond with only a number between 1-100 representing the relevance score.`;
         return res.status(404).json({ error: 'SOAP note not found' });
       }
 
-      const progressReport = await aiPaperworkService.generateProgressReport(soapNote);
+      const progressReport = await aiPaperworkService.generateSingleSessionProgressReport(soapNote);
       res.json({ progressReport });
     } catch (error: any) {
       console.error("Error generating progress report:", error);

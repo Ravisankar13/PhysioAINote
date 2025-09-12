@@ -26,21 +26,29 @@ try {
   console.log('📂 Ensuring server/public directory exists...');
   execSync('mkdir -p server/public && cp public/index.html server/public/', { stdio: 'inherit' });
   
-  // Copy simple deployment server (no compilation needed)
+  // Copy simple deployment server as CommonJS file (to avoid ESM issues)
   console.log('⚙️  Preparing ultra-simple deployment server...');
-  execSync('cp server/deploy.js deploy-server.js', { stdio: 'inherit' });
-  console.log('✅ Deployment server ready');
+  execSync('cp server/deploy.js deploy-server.cjs', { stdio: 'inherit' });
+  
+  // Fix the PORT configuration in the .cjs file
+  const serverContent = execSync('cat deploy-server.cjs', { encoding: 'utf8' });
+  const fixedContent = serverContent
+    .replace('const PORT = process.env.PORT || 5000;', 
+             'const PORT = Number(process.env.PORT) || 3000;\nconsole.log(`Starting server on port ${PORT}...`);');
+  writeFileSync('deploy-server.cjs', fixedContent);
+  console.log('✅ Deployment server ready (CommonJS format)');
   
   // Update the start script in package.json for production
   console.log('📝 Updating package.json for production...');
   const pkg = JSON.parse(execSync('cat package.json', { encoding: 'utf8' }));
   pkg.scripts = pkg.scripts || {};
-  pkg.scripts.start = 'node deploy-server.js';
+  pkg.scripts.start = 'node deploy-server.cjs';
   writeFileSync('package.json', JSON.stringify(pkg, null, 2));
   
   console.log('📋 Deployment preparation complete:');
-  console.log('   - Backend: Simple Node.js server (no dependencies)');
-  console.log('   - Start script: node deploy-server.js');
+  console.log('   - Backend: Simple Node.js server (CommonJS format)');
+  console.log('   - Start script: node deploy-server.cjs');
+  console.log('   - Port: Will use process.env.PORT or 3000');
   console.log('   - Dependencies: None required');
   
   console.log('');

@@ -28,14 +28,13 @@ try {
     console.log('⚠️ Frontend build skipped');
   }
 
-  // Build backend with FULL bundling
-  console.log('⚙️ Building backend with ALL dependencies bundled...');
-  console.log('  Using --packages=bundle to ensure everything is included...');
+  // Build backend with external packages (native modules can't be bundled)
+  console.log('⚙️ Building backend...');
+  console.log('  Using --packages=external to avoid bundling native modules...');
   
-  // The CRITICAL flag is --packages=bundle
-  execSync(`npx --yes esbuild@0.25.9 server/index.ts \
+  execSync(`npx --yes esbuild server/index.ts \
     --bundle \
-    --packages=bundle \
+    --packages=external \
     --platform=node \
     --format=esm \
     --outfile=dist/index.js \
@@ -46,7 +45,21 @@ try {
     timeout: 180000
   });
   
-  console.log('✅ Backend bundled with all dependencies');
+  console.log('✅ Backend built successfully');
+  
+  // Copy package files for production dependencies
+  console.log('📦 Copying package files for production...');
+  execSync('cp package.json dist/', { stdio: 'inherit' });
+  if (existsSync('package-lock.json')) {
+    execSync('cp package-lock.json dist/', { stdio: 'inherit' });
+  }
+  
+  // Copy shared directory if exists
+  if (existsSync('shared')) {
+    console.log('📁 Copying shared directory...');
+    execSync('cp -r shared dist/', { stdio: 'inherit' });
+  }
+  
   console.log('🎉 Build completed successfully!');
   process.exit(0);
 

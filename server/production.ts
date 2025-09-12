@@ -2,8 +2,16 @@ import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Handle both ESM and CJS for production deployment
+let __filename;
+let __dirname;
+try {
+  __filename = fileURLToPath(import.meta.url);
+  __dirname = path.dirname(__filename);
+} catch (e) {
+  // CJS fallback for compiled code
+  __dirname = __dirname || process.cwd();
+}
 
 // Create Express app
 const app = express();

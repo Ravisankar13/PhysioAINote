@@ -26,20 +26,21 @@ try {
   console.log('📂 Ensuring server/public directory exists...');
   execSync('mkdir -p server/public && cp public/index.html server/public/', { stdio: 'inherit' });
   
-  // Skip bundling - use the development server which works
-  console.log('⚙️  Preparing production server...');
-  console.log('   Using unbundled server due to esbuild port binding issues');
+  // Compile production server to JavaScript
+  console.log('⚙️  Compiling production server to JavaScript...');
+  execSync('npx esbuild server/production.ts --platform=node --packages=external --bundle --format=cjs --outdir=dist --minify --legal-comments=none', { stdio: 'inherit' });
+  console.log('✅ Server compiled to dist/production.js');
   
   // Update the start script in package.json for production
   console.log('📝 Updating package.json for production...');
   const pkg = JSON.parse(execSync('cat package.json', { encoding: 'utf8' }));
   pkg.scripts = pkg.scripts || {};
-  pkg.scripts.start = 'NODE_ENV=production npx tsx server/production.ts';
+  pkg.scripts.start = 'NODE_ENV=production node dist/production.js';
   writeFileSync('package.json', JSON.stringify(pkg, null, 2));
   
   console.log('📋 Deployment preparation complete:');
-  console.log('   - Backend: Using tsx to run TypeScript directly');
-  console.log('   - Start script: NODE_ENV=production npx tsx server/production.ts');
+  console.log('   - Backend: Compiled to JavaScript (dist/production.js)');
+  console.log('   - Start script: NODE_ENV=production node dist/production.js');
   console.log('   - Dependencies: Available via package.json');
   
   console.log('');

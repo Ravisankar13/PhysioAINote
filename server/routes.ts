@@ -297,10 +297,12 @@ function generateSoapSectionsFromInsights(transcript: string, insights: string):
   }
 }
 
-// Initialize Stripe with secret key from environment
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-08-27.basil',
-});
+// Initialize Stripe with secret key from environment (conditional to prevent crashes)
+const stripe = process.env.STRIPE_SECRET_KEY 
+  ? new Stripe(process.env.STRIPE_SECRET_KEY, {
+      apiVersion: '2025-08-27.basil',
+    })
+  : null;
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 

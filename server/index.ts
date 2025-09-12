@@ -114,6 +114,9 @@ app.use((req, res, next) => {
 
     // Start server with enhanced error handling
     const PORT = Number(process.env.PORT) || 5000;
+    
+    // Set build time for startup logging
+    process.env.BUILD_TIME = process.env.BUILD_TIME || new Date().toISOString();
 
     // Enhanced error handling for deployment with better diagnostics
     process.on('uncaughtException', (error) => {
@@ -164,6 +167,9 @@ app.use((req, res, next) => {
       console.log(`📦 Environment: ${process.env.NODE_ENV || 'development'}`);
       console.log(`🏗️  Build time: ${process.env.BUILD_TIME || 'unknown'}`);
       console.log(`🔧 Node.js version: ${process.version}`);
+      console.log(`📋 Platform: ${process.platform} ${process.arch}`);
+      console.log(`🆔 Process ID: ${process.pid}`);
+      console.log(`⏱️  Uptime: ${Math.round(process.uptime())}s`);
       console.log(`💾 Memory usage:`, {
         rss: Math.round(process.memoryUsage().rss / 1024 / 1024) + 'MB',
         heapTotal: Math.round(process.memoryUsage().heapTotal / 1024 / 1024) + 'MB',
@@ -171,9 +177,20 @@ app.use((req, res, next) => {
       });
       console.log(`🔑 Environment check:`, {
         database: process.env.DATABASE_URL ? '✅ configured' : '❌ not configured',
-        openai: process.env.OPENAI_API_KEY ? '✅ configured' : '❌ not configured'
+        openai: process.env.OPENAI_API_KEY ? '✅ configured' : '❌ not configured',
+        port: `✅ ${PORT}`,
+        host: '✅ 0.0.0.0'
       });
+      console.log(`🏥 Health check available at: http://0.0.0.0:${PORT}/health`);
       console.log(`🚀 Server ready to accept connections`);
+    }).on('error', (error: any) => {
+      console.error(`❌ Failed to start server on port ${PORT}:`, error.message);
+      if (error.code === 'EADDRINUSE') {
+        console.error(`🚫 Port ${PORT} is already in use. Try a different port.`);
+      } else if (error.code === 'EACCES') {
+        console.error(`🚫 Permission denied to bind to port ${PORT}. Try a different port or run with elevated privileges.`);
+      }
+      process.exit(1);
     });
 
     // Initialize background services with individual error handling

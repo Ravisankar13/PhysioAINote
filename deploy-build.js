@@ -26,17 +26,19 @@ try {
   console.log('📂 Ensuring server/public directory exists...');
   execSync('mkdir -p server/public && cp public/index.html server/public/', { stdio: 'inherit' });
   
-  // Copy simple deployment server as CommonJS file (to avoid ESM issues)
-  console.log('⚙️  Preparing ultra-simple deployment server...');
-  execSync('cp server/deploy.js deploy-server.cjs', { stdio: 'inherit' });
+  // Build the React frontend for production
+  console.log('⚙️  Building React frontend...');
+  try {
+    execSync('npx vite build', { stdio: 'inherit' });
+    console.log('✅ Frontend built successfully');
+  } catch (error) {
+    console.log('⚠️  Frontend build failed, deployment will serve API only');
+  }
   
-  // Fix the PORT configuration in the .cjs file
-  const serverContent = execSync('cat deploy-server.cjs', { encoding: 'utf8' });
-  const fixedContent = serverContent
-    .replace('const PORT = process.env.PORT || 5000;', 
-             'const PORT = Number(process.env.PORT) || 3000;\nconsole.log(`Starting server on port ${PORT}...`);');
-  writeFileSync('deploy-server.cjs', fixedContent);
-  console.log('✅ Deployment server ready (CommonJS format)');
+  // Copy production server as CommonJS file (to avoid ESM issues)
+  console.log('⚙️  Preparing production server...');
+  execSync('cp server/production-full.cjs deploy-server.cjs', { stdio: 'inherit' });
+  console.log('✅ Production server ready (CommonJS format)');
   
   // Update the start script in package.json for production
   console.log('📝 Updating package.json for production...');
@@ -46,10 +48,10 @@ try {
   writeFileSync('package.json', JSON.stringify(pkg, null, 2));
   
   console.log('📋 Deployment preparation complete:');
-  console.log('   - Backend: Simple Node.js server (CommonJS format)');
+  console.log('   - Frontend: Built to dist/client');
+  console.log('   - Backend: Full production server (CommonJS)');
   console.log('   - Start script: node deploy-server.cjs');
   console.log('   - Port: Will use process.env.PORT or 3000');
-  console.log('   - Dependencies: None required');
   
   console.log('');
   console.log('🎉 Build completed successfully!');

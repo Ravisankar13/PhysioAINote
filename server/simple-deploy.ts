@@ -8,23 +8,22 @@ const __dirname = path.dirname(__filename);
 // Create Express app
 const app = express();
 
-// Basic middleware - parse JSON
+// Basic middleware
 app.use(express.json());
 
-// Health check endpoint - MUST work
+// Health check endpoint - MUST be first
 app.get("/health", (req, res) => {
   res.status(200).json({ 
     status: "ok",
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || "production"
+    timestamp: new Date().toISOString()
   });
 });
 
 // API endpoint
 app.get("/api", (req, res) => {
   res.status(200).json({ 
-    message: "PhysioGPT API is working",
-    timestamp: new Date().toISOString()
+    message: "API is working",
+    environment: process.env.NODE_ENV || "production"
   });
 });
 
@@ -73,11 +72,6 @@ app.get("/", (req, res) => {
   `);
 });
 
-// Catch all other routes
-app.use((req, res) => {
-  res.status(404).json({ error: "Not found" });
-});
-
 // Error handler
 app.use((err: any, req: any, res: any, next: any) => {
   console.error("Error:", err);
@@ -87,15 +81,7 @@ app.use((err: any, req: any, res: any, next: any) => {
 // Start server
 const PORT = parseInt(process.env.PORT || "3000", 10);
 
-const server = app.listen(PORT, "0.0.0.0", () => {
-  console.log(`✅ Server running on port ${PORT}`);
-  console.log(`🏥 Health check: http://0.0.0.0:${PORT}/health`);
-});
-
-// Graceful shutdown
-process.on("SIGTERM", () => {
-  server.close(() => {
-    console.log("Server closed");
-    process.exit(0);
-  });
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server running on port ${PORT}`);
+  console.log(`Health check: http://0.0.0.0:${PORT}/health`);
 });

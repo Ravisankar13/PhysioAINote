@@ -26,33 +26,20 @@ try {
   console.log('📂 Ensuring server/public directory exists...');
   execSync('mkdir -p server/public && cp public/index.html server/public/', { stdio: 'inherit' });
   
-  // Build the backend server to the root directory
-  console.log('⚙️  Building backend server...');
-  execSync(`npx esbuild server/index.ts \
-    --bundle \
-    --packages=external \
-    --platform=node \
-    --format=esm \
-    --outfile=index-production.js \
-    --target=node20 \
-    --minify \
-    --legal-comments=none`, { 
-    stdio: 'inherit',
-    timeout: 180000
-  });
-  
-  console.log('✅ Backend built to index-production.js');
+  // Skip bundling - use the development server which works
+  console.log('⚙️  Preparing production server...');
+  console.log('   Using unbundled server due to esbuild port binding issues');
   
   // Update the start script in package.json for production
   console.log('📝 Updating package.json for production...');
   const pkg = JSON.parse(execSync('cat package.json', { encoding: 'utf8' }));
   pkg.scripts = pkg.scripts || {};
-  pkg.scripts.start = 'NODE_ENV=production node index-production.js';
+  pkg.scripts.start = 'NODE_ENV=production npx tsx server/index.ts';
   writeFileSync('package.json', JSON.stringify(pkg, null, 2));
   
   console.log('📋 Deployment preparation complete:');
-  console.log('   - Backend: index-production.js');
-  console.log('   - Start script: NODE_ENV=production node index-production.js');
+  console.log('   - Backend: Using tsx to run TypeScript directly');
+  console.log('   - Start script: NODE_ENV=production npx tsx server/index.ts');
   console.log('   - Dependencies: Available via package.json');
   
   console.log('');
@@ -60,7 +47,7 @@ try {
   console.log('   The application is ready for deployment.');
   console.log('   When deployed, Replit will:');
   console.log('   1. Install dependencies from package.json');
-  console.log('   2. Run: npm start (which runs index-production.js)');
+  console.log('   2. Run: npm start (which runs the TypeScript server directly)');
   
   process.exit(0);
 

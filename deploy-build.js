@@ -16,9 +16,9 @@ try {
   console.log('⏭️  Skipping frontend Vite build (known hanging issue)...');
   console.log('   Frontend will be served from public/client directories');
 
-  // Build backend with external packages (native modules can't be bundled)
+  // Build backend with all packages external
   console.log('⚙️ Building backend...');
-  console.log('  Using --packages=external to avoid bundling native modules...');
+  console.log('  Using --packages=external - Replit will install dependencies...');
   
   execSync(`npx --yes esbuild server/index.ts \
     --bundle \
@@ -35,14 +35,14 @@ try {
   
   console.log('✅ Backend built successfully');
   
-  // Copy package files for production dependencies
-  console.log('📦 Copying package files for production...');
+  // Copy package files - Replit deployment will install these dependencies
+  console.log('📦 Copying package files for Replit deployment...');
   execSync('cp package.json dist/', { stdio: 'inherit' });
   if (existsSync('package-lock.json')) {
     execSync('cp package-lock.json dist/', { stdio: 'inherit' });
   }
   
-  // Copy shared directory if exists
+  // Copy shared directory (required for schema)
   if (existsSync('shared')) {
     console.log('📁 Copying shared directory...');
     cpSync('shared', 'dist/shared', { recursive: true });
@@ -63,6 +63,9 @@ try {
   console.log('🎉 Build completed successfully!');
   console.log('   Backend: ✅ Built and optimized');
   console.log('   Frontend: ✅ Static files copied');
+  console.log('   Dependencies: ✅ package.json ready for Replit deployment');
+  console.log('');
+  console.log('📋 Replit deployment will automatically install dependencies from package.json');
   console.log('   Ready for deployment!');
   process.exit(0);
 

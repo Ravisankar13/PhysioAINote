@@ -1,0 +1,24 @@
+HOW TO FIND THE ACTUAL DEPLOYMENT ERROR:
+=========================================
+
+The local environment logs (what we see here) are NOT the deployment logs.
+You need to check the ACTUAL deployment error from Replit's servers:
+
+1. Go to the Publishing tab (left sidebar)
+2. Click on "Overview" tab if not already there
+3. Look for one of these:
+   - "View publish logs" button
+   - "Logs" tab
+   - Error messages in red
+
+The deployment error will show there. It might say things like:
+- Build failed at step X
+- npm install error
+- Vite build error
+- Memory limit exceeded
+- Timeout during build
+
+Please check those logs and tell me the EXACT error message from the deployment.
+The error there is different from what we see locally.
+
+The deployment runs in a separate environment with its own build process.

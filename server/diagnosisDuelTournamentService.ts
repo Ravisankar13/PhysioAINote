@@ -12,7 +12,7 @@ import {
   TournamentParticipant,
   TournamentMatch
 } from '@shared/schema';
-import { eq, and, or, isNull, desc, gt } from 'drizzle-orm';
+import { eq, and, or, isNull, desc, gt, not } from 'drizzle-orm';
 import { gameContentGenerator } from './gameContentGenerator';
 
 export class DiagnosisDuelTournamentService {
@@ -127,8 +127,11 @@ export class DiagnosisDuelTournamentService {
       };
     } catch (error) {
       console.error('Error registering for tournament:', error);
-      console.error('Error details:', error.message, error.stack);
-      return { success: false, message: `Failed to register for tournament: ${error.message}` };
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      if (error instanceof Error) {
+        console.error('Error details:', error.message, error.stack);
+      }
+      return { success: false, message: `Failed to register for tournament: ${errorMessage}` };
     }
   }
 
@@ -148,7 +151,9 @@ export class DiagnosisDuelTournamentService {
       }
 
       // Check if tournament has started
-      if (tournament.status === 'active' || tournament.status === 'completed') {
+      if (tournament.status === 'round_1' || tournament.status === 'round_2' || 
+          tournament.status === 'round_3' || tournament.status === 'round_4' || 
+          tournament.status === 'finals' || tournament.status === 'completed') {
         return { success: false, message: 'Cannot leave a tournament that has already started' };
       }
 
@@ -396,13 +401,13 @@ export class DiagnosisDuelTournamentService {
       if (bothCompleted) {
         // Determine winner
         let winnerId: number | undefined;
-        if (updatedMatch.player1Score > updatedMatch.player2Score) {
+        if ((updatedMatch.player1Score ?? 0) > (updatedMatch.player2Score ?? 0)) {
           winnerId = updatedMatch.player1Id;
-        } else if (updatedMatch.player2Score > updatedMatch.player1Score) {
+        } else if ((updatedMatch.player2Score ?? 0) > (updatedMatch.player1Score ?? 0)) {
           winnerId = updatedMatch.player2Id;
         } else {
           // Tie - winner by time (faster wins)
-          winnerId = updatedMatch.player1TimeSpent < updatedMatch.player2TimeSpent 
+          winnerId = (updatedMatch.player1TimeSpent ?? Infinity) < (updatedMatch.player2TimeSpent ?? Infinity) 
             ? updatedMatch.player1Id 
             : updatedMatch.player2Id;
         }
@@ -512,7 +517,7 @@ export class DiagnosisDuelTournamentService {
       .where(and(
         eq(tournamentMatches.tournamentId, tournamentId),
         eq(tournamentMatches.round, currentRound),
-        isNull(tournamentMatches.winnerId).not()
+        not(isNull(tournamentMatches.winnerId))
       ));
 
     console.log(`Found ${winners.length} winners from round ${currentRound}`);
@@ -663,8 +668,8 @@ export class DiagnosisDuelTournamentService {
 
     return {
       tournament,
-      participants,
-      matches: matches as any, // Type assertion for now
+      participants: participants as (TournamentParticipant & { username: string })[],
+      matches: matches as (TournamentMatch & { player1Username: string; player2Username: string })[],
     };
   }
 
@@ -886,7 +891,7 @@ export class DiagnosisDuelTournamentService {
       await db
         .update(tournamentMatches)
         .set({
-          status: 'active',
+          status: 'in_progress',
           actualStartTime: new Date(),
         })
         .where(eq(tournamentMatches.id, matchId));

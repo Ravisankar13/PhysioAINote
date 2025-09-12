@@ -26,22 +26,22 @@ try {
   console.log('📂 Ensuring server/public directory exists...');
   execSync('mkdir -p server/public && cp public/index.html server/public/', { stdio: 'inherit' });
   
-  // Compile production server to JavaScript
-  console.log('⚙️  Compiling production server to JavaScript...');
-  execSync('npx esbuild server/production.ts --platform=node --packages=external --bundle --format=cjs --outdir=dist --minify --legal-comments=none', { stdio: 'inherit' });
-  console.log('✅ Server compiled to dist/production.js');
+  // Copy simple deployment server (no compilation needed)
+  console.log('⚙️  Preparing ultra-simple deployment server...');
+  execSync('cp server/deploy.js deploy-server.js', { stdio: 'inherit' });
+  console.log('✅ Deployment server ready');
   
   // Update the start script in package.json for production
   console.log('📝 Updating package.json for production...');
   const pkg = JSON.parse(execSync('cat package.json', { encoding: 'utf8' }));
   pkg.scripts = pkg.scripts || {};
-  pkg.scripts.start = 'NODE_ENV=production node dist/production.js';
+  pkg.scripts.start = 'node deploy-server.js';
   writeFileSync('package.json', JSON.stringify(pkg, null, 2));
   
   console.log('📋 Deployment preparation complete:');
-  console.log('   - Backend: Compiled to JavaScript (dist/production.js)');
-  console.log('   - Start script: NODE_ENV=production node dist/production.js');
-  console.log('   - Dependencies: Available via package.json');
+  console.log('   - Backend: Simple Node.js server (no dependencies)');
+  console.log('   - Start script: node deploy-server.js');
+  console.log('   - Dependencies: None required');
   
   console.log('');
   console.log('🎉 Build completed successfully!');

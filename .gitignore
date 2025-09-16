@@ -14,3 +14,6 @@ soap-note-litellm-streaming/stream_client_web.html
 soap-note-litellm-streaming/test_stream_simple.py
 soap-note-litellm-streaming/test_streaming.sh
 
+public/
+attached_assets/
+test-uploads/

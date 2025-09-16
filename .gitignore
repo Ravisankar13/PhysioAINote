@@ -4,6 +4,9 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+public
+attached_assets
+test-uploads
 
 __pycache__
 soap-note-litellm-streaming/stream_client_example.py

@@ -43,20 +43,40 @@ try {
     console.log('   The deployment will continue but may not serve the frontend properly');
   }
   
-  // The deploy-server.cjs is already configured properly
-  console.log('✅ Production server ready (deploy-server.cjs)');
+  // Build the backend TypeScript server
+  console.log('⚙️  Building backend server...');
+  try {
+    execSync('npm run build:backend', { stdio: 'inherit' });
+    console.log('✅ Backend built successfully to dist/index.js');
+  } catch (error) {
+    console.log('❌ Backend build failed:', error.message);
+    process.exit(1);
+  }
   
-  // Update the start script in package.json for production
+  // Create production starter that uses the built server
+  console.log('📝 Creating production starter...');
+  const startScript = `#!/usr/bin/env node
+// Production starter for PhysioGPT - uses built server
+console.log('🚀 Starting PhysioGPT Production Server...');
+console.log('Using built server: dist/index.js');
+import('./dist/index.js').catch(error => {
+  console.error('Failed to start built server:', error);
+  process.exit(1);
+});`;
+  
+  writeFileSync('start-production.mjs', startScript);
+  
+  // Update package.json to use the built server
   console.log('📝 Updating package.json for production...');
   const pkg = JSON.parse(execSync('cat package.json', { encoding: 'utf8' }));
   pkg.scripts = pkg.scripts || {};
-  pkg.scripts.start = 'node deploy-server.cjs';
+  pkg.scripts.start = 'node start-production.mjs';
   writeFileSync('package.json', JSON.stringify(pkg, null, 2));
   
   console.log('📋 Deployment preparation complete:');
   console.log('   - Frontend: Built to dist/public');
-  console.log('   - Backend: Production server (deploy-server.cjs)');
-  console.log('   - Start script: node deploy-server.cjs');
+  console.log('   - Backend: Built to dist/index.js');
+  console.log('   - Start script: node start-production.mjs');
   console.log('   - Port: Will use process.env.PORT or 5000');
   
   console.log('');
@@ -64,7 +84,7 @@ try {
   console.log('   The application is ready for deployment.');
   console.log('   When deployed, Replit will:');
   console.log('   1. Install dependencies from package.json');
-  console.log('   2. Run: npm start (which runs deploy-server.cjs)');
+  console.log('   2. Run: npm start (which runs start-production.mjs → dist/index.js)');
   
   process.exit(0);
 

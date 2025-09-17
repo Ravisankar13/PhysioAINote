@@ -15,13 +15,6 @@ run = ["sh", "-c", "npm start"]
 localPort = 5000
 externalPort = 80
 
-[[ports]]
-localPort = 5001
-externalPort = 3000
-
-[[ports]]
-localPort = 8080
-externalPort = 8080
 
 [workflows]
 runButton = "Dev Server"

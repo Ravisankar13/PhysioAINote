@@ -20,25 +20,31 @@ try {
     rmSync('index-production.js', { force: true });
   }
   
-  console.log('⏭️  Skipping frontend Vite build (known hanging issue)...');
-  
-  // Ensure server/public directory exists with index.html for production
-  console.log('📂 Ensuring server/public directory exists...');
-  execSync('mkdir -p server/public && cp public/index.html server/public/', { stdio: 'inherit' });
+  // Clean dist directory
+  console.log('🧹 Cleaning dist directory...');
+  if (existsSync('dist')) {
+    rmSync('dist', { recursive: true, force: true });
+  }
+  mkdirSync('dist', { recursive: true });
   
   // Build the React frontend for production
   console.log('⚙️  Building React frontend...');
+  console.log('   This will output to dist/public as configured in vite.config.ts');
   try {
-    execSync('npx vite build', { stdio: 'inherit' });
+    // Set timeout for Vite build to prevent hanging
+    execSync('npx vite build', { 
+      stdio: 'inherit',
+      timeout: 180000 // 3 minutes timeout
+    });
     console.log('✅ Frontend built successfully');
   } catch (error) {
-    console.log('⚠️  Frontend build failed, deployment will serve API only');
+    console.log('⚠️  Frontend build failed or timed out');
+    console.log('   Error:', error.message);
+    console.log('   The deployment will continue but may not serve the frontend properly');
   }
   
-  // Copy complete deployment server
-  console.log('⚙️  Preparing complete production server...');
-  execSync('cp deploy-complete.cjs deploy-server.cjs', { stdio: 'inherit' });
-  console.log('✅ Production server ready (full application)');
+  // The deploy-server.cjs is already configured properly
+  console.log('✅ Production server ready (deploy-server.cjs)');
   
   // Update the start script in package.json for production
   console.log('📝 Updating package.json for production...');
@@ -48,17 +54,17 @@ try {
   writeFileSync('package.json', JSON.stringify(pkg, null, 2));
   
   console.log('📋 Deployment preparation complete:');
-  console.log('   - Frontend: Built to dist/client');
-  console.log('   - Backend: Full production server (CommonJS)');
+  console.log('   - Frontend: Built to dist/public');
+  console.log('   - Backend: Production server (deploy-server.cjs)');
   console.log('   - Start script: node deploy-server.cjs');
-  console.log('   - Port: Will use process.env.PORT or 3000');
+  console.log('   - Port: Will use process.env.PORT or 5000');
   
   console.log('');
   console.log('🎉 Build completed successfully!');
   console.log('   The application is ready for deployment.');
   console.log('   When deployed, Replit will:');
   console.log('   1. Install dependencies from package.json');
-  console.log('   2. Run: npm start (which runs the TypeScript server directly)');
+  console.log('   2. Run: npm start (which runs deploy-server.cjs)');
   
   process.exit(0);
 

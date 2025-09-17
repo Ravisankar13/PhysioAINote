@@ -1,4 +1,4 @@
-// Fixed production server for PhysioGPT Platform
+// Production server for PhysioGPT Platform
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
@@ -6,21 +6,25 @@ const fs = require('fs');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-console.log(`Starting PhysioGPT server on port ${PORT}...`);
+console.log(`Starting PhysioGPT production server on port ${PORT}...`);
+console.log('Current directory:', process.cwd());
+console.log('__dirname:', __dirname);
 
 // Middleware
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: false, limit: '50mb' }));
 
-// CORS
+// CORS for API routes
 app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
+  if (req.path.startsWith('/api')) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(200);
+    }
   }
   next();
 });
@@ -31,238 +35,237 @@ app.use((req, res, next) => {
   next();
 });
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
-    port: PORT,
-    environment: 'production'
+// Import and use the actual backend routes
+try {
+  // Try to import the compiled backend
+  const distPath = path.join(__dirname, 'dist', 'production.js');
+  const serverPath = path.join(__dirname, 'dist', 'server.js');
+  
+  if (fs.existsSync(distPath)) {
+    console.log('Loading production backend from dist/production.js...');
+    const backend = require(distPath);
+    if (backend && backend.app) {
+      // Mount the backend routes
+      app.use(backend.app);
+      console.log('✅ Production backend loaded successfully');
+    } else {
+      console.log('⚠️ Backend loaded but no app exported');
+    }
+  } else if (fs.existsSync(serverPath)) {
+    console.log('Loading production backend from dist/server.js...');
+    const backend = require(serverPath);
+    if (backend && backend.app) {
+      // Mount the backend routes
+      app.use(backend.app);
+      console.log('✅ Production backend loaded successfully');
+    } else {
+      console.log('⚠️ Backend loaded but no app exported');
+    }
+  } else {
+    console.log('⚠️ No compiled backend found, using fallback API routes');
+    
+    // Fallback API routes for basic functionality
+    app.get('/health', (req, res) => {
+      res.json({
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        port: PORT,
+        environment: 'production',
+        backend: 'fallback'
+      });
+    });
+
+    app.get('/api/user', (req, res) => {
+      res.status(401).json({ message: 'Not authenticated' });
+    });
+
+    app.get('/api/pattern-recognition/leaderboard', (req, res) => {
+      res.json([]);
+    });
+
+    app.get('/api/pattern-recognition/stats', (req, res) => {
+      res.json({ totalPlayers: 0, totalAttempts: 0 });
+    });
+
+    app.get('/api/home/global-leaderboard', (req, res) => {
+      res.json([]);
+    });
+
+    app.get('/api/home/platform-stats', (req, res) => {
+      res.json({ totalUsers: '0', totalCompetitions: '0', totalSOAPNotes: '0', totalExercises: '0' });
+    });
+
+    app.get('/api/home/featured-competitions', (req, res) => {
+      res.json([]);
+    });
+
+    app.get('/api/trial/status', (req, res) => {
+      res.json({ status: 'inactive', daysRemaining: 0 });
+    });
+
+    // Catch all API routes
+    app.use('/api/*', (req, res) => {
+      res.status(404).json({ error: 'API endpoint not found' });
+    });
+  }
+} catch (error) {
+  console.error('Error loading backend:', error);
+  console.log('Using fallback API routes due to error');
+  
+  // Fallback health check
+  app.get('/health', (req, res) => {
+    res.json({
+      status: 'degraded',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
   });
-});
+}
 
-// API endpoint
-app.get('/api', (req, res) => {
-  res.json({
-    message: 'PhysioGPT API Working',
-    timestamp: new Date().toISOString()
+// Serve static files from the built React app
+const clientDistPath = path.join(__dirname, 'dist', 'public');
+const clientDistPath2 = path.join(__dirname, 'dist', 'client');
+const fallbackPath = path.join(__dirname, 'client', 'dist');
+
+let staticPath = null;
+
+if (fs.existsSync(clientDistPath)) {
+  staticPath = clientDistPath;
+  console.log(`Serving static files from: ${clientDistPath}`);
+} else if (fs.existsSync(clientDistPath2)) {
+  staticPath = clientDistPath2;
+  console.log(`Serving static files from: ${clientDistPath2}`);
+} else if (fs.existsSync(fallbackPath)) {
+  staticPath = fallbackPath;
+  console.log(`Serving static files from: ${fallbackPath}`);
+} else {
+  console.log('⚠️ No static files directory found!');
+  console.log('Checked paths:');
+  console.log(`  - ${clientDistPath}`);
+  console.log(`  - ${clientDistPath2}`);
+  console.log(`  - ${fallbackPath}`);
+}
+
+if (staticPath) {
+  // Serve static assets
+  app.use(express.static(staticPath, {
+    maxAge: '1d',
+    setHeaders: (res, path) => {
+      if (path.endsWith('.html')) {
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      }
+    }
+  }));
+
+  // Handle client-side routing - serve index.html for all non-API routes
+  app.get('*', (req, res) => {
+    const indexPath = path.join(staticPath, 'index.html');
+    if (fs.existsSync(indexPath)) {
+      res.sendFile(indexPath);
+    } else {
+      console.error(`index.html not found at ${indexPath}`);
+      res.status(500).send('Application files not found');
+    }
   });
-});
-
-// API endpoints (return proper JSON responses)
-app.get('/api/user', (req, res) => {
-  res.json({ user: null, message: 'Authentication required' });
-});
-
-app.get('/api/pattern-recognition/leaderboard', (req, res) => {
-  res.json({ leaderboard: [] });
-});
-
-app.get('/api/pattern-recognition/stats', (req, res) => {
-  res.json({ stats: { totalUsers: 0, totalSessions: 0 } });
-});
-
-app.get('/api/home/global-leaderboard', (req, res) => {
-  res.json({ leaderboard: [] });
-});
-
-app.get('/api/home/platform-stats', (req, res) => {
-  res.json({ stats: { activeUsers: 0, totalExercises: 0, totalNotes: 0 } });
-});
-
-app.get('/api/home/featured-competitions', (req, res) => {
-  res.json({ competitions: [] });
-});
-
-app.get('/api/trial/status', (req, res) => {
-  res.json({ trial: { active: false, daysRemaining: 0 } });
-});
-
-// Main HTML page
-app.get('/', (req, res) => {
-  res.send(`<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PhysioAI - Physiotherapy Management Platform</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
-    .nav {
-      background: rgba(0,0,0,0.2);
-      padding: 1rem 2rem;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      backdrop-filter: blur(10px);
-    }
-    .nav-brand {
-      font-size: 1.5rem;
-      font-weight: bold;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-    .nav-links {
-      display: flex;
-      gap: 2rem;
-      list-style: none;
-    }
-    .nav-links a {
-      color: white;
-      text-decoration: none;
-      padding: 0.5rem 1rem;
-      border-radius: 0.5rem;
-      transition: background 0.3s;
-    }
-    .nav-links a:hover {
-      background: rgba(255,255,255,0.1);
-    }
-    .hero {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 2rem;
-    }
-    .hero-content {
-      text-align: center;
-      max-width: 800px;
-    }
-    .hero h1 {
-      font-size: 3rem;
-      margin-bottom: 1rem;
-      line-height: 1.2;
-    }
-    .hero p {
-      font-size: 1.25rem;
-      margin-bottom: 2rem;
-      opacity: 0.9;
-    }
-    .features {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      gap: 1.5rem;
-      margin-top: 3rem;
-    }
-    .feature-card {
-      background: rgba(255,255,255,0.1);
-      padding: 1.5rem;
-      border-radius: 1rem;
-      backdrop-filter: blur(10px);
-      border: 1px solid rgba(255,255,255,0.2);
-    }
-    .feature-card h3 {
-      margin-bottom: 0.5rem;
-      font-size: 1.25rem;
-    }
-    .feature-card p {
-      opacity: 0.9;
-      line-height: 1.5;
-    }
-    .status-badge {
-      display: inline-block;
-      background: #4ade80;
-      color: #0a0a0a;
-      padding: 0.25rem 0.75rem;
-      border-radius: 9999px;
-      font-size: 0.875rem;
-      font-weight: 600;
-      margin-top: 1rem;
-    }
-    @media (max-width: 768px) {
-      .hero h1 { font-size: 2rem; }
-      .nav-links { display: none; }
-    }
-  </style>
-</head>
-<body>
-  <nav class="nav">
-    <div class="nav-brand">
-      <span>🏥</span>
-      <span>PhysioAI</span>
-    </div>
-    <ul class="nav-links">
-      <li><a href="#body-scanner">Body Scanner</a></li>
-      <li><a href="#movement">Movement Analysis</a></li>
-      <li><a href="#virtual">Virtual Patients</a></li>
-      <li><a href="#soap">Enhanced SOAP</a></li>
-      <li><a href="#research">Research</a></li>
-    </ul>
-  </nav>
-
-  <main class="hero">
-    <div class="hero-content">
-      <h1>Advanced AI-Powered Physiotherapy Platform</h1>
-      <p>Comprehensive clinical decision support for practitioners and students</p>
-      
-      <div class="features">
-        <div class="feature-card">
-          <h3>🔍 Body Scanner</h3>
-          <p>Medical-grade anatomical visualization with enhanced skeletal detail and clinical measurements</p>
+} else {
+  // Fallback when no static files are found
+  app.get('/', (req, res) => {
+    res.status(500).send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>PhysioGPT - Deployment Error</title>
+        <style>
+          body {
+            font-family: system-ui, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+          }
+          .error {
+            background: #fee;
+            border: 1px solid #fcc;
+            padding: 20px;
+            border-radius: 5px;
+          }
+          h1 { color: #c00; }
+          pre {
+            background: #f5f5f5;
+            padding: 10px;
+            overflow-x: auto;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="error">
+          <h1>Deployment Configuration Error</h1>
+          <p>The React application files could not be found in the expected locations.</p>
+          <p>This typically means the build process didn't complete properly.</p>
+          <h3>Checked paths:</h3>
+          <pre>${clientDistPath}
+${clientDistPath2}
+${fallbackPath}</pre>
+          <h3>Current directory contents:</h3>
+          <pre>${fs.readdirSync(process.cwd()).join('\n')}</pre>
         </div>
-        
-        <div class="feature-card">
-          <h3>🏃 Movement Analysis</h3>
-          <p>Professional biomechanical analysis with 25+ real-time metrics including gait analysis</p>
-        </div>
-        
-        <div class="feature-card">
-          <h3>👤 Virtual Patients</h3>
-          <p>3D patient models with customizable pathologies and movement restrictions</p>
-        </div>
-        
-        <div class="feature-card">
-          <h3>📝 Enhanced SOAP</h3>
-          <p>AI-powered clinical documentation with automated transcription and PII protection</p>
-        </div>
-        
-        <div class="feature-card">
-          <h3>🤖 Clinical AI Assistant</h3>
-          <p>Expert physiotherapy guidance based on leading methodologies and evidence-based practice</p>
-        </div>
-        
-        <div class="feature-card">
-          <h3>📚 Research Integration</h3>
-          <p>AI-analyzed research database with bias assessment and clinical insights</p>
-        </div>
-      </div>
-      
-      <div class="status-badge">✓ System Operational</div>
-    </div>
-  </main>
-</body>
-</html>`);
-});
+      </body>
+      </html>
+    `);
+  });
 
-// Catch all for other routes
-app.use((req, res) => {
-  res.status(404).json({ error: 'Not found', path: req.url });
-});
+  app.get('*', (req, res) => {
+    res.status(404).send('Not found');
+  });
+}
 
 // Error handler
 app.use((err, req, res, next) => {
-  console.error('Error:', err);
-  res.status(500).json({ error: 'Internal server error' });
+  console.error('Server error:', err);
+  res.status(500).json({ 
+    error: 'Internal server error',
+    message: process.env.NODE_ENV === 'development' ? err.message : undefined
+  });
 });
 
 // Start server
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`✅ PhysioGPT server running on http://0.0.0.0:${PORT}`);
+const server = app.listen(PORT, '0.0.0.0', () => {
+  console.log(`✅ PhysioGPT production server running on http://0.0.0.0:${PORT}`);
   console.log(`📊 Health check: http://0.0.0.0:${PORT}/health`);
-  console.log(`🌐 API endpoint: http://0.0.0.0:${PORT}/api`);
+  console.log(`🌐 Environment: production`);
+  console.log(`📂 Working directory: ${process.cwd()}`);
+  
+  // List directory contents for debugging
+  try {
+    const files = fs.readdirSync(process.cwd());
+    console.log('📁 Root directory contents:', files.join(', '));
+    
+    if (fs.existsSync('dist')) {
+      const distFiles = fs.readdirSync('dist');
+      console.log('📁 dist/ contents:', distFiles.join(', '));
+      
+      if (fs.existsSync('dist/public')) {
+        const publicFiles = fs.readdirSync('dist/public');
+        console.log('📁 dist/public/ contents:', publicFiles.slice(0, 5).join(', '), '...');
+      }
+    }
+  } catch (error) {
+    console.error('Error listing directory:', error.message);
+  }
 });
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
   console.log('SIGTERM received, shutting down gracefully...');
-  process.exit(0);
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  console.log('SIGINT received, shutting down gracefully...');
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
 });

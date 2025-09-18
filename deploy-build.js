@@ -272,25 +272,36 @@ try {
     type: "module",
     main: "index.js",
     dependencies: {
-      // Core server dependencies - only runtime essentials for production deployment
+      // Critical runtime dependencies for production deployment
       express: "^4.21.2",
+      vite: "^5.4.20",
+      // Database dependencies
       "drizzle-orm": "^0.39.1",
       "@neondatabase/serverless": "^0.10.4",
       pg: "^8.15.5",
+      // Core utilities
       dotenv: "^16.5.0",
       zod: "^3.24.2",
       "drizzle-zod": "^0.7.0",
       "zod-validation-error": "^3.4.0",
+      // Session and authentication
       "express-session": "^1.18.1",
       "connect-pg-simple": "^10.0.0",
       passport: "^0.7.0",
       "passport-local": "^1.0.0",
+      // Utilities
       nanoid: "^5.1.5",
       axios: "^1.10.0",
+      marked: "^15.0.11",
+      // AI and ML services
       "@anthropic-ai/sdk": "^0.37.0",
       openai: "^4.104.0",
+      // Payment processing
       stripe: "^18.4.0",
+      "@paypal/paypal-server-sdk": "^1.0.0",
+      // WebSocket support
       ws: "^8.18.0",
+      // File upload and storage
       multer: "^1.4.5-lts.2",
       "@aws-sdk/client-s3": "^3.812.0",
       "@aws-sdk/lib-storage": "^3.812.0",
@@ -300,15 +311,20 @@ try {
       // Document generation dependencies (server-side only)
       docx: "^9.5.1",
       "pdf-lib": "^1.17.1",
+      mammoth: "^1.10.0",
+      jspdf: "^3.0.1",
+      "html-pdf-node": "^1.0.8",
       // Media processing dependencies
       "ytdl-core": "^4.11.5",
       "ffmpeg-static": "^5.2.0",
-      // Payment processing dependencies
-      "@paypal/paypal-server-sdk": "^1.0.0",
       // Additional runtime dependencies
       "adm-zip": "^0.5.16",
       memoizee: "^0.4.17",
       memorystore: "^1.6.7",
+      "file-saver": "^2.0.5",
+      papaparse: "^5.5.2",
+      // Firebase (if used in production)
+      firebase: "^11.7.3",
     },
   };
 

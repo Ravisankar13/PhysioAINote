@@ -61,6 +61,33 @@ app.use((req, res, next) => {
       console.log(`ℹ️  Optional environment variables not set: ${missingOptionalVars.join(', ')}`);
     }
 
+    // Add health check endpoint for deployment debugging
+    app.get('/health', (req, res) => {
+      const healthInfo = {
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        uptime: Math.round(process.uptime()),
+        environment: process.env.NODE_ENV || 'development',
+        port: process.env.PORT || '5000',
+        nodeVersion: process.version,
+        platform: `${process.platform} ${process.arch}`,
+        pid: process.pid,
+        memory: {
+          rss: Math.round(process.memoryUsage().rss / 1024 / 1024) + 'MB',
+          heapTotal: Math.round(process.memoryUsage().heapTotal / 1024 / 1024) + 'MB',
+          heapUsed: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + 'MB'
+        },
+        env: {
+          database: process.env.DATABASE_URL ? '✅ configured' : '❌ not configured',
+          openai: process.env.OPENAI_API_KEY ? '✅ configured' : '❌ not configured',
+          buildTime: process.env.BUILD_TIME || 'unknown'
+        }
+      };
+      
+      console.log(`🏥 Health check accessed from ${req.ip || req.connection.remoteAddress}`);
+      res.json(healthInfo);
+    });
+
     // Register routes with error handling
     const server = await registerRoutes(app).catch(err => {
       console.error("❌ Failed to register routes:", err);

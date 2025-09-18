@@ -30,17 +30,61 @@ try {
   // Build the React frontend for production with deployment config
   console.log('⚙️  Building React frontend...');
   console.log('   This will output to dist/public with relative paths for subdirectory compatibility');
+  console.log('   Using increased memory allocation and extended timeout for large dependencies');
   try {
-    // Set timeout for Vite build to prevent hanging
-    execSync('npx vite build --config vite.config.deployment.ts', { 
+    // Set increased memory allocation and longer timeout for Vite build
+    execSync('NODE_OPTIONS="--max-old-space-size=8192" npx vite build --config vite.config.deployment.ts', { 
       stdio: 'inherit',
-      timeout: 180000 // 3 minutes timeout
+      timeout: 600000, // 10 minutes timeout (increased from 3 minutes)
+      env: {
+        ...process.env,
+        NODE_OPTIONS: '--max-old-space-size=8192' // 8GB memory allocation
+      }
     });
     console.log('✅ Frontend built successfully');
   } catch (error) {
     console.log('⚠️  Frontend build failed or timed out');
     console.log('   Error:', error.message);
-    console.log('   The deployment will continue but may not serve the frontend properly');
+    console.log('   Attempting fallback build with optimized configuration...');
+    
+    // Try fallback build with lighter configuration
+    try {
+      console.log('⚙️  Attempting optimized fallback build...');
+      execSync('NODE_OPTIONS="--max-old-space-size=6144" node build-optimized.js', { 
+        stdio: 'inherit',
+        timeout: 420000, // 7 minutes timeout for fallback
+        env: {
+          ...process.env,
+          NODE_OPTIONS: '--max-old-space-size=6144' // 6GB memory allocation
+        }
+      });
+      console.log('✅ Optimized fallback frontend build completed successfully');
+    } catch (fallbackError) {
+      console.log('⚠️  Optimized fallback build also failed');
+      console.log('   Attempting minimal emergency build (last resort)...');
+      
+      // Final emergency fallback - minimal build
+      try {
+        console.log('🔥 Starting minimal emergency build...');
+        execSync('NODE_OPTIONS="--max-old-space-size=4096" node build-minimal.js', { 
+          stdio: 'inherit',
+          timeout: 300000, // 5 minutes timeout for minimal build
+          env: {
+            ...process.env,
+            NODE_OPTIONS: '--max-old-space-size=4096' // 4GB memory allocation
+          }
+        });
+        console.log('✅ Minimal emergency build completed successfully');
+        console.log('⚠️  WARNING: Application may have limited functionality');
+      } catch (minimalError) {
+        console.log('❌ ALL BUILD ATTEMPTS FAILED');
+        console.log('   Main build error:', error.message);
+        console.log('   Optimized fallback error:', fallbackError.message);
+        console.log('   Minimal build error:', minimalError.message);
+        console.log('   The deployment will continue but frontend will not work properly');
+        console.log('   Consider checking build dependencies and configuration');
+      }
+    }
   }
   
   // Skip backend bundling - use existing deploy-server.mjs instead

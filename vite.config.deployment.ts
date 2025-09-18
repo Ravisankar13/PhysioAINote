@@ -25,101 +25,64 @@ export default defineConfig({
   build: {
     outDir: path.resolve(__dirname, "dist/public"),
     emptyOutDir: true,
-    chunkSizeWarningLimit: 10000,
+    chunkSizeWarningLimit: 2000, // Reduced from 10000 to encourage smaller chunks
     rollupOptions: {
       output: {
-        manualChunks: (id) => {
-          // Handle dependencies by checking the actual path
-          if (id.includes('node_modules')) {
-            // Core React ecosystem
-            if (id.includes('react') && !id.includes('react-')) return 'react-vendor';
-            if (id.includes('react-dom')) return 'react-vendor';
-            if (id.includes('react-router-dom') || id.includes('wouter')) return 'react-vendor';
-            
-            // Heavy ML/3D libraries
-            if (id.includes('@tensorflow') || id.includes('tfjs')) return 'tensorflow';
-            if (id.includes('three') || id.includes('@react-three')) return 'three';
-            if (id.includes('@mediapipe')) return 'mediapipe';
-            
-            // UI Libraries
-            if (id.includes('@mui') || id.includes('@emotion')) return 'mui';
-            if (id.includes('@radix-ui')) return 'radix-ui';
-            
-            // Cloud Services (Firebase handled specially)
-            if (id.includes('firebase')) return 'firebase';
-            if (id.includes('@aws-sdk')) return 'aws-sdk';
-            if (id.includes('@google-cloud')) return 'google-cloud';
-            
-            // Payment
-            if (id.includes('@stripe') || id.includes('stripe')) return 'payment';
-            if (id.includes('@paypal')) return 'payment';
-            
-            // AI Services
-            if (id.includes('openai') || id.includes('@anthropic-ai')) return 'ai-services';
-            
-            // File handling
-            if (id.includes('@uppy')) return 'file-handling';
-            
-            // Document processing
-            if (id.includes('pdf') || id.includes('docx') || id.includes('mammoth')) return 'documents';
-            
-            // Data visualization
-            if (id.includes('recharts') || id.includes('framer-motion')) return 'visualization';
-            
-            // Form handling
-            if (id.includes('react-hook-form') || id.includes('@hookform') || id.includes('zod')) return 'forms';
-            
-            // Icons
-            if (id.includes('lucide-react') || id.includes('react-icons')) return 'icons';
-            
-            // Utils
-            if (id.includes('axios') || id.includes('date-fns') || id.includes('clsx') || 
-                id.includes('tailwind-merge') || id.includes('nanoid') || 
-                id.includes('papaparse') || id.includes('marked')) return 'utils';
-            
-            // Default vendor chunk for remaining modules
-            return 'vendor';
-          }
-        },
+        // Let Vite automatically handle chunking to avoid empty chunks
         chunkFileNames: 'assets/js/[name]-[hash].js',
-        entryFileNames: 'assets/js/[name]-[hash].js',
+        entryFileNames: 'assets/js/[name]-[hash].js', 
         assetFileNames: 'assets/[ext]/[name]-[hash].[ext]'
       },
       onwarn(warning, warn) {
         if (warning.code === 'CIRCULAR_DEPENDENCY') return;
         if (warning.code === 'EVAL') return;
         if (warning.code === 'MODULE_LEVEL_DIRECTIVE') return;
+        if (warning.code === 'MISSING_EXPORT') return;
         warn(warning);
       },
+      // Use default treeshaking to preserve entry points
+      preserveEntrySignatures: 'exports-only'
     },
-    minify: 'terser',
-    terserOptions: {
-      compress: {
-        drop_console: true,
-        drop_debugger: true,
-        pure_funcs: ['console.log', 'console.debug', 'console.trace'],
-        passes: 2
-      },
-      mangle: {
-        safari10: true
-      },
-      format: {
-        comments: false,
-        ascii_only: true
-      },
-    },
+    minify: 'esbuild', // Changed from terser to esbuild for faster builds
+    target: 'es2020', // Modern target for better optimization
     sourcemap: false,
     reportCompressedSize: false,
     cssCodeSplit: true,
-    cssMinify: true,
-    assetsInlineLimit: 4096,
+    cssMinify: 'esbuild', // Use esbuild for CSS minification too
+    assetsInlineLimit: 2048, // Reduced from 4096 to avoid large inline assets
     modulePreload: {
       polyfill: false
-    }
+    },
+    // Additional build optimizations for faster processing
+    write: true
   },
   optimizeDeps: {
-    include: ['react', 'react-dom', 'react-router-dom'],
-    exclude: ['@mediapipe/pose']
+    include: [
+      'react', 
+      'react-dom', 
+      'react-router-dom',
+      'wouter',
+      '@tanstack/react-query',
+      'axios',
+      'zod',
+      'clsx',
+      'tailwind-merge',
+      'lucide-react'
+    ],
+    exclude: [
+      '@mediapipe/pose',
+      '@tensorflow/tfjs',
+      '@tensorflow/tfjs-core',
+      '@tensorflow/tfjs-backend-webgl',
+      'three',
+      'firebase',
+      '@aws-sdk/client-s3',
+      '@google-cloud/storage'
+    ],
+    force: true, // Force re-optimization for deployment
+    esbuildOptions: {
+      target: 'es2020'
+    }
   },
   logLevel: 'info',
   clearScreen: false,

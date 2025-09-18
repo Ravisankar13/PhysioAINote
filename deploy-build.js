@@ -382,6 +382,7 @@ try {
       // Verify critical packages are installed
       const criticalPackages = [
         "express", 
+        "vite",
         "docx", 
         "drizzle-orm", 
         "openai", 
@@ -429,79 +430,18 @@ try {
           console.log("   (Sleep command unavailable, retrying immediately)");
         }
       } else {
-        console.log("❌ All installation attempts failed");
-        console.log("   Creating enhanced fallback installation mechanism...");
-
-        // Create enhanced fallback installation script
-        const fallbackScript = `#!/usr/bin/env node
-// Enhanced fallback dependency installation script
-import { execSync } from 'child_process';
-import { existsSync } from 'fs';
-
-console.log('🔄 Attempting enhanced fallback dependency installation...');
-
-const strategies = [
-  {
-    name: 'npm ci (if lockfile exists)',
-    command: 'npm ci --omit=dev --prefer-offline --no-audit',
-    condition: () => existsSync('./package-lock.json')
-  },
-  {
-    name: 'npm install online',
-    command: 'npm install --omit=dev --prefer-online --no-audit --no-fund',
-    condition: () => true
-  },
-  {
-    name: 'npm install no-optional',
-    command: 'npm install --omit=dev --prefer-online --no-audit --no-fund --no-optional',
-    condition: () => true
-  },
-  {
-    name: 'npm install basic',
-    command: 'npm install --omit=dev --no-audit --no-fund',
-    condition: () => true
-  }
-];
-
-for (const strategy of strategies) {
-  if (!strategy.condition()) continue;
-  
-  try {
-    console.log(\`📦 Trying: \${strategy.name}\`);
-    execSync(strategy.command, { 
-      stdio: 'inherit',
-      timeout: 600000, // 10 minutes for fallback
-      env: { ...process.env, NODE_ENV: 'production' }
-    });
-    
-    // Verify critical packages
-    const critical = ['express', 'docx', 'openai'];
-    const missing = critical.filter(pkg => !existsSync(\`./node_modules/\${pkg}\`));
-    
-    if (missing.length === 0) {
-      console.log('✅ Fallback installation succeeded');
-      process.exit(0);
-    } else {
-      console.log(\`⚠️  Missing packages: \${missing.join(', ')}, trying next strategy...\`);
-    }
-  } catch (error) {
-    console.log(\`❌ \${strategy.name} failed: \${error.message}\`);
-  }
-}
-
-console.error('❌ All fallback installation strategies failed');
-console.error('Manual intervention required - check network connectivity and package registry');
-process.exit(1);
-`;
-        writeFileSync("dist/install-deps.mjs", fallbackScript);
-        console.log(
-          "✅ Enhanced fallback installation script created at dist/install-deps.mjs",
-        );
-
-        // Don't fail the entire build - let the production starter handle it
-        console.log(
-          "⚠️  Build will continue, production starter will attempt fallback installation",
-        );
+        console.log("❌ All dependency installation attempts failed");
+        console.log("");
+        console.log("💡 Troubleshooting suggestions:");
+        console.log("   1. Check network connectivity and npm registry access");
+        console.log("   2. Verify Node.js version compatibility (requires Node 18+)");
+        console.log("   3. Clear cache: npm cache clean --force");
+        console.log("   4. Check for package conflicts or resolution issues");
+        console.log("");
+        console.error("❌ BUILD FAILED: Cannot deploy without production dependencies");
+        console.error("   Production dependencies are required for the application to run");
+        console.error("   Please fix dependency installation issues and rebuild");
+        process.exit(1);
       }
     }
   }

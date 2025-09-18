@@ -119,12 +119,30 @@ app.use((req, res, next) => {
     });
 
     // Setup Vite or static serving with enhanced error handling
+    const isProduction = process.env.NODE_ENV === "production" || 
+                        process.env.NODE_ENV === "prod" ||
+                        process.env.REPLIT_DEPLOYMENT === "1" ||
+                        !process.env.NODE_ENV && app.get("env") !== "development";
+
     try {
-      if (app.get("env") === "development" || process.env.NODE_ENV === "development") {
+      if (!isProduction && (app.get("env") === "development" || process.env.NODE_ENV === "development")) {
         log("Setting up Vite development server...");
-        const { setupVite } = await import("./vite");
-        await setupVite(app, server);
-        log("Vite development server ready");
+        try {
+          // Only import vite module if we're definitely in development
+          const viteModule = await import("./vite").catch(() => null);
+          if (viteModule && viteModule.setupVite) {
+            await viteModule.setupVite(app, server);
+            log("Vite development server ready");
+          } else {
+            log("Vite module not available, falling back to static files");
+            const staticModule = await import("./static");
+            staticModule.serveStatic(app);
+          }
+        } catch (viteError) {
+          log("Vite setup failed, falling back to static files:", viteError.message);
+          const staticModule = await import("./static");
+          staticModule.serveStatic(app);
+        }
       } else {
         log("Setting up static file serving for production...");
         serveStatic(app);
@@ -133,7 +151,7 @@ app.use((req, res, next) => {
     } catch (err) {
       console.error("Failed to setup file serving:", err);
       // In production, if static files fail, try to continue anyway
-      if (process.env.NODE_ENV === "production") {
+      if (isProduction) {
         console.warn("Static file serving failed, server will continue without client files");
       } else {
         throw err;

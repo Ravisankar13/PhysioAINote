@@ -146,14 +146,15 @@ try {
     type: "module",
     main: "index.js",
     dependencies: {
-      // Core server dependencies - only the ones needed for the built server
+      // Core server dependencies - only runtime essentials for production deployment
       "express": "^4.21.2",
       "drizzle-orm": "^0.39.1",
-      "drizzle-kit": "^0.31.4",
       "@neondatabase/serverless": "^0.10.4",
+      "pg": "^8.15.5",
       "dotenv": "^16.5.0",
       "zod": "^3.24.2",
       "drizzle-zod": "^0.7.0",
+      "zod-validation-error": "^3.4.0",
       "express-session": "^1.18.1",
       "connect-pg-simple": "^10.0.0",
       "passport": "^0.7.0",
@@ -169,7 +170,17 @@ try {
       "@aws-sdk/lib-storage": "^3.812.0",
       "multer-s3": "^3.0.1",
       "@google-cloud/storage": "^7.17.0",
-      "google-auth-library": "^10.3.0"
+      "google-auth-library": "^10.3.0",
+      // Document generation dependencies (server-side only)
+      "docx": "^9.5.1",
+      "pdf-lib": "^1.17.1",
+      // Media processing dependencies
+      "ytdl-core": "^4.11.5",
+      "ffmpeg-static": "^5.2.0",
+      // Additional runtime dependencies
+      "adm-zip": "^0.5.16",
+      "memoizee": "^0.4.17",
+      "memorystore": "^1.6.7"
     }
   };
   

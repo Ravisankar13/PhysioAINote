@@ -18,12 +18,21 @@ console.log('Environment:', process.env.NODE_ENV || 'production');
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: false, limit: '50mb' }));
 
-// CORS for all requests
+// CORS for all requests - SECURE configuration for clinical app
 app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  const allowedOrigins = [
+    'https://physioconversation.replit.app',
+    'https://ba80d676-c815-4ef2-91f1-9ae69dd4cc67-00-3d60ta5qkogfw.sisko.replit.dev',
+    'http://localhost:5000',
+    'http://0.0.0.0:5000'
+  ];
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Credentials', 'false'); // Explicitly disable credentials for security
   
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);

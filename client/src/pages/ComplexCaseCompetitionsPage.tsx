@@ -805,7 +805,7 @@ export default function ComplexCaseCompetitionsPage() {
                         className={`p-4 border rounded-lg cursor-pointer transition-colors ${
                           selectedCompetition?.id === competition.id
                             ? 'border-primary bg-primary/5'
-                            : 'border-border hover:border-primary/50'
+                            : 'border-gray-200 hover:border-primary/50'
                         }`}
                         onClick={() => setSelectedCompetition(competition)}
                       >

@@ -943,7 +943,7 @@ function ComplexCaseCompetitionParticipationPage() {
                     ? 'border-primary bg-primary/5'
                     : answers[stage.id]
                     ? 'border-green-500 bg-green-50'
-                    : 'border-border hover:border-primary/50'
+                    : 'border-gray-200 hover:border-primary/50'
                 }`}
                 onClick={() => setCurrentStage(index)}
               >

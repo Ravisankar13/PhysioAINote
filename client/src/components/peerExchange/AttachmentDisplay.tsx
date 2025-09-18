@@ -18,7 +18,7 @@ const AttachmentDisplay = ({ attachments }: AttachmentDisplayProps) => {
             <img 
               src={attachment.url} 
               alt={attachment.name} 
-              className="max-h-48 max-w-full object-contain rounded-md border border-border" 
+              className="max-h-48 max-w-full object-contain rounded-md border border-gray-200" 
             />
             <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 rounded-md">
               <a 
@@ -34,7 +34,7 @@ const AttachmentDisplay = ({ attachments }: AttachmentDisplayProps) => {
         );
       case 'video':
         return (
-          <div className="border border-border rounded-md p-2 bg-muted/20">
+          <div className="border border-gray-200 rounded-md p-2 bg-muted/20">
             <div className="flex items-center space-x-2 mb-2">
               <Video className="h-4 w-4 text-primary" />
               <span className="text-sm font-medium truncate">{attachment.name}</span>
@@ -54,7 +54,7 @@ const AttachmentDisplay = ({ attachments }: AttachmentDisplayProps) => {
             href={attachment.url} 
             target="_blank" 
             rel="noopener noreferrer" 
-            className="flex items-center gap-2 p-3 border border-border rounded-md hover:bg-muted/20 transition-colors"
+            className="flex items-center gap-2 p-3 border border-gray-200 rounded-md hover:bg-muted/20 transition-colors"
           >
             <FileText className="h-5 w-5 text-red-500" />
             <div>
@@ -70,7 +70,7 @@ const AttachmentDisplay = ({ attachments }: AttachmentDisplayProps) => {
             href={attachment.url} 
             target="_blank" 
             rel="noopener noreferrer" 
-            className="flex items-center gap-2 p-3 border border-border rounded-md hover:bg-muted/20 transition-colors"
+            className="flex items-center gap-2 p-3 border border-gray-200 rounded-md hover:bg-muted/20 transition-colors"
           >
             <FileText className="h-5 w-5 text-muted-foreground" />
             <div>

@@ -303,6 +303,8 @@ try {
       // Media processing dependencies
       "ytdl-core": "^4.11.5",
       "ffmpeg-static": "^5.2.0",
+      // Payment processing dependencies
+      "@paypal/paypal-server-sdk": "^1.0.0",
       // Additional runtime dependencies
       "adm-zip": "^0.5.16",
       memoizee: "^0.4.17",
@@ -331,7 +333,7 @@ try {
       if (existsSync("dist/package-lock.json")) {
         console.log("   Using npm ci (faster, deterministic install)");
         execSync(
-          "cd dist && npm ci --omit=dev --prefer-offline --no-audit --no-fund",
+          "cd dist && npm ci --omit=dev --no-audit --no-fund",
           {
             stdio: "inherit",
             timeout: 420000, // 7 minutes timeout for npm install (increased for reliability)
@@ -347,7 +349,7 @@ try {
         // Strategy 2: Use npm install with optimizations
         console.log("   Using npm install with production optimizations");
         execSync(
-          "cd dist && npm install --omit=dev --prefer-offline --no-audit --no-fund --no-optional",
+          "cd dist && npm install --omit=dev --prefer-online --no-audit --no-fund --no-optional",
           {
             stdio: "inherit",
             timeout: 420000, // 7 minutes timeout
@@ -362,7 +364,16 @@ try {
       }
 
       // Verify critical packages are installed
-      const criticalPackages = ["express", "docx", "drizzle-orm", "openai"];
+      const criticalPackages = [
+        "express", 
+        "docx", 
+        "drizzle-orm", 
+        "openai", 
+        "@paypal/paypal-server-sdk",
+        "stripe",
+        "zod",
+        "@anthropic-ai/sdk"
+      ];
       const missingPackages = criticalPackages.filter(
         (pkg) => !existsSync(`dist/node_modules/${pkg}`),
       );
@@ -420,18 +431,18 @@ const strategies = [
     condition: () => existsSync('./package-lock.json')
   },
   {
-    name: 'npm install with cache',
-    command: 'npm install --omit=dev --prefer-offline --no-audit --no-fund',
+    name: 'npm install online',
+    command: 'npm install --omit=dev --prefer-online --no-audit --no-fund',
     condition: () => true
   },
   {
-    name: 'npm install force cache',
-    command: 'npm install --omit=dev --cache-max=300 --no-audit --no-fund',
+    name: 'npm install no-optional',
+    command: 'npm install --omit=dev --prefer-online --no-audit --no-fund --no-optional',
     condition: () => true
   },
   {
-    name: 'npm install minimal',
-    command: 'npm install --omit=dev --no-optional --no-audit --no-fund',
+    name: 'npm install basic',
+    command: 'npm install --omit=dev --no-audit --no-fund',
     condition: () => true
   }
 ];

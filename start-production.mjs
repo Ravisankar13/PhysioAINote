@@ -19,7 +19,16 @@ const distNodeModules = resolve(__dirname, 'dist/node_modules');
 const fallbackInstaller = resolve(__dirname, 'dist/install-deps.mjs');
 
 async function verifyCriticalPackages() {
-  const criticalPackages = ['express', 'docx', 'drizzle-orm', 'openai', 'zod'];
+  const criticalPackages = [
+    'express', 
+    'docx', 
+    'drizzle-orm', 
+    'openai', 
+    'zod',
+    '@paypal/paypal-server-sdk',
+    'stripe',
+    '@anthropic-ai/sdk'
+  ];
   const missingPackages = criticalPackages.filter(pkg => 
     !existsSync(resolve(__dirname, 'dist/node_modules', pkg))
   );
@@ -66,7 +75,7 @@ async function attemptDependencyInstallation() {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       console.log(`📦 Attempting direct npm install (attempt ${attempt}/${maxRetries})...`);
-      execSync('npm install --omit=dev --prefer-offline --no-audit --no-fund', {
+      execSync('npm install --omit=dev --prefer-online --no-audit --no-fund', {
         cwd: resolve(__dirname, 'dist'),
         stdio: 'inherit',
         timeout: 420000, // 7 minutes

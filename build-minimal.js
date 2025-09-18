@@ -53,25 +53,15 @@ try {
           entryFileNames: 'js/main-[hash].js',
           assetFileNames: '[ext]/[name]-[hash].[ext]'
         },
-        // Ignore all warnings to speed up build
-        onwarn: () => {},
-        // Mark ALL heavy dependencies as external
-        external: [
-          /@tensorflow\/*/,
-          /@mediapipe\/*/,
-          /three/,
-          /firebase/,
-          /@aws-sdk\/*/,
-          /@google-cloud\/*/,
-          /openai/,
-          /@anthropic-ai\/*/,
-          /@stripe\/*/,
-          /stripe/,
-          /@paypal\/*/,
-          /@mui\/*/,
-          /@emotion\/*/,
-          /@react-three\/*/
-        ]
+        // Only suppress safe warnings - critical ones should show
+        onwarn(warning, warn) {
+          if (warning.code === 'CIRCULAR_DEPENDENCY') return;
+          if (warning.code === 'EVAL') return;
+          if (warning.code === 'MODULE_LEVEL_DIRECTIVE') return;
+          // Show all other warnings including import issues
+          warn(warning);
+        }
+        // Removed external dependencies to prevent runtime import failures
       },
       minify: 'esbuild',
       target: 'es2020',
@@ -91,6 +81,22 @@ try {
     clearScreen: false
   });
   console.log('✅ Minimal frontend build complete!');
+  
+  // Verify build outputs exist
+  const frontendIndexPath = path.resolve(__dirname, 'dist/public/index.html');
+  const jsAssetsPath = path.resolve(__dirname, 'dist/public/js');
+  
+  if (!require('fs').existsSync(frontendIndexPath)) {
+    console.error('❌ Build verification failed: dist/public/index.html is missing');
+    process.exit(1);
+  }
+  
+  if (!require('fs').existsSync(jsAssetsPath)) {
+    console.error('❌ Build verification failed: dist/public/js directory is missing');
+    process.exit(1);
+  }
+  
+  console.log('✅ Minimal frontend build verification passed');
 } catch (error) {
   console.error('❌ Even minimal build failed:', error);
   console.error('   This indicates a serious configuration issue');

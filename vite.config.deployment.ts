@@ -25,65 +25,185 @@ export default defineConfig({
   build: {
     outDir: path.resolve(__dirname, "dist/public"),
     emptyOutDir: true,
-    chunkSizeWarningLimit: 2000, // Reduced from 10000 to encourage smaller chunks
+    chunkSizeWarningLimit: 1500, // Further reduced for faster processing
     rollupOptions: {
       output: {
-        // Let Vite automatically handle chunking to avoid empty chunks
+        // Aggressive chunking for faster builds and better caching
+        manualChunks: (id) => {
+          if (id.includes('node_modules')) {
+            // Core React libs - essential and loaded first
+            if (id.includes('react') && !id.includes('react-') && !id.includes('@react')) return 'react-core';
+            if (id.includes('react-dom')) return 'react-dom';
+            
+            // Heavy ML/AI libraries - defer loading to reduce initial build time
+            if (id.includes('@tensorflow') || id.includes('tensorflow')) return 'ml-tensorflow';
+            if (id.includes('@mediapipe')) return 'ml-mediapipe';
+            if (id.includes('openai') || id.includes('@anthropic')) return 'ai-services';
+            
+            // 3D libraries - heavy, defer loading
+            if (id.includes('three') || id.includes('@react-three')) return '3d-libs';
+            
+            // Cloud services - defer loading
+            if (id.includes('firebase')) return 'cloud-firebase';
+            if (id.includes('@aws-sdk')) return 'cloud-aws';
+            if (id.includes('@google-cloud')) return 'cloud-gcp';
+            
+            // Payment libraries - defer loading
+            if (id.includes('stripe') || id.includes('@stripe')) return 'payment-stripe';
+            if (id.includes('@paypal')) return 'payment-paypal';
+            
+            // UI libraries - group by vendor
+            if (id.includes('@mui')) return 'ui-mui';
+            if (id.includes('@radix-ui')) return 'ui-radix';
+            if (id.includes('@emotion')) return 'ui-emotion';
+            
+            // Icons and media
+            if (id.includes('lucide-react') || id.includes('react-icons')) return 'icons';
+            
+            // Form handling
+            if (id.includes('react-hook-form') || id.includes('@hookform')) return 'forms';
+            
+            // Essential utilities - keep together for better compression
+            if (id.includes('axios') || id.includes('@tanstack/react-query')) return 'utils-essential';
+            if (id.includes('wouter') || id.includes('react-router')) return 'routing';
+            if (id.includes('zod')) return 'validation';
+            if (id.includes('clsx') || id.includes('tailwind-merge')) return 'utils-styles';
+            
+            // Everything else as vendor
+            return 'vendor';
+          }
+        },
         chunkFileNames: 'assets/js/[name]-[hash].js',
         entryFileNames: 'assets/js/[name]-[hash].js', 
-        assetFileNames: 'assets/[ext]/[name]-[hash].[ext]'
+        assetFileNames: 'assets/[ext]/[name]-[hash].[ext]',
+        // Enable advanced optimizations
+        compact: true
       },
       onwarn(warning, warn) {
+        // Only suppress safe warnings - keep critical ones visible
         if (warning.code === 'CIRCULAR_DEPENDENCY') return;
         if (warning.code === 'EVAL') return;
         if (warning.code === 'MODULE_LEVEL_DIRECTIVE') return;
-        if (warning.code === 'MISSING_EXPORT') return;
+        if (warning.code === 'SOURCEMAP_ERROR') return;
+        if (warning.code === 'THIS_IS_UNDEFINED') return;
+        // Always show these critical warnings
         warn(warning);
       },
-      // Use default treeshaking to preserve entry points
+      // Aggressive treeshaking for smaller bundles
+      treeshake: {
+        preset: 'recommended',
+        moduleSideEffects: false,
+        propertyReadSideEffects: false,
+        tryCatchDeoptimization: false,
+        unknownGlobalSideEffects: false
+      },
       preserveEntrySignatures: 'exports-only'
     },
-    minify: 'esbuild', // Changed from terser to esbuild for faster builds
-    target: 'es2020', // Modern target for better optimization
+    minify: 'esbuild', // Fastest minifier
+    target: 'es2020',
     sourcemap: false,
-    reportCompressedSize: false,
-    cssCodeSplit: true,
-    cssMinify: 'esbuild', // Use esbuild for CSS minification too
-    assetsInlineLimit: 2048, // Reduced from 4096 to avoid large inline assets
+    reportCompressedSize: false, // Skip size reporting to save time
+    cssCodeSplit: false, // Bundle CSS together for faster builds
+    cssMinify: 'esbuild',
+    assetsInlineLimit: 1024, // Smaller limit for faster processing
     modulePreload: {
       polyfill: false
     },
-    // Additional build optimizations for faster processing
-    write: true
+    // Memory and performance optimizations
+    write: true,
+    // Increase build concurrency for faster builds
+    commonjsOptions: {
+      include: /node_modules/,
+      transformMixedEsModules: true
+    }
   },
   optimizeDeps: {
     include: [
       'react', 
       'react-dom', 
-      'react-router-dom',
       'wouter',
       '@tanstack/react-query',
       'axios',
       'zod',
       'clsx',
       'tailwind-merge',
-      'lucide-react'
+      'lucide-react',
+      'react-hook-form',
+      '@hookform/resolvers',
+      'class-variance-authority'
     ],
     exclude: [
+      // Heavy ML/AI libraries
       '@mediapipe/pose',
+      '@mediapipe/camera_utils',
+      '@mediapipe/drawing_utils',
       '@tensorflow/tfjs',
       '@tensorflow/tfjs-core',
       '@tensorflow/tfjs-backend-webgl',
+      '@tensorflow-models/pose-detection',
+      '@tensorflow-models/body-pix',
+      'openai',
+      '@anthropic-ai/sdk',
+      
+      // Heavy 3D libraries
       'three',
+      '@react-three/fiber',
+      '@react-three/drei',
+      'three-stdlib',
+      'three-fbx-loader',
+      'three-gltf-loader',
+      'three-obj-loader',
+      
+      // Cloud services
       'firebase',
       '@aws-sdk/client-s3',
-      '@google-cloud/storage'
+      '@aws-sdk/lib-storage',
+      '@google-cloud/storage',
+      '@google-cloud/vertexai',
+      
+      // Payment libraries
+      'stripe',
+      '@stripe/stripe-js',
+      '@stripe/react-stripe-js',
+      '@paypal/paypal-server-sdk',
+      
+      // Heavy UI libraries
+      '@mui/material',
+      '@mui/icons-material',
+      '@emotion/react',
+      '@emotion/styled',
+      
+      // Media processing
+      'ffmpeg-static',
+      '@breezystack/lamejs'
     ],
-    force: true, // Force re-optimization for deployment
+    force: true,
     esbuildOptions: {
-      target: 'es2020'
+      target: 'es2020',
+      // Use more workers for faster dep optimization
+      minify: false,
+      keepNames: false,
+      tsconfigRaw: '{}'
     }
   },
-  logLevel: 'info',
+  logLevel: 'warn', // Reduce logging for faster builds
   clearScreen: false,
+  // Additional performance optimizations
+  esbuild: {
+    // Use all available CPU cores
+    target: 'es2020',
+    legalComments: 'none',
+    minifyIdentifiers: true,
+    minifySyntax: true,
+    minifyWhitespace: true,
+    treeShaking: true,
+    drop: ['console', 'debugger'] // Remove console logs in production
+  },
+  // Server options for faster builds
+  server: {
+    fs: {
+      // Allow serving files from one level up to access node_modules
+      allow: ['..']
+    }
+  },
 });

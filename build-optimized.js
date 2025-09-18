@@ -90,15 +90,13 @@ try {
           // Aggressive compression for smaller files
           compact: true
         },
-        // Suppress all warnings for faster builds
+        // Only suppress safe warnings - keep critical ones visible
         onwarn(warning, warn) {
           if (warning.code === 'CIRCULAR_DEPENDENCY') return;
           if (warning.code === 'EVAL') return;
           if (warning.code === 'MODULE_LEVEL_DIRECTIVE') return;
-          if (warning.code === 'MISSING_EXPORT') return;
-          if (warning.code === 'UNRESOLVED_IMPORT') return;
-          // Only warn for critical issues
-          if (warning.code === 'PLUGIN_WARNING') warn(warning);
+          // Always show critical warnings that could indicate broken bundles
+          warn(warning);
         },
         // Use safe treeshaking to preserve entry points
         preserveEntrySignatures: 'exports-only',
@@ -135,6 +133,22 @@ try {
     clearScreen: false
   });
   console.log('Frontend build complete!');
+  
+  // Verify build outputs exist
+  const frontendIndexPath = path.resolve(__dirname, 'dist/public/index.html');
+  const assetsPath = path.resolve(__dirname, 'dist/public/assets');
+  
+  if (!require('fs').existsSync(frontendIndexPath)) {
+    console.error('❌ Build verification failed: dist/public/index.html is missing');
+    process.exit(1);
+  }
+  
+  if (!require('fs').existsSync(assetsPath)) {
+    console.error('❌ Build verification failed: dist/public/assets directory is missing');
+    process.exit(1);
+  }
+  
+  console.log('✅ Frontend build verification passed');
 } catch (error) {
   console.error('Frontend build failed:', error);
   process.exit(1);

@@ -14,70 +14,23 @@ export default defineConfig({
       }
     })
   ],
+  root: path.resolve(__dirname, "client"),
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "client", "src"),
+      "@": path.resolve(__dirname, "client/src"),
       "@shared": path.resolve(__dirname, "shared"),
       "@assets": path.resolve(__dirname, "attached_assets"),
     },
   },
-  root: path.resolve(__dirname, "client"),
   build: {
     outDir: path.resolve(__dirname, "dist/public"),
     emptyOutDir: true,
     chunkSizeWarningLimit: 1500, // Further reduced for faster processing
     rollupOptions: {
       output: {
-        // Aggressive chunking for faster builds and better caching
-        manualChunks: (id) => {
-          if (id.includes('node_modules')) {
-            // Core React libs - essential and loaded first
-            if (id.includes('react') && !id.includes('react-') && !id.includes('@react')) return 'react-core';
-            if (id.includes('react-dom')) return 'react-dom';
-            
-            // Heavy ML/AI libraries - defer loading to reduce initial build time
-            if (id.includes('@tensorflow') || id.includes('tensorflow')) return 'ml-tensorflow';
-            if (id.includes('@mediapipe')) return 'ml-mediapipe';
-            if (id.includes('openai') || id.includes('@anthropic')) return 'ai-services';
-            
-            // 3D libraries - heavy, defer loading
-            if (id.includes('three') || id.includes('@react-three')) return '3d-libs';
-            
-            // Cloud services - defer loading
-            if (id.includes('firebase')) return 'cloud-firebase';
-            if (id.includes('@aws-sdk')) return 'cloud-aws';
-            if (id.includes('@google-cloud')) return 'cloud-gcp';
-            
-            // Payment libraries - defer loading
-            if (id.includes('stripe') || id.includes('@stripe')) return 'payment-stripe';
-            if (id.includes('@paypal')) return 'payment-paypal';
-            
-            // UI libraries - group by vendor
-            if (id.includes('@mui')) return 'ui-mui';
-            if (id.includes('@radix-ui')) return 'ui-radix';
-            if (id.includes('@emotion')) return 'ui-emotion';
-            
-            // Icons and media
-            if (id.includes('lucide-react') || id.includes('react-icons')) return 'icons';
-            
-            // Form handling
-            if (id.includes('react-hook-form') || id.includes('@hookform')) return 'forms';
-            
-            // Essential utilities - keep together for better compression
-            if (id.includes('axios') || id.includes('@tanstack/react-query')) return 'utils-essential';
-            if (id.includes('wouter') || id.includes('react-router')) return 'routing';
-            if (id.includes('zod')) return 'validation';
-            if (id.includes('clsx') || id.includes('tailwind-merge')) return 'utils-styles';
-            
-            // Everything else as vendor
-            return 'vendor';
-          }
-        },
         chunkFileNames: 'assets/js/[name]-[hash].js',
         entryFileNames: 'assets/js/[name]-[hash].js', 
         assetFileNames: 'assets/[ext]/[name]-[hash].[ext]',
-        // Enable advanced optimizations
-        compact: true
       },
       onwarn(warning, warn) {
         // Only suppress safe warnings - keep critical ones visible

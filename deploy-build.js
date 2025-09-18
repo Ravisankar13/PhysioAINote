@@ -206,7 +206,12 @@ try {
       "--log-level=info", // Better error reporting
       "--color=true", // Colorized output for better visibility
       // Explicitly exclude dev dependencies from bundling
-      ...devDependenciesToExclude.map(dep => `--external:${dep}`)
+      ...devDependenciesToExclude.map(dep => `--external:${dep}`),
+      // Exclude vite.ts module specifically from production builds
+      "--external:./vite",
+      "--external:./server/vite",
+      "--external:../vite.config",
+      "--external:../vite.config.ts"
     ].join(" ");
 
     console.log("   Build command:", esbuildCommand);
@@ -221,6 +226,8 @@ try {
       env: {
         ...process.env,
         NODE_ENV: "production",
+        REPLIT_DEPLOYMENT: "1",
+        NODE_ENV_MODE: "production",
         // Set build timestamp for runtime debugging
         BUILD_TIME: new Date().toISOString(),
         // Ensure dev dependencies are excluded from resolution
@@ -259,6 +266,12 @@ try {
         "--outdir=dist",
         "--target=node18",
         "--log-level=warning", // Less verbose for fallback
+        // Also exclude vite dependencies in fallback
+        "--external:vite",
+        "--external:./vite",
+        "--external:./server/vite",
+        "--external:../vite.config",
+        "--external:../vite.config.ts"
       ].join(" ");
 
       execSync(fallbackCommand, {
@@ -267,6 +280,9 @@ try {
         env: {
           ...process.env,
           NODE_ENV: "production",
+          REPLIT_DEPLOYMENT: "1",
+          NODE_ENV_MODE: "production",
+          BUILD_TIME: new Date().toISOString(),
           NPM_CONFIG_OMIT: "dev",
           NPM_CONFIG_PRODUCTION: "true",
         },

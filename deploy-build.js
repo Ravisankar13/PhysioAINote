@@ -274,7 +274,6 @@ try {
     dependencies: {
       // Critical runtime dependencies for production deployment
       express: "^4.21.2",
-      vite: "^5.4.20",
       // Database dependencies
       "drizzle-orm": "^0.39.1",
       "@neondatabase/serverless": "^0.10.4",
@@ -382,7 +381,6 @@ try {
       // Verify critical packages are installed
       const criticalPackages = [
         "express", 
-        "vite",
         "docx", 
         "drizzle-orm", 
         "openai", 

@@ -17,7 +17,7 @@ process.env.VITE_NODE_ENV = 'production';
 
 // Simple dependency verification
 function verifyBasicDependencies() {
-  const criticalPackages = ['express', 'vite', 'drizzle-orm', 'openai', 'zod'];
+  const criticalPackages = ['express', 'drizzle-orm', 'openai', 'zod'];
   const distNodeModules = resolve(__dirname, 'dist/node_modules');
   
   if (!existsSync(distNodeModules)) {

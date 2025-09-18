@@ -164,7 +164,26 @@ try {
   console.log("⚙️  Building backend server...");
   console.log("   This will create a production-ready server bundle");
   try {
-    // Enhanced esbuild configuration with better error handling and optimization
+    // Enhanced esbuild configuration with explicit dev dependency exclusions
+    const devDependenciesToExclude = [
+      "vite",
+      "@vitejs/plugin-react",
+      "vite-tsconfig-paths",
+      "@replit/vite-plugin-cartographer",
+      "@replit/vite-plugin-runtime-error-modal",
+      "esbuild",
+      "@types/*",
+      "typescript",
+      "tsx",
+      "drizzle-kit",
+      "terser",
+      "autoprefixer",
+      "postcss",
+      "tailwindcss",
+      "@tailwindcss/typography",
+      "@tailwindcss/vite"
+    ];
+
     const esbuildCommand = [
       "npx esbuild server/index.ts",
       "--platform=node",
@@ -179,6 +198,8 @@ try {
       "--keep-names", // Preserve function names for better debugging
       "--log-level=info", // Better error reporting
       "--color=true", // Colorized output for better visibility
+      // Explicitly exclude dev dependencies from bundling
+      ...devDependenciesToExclude.map(dep => `--external:${dep}`)
     ].join(" ");
 
     console.log("   Build command:", esbuildCommand);

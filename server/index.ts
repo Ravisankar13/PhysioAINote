@@ -1,6 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
+import { serveStatic, log } from "./static";
 import { createAdditionalComplexCases2024 } from "./additionalComplexCases2024";
 import { competitionScheduler } from "./competitionScheduler";
 import { notificationService } from "./notificationService";
@@ -122,6 +122,7 @@ app.use((req, res, next) => {
     try {
       if (app.get("env") === "development" || process.env.NODE_ENV === "development") {
         log("Setting up Vite development server...");
+        const { setupVite } = await import("./vite");
         await setupVite(app, server);
         log("Vite development server ready");
       } else {

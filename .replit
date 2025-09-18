@@ -7,7 +7,7 @@ channel = "stable-24_05"
 packages = ["lsof", "jq"]
 
 [deployment]
-deploymentTarget = "gce"
+deploymentTarget = "cloudrun"
 build = ["sh", "-c", "node deploy-build.js"]
 run = ["sh", "-c", "npm start"]
 

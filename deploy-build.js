@@ -27,12 +27,12 @@ try {
   }
   mkdirSync('dist', { recursive: true });
   
-  // Build the React frontend for production
+  // Build the React frontend for production with deployment config
   console.log('⚙️  Building React frontend...');
-  console.log('   This will output to dist/public as configured in vite.config.ts');
+  console.log('   This will output to dist/public with relative paths for subdirectory compatibility');
   try {
     // Set timeout for Vite build to prevent hanging
-    execSync('npx vite build', { 
+    execSync('npx vite build --config vite.config.deployment.ts', { 
       stdio: 'inherit',
       timeout: 180000 // 3 minutes timeout
     });

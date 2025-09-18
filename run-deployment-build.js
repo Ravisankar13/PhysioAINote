@@ -32,9 +32,9 @@ console.log('Running standard build with memory optimization...');
 process.env.NODE_OPTIONS = '--max-old-space-size=4096';
 
 try {
-  // Build frontend
+  // Build frontend with deployment config for correct base paths
   console.log('Building frontend...');
-  execSync('npx vite build --mode production', { stdio: 'inherit' });
+  execSync('npx vite build --config vite.config.deployment.ts --mode production', { stdio: 'inherit' });
   
   // Build backend - use working deploy-server.mjs approach (no problematic bundling)
   console.log('Configuring backend...');

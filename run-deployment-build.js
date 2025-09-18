@@ -36,11 +36,27 @@ try {
   console.log('Building frontend...');
   execSync('npx vite build --mode production', { stdio: 'inherit' });
   
-  // Build backend
-  console.log('Building backend...');
-  execSync('npx esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist --minify', { stdio: 'inherit' });
+  // Build backend - use working deploy-server.mjs approach (no problematic bundling)
+  console.log('Configuring backend...');
+  console.log('Using deploy-server.mjs (skipping problematic esbuild bundling)');
+  
+  // Create production starter script
+  const startScript = `#!/usr/bin/env node
+// Production starter for PhysioGPT - uses working deploy-server.mjs
+console.log('🚀 Starting PhysioGPT Production Server...');
+console.log('Using deploy-server.mjs with all dependencies available');
+import('./deploy-server.mjs').catch(error => {
+  console.error('Failed to start production server:', error);
+  process.exit(1);
+});`;
+  
+  fs.writeFileSync('start-production.mjs', startScript);
   
   console.log('✅ Build completed successfully!');
+  console.log('📋 Production files ready:');
+  console.log('   - Frontend: Built to dist/public');
+  console.log('   - Backend: Using deploy-server.mjs');
+  console.log('   - Start script: start-production.mjs');
   process.exit(0);
 } catch (error) {
   console.error('Build failed:', error.message);

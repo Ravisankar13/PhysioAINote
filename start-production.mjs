@@ -12,49 +12,109 @@ console.log('🏗️  Build time:', process.env.BUILD_TIME || 'Unknown');
 console.log('🌍 Environment:', process.env.NODE_ENV || 'Unknown');
 console.log('🔌 Port:', process.env.PORT || '5000');
 
-// Check for dependencies before starting server
-console.log('🔍 Checking dependencies...');
+// Enhanced dependency verification and installation
+console.log('🔍 Performing comprehensive dependency check...');
 const distPackageJson = resolve(__dirname, 'dist/package.json');
 const distNodeModules = resolve(__dirname, 'dist/node_modules');
 const fallbackInstaller = resolve(__dirname, 'dist/install-deps.mjs');
 
+async function verifyCriticalPackages() {
+  const criticalPackages = ['express', 'docx', 'drizzle-orm', 'openai', 'zod'];
+  const missingPackages = criticalPackages.filter(pkg => 
+    !existsSync(resolve(__dirname, 'dist/node_modules', pkg))
+  );
+  
+  if (missingPackages.length > 0) {
+    console.log(`❌ Critical packages missing: ${missingPackages.join(', ')}`);
+    return false;
+  }
+  
+  console.log(`✅ All ${criticalPackages.length} critical packages verified`);
+  return true;
+}
+
+async function attemptDependencyInstallation() {
+  const { execSync } = await import('child_process');
+  
+  console.log('🔄 Attempting dependency installation...');
+  
+  // Strategy 1: Use enhanced fallback installer if available
+  if (existsSync(fallbackInstaller)) {
+    try {
+      console.log('📦 Using enhanced fallback dependency installer...');
+      execSync('node install-deps.mjs', {
+        cwd: resolve(__dirname, 'dist'),
+        stdio: 'inherit',
+        timeout: 600000, // 10 minute timeout for fallback (increased)
+        env: { ...process.env, NODE_ENV: 'production' }
+      });
+      
+      // Verify installation succeeded
+      if (await verifyCriticalPackages()) {
+        console.log('✅ Enhanced fallback installation succeeded');
+        return true;
+      } else {
+        console.log('⚠️  Enhanced fallback installation completed but packages still missing');
+      }
+    } catch (installError) {
+      console.log('⚠️  Enhanced fallback installation failed:', installError.message);
+    }
+  }
+  
+  // Strategy 2: Direct npm install with retries
+  const maxRetries = 2;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`📦 Attempting direct npm install (attempt ${attempt}/${maxRetries})...`);
+      execSync('npm install --omit=dev --prefer-offline --no-audit --no-fund', {
+        cwd: resolve(__dirname, 'dist'),
+        stdio: 'inherit',
+        timeout: 420000, // 7 minutes
+        env: { 
+          ...process.env, 
+          NODE_ENV: 'production',
+          NPM_CONFIG_LOGLEVEL: 'warn'
+        }
+      });
+      
+      if (await verifyCriticalPackages()) {
+        console.log('✅ Direct npm install succeeded');
+        return true;
+      }
+    } catch (installError) {
+      console.log(`⚠️  Direct install attempt ${attempt} failed:`, installError.message);
+      if (attempt < maxRetries) {
+        console.log('   Retrying in 3 seconds...');
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      }
+    }
+  }
+  
+  console.log('❌ All dependency installation strategies failed');
+  return false;
+}
+
 if (existsSync(distPackageJson)) {
   console.log('✅ Found dist/package.json');
   
-  if (!existsSync(distNodeModules)) {
-    console.log('⚠️  Dependencies missing in dist directory');
-    console.log('🔄 Attempting to install dependencies...');
-    
-    if (existsSync(fallbackInstaller)) {
-      try {
-        console.log('📦 Running fallback dependency installer...');
-        const { execSync } = await import('child_process');
-        execSync('cd dist && node install-deps.mjs', {
-          stdio: 'inherit',
-          timeout: 300000, // 5 minute timeout
-          env: { ...process.env, NODE_ENV: 'production' }
-        });
-        console.log('✅ Dependencies installed successfully');
-      } catch (installError) {
-        console.log('⚠️  Fallback installation failed:', installError.message);
-        console.log('🔄 Will try to continue with source files...');
-      }
-    } else {
-      console.log('⚠️  Fallback installer not found, trying direct npm install...');
-      try {
-        const { execSync } = await import('child_process');
-        execSync('cd dist && npm install --omit=dev', {
-          stdio: 'inherit',
-          timeout: 300000,
-          env: { ...process.env, NODE_ENV: 'production' }
-        });
-        console.log('✅ Direct npm install successful');
-      } catch (directInstallError) {
-        console.log('⚠️  Direct npm install failed:', directInstallError.message);
-      }
+  // Check if dependencies exist and are complete
+  const hasNodeModules = existsSync(distNodeModules);
+  const hasCriticalPackages = hasNodeModules && await verifyCriticalPackages();
+  
+  if (!hasNodeModules) {
+    console.log('⚠️  dist/node_modules directory missing');
+    const installSuccess = await attemptDependencyInstallation();
+    if (!installSuccess) {
+      console.log('🔄 Dependency installation failed, will attempt to use source files');
+    }
+  } else if (!hasCriticalPackages) {
+    console.log('⚠️  Dependencies exist but critical packages are missing');
+    const installSuccess = await attemptDependencyInstallation();
+    if (!installSuccess) {
+      console.log('🔄 Dependency repair failed, will attempt to use source files');
     }
   } else {
-    console.log('✅ Dependencies found in dist/node_modules');
+    console.log('✅ All dependencies verified and ready');
   }
 } else {
   console.log('⚠️  No dist/package.json found, will use source files');

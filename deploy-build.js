@@ -43,24 +43,18 @@ try {
     console.log('   The deployment will continue but may not serve the frontend properly');
   }
   
-  // Build the backend TypeScript server
-  console.log('⚙️  Building backend server...');
-  try {
-    execSync('npm run build:backend', { stdio: 'inherit' });
-    console.log('✅ Backend built successfully to dist/index.js');
-  } catch (error) {
-    console.log('❌ Backend build failed:', error.message);
-    process.exit(1);
-  }
+  // Skip backend bundling - use existing deploy-server.mjs instead
+  console.log('⚙️  Configuring backend server...');
+  console.log('   Using existing deploy-server.mjs (no bundling needed)');
   
-  // Create production starter that uses the built server
+  // Create production starter that uses the working deploy-server.mjs
   console.log('📝 Creating production starter...');
   const startScript = `#!/usr/bin/env node
-// Production starter for PhysioGPT - uses built server
+// Production starter for PhysioGPT - uses working deploy-server.mjs
 console.log('🚀 Starting PhysioGPT Production Server...');
-console.log('Using built server: dist/index.js');
-import('./dist/index.js').catch(error => {
-  console.error('Failed to start built server:', error);
+console.log('Using deploy-server.mjs with all dependencies available');
+import('./deploy-server.mjs').catch(error => {
+  console.error('Failed to start production server:', error);
   process.exit(1);
 });`;
   

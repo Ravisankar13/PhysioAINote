@@ -265,48 +265,152 @@ try {
   writeFileSync(distPackageJsonPath, JSON.stringify(productionPackageJson, null, 2));
   console.log('✅ Production package.json created in dist directory');
 
-  // Install dependencies in dist directory
+  // Install dependencies in dist directory with enhanced error handling
   console.log('📥 Installing dependencies in dist directory...');
-  try {
-    execSync('cd dist && npm install --omit=dev', {
-      stdio: 'inherit',
-      timeout: 300000, // 5 minutes timeout for npm install
-      env: {
-        ...process.env,
-        NODE_ENV: 'production'
-      }
-    });
-    console.log('✅ Dependencies installed successfully in dist directory');
-  } catch (installError) {
-    console.log('⚠️  Dependency installation failed:', installError.message);
-    console.log('   Adding fallback dependency installation mechanism...');
+  
+  let installSucceeded = false;
+  const maxRetries = 3;
+  
+  for (let attempt = 1; attempt <= maxRetries && !installSucceeded; attempt++) {
+    console.log(`   Attempt ${attempt}/${maxRetries}...`);
     
-    // Create a fallback installation script
-    const fallbackScript = `#!/usr/bin/env node
-// Fallback dependency installation script
+    try {
+      // Strategy 1: Try npm ci if package-lock.json exists (faster and more reliable)
+      if (existsSync('dist/package-lock.json')) {
+        console.log('   Using npm ci (faster, deterministic install)');
+        execSync('cd dist && npm ci --omit=dev --prefer-offline --no-audit --no-fund', {
+          stdio: 'inherit',
+          timeout: 420000, // 7 minutes timeout for npm install (increased for reliability)
+          env: {
+            ...process.env,
+            NODE_ENV: 'production',
+            NPM_CONFIG_PROGRESS: 'false', // Reduce noise in CI environments
+            NPM_CONFIG_LOGLEVEL: 'warn'
+          }
+        });
+      } else {
+        // Strategy 2: Use npm install with optimizations
+        console.log('   Using npm install with production optimizations');
+        execSync('cd dist && npm install --omit=dev --prefer-offline --no-audit --no-fund --no-optional', {
+          stdio: 'inherit',
+          timeout: 420000, // 7 minutes timeout
+          env: {
+            ...process.env,
+            NODE_ENV: 'production',
+            NPM_CONFIG_PROGRESS: 'false',
+            NPM_CONFIG_LOGLEVEL: 'warn'
+          }
+        });
+      }
+      
+      // Verify critical packages are installed
+      const criticalPackages = ['express', 'docx', 'drizzle-orm', 'openai'];
+      const missingPackages = criticalPackages.filter(pkg => 
+        !existsSync(`dist/node_modules/${pkg}`)
+      );
+      
+      if (missingPackages.length > 0) {
+        throw new Error(`Critical packages missing after install: ${missingPackages.join(', ')}`);
+      }
+      
+      console.log('✅ Dependencies installed and verified successfully');
+      console.log(`   Installed ${criticalPackages.length} critical packages`);
+      installSucceeded = true;
+      
+    } catch (installError) {
+      console.log(`⚠️  Installation attempt ${attempt} failed:`, installError.message);
+      
+      if (attempt < maxRetries) {
+        console.log('   Retrying with different strategy...');
+        
+        // Clean up for retry
+        if (existsSync('dist/node_modules')) {
+          console.log('   Cleaning node_modules for retry...');
+          rmSync('dist/node_modules', { recursive: true, force: true });
+        }
+        
+        // Wait before retry (exponential backoff)
+        const delay = Math.min(2 * Math.pow(2, attempt - 1), 10);
+        console.log(`   Waiting ${delay} seconds before retry...`);
+        // Use synchronous sleep via shell command
+        try {
+          execSync(`sleep ${delay}`, { timeout: 15000 });
+        } catch {
+          // If sleep command fails (on Windows), just continue without delay
+          console.log('   (Sleep command unavailable, retrying immediately)');
+        }
+      } else {
+        console.log('❌ All installation attempts failed');
+        console.log('   Creating enhanced fallback installation mechanism...');
+        
+        // Create enhanced fallback installation script
+        const fallbackScript = `#!/usr/bin/env node
+// Enhanced fallback dependency installation script
 import { execSync } from 'child_process';
 import { existsSync } from 'fs';
 
-console.log('🔄 Attempting fallback dependency installation...');
-try {
-  if (!existsSync('./node_modules')) {
-    console.log('📦 Installing dependencies...');
-    if (existsSync('./package-lock.json')) {
-      execSync('npm ci --omit=dev', { stdio: 'inherit' });
-    } else {
-      execSync('npm install --omit=dev', { stdio: 'inherit' });
-    }
-    console.log('✅ Fallback installation completed');
-  } else {
-    console.log('✅ Dependencies already installed');
+console.log('🔄 Attempting enhanced fallback dependency installation...');
+
+const strategies = [
+  {
+    name: 'npm ci (if lockfile exists)',
+    command: 'npm ci --omit=dev --prefer-offline --no-audit',
+    condition: () => existsSync('./package-lock.json')
+  },
+  {
+    name: 'npm install with cache',
+    command: 'npm install --omit=dev --prefer-offline --no-audit --no-fund',
+    condition: () => true
+  },
+  {
+    name: 'npm install force cache',
+    command: 'npm install --omit=dev --cache-max=300 --no-audit --no-fund',
+    condition: () => true
+  },
+  {
+    name: 'npm install minimal',
+    command: 'npm install --omit=dev --no-optional --no-audit --no-fund',
+    condition: () => true
   }
-} catch (error) {
-  console.error('❌ Fallback installation failed:', error.message);
-  process.exit(1);
+];
+
+for (const strategy of strategies) {
+  if (!strategy.condition()) continue;
+  
+  try {
+    console.log(\`📦 Trying: \${strategy.name}\`);
+    execSync(strategy.command, { 
+      stdio: 'inherit',
+      timeout: 600000, // 10 minutes for fallback
+      env: { ...process.env, NODE_ENV: 'production' }
+    });
+    
+    // Verify critical packages
+    const critical = ['express', 'docx', 'openai'];
+    const missing = critical.filter(pkg => !existsSync(\`./node_modules/\${pkg}\`));
+    
+    if (missing.length === 0) {
+      console.log('✅ Fallback installation succeeded');
+      process.exit(0);
+    } else {
+      console.log(\`⚠️  Missing packages: \${missing.join(', ')}, trying next strategy...\`);
+    }
+  } catch (error) {
+    console.log(\`❌ \${strategy.name} failed: \${error.message}\`);
+  }
 }
+
+console.error('❌ All fallback installation strategies failed');
+console.error('Manual intervention required - check network connectivity and package registry');
+process.exit(1);
 `;
-    writeFileSync('dist/install-deps.mjs', fallbackScript);
-    console.log('✅ Fallback installation script created at dist/install-deps.mjs');
+        writeFileSync('dist/install-deps.mjs', fallbackScript);
+        console.log('✅ Enhanced fallback installation script created at dist/install-deps.mjs');
+        
+        // Don't fail the entire build - let the production starter handle it
+        console.log('⚠️  Build will continue, production starter will attempt fallback installation');
+      }
+    }
   }
   
   // Verify build outputs exist

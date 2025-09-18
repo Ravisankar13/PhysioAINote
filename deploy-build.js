@@ -137,6 +137,89 @@ try {
     console.log('⚠️  Backend build failed:', backendError.message);
     console.log('   Deployment will continue but may use existing server files');
   }
+
+  // Create production package.json in dist directory
+  console.log('📦 Creating production package.json in dist directory...');
+  const productionPackageJson = {
+    name: "rest-express-production",
+    version: "1.0.0",
+    type: "module",
+    main: "index.js",
+    dependencies: {
+      // Core server dependencies - only the ones needed for the built server
+      "express": "^4.21.2",
+      "drizzle-orm": "^0.39.1",
+      "drizzle-kit": "^0.31.4",
+      "@neondatabase/serverless": "^0.10.4",
+      "dotenv": "^16.5.0",
+      "zod": "^3.24.2",
+      "drizzle-zod": "^0.7.0",
+      "express-session": "^1.18.1",
+      "connect-pg-simple": "^10.0.0",
+      "passport": "^0.7.0",
+      "passport-local": "^1.0.0",
+      "nanoid": "^5.1.5",
+      "axios": "^1.10.0",
+      "@anthropic-ai/sdk": "^0.37.0",
+      "openai": "^4.104.0",
+      "stripe": "^18.4.0",
+      "ws": "^8.18.0",
+      "multer": "^1.4.5-lts.2",
+      "@aws-sdk/client-s3": "^3.812.0",
+      "@aws-sdk/lib-storage": "^3.812.0",
+      "multer-s3": "^3.0.1",
+      "@google-cloud/storage": "^7.17.0",
+      "google-auth-library": "^10.3.0"
+    }
+  };
+  
+  const distPackageJsonPath = 'dist/package.json';
+  writeFileSync(distPackageJsonPath, JSON.stringify(productionPackageJson, null, 2));
+  console.log('✅ Production package.json created in dist directory');
+
+  // Install dependencies in dist directory
+  console.log('📥 Installing dependencies in dist directory...');
+  try {
+    execSync('cd dist && npm install --omit=dev', {
+      stdio: 'inherit',
+      timeout: 300000, // 5 minutes timeout for npm install
+      env: {
+        ...process.env,
+        NODE_ENV: 'production'
+      }
+    });
+    console.log('✅ Dependencies installed successfully in dist directory');
+  } catch (installError) {
+    console.log('⚠️  Dependency installation failed:', installError.message);
+    console.log('   Adding fallback dependency installation mechanism...');
+    
+    // Create a fallback installation script
+    const fallbackScript = `#!/usr/bin/env node
+// Fallback dependency installation script
+import { execSync } from 'child_process';
+import { existsSync } from 'fs';
+
+console.log('🔄 Attempting fallback dependency installation...');
+try {
+  if (!existsSync('./node_modules')) {
+    console.log('📦 Installing dependencies...');
+    if (existsSync('./package-lock.json')) {
+      execSync('npm ci --omit=dev', { stdio: 'inherit' });
+    } else {
+      execSync('npm install --omit=dev', { stdio: 'inherit' });
+    }
+    console.log('✅ Fallback installation completed');
+  } else {
+    console.log('✅ Dependencies already installed');
+  }
+} catch (error) {
+  console.error('❌ Fallback installation failed:', error.message);
+  process.exit(1);
+}
+`;
+    writeFileSync('dist/install-deps.mjs', fallbackScript);
+    console.log('✅ Fallback installation script created at dist/install-deps.mjs');
+  }
   
   // Verify build outputs exist
   console.log('📝 Verifying build outputs...');

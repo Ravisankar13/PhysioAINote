@@ -111,7 +111,8 @@ function NotesClinical(): React.ReactElement {
   >({});
 
   const [location, setLocation] = useLocation();
-  const soap_note_streaming_api_base_url = 'https://api.physioconversation.stackaisolutions.com'
+  // Use local backend API instead of external service
+  const soap_note_streaming_api_base_url = window.location.origin
 
   useEffect(() => {
     const handleLogin = async () => {
@@ -334,7 +335,7 @@ function NotesClinical(): React.ReactElement {
       
       await axios.post(
         // "https://hqy44mb8l7.execute-api.us-east-2.amazonaws.com/dev/save-demographic-data",
-        `${soap_note_streaming_api_base_url}/save-demographic-data`,
+        `${soap_note_streaming_api_base_url}/api/patient-data`,
         {
           ...patientData,
           user_id: userId,
@@ -431,7 +432,7 @@ function NotesClinical(): React.ReactElement {
 
       // Use the streaming endpoint
       const response = await fetch(
-        `${soap_note_streaming_api_base_url}/gen-soap-note-stream`,
+        `${soap_note_streaming_api_base_url}/api/notes/generate`,
         {
           method: "POST",
           headers: {
@@ -627,7 +628,7 @@ function NotesClinical(): React.ReactElement {
   const fetchSoapSummaries = async (sessionId: string, userId?: string): Promise<void> => {
     try {
       const response = await axios.post(
-        `${soap_note_streaming_api_base_url}/soap-note-summary`,
+        `${soap_note_streaming_api_base_url}/api/notes`,
         {
           session_id: sessionId,
           user_id: userId,

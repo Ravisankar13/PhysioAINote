@@ -29,7 +29,19 @@ if (existsSync(distIndex)) {
     console.log('🔄 Falling back to source server...');
     
     try {
-      await import('./server/index.ts');
+      // Use tsx to run TypeScript in production
+      const { spawn } = await import('child_process');
+      const tsx = spawn('npx', ['tsx', 'server/index.ts'], { 
+        stdio: 'inherit',
+        env: { ...process.env, NODE_ENV: 'production' }
+      });
+      
+      tsx.on('exit', (code) => {
+        if (code !== 0) {
+          console.error('💥 Server exited with code:', code);
+          process.exit(code);
+        }
+      });
     } catch (fallbackError) {
       console.error('💥 Both built and source servers failed!');
       console.error('Built server error:', error.message);
@@ -42,7 +54,19 @@ if (existsSync(distIndex)) {
   console.log('📂 Loading from:', sourceIndex);
   
   try {
-    await import('./server/index.ts');
+    // Use tsx to run TypeScript in production
+    const { spawn } = await import('child_process');
+    const tsx = spawn('npx', ['tsx', 'server/index.ts'], { 
+      stdio: 'inherit',
+      env: { ...process.env, NODE_ENV: 'production' }
+    });
+    
+    tsx.on('exit', (code) => {
+      if (code !== 0) {
+        console.error('💥 Server exited with code:', code);
+        process.exit(code);
+      }
+    });
   } catch (error) {
     console.error('❌ Failed to load source server:', error.message);
     console.error('🔍 Stack trace:', error.stack);

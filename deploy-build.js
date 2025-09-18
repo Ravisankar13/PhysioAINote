@@ -4,7 +4,7 @@
 // This script prepares the application for deployment without changing directories
 
 import { execSync } from 'child_process';
-import { existsSync, rmSync, mkdirSync, cpSync, writeFileSync } from 'fs';
+import { existsSync, rmSync, mkdirSync, cpSync, writeFileSync, statSync } from 'fs';
 import { dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -124,18 +124,95 @@ try {
   console.log('⚙️  Building backend server...');
   console.log('   This will create a production-ready server bundle');
   try {
-    execSync('npx esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist --minify --target=node18', {
+    // Enhanced esbuild configuration with better error handling and optimization
+    const esbuildCommand = [
+      'npx esbuild server/index.ts',
+      '--platform=node',
+      '--packages=external',
+      '--bundle',
+      '--format=esm',
+      '--outdir=dist',
+      '--minify',
+      '--target=node18',
+      '--sourcemap=external',  // Add source maps for better debugging
+      '--resolve-extensions=.ts,.js,.mjs,.json',  // Explicit extensions including JSON
+      '--keep-names',  // Preserve function names for better debugging
+      '--log-level=info',  // Better error reporting
+      '--color=true'  // Colorized output for better visibility
+    ].join(' ');
+    
+    console.log('   Build command:', esbuildCommand);
+    console.log('   Memory allocation: Default (should be sufficient for server build)');
+    console.log('   Timeout: 3 minutes maximum');
+    
+    execSync(esbuildCommand, {
       stdio: 'inherit',
-      timeout: 120000, // 2 minutes timeout for backend build
+      timeout: 180000, // 3 minutes timeout for backend build (increased for reliability)
       env: {
         ...process.env,
-        NODE_ENV: 'production'
+        NODE_ENV: 'production',
+        // Set build timestamp for runtime debugging
+        BUILD_TIME: new Date().toISOString()
       }
     });
     console.log('✅ Backend built successfully to dist/index.js');
+    
+    // Verify the built file exists and has reasonable size
+    if (existsSync('dist/index.js')) {
+      const stats = statSync('dist/index.js');
+      console.log(`   Built server size: ${Math.round(stats.size / 1024)}KB`);
+      if (stats.size < 10000) {  // Less than 10KB suggests build issue
+        console.log('⚠️  Warning: Built server file is unexpectedly small, may indicate build issues');
+      }
+    } else {
+      throw new Error('Built server file dist/index.js was not created');
+    }
+    
   } catch (backendError) {
     console.log('⚠️  Backend build failed:', backendError.message);
-    console.log('   Deployment will continue but may use existing server files');
+    console.log('   Stack:', backendError.stack);
+    console.log('   Attempting fallback build with relaxed settings...');
+    
+    // Fallback build with minimal optimizations
+    try {
+      const fallbackCommand = [
+        'npx esbuild server/index.ts',
+        '--platform=node',
+        '--packages=external',
+        '--bundle',
+        '--format=esm',
+        '--outdir=dist',
+        '--target=node18',
+        '--log-level=warning'  // Less verbose for fallback
+      ].join(' ');
+      
+      execSync(fallbackCommand, {
+        stdio: 'inherit',
+        timeout: 120000, // 2 minutes for fallback
+        env: {
+          ...process.env,
+          NODE_ENV: 'production'
+        }
+      });
+      console.log('✅ Fallback backend build completed (unminified)');
+      
+      // Verify fallback build output
+      if (existsSync('dist/index.js')) {
+        const stats = statSync('dist/index.js');
+        console.log(`   Fallback server size: ${Math.round(stats.size / 1024)}KB`);
+        if (stats.size < 10000) {
+          console.log('⚠️  Warning: Fallback server file is unexpectedly small');
+        }
+      } else {
+        throw new Error('Fallback build did not create dist/index.js');
+      }
+      
+    } catch (fallbackError) {
+      console.log('❌ Both main and fallback backend builds failed');
+      console.log('   Main error:', backendError.message);
+      console.log('   Fallback error:', fallbackError.message);
+      console.log('   Deployment will continue but server may not work correctly');
+    }
   }
 
   // Create production package.json in dist directory

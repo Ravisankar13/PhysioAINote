@@ -59,6 +59,9 @@ try {
         NODE_ENV: "production",
         VITE_NODE_ENV: "production",
         CI: "true", // Enable CI optimizations
+        // Explicitly exclude dev dependencies during build
+        NPM_CONFIG_OMIT: "dev",
+        NPM_CONFIG_PRODUCTION: "true"
       },
     });
     console.log("✅ Frontend built successfully");
@@ -93,6 +96,8 @@ try {
             NODE_OPTIONS: "--max-old-space-size=8192", // 8GB memory allocation
             NODE_ENV: "production",
             BUILD_MODE: "optimized",
+            NPM_CONFIG_OMIT: "dev",
+            NPM_CONFIG_PRODUCTION: "true",
           },
         },
       );
@@ -126,6 +131,8 @@ try {
               NODE_OPTIONS: "--max-old-space-size=6144", // 6GB memory allocation
               NODE_ENV: "production",
               BUILD_MODE: "minimal",
+              NPM_CONFIG_OMIT: "dev",
+              NPM_CONFIG_PRODUCTION: "true",
             },
           },
         );
@@ -216,6 +223,9 @@ try {
         NODE_ENV: "production",
         // Set build timestamp for runtime debugging
         BUILD_TIME: new Date().toISOString(),
+        // Ensure dev dependencies are excluded from resolution
+        NPM_CONFIG_OMIT: "dev",
+        NPM_CONFIG_PRODUCTION: "true",
       },
     });
     console.log("✅ Backend built successfully to dist/index.js");
@@ -257,6 +267,8 @@ try {
         env: {
           ...process.env,
           NODE_ENV: "production",
+          NPM_CONFIG_OMIT: "dev",
+          NPM_CONFIG_PRODUCTION: "true",
         },
       });
       console.log("✅ Fallback backend build completed (unminified)");
@@ -285,13 +297,22 @@ try {
     }
   }
 
-  // Create production package.json in dist directory
+  // Create production package.json in dist directory with strict prod-only dependencies
   console.log("📦 Creating production package.json in dist directory...");
+  console.log("   Excluding all development dependencies (Vite, TypeScript, etc.)");
+  console.log("   Including only runtime dependencies required for production");
+  
   const productionPackageJson = {
     name: "rest-express-production",
     version: "1.0.0",
     type: "module",
     main: "index.js",
+    scripts: {
+      start: "NODE_ENV=production node index.js"
+    },
+    engines: {
+      node: ">=18.0.0"
+    },
     dependencies: {
       // Critical runtime dependencies for production deployment
       express: "^4.21.2",
@@ -346,6 +367,10 @@ try {
       // Firebase (if used in production)
       firebase: "^11.7.3",
     },
+    // Explicitly exclude dev dependencies to prevent accidental inclusion
+    devDependencies: {},
+    peerDependencies: {},
+    optionalDependencies: {},
   };
 
   const distPackageJsonPath = "dist/package.json";

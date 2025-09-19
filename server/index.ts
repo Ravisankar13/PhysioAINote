@@ -44,9 +44,9 @@ app.use((req, res, next) => {
   try {
     log("Starting PhysioGPT server initialization...");
 
-    // Environment validation for deployment
-    const requiredEnvVars = ['DATABASE_URL'];
-    const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
+    // Environment validation for deployment  
+    const hasDatabaseUrl = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL;
+    const missingEnvVars = hasDatabaseUrl ? [] : ['DATABASE_URL or NEON_DATABASE_URL'];
     
     if (missingEnvVars.length > 0) {
       console.warn(`⚠️  Missing environment variables: ${missingEnvVars.join(', ')}`);
@@ -62,9 +62,34 @@ app.use((req, res, next) => {
     }
 
     // Add health check endpoint for deployment debugging
-    app.get('/health', (req, res) => {
+    app.get('/health', async (req, res) => {
+      const { getDbStatus } = await import('./db.js');
+      
+      // Test database with resilient probe for deployment debugging
+      let dbTestResult = 'unknown';
+      let dbError = null;
+      let userCount = null;
+      try {
+        const { pool } = await import('./db.js');
+        // First test basic connectivity
+        await pool.query('SELECT 1');
+        dbTestResult = 'connected';
+        
+        // Then optionally test schema/data access
+        try {
+          const result = await pool.query('SELECT COUNT(*) as user_count FROM users');
+          userCount = result.rows[0]?.user_count || 0;
+        } catch {
+          // Schema test failed but connection works
+          userCount = 'schema_error';
+        }
+      } catch (err: any) {
+        dbTestResult = 'failed';
+        dbError = err.message;
+      }
+      
       const healthInfo = {
-        status: 'healthy',
+        status: dbTestResult === 'connected' ? 'healthy' : 'unhealthy',
         timestamp: new Date().toISOString(),
         uptime: Math.round(process.uptime()),
         environment: process.env.NODE_ENV || 'development',
@@ -77,14 +102,21 @@ app.use((req, res, next) => {
           heapTotal: Math.round(process.memoryUsage().heapTotal / 1024 / 1024) + 'MB',
           heapUsed: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + 'MB'
         },
+        database: {
+          status: getDbStatus(),
+          testResult: dbTestResult,
+          configured: (process.env.DATABASE_URL || process.env.NEON_DATABASE_URL) ? '✅ configured' : '❌ not configured',
+          userCount: userCount,
+          error: dbError
+        },
         env: {
-          database: process.env.DATABASE_URL ? '✅ configured' : '❌ not configured',
           openai: process.env.OPENAI_API_KEY ? '✅ configured' : '❌ not configured',
           buildTime: process.env.BUILD_TIME || 'unknown'
         }
       };
       
-      console.log(`🏥 Health check accessed from ${req.ip || req.connection.remoteAddress}`);
+      console.log(`🏥 Health check accessed from ${req.ip || req.connection.remoteAddress}`, 
+                  `- DB Status: ${dbTestResult}`);
       res.json(healthInfo);
     });
 

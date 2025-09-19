@@ -163,7 +163,7 @@ class DatabaseMigrator {
           // Prepare batch insert - this is a simplified version
           // In practice, you'd use proper Drizzle insert methods
           const columns = Object.keys(batch[0]).join(', ');
-          const values = batch.map(row => 
+          const values = batch.map((row: any) => 
             '(' + Object.values(row).map(val => 
               val === null ? 'NULL' : 
               typeof val === 'string' ? `'${val.replace(/'/g, "''")}'` :

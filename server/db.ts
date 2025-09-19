@@ -14,7 +14,9 @@ neonConfig.poolQueryViaFetch = true;
  * Only accepts DATABASE_URL or documented Neon alternatives
  */
 function getDatabaseUrl(): string {
-  const databaseUrl = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL;
+  const databaseUrl = process.env.DATABASE_URL || 
+                     process.env.NEON_DATABASE_URL || 
+                     process.env.database_url;
   
   if (!databaseUrl) {
     console.error('❌ CRITICAL: DATABASE_URL not configured');

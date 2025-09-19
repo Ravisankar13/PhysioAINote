@@ -45,8 +45,8 @@ app.use((req, res, next) => {
     log("Starting PhysioGPT server initialization...");
 
     // Environment validation for deployment  
-    const hasDatabaseUrl = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL;
-    const missingEnvVars = hasDatabaseUrl ? [] : ['DATABASE_URL or NEON_DATABASE_URL'];
+    const hasDatabaseUrl = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL || process.env.database_url;
+    const missingEnvVars = hasDatabaseUrl ? [] : ['DATABASE_URL, NEON_DATABASE_URL, or database_url'];
     
     if (missingEnvVars.length > 0) {
       console.warn(`⚠️  Missing environment variables: ${missingEnvVars.join(', ')}`);
@@ -105,7 +105,7 @@ app.use((req, res, next) => {
         database: {
           status: getDbStatus(),
           testResult: dbTestResult,
-          configured: (process.env.DATABASE_URL || process.env.NEON_DATABASE_URL) ? '✅ configured' : '❌ not configured',
+          configured: (process.env.DATABASE_URL || process.env.NEON_DATABASE_URL || process.env.database_url) ? '✅ configured' : '❌ not configured',
           userCount: userCount,
           error: dbError
         },

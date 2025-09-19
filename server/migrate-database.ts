@@ -354,6 +354,8 @@ async function main() {
   console.log('');
 }
 
-if (require.main === module) {
-  main();
+// Run main function if this is the entry point
+const isMainModule = import.meta.url === `file://${process.argv[1]}`;
+if (isMainModule) {
+  main().catch(console.error);
 }

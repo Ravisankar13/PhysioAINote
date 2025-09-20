@@ -20,16 +20,16 @@ localPort = 6000
 externalPort = 6000
 
 [[ports]]
+localPort = 33557
+externalPort = 3002
+
+[[ports]]
 localPort = 36661
 externalPort = 3001
 
 [[ports]]
 localPort = 40999
 externalPort = 3000
-
-[[ports]]
-localPort = 42467
-externalPort = 3002
 
 [workflows]
 runButton = "Dev Server"

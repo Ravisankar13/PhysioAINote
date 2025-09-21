@@ -4282,35 +4282,209 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(userEnrollments.userId, userId), eq(userEnrollments.courseId, courseId)));
   }
 
-  // Stub implementations for remaining methods
+  // Course Module Operations
   async createCourseModule(module: InsertCourseModule): Promise<CourseModule> {
     const result = await db.insert(courseModules).values(module).returning();
     return result[0];
   }
-  async getCourseModule(id: number): Promise<CourseModule | undefined> { return undefined; }
-  async getCourseModules(courseId: number): Promise<CourseModule[]> { return []; }
-  async updateCourseModule(id: number, data: Partial<InsertCourseModule>): Promise<CourseModule> { throw new Error("Not implemented"); }
-  async deleteCourseModule(id: number): Promise<void> {}
-  async reorderCourseModules(courseId: number, moduleIds: number[]): Promise<void> {}
-  async createModuleProgress(progress: InsertModuleProgress): Promise<ModuleProgress> { throw new Error("Not implemented"); }
-  async getModuleProgress(userId: number, moduleId: number): Promise<ModuleProgress | undefined> { return undefined; }
-  async getUserModuleProgress(userId: number, courseId: number): Promise<ModuleProgress[]> { return []; }
-  async updateModuleProgress(id: number, data: Partial<InsertModuleProgress>): Promise<ModuleProgress> { throw new Error("Not implemented"); }
-  async markModuleCompleted(userId: number, moduleId: number): Promise<ModuleProgress> { throw new Error("Not implemented"); }
-  async createAssessment(assessment: InsertAssessment): Promise<Assessment> { throw new Error("Not implemented"); }
-  async getAssessment(id: number): Promise<Assessment | undefined> { return undefined; }
-  async getModuleAssessments(moduleId: number): Promise<Assessment[]> { return []; }
-  async updateAssessment(id: number, data: Partial<InsertAssessment>): Promise<Assessment> { throw new Error("Not implemented"); }
-  async deleteAssessment(id: number): Promise<void> {}
-  async createAssessmentAttempt(attempt: InsertAssessmentAttempt): Promise<AssessmentAttempt> { throw new Error("Not implemented"); }
-  async getAssessmentAttempt(id: number): Promise<AssessmentAttempt | undefined> { return undefined; }
-  async getUserAssessmentAttempts(userId: number, assessmentId: number): Promise<AssessmentAttempt[]> { return []; }
-  async updateAssessmentAttempt(id: number, data: Partial<InsertAssessmentAttempt>): Promise<AssessmentAttempt> { throw new Error("Not implemented"); }
-  async createCertificate(certificate: InsertCertificate): Promise<Certificate> { throw new Error("Not implemented"); }
-  async getCertificate(id: number): Promise<Certificate | undefined> { return undefined; }
-  async getUserCertificates(userId: number): Promise<Certificate[]> { return []; }
-  async getCourseCertificates(courseId: number): Promise<Certificate[]> { return []; }
-  async verifyCertificate(certificateNumber: string): Promise<Certificate | undefined> { return undefined; }
+
+  async getCourseModule(id: number): Promise<CourseModule | undefined> {
+    const result = await db
+      .select()
+      .from(courseModules)
+      .where(eq(courseModules.id, id))
+      .limit(1);
+    return result[0];
+  }
+
+  async getCourseModules(courseId: number): Promise<CourseModule[]> {
+    return await db
+      .select()
+      .from(courseModules)
+      .where(eq(courseModules.courseId, courseId))
+      .orderBy(courseModules.orderIndex);
+  }
+
+  async updateCourseModule(id: number, data: Partial<InsertCourseModule>): Promise<CourseModule> {
+    const result = await db
+      .update(courseModules)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(courseModules.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteCourseModule(id: number): Promise<void> {
+    await db.delete(courseModules).where(eq(courseModules.id, id));
+  }
+
+  async reorderCourseModules(courseId: number, moduleIds: number[]): Promise<void> {
+    for (let i = 0; i < moduleIds.length; i++) {
+      await db
+        .update(courseModules)
+        .set({ orderIndex: i + 1 })
+        .where(eq(courseModules.id, moduleIds[i]));
+    }
+  }
+
+  // Module Progress Operations
+  async createModuleProgress(progress: InsertModuleProgress): Promise<ModuleProgress> {
+    const result = await db.insert(moduleProgress).values(progress).returning();
+    return result[0];
+  }
+
+  async getModuleProgress(userId: number, moduleId: number): Promise<ModuleProgress | undefined> {
+    const result = await db
+      .select()
+      .from(moduleProgress)
+      .where(and(eq(moduleProgress.userId, userId), eq(moduleProgress.moduleId, moduleId)))
+      .limit(1);
+    return result[0];
+  }
+
+  async getUserModuleProgress(userId: number, courseId: number): Promise<ModuleProgress[]> {
+    return await db
+      .select()
+      .from(moduleProgress)
+      .innerJoin(courseModules, eq(moduleProgress.moduleId, courseModules.id))
+      .where(and(eq(moduleProgress.userId, userId), eq(courseModules.courseId, courseId)))
+      .orderBy(courseModules.orderIndex);
+  }
+
+  async updateModuleProgress(id: number, data: Partial<InsertModuleProgress>): Promise<ModuleProgress> {
+    const result = await db
+      .update(moduleProgress)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(moduleProgress.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async markModuleCompleted(userId: number, moduleId: number): Promise<ModuleProgress> {
+    const existing = await this.getModuleProgress(userId, moduleId);
+    if (existing) {
+      return await this.updateModuleProgress(existing.id, {
+        isCompleted: true,
+        completedAt: new Date(),
+        progress: 100
+      });
+    } else {
+      return await this.createModuleProgress({
+        userId,
+        moduleId,
+        isCompleted: true,
+        completedAt: new Date(),
+        progress: 100
+      });
+    }
+  }
+
+  // Assessment Operations
+  async createAssessment(assessment: InsertAssessment): Promise<Assessment> {
+    const result = await db.insert(assessments).values(assessment).returning();
+    return result[0];
+  }
+
+  async getAssessment(id: number): Promise<Assessment | undefined> {
+    const result = await db
+      .select()
+      .from(assessments)
+      .where(eq(assessments.id, id))
+      .limit(1);
+    return result[0];
+  }
+
+  async getModuleAssessments(moduleId: number): Promise<Assessment[]> {
+    return await db
+      .select()
+      .from(assessments)
+      .where(eq(assessments.moduleId, moduleId))
+      .orderBy(assessments.createdAt);
+  }
+
+  async updateAssessment(id: number, data: Partial<InsertAssessment>): Promise<Assessment> {
+    const result = await db
+      .update(assessments)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(assessments.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteAssessment(id: number): Promise<void> {
+    await db.delete(assessments).where(eq(assessments.id, id));
+  }
+  // Assessment Attempt Operations
+  async createAssessmentAttempt(attempt: InsertAssessmentAttempt): Promise<AssessmentAttempt> {
+    const result = await db.insert(assessmentAttempts).values(attempt).returning();
+    return result[0];
+  }
+
+  async getAssessmentAttempt(id: number): Promise<AssessmentAttempt | undefined> {
+    const result = await db
+      .select()
+      .from(assessmentAttempts)
+      .where(eq(assessmentAttempts.id, id))
+      .limit(1);
+    return result[0];
+  }
+
+  async getUserAssessmentAttempts(userId: number, assessmentId: number): Promise<AssessmentAttempt[]> {
+    return await db
+      .select()
+      .from(assessmentAttempts)
+      .where(and(eq(assessmentAttempts.userId, userId), eq(assessmentAttempts.assessmentId, assessmentId)))
+      .orderBy(assessmentAttempts.attemptedAt);
+  }
+
+  async updateAssessmentAttempt(id: number, data: Partial<InsertAssessmentAttempt>): Promise<AssessmentAttempt> {
+    const result = await db
+      .update(assessmentAttempts)
+      .set(data)
+      .where(eq(assessmentAttempts.id, id))
+      .returning();
+    return result[0];
+  }
+
+  // Certificate Operations
+  async createCertificate(certificate: InsertCertificate): Promise<Certificate> {
+    const result = await db.insert(certificates).values(certificate).returning();
+    return result[0];
+  }
+
+  async getCertificate(id: number): Promise<Certificate | undefined> {
+    const result = await db
+      .select()
+      .from(certificates)
+      .where(eq(certificates.id, id))
+      .limit(1);
+    return result[0];
+  }
+
+  async getUserCertificates(userId: number): Promise<Certificate[]> {
+    return await db
+      .select()
+      .from(certificates)
+      .where(eq(certificates.userId, userId))
+      .orderBy(certificates.issuedAt);
+  }
+
+  async getCourseCertificates(courseId: number): Promise<Certificate[]> {
+    return await db
+      .select()
+      .from(certificates)
+      .where(eq(certificates.courseId, courseId))
+      .orderBy(certificates.issuedAt);
+  }
+
+  async verifyCertificate(certificateNumber: string): Promise<Certificate | undefined> {
+    const result = await db
+      .select()
+      .from(certificates)
+      .where(eq(certificates.certificateNumber, certificateNumber))
+      .limit(1);
+    return result[0];
+  }
 }
 
 export const storage = new DatabaseStorage();

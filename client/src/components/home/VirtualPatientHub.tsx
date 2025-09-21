@@ -29,7 +29,7 @@ const VirtualPatientHub = () => {
     description: "Create, analyze, and learn from AI-powered virtual patients built from real movement data",
     icon: <Users className="h-10 w-10" />,
     href: "/virtual-patients",
-    gradient: "from-blue-500 to-purple-600"
+    gradient: "from-emerald-500 to-teal-600"
   };
 
   // Connected features arranged around the center

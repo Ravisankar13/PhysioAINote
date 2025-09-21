@@ -4048,5 +4048,298 @@ export const exerciseProgressRelations = relations(exerciseProgress, ({ one }) =
   }),
 }));
 
+// Education Hub Enums
+export const courseDifficultyEnum = pgEnum("course_difficulty", [
+  "beginner",
+  "intermediate", 
+  "advanced",
+  "expert",
+]);
+
+export const courseStatusEnum = pgEnum("course_status", [
+  "draft",
+  "published",
+  "archived",
+]);
+
+export const enrollmentStatusEnum = pgEnum("enrollment_status", [
+  "enrolled",
+  "completed",
+  "dropped",
+  "expired",
+]);
+
+export const moduleTypeEnum = pgEnum("module_type", [
+  "video",
+  "text", 
+  "assessment",
+  "interactive",
+  "case_study",
+]);
+
+export const assessmentTypeEnum = pgEnum("assessment_type", [
+  "quiz",
+  "case_analysis",
+  "practical_demo",
+  "written_response",
+]);
+
+// Education Hub Tables
+export const courses = pgTable("courses", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description"),
+  shortDescription: text("short_description"),
+  thumbnailUrl: text("thumbnail_url"),
+  difficulty: courseDifficultyEnum("difficulty").default("beginner").notNull(),
+  estimatedHours: integer("estimated_hours").default(0).notNull(),
+  status: courseStatusEnum("status").default("draft").notNull(),
+  bodyPart: bodyPartEnum("body_part").default("general"),
+  tags: json("tags").$type<string[]>().default([]),
+  learningObjectives: json("learning_objectives").$type<string[]>().default([]),
+  prerequisites: json("prerequisites").$type<string[]>().default([]),
+  createdBy: integer("created_by")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  isPublic: boolean("is_public").default(true).notNull(),
+  price: integer("price").default(0).notNull(), // Price in cents
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const courseModules = pgTable("course_modules", {
+  id: serial("id").primaryKey(),
+  courseId: integer("course_id")
+    .notNull()
+    .references(() => courses.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  description: text("description"),
+  type: moduleTypeEnum("type").default("text").notNull(),
+  content: json("content"), // Flexible content storage
+  videoUrl: text("video_url"),
+  duration: integer("duration").default(0), // Duration in minutes
+  order: integer("order").notNull(),
+  isRequired: boolean("is_required").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const userEnrollments = pgTable("user_enrollments", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  courseId: integer("course_id")
+    .notNull()
+    .references(() => courses.id, { onDelete: "cascade" }),
+  status: enrollmentStatusEnum("status").default("enrolled").notNull(),
+  progress: integer("progress").default(0).notNull(), // Percentage 0-100
+  completedModules: json("completed_modules").$type<number[]>().default([]),
+  totalTimeSpent: integer("total_time_spent").default(0).notNull(), // Minutes
+  lastAccessedAt: timestamp("last_accessed_at"),
+  enrolledAt: timestamp("enrolled_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"),
+});
+
+export const moduleProgress = pgTable("module_progress", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  moduleId: integer("module_id")
+    .notNull()
+    .references(() => courseModules.id, { onDelete: "cascade" }),
+  isCompleted: boolean("is_completed").default(false).notNull(),
+  timeSpent: integer("time_spent").default(0).notNull(), // Minutes
+  notes: text("notes"),
+  completedAt: timestamp("completed_at"),
+  lastAccessedAt: timestamp("last_accessed_at").defaultNow().notNull(),
+});
+
+export const assessments = pgTable("assessments", {
+  id: serial("id").primaryKey(),
+  moduleId: integer("module_id")
+    .notNull()
+    .references(() => courseModules.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  description: text("description"),
+  type: assessmentTypeEnum("type").default("quiz").notNull(),
+  questions: json("questions").$type<Array<{
+    id: string;
+    question: string;
+    type: "multiple_choice" | "true_false" | "short_answer" | "essay";
+    options?: string[];
+    correctAnswer?: string | string[];
+    points: number;
+  }>>().default([]),
+  passingScore: integer("passing_score").default(70).notNull(),
+  timeLimit: integer("time_limit"), // Minutes
+  maxAttempts: integer("max_attempts").default(3).notNull(),
+  isRequired: boolean("is_required").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const assessmentAttempts = pgTable("assessment_attempts", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  assessmentId: integer("assessment_id")
+    .notNull()
+    .references(() => assessments.id, { onDelete: "cascade" }),
+  answers: json("answers").$type<Record<string, any>>().default({}),
+  score: integer("score").default(0).notNull(),
+  passed: boolean("passed").default(false).notNull(),
+  timeSpent: integer("time_spent").default(0).notNull(), // Minutes
+  startedAt: timestamp("started_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"),
+});
+
+export const certificates = pgTable("certificates", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  courseId: integer("course_id")
+    .notNull()
+    .references(() => courses.id, { onDelete: "cascade" }),
+  certificateNumber: text("certificate_number").notNull().unique(),
+  issuedAt: timestamp("issued_at").defaultNow().notNull(),
+  verificationUrl: text("verification_url"),
+  metadata: json("metadata").$type<{
+    finalScore?: number;
+    completionTime?: number; // Days
+    achievements?: string[];
+  }>().default({}),
+});
+
+// Insert Schemas for Education Tables
+export const insertCourseSchema = createInsertSchema(courses).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCourseModuleSchema = createInsertSchema(courseModules).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertUserEnrollmentSchema = createInsertSchema(userEnrollments).omit({
+  id: true,
+  enrolledAt: true,
+});
+
+export const insertModuleProgressSchema = createInsertSchema(moduleProgress).omit({
+  id: true,
+  lastAccessedAt: true,
+});
+
+export const insertAssessmentSchema = createInsertSchema(assessments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertAssessmentAttemptSchema = createInsertSchema(assessmentAttempts).omit({
+  id: true,
+  startedAt: true,
+});
+
+export const insertCertificateSchema = createInsertSchema(certificates).omit({
+  id: true,
+  issuedAt: true,
+});
+
+// Types
+export type Course = typeof courses.$inferSelect;
+export type InsertCourse = z.infer<typeof insertCourseSchema>;
+export type CourseModule = typeof courseModules.$inferSelect;
+export type InsertCourseModule = z.infer<typeof insertCourseModuleSchema>;
+export type UserEnrollment = typeof userEnrollments.$inferSelect;
+export type InsertUserEnrollment = z.infer<typeof insertUserEnrollmentSchema>;
+export type ModuleProgress = typeof moduleProgress.$inferSelect;
+export type InsertModuleProgress = z.infer<typeof insertModuleProgressSchema>;
+export type Assessment = typeof assessments.$inferSelect;
+export type InsertAssessment = z.infer<typeof insertAssessmentSchema>;
+export type AssessmentAttempt = typeof assessmentAttempts.$inferSelect;
+export type InsertAssessmentAttempt = z.infer<typeof insertAssessmentAttemptSchema>;
+export type Certificate = typeof certificates.$inferSelect;
+export type InsertCertificate = z.infer<typeof insertCertificateSchema>;
+
+// Education Relations
+export const courseRelations = relations(courses, ({ one, many }) => ({
+  creator: one(users, {
+    fields: [courses.createdBy],
+    references: [users.id],
+  }),
+  modules: many(courseModules),
+  enrollments: many(userEnrollments),
+  certificates: many(certificates),
+}));
+
+export const courseModuleRelations = relations(courseModules, ({ one, many }) => ({
+  course: one(courses, {
+    fields: [courseModules.courseId],
+    references: [courses.id],
+  }),
+  progress: many(moduleProgress),
+  assessments: many(assessments),
+}));
+
+export const userEnrollmentRelations = relations(userEnrollments, ({ one }) => ({
+  user: one(users, {
+    fields: [userEnrollments.userId],
+    references: [users.id],
+  }),
+  course: one(courses, {
+    fields: [userEnrollments.courseId],
+    references: [courses.id],
+  }),
+}));
+
+export const moduleProgressRelations = relations(moduleProgress, ({ one }) => ({
+  user: one(users, {
+    fields: [moduleProgress.userId],
+    references: [users.id],
+  }),
+  module: one(courseModules, {
+    fields: [moduleProgress.moduleId],
+    references: [courseModules.id],
+  }),
+}));
+
+export const assessmentRelations = relations(assessments, ({ one, many }) => ({
+  module: one(courseModules, {
+    fields: [assessments.moduleId],
+    references: [courseModules.id],
+  }),
+  attempts: many(assessmentAttempts),
+}));
+
+export const assessmentAttemptRelations = relations(assessmentAttempts, ({ one }) => ({
+  user: one(users, {
+    fields: [assessmentAttempts.userId],
+    references: [users.id],
+  }),
+  assessment: one(assessments, {
+    fields: [assessmentAttempts.assessmentId],
+    references: [assessments.id],
+  }),
+}));
+
+export const certificateRelations = relations(certificates, ({ one }) => ({
+  user: one(users, {
+    fields: [certificates.userId],
+    references: [users.id],
+  }),
+  course: one(courses, {
+    fields: [certificates.courseId],
+    references: [courses.id],
+  }),
+}));
+
 // Export all movement analysis schema tables
 export * from './movementAnalysisSchema';

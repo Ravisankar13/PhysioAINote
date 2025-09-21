@@ -53,10 +53,10 @@ const VirtualPatientHub = () => {
       description: "Generate comprehensive clinical notes with AI assistance",
       icon: <FileText className="h-6 w-6" />,
       href: "/enhanced-soap-notes",
-      gradient: "from-purple-500 to-indigo-600",
+      gradient: "from-emerald-500 to-teal-600",
       position: "top-right",
       connectionStory: "Document virtual patient interactions seamlessly",
-      connectionColor: "from-purple-400 to-blue-500"
+      connectionColor: "from-emerald-400 to-blue-500"
     },
     {
       id: "movement-analysis",
@@ -65,10 +65,10 @@ const VirtualPatientHub = () => {
       description: "Capture and analyze movement patterns in real-time",
       icon: <Activity className="h-6 w-6" />,
       href: "/movement-analysis",
-      gradient: "from-orange-500 to-red-600",
+      gradient: "from-emerald-500 to-teal-600",
       position: "middle-left",
       connectionStory: "Transform movement data into virtual patients",
-      connectionColor: "from-orange-400 to-blue-500"
+      connectionColor: "from-emerald-400 to-blue-500"
     },
     {
       id: "body-scanner",
@@ -77,10 +77,10 @@ const VirtualPatientHub = () => {
       description: "Advanced anatomical scanning and visualization tools",
       icon: <Eye className="h-6 w-6" />,
       href: "/body-scanner",
-      gradient: "from-cyan-500 to-blue-600",
+      gradient: "from-emerald-500 to-teal-600",
       position: "middle-right",
       connectionStory: "Build detailed anatomical models for patients",
-      connectionColor: "from-cyan-400 to-blue-500"
+      connectionColor: "from-emerald-400 to-blue-500"
     },
     {
       id: "research-hub",
@@ -89,20 +89,20 @@ const VirtualPatientHub = () => {
       description: "Access latest research and evidence-based protocols",
       icon: <BookOpen className="h-6 w-6" />,
       href: "/research",
-      gradient: "from-violet-500 to-purple-600",
+      gradient: "from-emerald-500 to-teal-600",
       position: "bottom",
       connectionStory: "Evidence-based virtual case creation and validation",
-      connectionColor: "from-violet-400 to-blue-500"
+      connectionColor: "from-emerald-400 to-blue-500"
     }
   ];
 
   const getFeaturePosition = (position: string) => {
     const positions = {
-      "top-left": "absolute top-0 left-0 md:top-8 md:left-8 w-full md:w-64 lg:w-72 xl:w-80",
-      "top-right": "absolute top-0 right-0 md:top-8 md:right-8 w-full md:w-64 lg:w-72 xl:w-80",
-      "middle-left": "absolute left-0 top-1/2 -translate-y-1/2 md:left-8 w-full md:w-64 lg:w-72 xl:w-80",
-      "middle-right": "absolute right-0 top-1/2 -translate-y-1/2 md:right-8 w-full md:w-64 lg:w-72 xl:w-80",
-      "bottom": "absolute bottom-0 left-1/2 -translate-x-1/2 md:bottom-8 w-full md:w-72 lg:w-80 xl:w-96"
+      "top-left": "absolute top-0 left-0 md:top-4 md:left-4 lg:top-8 lg:left-8 xl:top-12 xl:left-12 w-full md:w-64 lg:w-72 xl:w-80",
+      "top-right": "absolute top-0 right-0 md:top-4 md:right-4 lg:top-8 lg:right-8 xl:top-12 xl:right-12 w-full md:w-64 lg:w-72 xl:w-80",
+      "middle-left": "absolute left-0 top-1/2 -translate-y-1/2 md:left-4 lg:left-8 xl:left-12 w-full md:w-64 lg:w-72 xl:w-80",
+      "middle-right": "absolute right-0 top-1/2 -translate-y-1/2 md:right-4 lg:right-8 xl:right-12 w-full md:w-64 lg:w-72 xl:w-80",
+      "bottom": "absolute bottom-0 left-1/2 -translate-x-1/2 md:bottom-4 lg:bottom-8 xl:bottom-12 w-full md:w-72 lg:w-80 xl:w-96"
     };
     return positions[position as keyof typeof positions] || "";
   };
@@ -111,13 +111,13 @@ const VirtualPatientHub = () => {
     const opacity = isHovered ? "1" : "0.3";
     const strokeWidth = isHovered ? "3" : "2";
     
-    // SVG paths from center to each position (adjusted for larger container)
+    // SVG paths from center to each position (adjusted for more spacing)
     const paths = {
-      "top-left": `M 400 350 Q 250 250 180 180`,
-      "top-right": `M 400 350 Q 550 250 620 180`,
-      "middle-left": `M 400 350 L 180 350`,
-      "middle-right": `M 400 350 L 620 350`,
-      "bottom": `M 400 350 Q 400 500 400 580`
+      "top-left": `M 400 350 Q 220 220 160 160`,
+      "top-right": `M 400 350 Q 580 220 640 160`,
+      "middle-left": `M 400 350 L 160 350`,
+      "middle-right": `M 400 350 L 640 350`,
+      "bottom": `M 400 350 Q 400 520 400 600`
     };
 
     return (
@@ -154,7 +154,7 @@ const VirtualPatientHub = () => {
         </div>
 
         {/* Interactive Hub - Desktop Layout */}
-        <div className="hidden md:block relative h-[700px] lg:h-[800px] w-full">
+        <div className="hidden md:block relative h-[700px] lg:h-[850px] xl:h-[900px] w-full">
           {/* SVG for Connection Lines */}
           <svg 
             className="absolute inset-0 w-full h-full pointer-events-none z-10"

@@ -68,6 +68,7 @@ import TournamentResultsPage from "@/pages/TournamentResultsPage";
 import BodyScanner from "@/pages/BodyScanner";
 import TestSkeleton from "@/pages/TestSkeleton";
 import TestSkeletonNew from "@/pages/TestSkeletonNew";
+import Education from "@/pages/Education";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { ThemeProvider } from "next-themes";
@@ -176,6 +177,9 @@ function Router() {
           </Route>
           <Route path="/physiogpt">
             <ProtectedRoute component={PhysioGPT} />
+          </Route>
+          <Route path="/education">
+            <ProtectedRoute component={Education} />
           </Route>
           <Route path="/membership">
             {() => {

@@ -4180,6 +4180,137 @@ export class DatabaseStorage implements IStorage {
       .returning();
     return result[0];
   }
+
+  // Education Hub Implementation
+  // Course Operations
+  async createCourse(course: InsertCourse): Promise<Course> {
+    const result = await db.insert(courses).values(course).returning();
+    return result[0];
+  }
+
+  async getCourse(id: number): Promise<Course | undefined> {
+    const result = await db
+      .select()
+      .from(courses)
+      .where(eq(courses.id, id))
+      .limit(1);
+    return result[0];
+  }
+
+  async getCourses(filters?: { difficulty?: string; bodyPart?: string; status?: string }): Promise<Course[]> {
+    let query = db.select().from(courses);
+    
+    if (filters) {
+      const conditions = [];
+      if (filters.difficulty) conditions.push(eq(courses.difficulty, filters.difficulty as any));
+      if (filters.bodyPart) conditions.push(eq(courses.bodyPart, filters.bodyPart as any));
+      if (filters.status) conditions.push(eq(courses.status, filters.status as any));
+      
+      if (conditions.length > 0) {
+        query = query.where(and(...conditions));
+      }
+    }
+    
+    return await query.orderBy(courses.createdAt);
+  }
+
+  async getUserCreatedCourses(userId: number): Promise<Course[]> {
+    return await db
+      .select()
+      .from(courses)
+      .where(eq(courses.createdBy, userId))
+      .orderBy(courses.createdAt);
+  }
+
+  async updateCourse(id: number, data: Partial<InsertCourse>): Promise<Course> {
+    const result = await db
+      .update(courses)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(courses.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteCourse(id: number): Promise<void> {
+    await db.delete(courses).where(eq(courses.id, id));
+  }
+  
+  // User Enrollment Operations (basic implementation)
+  async enrollUserInCourse(enrollment: InsertUserEnrollment): Promise<UserEnrollment> {
+    const result = await db.insert(userEnrollments).values(enrollment).returning();
+    return result[0];
+  }
+
+  async getUserEnrollment(userId: number, courseId: number): Promise<UserEnrollment | undefined> {
+    const result = await db
+      .select()
+      .from(userEnrollments)
+      .where(and(eq(userEnrollments.userId, userId), eq(userEnrollments.courseId, courseId)))
+      .limit(1);
+    return result[0];
+  }
+
+  async getUserEnrollments(userId: number): Promise<UserEnrollment[]> {
+    return await db
+      .select()
+      .from(userEnrollments)
+      .where(eq(userEnrollments.userId, userId))
+      .orderBy(userEnrollments.enrolledAt);
+  }
+
+  async getCourseEnrollments(courseId: number): Promise<UserEnrollment[]> {
+    return await db
+      .select()
+      .from(userEnrollments)
+      .where(eq(userEnrollments.courseId, courseId))
+      .orderBy(userEnrollments.enrolledAt);
+  }
+
+  async updateUserEnrollment(id: number, data: Partial<InsertUserEnrollment>): Promise<UserEnrollment> {
+    const result = await db
+      .update(userEnrollments)
+      .set(data)
+      .where(eq(userEnrollments.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async dropUserFromCourse(userId: number, courseId: number): Promise<void> {
+    await db
+      .update(userEnrollments)
+      .set({ status: "dropped" })
+      .where(and(eq(userEnrollments.userId, userId), eq(userEnrollments.courseId, courseId)));
+  }
+
+  // Stub implementations for remaining methods
+  async createCourseModule(module: InsertCourseModule): Promise<CourseModule> {
+    const result = await db.insert(courseModules).values(module).returning();
+    return result[0];
+  }
+  async getCourseModule(id: number): Promise<CourseModule | undefined> { return undefined; }
+  async getCourseModules(courseId: number): Promise<CourseModule[]> { return []; }
+  async updateCourseModule(id: number, data: Partial<InsertCourseModule>): Promise<CourseModule> { throw new Error("Not implemented"); }
+  async deleteCourseModule(id: number): Promise<void> {}
+  async reorderCourseModules(courseId: number, moduleIds: number[]): Promise<void> {}
+  async createModuleProgress(progress: InsertModuleProgress): Promise<ModuleProgress> { throw new Error("Not implemented"); }
+  async getModuleProgress(userId: number, moduleId: number): Promise<ModuleProgress | undefined> { return undefined; }
+  async getUserModuleProgress(userId: number, courseId: number): Promise<ModuleProgress[]> { return []; }
+  async updateModuleProgress(id: number, data: Partial<InsertModuleProgress>): Promise<ModuleProgress> { throw new Error("Not implemented"); }
+  async markModuleCompleted(userId: number, moduleId: number): Promise<ModuleProgress> { throw new Error("Not implemented"); }
+  async createAssessment(assessment: InsertAssessment): Promise<Assessment> { throw new Error("Not implemented"); }
+  async getAssessment(id: number): Promise<Assessment | undefined> { return undefined; }
+  async getModuleAssessments(moduleId: number): Promise<Assessment[]> { return []; }
+  async updateAssessment(id: number, data: Partial<InsertAssessment>): Promise<Assessment> { throw new Error("Not implemented"); }
+  async deleteAssessment(id: number): Promise<void> {}
+  async createAssessmentAttempt(attempt: InsertAssessmentAttempt): Promise<AssessmentAttempt> { throw new Error("Not implemented"); }
+  async getAssessmentAttempt(id: number): Promise<AssessmentAttempt | undefined> { return undefined; }
+  async getUserAssessmentAttempts(userId: number, assessmentId: number): Promise<AssessmentAttempt[]> { return []; }
+  async updateAssessmentAttempt(id: number, data: Partial<InsertAssessmentAttempt>): Promise<AssessmentAttempt> { throw new Error("Not implemented"); }
+  async createCertificate(certificate: InsertCertificate): Promise<Certificate> { throw new Error("Not implemented"); }
+  async getCertificate(id: number): Promise<Certificate | undefined> { return undefined; }
+  async getUserCertificates(userId: number): Promise<Certificate[]> { return []; }
+  async getCourseCertificates(courseId: number): Promise<Certificate[]> { return []; }
+  async verifyCertificate(certificateNumber: string): Promise<Certificate | undefined> { return undefined; }
 }
 
 export const storage = new DatabaseStorage();

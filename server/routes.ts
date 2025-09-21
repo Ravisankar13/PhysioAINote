@@ -15224,6 +15224,92 @@ Respond in JSON format:
     }
   });
 
+  // Education Hub API Routes
+  app.get("/api/education/courses", async (req: Request, res: Response) => {
+    try {
+      const { difficulty, bodyPart, status } = req.query;
+      const filters = {
+        difficulty: difficulty as string,
+        bodyPart: bodyPart as string,
+        status: status as string || "published"
+      };
+      
+      const courses = await storage.getCourses(filters);
+      res.json(courses);
+    } catch (error) {
+      console.error('Error fetching courses:', error);
+      res.status(500).json({ error: 'Failed to fetch courses' });
+    }
+  });
+
+  app.get("/api/education/enrollments", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const enrollments = await storage.getUserEnrollments(userId);
+      res.json(enrollments);
+    } catch (error) {
+      console.error('Error fetching enrollments:', error);
+      res.status(500).json({ error: 'Failed to fetch enrollments' });
+    }
+  });
+
+  app.post("/api/education/enroll", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { courseId } = req.body;
+      if (!courseId) {
+        return res.status(400).json({ error: 'Course ID is required' });
+      }
+
+      // Check if already enrolled
+      const existingEnrollment = await storage.getUserEnrollment(userId, courseId);
+      if (existingEnrollment) {
+        return res.status(400).json({ error: 'Already enrolled in this course' });
+      }
+
+      const enrollment = await storage.enrollUserInCourse({
+        userId,
+        courseId,
+        status: "enrolled",
+        progress: 0,
+        completedModules: [],
+        totalTimeSpent: 0
+      });
+
+      res.json(enrollment);
+    } catch (error) {
+      console.error('Error enrolling user:', error);
+      res.status(500).json({ error: 'Failed to enroll in course' });
+    }
+  });
+
+  app.get("/api/education/courses/:id", async (req: Request, res: Response) => {
+    try {
+      const courseId = parseInt(req.params.id);
+      if (isNaN(courseId)) {
+        return res.status(400).json({ error: 'Invalid course ID' });
+      }
+
+      const course = await storage.getCourse(courseId);
+      if (!course) {
+        return res.status(404).json({ error: 'Course not found' });
+      }
+
+      res.json(course);
+    } catch (error) {
+      console.error('Error fetching course:', error);
+      res.status(500).json({ error: 'Failed to fetch course' });
+    }
+  });
+
   // Health check endpoint for Cloud Run
   app.get("/health", (req: Request, res: Response) => {
     res.json({

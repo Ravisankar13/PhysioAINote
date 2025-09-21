@@ -126,18 +126,31 @@ const AuthPage = () => {
     registerMutation.mutate(data, {
       onSuccess: (response) => {
         console.log("Registration successful, response:", response);
-        // If Stripe checkout URL is provided, redirect to it immediately
-        if (response?.checkoutUrl) {
-          console.log("Redirecting to Stripe checkout URL:", response.checkoutUrl);
+        
+        // NEW SECURE FLOW: Check if this is a pending registration (no user account created yet)
+        if (response?.pendingRegistration) {
+          console.log("Pending registration - redirecting to Stripe for payment confirmation");
+          if (response?.checkoutUrl) {
+            // Immediately redirect to Stripe - user account will be created after payment
+            window.location.href = response.checkoutUrl;
+          } else {
+            console.error("No checkout URL provided for pending registration");
+            setLocation("/registration-incomplete");
+          }
+        }
+        // LEGACY FLOW: If user was created immediately (fallback)
+        else if (response?.checkoutUrl) {
+          console.log("Legacy flow - user created, redirecting to Stripe checkout URL:", response.checkoutUrl);
           window.location.href = response.checkoutUrl;
         } else if (response?.requiresOnboarding) {
           console.log("Onboarding required, redirecting to registration-incomplete");
-          // Fallback: if Stripe failed but user was created, redirect to onboarding page
           setLocation("/registration-incomplete");
-        } else {
-          console.log("No checkout URL or onboarding flag, redirecting to home");
-          // Default: redirect to home page
+        } else if (response?.id) {
+          console.log("User created successfully, redirecting to home");
           setLocation("/");
+        } else {
+          console.error("Unexpected registration response format:", response);
+          setLocation("/registration-incomplete");
         }
       },
       onError: (error) => {

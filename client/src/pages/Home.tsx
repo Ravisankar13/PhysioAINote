@@ -1,5 +1,6 @@
 import { Helmet } from "react-helmet";
-import VirtualPatientHub from "@/components/home/VirtualPatientHub";
+import FocusedHero from "@/components/home/FocusedHero";
+import CoreFeatureShowcase from "@/components/home/CoreFeatureShowcase";
 import FeaturedCompetitions from "@/components/home/FeaturedCompetitions";
 import GlobalLeaderboard from "@/components/home/GlobalLeaderboard";
 import { PatternRecognitionLeaderboard } from "@/components/home/PatternRecognitionLeaderboard";
@@ -28,8 +29,8 @@ const Home = () => {
         <TrialBanner />
       </div>
       
-      {/* Virtual Patient Hub - Main Feature Section */}
-      <VirtualPatientHub />
+      {/* Hero Section */}
+      <FocusedHero />
       
       {/* Pattern Recognition Leaderboard */}
       <section id="pattern-recognition-leaderboard" className="bg-gray-50 py-16">
@@ -40,6 +41,9 @@ const Home = () => {
           </div>
         </div>
       </section>
+      
+      {/* Primary Clinical Tools Section */}
+      <CoreFeatureShowcase />
       
       {/* Featured Competitions Section */}
       <FeaturedCompetitions />

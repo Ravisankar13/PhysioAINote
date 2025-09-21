@@ -28,6 +28,7 @@ import CreateResearchProject from "@/pages/CreateResearchProject";
 import Pricing from "@/pages/Pricing";
 import OnboardingComplete from "@/pages/OnboardingComplete";
 import RegistrationIncomplete from "@/pages/RegistrationIncomplete";
+import RegistrationComplete from "@/pages/RegistrationComplete";
 
 import ManualTherapyPage from "@/pages/ManualTherapyPage";
 import TestAudioTranscription from "@/pages/TestAudioTranscription";
@@ -195,6 +196,7 @@ function Router() {
           <Route path="/registration-incomplete">
             <ProtectedRoute component={RegistrationIncomplete} />
           </Route>
+          <Route path="/registration-complete" component={RegistrationComplete} />
           <Route path="/admin">
             <ProtectedRoute component={AdminDashboard} />
           </Route>

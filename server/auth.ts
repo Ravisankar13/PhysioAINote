@@ -20,6 +20,18 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_51RP2StQgGBJ
 declare global {
   namespace Express {
     interface User extends SelectUser {}
+    interface Session {
+      pendingRegistration?: {
+        username: string;
+        password: string;
+        email: string;
+        fullName: string;
+        membershipTier: string;
+        hasUsedTrial: boolean;
+        onboardingRequired: boolean;
+        registrationTimestamp: string;
+      };
+    }
   }
 }
 
@@ -335,6 +347,132 @@ export function setupAuth(app: Express) {
     });
   });
   
+  // Registration completion endpoint for successful Stripe payments
+  app.get("/api/registration-complete", async (req, res) => {
+    try {
+      const { session_id } = req.query;
+      
+      if (!session_id) {
+        return res.status(400).json({ message: "Missing session ID" });
+      }
+
+      // Retrieve the checkout session from Stripe
+      const session = await stripe.checkout.sessions.retrieve(session_id as string, {
+        expand: ['subscription', 'customer']
+      });
+
+      if (session.payment_status !== 'paid' && session.payment_status !== 'no_payment_required') {
+        return res.status(400).json({ message: "Payment not completed" });
+      }
+
+      // Get pending registration from session
+      const pendingRegistration = req.session.pendingRegistration;
+      
+      if (!pendingRegistration) {
+        return res.status(400).json({ message: "No pending registration found" });
+      }
+
+      // Verify the username matches
+      const pendingUsername = session.metadata?.pendingUsername;
+      if (pendingUsername !== pendingRegistration.username) {
+        return res.status(400).json({ message: "Registration data mismatch" });
+      }
+
+      // Create the user account now that payment is confirmed
+      const user = await storage.createUser({
+        username: pendingRegistration.username,
+        password: pendingRegistration.password,
+        email: pendingRegistration.email,
+        fullName: pendingRegistration.fullName,
+        membershipTier: "basic",
+        hasUsedTrial: false,
+        stripeCustomerId: session.customer as string,
+        stripeSubscriptionId: (session.subscription as any)?.id,
+        subscriptionStatus: (session.subscription as any)?.status || 'trialing',
+        onboardingRequired: false, // Payment completed, no onboarding needed
+      });
+
+      // Clear pending registration from session
+      delete req.session.pendingRegistration;
+
+      // Log in the user
+      req.login(user, (err) => {
+        if (err) {
+          console.error("Error logging in user after registration:", err);
+          return res.status(500).json({ message: "Registration completed but login failed" });
+        }
+
+        console.log(`User registration completed and logged in: ${user.username}, ID: ${user.id}`);
+        
+        // Return success response
+        const { password, ...userWithoutPassword } = user;
+        res.status(201).json({
+          ...userWithoutPassword,
+          message: "Registration completed successfully!",
+          registrationComplete: true
+        });
+      });
+    } catch (error) {
+      console.error("Error completing registration:", error);
+      res.status(500).json({ message: "Failed to complete registration" });
+    }
+  });
+
+  // Stripe webhook handler for payment confirmations (additional security layer)
+  app.post("/api/webhooks/stripe", async (req, res) => {
+    const sig = req.headers['stripe-signature'];
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    
+    if (!webhookSecret) {
+      console.warn("Stripe webhook secret not configured");
+      return res.status(400).send('Webhook secret not configured');
+    }
+
+    let event: Stripe.Event;
+
+    try {
+      event = stripe.webhooks.constructEvent(req.body, sig as string, webhookSecret);
+    } catch (err: any) {
+      console.error('Webhook signature verification failed:', err.message);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    // Handle the event
+    try {
+      switch (event.type) {
+        case 'checkout.session.completed':
+          const session = event.data.object as Stripe.Checkout.Session;
+          console.log('Checkout session completed via webhook:', session.id);
+          
+          // Check if this is a pending registration
+          if (session.metadata?.pendingUsername) {
+            console.log('Processing pending registration via webhook for:', session.metadata.pendingUsername);
+            // This will be handled by the registration-complete endpoint
+            // Webhook is mainly for logging and additional security verification
+          }
+          break;
+
+        case 'invoice.payment_succeeded':
+          const invoice = event.data.object as Stripe.Invoice;
+          console.log('Payment succeeded via webhook:', invoice.id);
+          break;
+
+        case 'customer.subscription.updated':
+          const subscription = event.data.object as Stripe.Subscription;
+          console.log('Subscription updated via webhook:', subscription.id);
+          break;
+
+        default:
+          console.log(`Unhandled event type: ${event.type}`);
+      }
+
+      res.json({ received: true });
+    } catch (error) {
+      console.error('Error processing webhook:', error);
+      res.status(500).json({ error: 'Webhook processing failed' });
+    }
+  });
+
   // Admin endpoint to view user statistics - only accessible by specific admin users
   app.get("/api/admin/users", async (req, res) => {
     if (!req.isAuthenticated()) {

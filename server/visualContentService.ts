@@ -69,10 +69,13 @@ class VisualContentService {
   async searchExternalImages(query: string, limit: number = 3): Promise<ExternalImageResult[]> {
     const results: ExternalImageResult[] = [];
     
+    // Enhance query with physiotherapy-specific terms
+    const enhancedQuery = this.enhancePhysiotherapyQuery(query);
+    
     // Try Pexels API first (free, good for health/fitness images)
     if (this.pexelsApiKey) {
       try {
-        const pexelsUrl = `https://api.pexels.com/v1/search?query=${encodeURIComponent(query + ' exercise physiotherapy')}&per_page=${limit}`;
+        const pexelsUrl = `https://api.pexels.com/v1/search?query=${encodeURIComponent(enhancedQuery)}&per_page=${limit}`;
         const response = await fetch(pexelsUrl, {
           headers: {
             'Authorization': this.pexelsApiKey
@@ -99,7 +102,7 @@ class VisualContentService {
     // Try Unsplash API as fallback
     if (this.unsplashApiKey && results.length < limit) {
       try {
-        const unsplashUrl = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=${limit - results.length}`;
+        const unsplashUrl = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(enhancedQuery)}&per_page=${limit - results.length}`;
         const response = await fetch(unsplashUrl, {
           headers: {
             'Authorization': `Client-ID ${this.unsplashApiKey}`
@@ -124,6 +127,26 @@ class VisualContentService {
     }
     
     return results;
+  }
+
+  // Helper function to enhance queries with physiotherapy-specific terms
+  private enhancePhysiotherapyQuery(query: string): string {
+    const lowerQuery = query.toLowerCase();
+    
+    // Add relevant terms based on context
+    if (lowerQuery.includes('exercise') || lowerQuery.includes('stretch')) {
+      return `${query} physiotherapy rehabilitation therapy`;
+    } else if (lowerQuery.includes('shoulder') || lowerQuery.includes('arm')) {
+      return `${query} exercise physiotherapy shoulder rehabilitation`;
+    } else if (lowerQuery.includes('back') || lowerQuery.includes('spine')) {
+      return `${query} back exercise physiotherapy rehabilitation`;
+    } else if (lowerQuery.includes('knee') || lowerQuery.includes('leg')) {
+      return `${query} knee exercise physiotherapy rehabilitation`;
+    } else if (lowerQuery.includes('neck') || lowerQuery.includes('cervical')) {
+      return `${query} neck exercise physiotherapy rehabilitation`;
+    } else {
+      return `${query} exercise physiotherapy rehabilitation therapy`;
+    }
   }
 
   // Search YouTube for exercise demonstration videos
@@ -243,31 +266,80 @@ class VisualContentService {
     const imageKeywords = [
       'show me', 'image', 'picture', 'photo', 'demonstrate',
       'what does', 'how to', 'can you show', 'visualize',
-      'illustration', 'diagram', 'video', 'see how'
+      'illustration', 'diagram', 'video', 'see how',
+      'exercise for', 'exercises for', 'stretches for', 'strengthening for',
+      'rehabilitation for', 'therapy for', 'treatment for', 'how do i',
+      'what exercises', 'what stretches', 'rehab exercises', 'physio exercises'
     ];
     
     const lowerMessage = message.toLowerCase();
-    return imageKeywords.some(keyword => lowerMessage.includes(keyword));
+    
+    // Check for direct image requests
+    const hasImageKeyword = imageKeywords.some(keyword => lowerMessage.includes(keyword));
+    
+    // Check for exercise-related queries (implicit image request)
+    const exercisePatterns = [
+      /exercise.*for.*\w+/i,
+      /stretch.*for.*\w+/i,
+      /strengthen.*\w+/i,
+      /rehabilitation.*for/i,
+      /how.*do.*exercise/i,
+      /show.*exercise/i,
+      /demonstrate.*movement/i
+    ];
+    
+    const hasExercisePattern = exercisePatterns.some(pattern => pattern.test(message));
+    
+    return hasImageKeyword || hasExercisePattern;
   }
 
   // Function to extract exercise names from messages
   extractExerciseNames(message: string): string[] {
     const commonExercises = [
+      // Basic exercises
       'bridge', 'squat', 'deadlift', 'plank', 'clamshell', 'lunge',
       'push-up', 'pull-up', 'row', 'press', 'curl', 'extension',
-      'flexion', 'rotation', 'stretch', 'mobilization', 'strengthening'
+      'flexion', 'rotation', 'stretch', 'mobilization', 'strengthening',
+      
+      // Physiotherapy specific
+      'pendulum', 'wall slides', 'scapular', 'rotator cuff', 'chin tucks',
+      'heel raises', 'toe raises', 'ankle pumps', 'piriformis', 'hip thrust',
+      'dead bug', 'bird dog', 'cat cow', 'knee to chest', 'hamstring',
+      'quadriceps', 'calf raises', 'glute bridges', 'side lying',
+      'prone lying', 'supine lying', 'standing', 'seated',
+      
+      // Movement patterns
+      'abduction', 'adduction', 'internal rotation', 'external rotation',
+      'dorsiflexion', 'plantarflexion', 'inversion', 'eversion',
+      'forward bending', 'backward bending', 'side bending',
+      
+      // Body parts for context
+      'shoulder', 'neck', 'back', 'hip', 'knee', 'ankle', 'foot',
+      'elbow', 'wrist', 'hand', 'spine', 'core', 'pelvis'
     ];
     
     const found: string[] = [];
     const lowerMessage = message.toLowerCase();
     
+    // Look for exercise combinations (e.g., "shoulder external rotation")
+    for (let i = 0; i < commonExercises.length; i++) {
+      for (let j = i + 1; j < commonExercises.length; j++) {
+        const combo = `${commonExercises[i]} ${commonExercises[j]}`;
+        if (lowerMessage.includes(combo)) {
+          found.push(combo);
+        }
+      }
+    }
+    
+    // Look for individual exercises
     for (const exercise of commonExercises) {
       if (lowerMessage.includes(exercise)) {
         found.push(exercise);
       }
     }
     
-    return found;
+    // Remove duplicates and prioritize longer matches
+    return [...new Set(found)].sort((a, b) => b.length - a.length).slice(0, 5);
   }
 }
 

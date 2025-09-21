@@ -98,11 +98,11 @@ const VirtualPatientHub = () => {
 
   const getFeaturePosition = (position: string) => {
     const positions = {
-      "top-left": "absolute top-0 left-0 md:top-4 md:left-4 w-full md:w-72",
-      "top-right": "absolute top-0 right-0 md:top-4 md:right-4 w-full md:w-72",
-      "middle-left": "absolute left-0 top-1/2 -translate-y-1/2 md:left-4 w-full md:w-72",
-      "middle-right": "absolute right-0 top-1/2 -translate-y-1/2 md:right-4 w-full md:w-72",
-      "bottom": "absolute bottom-0 left-1/2 -translate-x-1/2 md:bottom-4 w-full md:w-80"
+      "top-left": "absolute top-0 left-0 md:top-8 md:left-8 w-full md:w-64 lg:w-72 xl:w-80",
+      "top-right": "absolute top-0 right-0 md:top-8 md:right-8 w-full md:w-64 lg:w-72 xl:w-80",
+      "middle-left": "absolute left-0 top-1/2 -translate-y-1/2 md:left-8 w-full md:w-64 lg:w-72 xl:w-80",
+      "middle-right": "absolute right-0 top-1/2 -translate-y-1/2 md:right-8 w-full md:w-64 lg:w-72 xl:w-80",
+      "bottom": "absolute bottom-0 left-1/2 -translate-x-1/2 md:bottom-8 w-full md:w-72 lg:w-80 xl:w-96"
     };
     return positions[position as keyof typeof positions] || "";
   };
@@ -111,13 +111,13 @@ const VirtualPatientHub = () => {
     const opacity = isHovered ? "1" : "0.3";
     const strokeWidth = isHovered ? "3" : "2";
     
-    // SVG paths from center to each position
+    // SVG paths from center to each position (adjusted for larger container)
     const paths = {
-      "top-left": `M 400 300 Q 200 200 150 150`,
-      "top-right": `M 400 300 Q 600 200 650 150`,
-      "middle-left": `M 400 300 L 150 300`,
-      "middle-right": `M 400 300 L 650 300`,
-      "bottom": `M 400 300 Q 400 450 400 500`
+      "top-left": `M 400 350 Q 250 250 180 180`,
+      "top-right": `M 400 350 Q 550 250 620 180`,
+      "middle-left": `M 400 350 L 180 350`,
+      "middle-right": `M 400 350 L 620 350`,
+      "bottom": `M 400 350 Q 400 500 400 580`
     };
 
     return (
@@ -154,11 +154,11 @@ const VirtualPatientHub = () => {
         </div>
 
         {/* Interactive Hub - Desktop Layout */}
-        <div className="hidden md:block relative h-[600px] w-full">
+        <div className="hidden md:block relative h-[700px] lg:h-[800px] w-full">
           {/* SVG for Connection Lines */}
           <svg 
             className="absolute inset-0 w-full h-full pointer-events-none z-10"
-            viewBox="0 0 800 600"
+            viewBox="0 0 800 700"
             preserveAspectRatio="xMidYMid meet"
           >
             <defs>
@@ -192,7 +192,7 @@ const VirtualPatientHub = () => {
           {/* Central Virtual Patient Hub */}
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20">
             <Card 
-              className="w-80 h-80 border-none shadow-2xl group cursor-pointer hover:scale-105 transition-all duration-300"
+              className="w-72 h-72 lg:w-80 lg:h-80 border-none shadow-2xl group cursor-pointer hover:scale-105 transition-all duration-300"
               onMouseEnter={() => setHoveredFeature('virtual-patients')}
               onMouseLeave={() => setHoveredFeature(null)}
             >
@@ -220,7 +220,7 @@ const VirtualPatientHub = () => {
               className={getFeaturePosition(feature.position)}
             >
               <Card 
-                className="border-none shadow-lg group cursor-pointer hover:shadow-xl hover:scale-105 transition-all duration-300 z-30 relative"
+                className="border-none shadow-lg group cursor-pointer hover:shadow-xl hover:scale-[1.02] transition-all duration-300 z-30 relative"
                 onMouseEnter={() => setHoveredFeature(feature.id)}
                 onMouseLeave={() => setHoveredFeature(null)}
               >

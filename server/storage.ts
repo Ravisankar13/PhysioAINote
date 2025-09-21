@@ -123,6 +123,27 @@ import {
   type ExerciseImage,
   type InsertExerciseImage,
   cachedExercises,
+  courses,
+  type Course,
+  type InsertCourse,
+  courseModules,
+  type CourseModule,
+  type InsertCourseModule,
+  userEnrollments,
+  type UserEnrollment,
+  type InsertUserEnrollment,
+  moduleProgress,
+  type ModuleProgress,
+  type InsertModuleProgress,
+  assessments,
+  type Assessment,
+  type InsertAssessment,
+  assessmentAttempts,
+  type AssessmentAttempt,
+  type InsertAssessmentAttempt,
+  certificates,
+  type Certificate,
+  type InsertCertificate,
   type CachedExercise,
   type InsertCachedExercise,
 } from "@shared/schema";
@@ -617,6 +638,58 @@ export interface IStorage {
   deleteTemporarySoapNote(id: number): Promise<void>;
   navigateTemporarySoapNote(currentId: number, direction: 'previous' | 'next'): Promise<TemporarySoapNote | undefined>;
   getLatestTemporarySoapNote(userId: number, sessionId: string): Promise<TemporarySoapNote | undefined>;
+
+  // Education Hub Operations
+  // Course Operations
+  createCourse(course: InsertCourse): Promise<Course>;
+  getCourse(id: number): Promise<Course | undefined>;
+  getCourses(filters?: { difficulty?: string; bodyPart?: string; status?: string }): Promise<Course[]>;
+  getUserCreatedCourses(userId: number): Promise<Course[]>;
+  updateCourse(id: number, data: Partial<InsertCourse>): Promise<Course>;
+  deleteCourse(id: number): Promise<void>;
+  
+  // Course Module Operations
+  createCourseModule(module: InsertCourseModule): Promise<CourseModule>;
+  getCourseModule(id: number): Promise<CourseModule | undefined>;
+  getCourseModules(courseId: number): Promise<CourseModule[]>;
+  updateCourseModule(id: number, data: Partial<InsertCourseModule>): Promise<CourseModule>;
+  deleteCourseModule(id: number): Promise<void>;
+  reorderCourseModules(courseId: number, moduleIds: number[]): Promise<void>;
+  
+  // User Enrollment Operations
+  enrollUserInCourse(enrollment: InsertUserEnrollment): Promise<UserEnrollment>;
+  getUserEnrollment(userId: number, courseId: number): Promise<UserEnrollment | undefined>;
+  getUserEnrollments(userId: number): Promise<UserEnrollment[]>;
+  getCourseEnrollments(courseId: number): Promise<UserEnrollment[]>;
+  updateUserEnrollment(id: number, data: Partial<InsertUserEnrollment>): Promise<UserEnrollment>;
+  dropUserFromCourse(userId: number, courseId: number): Promise<void>;
+  
+  // Module Progress Operations
+  createModuleProgress(progress: InsertModuleProgress): Promise<ModuleProgress>;
+  getModuleProgress(userId: number, moduleId: number): Promise<ModuleProgress | undefined>;
+  getUserModuleProgress(userId: number, courseId: number): Promise<ModuleProgress[]>;
+  updateModuleProgress(id: number, data: Partial<InsertModuleProgress>): Promise<ModuleProgress>;
+  markModuleCompleted(userId: number, moduleId: number): Promise<ModuleProgress>;
+  
+  // Assessment Operations
+  createAssessment(assessment: InsertAssessment): Promise<Assessment>;
+  getAssessment(id: number): Promise<Assessment | undefined>;
+  getModuleAssessments(moduleId: number): Promise<Assessment[]>;
+  updateAssessment(id: number, data: Partial<InsertAssessment>): Promise<Assessment>;
+  deleteAssessment(id: number): Promise<void>;
+  
+  // Assessment Attempt Operations
+  createAssessmentAttempt(attempt: InsertAssessmentAttempt): Promise<AssessmentAttempt>;
+  getAssessmentAttempt(id: number): Promise<AssessmentAttempt | undefined>;
+  getUserAssessmentAttempts(userId: number, assessmentId: number): Promise<AssessmentAttempt[]>;
+  updateAssessmentAttempt(id: number, data: Partial<InsertAssessmentAttempt>): Promise<AssessmentAttempt>;
+  
+  // Certificate Operations
+  createCertificate(certificate: InsertCertificate): Promise<Certificate>;
+  getCertificate(id: number): Promise<Certificate | undefined>;
+  getUserCertificates(userId: number): Promise<Certificate[]>;
+  getCourseCertificates(courseId: number): Promise<Certificate[]>;
+  verifyCertificate(certificateNumber: string): Promise<Certificate | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {

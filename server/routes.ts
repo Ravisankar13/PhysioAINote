@@ -52,7 +52,7 @@ import fs from "fs";
 import os from "os";
 import { transcribeAudio, analyzeTranscription } from "./transcription";
 import { uploadToS3, getFileType } from "./s3Uploader";
-import { setupAuth } from "./auth";
+import { setupAuth, ensureAuthenticated } from "./auth";
 import { calculateAgeRange, deIdentifyNote, extractCondition } from "./utilities/deIdentify";
 import { sampleNotes } from "./routes/sampleNotes";
 import { sampleResearchArticles } from "./sampleResearchArticles";
@@ -15221,6 +15221,196 @@ Respond in JSON format:
         "upper back"
       ];
       res.json(muscles);
+    }
+  });
+
+  // Assessment API Routes
+  app.get("/api/education/assessments/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const assessmentId = parseInt(req.params.id);
+      const userId = req.user!.id;
+      
+      const assessment = await storage.getAssessment(assessmentId);
+      if (!assessment) {
+        return res.status(404).json({ error: 'Assessment not found' });
+      }
+      
+      // Check if user is enrolled in the course for this assessment
+      const module = await storage.getCourseModule(assessment.moduleId);
+      if (!module) {
+        return res.status(404).json({ error: 'Module not found' });
+      }
+      
+      const enrollment = await storage.getUserEnrollment(userId, module.courseId);
+      if (!enrollment) {
+        return res.status(403).json({ error: 'Not enrolled in this course' });
+      }
+      
+      // Strip correct answers and grading keys for security
+      const secureAssessment = {
+        ...assessment,
+        questions: assessment.questions?.map(q => ({
+          id: q.id,
+          question: q.question,
+          type: q.type,
+          options: q.options,
+          points: q.points
+          // correctAnswer deliberately omitted
+        })) || []
+      };
+      
+      res.json(secureAssessment);
+    } catch (error) {
+      console.error('Error fetching assessment:', error);
+      res.status(500).json({ error: 'Failed to fetch assessment' });
+    }
+  });
+
+  app.get("/api/education/assessments/:id/attempts", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const assessmentId = parseInt(req.params.id);
+      const userId = req.user!.id;
+      
+      const attempts = await storage.getUserAssessmentAttempts(userId, assessmentId);
+      res.json(attempts);
+    } catch (error) {
+      console.error('Error fetching assessment attempts:', error);
+      res.status(500).json({ error: 'Failed to fetch attempts' });
+    }
+  });
+
+  app.post("/api/education/assessments/:id/submit", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const assessmentId = parseInt(req.params.id);
+      const userId = req.user!.id;
+      
+      // Validate request body
+      const submissionSchema = z.object({
+        answers: z.record(z.string(), z.any()),
+        timeSpent: z.number().min(0).max(1440) // Max 24 hours in minutes
+      });
+      
+      const validatedData = submissionSchema.parse(req.body);
+      const { answers, timeSpent } = validatedData;
+      
+      // Get assessment details
+      const assessment = await storage.getAssessment(assessmentId);
+      if (!assessment) {
+        return res.status(404).json({ error: 'Assessment not found' });
+      }
+      
+      // Check course enrollment authorization
+      const module = await storage.getCourseModule(assessment.moduleId);
+      if (!module) {
+        return res.status(404).json({ error: 'Module not found' });
+      }
+      
+      const enrollment = await storage.getUserEnrollment(userId, module.courseId);
+      if (!enrollment) {
+        return res.status(403).json({ error: 'Not enrolled in this course' });
+      }
+      
+      // Check attempt limits
+      const previousAttempts = await storage.getUserAssessmentAttempts(userId, assessmentId);
+      if (previousAttempts.length >= assessment.maxAttempts) {
+        return res.status(400).json({ 
+          error: 'Maximum attempts exceeded', 
+          attemptsUsed: previousAttempts.length,
+          maxAttempts: assessment.maxAttempts
+        });
+      }
+      
+      // Check time limit if specified
+      if (assessment.timeLimit && timeSpent > assessment.timeLimit) {
+        return res.status(400).json({ 
+          error: 'Time limit exceeded', 
+          timeSpent,
+          timeLimit: assessment.timeLimit
+        });
+      }
+      
+      // Calculate score
+      const { calculateAssessmentScore } = await import('./assessmentService');
+      const score = calculateAssessmentScore(assessment.questions || [], answers);
+      const passed = score >= assessment.passingScore;
+      
+      // Save attempt
+      const attempt = await storage.createAssessmentAttempt({
+        userId,
+        assessmentId,
+        answers,
+        score,
+        passed,
+        timeSpent
+      });
+      
+      res.json({ id: attempt.id, score, passed });
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return res.status(400).json({ error: 'Invalid submission data', details: fromZodError(error) });
+      }
+      console.error('Error submitting assessment:', error);
+      res.status(500).json({ error: 'Failed to submit assessment' });
+    }
+  });
+
+  app.get("/api/education/attempts/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const attemptId = parseInt(req.params.id);
+      const userId = req.user!.id;
+      const attempt = await storage.getAssessmentAttempt(attemptId);
+      
+      if (!attempt) {
+        return res.status(404).json({ error: 'Attempt not found' });
+      }
+      
+      // Verify ownership
+      if (attempt.userId !== userId) {
+        return res.status(403).json({ error: 'Access denied - not your attempt' });
+      }
+      
+      res.json(attempt);
+    } catch (error) {
+      console.error('Error fetching attempt:', error);
+      res.status(500).json({ error: 'Failed to fetch attempt' });
+    }
+  });
+
+  app.post("/api/education/attempts/:id/feedback", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const attemptId = parseInt(req.params.id);
+      const userId = req.user!.id;
+      
+      // Get attempt and verify ownership
+      const attempt = await storage.getAssessmentAttempt(attemptId);
+      if (!attempt) {
+        return res.status(404).json({ error: 'Attempt not found' });
+      }
+      
+      if (attempt.userId !== userId) {
+        return res.status(403).json({ error: 'Access denied - not your attempt' });
+      }
+      
+      const assessment = await storage.getAssessment(attempt.assessmentId);
+      if (!assessment) {
+        return res.status(404).json({ error: 'Assessment not found' });
+      }
+      
+      // Generate AI feedback
+      const { generateAssessmentFeedback } = await import('./assessmentService');
+      const feedback = await generateAssessmentFeedback(assessment, attempt, {
+        courseTitle: "Advanced Shoulder Assessment",
+        moduleTitle: "Assessment Module",
+        bodyPart: "shoulder"
+      });
+      
+      // Update attempt with feedback and return updated attempt
+      const updatedAttempt = await storage.updateAssessmentAttempt(attemptId, { feedback });
+      
+      res.json({ success: true, feedback, attempt: updatedAttempt });
+    } catch (error) {
+      console.error('Error generating feedback:', error);
+      res.status(500).json({ error: 'Failed to generate feedback' });
     }
   });
 

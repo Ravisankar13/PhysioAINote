@@ -29,6 +29,7 @@ import {
   Scan,
   Trophy,
   Sword,
+  GraduationCap,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Link, useLocation } from "wouter";
@@ -132,6 +133,13 @@ const Header = () => {
                 <span className="absolute -top-1 -right-1 bg-yellow-400 text-yellow-900 text-xs font-bold px-1.5 py-0.5 rounded-full">
                   AI
                 </span>
+              </Button>
+            </Link>
+
+            <Link to="/education">
+              <Button className="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white font-semibold shadow-sm flex items-center gap-2">
+                <GraduationCap className="h-4 w-4" />
+                <span>Education</span>
               </Button>
             </Link>
 
@@ -246,6 +254,15 @@ const Header = () => {
                   </DropdownMenuItem>
 
                   <DropdownMenuItem className="flex items-center" asChild>
+                    <Link to="/education">
+                      <div className="flex items-center cursor-pointer w-full">
+                        <GraduationCap className="mr-2 h-4 w-4" />
+                        <span>Education Hub</span>
+                      </div>
+                    </Link>
+                  </DropdownMenuItem>
+
+                  <DropdownMenuItem className="flex items-center" asChild>
                     <Link to="/pricing">
                       <div className="flex items-center cursor-pointer w-full">
                         <CreditCard className="mr-2 h-4 w-4" />
@@ -348,6 +365,14 @@ const Header = () => {
                             onClick={() => setOpen(false)}
                           >
                             Manual Therapy
+                          </span>
+                        </Link>
+                        <Link to="/education">
+                          <span
+                            className="px-2 py-2 text-base block cursor-pointer text-muted-foreground hover:text-foreground"
+                            onClick={() => setOpen(false)}
+                          >
+                            Education Hub
                           </span>
                         </Link>
                         <Link to="/pricing">

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -59,6 +60,7 @@ interface UserEnrollment {
 
 export default function Education() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
   const [difficultyFilter, setDifficultyFilter] = useState<string>("all");
   const [bodyPartFilter, setBodyPartFilter] = useState<string>("all");
@@ -70,7 +72,7 @@ export default function Education() {
   });
 
   // Fetch user enrollments
-  const { data: enrollments = [], isLoading: enrollmentsLoading } = useQuery<UserEnrollment[]>({
+  const { data: enrollments = [], isLoading: enrollmentsLoading, refetch: refetchEnrollments } = useQuery<UserEnrollment[]>({
     queryKey: ["/api/education/enrollments"],
     enabled: !!user,
   });
@@ -102,8 +104,38 @@ export default function Education() {
   };
 
   const handleEnrollment = async (courseId: number) => {
-    // TODO: Implement enrollment functionality
     console.log("Enrolling in course:", courseId);
+    try {
+      const response = await fetch("/api/education/enroll", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ courseId }),
+      });
+
+      if (response.ok) {
+        const enrollment = await response.json();
+        // Refetch enrollments to update the dashboard
+        refetchEnrollments();
+        toast({
+          title: "Enrollment Successful!",
+          description: "You have been enrolled in the course. Check your dashboard to start learning.",
+        });
+      } else {
+        const error = await response.json();
+        toast({
+          title: "Enrollment Failed",
+          description: error.error || "Failed to enroll in the course. Please try again.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Enrollment error:", error);
+      toast({
+        title: "Connection Error",
+        description: "Unable to connect to the server. Please check your connection and try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   if (!user) {

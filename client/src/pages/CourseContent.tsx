@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { Helmet } from "react-helmet";
 import { Link } from "wouter";
+import { useCourseAI, createEducationalPrompts, type CourseAIContext } from "@/hooks/use-course-ai";
 
 interface CourseModule {
   id: number;
@@ -74,8 +75,13 @@ interface UserEnrollment {
   completedAt?: string;
 }
 
-// Interactive Content Renderer Component
-const InteractiveContentRenderer = ({ content }: { content: any }) => {
+// Interactive Content Renderer Component  
+const InteractiveContentRenderer = ({ content, course, module }: { 
+  content: any; 
+  course: Course;
+  module: CourseModule;
+}) => {
+  const { startAISession, openBodyScanner, openMovementAnalysis, openVirtualPatients, openExerciseDatabase } = useCourseAI();
   if (!content || typeof content !== 'object') {
     return (
       <div className="text-center py-8">
@@ -140,7 +146,11 @@ const InteractiveContentRenderer = ({ content }: { content: any }) => {
                     </Badge>
                   ))}
                 </div>
-                <Button className="bg-blue-600 hover:bg-blue-700" size="sm">
+                <Button 
+                  className="bg-blue-600 hover:bg-blue-700" 
+                  size="sm"
+                  onClick={() => openBodyScanner(course.bodyPart)}
+                >
                   <ExternalLink className="h-4 w-4 mr-2" />
                   Open Body Scanner
                 </Button>
@@ -171,7 +181,22 @@ const InteractiveContentRenderer = ({ content }: { content: any }) => {
                     </div>
                   ))}
                 </div>
-                <Button className="bg-purple-600 hover:bg-purple-700" size="sm">
+                <Button 
+                  className="bg-purple-600 hover:bg-purple-700" 
+                  size="sm"
+                  onClick={() => {
+                    const context: CourseAIContext = {
+                      courseId: course.id,
+                      moduleId: module.id,
+                      moduleTitle: module.title,
+                      moduleType: content.type,
+                      bodyPart: course.bodyPart,
+                      learningObjective: module.description,
+                      clinicalFocus: content.title
+                    };
+                    startAISession(context);
+                  }}
+                >
                   <Bot className="h-4 w-4 mr-2" />
                   Start AI Session
                 </Button>
@@ -198,7 +223,11 @@ const InteractiveContentRenderer = ({ content }: { content: any }) => {
                     </div>
                   ))}
                 </div>
-                <Button className="bg-green-600 hover:bg-green-700" size="sm">
+                <Button 
+                  className="bg-green-600 hover:bg-green-700" 
+                  size="sm"
+                  onClick={() => openMovementAnalysis(course.bodyPart)}
+                >
                   <Activity className="h-4 w-4 mr-2" />
                   Start Motion Capture
                 </Button>
@@ -227,7 +256,15 @@ const InteractiveContentRenderer = ({ content }: { content: any }) => {
                     </div>
                   ))}
                 </div>
-                <Button className="bg-orange-600 hover:bg-orange-700" size="sm">
+                <Button 
+                  className="bg-orange-600 hover:bg-orange-700" 
+                  size="sm"
+                  onClick={() => {
+                    const pathologies = element.patients || element.pathologies || element.cases;
+                    const pathology = pathologies && pathologies.length > 0 ? pathologies[0] : course.bodyPart;
+                    openVirtualPatients(pathology);
+                  }}
+                >
                   <Eye className="h-4 w-4 mr-2" />
                   Open Virtual Patients
                 </Button>
@@ -253,7 +290,16 @@ const InteractiveContentRenderer = ({ content }: { content: any }) => {
                     </div>
                   ))}
                 </div>
-                <Button className="bg-emerald-600 hover:bg-emerald-700" size="sm">
+                <Button 
+                  className="bg-emerald-600 hover:bg-emerald-700" 
+                  size="sm"
+                  onClick={() => {
+                    const pathology = element.pathology_specific && element.pathology_specific.length > 0 
+                      ? element.pathology_specific[0] 
+                      : undefined;
+                    openExerciseDatabase(course.bodyPart, pathology);
+                  }}
+                >
                   <Target className="h-4 w-4 mr-2" />
                   Open Exercise Database
                 </Button>
@@ -634,7 +680,11 @@ export default function CourseContent() {
                   
                   <div className="space-y-6">
                     {selectedModule.content ? (
-                      <InteractiveContentRenderer content={selectedModule.content} />
+                      <InteractiveContentRenderer 
+                        content={selectedModule.content} 
+                        course={course}
+                        module={selectedModule}
+                      />
                     ) : (
                       <div className="text-center py-8">
                         <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />

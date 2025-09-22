@@ -24,6 +24,7 @@ import {
   GraduationCap
 } from "lucide-react";
 import { Helmet } from "react-helmet";
+import { Link } from "wouter";
 
 interface Course {
   id: number;
@@ -302,9 +303,11 @@ export default function Education() {
                                 Last: {new Date(courseWithEnrollment.enrollment.lastAccessedAt || courseWithEnrollment.enrollment.enrolledAt).toLocaleDateString()}
                               </span>
                             </div>
-                            <Button size="sm" data-testid={`continue-course-${courseWithEnrollment.id}`}>
-                              Continue Learning
-                            </Button>
+                            <Link to={`/education/course/${courseWithEnrollment.id}`}>
+                              <Button size="sm" data-testid={`continue-course-${courseWithEnrollment.id}`}>
+                                Continue Learning
+                              </Button>
+                            </Link>
                           </div>
                         </CardContent>
                       </Card>

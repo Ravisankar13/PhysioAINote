@@ -15307,6 +15307,45 @@ Respond in JSON format:
     }
   });
 
+  app.get("/api/education/courses/:id/modules", async (req: Request, res: Response) => {
+    try {
+      const courseId = parseInt(req.params.id);
+      if (isNaN(courseId)) {
+        return res.status(400).json({ error: 'Invalid course ID' });
+      }
+
+      const modules = await storage.getCourseModules(courseId);
+      res.json(modules);
+    } catch (error) {
+      console.error('Error fetching course modules:', error);
+      res.status(500).json({ error: 'Failed to fetch course modules' });
+    }
+  });
+
+  app.get("/api/education/enrollments/:courseId", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const courseId = parseInt(req.params.courseId);
+      if (isNaN(courseId)) {
+        return res.status(400).json({ error: 'Invalid course ID' });
+      }
+
+      const enrollment = await storage.getUserEnrollment(userId, courseId);
+      if (!enrollment) {
+        return res.status(404).json({ error: 'Enrollment not found' });
+      }
+
+      res.json(enrollment);
+    } catch (error) {
+      console.error('Error fetching enrollment:', error);
+      res.status(500).json({ error: 'Failed to fetch enrollment' });
+    }
+  });
+
   // Health check endpoint for Cloud Run
   app.get("/health", (req: Request, res: Response) => {
     res.json({

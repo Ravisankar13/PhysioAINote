@@ -4114,12 +4114,11 @@ export const courseModules = pgTable("course_modules", {
     .references(() => courses.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
   description: text("description"),
-  type: moduleTypeEnum("type").default("text").notNull(),
   content: json("content"), // Flexible content storage
-  videoUrl: text("video_url"),
-  duration: integer("duration").default(0), // Duration in minutes
-  order: integer("order").notNull(),
-  isRequired: boolean("is_required").default(true).notNull(),
+  orderIndex: integer("order_index").notNull(),
+  estimatedDuration: integer("estimated_duration").default(0), // Duration in minutes
+  prerequisites: json("prerequisites").$type<string[]>().default([]),
+  learningObjectives: json("learning_objectives").$type<string[]>().default([]),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

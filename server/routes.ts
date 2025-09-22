@@ -15278,10 +15278,7 @@ Respond in JSON format:
       const enrollment = await storage.enrollUserInCourse({
         userId,
         courseId,
-        status: "enrolled",
-        progress: 0,
-        completedModules: [],
-        totalTimeSpent: 0
+        status: "enrolled"
       });
 
       res.json(enrollment);

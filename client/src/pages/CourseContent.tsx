@@ -70,19 +70,19 @@ export default function CourseContent() {
 
   // Fetch course details
   const { data: course, isLoading: courseLoading } = useQuery<Course>({
-    queryKey: ["/api/education/courses", courseId],
+    queryKey: [`/api/education/courses/${courseId}`],
     enabled: !!courseId,
   });
 
   // Fetch course modules
   const { data: modules = [], isLoading: modulesLoading } = useQuery<CourseModule[]>({
-    queryKey: ["/api/education/courses", courseId, "modules"],
+    queryKey: [`/api/education/courses/${courseId}/modules`],
     enabled: !!courseId,
   });
 
   // Fetch user enrollment
   const { data: enrollment, isLoading: enrollmentLoading } = useQuery<UserEnrollment>({
-    queryKey: ["/api/education/enrollments", courseId],
+    queryKey: [`/api/education/enrollments/${courseId}`],
     enabled: !!courseId && !!user,
   });
 
@@ -226,8 +226,8 @@ export default function CourseContent() {
   return (
     <div className="min-h-screen bg-background">
       <Helmet>
-        <title>{course.title} - PhysioGPT Education</title>
-        <meta name="description" content={course.shortDescription || course.description} />
+        <title>{course?.title ? `${course.title} - PhysioGPT Education` : 'Course Content - PhysioGPT Education'}</title>
+        <meta name="description" content={course?.shortDescription || course?.description || 'PhysioGPT Education Course'} />
       </Helmet>
 
       <div className="container mx-auto px-4 py-8">

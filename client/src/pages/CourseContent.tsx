@@ -16,7 +16,20 @@ import {
   ArrowLeft,
   ChevronRight,
   Users,
-  Award
+  Award,
+  Brain,
+  Camera,
+  Activity,
+  Zap,
+  Target,
+  Microscope,
+  Stethoscope,
+  AlertCircle,
+  ExternalLink,
+  Eye,
+  Bot,
+  Lightbulb,
+  MessageSquare
 } from "lucide-react";
 import { Helmet } from "react-helmet";
 import { Link } from "wouter";
@@ -60,6 +73,279 @@ interface UserEnrollment {
   enrolledAt: string;
   completedAt?: string;
 }
+
+// Interactive Content Renderer Component
+const InteractiveContentRenderer = ({ content }: { content: any }) => {
+  if (!content || typeof content !== 'object') {
+    return (
+      <div className="text-center py-8">
+        <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+        <p className="text-muted-foreground">Content is being prepared...</p>
+      </div>
+    );
+  }
+
+  const renderSection = (section: any, index: number) => {
+    return (
+      <Card key={section.id || index} className="mb-6">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            {getSectionIcon(section.type)}
+            {section.title}
+          </CardTitle>
+          <CardDescription>{section.content}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {section.interactiveElements?.map((element: any, elementIndex: number) => (
+            <div key={elementIndex} className="space-y-4">
+              {renderInteractiveElement(element)}
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+    );
+  };
+
+  const getSectionIcon = (type: string) => {
+    switch (type) {
+      case "3d_body_scanner": return <Microscope className="h-5 w-5 text-blue-500" />;
+      case "ai_guided_assessment": return <Brain className="h-5 w-5 text-purple-500" />;
+      case "motion_analysis": return <Activity className="h-5 w-5 text-green-500" />;
+      case "live_motion_analysis": return <Camera className="h-5 w-5 text-red-500" />;
+      case "virtual_patient_practice": return <Users className="h-5 w-5 text-orange-500" />;
+      case "3d_patient_scenarios": return <Eye className="h-5 w-5 text-cyan-500" />;
+      case "exercise_database_integration": return <Target className="h-5 w-5 text-emerald-500" />;
+      case "physio_gpt_mentorship": return <Bot className="h-5 w-5 text-indigo-500" />;
+      case "advanced_3d_scenarios": return <Zap className="h-5 w-5 text-yellow-500" />;
+      default: return <FileText className="h-5 w-5 text-gray-500" />;
+    }
+  };
+
+  const renderInteractiveElement = (element: any) => {
+    switch (element.type) {
+      case "body_scanner_integration":
+        return (
+          <div className="bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 p-6 rounded-lg border border-blue-200 dark:border-blue-800">
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0">
+                <Microscope className="h-8 w-8 text-blue-600" />
+              </div>
+              <div className="flex-1">
+                <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">3D Body Scanner Integration</h4>
+                <p className="text-blue-700 dark:text-blue-300 mb-3">{element.description}</p>
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {element.features?.map((feature: string, i: number) => (
+                    <Badge key={i} variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-100">
+                      {feature.replace(/_/g, ' ')}
+                    </Badge>
+                  ))}
+                </div>
+                <Button className="bg-blue-600 hover:bg-blue-700" size="sm">
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Open Body Scanner
+                </Button>
+              </div>
+            </div>
+          </div>
+        );
+
+      case "physio_gpt_tutor":
+      case "physio_gpt_clinical_mentor":
+      case "advanced_clinical_mentor":
+        return (
+          <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 p-6 rounded-lg border border-purple-200 dark:border-purple-800">
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0">
+                <Brain className="h-8 w-8 text-purple-600" />
+              </div>
+              <div className="flex-1">
+                <h4 className="font-semibold text-purple-900 dark:text-purple-100 mb-2">PhysioGPT AI Assistant</h4>
+                <p className="text-purple-700 dark:text-purple-300 mb-3">
+                  Get expert clinical guidance and real-time assistance
+                </p>
+                <div className="space-y-2 mb-3">
+                  {element.prompts?.map((prompt: string, i: number) => (
+                    <div key={i} className="flex items-center gap-2 text-sm text-purple-600 dark:text-purple-400">
+                      <MessageSquare className="h-3 w-3" />
+                      {prompt}
+                    </div>
+                  ))}
+                </div>
+                <Button className="bg-purple-600 hover:bg-purple-700" size="sm">
+                  <Bot className="h-4 w-4 mr-2" />
+                  Start AI Session
+                </Button>
+              </div>
+            </div>
+          </div>
+        );
+
+      case "pose_detection_lab":
+      case "pose_detection_analysis":
+        return (
+          <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 p-6 rounded-lg border border-green-200 dark:border-green-800">
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0">
+                <Camera className="h-8 w-8 text-green-600" />
+              </div>
+              <div className="flex-1">
+                <h4 className="font-semibold text-green-900 dark:text-green-100 mb-2">Live Motion Analysis</h4>
+                <p className="text-green-700 dark:text-green-300 mb-3">{element.description}</p>
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  {element.exercises?.map((exercise: string, i: number) => (
+                    <div key={i} className="bg-green-100 dark:bg-green-800 p-2 rounded text-sm text-green-800 dark:text-green-200">
+                      {exercise.replace(/_/g, ' ')}
+                    </div>
+                  ))}
+                </div>
+                <Button className="bg-green-600 hover:bg-green-700" size="sm">
+                  <Activity className="h-4 w-4 mr-2" />
+                  Start Motion Capture
+                </Button>
+              </div>
+            </div>
+          </div>
+        );
+
+      case "virtual_patient_assessment":
+      case "virtual_patient_movement_lab":
+      case "complex_virtual_patients":
+        return (
+          <div className="bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-900/20 dark:to-red-900/20 p-6 rounded-lg border border-orange-200 dark:border-orange-800">
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0">
+                <Users className="h-8 w-8 text-orange-600" />
+              </div>
+              <div className="flex-1">
+                <h4 className="font-semibold text-orange-900 dark:text-orange-100 mb-2">Virtual Patient Practice</h4>
+                <p className="text-orange-700 dark:text-orange-300 mb-3">{element.description}</p>
+                <div className="space-y-2 mb-3">
+                  {(element.patients || element.pathologies || element.cases)?.map((item: string, i: number) => (
+                    <div key={i} className="flex items-center gap-2 text-sm text-orange-600 dark:text-orange-400">
+                      <Stethoscope className="h-3 w-3" />
+                      {item.replace(/_/g, ' ')}
+                    </div>
+                  ))}
+                </div>
+                <Button className="bg-orange-600 hover:bg-orange-700" size="sm">
+                  <Eye className="h-4 w-4 mr-2" />
+                  Open Virtual Patients
+                </Button>
+              </div>
+            </div>
+          </div>
+        );
+
+      case "exercise_database_builder":
+        return (
+          <div className="bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 p-6 rounded-lg border border-emerald-200 dark:border-emerald-800">
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0">
+                <Target className="h-8 w-8 text-emerald-600" />
+              </div>
+              <div className="flex-1">
+                <h4 className="font-semibold text-emerald-900 dark:text-emerald-100 mb-2">Exercise Prescription Builder</h4>
+                <p className="text-emerald-700 dark:text-emerald-300 mb-3">{element.description}</p>
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  {element.pathology_specific?.map((pathology: string, i: number) => (
+                    <div key={i} className="bg-emerald-100 dark:bg-emerald-800 p-2 rounded text-sm text-emerald-800 dark:text-emerald-200">
+                      {pathology.replace(/_/g, ' ')}
+                    </div>
+                  ))}
+                </div>
+                <Button className="bg-emerald-600 hover:bg-emerald-700" size="sm">
+                  <Target className="h-4 w-4 mr-2" />
+                  Open Exercise Database
+                </Button>
+              </div>
+            </div>
+          </div>
+        );
+
+      default:
+        return (
+          <div className="bg-muted p-4 rounded-lg">
+            <div className="flex items-center gap-2 mb-2">
+              <Lightbulb className="h-5 w-5 text-yellow-600" />
+              <span className="font-medium">Interactive Element</span>
+            </div>
+            <p className="text-sm text-muted-foreground">{element.description || "Interactive content available"}</p>
+          </div>
+        );
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Main Content Header */}
+      <div className="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 p-6 rounded-lg border border-indigo-200 dark:border-indigo-800">
+        <div className="flex items-center gap-3 mb-2">
+          {getSectionIcon(content.type)}
+          <h3 className="text-xl font-semibold text-indigo-900 dark:text-indigo-100">{content.title}</h3>
+        </div>
+        <p className="text-indigo-700 dark:text-indigo-300">{content.description}</p>
+      </div>
+
+      {/* Interactive Sections */}
+      {content.sections?.map((section: any, index: number) => renderSection(section, index))}
+
+      {/* AI Integration Summary */}
+      {content.ai_integration && (
+        <Card className="bg-gradient-to-r from-violet-50 to-purple-50 dark:from-violet-900/20 dark:to-purple-900/20 border-violet-200 dark:border-violet-800">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-violet-900 dark:text-violet-100">
+              <Bot className="h-5 w-5" />
+              AI Integration Features
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {Object.entries(content.ai_integration).map(([key, value]) => (
+                <div key={key} className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-violet-600" />
+                  <span className="text-sm text-violet-700 dark:text-violet-300">
+                    {key.replace(/_/g, ' ')}: {typeof value === 'string' ? value : '✓ Enabled'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Assessments */}
+      {content.assessments && content.assessments.length > 0 && (
+        <Card className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border-amber-200 dark:border-amber-800">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-amber-900 dark:text-amber-100">
+              <Award className="h-5 w-5" />
+              Module Assessments
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {content.assessments.map((assessment: any, index: number) => (
+                <div key={index} className="bg-amber-100 dark:bg-amber-800 p-4 rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="font-medium text-amber-900 dark:text-amber-100">{assessment.title}</h4>
+                    <Badge className="bg-amber-200 text-amber-800 dark:bg-amber-700 dark:text-amber-200">
+                      {assessment.type}
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-amber-700 dark:text-amber-300 mb-3">{assessment.description}</p>
+                  <Button size="sm" className="bg-amber-600 hover:bg-amber-700">
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    Start Assessment
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+};
 
 export default function CourseContent() {
   const { user } = useAuth();
@@ -346,18 +632,9 @@ export default function CourseContent() {
                     </div>
                   ) : null}
                   
-                  <div className="prose prose-sm max-w-none dark:prose-invert">
+                  <div className="space-y-6">
                     {selectedModule.content ? (
-                      <div>
-                        <h3>Module Content</h3>
-                        {typeof selectedModule.content === 'string' ? (
-                          <p>{selectedModule.content}</p>
-                        ) : (
-                          <pre className="bg-muted p-4 rounded-lg overflow-auto">
-                            {JSON.stringify(selectedModule.content, null, 2)}
-                          </pre>
-                        )}
-                      </div>
+                      <InteractiveContentRenderer content={selectedModule.content} />
                     ) : (
                       <div className="text-center py-8">
                         <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />

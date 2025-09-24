@@ -32,7 +32,7 @@ export class DetailedSpineRenderer {
 
   // Smoothing variables for stable spine movement
   private previousSpinePositions: Array<{x: number, y: number}> = [];
-  private smoothingFactor: number = 0.2; // Low value for very smooth movement
+  private smoothingFactor: number = 0.3; // Increased for more responsive neck movement
 
 
   /**
@@ -65,14 +65,21 @@ export class DetailedSpineRenderer {
       y: (leftHip.y + rightHip.y) / 2
     };
     
-    // Calculate stable head position based on shoulder position
-    // Using a fixed offset from shoulders is more stable than nose tracking
+    // Calculate head position using shoulder angle for natural spine movement
+    // This gives smooth, stable movement without the sensitivity of face landmarks
+    const shoulderAngle = Math.atan2(
+      rightShoulder.y - leftShoulder.y,
+      rightShoulder.x - leftShoulder.x
+    );
+    
+    // Apply shoulder angle to create natural head positioning
+    const neckLength = 0.15; // Distance from shoulders to head
     const headCenter = {
-      x: shoulderMidpoint.x,
-      y: shoulderMidpoint.y - 0.15 // Fixed distance above shoulders
+      x: shoulderMidpoint.x + Math.sin(shoulderAngle) * neckLength * 0.3, // Subtle lateral movement
+      y: shoulderMidpoint.y - neckLength + Math.cos(shoulderAngle) * neckLength * 0.1 // Natural head tilt
     };
     
-    // Calculate lateral flexion with limits to prevent extreme curves
+    // Calculate spine curvature based on shoulder-to-hip relationship
     const shoulderTilt = Math.atan2(
       rightShoulder.y - leftShoulder.y,
       rightShoulder.x - leftShoulder.x
@@ -81,8 +88,13 @@ export class DetailedSpineRenderer {
       rightHip.y - leftHip.y,
       rightHip.x - leftHip.x
     );
-    // Limit lateral flexion to prevent extreme C-shapes
-    const rawLateralFlexion = Math.max(-0.3, Math.min(0.3, shoulderTilt - hipTilt));
+    
+    // Create more responsive lateral flexion using shoulder angle
+    const baseLateralFlexion = shoulderTilt - hipTilt;
+    const enhancedLateralFlexion = baseLateralFlexion * 1.2; // Slightly more responsive
+    
+    // Limit lateral flexion to prevent extreme curves
+    const rawLateralFlexion = Math.max(-0.4, Math.min(0.4, enhancedLateralFlexion));
     
     // Calculate vertebrae positions with controlled movement
     const totalVertebrae = 24; // C1-C7, T1-T12, L1-L5
@@ -107,20 +119,30 @@ export class DetailedSpineRenderer {
       const baseX = headCenter.x + (hipMidpoint.x - headCenter.x) * t;
       const baseY = headCenter.y + (hipMidpoint.y - headCenter.y) * t;
       
-      // Add subtle lateral movement based on body tilt
-      const lateralOffset = Math.sin(t * Math.PI) * rawLateralFlexion * 0.05; // Very subtle
+      // Enhanced lateral movement with more responsiveness for cervical spine
+      let lateralOffset;
+      if (i < 7) {
+        // Cervical vertebrae: More responsive to shoulder angle
+        const cervicalFactor = (7 - i) / 7; // Stronger effect at top of neck
+        lateralOffset = Math.sin(shoulderAngle) * rawLateralFlexion * 0.08 * cervicalFactor;
+      } else {
+        // Rest of spine: Gradual transition
+        lateralOffset = Math.sin(t * Math.PI) * rawLateralFlexion * 0.04;
+      }
       
-      // Add tiny natural curves for realism
+      // Enhanced natural curves with shoulder influence
       let curveOffset = 0;
       if (i < 7) {
-        // Cervical: tiny forward curve
-        curveOffset = Math.sin((i / 7) * Math.PI) * 0.005;
+        // Cervical: Enhanced curve that responds to shoulder angle
+        const cervicalCurve = Math.sin((i / 7) * Math.PI) * 0.008;
+        const shoulderInfluence = Math.cos(shoulderAngle) * 0.003;
+        curveOffset = cervicalCurve + shoulderInfluence;
       } else if (i < 19) {
-        // Thoracic: tiny backward curve
-        curveOffset = -Math.sin(((i - 7) / 12) * Math.PI) * 0.008;
+        // Thoracic: Slightly enhanced backward curve
+        curveOffset = -Math.sin(((i - 7) / 12) * Math.PI) * 0.01;
       } else {
-        // Lumbar: tiny forward curve
-        curveOffset = Math.sin(((i - 19) / 5) * Math.PI) * 0.006;
+        // Lumbar: Enhanced forward curve
+        curveOffset = Math.sin(((i - 19) / 5) * Math.PI) * 0.008;
       }
       
       // Target position with all offsets

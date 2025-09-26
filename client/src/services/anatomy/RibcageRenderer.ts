@@ -42,10 +42,11 @@ export class RibcageRenderer {
     // Get thoracic vertebrae (T1-T12) for rib attachments
     const thoracicVertebrae = vertebrae.slice(7, 19); // Indices 7-18 are T1-T12
     
-    // Calculate sternum position from shoulders
+    // Calculate sternum position from shoulders with enhanced body proportions
     const leftShoulder = landmarks[11];
     const rightShoulder = landmarks[12];
-    const shoulderWidth = Math.abs(rightShoulder.x - leftShoulder.x) * width;
+    // Enhanced shoulder width calculation for more accurate ribcage sizing
+    const shoulderWidth = Math.abs(rightShoulder.x - leftShoulder.x) * width * 1.2;
     const chestCenter = {
       x: (leftShoulder.x + rightShoulder.x) / 2 * width,
       y: (leftShoulder.y + rightShoulder.y) / 2 * height
@@ -77,17 +78,17 @@ export class RibcageRenderer {
       const baseAngle = 20 + (i * 3); // Degrees, increasing declination
       const angleRad = (baseAngle * Math.PI) / 180;
       
-      // Calculate rib length based on type and number
+      // Calculate rib length based on type and number - made anatomically accurate
       let ribLength: number;
       if (ribNumber <= 7) {
-        // True ribs - longest at ribs 5-7
-        ribLength = shoulderWidth * (0.8 + Math.sin((ribNumber / 7) * Math.PI) * 0.2);
+        // True ribs - longest at ribs 5-7, much wider to match real anatomy
+        ribLength = shoulderWidth * (1.4 + Math.sin((ribNumber / 7) * Math.PI) * 0.3);
       } else if (ribNumber <= 10) {
-        // False ribs - gradually shorter
-        ribLength = shoulderWidth * (0.9 - (ribNumber - 7) * 0.05);
+        // False ribs - gradually shorter but still substantial
+        ribLength = shoulderWidth * (1.3 - (ribNumber - 7) * 0.08);
       } else {
-        // Floating ribs - shortest
-        ribLength = shoulderWidth * (0.5 - (ribNumber - 11) * 0.1);
+        // Floating ribs - shorter but not tiny
+        ribLength = shoulderWidth * (0.9 - (ribNumber - 11) * 0.15);
       }
       
       // Apply breathing expansion (more in lower ribs)
@@ -149,9 +150,9 @@ export class RibcageRenderer {
     const curvePoints: { x: number; y: number }[] = [];
     const numPoints = 20;
     
-    // Determine curve characteristics based on rib number
-    const curveFactor = number <= 6 ? 0.3 : 0.4; // Upper ribs less curved
-    const lateralExpansion = number <= 6 ? 0.7 : 1.0; // Lower ribs more lateral
+    // Determine curve characteristics based on rib number - enhanced for proper width
+    const curveFactor = number <= 6 ? 0.4 : 0.5; // Upper ribs moderately curved
+    const lateralExpansion = number <= 6 ? 1.2 : 1.5; // Much more lateral expansion for realistic width
     
     for (let t = 0; t <= 1; t += 1 / numPoints) {
       // Start at vertebra
@@ -162,20 +163,20 @@ export class RibcageRenderer {
       let endX: number, endY: number;
       
       if (type === 'floating') {
-        // Floating ribs don't reach sternum
-        endX = startX + (side === 'left' ? -length : length) * 0.6;
-        endY = startY + Math.sin(angle) * length * 0.3;
-      } else {
-        // True and false ribs curve toward sternum
-        endX = chestCenter.x + (side === 'left' ? -20 : 20);
+        // Floating ribs don't reach sternum but extend more laterally
+        endX = startX + (side === 'left' ? -length : length) * 0.8;
         endY = startY + Math.sin(angle) * length * 0.4;
+      } else {
+        // True and false ribs curve toward sternum with proper lateral extension
+        endX = chestCenter.x + (side === 'left' ? -35 : 35); // Wider sternum attachment
+        endY = startY + Math.sin(angle) * length * 0.5;
       }
       
-      // Control point for curve
+      // Control point for curve - enhanced lateral extension
       const controlX = startX + (endX - startX) * 0.5 + 
         (side === 'left' ? -1 : 1) * length * curveFactor * lateralExpansion;
       const controlY = startY + (endY - startY) * 0.5 + 
-        Math.cos(angle) * length * 0.2;
+        Math.cos(angle) * length * 0.3; // Enhanced vertical curve
       
       // Quadratic bezier curve
       const x = Math.pow(1 - t, 2) * startX + 

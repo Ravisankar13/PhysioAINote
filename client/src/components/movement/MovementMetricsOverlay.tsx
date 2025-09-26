@@ -18,9 +18,28 @@ import {
   Minus,
   AlertTriangle,
   CheckCircle,
-  Info
+  Info,
+  Play,
+  Square,
+  BarChart3,
+  Timer
 } from 'lucide-react';
 import { MovementMetrics } from '@/services/movement/MovementAnalyzer';
+
+type SessionStatus = 'idle' | 'active' | 'completed';
+
+interface SessionData {
+  id: string;
+  startTime: Date;
+  endTime: Date | null;
+  baselineMetrics: MovementMetrics | null;
+  finalMetrics: MovementMetrics | null;
+  improvements: {
+    posture: number;
+    balance: number;
+    symmetry: number;
+  } | null;
+}
 
 interface MovementMetricsOverlayProps {
   metrics: MovementMetrics | null;
@@ -37,6 +56,63 @@ export function MovementMetricsOverlay({
   onUserTypeChange,
   onToggleVisibility
 }: MovementMetricsOverlayProps) {
+  const [sessionStatus, setSessionStatus] = useState<SessionStatus>('idle');
+  const [currentSession, setCurrentSession] = useState<SessionData | null>(null);
+  const [sessionDuration, setSessionDuration] = useState(0);
+
+  // Timer for session duration
+  useEffect(() => {
+    if (sessionStatus === 'active' && currentSession) {
+      const interval = setInterval(() => {
+        setSessionDuration(Date.now() - currentSession.startTime.getTime());
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [sessionStatus, currentSession]);
+
+  const startSession = () => {
+    if (!metrics) return;
+    
+    const session: SessionData = {
+      id: `session_${Date.now()}`,
+      startTime: new Date(),
+      endTime: null,
+      baselineMetrics: { ...metrics },
+      finalMetrics: null,
+      improvements: null
+    };
+    
+    setCurrentSession(session);
+    setSessionStatus('active');
+    setSessionDuration(0);
+  };
+
+  const endSession = () => {
+    if (!currentSession || !metrics) return;
+    
+    const improvements = {
+      posture: metrics.posture.score - (currentSession.baselineMetrics?.posture.score || 0),
+      balance: metrics.balance.score - (currentSession.baselineMetrics?.balance.score || 0),
+      symmetry: calculateSymmetryImprovement(metrics, currentSession.baselineMetrics!)
+    };
+    
+    const updatedSession: SessionData = {
+      ...currentSession,
+      endTime: new Date(),
+      finalMetrics: { ...metrics },
+      improvements
+    };
+    
+    setCurrentSession(updatedSession);
+    setSessionStatus('completed');
+  };
+
+  const resetSession = () => {
+    setCurrentSession(null);
+    setSessionStatus('idle');
+    setSessionDuration(0);
+  };
+
   if (!isVisible || !metrics) return null;
 
   return (
@@ -58,6 +134,36 @@ export function MovementMetricsOverlay({
             </Button>
           </div>
           
+          {/* Session Controls */}
+          {userType === 'physiotherapist' && (
+            <div className="flex items-center gap-2 mb-3">
+              {sessionStatus === 'idle' && (
+                <Button size="sm" onClick={startSession} className="gap-2">
+                  <Play className="h-3 w-3" />
+                  Start Session
+                </Button>
+              )}
+              {sessionStatus === 'active' && (
+                <div className="flex items-center gap-2 flex-1">
+                  <Button size="sm" onClick={endSession} variant="destructive" className="gap-2">
+                    <Square className="h-3 w-3" />
+                    End Session
+                  </Button>
+                  <div className="flex items-center gap-1 text-sm text-gray-600">
+                    <Timer className="h-3 w-3" />
+                    {formatDuration(sessionDuration)}
+                  </div>
+                </div>
+              )}
+              {sessionStatus === 'completed' && (
+                <Button size="sm" onClick={resetSession} variant="outline" className="gap-2">
+                  <BarChart3 className="h-3 w-3" />
+                  New Session
+                </Button>
+              )}
+            </div>
+          )}
+          
           {/* Role Toggle */}
           <div className="flex items-center gap-2 text-sm">
             <User className="h-4 w-4" />
@@ -74,10 +180,14 @@ export function MovementMetricsOverlay({
         </CardHeader>
 
         <CardContent className="space-y-4">
+          {sessionStatus === 'completed' && currentSession && userType === 'physiotherapist' && (
+            <SessionSummary session={currentSession} />
+          )}
+          
           {userType === 'physiotherapist' ? (
             <PhysiotherapistView metrics={metrics} />
           ) : (
-            <PatientView metrics={metrics} />
+            <PatientView metrics={metrics} sessionStatus={sessionStatus} improvements={currentSession?.improvements} />
           )}
         </CardContent>
       </Card>
@@ -190,7 +300,59 @@ function PhysiotherapistView({ metrics }: { metrics: MovementMetrics }) {
   );
 }
 
-function PatientView({ metrics }: { metrics: MovementMetrics }) {
+function SessionSummary({ session }: { session: SessionData }) {
+  if (!session.improvements) return null;
+
+  return (
+    <Card className="border-l-4 border-l-blue-500 bg-blue-50">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm flex items-center gap-2">
+          <BarChart3 className="h-4 w-4" />
+          Session Summary
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        <div className="text-xs text-gray-600">
+          Duration: {formatDuration(session.endTime!.getTime() - session.startTime.getTime())}
+        </div>
+        
+        <div className="grid grid-cols-3 gap-2 text-xs">
+          <div className="text-center">
+            <div className="font-medium">Posture</div>
+            <div className={`flex items-center justify-center gap-1 ${session.improvements.posture >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {session.improvements.posture >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+              {Math.abs(session.improvements.posture).toFixed(1)}
+            </div>
+          </div>
+          <div className="text-center">
+            <div className="font-medium">Balance</div>
+            <div className={`flex items-center justify-center gap-1 ${session.improvements.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {session.improvements.balance >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+              {Math.abs(session.improvements.balance).toFixed(1)}
+            </div>
+          </div>
+          <div className="text-center">
+            <div className="font-medium">Symmetry</div>
+            <div className={`flex items-center justify-center gap-1 ${session.improvements.symmetry >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {session.improvements.symmetry >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+              {Math.abs(session.improvements.symmetry).toFixed(1)}%
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function PatientView({ 
+  metrics, 
+  sessionStatus, 
+  improvements 
+}: { 
+  metrics: MovementMetrics;
+  sessionStatus: SessionStatus;
+  improvements?: { posture: number; balance: number; symmetry: number } | null;
+}) {
   return (
     <div className="space-y-4">
       {/* Overall Score */}
@@ -351,4 +513,32 @@ function getEncouragementMessage(metrics: MovementMetrics) {
   const avgScore = (metrics.posture.score + metrics.balance.score) / 2;
   const index = Math.floor((avgScore / 10) * messages.length);
   return messages[Math.min(index, messages.length - 1)];
+}
+
+function formatDuration(milliseconds: number): string {
+  const seconds = Math.floor(milliseconds / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  
+  if (minutes > 0) {
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  }
+  return `0:${remainingSeconds.toString().padStart(2, '0')}`;
+}
+
+function calculateSymmetryImprovement(current: MovementMetrics, baseline: MovementMetrics): number {
+  // Calculate improvement in symmetry - lower difference is better, so we need to reverse the logic
+  const currentSymmetryScore = (
+    Math.abs(current.symmetry.shoulder.difference) + 
+    Math.abs(current.symmetry.hip.difference)
+  ) / 2;
+  
+  const baselineSymmetryScore = (
+    Math.abs(baseline.symmetry.shoulder.difference) + 
+    Math.abs(baseline.symmetry.hip.difference)
+  ) / 2;
+  
+  // Improvement = reduction in asymmetry (expressed as percentage)
+  const improvement = ((baselineSymmetryScore - currentSymmetryScore) / baselineSymmetryScore) * 100;
+  return improvement;
 }

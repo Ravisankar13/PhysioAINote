@@ -465,7 +465,7 @@ export default function BodyScanner() {
       const ribcageRenderer = ribcageRendererRef.current;
       if (ribcageRenderer && vertebrae.length > 0) {
         const ribs = ribcageRenderer.generateRibs(vertebrae, landmarks, width, height);
-        const sternum = ribcageRenderer.generateSternum(landmarks, width, height);
+        const sternum = ribcageRenderer.generateSternum(landmarks, vertebrae, width, height);
         ribcageRenderer.renderRibcage(ctx, ribs, sternum, true);
       }
       

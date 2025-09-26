@@ -74,21 +74,34 @@ export class RibcageRenderer {
         ribType = 'floating';
       }
       
-      // Calculate rib angle (increases from 1-12)
-      const baseAngle = 20 + (i * 3); // Degrees, increasing declination
+      // Calculate anatomically correct rib angle (progressive from 15° to 45°)
+      let baseAngle: number;
+      if (ribNumber <= 2) {
+        baseAngle = 15 + (ribNumber - 1) * 2; // 15-17° for upper ribs
+      } else if (ribNumber <= 7) {
+        baseAngle = 17 + (ribNumber - 2) * 3; // 17-32° for true ribs
+      } else if (ribNumber <= 10) {
+        baseAngle = 32 + (ribNumber - 7) * 4; // 32-44° for false ribs
+      } else {
+        baseAngle = 44 + (ribNumber - 10) * 2; // 44-48° for floating ribs
+      }
       const angleRad = (baseAngle * Math.PI) / 180;
       
-      // Calculate rib length based on type and number - made anatomically accurate
+      // Calculate anatomically correct rib length with proper barrel-shape progression
       let ribLength: number;
-      if (ribNumber <= 7) {
-        // True ribs - longest at ribs 5-7, much wider to match real anatomy
-        ribLength = shoulderWidth * (1.4 + Math.sin((ribNumber / 7) * Math.PI) * 0.3);
+      if (ribNumber <= 2) {
+        // Upper ribs - shorter, more horizontal
+        ribLength = shoulderWidth * (1.1 + ribNumber * 0.05);
+      } else if (ribNumber <= 7) {
+        // True ribs - longest at ribs 4-7 for barrel shape
+        const barrelFactor = Math.sin(((ribNumber - 2) / 5) * Math.PI);
+        ribLength = shoulderWidth * (1.4 + barrelFactor * 0.5); // Peak width at ribs 4-6
       } else if (ribNumber <= 10) {
-        // False ribs - gradually shorter but still substantial
-        ribLength = shoulderWidth * (1.3 - (ribNumber - 7) * 0.08);
+        // False ribs - progressively shorter with steeper angles
+        ribLength = shoulderWidth * (1.6 - (ribNumber - 7) * 0.2);
       } else {
-        // Floating ribs - shorter but not tiny
-        ribLength = shoulderWidth * (0.9 - (ribNumber - 11) * 0.15);
+        // Floating ribs - much shorter, lateral projection only
+        ribLength = shoulderWidth * (0.7 - (ribNumber - 11) * 0.1);
       }
       
       // Apply breathing expansion (more in lower ribs)
@@ -150,33 +163,64 @@ export class RibcageRenderer {
     const curvePoints: { x: number; y: number }[] = [];
     const numPoints = 20;
     
-    // Determine curve characteristics based on rib number - enhanced for proper width
-    const curveFactor = number <= 6 ? 0.4 : 0.5; // Upper ribs moderately curved
-    const lateralExpansion = number <= 6 ? 1.2 : 1.5; // Much more lateral expansion for realistic width
+    // Anatomically correct curve characteristics based on rib number
+    let curveFactor: number, lateralExpansion: number, anteriorReach: number;
+    
+    if (number <= 2) {
+      // Upper ribs - minimal lateral curve, more horizontal
+      curveFactor = 0.3;
+      lateralExpansion = 1.0;
+      anteriorReach = 0.6;
+    } else if (number <= 7) {
+      // True ribs - maximum barrel expansion at ribs 4-7
+      const barrelPeak = Math.sin(((number - 2) / 5) * Math.PI);
+      curveFactor = 0.4 + barrelPeak * 0.2; // More curve at peak ribs
+      lateralExpansion = 1.4 + barrelPeak * 0.8; // Maximum lateral extension
+      anteriorReach = 0.7 + barrelPeak * 0.2;
+    } else if (number <= 10) {
+      // False ribs - sharp anterior taper, less lateral extension
+      curveFactor = 0.6 + (number - 7) * 0.1; // Sharper curves
+      lateralExpansion = 1.8 - (number - 7) * 0.3; // Decreasing lateral reach
+      anteriorReach = 0.8 - (number - 7) * 0.1;
+    } else {
+      // Floating ribs - lateral projection only, no anterior reach
+      curveFactor = 0.4;
+      lateralExpansion = 1.0 - (number - 10) * 0.2;
+      anteriorReach = 0.0; // Don't reach sternum
+    }
     
     for (let t = 0; t <= 1; t += 1 / numPoints) {
       // Start at vertebra
       const startX = vertebralAttachment.x;
       const startY = vertebralAttachment.y;
       
-      // End point depends on rib type
+      // Calculate anatomically correct end points
       let endX: number, endY: number;
       
       if (type === 'floating') {
-        // Floating ribs don't reach sternum but extend more laterally
+        // Floating ribs extend laterally only
         endX = startX + (side === 'left' ? -length : length) * 0.8;
-        endY = startY + Math.sin(angle) * length * 0.4;
+        endY = startY + Math.sin(angle) * length * 0.6;
       } else {
-        // True and false ribs curve toward sternum with proper lateral extension
-        endX = chestCenter.x + (side === 'left' ? -35 : 35); // Wider sternum attachment
-        endY = startY + Math.sin(angle) * length * 0.5;
+        // True and false ribs - calculate proper sternum attachment based on thoracic anatomy
+        const sternumWidth = Math.max(40, width * 0.06); // Proportional sternum width
+        const sternumOffset = sternumWidth * (side === 'left' ? -0.5 : 0.5);
+        
+        // Calculate anterior reach based on rib length and angle
+        const anteriorDistance = length * anteriorReach * Math.cos(angle);
+        endX = chestCenter.x + sternumOffset + 
+          (side === 'left' ? -anteriorDistance : anteriorDistance) * 0.3;
+        endY = startY + Math.sin(angle) * length * 0.6;
       }
       
-      // Control point for curve - enhanced lateral extension
-      const controlX = startX + (endX - startX) * 0.5 + 
-        (side === 'left' ? -1 : 1) * length * curveFactor * lateralExpansion;
-      const controlY = startY + (endY - startY) * 0.5 + 
-        Math.cos(angle) * length * 0.3; // Enhanced vertical curve
+      // Calculate control point for anatomically correct curvature
+      const midX = startX + (endX - startX) * 0.5;
+      const midY = startY + (endY - startY) * 0.5;
+      
+      // Lateral projection - maximum at curve peak
+      const lateralOffset = (side === 'left' ? -1 : 1) * length * curveFactor * lateralExpansion;
+      const controlX = midX + lateralOffset;
+      const controlY = midY + Math.cos(angle) * length * 0.2;
       
       // Quadratic bezier curve
       const x = Math.pow(1 - t, 2) * startX + 
@@ -210,47 +254,64 @@ export class RibcageRenderer {
   }
   
   /**
-   * Generate sternum with anatomical landmarks
+   * Generate anatomically positioned sternum with proper thoracic curve alignment
    */
   generateSternum(
     landmarks: NormalizedLandmark[],
+    vertebrae: VertebralSegment[],
     width: number,
     height: number
   ): Sternum {
     const leftShoulder = landmarks[11];
     const rightShoulder = landmarks[12];
+    const leftHip = landmarks[23];
+    const rightHip = landmarks[24];
     
+    // Calculate proportional sternum dimensions
+    const shoulderWidth = Math.abs(rightShoulder.x - leftShoulder.x) * width;
+    const thoracicHeight = Math.abs((leftHip.y + rightHip.y) / 2 - (leftShoulder.y + rightShoulder.y) / 2) * height;
+    
+    // Sternum width should be proportional to shoulder width (anatomically ~6-8% of shoulder span)
+    const sternumWidth = Math.max(30, shoulderWidth * 0.08);
+    const sternumLength = Math.max(120, thoracicHeight * 0.35); // ~35% of thoracic height
+    
+    // Position sternum deeper in chest (following natural thoracic curve)
     const centerX = (leftShoulder.x + rightShoulder.x) / 2 * width;
-    const topY = (leftShoulder.y + rightShoulder.y) / 2 * height;
     
-    // Manubrium (top part)
+    // Calculate sternum top position based on T2-T3 vertebrae (anatomically correct)
+    const thoracicVertebrae = vertebrae.slice(8, 10); // T2-T3 for manubrium attachment
+    const sternumTopY = thoracicVertebrae.length > 0 ? 
+      thoracicVertebrae[0].body.y + thoracicVertebrae[0].body.height * 0.5 :
+      (leftShoulder.y + rightShoulder.y) / 2 * height + height * 0.08;
+    
+    // Manubrium (top part) - broader for clavicular attachments
     const manubrium = {
-      x: centerX - 15,
-      y: topY,
-      width: 30,
-      height: 40
+      x: centerX - sternumWidth * 0.6,
+      y: sternumTopY,
+      width: sternumWidth * 1.2,
+      height: sternumLength * 0.25
     };
     
-    // Sternal angle (Angle of Louis) at T4-T5 level
+    // Sternal angle (Angle of Louis) at T4-T5 level - anatomical landmark
     const sternalAngle = {
       x: centerX,
-      y: topY + 40
+      y: sternumTopY + sternumLength * 0.25
     };
     
-    // Body of sternum
+    // Body of sternum - main shaft
     const body = {
-      x: centerX - 20,
-      y: topY + 40,
-      width: 40,
-      height: 100
+      x: centerX - sternumWidth * 0.5,
+      y: sternumTopY + sternumLength * 0.25,
+      width: sternumWidth,
+      height: sternumLength * 0.65
     };
     
-    // Xiphoid process
+    // Xiphoid process - smaller, variable size
     const xiphoid = {
-      x: centerX - 10,
-      y: topY + 140,
-      width: 20,
-      height: 20
+      x: centerX - sternumWidth * 0.25,
+      y: sternumTopY + sternumLength * 0.9,
+      width: sternumWidth * 0.5,
+      height: sternumLength * 0.1
     };
     
     return {

@@ -56,6 +56,8 @@ import {
 } from '@/services/anatomy/EnhancedAnatomicalStructures';
 import RiggedAnatomicalSkeleton from '@/components/3d/RiggedAnatomicalSkeleton';
 import { convertMediaPipeTo3D, Posesmoother, type Skeleton3DPose } from '@/utils/mediapipeTo3D';
+import { MovementAnalyzer, type MovementMetrics } from '@/services/movement/MovementAnalyzer';
+import { MovementMetricsOverlay } from '@/components/movement/MovementMetricsOverlay';
 
 // Pose landmark indices
 const POSE_LANDMARKS = {
@@ -139,6 +141,11 @@ export default function BodyScanner() {
   const [selectedCameraId, setSelectedCameraId] = useState<string>('');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false); // iOS-friendly maximized view
+  
+  // Movement Analysis State
+  const [movementMetrics, setMovementMetrics] = useState<MovementMetrics | null>(null);
+  const [userType, setUserType] = useState<'physiotherapist' | 'patient'>('physiotherapist');
+  const [metricsVisible, setMetricsVisible] = useState(true);
   const [showControls, setShowControls] = useState(true);
   const [leftPanelOpen, setLeftPanelOpen] = useState(false);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
@@ -176,6 +183,7 @@ export default function BodyScanner() {
   const shoulderRendererRef = useRef<ShoulderComplexRenderer>(new ShoulderComplexRenderer());
   const compositeStreamRef = useRef<MediaStream | null>(null);
   const poseSmoother = useRef<Posesmoother>(new Posesmoother(0.3));
+  const movementAnalyzerRef = useRef<MovementAnalyzer>(new MovementAnalyzer());
   
   // 3D Skeleton state
   const [currentPose3D, setCurrentPose3D] = useState<Skeleton3DPose | null>(null);
@@ -329,6 +337,15 @@ export default function BodyScanner() {
       // Calculate and update knee metrics
       const metrics = calculateKneeMetrics(results.poseLandmarks);
       setKneeMetrics(metrics);
+      
+      // Analyze movement for clinical assessment
+      const movementAnalyzer = movementAnalyzerRef.current;
+      const movementMetrics = movementAnalyzer.analyzeMovement(
+        results.poseLandmarks,
+        canvasRef.current?.width || 1280,
+        canvasRef.current?.height || 720
+      );
+      setMovementMetrics(movementMetrics);
       
       // Convert MediaPipe landmarks to 3D skeleton pose
       const rawPose3D = convertMediaPipeTo3D(results.poseLandmarks);
@@ -2036,6 +2053,15 @@ export default function BodyScanner() {
               </div>
             )}
             
+            {/* Movement Metrics Overlay */}
+            <MovementMetricsOverlay
+              metrics={movementMetrics}
+              isVisible={metricsVisible}
+              userType={userType}
+              onUserTypeChange={setUserType}
+              onToggleVisibility={() => setMetricsVisible(!metricsVisible)}
+            />
+            
             {!isTracking && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/50">
                 <Button
@@ -2247,6 +2273,15 @@ export default function BodyScanner() {
                       </Button>
                     </div>
                   )}
+                  
+                  {/* Movement Metrics Overlay */}
+                  <MovementMetricsOverlay
+                    metrics={movementMetrics}
+                    isVisible={metricsVisible}
+                    userType={userType}
+                    onUserTypeChange={setUserType}
+                    onToggleVisibility={() => setMetricsVisible(!metricsVisible)}
+                  />
                 </div>
               
               {/* Control Buttons */}

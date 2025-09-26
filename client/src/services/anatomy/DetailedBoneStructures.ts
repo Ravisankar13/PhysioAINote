@@ -32,7 +32,7 @@ export class DetailedSpineRenderer {
 
   // Smoothing variables for stable spine movement
   private previousSpinePositions: Array<{x: number, y: number}> = [];
-  private smoothingFactor: number = 0.3; // Increased for more responsive neck movement
+  private smoothingFactor: number = 0.4; // Enhanced responsiveness for head-following movement
 
 
   /**
@@ -65,18 +65,23 @@ export class DetailedSpineRenderer {
       y: (leftHip.y + rightHip.y) / 2
     };
     
-    // Calculate head position using shoulder angle for natural spine movement
-    // This gives smooth, stable movement without the sensitivity of face landmarks
+    // Calculate head position combining actual head landmarks with shoulder stability
+    // This allows spine to follow head movement while maintaining stability
     const shoulderAngle = Math.atan2(
       rightShoulder.y - leftShoulder.y,
       rightShoulder.x - leftShoulder.x
     );
     
-    // Apply shoulder angle to create natural head positioning
-    const neckLength = 0.15; // Distance from shoulders to head
+    // Use actual nose position for head tracking, smoothed with shoulder reference
+    const shoulderBasedHead = {
+      x: shoulderMidpoint.x + Math.sin(shoulderAngle) * 0.15 * 0.3,
+      y: shoulderMidpoint.y - 0.15 + Math.cos(shoulderAngle) * 0.15 * 0.1
+    };
+    
+    // Blend actual nose position (60%) with shoulder-based position (40%) for stability
     const headCenter = {
-      x: shoulderMidpoint.x + Math.sin(shoulderAngle) * neckLength * 0.3, // Subtle lateral movement
-      y: shoulderMidpoint.y - neckLength + Math.cos(shoulderAngle) * neckLength * 0.1 // Natural head tilt
+      x: nose.x * 0.6 + shoulderBasedHead.x * 0.4,
+      y: nose.y * 0.6 + shoulderBasedHead.y * 0.4
     };
     
     // Calculate spine curvature based on shoulder-to-hip relationship
@@ -119,12 +124,20 @@ export class DetailedSpineRenderer {
       const baseX = headCenter.x + (hipMidpoint.x - headCenter.x) * t;
       const baseY = headCenter.y + (hipMidpoint.y - headCenter.y) * t;
       
-      // Enhanced lateral movement with more responsiveness for cervical spine
+      // Enhanced lateral movement with direct head responsiveness for cervical spine
       let lateralOffset;
       if (i < 7) {
-        // Cervical vertebrae: More responsive to shoulder angle
+        // Cervical vertebrae: Directly respond to head movement
         const cervicalFactor = (7 - i) / 7; // Stronger effect at top of neck
-        lateralOffset = Math.sin(shoulderAngle) * rawLateralFlexion * 0.08 * cervicalFactor;
+        
+        // Calculate head lateral displacement from shoulder midpoint
+        const headDisplacement = headCenter.x - shoulderMidpoint.x;
+        
+        // Combine head displacement with shoulder-based movement
+        const headInfluence = headDisplacement * cervicalFactor * 0.5; // Direct head tracking
+        const shoulderInfluence = Math.sin(shoulderAngle) * rawLateralFlexion * 0.06 * cervicalFactor;
+        
+        lateralOffset = headInfluence + shoulderInfluence;
       } else {
         // Rest of spine: Gradual transition
         lateralOffset = Math.sin(t * Math.PI) * rawLateralFlexion * 0.04;

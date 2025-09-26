@@ -33,7 +33,8 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
-  Video
+  Video,
+  Bone
 } from 'lucide-react';
 import { loadMediaPipeLibraries } from '@/utils/mediapipeLoader';
 import { isMobileDevice } from '@/config/mediapipe';

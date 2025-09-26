@@ -169,23 +169,23 @@ export class RibcageRenderer {
     if (number <= 2) {
       // Upper ribs - minimal lateral curve, more horizontal
       curveFactor = 0.3;
-      lateralExpansion = 1.0;
+      lateralExpansion = 0.8;
       anteriorReach = 0.6;
     } else if (number <= 7) {
-      // True ribs - maximum barrel expansion at ribs 4-7
+      // True ribs - moderate barrel expansion at ribs 4-7
       const barrelPeak = Math.sin(((number - 2) / 5) * Math.PI);
-      curveFactor = 0.4 + barrelPeak * 0.2; // More curve at peak ribs
-      lateralExpansion = 1.4 + barrelPeak * 0.8; // Maximum lateral extension
-      anteriorReach = 0.7 + barrelPeak * 0.2;
+      curveFactor = 0.4 + barrelPeak * 0.1; // Subtle curve increase at peak ribs
+      lateralExpansion = 1.0 + barrelPeak * 0.3; // More moderate lateral extension
+      anteriorReach = 0.7 + barrelPeak * 0.1;
     } else if (number <= 10) {
-      // False ribs - sharp anterior taper, less lateral extension
-      curveFactor = 0.6 + (number - 7) * 0.1; // Sharper curves
-      lateralExpansion = 1.8 - (number - 7) * 0.3; // Decreasing lateral reach
-      anteriorReach = 0.8 - (number - 7) * 0.1;
+      // False ribs - moderate anterior taper, controlled lateral extension
+      curveFactor = 0.5 + (number - 7) * 0.05; // Gentler curve progression
+      lateralExpansion = 1.2 - (number - 7) * 0.15; // More controlled decrease
+      anteriorReach = 0.75 - (number - 7) * 0.08;
     } else {
       // Floating ribs - lateral projection only, no anterior reach
       curveFactor = 0.4;
-      lateralExpansion = 1.0 - (number - 10) * 0.2;
+      lateralExpansion = 0.7 - (number - 10) * 0.1;
       anteriorReach = 0.0; // Don't reach sternum
     }
     

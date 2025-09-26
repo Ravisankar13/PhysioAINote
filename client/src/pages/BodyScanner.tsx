@@ -2053,14 +2053,6 @@ export default function BodyScanner() {
               </div>
             )}
             
-            {/* Movement Metrics Overlay */}
-            <MovementMetricsOverlay
-              metrics={movementMetrics}
-              isVisible={metricsVisible}
-              userType={userType}
-              onUserTypeChange={setUserType}
-              onToggleVisibility={() => setMetricsVisible(!metricsVisible)}
-            />
             
             {!isTracking && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/50">
@@ -2274,14 +2266,6 @@ export default function BodyScanner() {
                     </div>
                   )}
                   
-                  {/* Movement Metrics Overlay */}
-                  <MovementMetricsOverlay
-                    metrics={movementMetrics}
-                    isVisible={metricsVisible}
-                    userType={userType}
-                    onUserTypeChange={setUserType}
-                    onToggleVisibility={() => setMetricsVisible(!metricsVisible)}
-                  />
                 </div>
               
               {/* Control Buttons */}
@@ -2625,6 +2609,15 @@ export default function BodyScanner() {
               </CardContent>
             )}
           </Card>
+          
+          {/* Movement Analysis */}
+          <MovementMetricsOverlay
+            metrics={movementMetrics}
+            isVisible={metricsVisible}
+            userType={userType}
+            onUserTypeChange={setUserType}
+            onToggleVisibility={() => setMetricsVisible(!metricsVisible)}
+          />
           
           {/* Real-time Metrics */}
           <Card>

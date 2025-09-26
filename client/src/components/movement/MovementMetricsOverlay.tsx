@@ -116,8 +116,7 @@ export function MovementMetricsOverlay({
   if (!isVisible || !metrics) return null;
 
   return (
-    <div className="absolute top-4 right-4 w-80 max-h-[90vh] overflow-y-auto z-20">
-      <Card className="bg-white/95 backdrop-blur-md border-gray-200 shadow-lg">
+    <Card className="w-full border-gray-200 shadow-sm">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-lg flex items-center gap-2">
@@ -190,8 +189,7 @@ export function MovementMetricsOverlay({
             <PatientView metrics={metrics} sessionStatus={sessionStatus} improvements={currentSession?.improvements} />
           )}
         </CardContent>
-      </Card>
-    </div>
+    </Card>
   );
 }
 

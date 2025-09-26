@@ -4,14 +4,28 @@
  */
 
 import { NormalizedLandmark } from '@mediapipe/pose';
+import { PositionDetector, PositionInfo, PostureType, OrientationType } from './PositionDetector';
 
 export interface MovementMetrics {
+  position: {
+    current: PositionInfo;
+    isOptimal: boolean;
+    recommendations: {
+      nextPosition: string;
+      guidance: string;
+      assessmentReady: boolean;
+    };
+  };
   posture: {
     score: number; // 0-10 scale
     headForwardAngle: number; // degrees
     shoulderSymmetry: number; // mm difference
     status: 'excellent' | 'good' | 'fair' | 'poor';
     feedback: string;
+    adaptiveAnalysis: {
+      relevantForPosition: boolean;
+      positionSpecificFindings: string[];
+    };
   };
   balance: {
     score: number; // 0-10 scale
@@ -19,6 +33,10 @@ export interface MovementMetrics {
     sway: number; // stability index
     status: 'stable' | 'moderate' | 'unstable';
     feedback: string;
+    adaptiveAnalysis: {
+      relevantForPosition: boolean;
+      positionSpecificMetrics: Record<string, number>;
+    };
   };
   symmetry: {
     shoulder: {
@@ -33,6 +51,10 @@ export interface MovementMetrics {
       difference: number;
       status: 'level' | 'slight' | 'significant';
     };
+    adaptiveAnalysis: {
+      viewOptimal: boolean;
+      recommendedViews: OrientationType[];
+    };
   };
   rangeOfMotion: {
     shoulderFlexion: {
@@ -45,6 +67,10 @@ export interface MovementMetrics {
       current: number;
       normal: number;
       percentage: number;
+    };
+    adaptiveAnalysis: {
+      positionAppropriate: boolean;
+      suggestedMovements: string[];
     };
   };
 }
@@ -59,6 +85,11 @@ export interface SessionData {
 export class MovementAnalyzer {
   private previousMetrics: MovementMetrics[] = [];
   private smoothingWindow = 5; // frames for smoothing
+  private positionDetector: PositionDetector;
+  
+  constructor() {
+    this.positionDetector = new PositionDetector();
+  }
   
   /**
    * Analyze current pose and return comprehensive movement metrics
@@ -68,12 +99,28 @@ export class MovementAnalyzer {
     width: number,
     height: number
   ): MovementMetrics {
-    const postureAnalysis = this.analyzePosture(landmarks, width, height);
-    const balanceAnalysis = this.analyzeBalance(landmarks, width, height);
-    const symmetryAnalysis = this.analyzeSymmetry(landmarks, width, height);
-    const romAnalysis = this.analyzeRangeOfMotion(landmarks, width, height);
+    // First detect current position
+    const currentPosition = this.positionDetector.detectPosition(landmarks, width, height);
+    
+    // Get position-based recommendations
+    const positionRecommendations = this.positionDetector.getClinicalRecommendations(currentPosition);
+    
+    // Perform position-adaptive analysis
+    const postureAnalysis = this.analyzePosture(landmarks, width, height, currentPosition);
+    const balanceAnalysis = this.analyzeBalance(landmarks, width, height, currentPosition);
+    const symmetryAnalysis = this.analyzeSymmetry(landmarks, width, height, currentPosition);
+    const romAnalysis = this.analyzeRangeOfMotion(landmarks, width, height, currentPosition);
 
     const metrics: MovementMetrics = {
+      position: {
+        current: currentPosition,
+        isOptimal: currentPosition.stability.isStable && currentPosition.stability.qualityScore > 7,
+        recommendations: {
+          nextPosition: this.getNextRecommendedPosition(currentPosition),
+          guidance: positionRecommendations.positionGuidance,
+          assessmentReady: currentPosition.stability.isStable
+        }
+      },
       posture: postureAnalysis,
       balance: balanceAnalysis,
       symmetry: symmetryAnalysis,
@@ -95,7 +142,8 @@ export class MovementAnalyzer {
   private analyzePosture(
     landmarks: NormalizedLandmark[],
     width: number,
-    height: number
+    height: number,
+    position: PositionInfo
   ) {
     // Get key landmarks
     const nose = landmarks[0];
@@ -154,12 +202,33 @@ export class MovementAnalyzer {
       feedback = 'Significant posture concerns. Professional guidance recommended.';
     }
 
+    // Position-specific analysis
+    const isRelevantForPosition = position.posture.type === 'standing' || position.posture.type === 'sitting';
+    const positionSpecificFindings: string[] = [];
+    
+    if (position.posture.type === 'standing') {
+      if (headForwardAngle > 20) {
+        positionSpecificFindings.push('Forward head posture more pronounced in standing');
+      }
+      if (shoulderHeightDiff > 8) {
+        positionSpecificFindings.push('Significant shoulder asymmetry under load');
+      }
+    } else if (position.posture.type === 'sitting') {
+      if (headForwardAngle > 15) {
+        positionSpecificFindings.push('Poor seated posture - forward head position');
+      }
+    }
+
     return {
       score: Math.max(0, Math.min(10, postureScore)),
       headForwardAngle,
       shoulderSymmetry: shoulderHeightDiff,
       status,
-      feedback
+      feedback,
+      adaptiveAnalysis: {
+        relevantForPosition: isRelevantForPosition,
+        positionSpecificFindings
+      }
     };
   }
 
@@ -169,7 +238,8 @@ export class MovementAnalyzer {
   private analyzeBalance(
     landmarks: NormalizedLandmark[],
     width: number,
-    height: number
+    height: number,
+    position: PositionInfo
   ) {
     // Calculate center of gravity using key body segments
     const leftShoulder = landmarks[11];
@@ -235,6 +305,15 @@ export class MovementAnalyzer {
       feedback = 'Balance concerns detected. Consider balance training.';
     }
 
+    // Position-specific analysis
+    const isRelevantForPosition = position.posture.type === 'standing';
+    const positionSpecificMetrics: Record<string, number> = {};
+    
+    if (position.posture.type === 'standing') {
+      positionSpecificMetrics.weightDistribution = weightShift;
+      positionSpecificMetrics.stabilityIndex = totalSway;
+    }
+
     return {
       score: Math.max(0, Math.min(10, balanceScore)),
       centerOfGravity: {
@@ -243,7 +322,11 @@ export class MovementAnalyzer {
       },
       sway: totalSway,
       status,
-      feedback
+      feedback,
+      adaptiveAnalysis: {
+        relevantForPosition: isRelevantForPosition,
+        positionSpecificMetrics
+      }
     };
   }
 
@@ -253,7 +336,8 @@ export class MovementAnalyzer {
   private analyzeSymmetry(
     landmarks: NormalizedLandmark[],
     width: number,
-    height: number
+    height: number,
+    position: PositionInfo
   ) {
     const leftShoulder = landmarks[11];
     const rightShoulder = landmarks[12];
@@ -276,6 +360,16 @@ export class MovementAnalyzer {
       return 'significant';
     };
 
+    // Position-specific analysis
+    const viewOptimal = position.orientation.type === 'frontal' || position.orientation.type === 'posterior';
+    const recommendedViews: OrientationType[] = ['frontal', 'posterior'];
+    
+    if (!viewOptimal) {
+      if (position.orientation.type.includes('sagittal')) {
+        recommendedViews.unshift('frontal'); // Prioritize frontal for symmetry
+      }
+    }
+
     return {
       shoulder: {
         leftHeight: shoulderLeftHeight,
@@ -288,6 +382,10 @@ export class MovementAnalyzer {
         rightHeight: hipRightHeight,
         difference: hipDifference,
         status: getSymmetryStatus(hipDifference) as 'level' | 'slight' | 'significant'
+      },
+      adaptiveAnalysis: {
+        viewOptimal,
+        recommendedViews
       }
     };
   }
@@ -298,7 +396,8 @@ export class MovementAnalyzer {
   private analyzeRangeOfMotion(
     landmarks: NormalizedLandmark[],
     width: number,
-    height: number
+    height: number,
+    position: PositionInfo
   ) {
     // Shoulder flexion analysis
     const leftShoulder = landmarks[11];
@@ -330,6 +429,18 @@ export class MovementAnalyzer {
 
     const neckRotation = Math.abs(nose.x - shoulderMidpoint.x) * 100; // Approximate rotation
 
+    // Position-specific analysis
+    const positionAppropriate = position.posture.type === 'sitting' || position.posture.type === 'lying';
+    const suggestedMovements: string[] = [];
+    
+    if (position.posture.type === 'standing') {
+      suggestedMovements.push('Sit down for detailed range of motion testing');
+    } else if (position.posture.type === 'sitting') {
+      suggestedMovements.push('Shoulder elevation', 'Neck rotation', 'Trunk rotation');
+    } else if (position.posture.type === 'lying') {
+      suggestedMovements.push('Passive range of motion testing', 'Hip flexion', 'Knee flexion');
+    }
+
     return {
       shoulderFlexion: {
         left: leftShoulderAngle,
@@ -341,6 +452,10 @@ export class MovementAnalyzer {
         current: neckRotation,
         normal: 45,
         percentage: Math.min(100, (neckRotation / 45) * 100)
+      },
+      adaptiveAnalysis: {
+        positionAppropriate,
+        suggestedMovements
       }
     };
   }
@@ -452,5 +567,35 @@ export class MovementAnalyzer {
       patientId,
       sessionType: 'progress'
     };
+  }
+
+  /**
+   * Get next recommended position based on current position and assessment needs
+   */
+  private getNextRecommendedPosition(currentPosition: PositionInfo): string {
+    const { posture, orientation } = currentPosition;
+    
+    // Assessment sequence prioritization
+    if (posture.type === 'standing') {
+      if (orientation.type === 'frontal') {
+        return 'Turn sideways for spinal assessment';
+      } else if (orientation.type.includes('sagittal')) {
+        return 'Turn around for posterior view assessment';
+      } else if (orientation.type === 'posterior') {
+        return 'Assessment complete - consider sitting position';
+      }
+    } else if (posture.type === 'sitting') {
+      if (orientation.type === 'frontal') {
+        return 'Turn sideways for seated spinal assessment';
+      } else {
+        return 'Return to standing for weight-bearing assessment';
+      }
+    } else if (posture.type === 'lying') {
+      return 'Transition to sitting for functional assessment';
+    } else if (posture.type === 'transitional') {
+      return 'Hold steady position for movement quality analysis';
+    }
+    
+    return 'Maintain current position for continued assessment';
   }
 }

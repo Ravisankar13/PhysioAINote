@@ -53,6 +53,8 @@ import {
   EnhancedKneeRenderer, 
   EnhancedElbowRenderer 
 } from '@/services/anatomy/EnhancedAnatomicalStructures';
+import RiggedAnatomicalSkeleton from '@/components/3d/RiggedAnatomicalSkeleton';
+import { convertMediaPipeTo3D, Posesmoother, type Skeleton3DPose } from '@/utils/mediapipeTo3D';
 
 // Pose landmark indices
 const POSE_LANDMARKS = {
@@ -172,6 +174,11 @@ export default function BodyScanner() {
   const pelvisRendererRef = useRef<EnhancedPelvisRenderer>(new EnhancedPelvisRenderer());
   const shoulderRendererRef = useRef<ShoulderComplexRenderer>(new ShoulderComplexRenderer());
   const compositeStreamRef = useRef<MediaStream | null>(null);
+  const poseSmoother = useRef<Posesmoother>(new Posesmoother(0.3));
+  
+  // 3D Skeleton state
+  const [currentPose3D, setCurrentPose3D] = useState<Skeleton3DPose | null>(null);
+  const [show3DSkeleton, setShow3DSkeleton] = useState(true);
   
   // Detect iOS devices
   const detectIOS = () => {
@@ -321,6 +328,11 @@ export default function BodyScanner() {
       // Calculate and update knee metrics
       const metrics = calculateKneeMetrics(results.poseLandmarks);
       setKneeMetrics(metrics);
+      
+      // Convert MediaPipe landmarks to 3D skeleton pose
+      const rawPose3D = convertMediaPipeTo3D(results.poseLandmarks);
+      const smoothedPose3D = poseSmoother.current.smooth(rawPose3D);
+      setCurrentPose3D(smoothedPose3D);
       
       // Removed basic pose visualization - using anatomical overlay instead
       
@@ -1965,6 +1977,69 @@ export default function BodyScanner() {
               height={1080}
               className="hidden"
             />
+            
+            {/* 3D Skeleton Toggle Button */}
+            <div className="absolute top-4 left-4 z-10">
+              <Button
+                size="sm"
+                variant={show3DSkeleton ? "default" : "outline"}
+                onClick={() => setShow3DSkeleton(!show3DSkeleton)}
+                className="bg-black/80 backdrop-blur-md border-white/20 text-white hover:bg-white/20"
+              >
+                <Bone className="h-4 w-4 mr-2" />
+                3D Skeleton
+              </Button>
+            </div>
+            
+            {/* 3D Skeleton Overlay */}
+            {show3DSkeleton && currentPose3D && (
+              <div className="absolute top-4 right-4 w-80 h-96 bg-black/80 backdrop-blur-md rounded-lg overflow-hidden border border-white/20">
+                <div className="p-2 text-center text-white text-sm font-medium border-b border-white/20">
+                  3D Anatomical Model
+                </div>
+                <div className="w-full h-full">
+                  <RiggedAnatomicalSkeleton
+                    patientData={{
+                      anthropometrics: {
+                        height: 170,
+                        weight: 70,
+                      },
+                      jointRestrictions: {},
+                      painAreas: [],
+                      movementPatterns: null
+                    }}
+                    modelConfig={{
+                      limbScales: {
+                        upperArm: 1.0,
+                        forearm: 1.0,
+                        thigh: 1.0,
+                        shin: 1.0,
+                        overall: 1.0,
+                      },
+                      spinalPathology: {
+                        spineFlexion: currentPose3D.spine.x,
+                        spineLateralFlexion: currentPose3D.spine.z,
+                        spineRotation: currentPose3D.spine.y,
+                      },
+                      shoulderPathology: {
+                        shoulderFlexion: currentPose3D.leftShoulder.x,
+                        shoulderAbduction: currentPose3D.leftShoulder.z,
+                        shoulderRotation: currentPose3D.leftShoulder.y,
+                      },
+                      lowerLimbPathology: {
+                        hipFlexion: currentPose3D.leftHip.x,
+                        hipAbduction: currentPose3D.leftHip.z,
+                        hipRotation: currentPose3D.leftHip.y,
+                        kneeFlexion: currentPose3D.leftKnee.x,
+                        ankleDorsiflexion: 0,
+                      },
+                    }}
+                    className="w-full h-full"
+                    showControls={false}
+                  />
+                </div>
+              </div>
+            )}
             
             {!isTracking && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/50">

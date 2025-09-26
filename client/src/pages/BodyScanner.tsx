@@ -461,13 +461,7 @@ export default function BodyScanner() {
         spineRenderer.renderVertebrae(ctx, vertebrae, true);
       }
       
-      // Render anatomically accurate ribcage
-      const ribcageRenderer = ribcageRendererRef.current;
-      if (ribcageRenderer && vertebrae.length > 0) {
-        const ribs = ribcageRenderer.generateRibs(vertebrae, landmarks, width, height);
-        const sternum = ribcageRenderer.generateSternum(landmarks, vertebrae, width, height);
-        ribcageRenderer.renderRibcage(ctx, ribs, sternum, true);
-      }
+      // Ribcage rendering disabled per user request
       
       // Enhanced Pelvis with ASIS, PSIS, and clinical measurements
       const enhancedPelvisRenderer = new EnhancedPelvisRenderer();

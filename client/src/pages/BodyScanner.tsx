@@ -58,6 +58,9 @@ import RiggedAnatomicalSkeleton from '@/components/3d/RiggedAnatomicalSkeleton';
 import { convertMediaPipeTo3D, Posesmoother, type Skeleton3DPose } from '@/utils/mediapipeTo3D';
 import { MovementAnalyzer, type MovementMetrics } from '@/services/movement/MovementAnalyzer';
 import { MovementMetricsOverlay } from '@/components/movement/MovementMetricsOverlay';
+import { AssessmentWorkflow, type AssessmentStep, type WorkflowProgress } from '@/services/assessment/AssessmentWorkflow';
+import { AssessmentWorkflowPanel } from '@/components/assessment/AssessmentWorkflowPanel';
+import { PositionDetector, type PositionInfo, type PostureType, type OrientationType } from '@/services/movement/PositionDetector';
 
 // Pose landmark indices
 const POSE_LANDMARKS = {
@@ -166,6 +169,21 @@ export default function BodyScanner() {
   const [videoStream, setVideoStream] = useState<MediaStream | null>(null);
   const [showVideoRecorder, setShowVideoRecorder] = useState(false);
   const [compositeStream, setCompositeStream] = useState<MediaStream | null>(null);
+  
+  // Assessment Workflow State
+  const [assessmentWorkflow, setAssessmentWorkflow] = useState<AssessmentWorkflow | null>(null);
+  const [workflowActive, setWorkflowActive] = useState(false);
+  const [currentWorkflowStep, setCurrentWorkflowStep] = useState<AssessmentStep | null>(null);
+  const [workflowProgress, setWorkflowProgress] = useState<WorkflowProgress>({
+    currentStep: 0,
+    totalSteps: 0,
+    completedSteps: [],
+    overallProgress: 0,
+    estimatedTimeRemaining: 0
+  });
+  const [currentPosition, setCurrentPosition] = useState<PositionInfo | null>(null);
+  const [isCorrectPosition, setIsCorrectPosition] = useState(false);
+  const [positionGuidance, setPositionGuidance] = useState('');
   
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -346,6 +364,32 @@ export default function BodyScanner() {
         canvasRef.current?.height || 720
       );
       setMovementMetrics(movementMetrics);
+      
+      // Process assessment workflow if active
+      if (workflowActive && assessmentWorkflow) {
+        const workflowResult = assessmentWorkflow.processFrame(
+          results.poseLandmarks,
+          canvasRef.current?.width || 1280,
+          canvasRef.current?.height || 720
+        );
+        
+        setCurrentPosition(workflowResult.position);
+        setIsCorrectPosition(workflowResult.isCorrectPosition);
+        setPositionGuidance(workflowResult.guidance);
+        setWorkflowProgress(workflowResult.progress);
+        setCurrentWorkflowStep(assessmentWorkflow.getCurrentStep());
+        
+        // Check if workflow is complete
+        if (assessmentWorkflow.isComplete()) {
+          const result = assessmentWorkflow.generateResult();
+          console.log('Assessment Workflow Complete:', result);
+          toast({
+            title: "Assessment Complete",
+            description: "All workflow steps have been completed successfully.",
+          });
+          setWorkflowActive(false);
+        }
+      }
       
       // Convert MediaPipe landmarks to 3D skeleton pose
       const rawPose3D = convertMediaPipeTo3D(results.poseLandmarks);
@@ -1397,6 +1441,69 @@ export default function BodyScanner() {
       }
     };
   }, [isTracking, mediapipeLoaded, isPaused, onPoseResults, facingMode, selectedCameraId, availableCameras]);
+
+  // Assessment Workflow Control Functions
+  const startAssessmentWorkflow = useCallback(() => {
+    const workflow = new AssessmentWorkflow();
+    setAssessmentWorkflow(workflow);
+    setWorkflowActive(true);
+    setCurrentWorkflowStep(workflow.getCurrentStep());
+    setWorkflowProgress(workflow.getProgress());
+    
+    toast({
+      title: "Assessment Workflow Started",
+      description: "Follow the guidance to complete the clinical assessment.",
+    });
+  }, [toast]);
+
+  const skipCurrentStep = useCallback(() => {
+    if (assessmentWorkflow) {
+      assessmentWorkflow.skipCurrentStep();
+      setCurrentWorkflowStep(assessmentWorkflow.getCurrentStep());
+      setWorkflowProgress(assessmentWorkflow.getProgress());
+      
+      toast({
+        title: "Step Skipped",
+        description: "Moved to next assessment step.",
+      });
+    }
+  }, [assessmentWorkflow, toast]);
+
+  const goToPreviousStep = useCallback(() => {
+    if (assessmentWorkflow) {
+      assessmentWorkflow.goToPreviousStep();
+      setCurrentWorkflowStep(assessmentWorkflow.getCurrentStep());
+      setWorkflowProgress(assessmentWorkflow.getProgress());
+      
+      toast({
+        title: "Previous Step",
+        description: "Returned to previous assessment step.",
+      });
+    }
+  }, [assessmentWorkflow, toast]);
+
+  const resetAssessmentWorkflow = useCallback(() => {
+    if (assessmentWorkflow) {
+      assessmentWorkflow.reset();
+      setCurrentWorkflowStep(assessmentWorkflow.getCurrentStep());
+      setWorkflowProgress(assessmentWorkflow.getProgress());
+    } else {
+      setWorkflowActive(false);
+      setCurrentWorkflowStep(null);
+      setWorkflowProgress({
+        currentStep: 0,
+        totalSteps: 0,
+        completedSteps: [],
+        overallProgress: 0,
+        estimatedTimeRemaining: 0
+      });
+    }
+    
+    toast({
+      title: "Workflow Reset",
+      description: "Assessment workflow has been reset.",
+    });
+  }, [assessmentWorkflow, toast]);
   
   // Handle region selection with SAM 2 integration
   const handleCanvasClick = async (event: React.MouseEvent<HTMLCanvasElement>) => {
@@ -2609,6 +2716,44 @@ export default function BodyScanner() {
               </CardContent>
             )}
           </Card>
+          
+          {/* Assessment Workflow */}
+          <AssessmentWorkflowPanel
+            currentStep={currentWorkflowStep}
+            progress={workflowProgress}
+            position={currentPosition || {
+              posture: { 
+                type: 'standing', 
+                confidence: 0,
+                details: {
+                  hipAngle: 0,
+                  kneeAngle: 0,
+                  torsoVertical: true
+                }
+              },
+              orientation: { 
+                type: 'frontal', 
+                confidence: 0,
+                details: {
+                  shoulderVisibility: { left: 0, right: 0 },
+                  faceDirection: 0,
+                  bodyAngle: 0
+                }
+              },
+              stability: {
+                isStable: false,
+                movementDetected: false,
+                qualityScore: 0
+              }
+            }}
+            isCorrectPosition={isCorrectPosition}
+            guidance={positionGuidance}
+            isWorkflowActive={workflowActive}
+            onStartWorkflow={startAssessmentWorkflow}
+            onSkipStep={skipCurrentStep}
+            onPreviousStep={goToPreviousStep}
+            onResetWorkflow={resetAssessmentWorkflow}
+          />
           
           {/* Movement Analysis */}
           <MovementMetricsOverlay

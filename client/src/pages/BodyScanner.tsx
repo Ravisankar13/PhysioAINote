@@ -2944,36 +2944,6 @@ export default function BodyScanner() {
             </CardContent>
           </Card>
           
-          {/* Anatomy Layers */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Layers className="h-4 w-4" />
-                Anatomy Layers
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {ANATOMY_LAYERS.map(layer => (
-                <Button
-                  key={layer.id}
-                  variant={visibleLayers.includes(layer.id) ? 'default' : 'outline'}
-                  size="sm"
-                  className="w-full justify-start"
-                  onClick={() => toggleLayer(layer.id)}
-                >
-                  {visibleLayers.includes(layer.id) ? 
-                    <Eye className="h-4 w-4 mr-2" /> : 
-                    <EyeOff className="h-4 w-4 mr-2" />
-                  }
-                  <span className="flex-1 text-left">{layer.label}</span>
-                  <div 
-                    className="w-4 h-4 rounded-full ml-2"
-                    style={{ backgroundColor: layer.color }}
-                  />
-                </Button>
-              ))}
-            </CardContent>
-          </Card>
           
           {/* Tracked Regions */}
           <Card>

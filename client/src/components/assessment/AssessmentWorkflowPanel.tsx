@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import type { AssessmentStep, WorkflowProgress } from '@/services/assessment/AssessmentWorkflow';
 import type { PositionInfo } from '@/services/movement/PositionDetector';
+import type { MovementType } from '@/services/movement/MovementClassifier';
 
 interface AssessmentWorkflowPanelProps {
   currentStep: AssessmentStep | null;
@@ -26,10 +27,16 @@ interface AssessmentWorkflowPanelProps {
   isCorrectPosition: boolean;
   guidance: string;
   isWorkflowActive: boolean;
-  onStartWorkflow: () => void;
+  onStartWorkflow: (adaptiveMode?: boolean) => void;
   onSkipStep: () => void;
   onPreviousStep: () => void;
   onResetWorkflow: () => void;
+  adaptiveInfo?: {
+    isAdaptive: boolean;
+    detectedMovements: MovementType[];
+    adaptiveStepsCount: number;
+  };
+  onToggleAdaptiveMode?: () => void;
 }
 
 export function AssessmentWorkflowPanel({
@@ -42,7 +49,9 @@ export function AssessmentWorkflowPanel({
   onStartWorkflow,
   onSkipStep,
   onPreviousStep,
-  onResetWorkflow
+  onResetWorkflow,
+  adaptiveInfo,
+  onToggleAdaptiveMode
 }: AssessmentWorkflowPanelProps) {
   
   if (!isWorkflowActive) {
@@ -67,13 +76,37 @@ export function AssessmentWorkflowPanel({
                 <li>Functional movement screening</li>
               </ul>
             </div>
-            <Button 
-              onClick={onStartWorkflow} 
-              className="w-full"
-              data-testid="button-start-workflow"
-            >
-              Start Assessment Workflow
-            </Button>
+            {/* Adaptive Mode Info */}
+            {adaptiveInfo && adaptiveInfo.detectedMovements.length > 0 && (
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertDescription>
+                  Detected movements: {adaptiveInfo.detectedMovements.join(', ')}. 
+                  Consider starting in adaptive mode for movement-specific assessment.
+                </AlertDescription>
+              </Alert>
+            )}
+            
+            <div className="flex flex-col gap-2">
+              <Button 
+                onClick={() => onStartWorkflow(false)} 
+                className="w-full"
+                data-testid="button-start-workflow"
+              >
+                Start Standard Assessment
+              </Button>
+              
+              {adaptiveInfo && adaptiveInfo.detectedMovements.length > 0 && (
+                <Button 
+                  onClick={() => onStartWorkflow(true)} 
+                  variant="outline"
+                  className="w-full"
+                  data-testid="button-start-adaptive-workflow"
+                >
+                  Start Adaptive Assessment
+                </Button>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -117,6 +150,11 @@ export function AssessmentWorkflowPanel({
           <CardTitle className="flex items-center gap-2">
             <User className="h-5 w-5 text-blue-500" />
             Step {progress.currentStep} of {progress.totalSteps}
+            {adaptiveInfo?.isAdaptive && (
+              <Badge variant="outline" className="ml-2">
+                Adaptive Mode
+              </Badge>
+            )}
           </CardTitle>
           <Badge 
             variant={isCorrectPosition ? 'default' : 'secondary'}
@@ -226,6 +264,51 @@ export function AssessmentWorkflowPanel({
             </div>
           </div>
         </div>
+
+        {/* Adaptive Mode Information */}
+        {adaptiveInfo && (
+          <div className="bg-blue-50 dark:bg-blue-950/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="font-medium text-sm text-blue-900 dark:text-blue-100">
+                {adaptiveInfo.isAdaptive ? 'Adaptive Mode Active' : 'Adaptive Mode Available'}
+              </h4>
+              {onToggleAdaptiveMode && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onToggleAdaptiveMode}
+                  className="text-xs"
+                  data-testid="button-toggle-adaptive-mode"
+                >
+                  {adaptiveInfo.isAdaptive ? 'Disable' : 'Enable'}
+                </Button>
+              )}
+            </div>
+            <div className="space-y-2 text-sm">
+              {adaptiveInfo.detectedMovements.length > 0 && (
+                <div>
+                  <span className="text-blue-800 dark:text-blue-200">Detected movements:</span>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {adaptiveInfo.detectedMovements.map((movement) => (
+                      <Badge 
+                        key={movement} 
+                        variant="secondary" 
+                        className="text-xs bg-blue-100 dark:bg-blue-900/50"
+                      >
+                        {movement.replace('_', ' ')}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {adaptiveInfo.isAdaptive && adaptiveInfo.adaptiveStepsCount > 0 && (
+                <div className="text-blue-800 dark:text-blue-200">
+                  {adaptiveInfo.adaptiveStepsCount} movement-specific steps added
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Step Timer */}
         <div className="flex items-center gap-2 text-sm text-muted-foreground">

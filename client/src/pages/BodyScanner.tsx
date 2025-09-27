@@ -407,6 +407,9 @@ export default function BodyScanner() {
 
       // Process assessment workflow if active
       if (workflowActive && assessmentWorkflow) {
+        // Update assessment workflow with detected movements
+        assessmentWorkflow.updateDetectedMovements(updatedSequence);
+        
         const workflowResult = assessmentWorkflow.processFrame(
           results.poseLandmarks,
           canvasRef.current?.width || 1280,
@@ -1483,18 +1486,49 @@ export default function BodyScanner() {
   }, [isTracking, mediapipeLoaded, isPaused, onPoseResults, facingMode, selectedCameraId, availableCameras]);
 
   // Assessment Workflow Control Functions
-  const startAssessmentWorkflow = useCallback(() => {
+  const startAssessmentWorkflow = useCallback((adaptiveMode: boolean = false) => {
     const workflow = new AssessmentWorkflow();
+    
+    // Enable adaptive mode if requested
+    if (adaptiveMode) {
+      workflow.enableAdaptiveMode(movementSequence);
+    }
+    
     setAssessmentWorkflow(workflow);
     setWorkflowActive(true);
     setCurrentWorkflowStep(workflow.getCurrentStep());
     setWorkflowProgress(workflow.getProgress());
     
     toast({
-      title: "Assessment Workflow Started",
-      description: "Follow the guidance to complete the clinical assessment.",
+      title: adaptiveMode ? "Adaptive Assessment Started" : "Assessment Workflow Started",
+      description: adaptiveMode 
+        ? "Assessment will adapt based on your detected movements." 
+        : "Follow the guidance to complete the clinical assessment.",
     });
-  }, [toast]);
+  }, [movementSequence, toast]);
+
+  const toggleAdaptiveMode = useCallback(() => {
+    if (assessmentWorkflow) {
+      const adaptiveInfo = assessmentWorkflow.getAdaptiveInfo();
+      if (adaptiveInfo.isAdaptive) {
+        assessmentWorkflow.disableAdaptiveMode();
+        toast({
+          title: "Adaptive Mode Disabled",
+          description: "Workflow returned to standard assessment protocol.",
+        });
+      } else {
+        assessmentWorkflow.enableAdaptiveMode(movementSequence);
+        toast({
+          title: "Adaptive Mode Enabled",
+          description: "Workflow will now adapt based on detected movements.",
+        });
+      }
+      
+      // Refresh workflow display
+      setCurrentWorkflowStep(assessmentWorkflow.getCurrentStep());
+      setWorkflowProgress(assessmentWorkflow.getProgress());
+    }
+  }, [assessmentWorkflow, movementSequence, toast]);
 
   const skipCurrentStep = useCallback(() => {
     if (assessmentWorkflow) {
@@ -2830,6 +2864,8 @@ export default function BodyScanner() {
             onSkipStep={skipCurrentStep}
             onPreviousStep={goToPreviousStep}
             onResetWorkflow={resetAssessmentWorkflow}
+            adaptiveInfo={assessmentWorkflow?.getAdaptiveInfo()}
+            onToggleAdaptiveMode={toggleAdaptiveMode}
           />
           
           {/* Movement Detection */}

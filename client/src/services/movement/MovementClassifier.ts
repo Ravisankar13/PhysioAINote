@@ -103,7 +103,7 @@ export class MovementClassifier {
       minLungeDepth: 80,
       singleLegBalance: 0.15, // weight distribution threshold
       jumpVelocity: 0.02, // vertical velocity threshold
-      twistAngle: 15, // degrees of trunk rotation
+      twistAngle: 30, // degrees of trunk rotation (increased to reduce false positives)
       armRaiseAngle: 45, // shoulder elevation
       movementVelocity: 0.001, // minimum movement to detect
       stabilityTime: 1000 // ms to hold for "hold" phase
@@ -369,8 +369,22 @@ export class MovementClassifier {
    * Detect twisting/rotation movement
    */
   private detectTwisting(frames: MovementFrame[]): boolean {
+    if (frames.length < 15) return false; // Need more frames for reliable detection
+    
     const shoulderRotation = this.analyzeShoulderRotation(frames);
-    return shoulderRotation.totalRotation > this.movementThresholds.twistAngle;
+    const currentFrame = frames[frames.length - 1];
+    
+    // Check if person is sitting (higher chance of false positives)
+    const avgHipHeight = frames.slice(-5).reduce((sum, frame) => sum + frame.bodyPosition.hipHeight, 0) / 5;
+    const isSitting = avgHipHeight < 0.4; // Relative hip height when sitting
+    
+    // Use stricter threshold when sitting to avoid false positives
+    const threshold = isSitting ? this.movementThresholds.twistAngle * 1.5 : this.movementThresholds.twistAngle;
+    
+    // Must have sustained rotation movement, not just momentary shoulder adjustment
+    const hasConsistentMovement = this.hasConsistentRotationalMovement(frames);
+    
+    return shoulderRotation.totalRotation > threshold && hasConsistentMovement;
   }
 
   /**
@@ -521,6 +535,30 @@ export class MovementClassifier {
 
     const range = Math.max(...rotations) - Math.min(...rotations);
     return { totalRotation: Math.abs(range) };
+  }
+
+  private hasConsistentRotationalMovement(frames: MovementFrame[]): boolean {
+    if (frames.length < 15) return false;
+
+    // Analyze shoulder rotation over time to detect sustained twisting
+    const rotations = frames.map(frame => {
+      const leftShoulder = frame.landmarks[11];
+      const rightShoulder = frame.landmarks[12];
+      return Math.atan2(rightShoulder.y - leftShoulder.y, rightShoulder.x - leftShoulder.x) * (180 / Math.PI);
+    });
+
+    // Check for consistent directional movement (not just random oscillation)
+    let consistentDirection = 0;
+    for (let i = 1; i < rotations.length; i++) {
+      const diff = rotations[i] - rotations[i - 1];
+      if (Math.abs(diff) > 2) { // Minimum rotation change to consider
+        consistentDirection += diff > 0 ? 1 : -1;
+      }
+    }
+
+    // Must have consistent directional movement for at least 60% of the frames
+    const consistency = Math.abs(consistentDirection) / (rotations.length - 1);
+    return consistency > 0.6;
   }
 
   private detectFlightPhase(frames: MovementFrame[]): boolean {

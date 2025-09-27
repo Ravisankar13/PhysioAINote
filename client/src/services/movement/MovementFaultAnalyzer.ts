@@ -986,35 +986,144 @@ export class MovementFaultAnalyzer {
    */
   private initializeFaultDatabase() {
     this.faultDatabase = new Map([
+      // Lower Body Faults
       ['knee_valgus', {
-        potentialSymptoms: ['Knee pain', 'Anterior knee pain', 'IT band tightness'],
-        injuryRisks: ['ACL injury', 'Patellofemoral pain syndrome', 'IT band syndrome'],
-        commonCauses: ['Hip abductor weakness', 'Ankle mobility limitations', 'Core instability'],
-        recommendedInterventions: ['Hip abduction strengthening', 'Ankle mobility work', 'Movement retraining'],
+        potentialSymptoms: ['Anterior knee pain', 'Medial knee discomfort', 'IT band tightness', 'Patellofemoral pain', 'Hip pain during weight-bearing'],
+        injuryRisks: ['ACL injury risk', 'Patellofemoral pain syndrome', 'IT band syndrome', 'Medial collateral ligament strain', 'Hip labral pathology'],
+        commonCauses: ['Gluteus medius weakness', 'Ankle dorsiflexion limitation', 'Core instability', 'Hip internal rotation dominance', 'Foot pronation'],
+        recommendedInterventions: ['Clamshells and side-lying hip abduction', 'Single-leg glute bridges', 'Ankle mobility exercises', 'Movement pattern retraining', 'Foot intrinsic strengthening'],
+        urgencyLevel: 'moderate'
+      }],
+      ['knee_varus', {
+        potentialSymptoms: ['Lateral knee pain', 'Ankle instability', 'Hip abductor overactivity', 'Foot supination discomfort'],
+        injuryRisks: ['Lateral collateral ligament strain', 'Peroneal tendinopathy', 'Ankle inversion sprains', 'IT band friction syndrome'],
+        commonCauses: ['Hip adductor weakness', 'Foot rigidity', 'Previous ankle injury', 'Lateral hip muscle overactivity'],
+        recommendedInterventions: ['Hip adductor strengthening', 'Ankle eversion exercises', 'Foot mobility work', 'Balance training'],
         urgencyLevel: 'moderate'
       }],
       ['excessive_forward_lean', {
-        potentialSymptoms: ['Lower back pain', 'Hip tightness'],
-        injuryRisks: ['Lumbar spine strain', 'Hip flexor tightness'],
-        commonCauses: ['Ankle mobility restriction', 'Hip flexor tightness', 'Core weakness'],
-        recommendedInterventions: ['Ankle dorsiflexion stretching', 'Hip flexor stretching', 'Core strengthening'],
+        potentialSymptoms: ['Lower back pain', 'Hip flexor tightness', 'Thoracic spine stiffness', 'Anterior hip impingement'],
+        injuryRisks: ['Lumbar disc compression', 'Hip flexor tendinopathy', 'Femoroacetabular impingement', 'Thoracolumbar junction dysfunction'],
+        commonCauses: ['Ankle dorsiflexion restriction', 'Hip flexor tightness', 'Thoracic kyphosis', 'Core weakness', 'Soleus tightness'],
+        recommendedInterventions: ['Calf stretching and ankle mobilization', 'Hip flexor stretching', 'Thoracic extension exercises', 'Deep core activation', 'Posterior chain strengthening'],
         urgencyLevel: 'low'
       }],
-      ['forward_head_posture', {
-        potentialSymptoms: ['Neck pain', 'Headaches', 'Upper back tension'],
-        injuryRisks: ['Cervical strain', 'Thoracic outlet syndrome', 'TMJ dysfunction'],
-        commonCauses: ['Prolonged sitting', 'Weak deep neck flexors', 'Tight upper trapezius'],
-        recommendedInterventions: ['Chin tucks', 'Deep neck flexor strengthening', 'Upper trap stretching'],
+      ['heel_rise', {
+        potentialSymptoms: ['Calf tightness', 'Achilles tendon discomfort', 'Plantar foot pain', 'Reduced squat depth'],
+        injuryRisks: ['Achilles tendinopathy', 'Plantar fasciitis', 'Calf strain', 'Ankle impingement'],
+        commonCauses: ['Soleus/gastrocnemius tightness', 'Ankle joint restriction', 'Previous ankle injury', 'Prolonged heel wearing'],
+        recommendedInterventions: ['Calf stretching (straight and bent knee)', 'Ankle joint mobilization', 'Eccentric calf strengthening', 'Gradual range of motion progression'],
+        urgencyLevel: 'low'
+      }],
+      ['ankle_collapse', {
+        potentialSymptoms: ['Medial ankle pain', 'Arch discomfort', 'Shin splints', 'Knee tracking issues'],
+        injuryRisks: ['Posterior tibialis tendinopathy', 'Plantar fasciitis', 'Medial tibial stress syndrome', 'Navicular stress fracture'],
+        commonCauses: ['Foot intrinsic weakness', 'Posterior tibialis weakness', 'Excessive foot pronation', 'Hip weakness'],
+        recommendedInterventions: ['Foot intrinsic strengthening', 'Posterior tibialis strengthening', 'Arch support exercises', 'Hip stability training'],
         urgencyLevel: 'moderate'
       }],
       ['hip_drop', {
-        potentialSymptoms: ['Hip pain', 'Lower back pain', 'Knee pain'],
-        injuryRisks: ['IT band syndrome', 'Greater trochanteric bursitis', 'Lumbar dysfunction'],
-        commonCauses: ['Hip abductor weakness', 'Core instability', 'Previous injury'],
-        recommendedInterventions: ['Hip abduction strengthening', 'Single leg balance training', 'Core stabilization'],
+        potentialSymptoms: ['Hip pain', 'Lower back pain', 'Lateral knee pain', 'Trendelenburg gait pattern'],
+        injuryRisks: ['IT band syndrome', 'Greater trochanteric bursitis', 'Lumbar spine dysfunction', 'Sacroiliac joint dysfunction'],
+        commonCauses: ['Gluteus medius weakness', 'Core instability', 'Previous hip injury', 'Prolonged sitting postures'],
+        recommendedInterventions: ['Progressive hip abduction strengthening', 'Single-leg balance training', 'Core stabilization exercises', 'Functional movement retraining'],
+        urgencyLevel: 'moderate'
+      }],
+      ['hip_shift', {
+        potentialSymptoms: ['Unilateral hip pain', 'Lower back asymmetry', 'Pelvic floor dysfunction', 'Leg length sensation'],
+        injuryRisks: ['Sacroiliac joint dysfunction', 'Hip labral pathology', 'Lumbar scoliotic changes', 'Pelvic floor weakness'],
+        commonCauses: ['Unilateral hip weakness', 'Leg length discrepancy', 'Pelvic asymmetry', 'Scoliosis'],
+        recommendedInterventions: ['Bilateral hip strengthening', 'Pelvic alignment exercises', 'Unilateral stability training', 'Professional biomechanical assessment'],
+        urgencyLevel: 'moderate'
+      }],
+      ['asymmetric_loading', {
+        potentialSymptoms: ['Unilateral leg fatigue', 'Lower back pain', 'Hip discomfort', 'Asymmetric muscle development'],
+        injuryRisks: ['Stress fractures', 'Overuse injuries', 'Joint degeneration', 'Muscle imbalances'],
+        commonCauses: ['Previous injury compensation', 'Limb dominance', 'Structural asymmetries', 'Neuromuscular control deficits'],
+        recommendedInterventions: ['Bilateral strengthening programs', 'Proprioceptive training', 'Movement symmetry training', 'Load distribution awareness'],
+        urgencyLevel: 'moderate'
+      }],
+
+      // Upper Body Faults
+      ['forward_head_posture', {
+        potentialSymptoms: ['Neck pain', 'Cervicogenic headaches', 'Upper trapezius tension', 'Suboccipital tightness', 'TMJ dysfunction'],
+        injuryRisks: ['Cervical disc degeneration', 'Thoracic outlet syndrome', 'Cervical radiculopathy', 'TMJ disorders', 'Upper crossed syndrome'],
+        commonCauses: ['Prolonged computer use', 'Deep neck flexor weakness', 'Upper trapezius dominance', 'Thoracic kyphosis', 'Poor workstation ergonomics'],
+        recommendedInterventions: ['Chin tuck exercises', 'Deep neck flexor strengthening', 'Upper trapezius stretching', 'Thoracic extension mobility', 'Ergonomic assessment'],
+        urgencyLevel: 'moderate'
+      }],
+      ['rounded_shoulders', {
+        potentialSymptoms: ['Shoulder impingement', 'Thoracic outlet symptoms', 'Upper back tension', 'Breathing difficulties'],
+        injuryRisks: ['Subacromial impingement', 'Thoracic outlet syndrome', 'Rotator cuff tendinopathy', 'Biceps tendinopathy'],
+        commonCauses: ['Pectoral muscle tightness', 'Rhomboid weakness', 'Prolonged sitting', 'Poor posture habits'],
+        recommendedInterventions: ['Pectoral stretching', 'Rhomboid strengthening', 'Postural awareness training', 'Thoracic mobility exercises'],
+        urgencyLevel: 'low'
+      }],
+      ['elevated_shoulders', {
+        potentialSymptoms: ['Neck tension', 'Headaches', 'Shoulder blade pain', 'Reduced neck range of motion'],
+        injuryRisks: ['Cervical muscle strain', 'Tension headaches', 'Thoracic outlet syndrome', 'Myofascial trigger points'],
+        commonCauses: ['Chronic stress', 'Upper trapezius overactivity', 'Anxiety', 'Poor breathing patterns', 'Carrying heavy bags'],
+        recommendedInterventions: ['Stress management techniques', 'Upper trapezius stretching', 'Diaphragmatic breathing', 'Shoulder blade depression exercises'],
+        urgencyLevel: 'low'
+      }],
+      ['trunk_rotation', {
+        potentialSymptoms: ['Lower back pain', 'Hip restriction', 'Rib cage asymmetry', 'Shoulder impingement'],
+        injuryRisks: ['Lumbar disc pathology', 'Facet joint dysfunction', 'Hip labral pathology', 'Sacroiliac dysfunction'],
+        commonCauses: ['Hip mobility restrictions', 'Thoracic stiffness', 'Core weakness', 'Scoliosis', 'Rotational sports'],
+        recommendedInterventions: ['Thoracic rotation mobility', 'Hip flexibility exercises', 'Core stabilization', 'Anti-rotation strengthening'],
+        urgencyLevel: 'moderate'
+      }],
+      ['arm_asymmetry', {
+        potentialSymptoms: ['Unilateral shoulder pain', 'Neck tension', 'Upper back asymmetry', 'Functional limitations'],
+        injuryRisks: ['Rotator cuff pathology', 'Cervical dysfunction', 'Thoracic scoliosis', 'Scapular dyskinesis'],
+        commonCauses: ['Previous injury', 'Dominant hand overuse', 'Neurological conditions', 'Postural habits'],
+        recommendedInterventions: ['Bilateral strengthening programs', 'Scapular stabilization', 'Postural correction', 'Professional assessment'],
+        urgencyLevel: 'moderate'
+      }],
+
+      // Core and Stability Faults
+      ['loss_of_balance', {
+        potentialSymptoms: ['Frequent falls', 'Ankle instability', 'Fear of movement', 'Dizziness during movement'],
+        injuryRisks: ['Fall-related injuries', 'Ankle sprains', 'Fractures', 'Head trauma', 'Functional decline'],
+        commonCauses: ['Vestibular dysfunction', 'Proprioceptive deficits', 'Muscle weakness', 'Vision problems', 'Medication side effects'],
+        recommendedInterventions: ['Progressive balance training', 'Proprioceptive exercises', 'Strength training', 'Vestibular rehabilitation', 'Fall prevention strategies'],
+        urgencyLevel: 'high'
+      }],
+      ['excessive_sway', {
+        potentialSymptoms: ['Balance insecurity', 'Fatigue during standing', 'Ankle stiffness', 'Lower back tension'],
+        injuryRisks: ['Fall risk', 'Ankle overuse', 'Lower back strain', 'Functional limitations'],
+        commonCauses: ['Ankle stiffness', 'Hip weakness', 'Visual deficits', 'Inner ear problems', 'Proprioceptive loss'],
+        recommendedInterventions: ['Ankle mobility exercises', 'Hip strengthening', 'Visual-motor training', 'Static balance training'],
+        urgencyLevel: 'moderate'
+      }],
+      ['poor_alignment', {
+        potentialSymptoms: ['Generalized pain', 'Muscle fatigue', 'Joint stiffness', 'Movement inefficiency'],
+        injuryRisks: ['Overuse injuries', 'Joint degeneration', 'Muscle imbalances', 'Chronic pain syndromes'],
+        commonCauses: ['Muscle imbalances', 'Joint restrictions', 'Poor movement habits', 'Structural abnormalities'],
+        recommendedInterventions: ['Comprehensive postural assessment', 'Targeted strengthening', 'Mobility exercises', 'Movement retraining'],
+        urgencyLevel: 'moderate'
+      }],
+      ['insufficient_range', {
+        potentialSymptoms: ['Joint stiffness', 'Movement limitations', 'Compensatory patterns', 'Functional restrictions'],
+        injuryRisks: ['Joint contractures', 'Compensatory injuries', 'Functional decline', 'Quality of life impact'],
+        commonCauses: ['Joint capsule restrictions', 'Muscle tightness', 'Scar tissue', 'Prolonged immobility', 'Arthritic changes'],
+        recommendedInterventions: ['Progressive stretching', 'Joint mobilization', 'Heat therapy', 'Activity modification', 'Professional manual therapy'],
+        urgencyLevel: 'moderate'
+      }],
+      ['excessive_velocity', {
+        potentialSymptoms: ['Joint stress', 'Muscle strain', 'Poor control', 'Ballistic movement patterns'],
+        injuryRisks: ['Acute muscle strains', 'Joint injuries', 'Loss of control', 'Overuse syndromes'],
+        commonCauses: ['Poor motor control', 'Competitive mindset', 'Lack of awareness', 'Neuromuscular dysfunction'],
+        recommendedInterventions: ['Slow controlled movement training', 'Motor control exercises', 'Mindfulness techniques', 'Tempo-based training'],
+        urgencyLevel: 'low'
+      }],
+      ['poor_control', {
+        potentialSymptoms: ['Jerky movements', 'Muscle co-contraction', 'Fatigue', 'Movement inefficiency'],
+        injuryRisks: ['Overuse injuries', 'Joint stress', 'Muscle fatigue', 'Movement disorders'],
+        commonCauses: ['Neurological conditions', 'Muscle weakness', 'Poor coordination', 'Fatigue', 'Anxiety'],
+        recommendedInterventions: ['Motor control training', 'Strength building', 'Coordination exercises', 'Relaxation techniques', 'Professional assessment'],
         urgencyLevel: 'moderate'
       }]
-      // Additional fault correlations would be added here
     ]);
   }
 
@@ -1023,12 +1132,71 @@ export class MovementFaultAnalyzer {
    */
   private initializeMovementNorms() {
     this.movementNorms = new Map([
-      ['knee_flexion_squat', { min: 90, max: 135 }],
-      ['forward_lean_squat', { min: 0, max: 45 }],
-      ['knee_valgus_angle', { min: 0, max: 10 }],
-      ['shoulder_elevation', { min: 0, max: 180 }],
-      ['hip_drop_angle', { min: -5, max: 5 }]
-      // Additional norms would be added here
+      // Squat Movement Norms
+      ['knee_flexion_squat', { min: 90, max: 135 }], // degrees
+      ['forward_lean_squat', { min: 0, max: 45 }], // degrees from vertical
+      ['knee_valgus_angle', { min: 0, max: 10 }], // degrees medial deviation
+      ['heel_rise_threshold', { min: 0, max: 0.03 }], // normalized coordinate space
+      ['ankle_dorsiflexion_squat', { min: 15, max: 25 }], // degrees required
+      
+      // Hip and Pelvis Norms
+      ['hip_drop_angle', { min: -5, max: 5 }], // degrees from horizontal
+      ['pelvic_tilt_standing', { min: -10, max: 15 }], // degrees anterior tilt
+      ['hip_internal_rotation', { min: 30, max: 45 }], // degrees
+      ['hip_external_rotation', { min: 45, max: 60 }], // degrees
+      ['hip_abduction_angle', { min: 30, max: 45 }], // degrees
+      
+      // Shoulder and Upper Body Norms  
+      ['shoulder_elevation', { min: 0, max: 180 }], // degrees
+      ['shoulder_abduction', { min: 150, max: 180 }], // degrees
+      ['shoulder_flexion', { min: 150, max: 180 }], // degrees
+      ['cervical_forward_head', { min: 0, max: 3.0 }], // cm forward displacement
+      ['thoracic_kyphosis', { min: 20, max: 40 }], // degrees
+      ['shoulder_protraction', { min: 0, max: 2.5 }], // cm forward displacement
+      
+      // Balance and Stability Norms
+      ['postural_sway_range', { min: 0, max: 3.0 }], // cm total sway envelope
+      ['single_leg_balance_time', { min: 30, max: 60 }], // seconds
+      ['weight_distribution_asymmetry', { min: 0, max: 15 }], // percentage
+      ['center_mass_deviation', { min: 0, max: 2.0 }], // cm from base of support
+      
+      // Ankle and Foot Norms
+      ['ankle_dorsiflexion', { min: 15, max: 25 }], // degrees
+      ['ankle_plantarflexion', { min: 45, max: 55 }], // degrees
+      ['ankle_inversion', { min: 20, max: 30 }], // degrees
+      ['ankle_eversion', { min: 10, max: 15 }], // degrees
+      ['foot_arch_collapse', { min: 0, max: 8.0 }], // degrees medial deviation
+      
+      // Knee Tracking Norms
+      ['knee_varus_angle', { min: -10, max: 0 }], // degrees lateral deviation
+      ['knee_frontal_tracking', { min: -12, max: 12 }], // degrees from hip-ankle line
+      ['knee_flexion_lunge', { min: 90, max: 120 }], // degrees
+      ['patellofemoral_tracking', { min: -5, max: 5 }], // degrees deviation
+      
+      // Trunk and Spine Norms
+      ['trunk_lean_forward', { min: 0, max: 15 }], // degrees from vertical
+      ['trunk_lateral_lean', { min: -10, max: 10 }], // degrees from vertical  
+      ['lumbar_lordosis', { min: 30, max: 50 }], // degrees
+      ['trunk_rotation_range', { min: 0, max: 45 }], // degrees each direction
+      
+      // Movement Quality Norms
+      ['movement_velocity_control', { min: 0.5, max: 2.0 }], // normalized velocity units
+      ['movement_smoothness', { min: 0.7, max: 1.0 }], // smoothness coefficient
+      ['joint_coordination', { min: 0.8, max: 1.0 }], // coordination index
+      ['movement_symmetry', { min: 0.85, max: 1.0 }], // bilateral symmetry ratio
+      
+      // Functional Movement Norms
+      ['squat_depth_ankle', { min: 90, max: 135 }], // degrees knee flexion
+      ['overhead_reach', { min: 160, max: 180 }], // degrees shoulder flexion
+      ['single_leg_stance_stability', { min: 0, max: 15 }], // degrees sway range
+      ['step_down_control', { min: 0, max: 10 }], // degrees knee valgus
+      ['rotational_stability', { min: 0, max: 20 }], // degrees trunk deviation
+      
+      // Age-Related Adjustment Factors (multipliers for base norms)
+      ['age_18_30_factor', { min: 1.0, max: 1.0 }], // baseline
+      ['age_31_50_factor', { min: 0.9, max: 1.0 }], // slight reduction
+      ['age_51_70_factor', { min: 0.8, max: 0.95 }], // moderate reduction
+      ['age_70_plus_factor', { min: 0.7, max: 0.9 }] // greater reduction
     ]);
   }
 }

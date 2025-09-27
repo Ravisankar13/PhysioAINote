@@ -155,7 +155,8 @@ export default function RealtimeSkeletonOverlay({
             skeleton = child.skeleton;
             
             // Map bones by name with multiple naming conventions
-            skeleton.bones.forEach((bone: THREE.Bone) => {
+            if (skeleton) {
+              skeleton.bones.forEach((bone: THREE.Bone) => {
               bones[bone.name] = bone;
               
               // Handle mixamorig prefixes
@@ -166,7 +167,8 @@ export default function RealtimeSkeletonOverlay({
                 const shortName = bone.name.replace('mixamorig', '');
                 bones[shortName] = bone;
               }
-            });
+              });
+            }
           }
         });
         
@@ -234,8 +236,10 @@ export default function RealtimeSkeletonOverlay({
     
     // Create simple visual representation
     const skeletonHelper = new THREE.SkeletonHelper(hips);
-    skeletonHelper.material.color.setHex(0xe8d5c4);
-    skeletonHelper.material.linewidth = 3;
+    if (skeletonHelper.material instanceof THREE.LineBasicMaterial) {
+      skeletonHelper.material.color.setHex(0xe8d5c4);
+      skeletonHelper.material.linewidth = 3;
+    }
     
     sceneRef.current.scene.add(skeletonHelper);
     sceneRef.current.bones = bones;

@@ -63,6 +63,7 @@ import { MovementClassifier, type MovementSequence } from '@/services/movement/M
 import { MovementDetectionPanel } from '@/components/movement/MovementDetectionPanel';
 import { MovementFaultAnalysisPanel } from '@/components/movement/MovementFaultAnalysisPanel';
 import { type FaultAnalysisResult, type MovementFault, type FaultType } from '@/services/movement/MovementFaultAnalyzer';
+import RealtimeSkeletonOverlay from '@/components/bodyScanner/RealtimeSkeletonOverlay';
 
 // Pose landmark indices
 const POSE_LANDMARKS = {
@@ -221,6 +222,7 @@ export default function BodyScanner() {
   
   // 3D Skeleton state
   const [currentPose3D, setCurrentPose3D] = useState<Skeleton3DPose | null>(null);
+  const [currentPoseLandmarks, setCurrentPoseLandmarks] = useState<any[] | null>(null);
   const [show3DSkeleton, setShow3DSkeleton] = useState(true);
   
   // Detect iOS devices
@@ -555,6 +557,9 @@ export default function BodyScanner() {
     
     // Draw pose landmarks and connections
     if (results.poseLandmarks) {
+      // Store current pose landmarks for 3D skeleton overlay
+      setCurrentPoseLandmarks(results.poseLandmarks);
+      
       // Calculate and update knee metrics
       const metrics = calculateKneeMetrics(results.poseLandmarks);
       setKneeMetrics(metrics);
@@ -2230,6 +2235,20 @@ export default function BodyScanner() {
               className="absolute inset-0 w-full h-full object-contain pointer-events-none"
               style={{ maxWidth: '100vw', maxHeight: '100vh' }}
             />
+            {/* 3D Skeleton Overlay */}
+            <div className="absolute inset-0 w-full h-full">
+              <RealtimeSkeletonOverlay
+                poseLandmarks={currentPoseLandmarks}
+                canvasWidth={1920}
+                canvasHeight={1080}
+                isActive={isTracking && cameraStatus === 'ready'}
+                onSkeletonReady={(ready) => {
+                  if (ready) {
+                    console.log('[BodyScanner] 3D Skeleton overlay ready');
+                  }
+                }}
+              />
+            </div>
             {/* Hidden composite canvas for recording */}
             <canvas
               ref={compositeCanvasRef}
@@ -2493,6 +2512,20 @@ export default function BodyScanner() {
                     height={720}
                     className="absolute top-0 left-0 w-full h-auto pointer-events-none"
                   />
+                  {/* 3D Skeleton Overlay */}
+                  <div className="absolute top-0 left-0 w-full h-auto">
+                    <RealtimeSkeletonOverlay
+                      poseLandmarks={currentPoseLandmarks}
+                      canvasWidth={1280}
+                      canvasHeight={720}
+                      isActive={isTracking && cameraStatus === 'ready'}
+                      onSkeletonReady={(ready) => {
+                        if (ready) {
+                          console.log('[BodyScanner] 3D Skeleton overlay ready');
+                        }
+                      }}
+                    />
+                  </div>
                   {/* Hidden composite canvas for recording */}
                   <canvas
                     ref={compositeCanvasRef}

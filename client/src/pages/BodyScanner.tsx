@@ -2609,18 +2609,6 @@ export default function BodyScanner() {
                 
               </div>
               
-              {/* View Instructions */}
-              <Alert className="mt-4">
-                <Info className="h-4 w-4" />
-                <AlertDescription>
-                  <strong>{selectedView === 'frontal' ? 'Frontal' : selectedView === 'lateral' ? 'Lateral' : 'Posterior'} View:</strong> 
-                  {selectedView === 'frontal' && ' Position camera directly in front. Keep knees visible with slight bend.'}
-                  {selectedView === 'lateral' && ' Position camera to the side. Show full leg profile from hip to ankle.'}
-                  {selectedView === 'posterior' && ' Position camera behind. Focus on alignment and symmetry.'}
-                  <br />
-                  <strong>Tip:</strong> Tap on areas of concern to mark regions for tracking.
-                </AlertDescription>
-              </Alert>
             </CardContent>
           </Card>
           

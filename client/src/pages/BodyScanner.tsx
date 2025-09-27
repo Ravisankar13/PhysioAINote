@@ -2868,36 +2868,6 @@ export default function BodyScanner() {
           
           
           
-          {/* Phase 4: Clinical Features */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Activity className="h-4 w-4" />
-                Clinical Tests Guide
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {trackedRegions.length > 0 ? (
-                  <div className="space-y-3">
-                    <p className="text-xs font-medium text-muted-foreground">Suggested Tests:</p>
-                    {['McMurray Test', 'Lachman Test', 'Valgus Stress Test'].map(test => (
-                      <div key={test} className="p-2 bg-muted rounded text-sm">
-                        <p className="font-medium">{test}</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Educational visualization only
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground text-center py-4">
-                    Mark regions to see suggested clinical tests
-                  </p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
           
           {/* Actions */}
           <Card>

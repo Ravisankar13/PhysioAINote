@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { convertMediaPipeTo3D } from '@/utils/mediapipeTo3D';
+// skeleton model will be loaded via URL path
 
 interface RealtimeSkeletonOverlayProps {
   poseLandmarks: any[] | null;
@@ -118,7 +119,7 @@ export default function RealtimeSkeletonOverlay({
 
     const loader = new GLTFLoader();
     
-    // Try to load the skeleton from attached assets
+    // Try to load the skeleton from attached assets - use URL that works with current setup
     const skeletonPath = '/attached_assets/skeleton_rig.glb';
     
     console.log('[RealtimeSkeletonOverlay] Loading skeleton from:', skeletonPath);

@@ -2866,42 +2866,6 @@ export default function BodyScanner() {
           
           
           
-          {/* Tracked Regions */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Target className="h-4 w-4" />
-                Marked Regions
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {trackedRegions.length > 0 ? (
-                <div className="space-y-2">
-                  {trackedRegions.map(region => (
-                    <div key={region.id} className="flex items-center justify-between p-2 bg-secondary rounded">
-                      <div>
-                        <p className="text-sm font-medium">{region.label}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {region.type} - {region.severity}
-                        </p>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setTrackedRegions(prev => prev.filter(r => r.id !== region.id))}
-                      >
-                        ×
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  Tap on the video to mark regions
-                </p>
-              )}
-            </CardContent>
-          </Card>
           
           
           {/* Phase 4: Clinical Features */}

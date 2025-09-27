@@ -2607,58 +2607,6 @@ export default function BodyScanner() {
                   )}
                 </div>
                 
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setSelectedView('frontal')}
-                    className={selectedView === 'frontal' ? 'bg-primary/10' : ''}
-                  >
-                    Front
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setSelectedView('lateral')}
-                    className={selectedView === 'lateral' ? 'bg-primary/10' : ''}
-                  >
-                    Side
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setSelectedView('posterior')}
-                    className={selectedView === 'posterior' ? 'bg-primary/10' : ''}
-                  >
-                    Back
-                  </Button>
-                  <Separator orientation="vertical" className="h-8" />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={estimateDepth}
-                    disabled={!isTracking || cameraStatus !== 'ready'}
-                  >
-                    <Layers className="h-4 w-4 mr-1" />
-                    Depth
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      const newMode = facingMode === 'user' ? 'environment' : 'user';
-                      setFacingMode(newMode);
-                      toast({
-                        title: "Camera Switched",
-                        description: `Will use ${newMode === 'user' ? 'front' : 'back'} camera on next start`,
-                        duration: 2000,
-                      });
-                    }}
-                  >
-                    <RotateCw className="h-4 w-4 mr-1" />
-                    {facingMode === 'user' ? 'Front' : 'Back'}
-                  </Button>
-                </div>
               </div>
               
               {/* View Instructions */}

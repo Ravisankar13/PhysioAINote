@@ -63,6 +63,7 @@ import { AssessmentWorkflowPanel } from '@/components/assessment/AssessmentWorkf
 import { PositionDetector, type PositionInfo, type PostureType, type OrientationType } from '@/services/movement/PositionDetector';
 import { MovementClassifier, type MovementSequence } from '@/services/movement/MovementClassifier';
 import { MovementDetectionPanel } from '@/components/movement/MovementDetectionPanel';
+import { MovementFaultAnalysisPanel } from '@/components/movement/MovementFaultAnalysisPanel';
 
 // Pose landmark indices
 const POSE_LANDMARKS = {
@@ -396,9 +397,10 @@ export default function BodyScanner() {
       setMovementMetrics(movementMetrics);
       
       // Process movement classification if tracking
+      let updatedSequence = movementSequence; // Default to current sequence
       const movementClassifier = movementClassifierRef.current;
       if (movementClassifier) {
-        const updatedSequence = movementClassifier.processFrame(
+        updatedSequence = movementClassifier.processFrame(
           results.poseLandmarks,
           Date.now()
         );
@@ -2872,6 +2874,12 @@ export default function BodyScanner() {
           <MovementDetectionPanel
             movementSequence={movementSequence}
             onResetSession={resetMovementSession}
+            isActive={isTracking}
+          />
+
+          {/* Movement Fault Analysis */}
+          <MovementFaultAnalysisPanel
+            faultAnalysis={movementSequence.currentMovement?.faultAnalysis || null}
             isActive={isTracking}
           />
           

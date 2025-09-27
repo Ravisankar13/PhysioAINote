@@ -4,6 +4,7 @@
  */
 
 import type { NormalizedLandmark } from '@mediapipe/pose';
+import { MovementFaultAnalyzer, type FaultAnalysisResult } from './MovementFaultAnalyzer';
 
 export type MovementType = 
   | 'squat' 
@@ -50,6 +51,7 @@ export interface MovementPattern {
     issues: string[];
     recommendations: string[];
   };
+  faultAnalysis?: FaultAnalysisResult; // Detailed biomechanical fault analysis
   duration: number;
   range: {
     maxKneeFlexion: number;
@@ -78,8 +80,11 @@ export class MovementClassifier {
   private lastMovementDetection: MovementType = 'static';
   private movementStartTime: number = 0;
   private repetitionTracker: Map<MovementType, number> = new Map();
+  private faultAnalyzer: MovementFaultAnalyzer;
 
   constructor() {
+    this.faultAnalyzer = new MovementFaultAnalyzer();
+    
     this.currentSequence = {
       movements: [],
       currentMovement: null,
@@ -638,37 +643,69 @@ export class MovementClassifier {
       this.currentSequence.currentMovement.phase = 'execution';
     }
 
-    // Update movement quality (simplified)
+    // Update movement quality with enhanced fault analysis
     this.currentSequence.currentMovement.quality = this.assessMovementQuality();
+    
+    // Add detailed biomechanical fault analysis
+    this.currentSequence.currentMovement.faultAnalysis = this.faultAnalyzer.analyzeFaults(
+      this.frameHistory,
+      this.currentSequence.currentMovement.type,
+      true
+    );
   }
 
   private assessMovementQuality(): { score: number; issues: string[]; recommendations: string[] } {
-    // Simplified quality assessment
-    const currentFrame = this.frameHistory[this.frameHistory.length - 1];
-    const issues: string[] = [];
-    const recommendations: string[] = [];
-    let score = 10;
-
-    // Check bilateral symmetry
-    const kneeSymmetry = Math.abs(currentFrame.jointAngles.leftKnee - currentFrame.jointAngles.rightKnee);
-    if (kneeSymmetry > 20) {
-      issues.push('Asymmetric knee flexion detected');
-      recommendations.push('Focus on equal weight distribution');
-      score -= 2;
+    if (this.frameHistory.length === 0) {
+      return { score: 10, issues: [], recommendations: [] };
     }
 
-    // Check alignment
-    const hipAlignment = Math.abs(currentFrame.bodyPosition.centerOfMass.x - currentFrame.bodyPosition.baseOfSupport.x);
-    if (hipAlignment > 0.1) {
-      issues.push('Poor balance alignment');
-      recommendations.push('Keep center of mass over base of support');
-      score -= 1;
+    // Get detailed fault analysis from the fault analyzer
+    const movementType = this.currentSequence.currentMovement?.type || 'static';
+    const faultAnalysis = this.faultAnalyzer.analyzeFaults(this.frameHistory, movementType, true);
+    
+    // Use the fault analysis results for quality assessment
+    const score = faultAnalysis.overallMovementQuality;
+    
+    // Combine issues and recommendations from fault analysis
+    const issues: string[] = [];
+    const recommendations: string[] = [];
+    
+    // Extract primary issues from detected faults
+    faultAnalysis.detectedFaults.forEach(fault => {
+      issues.push(fault.description);
+    });
+    
+    // Add clinical insights as issues if significant
+    if (faultAnalysis.clinicalInsights.primaryConcerns.length > 0) {
+      issues.push(...faultAnalysis.clinicalInsights.primaryConcerns.slice(0, 2));
+    }
+    
+    // Add immediate corrections as recommendations
+    recommendations.push(...faultAnalysis.recommendations.immediateCorrections);
+    
+    // Add fallback basic checks if no detailed analysis available
+    if (faultAnalysis.detectedFaults.length === 0) {
+      const currentFrame = this.frameHistory[this.frameHistory.length - 1];
+      
+      // Check bilateral symmetry
+      const kneeSymmetry = Math.abs(currentFrame.jointAngles.leftKnee - currentFrame.jointAngles.rightKnee);
+      if (kneeSymmetry > 20) {
+        issues.push('Asymmetric knee flexion detected');
+        recommendations.push('Focus on equal weight distribution');
+      }
+
+      // Check alignment
+      const hipAlignment = Math.abs(currentFrame.bodyPosition.centerOfMass.x - currentFrame.bodyPosition.baseOfSupport.x);
+      if (hipAlignment > 0.1) {
+        issues.push('Poor balance alignment');
+        recommendations.push('Keep center of mass over base of support');
+      }
     }
 
     return {
-      score: Math.max(0, score),
-      issues,
-      recommendations
+      score: Math.max(0, Math.min(10, score)),
+      issues: issues.slice(0, 3), // Limit to most important issues
+      recommendations: recommendations.slice(0, 3) // Limit to most important recommendations
     };
   }
 

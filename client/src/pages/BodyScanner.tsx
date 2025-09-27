@@ -61,6 +61,8 @@ import { MovementMetricsOverlay } from '@/components/movement/MovementMetricsOve
 import { AssessmentWorkflow, type AssessmentStep, type WorkflowProgress } from '@/services/assessment/AssessmentWorkflow';
 import { AssessmentWorkflowPanel } from '@/components/assessment/AssessmentWorkflowPanel';
 import { PositionDetector, type PositionInfo, type PostureType, type OrientationType } from '@/services/movement/PositionDetector';
+import { MovementClassifier, type MovementSequence } from '@/services/movement/MovementClassifier';
+import { MovementDetectionPanel } from '@/components/movement/MovementDetectionPanel';
 
 // Pose landmark indices
 const POSE_LANDMARKS = {
@@ -185,6 +187,33 @@ export default function BodyScanner() {
   const [isCorrectPosition, setIsCorrectPosition] = useState(false);
   const [positionGuidance, setPositionGuidance] = useState('');
   
+  // Movement Classification State
+  const [movementClassifier, setMovementClassifier] = useState<MovementClassifier | null>(null);
+  const [movementSequence, setMovementSequence] = useState<MovementSequence>({
+    movements: [],
+    currentMovement: null,
+    transitionInProgress: false,
+    sessionStats: {
+      totalMovements: 0,
+      movementBreakdown: {
+        squat: 0,
+        lunge: 0,
+        single_leg_stand: 0,
+        jumping: 0,
+        twisting: 0,
+        sit_to_stand: 0,
+        step_up: 0,
+        heel_raises: 0,
+        arm_raise: 0,
+        walking: 0,
+        static: 0,
+        unknown: 0
+      },
+      averageQuality: 0,
+      totalDuration: 0
+    }
+  });
+  
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -202,6 +231,7 @@ export default function BodyScanner() {
   const compositeStreamRef = useRef<MediaStream | null>(null);
   const poseSmoother = useRef<Posesmoother>(new Posesmoother(0.3));
   const movementAnalyzerRef = useRef<MovementAnalyzer>(new MovementAnalyzer());
+  const movementClassifierRef = useRef<MovementClassifier>(new MovementClassifier());
   
   // 3D Skeleton state
   const [currentPose3D, setCurrentPose3D] = useState<Skeleton3DPose | null>(null);
@@ -365,6 +395,16 @@ export default function BodyScanner() {
       );
       setMovementMetrics(movementMetrics);
       
+      // Process movement classification if tracking
+      const movementClassifier = movementClassifierRef.current;
+      if (movementClassifier) {
+        const updatedSequence = movementClassifier.processFrame(
+          results.poseLandmarks,
+          Date.now()
+        );
+        setMovementSequence(updatedSequence);
+      }
+
       // Process assessment workflow if active
       if (workflowActive && assessmentWorkflow) {
         const workflowResult = assessmentWorkflow.processFrame(
@@ -1504,6 +1544,43 @@ export default function BodyScanner() {
       description: "Assessment workflow has been reset.",
     });
   }, [assessmentWorkflow, toast]);
+
+  // Movement Classification Control Functions
+  const resetMovementSession = useCallback(() => {
+    const classifier = movementClassifierRef.current;
+    if (classifier) {
+      classifier.reset();
+      setMovementSequence({
+        movements: [],
+        currentMovement: null,
+        transitionInProgress: false,
+        sessionStats: {
+          totalMovements: 0,
+          movementBreakdown: {
+            squat: 0,
+            lunge: 0,
+            single_leg_stand: 0,
+            jumping: 0,
+            twisting: 0,
+            sit_to_stand: 0,
+            step_up: 0,
+            heel_raises: 0,
+            arm_raise: 0,
+            walking: 0,
+            static: 0,
+            unknown: 0
+          },
+          averageQuality: 0,
+          totalDuration: 0
+        }
+      });
+      
+      toast({
+        title: "Movement Session Reset",
+        description: "Movement classification session has been reset.",
+      });
+    }
+  }, [toast]);
   
   // Handle region selection with SAM 2 integration
   const handleCanvasClick = async (event: React.MouseEvent<HTMLCanvasElement>) => {
@@ -2753,6 +2830,13 @@ export default function BodyScanner() {
             onSkipStep={skipCurrentStep}
             onPreviousStep={goToPreviousStep}
             onResetWorkflow={resetAssessmentWorkflow}
+          />
+          
+          {/* Movement Detection */}
+          <MovementDetectionPanel
+            movementSequence={movementSequence}
+            onResetSession={resetMovementSession}
+            isActive={isTracking}
           />
           
           {/* Movement Analysis */}

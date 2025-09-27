@@ -64,6 +64,7 @@ import { PositionDetector, type PositionInfo, type PostureType, type Orientation
 import { MovementClassifier, type MovementSequence } from '@/services/movement/MovementClassifier';
 import { MovementDetectionPanel } from '@/components/movement/MovementDetectionPanel';
 import { MovementFaultAnalysisPanel } from '@/components/movement/MovementFaultAnalysisPanel';
+import { type FaultAnalysisResult, type MovementFault, type FaultType } from '@/services/movement/MovementFaultAnalyzer';
 
 // Pose landmark indices
 const POSE_LANDMARKS = {
@@ -361,6 +362,193 @@ export default function BodyScanner() {
       stabilityScore
     };
   };
+
+  // Get colors for different fault severities
+  const getFaultColors = (severity: 'mild' | 'moderate' | 'severe') => {
+    switch (severity) {
+      case 'mild':
+        return {
+          primary: 'rgba(255, 193, 7, 0.8)', // Amber
+          secondary: 'rgba(255, 193, 7, 0.4)',
+          glow: 'rgba(255, 193, 7, 0.2)'
+        };
+      case 'moderate':
+        return {
+          primary: 'rgba(255, 152, 0, 0.8)', // Orange  
+          secondary: 'rgba(255, 152, 0, 0.4)',
+          glow: 'rgba(255, 152, 0, 0.2)'
+        };
+      case 'severe':
+        return {
+          primary: 'rgba(244, 67, 54, 0.8)', // Red
+          secondary: 'rgba(244, 67, 54, 0.4)', 
+          glow: 'rgba(244, 67, 54, 0.2)'
+        };
+    }
+  };
+
+  // Map joint names to MediaPipe landmark indices
+  const getJointLandmarkIndex = (joint: string): number => {
+    const jointMap: Record<string, number> = {
+      'left_shoulder': POSE_LANDMARKS.LEFT_SHOULDER,
+      'right_shoulder': POSE_LANDMARKS.RIGHT_SHOULDER,
+      'left_elbow': POSE_LANDMARKS.LEFT_ELBOW,
+      'right_elbow': POSE_LANDMARKS.RIGHT_ELBOW,
+      'left_wrist': POSE_LANDMARKS.LEFT_WRIST,
+      'right_wrist': POSE_LANDMARKS.RIGHT_WRIST,
+      'left_hip': POSE_LANDMARKS.LEFT_HIP,
+      'right_hip': POSE_LANDMARKS.RIGHT_HIP,
+      'left_knee': POSE_LANDMARKS.LEFT_KNEE,
+      'right_knee': POSE_LANDMARKS.RIGHT_KNEE,
+      'left_ankle': POSE_LANDMARKS.LEFT_ANKLE,
+      'right_ankle': POSE_LANDMARKS.RIGHT_ANKLE,
+      'pelvis': POSE_LANDMARKS.LEFT_HIP, // Use left hip as pelvis proxy
+      'trunk': POSE_LANDMARKS.LEFT_SHOULDER, // Use left shoulder as trunk proxy
+      'neck': 0, // Nose as neck proxy
+      'front_knee': POSE_LANDMARKS.LEFT_KNEE, // Default to left knee
+      'front_ankle': POSE_LANDMARKS.LEFT_ANKLE // Default to left ankle
+    };
+    
+    return jointMap[joint] || -1;
+  };
+
+  // Draw fault marker at specific joint location
+  const drawFaultMarker = (
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    fault: MovementFault,
+    colors: { primary: string; secondary: string; glow: string }
+  ) => {
+    // Create pulsing effect based on time
+    const time = Date.now() / 1000;
+    const pulse = Math.sin(time * 3) * 0.3 + 0.7; // Pulse between 0.4 and 1.0
+    
+    // Draw glow effect
+    const glowRadius = 25 * pulse;
+    const gradient = ctx.createRadialGradient(x, y, 0, x, y, glowRadius);
+    gradient.addColorStop(0, colors.glow);
+    gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(x, y, glowRadius, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Draw main indicator circle
+    ctx.fillStyle = colors.primary;
+    ctx.strokeStyle = colors.secondary;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x, y, 8 * pulse, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    
+    // Draw warning icon for severe faults
+    if (fault.severity === 'severe') {
+      ctx.fillStyle = 'white';
+      ctx.font = 'bold 12px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('!', x, y);
+    }
+  };
+
+  // Draw knee valgus alignment indicator
+  const drawKneeValgusIndicator = (
+    ctx: CanvasRenderingContext2D,
+    landmarks: any[],
+    width: number,
+    height: number,
+    colors: { primary: string; secondary: string; glow: string }
+  ) => {
+    const leftHip = landmarks[POSE_LANDMARKS.LEFT_HIP];
+    const leftKnee = landmarks[POSE_LANDMARKS.LEFT_KNEE];
+    const leftAnkle = landmarks[POSE_LANDMARKS.LEFT_ANKLE];
+    const rightHip = landmarks[POSE_LANDMARKS.RIGHT_HIP];
+    const rightKnee = landmarks[POSE_LANDMARKS.RIGHT_KNEE];
+    const rightAnkle = landmarks[POSE_LANDMARKS.RIGHT_ANKLE];
+    
+    if (leftHip && leftKnee && leftAnkle) {
+      // Draw ideal alignment line (hip to ankle)
+      ctx.setLineDash([5, 5]);
+      ctx.strokeStyle = colors.secondary;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(leftHip.x * width, leftHip.y * height);
+      ctx.lineTo(leftAnkle.x * width, leftAnkle.y * height);
+      ctx.stroke();
+      
+      // Draw actual knee position
+      ctx.setLineDash([]);
+      ctx.strokeStyle = colors.primary;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(leftHip.x * width, leftHip.y * height);
+      ctx.lineTo(leftKnee.x * width, leftKnee.y * height);
+      ctx.lineTo(leftAnkle.x * width, leftAnkle.y * height);
+      ctx.stroke();
+    }
+    
+    // Repeat for right knee
+    if (rightHip && rightKnee && rightAnkle) {
+      ctx.setLineDash([5, 5]);
+      ctx.strokeStyle = colors.secondary;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(rightHip.x * width, rightHip.y * height);
+      ctx.lineTo(rightAnkle.x * width, rightAnkle.y * height);
+      ctx.stroke();
+      
+      ctx.setLineDash([]);
+      ctx.strokeStyle = colors.primary;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(rightHip.x * width, rightHip.y * height);
+      ctx.lineTo(rightKnee.x * width, rightKnee.y * height);
+      ctx.lineTo(rightAnkle.x * width, rightAnkle.y * height);
+      ctx.stroke();
+    }
+  };
+
+  // Draw real-time fault indicators on canvas
+  const drawFaultIndicators = (
+    ctx: CanvasRenderingContext2D, 
+    landmarks: any[], 
+    width: number, 
+    height: number,
+    faultAnalysis: FaultAnalysisResult
+  ) => {
+    // Save current context state
+    ctx.save();
+    
+    // Process each detected fault
+    faultAnalysis.detectedFaults.forEach((fault) => {
+      // Get colors based on severity
+      const colors = getFaultColors(fault.severity);
+      
+      // Draw indicators for each affected joint
+      fault.affectedJoints.forEach((joint) => {
+        const landmarkIndex = getJointLandmarkIndex(joint);
+        if (landmarkIndex !== -1 && landmarks[landmarkIndex]) {
+          const landmark = landmarks[landmarkIndex];
+          const x = landmark.x * width;
+          const y = landmark.y * height;
+          
+          // Draw pulsing fault indicator
+          drawFaultMarker(ctx, x, y, fault, colors);
+        }
+      });
+      
+      // Draw fault-specific visual indicators
+      if (fault.type === 'knee_valgus') {
+        drawKneeValgusIndicator(ctx, landmarks, width, height, colors);
+      }
+    });
+    
+    // Restore context state
+    ctx.restore();
+  };
   
   // Process pose detection results
   const onPoseResults = useCallback((results: any) => {
@@ -482,6 +670,17 @@ export default function BodyScanner() {
       // Draw anatomy overlay if layers are visible
       if (visibleLayers.length > 0) {
         drawAnatomyOverlay(overlayCtx, results.poseLandmarks, overlayCanvas.width, overlayCanvas.height);
+      }
+      
+      // Draw real-time fault indicators if movement analysis is active
+      if (isTracking && updatedSequence.currentMovement?.faultAnalysis) {
+        drawFaultIndicators(
+          overlayCtx, 
+          results.poseLandmarks, 
+          overlayCanvas.width, 
+          overlayCanvas.height,
+          updatedSequence.currentMovement.faultAnalysis
+        );
       }
       
       // Draw tracked regions

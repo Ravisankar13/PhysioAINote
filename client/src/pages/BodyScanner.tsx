@@ -1974,40 +1974,6 @@ export default function BodyScanner() {
             </AlertDescription>
           </Alert>
           
-          {/* Phase 2 Features Info */}
-          <Card className="mb-6 border-blue-200 bg-blue-50/50">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-blue-600" />
-                Advanced Features (Phase 2)
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                <div className="flex items-start gap-2">
-                  <Target className="h-4 w-4 text-blue-600 mt-0.5" />
-                  <div>
-                    <p className="font-medium">SAM 2 Segmentation</p>
-                    <p className="text-muted-foreground">Click to precisely segment regions of interest</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-2">
-                  <Layers className="h-4 w-4 text-blue-600 mt-0.5" />
-                  <div>
-                    <p className="font-medium">MiDaS Depth Estimation</p>
-                    <p className="text-muted-foreground">3D depth analysis for volume comparison</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-2">
-                  <Activity className="h-4 w-4 text-blue-600 mt-0.5" />
-                  <div>
-                    <p className="font-medium">Educational Insights</p>
-                    <p className="text-muted-foreground">Anatomical correlations and clinical tests</p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
         </>
       )}
       

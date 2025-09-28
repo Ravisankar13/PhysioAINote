@@ -25,6 +25,7 @@ import {
 import { VideoRecorder } from '@/components/movement/VideoRecorder';
 import { MovementAnalyzer, type MovementMetrics } from '@/services/movement/MovementAnalyzer';
 import { MovementMetricsOverlay } from '@/components/movement/MovementMetricsOverlay';
+import { renderAnatomicalSkeletonOverlay } from '@/utils/AnatomicalSkeletonRenderer';
 
 // Pose landmark indices
 const POSE_LANDMARKS = {
@@ -214,45 +215,8 @@ export default function BodyScanner() {
 
     if (!ctx || !overlayCtx) return;
 
-    // Clear overlay
-    overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-
-    // Draw pose landmarks
-    overlayCtx.fillStyle = '#00ff00';
-    overlayCtx.strokeStyle = '#00ff00';
-    overlayCtx.lineWidth = 2;
-
-    // Draw simple skeleton
-    const connections = [
-      [POSE_LANDMARKS.LEFT_SHOULDER, POSE_LANDMARKS.RIGHT_SHOULDER],
-      [POSE_LANDMARKS.LEFT_SHOULDER, POSE_LANDMARKS.LEFT_HIP],
-      [POSE_LANDMARKS.RIGHT_SHOULDER, POSE_LANDMARKS.RIGHT_HIP],
-      [POSE_LANDMARKS.LEFT_HIP, POSE_LANDMARKS.RIGHT_HIP],
-      [POSE_LANDMARKS.LEFT_HIP, POSE_LANDMARKS.LEFT_KNEE],
-      [POSE_LANDMARKS.RIGHT_HIP, POSE_LANDMARKS.RIGHT_KNEE],
-      [POSE_LANDMARKS.LEFT_KNEE, POSE_LANDMARKS.LEFT_ANKLE],
-      [POSE_LANDMARKS.RIGHT_KNEE, POSE_LANDMARKS.RIGHT_ANKLE],
-    ];
-
-    connections.forEach(([startIdx, endIdx]) => {
-      const start = results.poseLandmarks[startIdx];
-      const end = results.poseLandmarks[endIdx];
-      if (start && end) {
-        overlayCtx.beginPath();
-        overlayCtx.moveTo(start.x * overlayCanvas.width, start.y * overlayCanvas.height);
-        overlayCtx.lineTo(end.x * overlayCanvas.width, end.y * overlayCanvas.height);
-        overlayCtx.stroke();
-      }
-    });
-
-    // Draw landmarks
-    results.poseLandmarks.forEach((landmark: any) => {
-      const x = landmark.x * overlayCanvas.width;
-      const y = landmark.y * overlayCanvas.height;
-      overlayCtx.beginPath();
-      overlayCtx.arc(x, y, 3, 0, 2 * Math.PI);
-      overlayCtx.fill();
-    });
+    // Render anatomically accurate skeleton overlay
+    renderAnatomicalSkeletonOverlay(overlayCanvas, results.poseLandmarks);
 
     // Calculate movement metrics
     const analyzer = movementAnalyzerRef.current;

@@ -120,16 +120,6 @@ export default function BodyScanner() {
   const [isRecording, setIsRecording] = useState(false);
   const [capturedFrames, setCapturedFrames] = useState<string[]>([]);
   const [mediapipeLoaded, setMediapipeLoaded] = useState(false);
-  const [xrSupported, setXrSupported] = useState(false);
-  const [xrActive, setXrActive] = useState(false);
-  const [anatomyLayers, setAnatomyLayers] = useState({
-    bones: true,
-    ligaments: false,
-    menisci: false,
-    tendons: false,
-    cartilage: false,
-    vessels: false
-  });
   const [clinicalTests, setClinicalTests] = useState<any[]>([]);
   // Default to back camera on mobile, front on desktop
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>(
@@ -145,8 +135,6 @@ export default function BodyScanner() {
   const [userType, setUserType] = useState<'physiotherapist' | 'patient'>('physiotherapist');
   const [metricsVisible, setMetricsVisible] = useState(true);
   const [showControls, setShowControls] = useState(true);
-  const [leftPanelOpen, setLeftPanelOpen] = useState(false);
-  const [rightPanelOpen, setRightPanelOpen] = useState(false);
   const [controlsTimeout, setControlsTimeout] = useState<NodeJS.Timeout | null>(null);
   const [isIOS, setIsIOS] = useState(false);
   const [selectedBodyPart, setSelectedBodyPart] = useState<BodyRegionId>('shoulder');
@@ -166,32 +154,6 @@ export default function BodyScanner() {
   const [compositeStream, setCompositeStream] = useState<MediaStream | null>(null);
   
   
-  // Movement Classification State
-  const [movementClassifier, setMovementClassifier] = useState<MovementClassifier | null>(null);
-  const [movementSequence, setMovementSequence] = useState<MovementSequence>({
-    movements: [],
-    currentMovement: null,
-    transitionInProgress: false,
-    sessionStats: {
-      totalMovements: 0,
-      movementBreakdown: {
-        squat: 0,
-        lunge: 0,
-        single_leg_stand: 0,
-        jumping: 0,
-        twisting: 0,
-        sit_to_stand: 0,
-        step_up: 0,
-        heel_raises: 0,
-        arm_raise: 0,
-        walking: 0,
-        static: 0,
-        unknown: 0
-      },
-      averageQuality: 0,
-      totalDuration: 0
-    }
-  });
   
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -210,12 +172,7 @@ export default function BodyScanner() {
   const compositeStreamRef = useRef<MediaStream | null>(null);
   const poseSmoother = useRef<Posesmoother>(new Posesmoother(0.3));
   const movementAnalyzerRef = useRef<MovementAnalyzer>(new MovementAnalyzer());
-  const movementClassifierRef = useRef<MovementClassifier>(new MovementClassifier());
   
-  // 3D Skeleton state
-  const [currentPose3D, setCurrentPose3D] = useState<Skeleton3DPose | null>(null);
-  const [currentPoseLandmarks, setCurrentPoseLandmarks] = useState<any[] | null>(null);
-  const [show3DSkeleton, setShow3DSkeleton] = useState(true);
   
   // Detect iOS devices
   const detectIOS = () => {
@@ -1727,6 +1684,21 @@ export default function BodyScanner() {
     }
   };
   
+  if (!mediapipeLoaded) {
+    return (
+      <div className="container mx-auto p-6 max-w-7xl">
+        <Card>
+          <CardContent className="p-6">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+              <p>Loading MediaPipe libraries...</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+  
   return (
     <div 
       ref={fullscreenContainerRef}
@@ -2309,7 +2281,6 @@ export default function BodyScanner() {
                     </select>
                   )}
                 </div>
-                
               </div>
               
             </CardContent>

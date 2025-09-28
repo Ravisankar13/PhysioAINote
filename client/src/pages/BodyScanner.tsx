@@ -773,6 +773,7 @@ export default function BodyScanner() {
         ctx.fill();
         ctx.stroke();
         
+        ctx.restore(); // Close femur branch
       } else if (boneName.includes('Tibia')) {
         // Tibia: Add tibial plateau and malleolus
         // Proximal tibial plateau
@@ -797,6 +798,7 @@ export default function BodyScanner() {
         ctx.fill();
         ctx.stroke();
         
+        ctx.restore(); // Close tibia branch
       } else if (boneName.includes('Humerus')) {
         // Humerus: Add head and epicondyles
         // Humeral head
@@ -819,6 +821,7 @@ export default function BodyScanner() {
         ctx.fill();
         ctx.stroke();
         
+        ctx.restore(); // Close humerus branch
       } else {
         // Default bone structure
         ctx.beginPath();
@@ -837,6 +840,8 @@ export default function BodyScanner() {
         ctx.arc(length, 0, thickness/2 + 2, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
+        
+        ctx.restore(); // Close default branch
       }
       
       ctx.restore();
@@ -1009,7 +1014,7 @@ export default function BodyScanner() {
     
     ctx.restore();
   };
-  
+
   // Draw muscle structures
   const drawMuscles = (ctx: CanvasRenderingContext2D, landmarks: any[], width: number, height: number) => {
     ctx.save();

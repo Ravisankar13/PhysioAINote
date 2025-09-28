@@ -938,14 +938,32 @@ export default function RiggedAnatomicalSkeleton({
           
           console.log('Found spine bones for transformation:', spineBones);
           
-          if (spineBones.length > 0) {
-            // Apply cervical lordosis (C1-C7) - natural curve is concave backward
-            const cervicalAngle = toRad((cervicalLordosis + 40) * 0.2); // Reduced scaling
-            const cervicalCount = Math.max(1, Math.floor(spineBones.length * 0.2));
-            spineBones.slice(0, cervicalCount).forEach((boneName, index) => {
+          // Find specific cervical vertebrae and head/neck bones
+          const cervicalBones = Object.keys(bones).filter(name => {
+            if (!name || typeof name !== 'string') return false;
+            const upperName = name.toUpperCase();
+            return (
+              upperName.includes('VERTEBRAE_C') || // C1-C7 vertebrae
+              upperName.includes('CERVICAL') ||    // Generic cervical bones
+              upperName.includes('HEAD') ||        // Head bone
+              upperName.includes('NECK') ||        // Neck bones
+              (upperName.includes('C1') && upperName.includes('ATLAS')) || // C1 Atlas
+              upperName.match(/C[1-7]/) ||         // C1-C7 pattern
+              (upperName.includes('MIXAMORIG') && (upperName.includes('HEAD') || upperName.includes('NECK')))
+            );
+          }).sort(); // Sort to ensure C1, C2, C3... order
+          
+          console.log('Found cervical bones for lordosis:', cervicalBones);
+          
+          if (cervicalBones.length > 0) {
+            // Apply cervical lordosis only to C1-C7 vertebrae and head/neck
+            const cervicalAngle = toRad((cervicalLordosis + 40) * 0.3); // Slightly increased scaling for visible effect
+            cervicalBones.forEach((boneName, index) => {
               const bone = bones[boneName];
               if (bone && bone.rotation) {
-                bone.rotation.x = cervicalAngle * (index + 1) / cervicalCount; // Progressive curve
+                // Progressive curve - more pronounced at the top of the neck
+                const progressiveFactor = (index + 1) / cervicalBones.length;
+                bone.rotation.x = cervicalAngle * progressiveFactor; 
                 if (bone.updateMatrix) bone.updateMatrix();
                 if (bone.updateMatrixWorld) bone.updateMatrixWorld(true);
               }

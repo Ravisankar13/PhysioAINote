@@ -46,24 +46,8 @@ import {
   type BodyRegionId
 } from '@/services/biomechanics/BodyPartAnalysis';
 import { VideoRecorder } from '@/components/movement/VideoRecorder';
-import { DetailedSpineRenderer } from '@/services/anatomy/DetailedBoneStructures';
-import { RibcageRenderer } from '@/services/anatomy/RibcageRenderer';
-import { ShoulderComplexRenderer } from '@/services/anatomy/shoulder/ShoulderComplex';
-import { 
-  EnhancedPelvisRenderer, 
-  EnhancedKneeRenderer, 
-  EnhancedElbowRenderer 
-} from '@/services/anatomy/EnhancedAnatomicalStructures';
-import RiggedAnatomicalSkeleton from '@/components/3d/RiggedAnatomicalSkeleton';
-import { convertMediaPipeTo3D, Posesmoother, type Skeleton3DPose } from '@/utils/mediapipeTo3D';
 import { MovementAnalyzer, type MovementMetrics } from '@/services/movement/MovementAnalyzer';
 import { MovementMetricsOverlay } from '@/components/movement/MovementMetricsOverlay';
-import { PositionDetector, type PositionInfo, type PostureType, type OrientationType } from '@/services/movement/PositionDetector';
-import { MovementClassifier, type MovementSequence } from '@/services/movement/MovementClassifier';
-import { MovementDetectionPanel } from '@/components/movement/MovementDetectionPanel';
-import { MovementFaultAnalysisPanel } from '@/components/movement/MovementFaultAnalysisPanel';
-import { type FaultAnalysisResult, type MovementFault, type FaultType } from '@/services/movement/MovementFaultAnalyzer';
-import RealtimeSkeletonOverlay from '@/components/bodyScanner/RealtimeSkeletonOverlay';
 
 // Pose landmark indices
 const POSE_LANDMARKS = {

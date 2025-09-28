@@ -81,14 +81,7 @@ const POSE_LANDMARKS = {
   RIGHT_WRIST: 16,
 };
 
-// Anatomy overlay layers
-const ANATOMY_LAYERS = [
-  { id: 'bones', label: 'Bones', color: '#ffffff' },
-  { id: 'ligaments', label: 'Ligaments', color: '#ff6b6b' },
-  { id: 'menisci', label: 'Menisci', color: '#4ecdc4' },
-  { id: 'tendons', label: 'Tendons', color: '#45b7d1' },
-  { id: 'muscles', label: 'Muscles', color: '#f7b801' }
-];
+// Simplified - basic bone overlay only
 
 interface KneeMetrics {
   flexionAngle: number;
@@ -121,8 +114,7 @@ export default function BodyScanner() {
   const [isTracking, setIsTracking] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [cameraStatus, setCameraStatus] = useState<'idle' | 'initializing' | 'ready' | 'error'>('idle');
-  const [selectedView, setSelectedView] = useState<'frontal' | 'lateral' | 'posterior'>('frontal');
-  const [visibleLayers, setVisibleLayers] = useState<string[]>(['bones']);
+  // Simplified - no view selection or layer controls needed
   const [kneeMetrics, setKneeMetrics] = useState<KneeMetrics | null>(null);
   const [trackedRegions, setTrackedRegions] = useState<TrackedRegion[]>([]);
   const [isRecording, setIsRecording] = useState(false);
@@ -628,10 +620,8 @@ export default function BodyScanner() {
       
       ctx.setLineDash([]);
       
-      // Draw anatomy overlay if layers are visible
-      if (visibleLayers.length > 0) {
-        drawAnatomyOverlay(overlayCtx, results.poseLandmarks, overlayCanvas.width, overlayCanvas.height);
-      }
+      // Simple pose landmark overlay only
+      drawAnatomyOverlay(overlayCtx, results.poseLandmarks, overlayCanvas.width, overlayCanvas.height);
       
       // Draw real-time fault indicators if movement analysis is active
       if (isTracking && updatedSequence.currentMovement?.faultAnalysis) {
@@ -651,7 +641,7 @@ export default function BodyScanner() {
     }
     
     ctx.restore();
-  }, [visibleLayers, trackedRegions, selectedBodyPart]);
+  }, [trackedRegions, selectedBodyPart]);
   
   // Create composite stream for recording with skeleton overlay
   const createCompositeStream = useCallback(() => {
@@ -712,102 +702,13 @@ export default function BodyScanner() {
     }
   }, [showVideoRecorder, cameraStatus, compositeStream, createCompositeStream]);
   
-  // Draw anatomy overlay with realistic structures
+  // Simplified anatomy overlay - just basic pose landmarks and connections
   const drawAnatomyOverlay = (ctx: CanvasRenderingContext2D, landmarks: any[], width: number, height: number) => {
     // Clear the overlay canvas first
     ctx.clearRect(0, 0, width, height);
     
-    // Render detailed bone structures if bones layer is visible
-    if (visibleLayers.includes('bones')) {
-      // Render detailed spine with individual vertebrae
-      const spineRenderer = spineRendererRef.current;
-      let vertebrae: any[] = [];
-      if (spineRenderer) {
-        vertebrae = spineRenderer.generateDetailedVertebrae(landmarks, width, height);
-        spineRenderer.renderVertebrae(ctx, vertebrae, true);
-      }
-      
-      // Ribcage rendering disabled per user request
-      
-      // Enhanced Pelvis with ASIS, PSIS, and clinical measurements
-      const enhancedPelvisRenderer = new EnhancedPelvisRenderer();
-      const enhancedPelvisData = enhancedPelvisRenderer.generateEnhancedPelvis(landmarks, width, height);
-      enhancedPelvisRenderer.renderEnhancedPelvis(ctx, enhancedPelvisData);
-      
-      // Render shoulder complex (keeping this as it has unique features)
-      const shoulderRenderer = shoulderRendererRef.current;
-      if (shoulderRenderer) {
-        // Render left shoulder
-        if (landmarks[11]) { // Left shoulder landmark exists
-          shoulderRenderer.render(ctx, landmarks, width, height, 'left');
-        }
-        
-        // Render right shoulder
-        if (landmarks[12]) { // Right shoulder landmark exists
-          shoulderRenderer.render(ctx, landmarks, width, height, 'right');
-        }
-      }
-      
-      // Enhanced Knee joints (both sides)
-      const enhancedKneeRenderer = new EnhancedKneeRenderer();
-      if (landmarks[25]) { // Left knee
-        const leftKnee = enhancedKneeRenderer.generateEnhancedKnee(landmarks, width, height, 'left');
-        enhancedKneeRenderer.renderEnhancedKnee(ctx, leftKnee, 'left', {
-          x: landmarks[25].x * width,
-          y: landmarks[25].y * height
-        });
-      }
-      if (landmarks[26]) { // Right knee
-        const rightKnee = enhancedKneeRenderer.generateEnhancedKnee(landmarks, width, height, 'right');
-        enhancedKneeRenderer.renderEnhancedKnee(ctx, rightKnee, 'right', {
-          x: landmarks[26].x * width,
-          y: landmarks[26].y * height
-        });
-      }
-      
-      // Enhanced Elbow joints (both sides)
-      const enhancedElbowRenderer = new EnhancedElbowRenderer();
-      if (landmarks[13]) { // Left elbow
-        const leftElbow = enhancedElbowRenderer.generateEnhancedElbow(landmarks, width, height, 'left');
-        enhancedElbowRenderer.renderEnhancedElbow(ctx, leftElbow, 'left', {
-          x: landmarks[13].x * width,
-          y: landmarks[13].y * height
-        });
-      }
-      if (landmarks[14]) { // Right elbow
-        const rightElbow = enhancedElbowRenderer.generateEnhancedElbow(landmarks, width, height, 'right');
-        enhancedElbowRenderer.renderEnhancedElbow(ctx, rightElbow, 'right', {
-          x: landmarks[14].x * width,
-          y: landmarks[14].y * height
-        });
-      }
-      
-      // Draw the main bones (femur, tibia, humerus, etc.)
-      drawBones(ctx, landmarks, width, height);
-    }
-    
-    // Render other layers (muscles, ligaments, etc.)
-    visibleLayers.forEach(layerId => {
-      if (layerId === 'bones') return; // Already handled above
-      
-      const layer = ANATOMY_LAYERS.find(l => l.id === layerId);
-      if (!layer) return;
-      
-      switch(layerId) {
-        case 'muscles':
-          drawMuscles(ctx, landmarks, width, height);
-          break;
-        case 'ligaments':
-          drawLigaments(ctx, landmarks, width, height);
-          break;
-        case 'menisci':
-          drawMenisci(ctx, landmarks, width, height);
-          break;
-        case 'tendons':
-          drawTendons(ctx, landmarks, width, height);
-          break;
-      }
-    });
+    // Draw basic bone connections (simplified)
+    drawBones(ctx, landmarks, width, height);
   };
   
   // Draw bone structures with enhanced anatomical detail
@@ -1783,14 +1684,7 @@ export default function BodyScanner() {
     }
   };
   
-  // Toggle anatomy layer visibility
-  const toggleLayer = (layerId: string) => {
-    setVisibleLayers(prev => 
-      prev.includes(layerId) 
-        ? prev.filter(id => id !== layerId)
-        : [...prev, layerId]
-    );
-  };
+  // Simplified - no layer toggle needed
   
   // Capture current frame
   const captureFrame = () => {
@@ -1887,7 +1781,6 @@ export default function BodyScanner() {
           credentials: 'include',
           body: JSON.stringify({
             bodyPart: 'knee',
-            view: selectedView,
             regions: trackedRegions,
             metrics: kneeMetrics,
             depthAnalysis,
@@ -1911,7 +1804,6 @@ export default function BodyScanner() {
           const reportContent = {
             scanId,
             timestamp: new Date().toISOString(),
-            view: selectedView,
             metrics: kneeMetrics,
             insights,
             disclaimer: "Educational visualization only - not for diagnostic purposes"
@@ -1999,7 +1891,7 @@ export default function BodyScanner() {
                  cameraStatus === 'initializing' ? 'Initializing...' : 
                  cameraStatus === 'error' ? 'Error' : 'Inactive'}
               </Badge>
-              <Badge variant="outline">{selectedView} View</Badge>
+              {/* View badge removed for simplified interface */}
               {isTracking && (
                 <Badge variant="secondary">
                   {isPaused ? 'Paused' : 'Tracking'}
@@ -2098,35 +1990,7 @@ export default function BodyScanner() {
             )}
             
             {/* View Mode */}
-            <div>
-              <label className="text-white text-sm mb-2 block">View Mode</label>
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant={selectedView === 'frontal' ? 'secondary' : 'ghost'}
-                  onClick={() => setSelectedView('frontal')}
-                  className="flex-1 text-white"
-                >
-                  Front
-                </Button>
-                <Button
-                  size="sm"
-                  variant={selectedView === 'lateral' ? 'secondary' : 'ghost'}
-                  onClick={() => setSelectedView('lateral')}
-                  className="flex-1 text-white"
-                >
-                  Side
-                </Button>
-                <Button
-                  size="sm"
-                  variant={selectedView === 'posterior' ? 'secondary' : 'ghost'}
-                  onClick={() => setSelectedView('posterior')}
-                  className="flex-1 text-white"
-                >
-                  Back
-                </Button>
-              </div>
-            </div>
+            {/* View selection removed for simplified interface */}
           </div>
         </div>
       )}
@@ -2154,33 +2018,7 @@ export default function BodyScanner() {
           </div>
           
           <div className="p-4 space-y-4">
-            {/* Anatomy Layers */}
-            <div>
-              <label className="text-white text-sm mb-2 block">Anatomy Layers</label>
-              <div className="space-y-2">
-                {ANATOMY_LAYERS.map(layer => (
-                  <label key={layer.id} className="flex items-center gap-2 text-white">
-                    <input
-                      type="checkbox"
-                      checked={visibleLayers.includes(layer.id)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setVisibleLayers([...visibleLayers, layer.id]);
-                        } else {
-                          setVisibleLayers(visibleLayers.filter(l => l !== layer.id));
-                        }
-                      }}
-                      className="rounded border-white/20"
-                    />
-                    <span className="text-sm">{layer.label}</span>
-                    <div 
-                      className="w-3 h-3 rounded-full ml-auto"
-                      style={{ backgroundColor: layer.color }}
-                    />
-                  </label>
-                ))}
-              </div>
-            </div>
+            {/* Anatomy layer controls removed for simplified interface */}
             
             {/* Measurement Display */}
             {kneeMetrics && (
@@ -2485,7 +2323,7 @@ export default function BodyScanner() {
                        cameraStatus === 'initializing' ? 'Initializing...' : 
                        cameraStatus === 'error' ? 'Error' : 'Inactive'}
                     </Badge>
-                    <Badge variant="outline">{selectedView} View</Badge>
+                    {/* View badge removed for simplified interface */}
                     <Button
                       size="sm"
                       variant="ghost"

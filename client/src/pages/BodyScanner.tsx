@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { webXRService } from '@/services/webXRService';
+// WebXR service removed for simplified interface
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -116,7 +116,7 @@ export default function BodyScanner() {
   const [cameraStatus, setCameraStatus] = useState<'idle' | 'initializing' | 'ready' | 'error'>('idle');
   // Simplified - no view selection or layer controls needed
   const [kneeMetrics, setKneeMetrics] = useState<KneeMetrics | null>(null);
-  const [trackedRegions, setTrackedRegions] = useState<TrackedRegion[]>([]);
+  // Region tracking removed for simplified interface
   const [isRecording, setIsRecording] = useState(false);
   const [capturedFrames, setCapturedFrames] = useState<string[]>([]);
   const [mediapipeLoaded, setMediapipeLoaded] = useState(false);
@@ -634,14 +634,11 @@ export default function BodyScanner() {
         );
       }
       
-      // Draw tracked regions
-      trackedRegions.forEach(region => {
-        drawTrackedRegion(ctx, region, canvas.width, canvas.height);
-      });
+      // Region drawing removed for simplified interface
     }
     
     ctx.restore();
-  }, [trackedRegions, selectedBodyPart]);
+  }, [selectedBodyPart]);
   
   // Create composite stream for recording with skeleton overlay
   const createCompositeStream = useCallback(() => {
@@ -1377,13 +1374,7 @@ export default function BodyScanner() {
     };
     loadLibraries();
     
-    // Check WebXR support
-    webXRService.checkXRSupport().then(support => {
-      setXrSupported(support.supported && (support.immersiveAR || support.inline));
-      if (support.supported) {
-        console.log('[BodyScanner] WebXR supported:', support);
-      }
-    });
+    // WebXR support checking removed for simplified interface
     
     // Enumerate available cameras
     const enumerateCameras = async () => {
@@ -1586,103 +1577,7 @@ export default function BodyScanner() {
     }
   }, [toast]);
   
-  // Handle region selection with SAM 2 integration
-  const handleCanvasClick = async (event: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!canvasRef.current || !isTracking) return;
-    
-    const rect = canvasRef.current.getBoundingClientRect();
-    const x = (event.clientX - rect.left) / rect.width;
-    const y = (event.clientY - rect.top) / rect.height;
-    
-    // Get current frame as image data
-    const imageData = canvasRef.current.toDataURL('image/png');
-    
-    try {
-      // Call SAM 2 segmentation API
-      const response = await fetch('/api/body-scanner/segment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          imageData,
-          clickPoint: { x, y },
-          frameIndex: capturedFrames.length
-        })
-      });
-      
-      if (response.ok) {
-        const { segmentation } = await response.json();
-        
-        // Convert segmentation mask to points for visualization
-        const points: { x: number; y: number }[] = [];
-        const { bounds, mask } = segmentation;
-        
-        // Extract contour points from mask (simplified)
-        for (let i = 0; i < 32; i++) {
-          const angle = (i / 32) * Math.PI * 2;
-          const radius = 0.05 + (Math.random() * 0.02); // Vary radius based on actual mask
-          points.push({
-            x: x + Math.cos(angle) * radius,
-            y: y + Math.sin(angle) * radius
-          });
-        }
-        
-        const newRegion: TrackedRegion = {
-          id: `region-${Date.now()}`,
-          label: `Region ${trackedRegions.length + 1}`,
-          points,
-          type: 'swelling',
-          severity: 'mild',
-          timestamp: new Date()
-        };
-        
-        setTrackedRegions([...trackedRegions, newRegion]);
-        
-        toast({
-          title: "Region Segmented",
-          description: `Confidence: ${(segmentation.confidence * 100).toFixed(0)}%`,
-          duration: 2000,
-        });
-      } else {
-        // Fallback to simple circular region
-        const newRegion: TrackedRegion = {
-          id: `region-${Date.now()}`,
-          label: `Region ${trackedRegions.length + 1}`,
-          points: Array.from({ length: 16 }, (_, i) => {
-            const angle = (i / 16) * Math.PI * 2;
-            return {
-              x: x + Math.cos(angle) * 0.05,
-              y: y + Math.sin(angle) * 0.05
-            };
-          }),
-          type: 'swelling',
-          severity: 'mild',
-          timestamp: new Date()
-        };
-        
-        setTrackedRegions([...trackedRegions, newRegion]);
-      }
-    } catch (error) {
-      console.error('Segmentation error:', error);
-      // Fallback to simple region
-      const newRegion: TrackedRegion = {
-        id: `region-${Date.now()}`,
-        label: `Region ${trackedRegions.length + 1}`,
-        points: Array.from({ length: 16 }, (_, i) => {
-          const angle = (i / 16) * Math.PI * 2;
-          return {
-            x: x + Math.cos(angle) * 0.05,
-            y: y + Math.sin(angle) * 0.05
-          };
-        }),
-        type: 'swelling',
-        severity: 'mild',
-        timestamp: new Date()
-      };
-      
-      setTrackedRegions([...trackedRegions, newRegion]);
-    }
-  };
+  // Canvas click handling removed for simplified interface
   
   // Simplified - no layer toggle needed
   
@@ -1765,7 +1660,6 @@ export default function BodyScanner() {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          regions: trackedRegions,
           kneeMetrics,
           depthAnalysis
         })
@@ -1781,7 +1675,6 @@ export default function BodyScanner() {
           credentials: 'include',
           body: JSON.stringify({
             bodyPart: 'knee',
-            regions: trackedRegions,
             metrics: kneeMetrics,
             depthAnalysis,
             frames: capturedFrames
@@ -2062,8 +1955,7 @@ export default function BodyScanner() {
               ref={canvasRef}
               width={1920}
               height={1080}
-              className="w-full h-full object-contain cursor-crosshair"
-              onClick={handleCanvasClick}
+              className="w-full h-full object-contain"
               style={{ maxWidth: '100vw', maxHeight: '100vh' }}
             />
             <canvas
@@ -2341,8 +2233,7 @@ export default function BodyScanner() {
                     ref={canvasRef}
                     width={1280}
                     height={720}
-                    className="w-full h-auto cursor-crosshair"
-                    onClick={handleCanvasClick}
+                    className="w-full h-auto"
                   />
                   <canvas
                     ref={overlayCanvasRef}
@@ -2747,7 +2638,7 @@ export default function BodyScanner() {
                 <Button 
                   className="w-full"
                   onClick={generateReport}
-                  disabled={!kneeMetrics && trackedRegions.length === 0}
+                  disabled={!kneeMetrics}
                 >
                   <Download className="h-4 w-4 mr-2" />
                   Generate Educational Report

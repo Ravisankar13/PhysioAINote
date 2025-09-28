@@ -42,6 +42,14 @@ interface RiggedAnatomicalSkeletonProps {
       shin: number;
       overall: number;
     };
+    spine?: {
+      cervicalLordosis: number;
+      thoracicKyphosis: number;
+      lumbarLordosis: number;
+      scoliosis: number;
+      forwardHead: number;
+      lateralShift: number;
+    };
     spinalPathology?: {
       spineFlexion: number;
       spineLateralFlexion: number;
@@ -887,38 +895,109 @@ export default function RiggedAnatomicalSkeleton({
       (modelConfig as any)?.leftElbow, (modelConfig as any)?.rightElbow,
       (modelConfig as any)?.leftShoulder, (modelConfig as any)?.rightShoulder]);
 
-  // Apply spinal curve parameters (lordosis and kyphosis) with IK
+  // Apply spinal curve parameters (lordosis and kyphosis) with proper bone mapping
   useEffect(() => {
-    if (!sceneRef.current || !sceneRef.current.bones) return;
+    if (!sceneRef.current?.bones) return;
     
-    const bones = sceneRef.current.bones;
-    // IK solver disabled
-    const configAny = modelConfig as any;
-    
-    // IMPORTANT: Spine rotation disabled to prevent deformation
-    // The skeleton rig doesn't support individual spine bone rotation
-    // IK solver will maintain limb positions while other controls work
-    
-    if (configAny?.spine) {
-      const hasSpineChanges = (
-        configAny.spine.cervicalLordosis !== -40 ||
-        configAny.spine.thoracicKyphosis !== 35 ||
-        configAny.spine.lumbarLordosis !== -50 ||
-        configAny.spine.scoliosis !== 0
-      );
+    try {
+      const bones = sceneRef.current.bones;
+      const configAny = modelConfig as any;
+      const toRad = (deg: number) => (deg * Math.PI) / 180;
       
-      if (hasSpineChanges) {
-        console.log('Spine adjustments detected but disabled to prevent deformation');
-        console.log('Current values:', {
-          cervicalLordosis: configAny.spine.cervicalLordosis,
-          thoracicKyphosis: configAny.spine.thoracicKyphosis,
-          lumbarLordosis: configAny.spine.lumbarLordosis,
-          scoliosis: configAny.spine.scoliosis
-        });
+      if (configAny?.spine && typeof configAny.spine === 'object') {
+        const {
+          cervicalLordosis = -40,
+          thoracicKyphosis = 35,
+          lumbarLordosis = -50,
+          scoliosis = 0
+        } = configAny.spine;
+        
+        const hasSpineChanges = (
+          cervicalLordosis !== -40 ||
+          thoracicKyphosis !== 35 ||
+          lumbarLordosis !== -50 ||
+          scoliosis !== 0
+        );
+        
+        if (hasSpineChanges) {
+          console.log('Applying spine curve adjustments:', {
+            cervicalLordosis,
+            thoracicKyphosis,
+            lumbarLordosis,
+            scoliosis
+          });
+          
+          // Find spine bones - try multiple naming conventions
+          const spineBones = Object.keys(bones).filter(name => {
+            if (!name || typeof name !== 'string') return false;
+            const upperName = name.toUpperCase();
+            return upperName.includes('SPINE') || upperName.includes('VERTEBRA') || 
+                   upperName.includes('CHEST') || upperName.includes('ABDOMEN') ||
+                   (upperName.includes('MIXAMORIG') && upperName.includes('SPINE'));
+          }).sort(); // Sort to ensure consistent order
+          
+          console.log('Found spine bones for transformation:', spineBones);
+          
+          if (spineBones.length > 0) {
+            // Apply cervical lordosis (C1-C7) - natural curve is concave backward
+            const cervicalAngle = toRad((cervicalLordosis + 40) * 0.2); // Reduced scaling
+            const cervicalCount = Math.max(1, Math.floor(spineBones.length * 0.2));
+            spineBones.slice(0, cervicalCount).forEach((boneName, index) => {
+              const bone = bones[boneName];
+              if (bone && bone.rotation) {
+                bone.rotation.x = cervicalAngle * (index + 1) / cervicalCount; // Progressive curve
+                if (bone.updateMatrix) bone.updateMatrix();
+                if (bone.updateMatrixWorld) bone.updateMatrixWorld(true);
+              }
+            });
+            
+            // Apply thoracic kyphosis (T1-T12) - natural curve is convex backward  
+            const thoracicAngle = toRad((thoracicKyphosis - 35) * 0.15); // Reduced scaling
+            const thoracicStart = Math.floor(spineBones.length * 0.2);
+            const thoracicEnd = Math.floor(spineBones.length * 0.7);
+            if (thoracicEnd > thoracicStart) {
+              spineBones.slice(thoracicStart, thoracicEnd).forEach((boneName, index) => {
+                const bone = bones[boneName];
+                if (bone && bone.rotation) {
+                  const progress = index / (thoracicEnd - thoracicStart);
+                  bone.rotation.x = thoracicAngle * Math.sin(progress * Math.PI); // Smooth curve
+                  if (bone.updateMatrix) bone.updateMatrix();
+                  if (bone.updateMatrixWorld) bone.updateMatrixWorld(true);
+                }
+              });
+            }
+            
+            // Apply lumbar lordosis (L1-L5) - natural curve is concave backward
+            const lumbarAngle = toRad((lumbarLordosis + 50) * 0.15); // Reduced scaling
+            const lumbarStart = Math.floor(spineBones.length * 0.7);
+            const lumbarBones = spineBones.slice(lumbarStart);
+            lumbarBones.forEach((boneName, index) => {
+              const bone = bones[boneName];
+              if (bone && bone.rotation) {
+                bone.rotation.x = lumbarAngle * (index + 1) / lumbarBones.length; // Progressive curve
+                if (bone.updateMatrix) bone.updateMatrix();
+                if (bone.updateMatrixWorld) bone.updateMatrixWorld(true);
+              }
+            });
+            
+            // Apply scoliosis (lateral curve)
+            if (scoliosis !== 0) {
+              const scoliosisAngle = toRad(scoliosis * 0.05); // Reduced scaling
+              spineBones.forEach((boneName, index) => {
+                const bone = bones[boneName];
+                if (bone && bone.rotation) {
+                  const progress = index / spineBones.length;
+                  bone.rotation.z += scoliosisAngle * Math.sin(progress * Math.PI * 2);
+                  if (bone.updateMatrix) bone.updateMatrix();
+                  if (bone.updateMatrixWorld) bone.updateMatrixWorld(true);
+                }
+              });
+            }
+          }
+        }
       }
-      
-      // Run IK solver to maintain skeleton integrity
-      // IK solver update disabled
+    } catch (error) {
+      console.error('Error applying spine transformations:', error);
     }
   }, [(modelConfig as any)?.spine?.cervicalLordosis, (modelConfig as any)?.spine?.thoracicKyphosis,
       (modelConfig as any)?.spine?.lumbarLordosis, (modelConfig as any)?.spine?.scoliosis]);

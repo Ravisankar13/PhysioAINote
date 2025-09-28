@@ -305,8 +305,9 @@ export default function RiggedAnatomicalSkeleton({
           
           // Find bone indices for IK chains
           const findBoneIndex = (name: string): number => {
-            const index = skeleton!.bones.findIndex(b => 
-              b.name.toUpperCase().includes(name.toUpperCase())
+            if (!skeleton?.bones) return -1;
+            const index = skeleton.bones.findIndex(b => 
+              b?.name?.toUpperCase().includes(name.toUpperCase())
             );
             if (index < 0) {
               console.log(`Warning: Could not find bone with name containing "${name}"`);
@@ -319,9 +320,9 @@ export default function RiggedAnatomicalSkeleton({
           
           // Try to find spine bones for IK
           const spineIndices: number[] = [];
-          if (skeleton) {
+          if (skeleton?.bones) {
             for (let i = 0; i < skeleton.bones.length; i++) {
-              const boneName = skeleton.bones[i].name.toUpperCase();
+              const boneName = skeleton.bones[i]?.name?.toUpperCase() || '';
             if (boneName.includes('SPINE') || boneName.includes('CHEST') || 
                 boneName.includes('ABDOMEN') || boneName.includes('TORSO')) {
               spineIndices.push(i);
@@ -344,7 +345,7 @@ export default function RiggedAnatomicalSkeleton({
           const leftElbowIndex = findBoneIndex('RADIUSL');
           const leftWristIndex = findBoneIndex('HANDL');
           
-          if (leftShoulderIndex >= 0 && leftElbowIndex >= 0 && leftWristIndex >= 0 && skeleton) {
+          if (leftShoulderIndex >= 0 && leftElbowIndex >= 0 && leftWristIndex >= 0 && skeleton?.bones) {
             // Add a target bone for left hand
             const leftHandTarget = new THREE.Bone();
             leftHandTarget.name = 'IK_TARGET_LEFT_HAND';
@@ -360,7 +361,7 @@ export default function RiggedAnatomicalSkeleton({
           const rightElbowIndex = findBoneIndex('RADIUSR');
           const rightWristIndex = findBoneIndex('HANDR');
           
-          if (rightShoulderIndex >= 0 && rightElbowIndex >= 0 && rightWristIndex >= 0 && skeleton) {
+          if (rightShoulderIndex >= 0 && rightElbowIndex >= 0 && rightWristIndex >= 0 && skeleton?.bones) {
             const rightHandTarget = new THREE.Bone();
             rightHandTarget.name = 'IK_TARGET_RIGHT_HAND';
             skeleton.bones.push(rightHandTarget);
@@ -375,7 +376,7 @@ export default function RiggedAnatomicalSkeleton({
           const leftKneeIndex = findBoneIndex('TIBIAL');
           const leftAnkleIndex = findBoneIndex('FOOTL');
           
-          if (leftHipIndex >= 0 && leftKneeIndex >= 0 && leftAnkleIndex >= 0 && skeleton) {
+          if (leftHipIndex >= 0 && leftKneeIndex >= 0 && leftAnkleIndex >= 0 && skeleton?.bones) {
             const leftFootTarget = new THREE.Bone();
             leftFootTarget.name = 'IK_TARGET_LEFT_FOOT';
             skeleton.bones.push(leftFootTarget);
@@ -938,31 +939,27 @@ export default function RiggedAnatomicalSkeleton({
           
           console.log('Found spine bones for transformation:', spineBones);
           
-          // Find specific cervical vertebrae and head/neck bones
-          const cervicalBones = Object.keys(bones).filter(name => {
+          // Find only cervical vertebrae (C1-C7) - exclude head and neck control bones
+          const cervicalVertebrae = Object.keys(bones).filter(name => {
             if (!name || typeof name !== 'string') return false;
             const upperName = name.toUpperCase();
             return (
-              upperName.includes('VERTEBRAE_C') || // C1-C7 vertebrae
-              upperName.includes('CERVICAL') ||    // Generic cervical bones
-              upperName.includes('HEAD') ||        // Head bone
-              upperName.includes('NECK') ||        // Neck bones
-              (upperName.includes('C1') && upperName.includes('ATLAS')) || // C1 Atlas
-              upperName.match(/C[1-7]/) ||         // C1-C7 pattern
-              (upperName.includes('MIXAMORIG') && (upperName.includes('HEAD') || upperName.includes('NECK')))
+              upperName.includes('VERTEBRAE_C') || // C1-C7 vertebrae only
+              (upperName.includes('C1') && upperName.includes('ATLAS')) // C1 Atlas specifically
             );
           }).sort(); // Sort to ensure C1, C2, C3... order
           
-          console.log('Found cervical bones for lordosis:', cervicalBones);
+          console.log('Found cervical vertebrae for lordosis:', cervicalVertebrae);
           
-          if (cervicalBones.length > 0) {
-            // Apply cervical lordosis only to C1-C7 vertebrae and head/neck
-            const cervicalAngle = toRad((cervicalLordosis + 40) * 0.3); // Slightly increased scaling for visible effect
-            cervicalBones.forEach((boneName, index) => {
+          if (cervicalVertebrae.length > 0) {
+            // Apply cervical lordosis only to actual vertebrae with subtle, anatomically correct curves
+            const cervicalAngle = toRad((cervicalLordosis + 40) * 0.08); // Much smaller scaling for subtle effect
+            cervicalVertebrae.forEach((boneName, index) => {
               const bone = bones[boneName];
               if (bone && bone.rotation) {
-                // Progressive curve - more pronounced at the top of the neck
-                const progressiveFactor = (index + 1) / cervicalBones.length;
+                // Very gentle progressive curve - strongest at C1 (top), weakest at C7 (bottom)
+                const normalizedIndex = index / Math.max(1, cervicalVertebrae.length - 1);
+                const progressiveFactor = 1.0 - (normalizedIndex * 0.6); // Range from 1.0 to 0.4
                 bone.rotation.x = cervicalAngle * progressiveFactor; 
                 if (bone.updateMatrix) bone.updateMatrix();
                 if (bone.updateMatrixWorld) bone.updateMatrixWorld(true);
@@ -1022,7 +1019,7 @@ export default function RiggedAnatomicalSkeleton({
 
   // Apply joint rotations to the skeleton
   const applyJointRotations = () => {
-    if (!sceneRef.current || !sceneRef.current.bones) return;
+    if (!sceneRef.current?.bones) return;
     
     const bones = sceneRef.current.bones;
     const toRad = (deg: number) => (deg * Math.PI) / 180;
@@ -1088,9 +1085,11 @@ export default function RiggedAnatomicalSkeleton({
     console.log('Pathology rotations disabled to prevent skeleton deformation');
     return;
     
+    if (!sceneRef.current?.bones) return;
     const bones = sceneRef.current.bones;
     const toRad = THREE.MathUtils.degToRad;
-    const { spinalPathology, shoulderPathology, lowerLimbPathology } = modelConfig;
+    const configAny = modelConfig as any;
+    const { spinalPathology, shoulderPathology, lowerLimbPathology } = configAny;
     
     // Apply spine rotations
     if (spinalPathology) {

@@ -55,6 +55,7 @@ export default function RealtimeSkeletonOverlay({
   
   const [isLoading, setIsLoading] = useState(true);
   const [skeletonReady, setSkeletonReady] = useState(false);
+  const animationFrameRef = useRef<number | null>(null);
 
   // Initialize Three.js scene for overlay rendering
   useEffect(() => {
@@ -178,6 +179,26 @@ export default function RealtimeSkeletonOverlay({
           sceneRef.current.model = model;
           sceneRef.current.skeleton = skeleton;
           sceneRef.current.bones = bones;
+          
+          // Center and frame the model
+          const box = new THREE.Box3().setFromObject(model);
+          const center = box.getCenter(new THREE.Vector3());
+          const size = box.getSize(new THREE.Vector3());
+          
+          // Center the model
+          model.position.sub(center);
+          
+          // Adjust camera to frame the model
+          const maxDim = Math.max(size.x, size.y, size.z);
+          const fov = 50;
+          const cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2 * Math.PI / 180));
+          sceneRef.current.camera.position.z = cameraZ * 1.5;
+          
+          // Perform initial render
+          sceneRef.current.renderer.clear();
+          sceneRef.current.renderer.render(sceneRef.current.scene, sceneRef.current.camera);
+          
+          console.log('[RealtimeSkeletonOverlay] Initial render completed');
         }
         
         setIsLoading(false);
@@ -244,6 +265,10 @@ export default function RealtimeSkeletonOverlay({
     
     sceneRef.current.scene.add(skeletonHelper);
     sceneRef.current.bones = bones;
+    
+    // Perform initial render
+    sceneRef.current.renderer.clear();
+    sceneRef.current.renderer.render(sceneRef.current.scene, sceneRef.current.camera);
     
     setIsLoading(false);
     setSkeletonReady(true);
@@ -328,6 +353,24 @@ export default function RealtimeSkeletonOverlay({
     renderer.clear();
     renderer.render(scene, camera);
   }, [skeletonReady]);
+  
+  // Continuous render loop
+  useEffect(() => {
+    if (!skeletonReady || !isActive) return;
+    
+    const animate = () => {
+      renderSkeleton();
+      animationFrameRef.current = requestAnimationFrame(animate);
+    };
+    
+    animate();
+    
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, [skeletonReady, isActive, renderSkeleton]);
 
   // Update when pose landmarks change
   useEffect(() => {

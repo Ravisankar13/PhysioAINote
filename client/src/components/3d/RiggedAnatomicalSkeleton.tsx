@@ -321,9 +321,11 @@ export default function RiggedAnatomicalSkeleton({
           // Try to find spine bones for IK
           const spineIndices: number[] = [];
           const skeletonBones = skeleton?.bones;
-          if (skeletonBones) {
+          if (skeletonBones && skeletonBones.length > 0) {
             for (let i = 0; i < skeletonBones.length; i++) {
-              const boneName = skeletonBones[i]?.name?.toUpperCase() || '';
+              const bone = skeletonBones[i];
+              if (!bone) continue;
+              const boneName = bone.name?.toUpperCase() || '';
             if (boneName.includes('SPINE') || boneName.includes('CHEST') || 
                 boneName.includes('ABDOMEN') || boneName.includes('TORSO')) {
               spineIndices.push(i);
@@ -347,7 +349,7 @@ export default function RiggedAnatomicalSkeleton({
           const leftWristIndex = findBoneIndex('HANDL');
           
           const leftArmBones = skeleton?.bones;
-          if (leftShoulderIndex >= 0 && leftElbowIndex >= 0 && leftWristIndex >= 0 && leftArmBones) {
+          if (leftShoulderIndex >= 0 && leftElbowIndex >= 0 && leftWristIndex >= 0 && leftArmBones && leftArmBones.length > 0) {
             // Add a target bone for left hand
             const leftHandTarget = new THREE.Bone();
             leftHandTarget.name = 'IK_TARGET_LEFT_HAND';
@@ -364,7 +366,7 @@ export default function RiggedAnatomicalSkeleton({
           const rightWristIndex = findBoneIndex('HANDR');
           
           const rightArmBones = skeleton?.bones;
-          if (rightShoulderIndex >= 0 && rightElbowIndex >= 0 && rightWristIndex >= 0 && rightArmBones) {
+          if (rightShoulderIndex >= 0 && rightElbowIndex >= 0 && rightWristIndex >= 0 && rightArmBones && rightArmBones.length > 0) {
             const rightHandTarget = new THREE.Bone();
             rightHandTarget.name = 'IK_TARGET_RIGHT_HAND';
             rightArmBones.push(rightHandTarget);
@@ -380,7 +382,7 @@ export default function RiggedAnatomicalSkeleton({
           const leftAnkleIndex = findBoneIndex('FOOTL');
           
           const leftLegBones = skeleton?.bones;
-          if (leftHipIndex >= 0 && leftKneeIndex >= 0 && leftAnkleIndex >= 0 && leftLegBones) {
+          if (leftHipIndex >= 0 && leftKneeIndex >= 0 && leftAnkleIndex >= 0 && leftLegBones && leftLegBones.length > 0) {
             const leftFootTarget = new THREE.Bone();
             leftFootTarget.name = 'IK_TARGET_LEFT_FOOT';
             leftLegBones.push(leftFootTarget);
@@ -395,7 +397,7 @@ export default function RiggedAnatomicalSkeleton({
           const rightAnkleIndex = findBoneIndex('FOOTR');
           
           const rightLegBones = skeleton?.bones;
-          if (rightHipIndex >= 0 && rightKneeIndex >= 0 && rightAnkleIndex >= 0 && rightLegBones) {
+          if (rightHipIndex >= 0 && rightKneeIndex >= 0 && rightAnkleIndex >= 0 && rightLegBones && rightLegBones.length > 0) {
             const rightFootTarget = new THREE.Bone();
             rightFootTarget.name = 'IK_TARGET_RIGHT_FOOT';
             rightLegBones.push(rightFootTarget);
@@ -1369,7 +1371,7 @@ export default function RiggedAnatomicalSkeleton({
     
     // Update skeleton if it exists
     const skeletonToUpdate = sceneRef.current?.skeleton;
-    if (skeletonToUpdate) {
+    if (skeletonToUpdate && typeof skeletonToUpdate.update === 'function') {
       skeletonToUpdate.update();
     }
   };

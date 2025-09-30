@@ -320,9 +320,10 @@ export default function RiggedAnatomicalSkeleton({
           
           // Try to find spine bones for IK
           const spineIndices: number[] = [];
-          if (skeleton?.bones) {
-            for (let i = 0; i < skeleton.bones.length; i++) {
-              const boneName = skeleton.bones[i]?.name?.toUpperCase() || '';
+          const skeletonBones = skeleton?.bones;
+          if (skeletonBones) {
+            for (let i = 0; i < skeletonBones.length; i++) {
+              const boneName = skeletonBones[i]?.name?.toUpperCase() || '';
             if (boneName.includes('SPINE') || boneName.includes('CHEST') || 
                 boneName.includes('ABDOMEN') || boneName.includes('TORSO')) {
               spineIndices.push(i);
@@ -345,11 +346,12 @@ export default function RiggedAnatomicalSkeleton({
           const leftElbowIndex = findBoneIndex('RADIUSL');
           const leftWristIndex = findBoneIndex('HANDL');
           
-          if (leftShoulderIndex >= 0 && leftElbowIndex >= 0 && leftWristIndex >= 0 && skeleton?.bones) {
+          const leftArmBones = skeleton?.bones;
+          if (leftShoulderIndex >= 0 && leftElbowIndex >= 0 && leftWristIndex >= 0 && leftArmBones) {
             // Add a target bone for left hand
             const leftHandTarget = new THREE.Bone();
             leftHandTarget.name = 'IK_TARGET_LEFT_HAND';
-            skeleton.bones.push(leftHandTarget);
+            leftArmBones.push(leftHandTarget);
             
             // Left arm IK disabled
             console.log('Left arm IK disabled');
@@ -361,10 +363,11 @@ export default function RiggedAnatomicalSkeleton({
           const rightElbowIndex = findBoneIndex('RADIUSR');
           const rightWristIndex = findBoneIndex('HANDR');
           
-          if (rightShoulderIndex >= 0 && rightElbowIndex >= 0 && rightWristIndex >= 0 && skeleton?.bones) {
+          const rightArmBones = skeleton?.bones;
+          if (rightShoulderIndex >= 0 && rightElbowIndex >= 0 && rightWristIndex >= 0 && rightArmBones) {
             const rightHandTarget = new THREE.Bone();
             rightHandTarget.name = 'IK_TARGET_RIGHT_HAND';
-            skeleton.bones.push(rightHandTarget);
+            rightArmBones.push(rightHandTarget);
             
             // Right arm IK disabled
             console.log('Right arm IK disabled');
@@ -376,10 +379,11 @@ export default function RiggedAnatomicalSkeleton({
           const leftKneeIndex = findBoneIndex('TIBIAL');
           const leftAnkleIndex = findBoneIndex('FOOTL');
           
-          if (leftHipIndex >= 0 && leftKneeIndex >= 0 && leftAnkleIndex >= 0 && skeleton?.bones) {
+          const leftLegBones = skeleton?.bones;
+          if (leftHipIndex >= 0 && leftKneeIndex >= 0 && leftAnkleIndex >= 0 && leftLegBones) {
             const leftFootTarget = new THREE.Bone();
             leftFootTarget.name = 'IK_TARGET_LEFT_FOOT';
-            skeleton.bones.push(leftFootTarget);
+            leftLegBones.push(leftFootTarget);
             
             // Left leg IK disabled
             console.log('Left leg IK disabled');
@@ -390,10 +394,11 @@ export default function RiggedAnatomicalSkeleton({
           const rightKneeIndex = findBoneIndex('TIBIAR');
           const rightAnkleIndex = findBoneIndex('FOOTR');
           
-          if (rightHipIndex >= 0 && rightKneeIndex >= 0 && rightAnkleIndex >= 0 && skeleton?.bones) {
+          const rightLegBones = skeleton?.bones;
+          if (rightHipIndex >= 0 && rightKneeIndex >= 0 && rightAnkleIndex >= 0 && rightLegBones) {
             const rightFootTarget = new THREE.Bone();
             rightFootTarget.name = 'IK_TARGET_RIGHT_FOOT';
-            skeleton.bones.push(rightFootTarget);
+            rightLegBones.push(rightFootTarget);
             
             // Right leg IK disabled
             console.log('Right leg IK disabled');
@@ -1363,8 +1368,9 @@ export default function RiggedAnatomicalSkeleton({
     }
     
     // Update skeleton if it exists
-    if (sceneRef.current?.skeleton) {
-      sceneRef.current.skeleton.update();
+    const skeletonToUpdate = sceneRef.current?.skeleton;
+    if (skeletonToUpdate) {
+      skeletonToUpdate.update();
     }
   };
 

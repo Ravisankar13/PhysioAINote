@@ -390,7 +390,7 @@ export default function RiggedAnatomicalSkeleton({
           const rightKneeIndex = findBoneIndex('TIBIAR');
           const rightAnkleIndex = findBoneIndex('FOOTR');
           
-          if (rightHipIndex >= 0 && rightKneeIndex >= 0 && rightAnkleIndex >= 0 && skeleton) {
+          if (rightHipIndex >= 0 && rightKneeIndex >= 0 && rightAnkleIndex >= 0 && skeleton?.bones) {
             const rightFootTarget = new THREE.Bone();
             rightFootTarget.name = 'IK_TARGET_RIGHT_FOOT';
             skeleton.bones.push(rightFootTarget);

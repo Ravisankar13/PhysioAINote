@@ -1136,13 +1136,20 @@ export async function seedComprehensiveCourses() {
     
     console.log(`📚 Inserting ${allCourses.length} courses...`);
     
-    // Insert courses in batches
-    const batchSize = 20;
-    for (let i = 0; i < allCourses.length; i += batchSize) {
-      const batch = allCourses.slice(i, i + batchSize);
-      await db.insert(courses).values(batch);
-      console.log(`   ✓ Inserted courses ${i + 1}-${Math.min(i + batchSize, allCourses.length)}`);
+    // Insert courses one by one to handle JSON fields properly
+    let successCount = 0;
+    for (let i = 0; i < allCourses.length; i++) {
+      try {
+        await db.insert(courses).values(allCourses[i]);
+        successCount++;
+        if ((i + 1) % 10 === 0) {
+          console.log(`   ✓ Inserted ${i + 1}/${allCourses.length} courses`);
+        }
+      } catch (error) {
+        console.error(`   ✗ Failed to insert course: ${allCourses[i].title}`, error);
+      }
     }
+    console.log(`   ✓ Successfully inserted ${successCount}/${allCourses.length} courses`);
     
     console.log("✅ Course seeding completed successfully!");
     console.log(`📊 Total courses created: ${allCourses.length}`);

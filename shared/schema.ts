@@ -4095,9 +4095,9 @@ export const courses = pgTable("courses", {
   estimatedHours: integer("estimated_hours").default(0).notNull(),
   status: courseStatusEnum("status").default("draft").notNull(),
   bodyPart: bodyPartEnum("body_part").default("general"),
-  tags: json("tags").$type<string[]>().default([]),
-  learningObjectives: json("learning_objectives").$type<string[]>().default([]),
-  prerequisites: json("prerequisites").$type<string[]>().default([]),
+  tags: text("tags").array().default([]),
+  learningObjectives: text("learning_objectives").array().default([]),
+  prerequisites: text("prerequisites").array().default([]),
   createdBy: integer("created_by")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
@@ -4117,8 +4117,8 @@ export const courseModules = pgTable("course_modules", {
   content: json("content"), // Flexible content storage
   orderIndex: integer("order_index").notNull(),
   estimatedDuration: integer("estimated_duration").default(0), // Duration in minutes
-  prerequisites: json("prerequisites").$type<string[]>().default([]),
-  learningObjectives: json("learning_objectives").$type<string[]>().default([]),
+  prerequisites: text("prerequisites").array().default([]),
+  learningObjectives: text("learning_objectives").array().default([]),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

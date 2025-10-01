@@ -4107,6 +4107,32 @@ export const courses = pgTable("courses", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// Module content structure types
+export type ModuleContentSection = {
+  type: "text" | "video" | "interactive" | "quiz" | "3d_scanner";
+  title?: string;
+  content?: string; // Markdown or HTML text
+  videoUrl?: string;
+  videoDescription?: string;
+  quizQuestions?: Array<{
+    question: string;
+    options?: string[];
+    correctAnswer?: string;
+    explanation?: string;
+  }>;
+  interactiveType?: "decision_tree" | "case_study" | "image_analysis" | "3d_model";
+  interactiveData?: any;
+};
+
+export type ModuleContent = {
+  sections: ModuleContentSection[];
+  resources?: Array<{
+    title: string;
+    url?: string;
+    type: "pdf" | "link" | "download";
+  }>;
+};
+
 export const courseModules = pgTable("course_modules", {
   id: serial("id").primaryKey(),
   courseId: integer("course_id")
@@ -4114,7 +4140,7 @@ export const courseModules = pgTable("course_modules", {
     .references(() => courses.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
   description: text("description"),
-  content: json("content"), // Flexible content storage
+  content: json("content").$type<ModuleContent>(),
   orderIndex: integer("order_index").notNull(),
   estimatedDuration: integer("estimated_duration").default(0), // Duration in minutes
   prerequisites: text("prerequisites").array().default([]),

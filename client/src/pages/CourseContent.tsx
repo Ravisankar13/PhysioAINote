@@ -20,6 +20,7 @@ import {
 import { Helmet } from "react-helmet";
 import { Link } from "wouter";
 import { SectionRenderer } from "@/components/course/SectionRenderer";
+import { AskPhysioGPTButton } from "@/components/course/AskPhysioGPTButton";
 import type { ModuleContent } from "@shared/schema";
 
 interface CourseModule {
@@ -444,6 +445,15 @@ export default function CourseContent() {
           </div>
         </div>
       </div>
+
+      {/* Ask PhysioGPT floating button - only show when module is selected */}
+      {selectedModule && course && (
+        <AskPhysioGPTButton
+          courseTitle={course.title}
+          moduleTitle={selectedModule.title}
+          moduleContent={selectedModule.content}
+        />
+      )}
     </div>
   );
 }

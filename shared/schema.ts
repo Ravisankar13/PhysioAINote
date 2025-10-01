@@ -4366,5 +4366,159 @@ export const certificateRelations = relations(certificates, ({ one }) => ({
   }),
 }));
 
+// Interactive Education Feature Tables
+
+// Course section notes and highlights
+export const courseSectionNotes = pgTable("course_section_notes", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  courseId: integer("course_id")
+    .notNull()
+    .references(() => courses.id, { onDelete: "cascade" }),
+  moduleId: integer("module_id")
+    .notNull()
+    .references(() => courseModules.id, { onDelete: "cascade" }),
+  sectionIndex: integer("section_index").notNull(),
+  content: text("content").notNull(),
+  highlights: json("highlights").$type<Array<{
+    id: string;
+    text: string;
+    color: string;
+    startOffset: number;
+    endOffset: number;
+  }>>().default([]),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Course section discussions
+export const courseSectionDiscussions = pgTable("course_section_discussions", {
+  id: serial("id").primaryKey(),
+  courseId: integer("course_id")
+    .notNull()
+    .references(() => courses.id, { onDelete: "cascade" }),
+  moduleId: integer("module_id")
+    .notNull()
+    .references(() => courseModules.id, { onDelete: "cascade" }),
+  sectionIndex: integer("section_index").notNull(),
+  parentId: integer("parent_id"), // For threaded replies
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  body: text("body").notNull(),
+  upvotes: integer("upvotes").default(0).notNull(),
+  isFlagged: boolean("is_flagged").default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Course flashcards with spaced repetition
+export const courseFlashcards = pgTable("course_flashcards", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  courseId: integer("course_id")
+    .notNull()
+    .references(() => courses.id, { onDelete: "cascade" }),
+  moduleId: integer("module_id")
+    .notNull()
+    .references(() => courseModules.id, { onDelete: "cascade" }),
+  sectionIndex: integer("section_index"),
+  front: text("front").notNull(),
+  back: text("back").notNull(),
+  srsData: json("srs_data").$type<{
+    dueAt: string; // ISO date
+    interval: number; // Days
+    easiness: number; // SM-2 factor
+    repetitions: number;
+    lastReviewedAt: string | null; // ISO date
+  }>().default({
+    dueAt: new Date().toISOString(),
+    interval: 0,
+    easiness: 2.5,
+    repetitions: 0,
+    lastReviewedAt: null,
+  }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Quiz attempts for analytics
+export const quizAttempts = pgTable("quiz_attempts", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  courseId: integer("course_id")
+    .notNull()
+    .references(() => courses.id, { onDelete: "cascade" }),
+  moduleId: integer("module_id")
+    .notNull()
+    .references(() => courseModules.id, { onDelete: "cascade" }),
+  sectionIndex: integer("section_index").notNull(),
+  questionId: text("question_id").notNull(),
+  selectedAnswer: text("selected_answer").notNull(),
+  correctAnswer: text("correct_answer").notNull(),
+  isCorrect: boolean("is_correct").notNull(),
+  durationMs: integer("duration_ms").notNull(), // Time to answer in milliseconds
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Discussion upvotes tracking
+export const discussionUpvoteTracking = pgTable("discussion_upvote_tracking", {
+  id: serial("id").primaryKey(),
+  discussionId: integer("discussion_id")
+    .notNull()
+    .references(() => courseSectionDiscussions.id, { onDelete: "cascade" }),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Insert Schemas for Interactive Features
+export const insertCourseSectionNoteSchema = createInsertSchema(courseSectionNotes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCourseSectionDiscussionSchema = createInsertSchema(courseSectionDiscussions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCourseFlashcardSchema = createInsertSchema(courseFlashcards).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertQuizAttemptSchema = createInsertSchema(quizAttempts).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertDiscussionUpvoteSchema = createInsertSchema(discussionUpvoteTracking).omit({
+  id: true,
+  createdAt: true,
+});
+
+// Types
+export type CourseSectionNote = typeof courseSectionNotes.$inferSelect;
+export type InsertCourseSectionNote = z.infer<typeof insertCourseSectionNoteSchema>;
+export type CourseSectionDiscussion = typeof courseSectionDiscussions.$inferSelect;
+export type InsertCourseSectionDiscussion = z.infer<typeof insertCourseSectionDiscussionSchema>;
+export type CourseFlashcard = typeof courseFlashcards.$inferSelect;
+export type InsertCourseFlashcard = z.infer<typeof insertCourseFlashcardSchema>;
+export type QuizAttempt = typeof quizAttempts.$inferSelect;
+export type InsertQuizAttempt = z.infer<typeof insertQuizAttemptSchema>;
+export type DiscussionUpvote = typeof discussionUpvoteTracking.$inferSelect;
+export type InsertDiscussionUpvote = z.infer<typeof insertDiscussionUpvoteSchema>;
+
 // Export all movement analysis schema tables
 export * from './movementAnalysisSchema';

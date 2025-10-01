@@ -1854,7 +1854,7 @@ Screen for labral pathology, capsular restriction, or impingement
             },
             {
               type: 'interactive' as const,
-              title: 'Case Study 1: Young Athlete with Instability',
+              title: 'Case Study 1: Young Athlete with Shoulder Pain',
               interactiveType: 'case_study',
               content: `**Patient:**
 20-year-old male, collegiate baseball pitcher
@@ -1902,7 +1902,7 @@ Screen for labral pathology, capsular restriction, or impingement
             },
             {
               type: 'interactive' as const,
-              title: 'Case Study 2: Middle-Aged Worker with Rotator Cuff',
+              title: 'Case Study 2: Middle-Aged Worker with Shoulder Pain',
               interactiveType: 'case_study',
               content: `**Patient:**
 52-year-old female, office worker
@@ -1956,7 +1956,7 @@ Screen for labral pathology, capsular restriction, or impingement
             },
             {
               type: 'interactive' as const,
-              title: 'Case Study 3: Post-MVA with Parsonage-Turner',
+              title: 'Case Study 3: Post-MVA with Shoulder Weakness',
               interactiveType: 'case_study',
               content: `**Patient:**
 35-year-old male, 4 weeks post motor vehicle accident
@@ -2023,7 +2023,7 @@ Screen for labral pathology, capsular restriction, or impingement
             },
             {
               type: 'interactive' as const,
-              title: 'Case Study 4: Overhead Athlete with SLAP',
+              title: 'Case Study 4: Overhead Athlete with Shoulder Pain',
               interactiveType: 'case_study',
               content: `**Patient:**
 22-year-old female, collegiate volleyball player
@@ -2083,7 +2083,7 @@ Screen for labral pathology, capsular restriction, or impingement
             },
             {
               type: 'interactive' as const,
-              title: 'Case Study 5: Elderly Patient with Adhesive Capsulitis',
+              title: 'Case Study 5: Elderly Patient with Shoulder Stiffness',
               interactiveType: 'case_study',
               content: `**Patient:**
 58-year-old female with diabetes

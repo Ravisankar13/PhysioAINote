@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute } from "wouter";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -61,9 +62,10 @@ interface UserEnrollment {
 }
 
 // Module Content Renderer Component  
-const ModuleContentRenderer = ({ content, course }: { 
+const ModuleContentRenderer = ({ content, course, onQuizComplete }: { 
   content: ModuleContent | null; 
   course: Course;
+  onQuizComplete?: () => void;
 }) => {
   if (!content || !content.sections || content.sections.length === 0) {
     return (
@@ -82,6 +84,7 @@ const ModuleContentRenderer = ({ content, course }: {
           section={section}
           sectionIndex={index}
           courseBodyPart={course.bodyPart}
+          onQuizComplete={onQuizComplete}
         />
       ))}
       
@@ -143,6 +146,22 @@ export default function CourseContent() {
   });
 
   const selectedModule = selectedModuleId ? modules.find(m => m.id === selectedModuleId) : modules[0];
+
+  const completeModuleMutation = useMutation({
+    mutationFn: async (moduleId: number) => {
+      return await apiRequest(`/api/education/modules/${moduleId}/complete`, {
+        method: 'POST',
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/education/enrollments/${courseId}`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/education/courses/${courseId}/progress`] });
+    },
+  });
+
+  const handleCompleteModule = (moduleId: number) => {
+    completeModuleMutation.mutate(moduleId);
+  };
 
   const getModuleIcon = () => {
     return <BookOpen className="h-4 w-4" />;
@@ -371,6 +390,7 @@ export default function CourseContent() {
                     <ModuleContentRenderer 
                       content={selectedModule.content} 
                       course={course}
+                      onQuizComplete={() => handleCompleteModule(selectedModule.id)}
                     />
                   </div>
 
@@ -382,9 +402,14 @@ export default function CourseContent() {
                     
                     <div className="flex items-center gap-2">
                       {!isModuleCompleted(selectedModule.id) && (
-                        <Button size="sm" data-testid={`complete-module-${selectedModule.id}`}>
+                        <Button 
+                          size="sm" 
+                          data-testid={`complete-module-${selectedModule.id}`}
+                          onClick={() => handleCompleteModule(selectedModule.id)}
+                          disabled={completeModuleMutation.isPending}
+                        >
                           <CheckCircle className="h-4 w-4 mr-2" />
-                          Mark Complete
+                          {completeModuleMutation.isPending ? 'Completing...' : 'Mark Complete'}
                         </Button>
                       )}
                       

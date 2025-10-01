@@ -15536,6 +15536,58 @@ Respond in JSON format:
     }
   });
 
+  app.post("/api/education/modules/:moduleId/complete", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const moduleId = parseInt(req.params.moduleId);
+      if (isNaN(moduleId)) {
+        return res.status(400).json({ error: 'Invalid module ID' });
+      }
+
+      // Verify module exists and get its course ID
+      const module = await storage.getCourseModule(moduleId);
+      if (!module) {
+        return res.status(404).json({ error: 'Module not found' });
+      }
+
+      // Verify user is enrolled in the course
+      const enrollment = await storage.getUserEnrollment(userId, module.courseId);
+      if (!enrollment) {
+        return res.status(403).json({ error: 'User not enrolled in this course' });
+      }
+
+      const progress = await storage.markModuleCompleted(userId, moduleId);
+      res.json(progress);
+    } catch (error) {
+      console.error('Error marking module complete:', error);
+      res.status(500).json({ error: 'Failed to mark module as complete' });
+    }
+  });
+
+  app.get("/api/education/courses/:courseId/progress", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const courseId = parseInt(req.params.courseId);
+      if (isNaN(courseId)) {
+        return res.status(400).json({ error: 'Invalid course ID' });
+      }
+
+      const progress = await storage.getUserModuleProgress(userId, courseId);
+      res.json(progress);
+    } catch (error) {
+      console.error('Error fetching course progress:', error);
+      res.status(500).json({ error: 'Failed to fetch course progress' });
+    }
+  });
+
   // Health check endpoint for Cloud Run
   app.get("/health", (req: Request, res: Response) => {
     res.json({

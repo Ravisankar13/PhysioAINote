@@ -146,6 +146,21 @@ import {
   type InsertCertificate,
   type CachedExercise,
   type InsertCachedExercise,
+  courseSectionNotes,
+  type CourseSectionNote,
+  type InsertCourseSectionNote,
+  courseSectionDiscussions,
+  type CourseSectionDiscussion,
+  type InsertCourseSectionDiscussion,
+  courseFlashcards,
+  type CourseFlashcard,
+  type InsertCourseFlashcard,
+  quizAttempts,
+  type QuizAttempt,
+  type InsertQuizAttempt,
+  discussionUpvoteTracking,
+  type DiscussionUpvote,
+  type InsertDiscussionUpvote,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, isNull, sql, ilike, not } from "drizzle-orm";
@@ -690,6 +705,35 @@ export interface IStorage {
   getUserCertificates(userId: number): Promise<Certificate[]>;
   getCourseCertificates(courseId: number): Promise<Certificate[]>;
   verifyCertificate(certificateNumber: string): Promise<Certificate | undefined>;
+
+  // Interactive Education Features
+  // Notes Operations
+  createCourseSectionNote(note: InsertCourseSectionNote): Promise<CourseSectionNote>;
+  getCourseSectionNote(userId: number, courseId: number, moduleId: number, sectionIndex: number): Promise<CourseSectionNote | undefined>;
+  updateCourseSectionNote(id: number, data: Partial<InsertCourseSectionNote>): Promise<CourseSectionNote>;
+  getUserCourseSectionNotes(userId: number, courseId: number): Promise<CourseSectionNote[]>;
+  
+  // Discussion Operations
+  createCourseSectionDiscussion(discussion: InsertCourseSectionDiscussion): Promise<CourseSectionDiscussion>;
+  getCourseSectionDiscussions(courseId: number, moduleId: number, sectionIndex: number): Promise<CourseSectionDiscussion[]>;
+  updateCourseSectionDiscussion(id: number, data: Partial<InsertCourseSectionDiscussion>): Promise<CourseSectionDiscussion>;
+  deleteCourseSectionDiscussion(id: number): Promise<void>;
+  upvoteDiscussion(discussionId: number, userId: number): Promise<CourseSectionDiscussion>;
+  removeUpvoteDiscussion(discussionId: number, userId: number): Promise<CourseSectionDiscussion>;
+  getUserDiscussionUpvotes(userId: number, discussionIds: number[]): Promise<number[]>;
+  
+  // Flashcard Operations
+  createCourseFlashcard(flashcard: InsertCourseFlashcard): Promise<CourseFlashcard>;
+  getCourseFlashcard(id: number): Promise<CourseFlashcard | undefined>;
+  getUserCourseFlashcards(userId: number, courseId: number): Promise<CourseFlashcard[]>;
+  updateCourseFlashcard(id: number, data: Partial<InsertCourseFlashcard>): Promise<CourseFlashcard>;
+  deleteCourseFlashcard(id: number): Promise<void>;
+  getDueFlashcards(userId: number, courseId: number): Promise<CourseFlashcard[]>;
+  
+  // Quiz Attempt Operations
+  createQuizAttempt(attempt: InsertQuizAttempt): Promise<QuizAttempt>;
+  getQuizAttempts(userId: number, courseId: number, moduleId: number, sectionIndex: number): Promise<QuizAttempt[]>;
+  getQuestionAttempts(userId: number, courseId: number, moduleId: number, sectionIndex: number, questionId: string): Promise<QuizAttempt[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -4484,6 +4528,230 @@ export class DatabaseStorage implements IStorage {
       .where(eq(certificates.certificateNumber, certificateNumber))
       .limit(1);
     return result[0];
+  }
+
+  // Interactive Education Features Implementation
+  
+  // Notes Operations
+  async createCourseSectionNote(note: InsertCourseSectionNote): Promise<CourseSectionNote> {
+    const result = await db.insert(courseSectionNotes).values(note).returning();
+    return result[0];
+  }
+
+  async getCourseSectionNote(userId: number, courseId: number, moduleId: number, sectionIndex: number): Promise<CourseSectionNote | undefined> {
+    const result = await db
+      .select()
+      .from(courseSectionNotes)
+      .where(and(
+        eq(courseSectionNotes.userId, userId),
+        eq(courseSectionNotes.courseId, courseId),
+        eq(courseSectionNotes.moduleId, moduleId),
+        eq(courseSectionNotes.sectionIndex, sectionIndex)
+      ))
+      .limit(1);
+    return result[0];
+  }
+
+  async updateCourseSectionNote(id: number, data: Partial<InsertCourseSectionNote>): Promise<CourseSectionNote> {
+    const result = await db
+      .update(courseSectionNotes)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(courseSectionNotes.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async getUserCourseSectionNotes(userId: number, courseId: number): Promise<CourseSectionNote[]> {
+    return await db
+      .select()
+      .from(courseSectionNotes)
+      .where(and(eq(courseSectionNotes.userId, userId), eq(courseSectionNotes.courseId, courseId)))
+      .orderBy(desc(courseSectionNotes.updatedAt));
+  }
+
+  // Discussion Operations
+  async createCourseSectionDiscussion(discussion: InsertCourseSectionDiscussion): Promise<CourseSectionDiscussion> {
+    const result = await db.insert(courseSectionDiscussions).values(discussion).returning();
+    return result[0];
+  }
+
+  async getCourseSectionDiscussions(courseId: number, moduleId: number, sectionIndex: number): Promise<CourseSectionDiscussion[]> {
+    return await db
+      .select()
+      .from(courseSectionDiscussions)
+      .where(and(
+        eq(courseSectionDiscussions.courseId, courseId),
+        eq(courseSectionDiscussions.moduleId, moduleId),
+        eq(courseSectionDiscussions.sectionIndex, sectionIndex),
+        isNull(courseSectionDiscussions.parentId)
+      ))
+      .orderBy(desc(courseSectionDiscussions.upvotes), desc(courseSectionDiscussions.createdAt));
+  }
+
+  async updateCourseSectionDiscussion(id: number, data: Partial<InsertCourseSectionDiscussion>): Promise<CourseSectionDiscussion> {
+    const result = await db
+      .update(courseSectionDiscussions)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(courseSectionDiscussions.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteCourseSectionDiscussion(id: number): Promise<void> {
+    await db.delete(courseSectionDiscussions).where(eq(courseSectionDiscussions.id, id));
+  }
+
+  async upvoteDiscussion(discussionId: number, userId: number): Promise<CourseSectionDiscussion> {
+    // First, check if already upvoted
+    const existingUpvote = await db
+      .select()
+      .from(discussionUpvoteTracking)
+      .where(and(
+        eq(discussionUpvoteTracking.discussionId, discussionId),
+        eq(discussionUpvoteTracking.userId, userId)
+      ))
+      .limit(1);
+
+    if (existingUpvote.length === 0) {
+      // Add upvote tracking
+      await db.insert(discussionUpvoteTracking).values({ discussionId, userId });
+      
+      // Increment upvote count
+      const result = await db
+        .update(courseSectionDiscussions)
+        .set({ 
+          upvotes: sql`${courseSectionDiscussions.upvotes} + 1`,
+          updatedAt: new Date()
+        })
+        .where(eq(courseSectionDiscussions.id, discussionId))
+        .returning();
+      return result[0];
+    }
+
+    // Return unchanged if already upvoted
+    const result = await db
+      .select()
+      .from(courseSectionDiscussions)
+      .where(eq(courseSectionDiscussions.id, discussionId))
+      .limit(1);
+    return result[0];
+  }
+
+  async removeUpvoteDiscussion(discussionId: number, userId: number): Promise<CourseSectionDiscussion> {
+    // Remove upvote tracking
+    await db
+      .delete(discussionUpvoteTracking)
+      .where(and(
+        eq(discussionUpvoteTracking.discussionId, discussionId),
+        eq(discussionUpvoteTracking.userId, userId)
+      ));
+
+    // Decrement upvote count
+    const result = await db
+      .update(courseSectionDiscussions)
+      .set({ 
+        upvotes: sql`GREATEST(0, ${courseSectionDiscussions.upvotes} - 1)`,
+        updatedAt: new Date()
+      })
+      .where(eq(courseSectionDiscussions.id, discussionId))
+      .returning();
+    return result[0];
+  }
+
+  async getUserDiscussionUpvotes(userId: number, discussionIds: number[]): Promise<number[]> {
+    if (discussionIds.length === 0) return [];
+    
+    const upvotes = await db
+      .select({ discussionId: discussionUpvoteTracking.discussionId })
+      .from(discussionUpvoteTracking)
+      .where(and(
+        eq(discussionUpvoteTracking.userId, userId),
+        sql`${discussionUpvoteTracking.discussionId} = ANY(${discussionIds})`
+      ));
+    
+    return upvotes.map(u => u.discussionId);
+  }
+
+  // Flashcard Operations
+  async createCourseFlashcard(flashcard: InsertCourseFlashcard): Promise<CourseFlashcard> {
+    const result = await db.insert(courseFlashcards).values(flashcard).returning();
+    return result[0];
+  }
+
+  async getCourseFlashcard(id: number): Promise<CourseFlashcard | undefined> {
+    const result = await db
+      .select()
+      .from(courseFlashcards)
+      .where(eq(courseFlashcards.id, id))
+      .limit(1);
+    return result[0];
+  }
+
+  async getUserCourseFlashcards(userId: number, courseId: number): Promise<CourseFlashcard[]> {
+    return await db
+      .select()
+      .from(courseFlashcards)
+      .where(and(eq(courseFlashcards.userId, userId), eq(courseFlashcards.courseId, courseId)))
+      .orderBy(courseFlashcards.createdAt);
+  }
+
+  async updateCourseFlashcard(id: number, data: Partial<InsertCourseFlashcard>): Promise<CourseFlashcard> {
+    const result = await db
+      .update(courseFlashcards)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(courseFlashcards.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteCourseFlashcard(id: number): Promise<void> {
+    await db.delete(courseFlashcards).where(eq(courseFlashcards.id, id));
+  }
+
+  async getDueFlashcards(userId: number, courseId: number): Promise<CourseFlashcard[]> {
+    const now = new Date().toISOString();
+    return await db
+      .select()
+      .from(courseFlashcards)
+      .where(and(
+        eq(courseFlashcards.userId, userId),
+        eq(courseFlashcards.courseId, courseId),
+        sql`(${courseFlashcards.srsData}->>'dueAt')::timestamp <= ${now}::timestamp`
+      ))
+      .orderBy(sql`(${courseFlashcards.srsData}->>'dueAt')::timestamp`);
+  }
+
+  // Quiz Attempt Operations
+  async createQuizAttempt(attempt: InsertQuizAttempt): Promise<QuizAttempt> {
+    const result = await db.insert(quizAttempts).values(attempt).returning();
+    return result[0];
+  }
+
+  async getQuizAttempts(userId: number, courseId: number, moduleId: number, sectionIndex: number): Promise<QuizAttempt[]> {
+    return await db
+      .select()
+      .from(quizAttempts)
+      .where(and(
+        eq(quizAttempts.userId, userId),
+        eq(quizAttempts.courseId, courseId),
+        eq(quizAttempts.moduleId, moduleId),
+        eq(quizAttempts.sectionIndex, sectionIndex)
+      ))
+      .orderBy(quizAttempts.createdAt);
+  }
+
+  async getQuestionAttempts(userId: number, courseId: number, moduleId: number, sectionIndex: number, questionId: string): Promise<QuizAttempt[]> {
+    return await db
+      .select()
+      .from(quizAttempts)
+      .where(and(
+        eq(quizAttempts.userId, userId),
+        eq(quizAttempts.courseId, courseId),
+        eq(quizAttempts.moduleId, moduleId),
+        eq(quizAttempts.sectionIndex, sectionIndex),
+        eq(quizAttempts.questionId, questionId)
+      ))
+      .orderBy(quizAttempts.createdAt);
   }
 }
 

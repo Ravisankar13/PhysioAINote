@@ -43,7 +43,7 @@ import { comparativeAnalysisService } from "./ai/comparativeAnalysis";
 import { generateAISuggestions, applySuggestionToSoap } from "./services/aiSuggestionsService";
 import { ResearchService } from "./services/researchService";
 
-import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, competitionParticipants, soapNotes, insertSoapNoteSchema, bodyScans, insertBodyScanSchema, tournamentParticipants, diagnosisDuelTournaments, gameContent, virtualPatients, patternRecognitionScores } from "@shared/schema";
+import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, competitionParticipants, soapNotes, insertSoapNoteSchema, bodyScans, insertBodyScanSchema, tournamentParticipants, diagnosisDuelTournaments, gameContent, virtualPatients, patternRecognitionScores, insertCourseSectionNoteSchema, insertCourseSectionDiscussionSchema, insertCourseFlashcardSchema, insertQuizAttemptSchema } from "@shared/schema";
 import { ZodError, z } from "zod";
 import { fromZodError } from "zod-validation-error";
 import multer from "multer";
@@ -15585,6 +15585,398 @@ Respond in JSON format:
     } catch (error) {
       console.error('Error fetching course progress:', error);
       res.status(500).json({ error: 'Failed to fetch course progress' });
+    }
+  });
+
+  // Interactive Education Features API Routes
+
+  // Notes & Highlights Routes
+  app.post("/api/education/notes", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      // Validate input
+      const validatedData = insertCourseSectionNoteSchema.parse({
+        userId,
+        courseId: req.body.courseId,
+        moduleId: req.body.moduleId,
+        sectionIndex: req.body.sectionIndex,
+        content: req.body.content,
+        highlights: req.body.highlights || []
+      });
+
+      // Check if user is enrolled in the course
+      const enrollment = await storage.getUserEnrollment(userId, validatedData.courseId);
+      if (!enrollment) {
+        return res.status(403).json({ error: 'You must be enrolled in this course to create notes' });
+      }
+
+      // Check if note already exists for this section
+      const existing = await storage.getCourseSectionNote(userId, validatedData.courseId, validatedData.moduleId, validatedData.sectionIndex);
+      if (existing) {
+        // Update existing note
+        const updated = await storage.updateCourseSectionNote(existing.id, { content: validatedData.content, highlights: validatedData.highlights });
+        return res.json(updated);
+      }
+
+      // Create new note
+      const note = await storage.createCourseSectionNote(validatedData);
+      res.json(note);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return res.status(400).json({ error: fromZodError(error).message });
+      }
+      console.error('Error saving note:', error);
+      res.status(500).json({ error: 'Failed to save note' });
+    }
+  });
+
+  app.get("/api/education/notes/:courseId/:moduleId/:sectionIndex", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const courseId = parseInt(req.params.courseId);
+      const moduleId = parseInt(req.params.moduleId);
+      const sectionIndex = parseInt(req.params.sectionIndex);
+
+      if (isNaN(courseId) || isNaN(moduleId) || isNaN(sectionIndex)) {
+        return res.status(400).json({ error: 'Invalid course ID, module ID, or section index' });
+      }
+
+      const note = await storage.getCourseSectionNote(userId, courseId, moduleId, sectionIndex);
+      res.json(note || null);
+    } catch (error) {
+      console.error('Error fetching note:', error);
+      res.status(500).json({ error: 'Failed to fetch note' });
+    }
+  });
+
+  app.get("/api/education/notes/:courseId", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const courseId = parseInt(req.params.courseId);
+      const notes = await storage.getUserCourseSectionNotes(userId, courseId);
+      res.json(notes);
+    } catch (error) {
+      console.error('Error fetching notes:', error);
+      res.status(500).json({ error: 'Failed to fetch notes' });
+    }
+  });
+
+  // Discussion Routes
+  app.post("/api/education/discussions", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      // Validate input
+      const validatedData = insertCourseSectionDiscussionSchema.parse({
+        courseId: req.body.courseId,
+        moduleId: req.body.moduleId,
+        sectionIndex: req.body.sectionIndex,
+        userId,
+        body: req.body.body,
+        parentId: req.body.parentId || null
+      });
+
+      // Check if user is enrolled in the course
+      const enrollment = await storage.getUserEnrollment(userId, validatedData.courseId);
+      if (!enrollment) {
+        return res.status(403).json({ error: 'You must be enrolled in this course to create discussions' });
+      }
+
+      const discussion = await storage.createCourseSectionDiscussion(validatedData);
+      res.json(discussion);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return res.status(400).json({ error: fromZodError(error).message });
+      }
+      console.error('Error creating discussion:', error);
+      res.status(500).json({ error: 'Failed to create discussion' });
+    }
+  });
+
+  app.get("/api/education/discussions/:courseId/:moduleId/:sectionIndex", async (req: Request, res: Response) => {
+    try {
+      const courseId = parseInt(req.params.courseId);
+      const moduleId = parseInt(req.params.moduleId);
+      const sectionIndex = parseInt(req.params.sectionIndex);
+
+      if (isNaN(courseId) || isNaN(moduleId) || isNaN(sectionIndex)) {
+        return res.status(400).json({ error: 'Invalid course ID, module ID, or section index' });
+      }
+
+      const discussions = await storage.getCourseSectionDiscussions(courseId, moduleId, sectionIndex);
+      res.json(discussions);
+    } catch (error) {
+      console.error('Error fetching discussions:', error);
+      res.status(500).json({ error: 'Failed to fetch discussions' });
+    }
+  });
+
+  app.post("/api/education/discussions/:discussionId/upvote", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const discussionId = parseInt(req.params.discussionId);
+      const discussion = await storage.upvoteDiscussion(discussionId, userId);
+      res.json(discussion);
+    } catch (error) {
+      console.error('Error upvoting discussion:', error);
+      res.status(500).json({ error: 'Failed to upvote discussion' });
+    }
+  });
+
+  app.delete("/api/education/discussions/:discussionId/upvote", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const discussionId = parseInt(req.params.discussionId);
+      const discussion = await storage.removeUpvoteDiscussion(discussionId, userId);
+      res.json(discussion);
+    } catch (error) {
+      console.error('Error removing upvote:', error);
+      res.status(500).json({ error: 'Failed to remove upvote' });
+    }
+  });
+
+  app.get("/api/education/discussions/upvotes", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const discussionIds = (req.query.ids as string)?.split(',').map(id => parseInt(id)) || [];
+      const upvotedIds = await storage.getUserDiscussionUpvotes(userId, discussionIds);
+      res.json(upvotedIds);
+    } catch (error) {
+      console.error('Error fetching user upvotes:', error);
+      res.status(500).json({ error: 'Failed to fetch user upvotes' });
+    }
+  });
+
+  // Flashcard Routes
+  app.post("/api/education/flashcards", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      // Validate input
+      const validatedData = insertCourseFlashcardSchema.parse({
+        userId,
+        courseId: req.body.courseId,
+        moduleId: req.body.moduleId,
+        sectionIndex: req.body.sectionIndex || null,
+        front: req.body.front,
+        back: req.body.back
+      });
+
+      // Check if user is enrolled in the course
+      const enrollment = await storage.getUserEnrollment(userId, validatedData.courseId);
+      if (!enrollment) {
+        return res.status(403).json({ error: 'You must be enrolled in this course to create flashcards' });
+      }
+
+      const flashcard = await storage.createCourseFlashcard(validatedData);
+      res.json(flashcard);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return res.status(400).json({ error: fromZodError(error).message });
+      }
+      console.error('Error creating flashcard:', error);
+      res.status(500).json({ error: 'Failed to create flashcard' });
+    }
+  });
+
+  app.get("/api/education/flashcards/:courseId", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const courseId = parseInt(req.params.courseId);
+      if (isNaN(courseId)) {
+        return res.status(400).json({ error: 'Invalid course ID' });
+      }
+
+      const flashcards = await storage.getUserCourseFlashcards(userId, courseId);
+      res.json(flashcards);
+    } catch (error) {
+      console.error('Error fetching flashcards:', error);
+      res.status(500).json({ error: 'Failed to fetch flashcards' });
+    }
+  });
+
+  app.get("/api/education/flashcards/:courseId/due", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const courseId = parseInt(req.params.courseId);
+      if (isNaN(courseId)) {
+        return res.status(400).json({ error: 'Invalid course ID' });
+      }
+
+      const flashcards = await storage.getDueFlashcards(userId, courseId);
+      res.json(flashcards);
+    } catch (error) {
+      console.error('Error fetching due flashcards:', error);
+      res.status(500).json({ error: 'Failed to fetch due flashcards' });
+    }
+  });
+
+  app.patch("/api/education/flashcards/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const id = parseInt(req.params.id);
+      const flashcard = await storage.getCourseFlashcard(id);
+      if (!flashcard || flashcard.userId !== userId) {
+        return res.status(403).json({ error: 'Unauthorized' });
+      }
+
+      const updated = await storage.updateCourseFlashcard(id, req.body);
+      res.json(updated);
+    } catch (error) {
+      console.error('Error updating flashcard:', error);
+      res.status(500).json({ error: 'Failed to update flashcard' });
+    }
+  });
+
+  app.delete("/api/education/flashcards/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const id = parseInt(req.params.id);
+      const flashcard = await storage.getCourseFlashcard(id);
+      if (!flashcard || flashcard.userId !== userId) {
+        return res.status(403).json({ error: 'Unauthorized' });
+      }
+
+      await storage.deleteCourseFlashcard(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting flashcard:', error);
+      res.status(500).json({ error: 'Failed to delete flashcard' });
+    }
+  });
+
+  // Quiz Attempts Routes
+  app.post("/api/education/quiz-attempts", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      // Validate input
+      const validatedData = insertQuizAttemptSchema.parse({
+        userId,
+        courseId: req.body.courseId,
+        moduleId: req.body.moduleId,
+        sectionIndex: req.body.sectionIndex,
+        questionId: req.body.questionId,
+        selectedAnswer: req.body.selectedAnswer,
+        correctAnswer: req.body.correctAnswer,
+        isCorrect: req.body.isCorrect,
+        durationMs: req.body.durationMs
+      });
+
+      // Check if user is enrolled in the course
+      const enrollment = await storage.getUserEnrollment(userId, validatedData.courseId);
+      if (!enrollment) {
+        return res.status(403).json({ error: 'You must be enrolled in this course to submit quiz attempts' });
+      }
+
+      const attempt = await storage.createQuizAttempt(validatedData);
+      res.json(attempt);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return res.status(400).json({ error: fromZodError(error).message });
+      }
+      console.error('Error recording quiz attempt:', error);
+      res.status(500).json({ error: 'Failed to record quiz attempt' });
+    }
+  });
+
+  app.get("/api/education/quiz-attempts/:courseId/:moduleId/:sectionIndex", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const courseId = parseInt(req.params.courseId);
+      const moduleId = parseInt(req.params.moduleId);
+      const sectionIndex = parseInt(req.params.sectionIndex);
+
+      if (isNaN(courseId) || isNaN(moduleId) || isNaN(sectionIndex)) {
+        return res.status(400).json({ error: 'Invalid course ID, module ID, or section index' });
+      }
+
+      const attempts = await storage.getQuizAttempts(userId, courseId, moduleId, sectionIndex);
+      res.json(attempts);
+    } catch (error) {
+      console.error('Error fetching quiz attempts:', error);
+      res.status(500).json({ error: 'Failed to fetch quiz attempts' });
+    }
+  });
+
+  app.get("/api/education/quiz-attempts/:courseId/:moduleId/:sectionIndex/:questionId", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const courseId = parseInt(req.params.courseId);
+      const moduleId = parseInt(req.params.moduleId);
+      const sectionIndex = parseInt(req.params.sectionIndex);
+      const questionId = req.params.questionId;
+
+      if (isNaN(courseId) || isNaN(moduleId) || isNaN(sectionIndex)) {
+        return res.status(400).json({ error: 'Invalid course ID, module ID, or section index' });
+      }
+
+      if (!questionId) {
+        return res.status(400).json({ error: 'Question ID is required' });
+      }
+
+      const attempts = await storage.getQuestionAttempts(userId, courseId, moduleId, sectionIndex, questionId);
+      res.json(attempts);
+    } catch (error) {
+      console.error('Error fetching question attempts:', error);
+      res.status(500).json({ error: 'Failed to fetch question attempts' });
     }
   });
 

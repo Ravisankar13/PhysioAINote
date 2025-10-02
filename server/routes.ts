@@ -1961,6 +1961,41 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
 
+  // Image Search Routes
+  app.get("/api/search/exercise-images", async (req: Request, res: Response) => {
+    try {
+      const { query, maxResults = 3 } = req.query;
+      
+      if (!query || typeof query !== 'string') {
+        return res.status(400).json({ error: "Query parameter is required" });
+      }
+
+      const { searchExerciseImages } = await import('./googleImageSearch');
+      const result = await searchExerciseImages(query, Number(maxResults));
+      res.json(result);
+    } catch (error: any) {
+      console.error("Error searching exercise images:", error);
+      res.status(500).json({ error: error.message || "Failed to search for exercise images" });
+    }
+  });
+
+  app.post("/api/search/exercise-images/batch", async (req: Request, res: Response) => {
+    try {
+      const { exercises, imagesPerExercise = 2 } = req.body;
+      
+      if (!exercises || !Array.isArray(exercises)) {
+        return res.status(400).json({ error: "Exercises array is required" });
+      }
+
+      const { searchMultipleExercises } = await import('./googleImageSearch');
+      const results = await searchMultipleExercises(exercises, Number(imagesPerExercise));
+      res.json(results);
+    } catch (error: any) {
+      console.error("Error searching multiple exercise images:", error);
+      res.status(500).json({ error: error.message || "Failed to search for exercise images" });
+    }
+  });
+
   // Research Gaps Routes (must come before parameterized routes)
   app.get("/api/research/gaps", async (req: Request, res: Response) => {
     try {

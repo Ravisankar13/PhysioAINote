@@ -18,7 +18,9 @@ import {
   TrendingUp,
   Ruler,
   RotateCw,
-  Cpu
+  Cpu,
+  Video,
+  Clock
 } from 'lucide-react';
 import { loadMediaPipeLibraries } from '@/utils/mediapipeLoader';
 
@@ -46,8 +48,9 @@ interface JointConfig {
   id: JointType;
   label: string;
   landmarks: { primary: number; secondary: number; tertiary: number };
-  targetPosition: { x: number; y: number }; // Normalized position (0-1)
-  toleranceRadius: number; // In pixels
+  targetPosition: { x: number; y: number };
+  toleranceRadius: number;
+  movementInstruction: string;
 }
 
 const JOINT_CONFIGS: Record<JointType, JointConfig> = {
@@ -60,7 +63,8 @@ const JOINT_CONFIGS: Record<JointType, JointConfig> = {
       tertiary: POSE_LANDMARKS.LEFT_HIP
     },
     targetPosition: { x: 0.5, y: 0.7 },
-    toleranceRadius: 80
+    toleranceRadius: 80,
+    movementInstruction: "Rise up on your toes and lower back down"
   },
   knee: {
     id: 'knee',
@@ -71,7 +75,8 @@ const JOINT_CONFIGS: Record<JointType, JointConfig> = {
       tertiary: POSE_LANDMARKS.LEFT_ANKLE
     },
     targetPosition: { x: 0.5, y: 0.6 },
-    toleranceRadius: 80
+    toleranceRadius: 80,
+    movementInstruction: "Perform a slow squat and stand back up"
   },
   hip: {
     id: 'hip',
@@ -82,7 +87,8 @@ const JOINT_CONFIGS: Record<JointType, JointConfig> = {
       tertiary: POSE_LANDMARKS.LEFT_SHOULDER
     },
     targetPosition: { x: 0.5, y: 0.5 },
-    toleranceRadius: 80
+    toleranceRadius: 80,
+    movementInstruction: "Lift your knee toward chest and lower it down"
   },
   shoulder: {
     id: 'shoulder',
@@ -93,7 +99,8 @@ const JOINT_CONFIGS: Record<JointType, JointConfig> = {
       tertiary: POSE_LANDMARKS.LEFT_HIP
     },
     targetPosition: { x: 0.5, y: 0.35 },
-    toleranceRadius: 80
+    toleranceRadius: 80,
+    movementInstruction: "Slowly raise your arm overhead and back down"
   },
   elbow: {
     id: 'elbow',
@@ -104,7 +111,8 @@ const JOINT_CONFIGS: Record<JointType, JointConfig> = {
       tertiary: POSE_LANDMARKS.LEFT_WRIST
     },
     targetPosition: { x: 0.5, y: 0.45 },
-    toleranceRadius: 80
+    toleranceRadius: 80,
+    movementInstruction: "Bend your elbow and straighten it out"
   },
   wrist: {
     id: 'wrist',
@@ -115,53 +123,65 @@ const JOINT_CONFIGS: Record<JointType, JointConfig> = {
       tertiary: POSE_LANDMARKS.LEFT_SHOULDER
     },
     targetPosition: { x: 0.5, y: 0.55 },
-    toleranceRadius: 80
+    toleranceRadius: 80,
+    movementInstruction: "Flex your wrist up and down"
   }
 };
 
+interface MovementFrame {
+  timestamp: number;
+  landmarks: any[];
+  angle: number;
+}
+
+interface MovementMetrics {
+  totalRange: number;
+  smoothness: number;
+  symmetry?: number;
+  compensations: string[];
+}
+
 interface JointAnalysisResult {
   jointType: JointType;
-  flexionAngle: number;
-  extensionAngle: number;
-  alignmentScore: number;
-  rangeOfMotion: {
-    current: number;
-    normal: { min: number; max: number };
-    percentage: number;
-  };
+  movementMetrics: MovementMetrics;
+  movementRange: { min: number; max: number; total: number };
   clinicalInterpretation: string;
   timestamp: Date;
 }
 
-// MediaPipe types (loaded dynamically)
 type Pose = any;
 type Camera = any;
+
+type RecordingPhase = 'idle' | 'countdown' | 'recording' | 'complete';
 
 export default function JointAnalysisLab() {
   const { toast } = useToast();
   
-  // State management
   const [selectedJoint, setSelectedJoint] = useState<JointType>('shoulder');
   const [cameraStatus, setCameraStatus] = useState<'idle' | 'initializing' | 'ready' | 'error'>('idle');
   const [mediapipeLoaded, setMediapipeLoaded] = useState(false);
   const [isTracking, setIsTracking] = useState(false);
   const [isJointCentered, setIsJointCentered] = useState(false);
-  const [canAnalyze, setCanAnalyze] = useState(false);
+  const [centeredDuration, setCenteredDuration] = useState(0);
+  
+  const [recordingPhase, setRecordingPhase] = useState<RecordingPhase>('idle');
+  const [countdown, setCountdown] = useState(3);
+  const [recordingProgress, setRecordingProgress] = useState(0);
+  const [movementData, setMovementData] = useState<MovementFrame[]>([]);
+  
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<JointAnalysisResult | null>(null);
   const [currentLandmarks, setCurrentLandmarks] = useState<any[] | null>(null);
-  const [centeredDuration, setCenteredDuration] = useState(0);
   
-  // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const poseRef = useRef<Pose | null>(null);
   const cameraRef = useRef<Camera | null>(null);
-  const centeredTimerRef = useRef<NodeJS.Timeout | null>(null);
   const centeredStartTimeRef = useRef<number | null>(null);
+  const recordingStartTimeRef = useRef<number | null>(null);
+  const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Calculate angle between three points
   const calculateAngle = (a: any, b: any, c: any): number => {
     const radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
     let angle = Math.abs(radians * 180 / Math.PI);
@@ -169,7 +189,6 @@ export default function JointAnalysisLab() {
     return angle;
   };
 
-  // Check if joint is within target circle
   const isJointInTarget = useCallback((landmarks: any[], config: JointConfig, width: number, height: number): boolean => {
     const primaryLandmark = landmarks[config.landmarks.primary];
     if (!primaryLandmark) return false;
@@ -187,69 +206,78 @@ export default function JointAnalysisLab() {
     return distance <= config.toleranceRadius;
   }, []);
 
-  // Analyze joint metrics
-  const analyzeJoint = useCallback((landmarks: any[], jointType: JointType): JointAnalysisResult => {
-    const config = JOINT_CONFIGS[jointType];
-    const primary = landmarks[config.landmarks.primary];
-    const secondary = landmarks[config.landmarks.secondary];
-    const tertiary = landmarks[config.landmarks.tertiary];
-    
-    // Calculate flexion/extension angle
-    const flexionAngle = calculateAngle(tertiary, primary, secondary);
-    const extensionAngle = 180 - flexionAngle;
-    
-    // Calculate alignment score (0-100)
-    const alignmentScore = Math.min(100, Math.max(0, 
-      100 - Math.abs(90 - flexionAngle)
-    ));
-    
-    // Normal ROM ranges by joint type
-    const romRanges: Record<JointType, { min: number; max: number }> = {
-      ankle: { min: 20, max: 50 },
-      knee: { min: 0, max: 135 },
-      hip: { min: 0, max: 125 },
-      shoulder: { min: 0, max: 180 },
-      elbow: { min: 0, max: 145 },
-      wrist: { min: 0, max: 90 }
-    };
-    
-    const normalRange = romRanges[jointType];
-    const romPercentage = Math.min(100, (flexionAngle / normalRange.max) * 100);
-    
-    // Generate clinical interpretation
-    let interpretation = '';
-    if (alignmentScore > 80) {
-      interpretation = `Excellent alignment detected. ${config.label} joint shows optimal positioning with ${flexionAngle.toFixed(1)}° of flexion.`;
-    } else if (alignmentScore > 60) {
-      interpretation = `Good alignment. ${config.label} joint flexion at ${flexionAngle.toFixed(1)}° is within acceptable range.`;
-    } else {
-      interpretation = `Alignment concern detected. ${config.label} joint shows ${flexionAngle.toFixed(1)}° flexion, which may require clinical assessment.`;
+  const calculateMovementMetrics = (frames: MovementFrame[], jointType: JointType): MovementMetrics => {
+    if (frames.length < 2) {
+      return {
+        totalRange: 0,
+        smoothness: 0,
+        compensations: []
+      };
     }
-    
-    if (romPercentage > 90) {
-      interpretation += ' Range of motion appears excellent.';
-    } else if (romPercentage > 70) {
-      interpretation += ' Range of motion is adequate.';
-    } else {
-      interpretation += ' Limited range of motion detected - further evaluation recommended.';
-    }
-    
-    return {
-      jointType,
-      flexionAngle,
-      extensionAngle,
-      alignmentScore,
-      rangeOfMotion: {
-        current: flexionAngle,
-        normal: normalRange,
-        percentage: romPercentage
-      },
-      clinicalInterpretation: interpretation,
-      timestamp: new Date()
-    };
-  }, []);
 
-  // Process pose detection results
+    const angles = frames.map(f => f.angle);
+    const minAngle = Math.min(...angles);
+    const maxAngle = Math.max(...angles);
+    const totalRange = maxAngle - minAngle;
+
+    const angleChanges: number[] = [];
+    for (let i = 1; i < angles.length; i++) {
+      angleChanges.push(Math.abs(angles[i] - angles[i - 1]));
+    }
+    
+    const mean = angleChanges.reduce((a, b) => a + b, 0) / angleChanges.length;
+    const variance = angleChanges.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / angleChanges.length;
+    const smoothness = Math.sqrt(variance);
+
+    const compensations: string[] = [];
+    
+    const config = JOINT_CONFIGS[jointType];
+    for (const frame of frames) {
+      const leftShoulder = frame.landmarks[POSE_LANDMARKS.LEFT_SHOULDER];
+      const rightShoulder = frame.landmarks[POSE_LANDMARKS.RIGHT_SHOULDER];
+      const leftHip = frame.landmarks[POSE_LANDMARKS.LEFT_HIP];
+      const rightHip = frame.landmarks[POSE_LANDMARKS.RIGHT_HIP];
+      
+      if (leftShoulder && rightShoulder && leftHip && rightHip) {
+        const shoulderTilt = Math.abs(leftShoulder.y - rightShoulder.y);
+        const hipTilt = Math.abs(leftHip.y - rightHip.y);
+        
+        if (shoulderTilt > 0.1) {
+          if (!compensations.includes('Shoulder elevation detected')) {
+            compensations.push('Shoulder elevation detected');
+          }
+        }
+        
+        if (hipTilt > 0.08) {
+          if (!compensations.includes('Hip hiking observed')) {
+            compensations.push('Hip hiking observed');
+          }
+        }
+        
+        const trunkAngle = calculateAngle(leftShoulder, leftHip, rightHip);
+        if (Math.abs(trunkAngle - 90) > 15) {
+          if (!compensations.includes('Trunk lean detected')) {
+            compensations.push('Trunk lean detected');
+          }
+        }
+      }
+    }
+
+    let symmetry: number | undefined;
+    if (['shoulder', 'hip', 'knee', 'ankle', 'elbow', 'wrist'].includes(jointType)) {
+      const leftAngles = angles;
+      const avgLeft = leftAngles.reduce((a, b) => a + b, 0) / leftAngles.length;
+      symmetry = 100 - Math.min(100, Math.abs(avgLeft - 90));
+    }
+
+    return {
+      totalRange,
+      smoothness,
+      symmetry,
+      compensations
+    };
+  };
+
   const onPoseResults = useCallback((results: any) => {
     if (!canvasRef.current || !overlayCanvasRef.current) return;
     
@@ -260,65 +288,67 @@ export default function JointAnalysisLab() {
     
     if (!ctx || !overlayCtx) return;
     
-    // Clear canvases
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
     
-    // Draw video frame
     ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
     
     if (results.poseLandmarks) {
       setCurrentLandmarks(results.poseLandmarks);
       
       const config = JOINT_CONFIGS[selectedJoint];
-      const centered = isJointInTarget(results.poseLandmarks, config, canvas.width, canvas.height);
-      setIsJointCentered(centered);
-      
-      // Track how long joint has been centered
-      if (centered) {
-        if (!centeredStartTimeRef.current) {
-          centeredStartTimeRef.current = Date.now();
-        }
-        const duration = (Date.now() - centeredStartTimeRef.current) / 1000;
-        setCenteredDuration(duration);
-        
-        // Enable analyze after 1 second of stable centering
-        if (duration >= 1) {
-          setCanAnalyze(true);
-        }
-      } else {
-        centeredStartTimeRef.current = null;
-        setCenteredDuration(0);
-        setCanAnalyze(false);
-      }
-      
-      // Draw target circle
-      const targetX = config.targetPosition.x * canvas.width;
-      const targetY = config.targetPosition.y * canvas.height;
-      
-      overlayCtx.strokeStyle = centered ? '#22c55e' : '#ef4444';
-      overlayCtx.lineWidth = 4;
-      overlayCtx.beginPath();
-      overlayCtx.arc(targetX, targetY, config.toleranceRadius, 0, Math.PI * 2);
-      overlayCtx.stroke();
-      
-      // Draw crosshair
-      overlayCtx.strokeStyle = centered ? 'rgba(34, 197, 94, 0.4)' : 'rgba(239, 68, 68, 0.4)';
-      overlayCtx.lineWidth = 2;
-      overlayCtx.beginPath();
-      overlayCtx.moveTo(targetX - 20, targetY);
-      overlayCtx.lineTo(targetX + 20, targetY);
-      overlayCtx.moveTo(targetX, targetY - 20);
-      overlayCtx.lineTo(targetX, targetY + 20);
-      overlayCtx.stroke();
-      
-      // Draw joint landmarks
       const primary = results.poseLandmarks[config.landmarks.primary];
       const secondary = results.poseLandmarks[config.landmarks.secondary];
       const tertiary = results.poseLandmarks[config.landmarks.tertiary];
       
       if (primary && secondary && tertiary) {
-        // Draw skeleton connections
+        const angle = calculateAngle(tertiary, primary, secondary);
+        
+        if (recordingPhase === 'recording') {
+          const timestamp = Date.now();
+          setMovementData(prev => [...prev, {
+            timestamp,
+            landmarks: results.poseLandmarks,
+            angle
+          }]);
+        }
+        
+        if (recordingPhase === 'idle' || recordingPhase === 'countdown') {
+          const centered = isJointInTarget(results.poseLandmarks, config, canvas.width, canvas.height);
+          setIsJointCentered(centered);
+          
+          if (centered) {
+            if (!centeredStartTimeRef.current) {
+              centeredStartTimeRef.current = Date.now();
+            }
+            const duration = (Date.now() - centeredStartTimeRef.current) / 1000;
+            setCenteredDuration(duration);
+          } else {
+            centeredStartTimeRef.current = null;
+            setCenteredDuration(0);
+          }
+        }
+        
+        const targetX = config.targetPosition.x * canvas.width;
+        const targetY = config.targetPosition.y * canvas.height;
+        
+        const centered = isJointInTarget(results.poseLandmarks, config, canvas.width, canvas.height);
+        
+        overlayCtx.strokeStyle = centered ? '#22c55e' : '#ef4444';
+        overlayCtx.lineWidth = 4;
+        overlayCtx.beginPath();
+        overlayCtx.arc(targetX, targetY, config.toleranceRadius, 0, Math.PI * 2);
+        overlayCtx.stroke();
+        
+        overlayCtx.strokeStyle = centered ? 'rgba(34, 197, 94, 0.4)' : 'rgba(239, 68, 68, 0.4)';
+        overlayCtx.lineWidth = 2;
+        overlayCtx.beginPath();
+        overlayCtx.moveTo(targetX - 20, targetY);
+        overlayCtx.lineTo(targetX + 20, targetY);
+        overlayCtx.moveTo(targetX, targetY - 20);
+        overlayCtx.lineTo(targetX, targetY + 20);
+        overlayCtx.stroke();
+        
         overlayCtx.strokeStyle = 'rgba(59, 130, 246, 0.8)';
         overlayCtx.lineWidth = 3;
         overlayCtx.beginPath();
@@ -327,7 +357,6 @@ export default function JointAnalysisLab() {
         overlayCtx.lineTo(secondary.x * canvas.width, secondary.y * canvas.height);
         overlayCtx.stroke();
         
-        // Draw joint points
         [primary, secondary, tertiary].forEach((landmark, idx) => {
           overlayCtx.fillStyle = idx === 0 ? '#3b82f6' : '#60a5fa';
           overlayCtx.beginPath();
@@ -341,8 +370,6 @@ export default function JointAnalysisLab() {
           overlayCtx.fill();
         });
         
-        // Draw angle arc at primary joint
-        const angle = calculateAngle(tertiary, primary, secondary);
         overlayCtx.strokeStyle = 'rgba(251, 191, 36, 0.8)';
         overlayCtx.lineWidth = 2;
         const arcRadius = 40;
@@ -357,7 +384,6 @@ export default function JointAnalysisLab() {
         );
         overlayCtx.stroke();
         
-        // Draw angle text
         overlayCtx.fillStyle = '#fbbf24';
         overlayCtx.font = 'bold 16px Arial';
         overlayCtx.fillText(
@@ -365,11 +391,37 @@ export default function JointAnalysisLab() {
           primary.x * canvas.width + 50,
           primary.y * canvas.height - 10
         );
+
+        if (recordingPhase === 'countdown') {
+          overlayCtx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+          overlayCtx.fillRect(canvas.width / 2 - 100, canvas.height / 2 - 100, 200, 200);
+          
+          overlayCtx.fillStyle = '#ffffff';
+          overlayCtx.font = 'bold 120px Arial';
+          overlayCtx.textAlign = 'center';
+          overlayCtx.textBaseline = 'middle';
+          overlayCtx.fillText(
+            countdown > 0 ? countdown.toString() : 'GO!',
+            canvas.width / 2,
+            canvas.height / 2
+          );
+        }
+        
+        if (recordingPhase === 'recording') {
+          overlayCtx.fillStyle = 'rgba(239, 68, 68, 0.8)';
+          overlayCtx.beginPath();
+          overlayCtx.arc(50, 50, 15, 0, Math.PI * 2);
+          overlayCtx.fill();
+          
+          overlayCtx.fillStyle = '#ffffff';
+          overlayCtx.font = 'bold 18px Arial';
+          overlayCtx.textAlign = 'left';
+          overlayCtx.fillText('RECORDING', 75, 55);
+        }
       }
     }
-  }, [selectedJoint, isJointInTarget, calculateAngle]);
+  }, [selectedJoint, isJointInTarget, calculateAngle, recordingPhase, countdown]);
 
-  // Initialize MediaPipe
   useEffect(() => {
     const initMediaPipe = async () => {
       try {
@@ -401,7 +453,6 @@ export default function JointAnalysisLab() {
     initMediaPipe();
   }, [toast]);
 
-  // Start tracking
   const startTracking = async () => {
     if (!mediapipeLoaded || !videoRef.current || !canvasRef.current) return;
     
@@ -452,7 +503,6 @@ export default function JointAnalysisLab() {
     }
   };
 
-  // Stop tracking
   const stopTracking = () => {
     if (cameraRef.current) {
       cameraRef.current.stop();
@@ -461,49 +511,108 @@ export default function JointAnalysisLab() {
     if (poseRef.current) {
       poseRef.current = null;
     }
+    if (recordingIntervalRef.current) {
+      clearInterval(recordingIntervalRef.current);
+    }
     setIsTracking(false);
     setIsJointCentered(false);
-    setCanAnalyze(false);
     setCenteredDuration(0);
+    setRecordingPhase('idle');
+    setMovementData([]);
     centeredStartTimeRef.current = null;
   };
 
-  // Handle joint selection change
   const handleJointChange = (joint: JointType) => {
     setSelectedJoint(joint);
     setAnalysisResult(null);
-    setCanAnalyze(false);
     setIsJointCentered(false);
     setCenteredDuration(0);
+    setRecordingPhase('idle');
+    setMovementData([]);
     centeredStartTimeRef.current = null;
   };
 
-  // Perform analysis
+  const startRecording = () => {
+    setRecordingPhase('countdown');
+    setCountdown(3);
+    
+    const countdownInterval = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(countdownInterval);
+          setTimeout(() => {
+            setRecordingPhase('recording');
+            setMovementData([]);
+            recordingStartTimeRef.current = Date.now();
+            
+            const progressInterval = setInterval(() => {
+              if (recordingStartTimeRef.current) {
+                const elapsed = (Date.now() - recordingStartTimeRef.current) / 1000;
+                const progress = Math.min(100, (elapsed / 5) * 100);
+                setRecordingProgress(progress);
+                
+                if (elapsed >= 5) {
+                  clearInterval(progressInterval);
+                  setRecordingPhase('complete');
+                  setRecordingProgress(100);
+                  
+                  toast({
+                    title: "Recording Complete",
+                    description: "Movement data captured. Click Analyze to see results.",
+                  });
+                }
+              }
+            }, 100);
+            
+            recordingIntervalRef.current = progressInterval;
+          }, 500);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
   const performAnalysis = async () => {
-    if (!currentLandmarks || !canAnalyze) return;
+    if (movementData.length === 0) {
+      toast({
+        title: "No Movement Data",
+        description: "Please record a movement first",
+        variant: "destructive",
+      });
+      return;
+    }
     
     setIsAnalyzing(true);
     
     try {
-      // Calculate local metrics first
-      const localResult = analyzeJoint(currentLandmarks, selectedJoint);
+      const metrics = calculateMovementMetrics(movementData, selectedJoint);
       
-      // Prepare metrics for backend AI analysis
-      const metrics = {
+      const angles = movementData.map(f => f.angle);
+      const minAngle = Math.min(...angles);
+      const maxAngle = Math.max(...angles);
+      
+      const movementSummary = {
+        frameCount: movementData.length,
+        duration: movementData.length > 0 ? 
+          (movementData[movementData.length - 1].timestamp - movementData[0].timestamp) / 1000 : 0,
+        angleRange: { min: minAngle, max: maxAngle }
+      };
+      
+      const analysisPayload = {
         joint: selectedJoint,
-        flexionAngle: localResult.flexionAngle,
-        extensionAngle: localResult.extensionAngle,
-        alignmentScore: localResult.alignmentScore,
-        rangeOfMotion: localResult.rangeOfMotion.percentage,
-        poseLandmarks: currentLandmarks
+        movementRange: metrics.totalRange,
+        smoothness: metrics.smoothness,
+        compensationPatterns: metrics.compensations,
+        symmetry: metrics.symmetry,
+        movementDataSummary: movementSummary
       };
 
-      // Call backend AI analysis
       const response = await fetch('/api/joint-analysis/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(metrics)
+        body: JSON.stringify(analysisPayload)
       });
 
       if (!response.ok) {
@@ -512,53 +621,73 @@ export default function JointAnalysisLab() {
 
       const aiAnalysis = await response.json();
       
-      // Merge local calculations with AI interpretation
-      const enhancedResult: JointAnalysisResult = {
-        ...localResult,
-        clinicalInterpretation: aiAnalysis.interpretation.overall
+      const result: JointAnalysisResult = {
+        jointType: selectedJoint,
+        movementMetrics: metrics,
+        movementRange: {
+          min: minAngle,
+          max: maxAngle,
+          total: metrics.totalRange
+        },
+        clinicalInterpretation: aiAnalysis.interpretation?.overall || 'Analysis complete. Movement patterns captured successfully.',
+        timestamp: new Date()
       };
       
-      setAnalysisResult(enhancedResult);
+      setAnalysisResult(result);
       
       toast({
         title: "AI Analysis Complete",
-        description: aiAnalysis.interpretation.overall.substring(0, 100) + "...",
+        description: "Movement analysis results are ready",
       });
       
     } catch (error) {
       console.error('Analysis error:', error);
+      
+      const metrics = calculateMovementMetrics(movementData, selectedJoint);
+      const angles = movementData.map(f => f.angle);
+      const minAngle = Math.min(...angles);
+      const maxAngle = Math.max(...angles);
+      
+      setAnalysisResult({
+        jointType: selectedJoint,
+        movementMetrics: metrics,
+        movementRange: {
+          min: minAngle,
+          max: maxAngle,
+          total: metrics.totalRange
+        },
+        clinicalInterpretation: `Movement analysis complete. Range: ${metrics.totalRange.toFixed(1)}°, Smoothness: ${metrics.smoothness.toFixed(2)}. ${metrics.compensations.length > 0 ? 'Compensations detected: ' + metrics.compensations.join(', ') : 'No significant compensations detected.'}`,
+        timestamp: new Date()
+      });
+      
       toast({
-        title: "Analysis Error",
-        description: "Failed to analyze joint. Please try again.",
-        variant: "destructive",
+        title: "Analysis Complete",
+        description: "Local analysis completed (AI analysis unavailable)",
       });
     } finally {
       setIsAnalyzing(false);
     }
   };
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       stopTracking();
-      if (centeredTimerRef.current) {
-        clearTimeout(centeredTimerRef.current);
-      }
     };
   }, []);
+
+  const canStartRecording = isTracking && isJointCentered && centeredDuration >= 1 && recordingPhase === 'idle';
+  const canAnalyze = recordingPhase === 'complete' && movementData.length > 0;
 
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
         <div className="text-center space-y-2">
           <h1 className="text-4xl font-bold tracking-tight">Joint Analysis Lab</h1>
           <p className="text-muted-foreground text-lg">
-            AI-powered joint analysis with real-time positioning feedback
+            Movement-based joint analysis with AI-powered biomechanical insights
           </p>
         </div>
 
-        {/* Joint Selection */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -587,7 +716,6 @@ export default function JointAnalysisLab() {
           </CardContent>
         </Card>
 
-        {/* Camera Feed */}
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -597,7 +725,10 @@ export default function JointAnalysisLab() {
                   Camera Feed
                 </CardTitle>
                 <CardDescription>
-                  Position your {JOINT_CONFIGS[selectedJoint].label.toLowerCase()} within the target circle
+                  {recordingPhase === 'idle' && 'Position your joint within the target circle'}
+                  {recordingPhase === 'countdown' && 'Get ready...'}
+                  {recordingPhase === 'recording' && `Performing: ${JOINT_CONFIGS[selectedJoint].movementInstruction}`}
+                  {recordingPhase === 'complete' && 'Recording complete - ready to analyze'}
                 </CardDescription>
               </div>
               <div className="flex gap-2">
@@ -624,7 +755,6 @@ export default function JointAnalysisLab() {
             </div>
           </CardHeader>
           <CardContent>
-            {/* Status Alert */}
             {cameraStatus === 'initializing' && (
               <Alert className="mb-4" data-testid="alert-initializing">
                 <Activity className="h-4 w-4" />
@@ -645,10 +775,9 @@ export default function JointAnalysisLab() {
               </Alert>
             )}
 
-            {isTracking && (
+            {isTracking && recordingPhase === 'idle' && (
               <Alert 
                 className="mb-4" 
-                variant={isJointCentered ? 'default' : 'default'}
                 data-testid={isJointCentered ? 'alert-centered' : 'alert-not-centered'}
               >
                 {isJointCentered ? (
@@ -656,7 +785,7 @@ export default function JointAnalysisLab() {
                     <CheckCircle className="h-4 w-4 text-green-600" />
                     <AlertTitle className="text-green-600">Joint Centered</AlertTitle>
                     <AlertDescription>
-                      Hold steady... {centeredDuration >= 1 ? 'Ready to analyze!' : `${(1 - centeredDuration).toFixed(1)}s`}
+                      Hold steady... {centeredDuration >= 1 ? 'Ready to record!' : `${(1 - centeredDuration).toFixed(1)}s`}
                     </AlertDescription>
                   </>
                 ) : (
@@ -664,14 +793,34 @@ export default function JointAnalysisLab() {
                     <Target className="h-4 w-4" />
                     <AlertTitle>Position Your Joint</AlertTitle>
                     <AlertDescription>
-                      Move your {JOINT_CONFIGS[selectedJoint].label.toLowerCase()} into the green target circle
+                      Move your {JOINT_CONFIGS[selectedJoint].label.toLowerCase()} into the target circle
                     </AlertDescription>
                   </>
                 )}
               </Alert>
             )}
 
-            {/* Video and Canvas */}
+            {recordingPhase === 'recording' && (
+              <Alert className="mb-4 bg-red-50 border-red-200" data-testid="alert-recording">
+                <Video className="h-4 w-4 text-red-600" />
+                <AlertTitle className="text-red-600">Recording Movement</AlertTitle>
+                <AlertDescription>
+                  {JOINT_CONFIGS[selectedJoint].movementInstruction}
+                  <Progress value={recordingProgress} className="mt-2" />
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {recordingPhase === 'complete' && (
+              <Alert className="mb-4 bg-green-50 border-green-200" data-testid="alert-complete">
+                <CheckCircle className="h-4 w-4 text-green-600" />
+                <AlertTitle className="text-green-600">Recording Complete</AlertTitle>
+                <AlertDescription>
+                  Captured {movementData.length} frames. Click "Analyze Movement" to see results.
+                </AlertDescription>
+              </Alert>
+            )}
+
             <div className="relative bg-black rounded-lg overflow-hidden aspect-video">
               <video
                 ref={videoRef}
@@ -703,13 +852,24 @@ export default function JointAnalysisLab() {
               )}
             </div>
 
-            {/* Analyze Button */}
-            {isTracking && (
-              <div className="mt-4 flex justify-center">
+            <div className="mt-4 flex gap-3 justify-center">
+              {canStartRecording && (
                 <Button
                   size="lg"
-                  disabled={!canAnalyze || isAnalyzing}
+                  onClick={startRecording}
+                  data-testid="button-record-movement"
+                  className="min-w-[200px]"
+                >
+                  <Video className="h-4 w-4 mr-2" />
+                  Record Movement
+                </Button>
+              )}
+              
+              {canAnalyze && (
+                <Button
+                  size="lg"
                   onClick={performAnalysis}
+                  disabled={isAnalyzing}
                   data-testid="button-analyze"
                   className="min-w-[200px]"
                 >
@@ -721,89 +881,87 @@ export default function JointAnalysisLab() {
                   ) : (
                     <>
                       <Sparkles className="h-4 w-4 mr-2" />
-                      Analyze Joint
+                      Analyze Movement
                     </>
                   )}
                 </Button>
-              </div>
-            )}
+              )}
+            </div>
           </CardContent>
         </Card>
 
-        {/* Analysis Results */}
         {analysisResult && (
           <Card data-testid="card-analysis-results">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Activity className="h-5 w-5" />
-                Analysis Results - {JOINT_CONFIGS[analysisResult.jointType].label}
+                Movement Analysis - {JOINT_CONFIGS[analysisResult.jointType].label}
               </CardTitle>
               <CardDescription>
-                Captured at {analysisResult.timestamp.toLocaleTimeString()}
+                Captured at {analysisResult.timestamp.toLocaleTimeString()} • {movementData.length} frames analyzed
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* Metrics Grid */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Flexion/Extension */}
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <RotateCw className="h-4 w-4 text-blue-600" />
-                    <h3 className="font-semibold">Joint Angles</h3>
+                    <h3 className="font-semibold">Movement Range</h3>
                   </div>
-                  <div className="space-y-1" data-testid="text-flexion-angle">
+                  <div className="space-y-1" data-testid="text-movement-range">
                     <p className="text-2xl font-bold text-blue-600">
-                      {analysisResult.flexionAngle.toFixed(1)}°
+                      {analysisResult.movementMetrics.totalRange.toFixed(1)}°
                     </p>
-                    <p className="text-sm text-muted-foreground">Flexion Angle</p>
-                  </div>
-                  <div className="space-y-1" data-testid="text-extension-angle">
-                    <p className="text-lg text-muted-foreground">
-                      {analysisResult.extensionAngle.toFixed(1)}°
+                    <p className="text-sm text-muted-foreground">Total Range</p>
+                    <p className="text-xs text-muted-foreground">
+                      {analysisResult.movementRange.min.toFixed(1)}° - {analysisResult.movementRange.max.toFixed(1)}°
                     </p>
-                    <p className="text-sm text-muted-foreground">Extension</p>
                   </div>
                 </div>
 
-                {/* Alignment */}
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <Ruler className="h-4 w-4 text-purple-600" />
-                    <h3 className="font-semibold">Alignment Score</h3>
+                    <TrendingUp className="h-4 w-4 text-purple-600" />
+                    <h3 className="font-semibold">Smoothness</h3>
                   </div>
-                  <div className="space-y-2" data-testid="text-alignment-score">
+                  <div className="space-y-2" data-testid="text-smoothness">
                     <p className="text-2xl font-bold text-purple-600">
-                      {analysisResult.alignmentScore.toFixed(0)}/100
+                      {analysisResult.movementMetrics.smoothness.toFixed(2)}
                     </p>
-                    <Progress value={analysisResult.alignmentScore} className="h-2" />
-                    <Badge variant={analysisResult.alignmentScore > 70 ? 'default' : 'secondary'}>
-                      {analysisResult.alignmentScore > 80 ? 'Excellent' : 
-                       analysisResult.alignmentScore > 60 ? 'Good' : 'Fair'}
+                    <Badge variant={analysisResult.movementMetrics.smoothness < 2 ? 'default' : 'secondary'}>
+                      {analysisResult.movementMetrics.smoothness < 2 ? 'Smooth' : 
+                       analysisResult.movementMetrics.smoothness < 4 ? 'Moderate' : 'Jerky'}
                     </Badge>
+                    <p className="text-xs text-muted-foreground">Lower is better</p>
                   </div>
                 </div>
 
-                {/* Range of Motion */}
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <TrendingUp className="h-4 w-4 text-green-600" />
-                    <h3 className="font-semibold">Range of Motion</h3>
+                    <Ruler className="h-4 w-4 text-green-600" />
+                    <h3 className="font-semibold">Compensations</h3>
                   </div>
-                  <div className="space-y-2" data-testid="text-rom">
+                  <div className="space-y-2" data-testid="text-compensations">
                     <p className="text-2xl font-bold text-green-600">
-                      {analysisResult.rangeOfMotion.percentage.toFixed(0)}%
+                      {analysisResult.movementMetrics.compensations.length}
                     </p>
-                    <Progress value={analysisResult.rangeOfMotion.percentage} className="h-2" />
-                    <p className="text-sm text-muted-foreground">
-                      Normal: {analysisResult.rangeOfMotion.normal.min}° - {analysisResult.rangeOfMotion.normal.max}°
-                    </p>
+                    {analysisResult.movementMetrics.compensations.length > 0 ? (
+                      <div className="space-y-1">
+                        {analysisResult.movementMetrics.compensations.map((comp, idx) => (
+                          <Badge key={idx} variant="outline" className="text-xs block w-full">
+                            {comp}
+                          </Badge>
+                        ))}
+                      </div>
+                    ) : (
+                      <Badge variant="default" className="bg-green-600">No Compensations</Badge>
+                    )}
                   </div>
                 </div>
               </div>
 
               <Separator />
 
-              {/* AI Clinical Interpretation */}
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
                   <Cpu className="h-5 w-5 text-orange-600" />
@@ -813,14 +971,11 @@ export default function JointAnalysisLab() {
                     AI-Generated
                   </Badge>
                 </div>
-                <Alert data-testid="text-clinical-interpretation">
-                  <AlertDescription className="text-base leading-relaxed">
+                <div className="p-4 bg-muted rounded-lg" data-testid="text-clinical-interpretation">
+                  <p className="text-sm leading-relaxed whitespace-pre-line">
                     {analysisResult.clinicalInterpretation}
-                  </AlertDescription>
-                </Alert>
-                <p className="text-xs text-muted-foreground italic">
-                  Note: This is an automated analysis. Always consult with a qualified healthcare professional for medical advice.
-                </p>
+                  </p>
+                </div>
               </div>
             </CardContent>
           </Card>

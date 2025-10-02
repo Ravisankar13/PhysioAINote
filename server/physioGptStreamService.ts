@@ -348,9 +348,10 @@ Keep responses concise, practical, and directly applicable to clinical practice.
     const exerciseImages: any[] = [];
     
     try {
-      // Simple pattern to find exercise names
+      // Enhanced pattern to find exercise names
       const exercisePatterns = [
-        /\b([A-Za-z\s]+(?:stretch|exercise|raise|tilt|bridge|dog|cat|cow|wall sit|clamshell|plank))\b/gi
+        /\b([A-Za-z\s]+(?:stretch|exercise|raise|tilt|bridge|dog|cat|cow|wall sit|clamshell|plank|curl|press|pull|push|squat|lunge|rotation))\b/gi,
+        /\b(shoulder|hip|knee|ankle|elbow|wrist|neck|back|core)\s+([A-Za-z\s]+(?:strength|stretch|mobility|stability))\b/gi
       ];
       
       const foundExercises = new Set<string>();
@@ -358,31 +359,43 @@ Keep responses concise, practical, and directly applicable to clinical practice.
       for (const pattern of exercisePatterns) {
         const matches = response.matchAll(pattern);
         for (const match of matches) {
-          const exerciseName = match[1].trim().toLowerCase();
-          if (exerciseName.length > 2 && exerciseName.length < 50) {
+          const exerciseName = match[0].trim();
+          if (exerciseName.length > 5 && exerciseName.length < 60) {
             foundExercises.add(exerciseName);
           }
         }
       }
       
-      // Limit to first 3 exercises to speed up
+      // Limit to first 3 exercises to avoid API quota
       const exercisesToFetch = Array.from(foundExercises).slice(0, 3);
+      
+      if (exercisesToFetch.length === 0) {
+        return [];
+      }
+      
+      console.log("Fetching images for exercises:", exercisesToFetch);
+      
+      // Use Google Custom Search for exercise images
+      const { searchExerciseImages } = await import('./googleImageSearch');
       
       // Fetch in parallel
       const fetchPromises = exercisesToFetch.map(async (exerciseName) => {
         try {
-          const exerciseImage = await storage.getExerciseImageByName(exerciseName);
-          if (exerciseImage) {
+          const searchResult = await searchExerciseImages(exerciseName, 1);
+          
+          if (searchResult.images && searchResult.images.length > 0) {
+            const image = searchResult.images[0];
             return {
-              exerciseName: exerciseImage.exerciseName,
-              primaryImageUrl: exerciseImage.primaryImageUrl,
-              instructions: exerciseImage.instructions,
-              tips: exerciseImage.tips,
-              category: exerciseImage.category
+              exerciseName: exerciseName,
+              primaryImageUrl: image.url,
+              thumbnailUrl: image.thumbnailUrl,
+              instructions: [`Perform ${exerciseName} with proper form and control`],
+              tips: ['Focus on quality over quantity', 'Maintain proper breathing'],
+              category: 'physiotherapy'
             };
           }
         } catch (error) {
-          console.error(`Error fetching exercise ${exerciseName}:`, error);
+          console.error(`Error fetching image for ${exerciseName}:`, error);
         }
         return null;
       });

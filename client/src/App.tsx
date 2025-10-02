@@ -66,6 +66,7 @@ import TournamentWaitingRoom from "@/pages/TournamentWaitingRoom";
 import TournamentMatchPage from "@/pages/TournamentMatchPage";
 import TournamentResultsPage from "@/pages/TournamentResultsPage";
 import BodyScanner from "@/pages/BodyScanner";
+import JointAnalysisLab from "@/pages/JointAnalysisLab";
 import TestSkeleton from "@/pages/TestSkeleton";
 import TestSkeletonNew from "@/pages/TestSkeletonNew";
 import Education from "@/pages/Education";
@@ -154,6 +155,9 @@ function Router() {
           </Route>
           <Route path="/body-scanner">
             <ProtectedRoute component={BodyScanner} />
+          </Route>
+          <Route path="/joint-analysis-lab">
+            <ProtectedRoute component={JointAnalysisLab} />
           </Route>
           <Route path="/complex-competitions">
             <ProtectedRoute component={ComplexCaseCompetitionsPage} />

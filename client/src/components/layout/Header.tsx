@@ -30,6 +30,7 @@ import {
   Trophy,
   Sword,
   GraduationCap,
+  Target,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Link, useLocation } from "wouter";
@@ -109,6 +110,13 @@ const Header = () => {
               <Button className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-semibold shadow-sm flex items-center gap-2">
                 <Scan className="h-4 w-4" />
                 <span>Body Scanner</span>
+              </Button>
+            </Link>
+
+            <Link to="/joint-analysis-lab">
+              <Button className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-semibold shadow-sm flex items-center gap-2">
+                <Target className="h-4 w-4" />
+                <span>Joint Analysis Lab</span>
               </Button>
             </Link>
 

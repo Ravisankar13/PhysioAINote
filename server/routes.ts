@@ -32,6 +32,7 @@ import { competitionContentService } from "./competitionContentService";
 import { competitionAnalyticsService } from "./competitionAnalyticsService";
 import { soapNotesService } from "./soapNotesService";
 import { bodyScannerService, SymptomData } from "./bodyScannerService";
+import { jointAnalysisService, type JointMetrics } from "./jointAnalysisService";
 import { realTimeAIService } from "./realtimeAIService";
 import { continuousRecordingService } from "./continuousRecordingService";
 import { virtualPatientService } from "./virtualPatientService";
@@ -12474,6 +12475,27 @@ Respond in JSON format:
     } catch (error) {
       console.error('Error getting body scan:', error);
       res.status(500).json({ message: 'Failed to get body scan' });
+    }
+  });
+
+  // Joint Analysis Lab API Routes
+  app.post("/api/joint-analysis/analyze", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const metrics: JointMetrics = req.body;
+      
+      // Validate required fields
+      if (!metrics.joint || metrics.alignmentScore === undefined || metrics.rangeOfMotion === undefined) {
+        return res.status(400).json({ message: 'Joint, alignment score, and range of motion are required' });
+      }
+
+      // Analyze with AI
+      const analysis = await jointAnalysisService.analyzeJoint(metrics);
+
+      res.json(analysis);
+
+    } catch (error) {
+      console.error('Error in joint analysis:', error);
+      res.status(500).json({ message: 'Failed to analyze joint' });
     }
   });
 

@@ -479,22 +479,62 @@ export default function JointAnalysisLab() {
   };
 
   // Perform analysis
-  const performAnalysis = () => {
+  const performAnalysis = async () => {
     if (!currentLandmarks || !canAnalyze) return;
     
     setIsAnalyzing(true);
     
-    // Simulate analysis delay for better UX
-    setTimeout(() => {
-      const result = analyzeJoint(currentLandmarks, selectedJoint);
-      setAnalysisResult(result);
-      setIsAnalyzing(false);
+    try {
+      // Calculate local metrics first
+      const localResult = analyzeJoint(currentLandmarks, selectedJoint);
+      
+      // Prepare metrics for backend AI analysis
+      const metrics = {
+        joint: selectedJoint,
+        flexionAngle: localResult.flexionAngle,
+        extensionAngle: localResult.extensionAngle,
+        alignmentScore: localResult.alignmentScore,
+        rangeOfMotion: localResult.rangeOfMotion.percentage,
+        poseLandmarks: currentLandmarks
+      };
+
+      // Call backend AI analysis
+      const response = await fetch('/api/joint-analysis/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(metrics)
+      });
+
+      if (!response.ok) {
+        throw new Error('Analysis failed');
+      }
+
+      const aiAnalysis = await response.json();
+      
+      // Merge local calculations with AI interpretation
+      const enhancedResult: JointAnalysisResult = {
+        ...localResult,
+        clinicalInterpretation: aiAnalysis.interpretation.overall
+      };
+      
+      setAnalysisResult(enhancedResult);
       
       toast({
-        title: "Analysis Complete",
-        description: "Joint analysis results are ready",
+        title: "AI Analysis Complete",
+        description: aiAnalysis.interpretation.overall.substring(0, 100) + "...",
       });
-    }, 1500);
+      
+    } catch (error) {
+      console.error('Analysis error:', error);
+      toast({
+        title: "Analysis Error",
+        description: "Failed to analyze joint. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   // Cleanup on unmount

@@ -941,7 +941,8 @@ export default function JointAnalysisLab() {
       });
 
       if (!response.ok) {
-        throw new Error('Analysis failed');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Analysis failed with status ${response.status}`);
       }
 
       const aiAnalysis = await response.json();
@@ -978,7 +979,7 @@ export default function JointAnalysisLab() {
       const minAngle = Math.min(...angles);
       const maxAngle = Math.max(...angles);
       
-      setAnalysisResult({
+      const fallbackResult: JointAnalysisResult = {
         jointType: selectedJoint,
         movementMetrics: metrics,
         movementRange: {
@@ -988,7 +989,14 @@ export default function JointAnalysisLab() {
         },
         clinicalInterpretation: `Movement analysis complete. Range: ${metrics.totalRange.toFixed(1)}°, Smoothness: ${metrics.smoothness.toFixed(2)}. ${metrics.compensations.length > 0 ? 'Compensations detected: ' + metrics.compensations.join(', ') : 'No significant compensations detected.'}`,
         timestamp: new Date()
-      });
+      };
+      
+      setAnalysisResult(fallbackResult);
+      
+      // Continue adaptive assessment even with local metrics
+      setTimeout(() => {
+        getNextTestRecommendation(fallbackResult);
+      }, 500);
       
       toast({
         title: "Analysis Complete",

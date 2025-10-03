@@ -237,6 +237,32 @@ export default function JointAnalysisLab() {
   const [completionReason, setCompletionReason] = useState<string>('');
   const [isGettingNextTest, setIsGettingNextTest] = useState(false);
   
+  const [finalDiagnosis, setFinalDiagnosis] = useState<{
+    primaryDiagnosis: {
+      condition: string;
+      confidence: "high" | "moderate" | "low";
+      clinicalReasoning: string;
+      keyFindings: string[];
+    };
+    differentialDiagnoses: Array<{
+      condition: string;
+      likelihood: "high" | "moderate" | "low";
+      supportingEvidence: string[];
+      ruledOutBy?: string;
+    }>;
+    clinicalReasoningChain: string[];
+    treatmentRecommendations: {
+      immediateActions: string[];
+      exercises: string[];
+      manualTherapy: string[];
+      precautions: string[];
+    };
+    redFlags: string[];
+    prognosticIndicators: string[];
+  } | null>(null);
+  const [isGettingFinalDiagnosis, setIsGettingFinalDiagnosis] = useState(false);
+  const [showTestHistory, setShowTestHistory] = useState(false);
+  
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -1020,6 +1046,12 @@ export default function JointAnalysisLab() {
         setSessionId(`session-${Date.now()}`);
       }
       
+      if (result.isAssessmentComplete && updatedHistory.length > 0) {
+        setTimeout(() => {
+          getFinalDiagnosis();
+        }, 1000);
+      }
+      
       toast({
         title: result.isAssessmentComplete ? "Assessment Complete" : "Next Test Recommended",
         description: result.isAssessmentComplete 
@@ -1039,6 +1071,45 @@ export default function JointAnalysisLab() {
     }
   };
 
+  const getFinalDiagnosis = async () => {
+    setIsGettingFinalDiagnosis(true);
+    
+    try {
+      const response = await fetch('/api/joint-analysis/final-diagnosis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          jointType: selectedJoint,
+          testsPerformed: testHistory,
+          currentHypotheses: currentHypotheses
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get final diagnosis');
+      }
+
+      const result = await response.json();
+      setFinalDiagnosis(result);
+      
+      toast({
+        title: "Final Diagnosis Complete",
+        description: "Comprehensive diagnostic report is ready",
+      });
+      
+    } catch (error) {
+      console.error('Error getting final diagnosis:', error);
+      toast({
+        title: "Error",
+        description: "Failed to generate final diagnosis",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGettingFinalDiagnosis(false);
+    }
+  };
+
   const resetSession = () => {
     setSessionId(null);
     setTestHistory([]);
@@ -1051,6 +1122,9 @@ export default function JointAnalysisLab() {
     setAnalysisResult(null);
     setRecordingPhase('idle');
     setMovementData([]);
+    setFinalDiagnosis(null);
+    setIsGettingFinalDiagnosis(false);
+    setShowTestHistory(false);
   };
 
   useEffect(() => {
@@ -1274,6 +1348,270 @@ export default function JointAnalysisLab() {
             )}
           </CardContent>
         </Card>
+
+        {isSessionActive && testHistory.length > 0 && (
+          <div className="fixed right-4 top-24 w-80 z-50">
+            <Card className="shadow-lg border-blue-200">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Clock className="h-5 w-5 text-blue-600" />
+                    Test History
+                  </CardTitle>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-xs">
+                      {testHistory.length} {testHistory.length === 1 ? 'Test' : 'Tests'}
+                    </Badge>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0"
+                      onClick={() => setShowTestHistory(!showTestHistory)}
+                      data-testid="button-toggle-history"
+                    >
+                      {showTestHistory ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              
+              {showTestHistory && (
+                <CardContent className="space-y-3 max-h-[60vh] overflow-y-auto">
+                  {testHistory.map((test, idx) => (
+                    <div key={idx} className="bg-muted p-3 rounded space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Badge variant="outline" className="text-xs">Test {idx + 1}</Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(test.timestamp).toLocaleTimeString()}
+                        </span>
+                      </div>
+                      <h4 className="font-semibold text-sm">{test.movementType}</h4>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <span className="text-muted-foreground">Range:</span>
+                          <span className="ml-1 font-medium">{test.movementRange.toFixed(1)}°</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Smoothness:</span>
+                          <span className="ml-1 font-medium">{test.smoothness.toFixed(2)}</span>
+                        </div>
+                      </div>
+                      {test.compensations.length > 0 && (
+                        <div className="text-xs">
+                          <span className="text-muted-foreground">Compensations:</span>
+                          <div className="mt-1 space-y-1">
+                            {test.compensations.map((comp, i) => (
+                              <Badge key={i} variant="secondary" className="text-xs mr-1">
+                                {comp}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </CardContent>
+              )}
+            </Card>
+          </div>
+        )}
+
+        {finalDiagnosis && isAssessmentComplete && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-2xl flex items-center gap-2">
+                      <CheckCircle className="h-6 w-6 text-green-600" />
+                      Final Diagnostic Report
+                    </CardTitle>
+                    <CardDescription className="mt-2">
+                      Comprehensive assessment of {JOINT_CONFIGS[selectedJoint].label} • {testHistory.length} tests performed
+                    </CardDescription>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setFinalDiagnosis(null)}
+                    data-testid="button-close-diagnosis"
+                  >
+                    <X className="h-5 w-5" />
+                  </Button>
+                </div>
+              </CardHeader>
+              
+              <CardContent className="space-y-6">
+                <div className="space-y-3 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-green-700 dark:text-green-400">
+                      Primary Diagnosis
+                    </h3>
+                    <Badge 
+                      variant={finalDiagnosis.primaryDiagnosis.confidence === 'high' ? 'default' : 'secondary'}
+                      className="text-sm"
+                    >
+                      {finalDiagnosis.primaryDiagnosis.confidence} confidence
+                    </Badge>
+                  </div>
+                  <h4 className="text-xl font-bold">{finalDiagnosis.primaryDiagnosis.condition}</h4>
+                  <p className="text-sm leading-relaxed">{finalDiagnosis.primaryDiagnosis.clinicalReasoning}</p>
+                  <div className="mt-2">
+                    <p className="text-xs font-semibold mb-2">Key Findings:</p>
+                    <div className="space-y-1">
+                      {finalDiagnosis.primaryDiagnosis.keyFindings.map((finding, idx) => (
+                        <div key={idx} className="flex items-start gap-2">
+                          <ChevronRight className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                          <span className="text-sm">{finding}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {finalDiagnosis.differentialDiagnoses.length > 0 && (
+                  <div className="space-y-3">
+                    <h3 className="text-lg font-semibold">Differential Diagnoses</h3>
+                    {finalDiagnosis.differentialDiagnoses.map((diff, idx) => (
+                      <div key={idx} className="p-4 bg-muted rounded-lg space-y-2">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-semibold">{diff.condition}</h4>
+                          <Badge variant="outline">{diff.likelihood} likelihood</Badge>
+                        </div>
+                        <div className="text-sm space-y-1">
+                          {diff.supportingEvidence.map((evidence, i) => (
+                            <div key={i} className="flex items-start gap-2">
+                              <span className="text-muted-foreground">•</span>
+                              <span>{evidence}</span>
+                            </div>
+                          ))}
+                        </div>
+                        {diff.ruledOutBy && (
+                          <p className="text-xs text-muted-foreground italic">
+                            Ruled out by: {diff.ruledOutBy}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <Separator />
+
+                <div className="space-y-3">
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <Cpu className="h-5 w-5 text-purple-600" />
+                    Clinical Reasoning Chain
+                  </h3>
+                  <div className="space-y-2">
+                    {finalDiagnosis.clinicalReasoningChain.map((step, idx) => (
+                      <div key={idx} className="flex items-start gap-3 p-3 bg-muted rounded">
+                        <Badge variant="outline" className="mt-0.5">{idx + 1}</Badge>
+                        <p className="text-sm">{step}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <Separator />
+
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <Target className="h-5 w-5 text-blue-600" />
+                    Treatment Recommendations
+                  </h3>
+                  
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <h4 className="font-semibold text-sm text-blue-600">Immediate Actions</h4>
+                      <ul className="space-y-1">
+                        {finalDiagnosis.treatmentRecommendations.immediateActions.map((action, idx) => (
+                          <li key={idx} className="text-sm flex items-start gap-2">
+                            <ChevronRight className="h-4 w-4 mt-0.5 flex-shrink-0 text-blue-600" />
+                            {action}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <h4 className="font-semibold text-sm text-green-600">Exercise Therapy</h4>
+                      <ul className="space-y-1">
+                        {finalDiagnosis.treatmentRecommendations.exercises.map((ex, idx) => (
+                          <li key={idx} className="text-sm flex items-start gap-2">
+                            <ChevronRight className="h-4 w-4 mt-0.5 flex-shrink-0 text-green-600" />
+                            {ex}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <h4 className="font-semibold text-sm text-purple-600">Manual Therapy</h4>
+                      <ul className="space-y-1">
+                        {finalDiagnosis.treatmentRecommendations.manualTherapy.map((mt, idx) => (
+                          <li key={idx} className="text-sm flex items-start gap-2">
+                            <ChevronRight className="h-4 w-4 mt-0.5 flex-shrink-0 text-purple-600" />
+                            {mt}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <h4 className="font-semibold text-sm text-orange-600">Precautions</h4>
+                      <ul className="space-y-1">
+                        {finalDiagnosis.treatmentRecommendations.precautions.map((prec, idx) => (
+                          <li key={idx} className="text-sm flex items-start gap-2">
+                            <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0 text-orange-600" />
+                            {prec}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+
+                {finalDiagnosis.redFlags.length > 0 && (
+                  <>
+                    <Separator />
+                    <Alert variant="destructive">
+                      <AlertTriangle className="h-4 w-4" />
+                      <AlertTitle>Red Flags</AlertTitle>
+                      <AlertDescription>
+                        <ul className="mt-2 space-y-1">
+                          {finalDiagnosis.redFlags.map((flag, idx) => (
+                            <li key={idx} className="text-sm">• {flag}</li>
+                          ))}
+                        </ul>
+                      </AlertDescription>
+                    </Alert>
+                  </>
+                )}
+
+                {finalDiagnosis.prognosticIndicators.length > 0 && (
+                  <>
+                    <Separator />
+                    <div className="space-y-2">
+                      <h3 className="text-lg font-semibold flex items-center gap-2">
+                        <TrendingUp className="h-5 w-5 text-indigo-600" />
+                        Prognosis
+                      </h3>
+                      <ul className="space-y-1">
+                        {finalDiagnosis.prognosticIndicators.map((indicator, idx) => (
+                          <li key={idx} className="text-sm flex items-start gap-2">
+                            <ChevronRight className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                            {indicator}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {isSessionActive && clinicalReasoning && (
           <div className="fixed left-4 top-24 w-96 z-50">
